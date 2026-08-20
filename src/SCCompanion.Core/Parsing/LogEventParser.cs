@@ -217,10 +217,15 @@ public sealed partial class LogEventParser
             return null;
 
         return Match(LocationInventoryRegex, line, m =>
-            new LocationInventoryEvent(
-                line.Timestamp,
-                m.Groups["player"].Value,
-                m.Groups["location"].Value));
+        {
+            var location = m.Groups["location"].Value;
+
+            // A sentinel, not a place: never let it reach the map or the stats.
+            if (location.Equals("INVALID_LOCATION_ID", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return new LocationInventoryEvent(line.Timestamp, m.Groups["player"].Value, location);
+        });
     }
 
     /// <summary>
@@ -310,7 +315,11 @@ public sealed partial class LogEventParser
         return null;
     }
 
-    private GameEvent? Match(Regex regex, LogLine line, Func<Match, GameEvent> project)
+    /// <summary>
+    /// Runs a pattern and projects the result. The projection may return null to
+    /// discard a line that matched but carries nothing worth recording.
+    /// </summary>
+    private GameEvent? Match(Regex regex, LogLine line, Func<Match, GameEvent?> project)
     {
         var m = regex.Match(line.Body);
         if (!m.Success)

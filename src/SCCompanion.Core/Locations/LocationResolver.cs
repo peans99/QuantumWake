@@ -56,15 +56,52 @@ public static partial class LocationResolver
                .Replace("ObjectContainer_", string.Empty, StringComparison.OrdinalIgnoreCase)
                .Replace("_LOC", string.Empty, StringComparison.OrdinalIgnoreCase);
 
-        return TryJumpPointRestStop(rawId, id)
+        return TryNamedPlace(rawId, id)
+            ?? TryJumpPointRestStop(rawId, id)
             ?? TryRestStop(rawId, id)
             ?? TryJumpPoint(rawId, id)
             ?? TryRsExt(rawId, id)
             ?? TryPlanetary(rawId, id)
             ?? TryOrbital(rawId, id)
+            ?? TryEmbeddedSystem(rawId, id)
             ?? TryNavPoint(rawId, id)
             ?? TryWellKnown(rawId, id)
             ?? ResolvedLocation.Unresolved(rawId);
+    }
+
+    /// <summary>Places known only by name, with no system prefix in the id.</summary>
+    private static ResolvedLocation? TryNamedPlace(string rawId, string id)
+    {
+        if (!Universe.WellKnown.TryGetValue(id, out var place))
+            return null;
+
+        return new ResolvedLocation(rawId, place.Name, place.System, place.Body, place.Kind, true);
+    }
+
+    /// <summary>
+    /// Ids carrying the system and body somewhere other than the start:
+    /// <c>TheCollectorAsteroid_Stanton4</c>, <c>Outpost_OLP_Stanton1b_Vivere</c>.
+    /// </summary>
+    private static ResolvedLocation? TryEmbeddedSystem(string rawId, string id)
+    {
+        var m = EmbeddedSystemRegex.Match(id);
+        if (!m.Success)
+            return null;
+
+        var systemToken = m.Groups["system"].Value;
+        var bodyToken = m.Groups["body"].Value;
+
+        var (system, bodies) = systemToken.Equals("Pyro", StringComparison.OrdinalIgnoreCase)
+            ? ("Pyro", Universe.PyroBodies)
+            : ("Stanton", Universe.StantonBodies);
+
+        var body = bodies.TryGetValue(bodyToken, out var b) ? b : null;
+
+        // Everything except the system token describes the site.
+        var rest = EmbeddedSystemRegex.Replace(id, "_").Trim('_');
+        var (name, kind) = DescribeSite(rest, body);
+
+        return new ResolvedLocation(rawId, name, system, body, kind, body is not null);
     }
 
     /// <summary><c>RR_JP_StantonPyro</c> - a rest stop sitting at a jump point.</summary>
@@ -273,11 +310,16 @@ public static partial class LocationResolver
             return ($"Rayari {Title(site)}{suffix}", LocationKind.Research);
         }
 
-        if (rest.Contains("Outpost", StringComparison.OrdinalIgnoreCase))
+        // A bare "Outpost_..." id carries no distinguishing name of its own.
+        if (parts.Length > 0 && parts[0].Equals("Outpost", StringComparison.OrdinalIgnoreCase) && parts.Length <= 2)
             return ($"Outpost{(body is null ? string.Empty : $" on {body}")}", LocationKind.Outpost);
 
-        if (rest.Contains("Asteroid", StringComparison.OrdinalIgnoreCase))
-            return ($"Asteroid{suffix}", LocationKind.Asteroid);
+        // Otherwise keep the descriptive name and classify it by its tokens.
+        foreach (var (token, kind) in Universe.SiteKinds)
+        {
+            if (rest.Contains(token, StringComparison.OrdinalIgnoreCase))
+                return ($"{Spaced(rest)}{suffix}", kind);
+        }
 
         return ($"{Spaced(rest)}{suffix}", LocationKind.Unknown);
     }
@@ -321,6 +363,10 @@ public static partial class LocationResolver
 
     [GeneratedRegex(@"^(?<system>Stanton|Pyro)_(?<body>\d[a-z]?)_(?<name>\w+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex OrbitalRegex { get; }
+
+    // System + body appearing anywhere but the start of the id.
+    [GeneratedRegex(@"_(?<system>Stanton|Pyro)(?<body>\d[a-z]?)(?=_|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex EmbeddedSystemRegex { get; }
 
     [GeneratedRegex(@"^NavPoint_\w+_\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex NavPointRegex { get; }

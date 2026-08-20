@@ -133,6 +133,45 @@ public static class Universe
             ["TerraStanton"] = "Terra – Stanton Jump Point"
         };
 
+    /// <summary>
+    /// Places whose ids carry no system prefix and must be known by name.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, (string Name, string System, string? Body, LocationKind Kind)> WellKnown =
+        new Dictionary<string, (string, string, string?, LocationKind)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Nyx_Levski"] = ("Levski", "Nyx", "Delamar", LocationKind.City),
+            ["Levski"] = ("Levski", "Nyx", "Delamar", LocationKind.City),
+            ["GrimHEX"] = ("GrimHEX", "Stanton", "Yela", LocationKind.Station),
+            ["Port_Tressler"] = ("Port Tressler", "Stanton", "microTech", LocationKind.Station),
+            ["Port Tressler"] = ("Port Tressler", "Stanton", "microTech", LocationKind.Station),
+            ["Seraphim_Station"] = ("Seraphim Station", "Stanton", "Crusader", LocationKind.Station),
+            ["Seraphim Station"] = ("Seraphim Station", "Stanton", "Crusader", LocationKind.Station),
+            ["Everus_Harbor"] = ("Everus Harbor", "Stanton", "Hurston", LocationKind.Station),
+            ["Baijini_Point"] = ("Baijini Point", "Stanton", "ArcCorp", LocationKind.Station)
+        };
+
+    /// <summary>
+    /// Site-name tokens that identify what a facility is. Checked in order, so
+    /// more specific tokens come first.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Token, LocationKind Kind)> SiteKinds =
+    [
+        ("TransportHub", LocationKind.Station),
+        ("Monorail", LocationKind.Station),
+        ("DistributionCentre", LocationKind.DistributionCentre),
+        ("Delve", LocationKind.Outpost),
+        ("Shubin", LocationKind.Mine),
+        ("Mine", LocationKind.Mine),
+        ("Farm", LocationKind.Outpost),
+        ("Growery", LocationKind.Outpost),
+        ("Rayari", LocationKind.Research),
+        ("Research", LocationKind.Research),
+        ("Hydro", LocationKind.Research),
+        ("Asteroid", LocationKind.Asteroid),
+        ("Outpost", LocationKind.Outpost),
+        ("Station", LocationKind.Station)
+    ];
+
     /// <summary>Company tokens appearing in facility ids.</summary>
     public static readonly IReadOnlyDictionary<string, string> Operators =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
