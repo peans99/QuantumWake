@@ -126,7 +126,9 @@ If CIG restores the events, the killboard works with no further code.
   fleet map.
 - **Contract completion.** Acceptance is detected; completion is not clearly
   logged and needs more investigation.
-- **Location graph coverage.** 73 ids resolve today; new content will need
-  additions to `Universe` in `Locations/Location.cs`.
+- **Location graph coverage.** All 72 observed ids resolve to a system, body and
+  kind today. New content will need additions to `Universe` in
+  `Locations/Location.cs` — unresolved ids stay visible in the map's unmapped
+  tray so the gap is obvious.
 - **Parser-health panel in the UI.** The data is collected and exposed by the
   CLI, but the dashboard does not surface it yet.

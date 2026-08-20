@@ -180,6 +180,54 @@ public class LocationResolverTests
         Assert.False(LocationResolver.Resolve("").IsResolved);
     }
 
+    /// <summary>Ids that put the system in the middle or at the end.</summary>
+    [Theory]
+    [InlineData("TheCollectorAsteroid_Stanton4", "Stanton", "microTech", LocationKind.Asteroid)]
+    [InlineData("Outpost_OLP_Stanton1b_Vivere", "Stanton", "Aberdeen", LocationKind.Outpost)]
+    public void Resolves_ids_with_an_embedded_system(
+        string id, string system, string body, LocationKind kind)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.Equal(system, location.System);
+        Assert.Equal(body, location.Body);
+        Assert.Equal(kind, location.Kind);
+    }
+
+    [Theory]
+    [InlineData("Nyx_Levski", "Levski", "Nyx", LocationKind.City)]
+    [InlineData("GrimHEX", "GrimHEX", "Stanton", LocationKind.Station)]
+    [InlineData("Port Tressler", "Port Tressler", "Stanton", LocationKind.Station)]
+    public void Resolves_places_known_only_by_name(
+        string id, string name, string system, LocationKind kind)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.True(location.IsResolved);
+        Assert.Equal(name, location.DisplayName);
+        Assert.Equal(system, location.System);
+        Assert.Equal(kind, location.Kind);
+    }
+
+    /// <summary>
+    /// Facilities kept their names but fell through to Unknown before site-token
+    /// classification was added.
+    /// </summary>
+    [Theory]
+    [InlineData("Stanton4c_ASD_Delve_Facility_005", LocationKind.Outpost, "Euterpe")]
+    [InlineData("Stanton4_Shubin_SM0_22", LocationKind.Mine, "microTech")]
+    [InlineData("Stanton4c_IndyFarm_BudsGrowery", LocationKind.Outpost, "Euterpe")]
+    [InlineData("Pyro1_ASD_Monorail_LazarusTransportHub_Phoenix_1A", LocationKind.Station, "Pyro I")]
+    public void Classifies_facilities_by_their_site_tokens(
+        string id, LocationKind kind, string body)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.Equal(kind, location.Kind);
+        Assert.Equal(body, location.Body);
+        Assert.NotEqual(id, location.DisplayName);
+    }
+
     [Fact]
     public void Caches_repeated_lookups()
     {
