@@ -116,6 +116,16 @@ body.overlay .feed li { padding: 3px 0; font-size: 12px; }
 }
 .brand .name b { color: var(--cyan-hot); font-weight: 600; }
 
+.brand .by {
+  font-size: 9.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding-left: 11px;
+  margin-left: 3px;
+  border-left: 1px solid var(--rule-hot);
+}
+
 .tabs { display: flex; gap: 4px; flex: 1; }
 
 .tabs button {
@@ -468,3 +478,94 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
 }
 .legend .item { display: flex; align-items: center; gap: 8px; }
 .legend .swatch { width: 7px; height: 7px; transform: rotate(45deg); }
+
+/* ---------- fleet ---------- */
+
+.fleet-chart-wrap { margin-bottom: 6px; }
+#fleet-chart { width: 100%; height: 220px; display: block; }
+
+.ship-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--gap);
+}
+
+.ship-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+  padding: 13px 15px;
+}
+
+.ship-logo {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ship-logo img { max-width: 100%; max-height: 100%; opacity: .88; }
+.ship-logo-text { font-size: 11px; letter-spacing: .1em; color: var(--dim); }
+
+.ship-body { min-width: 0; }
+.ship-name {
+  font-size: 15px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ship-maker {
+  font-size: 9.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin: 3px 0 6px;
+}
+.ship-stats { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.ship-stats b { color: var(--cyan-hot); }
+
+/* ---------- loadout & stash ---------- */
+
+.loadout-grid, .stash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+.loadout-grid .card, .stash-grid .card { min-height: 0; }
+
+.slot-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.slot-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(23, 41, 60, .5);
+}
+.slot-list li:last-child { border-bottom: 0; }
+.slot-item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-count { color: var(--dim); font-family: var(--mono); font-size: 11px; flex: 0 0 auto; }
+
+/* ---------- footer ---------- */
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 22px 22px 34px;
+  border-top: 1px solid var(--rule);
+  color: var(--dim);
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+.foot .mbc { width: 78px; opacity: .5; flex: 0 0 auto; }
+body.overlay .foot { display: none; }

@@ -12,15 +12,19 @@
   <div class="brand">
     <span class="mark"></span>
     <span class="name">SC<b>Companion</b></span>
+    <span class="by">by nekron</span>
   </div>
 
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
     <button data-view="sessions">Sessions</button>
-    <button data-view="ships">Ships</button>
+    <button data-view="fleet">Fleet</button>
     <button data-view="places">Places</button>
     <button data-view="contracts">Contracts</button>
+    <button data-view="spending">Spending</button>
+    <button data-view="loadout">Loadout</button>
+    <button data-view="stash">Stash</button>
   </nav>
 
   <div class="status">
@@ -113,14 +117,58 @@
   </section>
 
   <!-- SHIPS -->
-  <section id="view-ships" class="view">
-    <h2>Ships flown</h2>
+  <!-- FLEET -->
+  <section id="view-fleet" class="view">
+    <div class="summary-strip" id="fleet-summary"></div>
+
+    <h2>Fleet size over time</h2>
+    <p class="muted caption">
+      Owned-vehicle count reported by the entitlement query each session. Ship
+      <em>names</em> are not logged — only the total — so the roster below is what
+      you have actually flown.
+    </p>
+    <div class="map-wrap fleet-chart-wrap">
+      <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+    </div>
+
+    <h2 class="spaced">Ships flown</h2>
     <p class="muted caption">
       Counted from control-token releases. Star Citizen 4.9 logs no boarding
       event, so flight counts are exact while times aboard (~) are estimated from
       the last known stop.
     </p>
-    <div id="ships-chart" class="bars"></div>
+    <div id="fleet-ships" class="ship-grid"></div>
+  </section>
+
+  <!-- SPENDING -->
+  <section id="view-spending" class="view">
+    <div class="summary-strip" id="spend-summary"></div>
+    <h2>Where it went</h2>
+    <div id="shops-chart" class="bars"></div>
+    <h2 class="spaced">Most bought</h2>
+    <div id="items-chart" class="bars"></div>
+  </section>
+
+  <!-- LOADOUT -->
+  <section id="view-loadout" class="view">
+    <h2>Equipment by slot</h2>
+    <p class="muted caption">
+      Reconstructed from attachment events. These fire on every spawn and
+      inventory refresh, so each slot lists everything seen in it, most frequent
+      first — not a single current kit.
+    </p>
+    <div id="loadout-grid" class="loadout-grid"></div>
+  </section>
+
+  <!-- STASH -->
+  <section id="view-stash" class="view">
+    <h2>Items seen by location</h2>
+    <p class="muted caption">
+      Built by binding each location's inventory query to the place you opened it
+      at. Removals are never logged, so this is what has been <em>seen</em> stored
+      somewhere, not a live stock level.
+    </p>
+    <div id="stash-grid" class="stash-grid"></div>
   </section>
 
   <!-- PLACES -->
@@ -133,6 +181,7 @@
 
   <!-- CONTRACTS -->
   <section id="view-contracts" class="view">
+    <div class="summary-strip" id="contract-summary"></div>
     <h2>Contracts by issuer</h2>
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
@@ -140,6 +189,16 @@
   </section>
 
 </main>
+
+<footer class="foot">
+  <img src="assets/manufacturers/_madebycommunity.png" alt="Made by the Community" class="mbc">
+  <span>
+    Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
+    trademarks of Cloud Imperium Rights LLC. Manufacturer marks from the official
+    Star Citizen Fankit, used under the Fankit Agreement. This is an unofficial
+    fan tool, not affiliated with or endorsed by Cloud Imperium Games.
+  </span>
+</footer>
 
 <script src="app.js"></script>
 </body>

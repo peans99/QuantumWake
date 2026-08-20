@@ -36,6 +36,26 @@ public sealed class SessionBuilder
     private readonly List<LocationVisit> _locations = [];
     private readonly List<QuantumJump> _jumps = [];
     private readonly List<TimelineEntry> _timeline = [];
+    private readonly List<PurchaseRecord> _purchases = [];
+    private readonly List<LoadoutItem> _loadout = [];
+    private readonly HashSet<string> _loadoutKeys = [];
+
+    /// <summary>Mission id to contract key, so objective state can find its contract.</summary>
+    private readonly Dictionary<string, string> _contractsByMission = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ObjectiveState> _objectiveStates = new(StringComparer.Ordinal);
+
+    private readonly List<StashEntry> _stash = [];
+    private readonly HashSet<string> _stashKeys = [];
+
+    /// <summary>Opaque inventory scope key to the location id it belongs to.</summary>
+    private readonly Dictionary<string, string> _locationKeys = new(StringComparer.Ordinal);
+
+    private ShopRequestEvent? _pendingPurchase;
+    private string? _lastLocationId;
+    private int? _fleetSize;
+
+    /// <summary>Index of a jump whose destination was a category, awaiting arrival.</summary>
+    private int? _pendingGenericJump;
 
     private DateTimeOffset? _firstSeen;
     private DateTimeOffset _lastSeen;
@@ -116,6 +136,39 @@ public sealed class SessionBuilder
 
             case ContractEvent contract:
                 AddContract(contract);
+                break;
+
+            case ShopRequestEvent request:
+                // Held until the server confirms; an unanswered request is not spend.
+                _pendingPurchase = request;
+                break;
+
+            case ShopFlowResponseEvent response:
+                ResolvePurchase(response);
+                break;
+
+            case MissionObjectiveEvent objective:
+                ApplyObjectiveState(objective);
+                break;
+
+            case AttachmentEvent attachment:
+                RecordAttachment(attachment);
+                break;
+
+            // The scope key is opaque, but the query follows the named location
+            // request, so the two can be bound together.
+            case InventoryQueryEvent query when query.IsLocation:
+                if (_lastLocationId is not null)
+                    _locationKeys[query.ScopeKey] = _lastLocationId;
+                break;
+
+            case InventoryItemEvent item when item.IsLocation:
+                RecordStashItem(item);
+                break;
+
+            case FleetQueryEvent fleet:
+                // Take the largest seen: the count grows as ships are bought.
+                _fleetSize = Math.Max(_fleetSize ?? 0, fleet.Vehicles);
                 break;
 
             case NotificationEvent notification:
@@ -235,6 +288,12 @@ public sealed class SessionBuilder
 
     private void RecordLocation(DateTimeOffset at, ResolvedLocation location)
     {
+        // Remembered even when the visit itself is a repeat, because the
+        // inventory scope query that follows needs it to bind its key.
+        _lastLocationId = location.RawId;
+
+        ResolveGenericJump(location);
+
         // Collapse consecutive repeats: inventory is opened many times per stop.
         if (_locations.Count > 0 && _locations[^1].RawId == location.RawId)
             return;
@@ -248,6 +307,35 @@ public sealed class SessionBuilder
         Timeline(at, "location", location.DisplayName, location.Body);
     }
 
+    /// <summary>
+    /// Rewrites a jump whose destination was a category to the place actually
+    /// reached, so "Rest Stop" becomes "microTech LEO Rest Stop".
+    /// </summary>
+    private void ResolveGenericJump(ResolvedLocation arrival)
+    {
+        if (_pendingGenericJump is not { } index || index >= _jumps.Count)
+            return;
+
+        _pendingGenericJump = null;
+
+        // Arriving back where the jump started means we never went anywhere.
+        var jump = _jumps[index];
+        if (jump.FromId == arrival.RawId)
+            return;
+
+        _jumps[index] = jump with { ToId = arrival.RawId, ToName = arrival.DisplayName };
+
+        // Keep the timeline consistent with the corrected destination.
+        for (var i = _timeline.Count - 1; i >= 0; i--)
+        {
+            if (_timeline[i].Kind != "quantum")
+                continue;
+
+            _timeline[i] = _timeline[i] with { Text = $"Quantum to {arrival.DisplayName}" };
+            break;
+        }
+    }
+
     private void RecordJump(DateTimeOffset at, string? originId, string destinationId)
     {
         var destination = LocationResolver.Resolve(destinationId);
@@ -259,6 +347,12 @@ public sealed class SessionBuilder
 
         _jumps.Add(new QuantumJump(
             at, origin?.RawId, origin?.DisplayName, destination.RawId, destination.DisplayName));
+
+        // "ObjectContainer_RestStop" and friends name a category, not a place.
+        // Remember the jump so the actual arrival can replace it.
+        _pendingGenericJump = LocationResolver.IsAmbiguous(destination.RawId)
+            ? _jumps.Count - 1
+            : null;
 
         Timeline(at, "quantum", $"Quantum to {destination.DisplayName}", origin?.DisplayName);
     }
@@ -281,6 +375,130 @@ public sealed class SessionBuilder
             var title = notification.Text["Contract Accepted:".Length..].Trim(' ', ':');
             Timeline(notification.Timestamp, "contract", "Contract accepted", title);
         }
+    }
+
+    /// <summary>
+    /// Matches a server response to the request it answers. Requests and
+    /// responses arrive in order at the same kiosk, so the most recent pending
+    /// request is the one being answered.
+    /// </summary>
+    private void ResolvePurchase(ShopFlowResponseEvent response)
+    {
+        if (_pendingPurchase is null)
+            return;
+
+        // Ignore responses for a different kiosk; the pairing would be a guess.
+        if (!string.IsNullOrEmpty(response.KioskId)
+            && !response.KioskId.Equals(_pendingPurchase.KioskId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // Intermediate states such as BuyRequestProcessing precede the outcome.
+        if (!response.Succeeded)
+            return;
+
+        var request = _pendingPurchase;
+        _pendingPurchase = null;
+
+        var record = new PurchaseRecord(
+            request.Timestamp,
+            PrettyShop(request.ShopName),
+            request.ItemName,
+            request.Price,
+            request.Quantity,
+            Confirmed: true);
+
+        _purchases.Add(record);
+
+        Timeline(
+            response.Timestamp,
+            response.IsSelling ? "sold" : "bought",
+            $"{(response.IsSelling ? "Sold" : "Bought")} {request.ItemName}",
+            $"{record.Total:N0} aUEC · {record.Shop}");
+    }
+
+    /// <summary><c>SCShop_OmegaPro_NewBabbage</c> becomes <c>Omega Pro, New Babbage</c>.</summary>
+    private static string PrettyShop(string raw)
+    {
+        var trimmed = raw.StartsWith("SCShop_", StringComparison.OrdinalIgnoreCase)
+            ? raw["SCShop_".Length..]
+            : raw;
+
+        return trimmed.Replace('_', ' ').Replace('-', ' ').Trim();
+    }
+
+    /// <summary>
+    /// Applies objective state to the contract that owns it. A contract counts as
+    /// completed once any of its objectives completes, and abandoned only if
+    /// nothing completed and something was withdrawn.
+    /// </summary>
+    private void ApplyObjectiveState(MissionObjectiveEvent objective)
+    {
+        _objectiveStates[objective.MissionId] = objective.State;
+
+        var key = _contractsByMission.GetValueOrDefault(objective.MissionId);
+        if (key is null || !_contracts.TryGetValue(key, out var contract))
+            return;
+
+        var outcome = objective.State switch
+        {
+            ObjectiveState.Completed => ContractOutcome.Completed,
+            ObjectiveState.Withdrawn => ContractOutcome.Abandoned,
+            ObjectiveState.Failed => ContractOutcome.Abandoned,
+            ObjectiveState.InProgress => ContractOutcome.InProgress,
+            _ => ContractOutcome.Unknown
+        };
+
+        // Completion is terminal: a later in-progress objective must not undo it.
+        if (contract.Outcome == ContractOutcome.Completed && outcome != ContractOutcome.Completed)
+            return;
+
+        _contracts[key] = contract with
+        {
+            Outcome = outcome,
+            CompletedAt = outcome == ContractOutcome.Completed ? objective.Timestamp : contract.CompletedAt
+        };
+
+        if (outcome == ContractOutcome.Completed)
+            Timeline(objective.Timestamp, "contract-done", "Contract completed", contract.DisplayName);
+    }
+
+    /// <summary>
+    /// Attributes an item to the location whose inventory was being browsed.
+    /// </summary>
+    /// <remarks>
+    /// Listings repeat as the player pages through an inventory, so each
+    /// (location, item) pair is counted once per session. Removals are never
+    /// logged, so this records what was <i>seen</i> at a place, not a live stock
+    /// level.
+    /// </remarks>
+    private void RecordStashItem(InventoryItemEvent item)
+    {
+        var locationId = _locationKeys.GetValueOrDefault(item.ScopeKey);
+        if (locationId is null)
+            return;
+
+        if (!_stashKeys.Add($"{locationId}|{item.ItemClass}"))
+            return;
+
+        var location = LocationResolver.Resolve(locationId);
+
+        _stash.Add(new StashEntry(
+            item.Timestamp, locationId, location.DisplayName, item.ItemClass));
+    }
+
+    /// <summary>
+    /// Records equipped items. These fire on every spawn and inventory refresh,
+    /// so only the first sighting of each port/item pair is kept.
+    /// </summary>
+    private void RecordAttachment(AttachmentEvent attachment)
+    {
+        var key = $"{attachment.Port}|{attachment.ItemClass}";
+        if (!_loadoutKeys.Add(key))
+            return;
+
+        _loadout.Add(new LoadoutItem(attachment.Port, attachment.ItemClass, attachment.Timestamp));
     }
 
     private void RecordDeath(ActorDeathEvent death)
@@ -343,6 +561,10 @@ public sealed class SessionBuilder
             Jumps = _jumps,
             Contracts = [.. _contracts.Values.OrderBy(c => c.FirstSeen)],
             Timeline = [.. _timeline.OrderBy(t => t.At)],
+            Purchases = _purchases,
+            Loadout = [.. _loadout.OrderBy(l => l.Port, StringComparer.Ordinal)],
+            Stash = _stash,
+            FleetSize = _fleetSize,
             Incapacitations = _incapacitations,
 
             // Always zero on SC 4.9: the game emits no combat events at all.
@@ -363,6 +585,10 @@ public sealed class SessionBuilder
 
         var parsed = ContractNameParser.Parse(contract.Contract);
 
+        // Objective state arrives keyed by mission id, sometimes before the
+        // contract itself, so apply anything already seen for this mission.
+        var known = _objectiveStates.GetValueOrDefault(contract.MissionId, ObjectiveState.Unknown);
+
         _contracts[contract.Contract] = new ContractRecord(
             contract.Timestamp,
             parsed.Raw,
@@ -371,6 +597,18 @@ public sealed class SessionBuilder
             parsed.System,
             parsed.Difficulty,
             parsed.Type,
-            Accepted: false);
+            Accepted: false)
+        {
+            MissionId = contract.MissionId,
+            Outcome = known switch
+            {
+                ObjectiveState.Completed => ContractOutcome.Completed,
+                ObjectiveState.Withdrawn or ObjectiveState.Failed => ContractOutcome.Abandoned,
+                ObjectiveState.InProgress => ContractOutcome.InProgress,
+                _ => ContractOutcome.Unknown
+            }
+        };
+
+        _contractsByMission[contract.MissionId] = contract.Contract;
     }
 }

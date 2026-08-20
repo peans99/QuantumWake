@@ -23,6 +23,8 @@ if (install is null)
 
 var liveOnly = args.Contains("--live-only");
 
+Console.WriteLine("SC Companion CLI  ·  by nekron");
+Console.WriteLine();
 Console.WriteLine($"Install : {install.RootPath}");
 Console.WriteLine($"Channel : {install.Channel}");
 

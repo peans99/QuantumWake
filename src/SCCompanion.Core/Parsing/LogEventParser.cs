@@ -194,6 +194,59 @@ public sealed partial class LogEventParser
                     (DestroyLevel)int.Parse(m.Groups["to"].ValueSpan),
                     m.Groups["cause"].Value)),
 
+            "CEntityComponentShopUIProvider::SendShopBuyRequest" => Match(ShopRequestRegex, line, m =>
+                new ShopRequestEvent(
+                    line.Timestamp,
+                    m.Groups["shop"].Value,
+                    m.Groups["shopId"].Value,
+                    m.Groups["kiosk"].Value,
+                    m.Groups["item"].Value,
+                    decimal.Parse(m.Groups["price"].ValueSpan, System.Globalization.CultureInfo.InvariantCulture),
+                    int.Parse(m.Groups["qty"].ValueSpan))),
+
+            "CEntityComponentShopUIProvider::RmShopFlowResponse" => Match(ShopResponseRegex, line, m =>
+                new ShopFlowResponseEvent(
+                    line.Timestamp,
+                    m.Groups["shop"].Value,
+                    m.Groups["kiosk"].Value,
+                    m.Groups["state"].Value,
+                    m.Groups["result"].Value,
+                    m.Groups["type"].Value)),
+
+            "ObjectiveUpserted" => Match(ObjectiveRegex, line, m =>
+                new MissionObjectiveEvent(
+                    line.Timestamp,
+                    m.Groups["mission"].Value,
+                    m.Groups["objective"].Value,
+                    ParseObjectiveState(m.Groups["state"].Value))),
+
+            "AttachmentReceived" => Match(AttachmentRegex, line, m =>
+                new AttachmentEvent(
+                    line.Timestamp,
+                    m.Groups["player"].Value,
+                    m.Groups["class"].Value.Trim(),
+                    m.Groups["entity"].Value,
+                    m.Groups["port"].Value,
+                    m.Groups["status"].Value)),
+
+            "VehicleListQuery" => ParseFleetQuery(line),
+
+            // Only the scope-carrying variant matters; the timing lines that share
+            // this tag are expected and must not count as parse failures.
+            "Query Inventory" => TryMatch(InventoryScopeRegex, line, m =>
+                new InventoryQueryEvent(
+                    line.Timestamp,
+                    m.Groups["owner"].Value,
+                    m.Groups["scope"].Value,
+                    m.Groups["key"].Value)),
+
+            "Update Container Items Add New Item" => TryMatch(InventoryItemRegex, line, m =>
+                new InventoryItemEvent(
+                    line.Timestamp,
+                    m.Groups["item"].Value,
+                    m.Groups["scope"].Value,
+                    m.Groups["key"].Value)),
+
             "Channel Disconnected" => Match(DisconnectRegex, line, m =>
                 new DisconnectEvent(
                     line.Timestamp,
@@ -429,6 +482,83 @@ public sealed partial class LogEventParser
 
     [GeneratedRegex(@"_\d{4,}$", RegexOptions.Compiled)]
     private static partial Regex TrailingIdRegex { get; }
+
+    /// <summary>
+    /// Like <see cref="Match"/>, but a non-match is expected rather than a defect.
+    /// Used for tags that cover several line shapes where only one is an event.
+    /// </summary>
+    private static GameEvent? TryMatch(Regex regex, LogLine line, Func<Match, GameEvent?> project)
+    {
+        var m = regex.Match(line.Body);
+        return m.Success ? project(m) : null;
+    }
+
+    /// <summary>
+    /// Fleet queries log twice: an opening "Fetching vehicle list…" line with no
+    /// counts, then a completion line carrying them. Only the latter is an event;
+    /// the former is expected and must not count as a parse failure.
+    /// </summary>
+    private GameEvent? ParseFleetQuery(LogLine line)
+    {
+        var m = FleetRegex.Match(line.Body);
+        if (!m.Success)
+            return null;
+
+        return new FleetQueryEvent(
+            line.Timestamp,
+            int.Parse(m.Groups["entitlements"].ValueSpan),
+            int.Parse(m.Groups["vehicles"].ValueSpan));
+    }
+
+    private static ObjectiveState ParseObjectiveState(string raw) => raw switch
+    {
+        "MISSION_OBJECTIVE_STATE_INPROGRESS" => ObjectiveState.InProgress,
+        "MISSION_OBJECTIVE_STATE_COMPLETED" => ObjectiveState.Completed,
+        "MISSION_OBJECTIVE_STATE_WITHDRAWN" => ObjectiveState.Withdrawn,
+        "MISSION_OBJECTIVE_STATE_FAILED" => ObjectiveState.Failed,
+        _ => ObjectiveState.Unknown
+    };
+
+    // ---- Commerce, missions, loadout, fleet ----
+
+    [GeneratedRegex(
+        @"shopId\[(?<shopId>\d+)\] shopName\[(?<shop>[^\]]+)\] kioskId\[(?<kiosk>\d+)\] " +
+        @"client_price\[(?<price>[\d.]+)\].*?itemName\[(?<item>[^\]]+)\] quantity\[(?<qty>\d+)\]",
+        RegexOptions.Compiled)]
+    private static partial Regex ShopRequestRegex { get; }
+
+    [GeneratedRegex(
+        @"shopName\[(?<shop>[^\]]+)\] kioskId\[(?<kiosk>\d+)\] kioskState\[(?<state>[^\]]*)\] " +
+        @"result\[(?<result>[^\]]*)\] type\[(?<type>[^\]]*)\]",
+        RegexOptions.Compiled)]
+    private static partial Regex ShopResponseRegex { get; }
+
+    [GeneratedRegex(
+        @"mission_id (?<mission>[0-9a-fA-F-]+) - objective_id (?<objective>\S+) - " +
+        @"state (?<state>MISSION_OBJECTIVE_STATE_\w+)",
+        RegexOptions.Compiled)]
+    private static partial Regex ObjectiveRegex { get; }
+
+    [GeneratedRegex(
+        @"Player\[(?<player>[^\]]+)\] Attachment\[[^,]+,\s*(?<class>[^,]+),\s*(?<entity>\d+)\] " +
+        @"Status\[(?<status>[^\]]*)\] Port\[(?<port>[^\]]+)\]",
+        RegexOptions.Compiled)]
+    private static partial Regex AttachmentRegex { get; }
+
+    [GeneratedRegex(
+        @"Retrieved (?<entitlements>\d+) entitlements out of (?<vehicles>\d+)",
+        RegexOptions.Compiled)]
+    private static partial Regex FleetRegex { get; }
+
+    [GeneratedRegex(
+        @"Inventory\[(?<owner>\d+):(?<scope>\w+):(?<key>\d+)\]",
+        RegexOptions.Compiled)]
+    private static partial Regex InventoryScopeRegex { get; }
+
+    [GeneratedRegex(
+        @"Entity Class\[(?<item>[^\]]+)\].*?SourceInventory\[\d+:(?<scope>\w+):(?<key>\d+)\]",
+        RegexOptions.Compiled)]
+    private static partial Regex InventoryItemRegex { get; }
 
     // ---- Dormant combat patterns (archived format; not emitted by SC 4.9) ----
 
