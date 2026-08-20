@@ -52,6 +52,13 @@ public sealed class SessionBuilder
     private string? _seatVehicle;
     private DateTimeOffset _seatSince;
 
+    /// <summary>
+    /// Last point the player was demonstrably not in flight - a location visit,
+    /// a spawn, or the end of the previous sortie. Used to estimate flight time
+    /// because no boarding event is logged.
+    /// </summary>
+    private DateTimeOffset _anchor;
+
     private int _incapacitations;
     private int _disconnects;
 
@@ -151,10 +158,18 @@ public sealed class SessionBuilder
             _inGame += span;
     }
 
+    /// <summary>
+    /// Longest span credited to a single flight. Beyond this the gap is far more
+    /// likely to be the player idling or away than a genuine sortie.
+    /// </summary>
+    private static readonly TimeSpan MaxFlightEstimate = TimeSpan.FromHours(2);
+
     private void RecordSeat(VehicleControlEvent vehicle)
     {
         var key = vehicle.Model;
 
+        // Retained for completeness: current builds never emit a seat-entry
+        // event, but handling it costs nothing and future-proofs the pairing.
         if (vehicle.Change == SeatChange.Entered)
         {
             _seatVehicle = key;
@@ -163,19 +178,37 @@ public sealed class SessionBuilder
             return;
         }
 
-        // Release. Credit elapsed time only when a matching entry was seen.
+        // Release. Prefer a genuine pairing; otherwise estimate from the last
+        // known ground anchor, since SC 4.9 logs no boarding event.
         var elapsed = _seatVehicle == key && _seatSince != default
             ? vehicle.Timestamp - _seatSince
-            : TimeSpan.Zero;
+            : EstimateFrom(vehicle.Timestamp);
 
         var existing = _ships.GetValueOrDefault(key);
         _ships[key] = (existing.Time + elapsed, existing.Sorties + 1, vehicle.Manufacturer);
 
-        Timeline(vehicle.Timestamp, "ship", $"Left {Describe(vehicle)}", null);
+        Timeline(vehicle.Timestamp, "ship", $"Left {Describe(vehicle)}", Format(elapsed));
 
         _seatVehicle = null;
         _seatSince = default;
+        _anchor = vehicle.Timestamp;
     }
+
+    /// <summary>Time since the last ground anchor, clamped to a believable range.</summary>
+    private TimeSpan EstimateFrom(DateTimeOffset until)
+    {
+        if (_anchor == default)
+            return TimeSpan.Zero;
+
+        var span = until - _anchor;
+        if (span <= TimeSpan.Zero)
+            return TimeSpan.Zero;
+
+        return span > MaxFlightEstimate ? MaxFlightEstimate : span;
+    }
+
+    private static string? Format(TimeSpan span) =>
+        span <= TimeSpan.Zero ? null : $"~{span.TotalMinutes:F0} min";
 
     private static string Describe(VehicleControlEvent vehicle) =>
         vehicle.Manufacturer is null
@@ -190,6 +223,9 @@ public sealed class SessionBuilder
 
         _locations.Add(new LocationVisit(
             at, location.RawId, location.DisplayName, location.System, location.Body, location.Kind));
+
+        // Arriving somewhere means the player is out of the pilot seat.
+        _anchor = at;
 
         Timeline(at, "location", location.DisplayName, location.Body);
     }
@@ -243,8 +279,8 @@ public sealed class SessionBuilder
 
         var ships = _ships
             .Select(p => new ShipUsage(p.Key, p.Value.Manufacturer, p.Value.Time, p.Value.Sorties))
-            .OrderByDescending(s => s.TimeInSeat)
-            .ThenByDescending(s => s.Sorties)
+            .OrderByDescending(s => s.Sorties)
+            .ThenByDescending(s => s.EstimatedTime)
             .ToList();
 
         return new SessionSummary

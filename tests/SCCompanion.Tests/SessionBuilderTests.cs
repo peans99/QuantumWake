@@ -104,8 +104,9 @@ public class SessionBuilderTests
         Assert.Equal(TimeSpan.FromMinutes(80), summary.Duration);
     }
 
+    /// <summary>Retained for the day CIG restores a boarding event.</summary>
     [Fact]
-    public void Accumulates_time_in_seat_across_a_sortie()
+    public void Uses_exact_time_when_a_boarding_event_is_present()
     {
         var summary = Build(
             new VehicleControlEvent(T0, "DRAK_Clipper_1", "Clipper", "DRAK", "1", SeatChange.Entered),
@@ -115,24 +116,66 @@ public class SessionBuilderTests
         var ship = Assert.Single(summary.Ships);
         Assert.Equal("Clipper", ship.Model);
         Assert.Equal("DRAK", ship.Manufacturer);
-        Assert.Equal(TimeSpan.FromMinutes(30), ship.TimeInSeat);
+        Assert.Equal(TimeSpan.FromMinutes(30), ship.EstimatedTime);
         Assert.Equal(1, ship.Sorties);
     }
 
     /// <summary>
-    /// Current logs reliably emit only ClearDriver. An unpaired release must
-    /// still count as a sortie, with zero time rather than a fabricated span.
+    /// SC 4.9 emits only ClearDriver - 497 of 497 vehicle events in the sample
+    /// set. With no anchor to measure from, no time may be invented.
     /// </summary>
     [Fact]
-    public void Unpaired_release_counts_a_sortie_without_inventing_time()
+    public void Release_with_no_anchor_counts_a_sortie_without_inventing_time()
     {
         var summary = Build(
             new VehicleControlEvent(T0, "RSI_Aurora_Mk2_9", "Aurora_Mk2", "RSI", "9", SeatChange.Left)
         ).Build();
 
         var ship = Assert.Single(summary.Ships);
-        Assert.Equal(TimeSpan.Zero, ship.TimeInSeat);
+        Assert.Equal(TimeSpan.Zero, ship.EstimatedTime);
         Assert.Equal(1, ship.Sorties);
+    }
+
+    /// <summary>Departing a known location gives a usable anchor to estimate from.</summary>
+    [Fact]
+    public void Estimates_flight_time_from_the_last_known_stop()
+    {
+        var summary = Build(
+            new LocationInventoryEvent(T0, "nekron", "RR_MIC_LEO"),
+            new VehicleControlEvent(T0.AddMinutes(12), "DRAK_Clipper_1", "Clipper", "DRAK", "1", SeatChange.Left)
+        ).Build();
+
+        Assert.Equal(TimeSpan.FromMinutes(12), Assert.Single(summary.Ships).EstimatedTime);
+    }
+
+    /// <summary>
+    /// A long idle gap is not a four-hour sortie; the estimate is capped so one
+    /// AFK stretch cannot dominate the totals.
+    /// </summary>
+    [Fact]
+    public void Caps_the_flight_estimate_across_idle_gaps()
+    {
+        var summary = Build(
+            new LocationInventoryEvent(T0, "nekron", "RR_MIC_LEO"),
+            new VehicleControlEvent(T0.AddHours(9), "DRAK_Clipper_1", "Clipper", "DRAK", "1", SeatChange.Left)
+        ).Build();
+
+        Assert.Equal(TimeSpan.FromHours(2), Assert.Single(summary.Ships).EstimatedTime);
+    }
+
+    [Fact]
+    public void Ranks_ships_by_flights_not_estimated_time()
+    {
+        var summary = Build(
+            new LocationInventoryEvent(T0, "nekron", "RR_MIC_LEO"),
+            new VehicleControlEvent(T0.AddHours(2), "RSI_Hermes_1", "Hermes", "RSI", "1", SeatChange.Left),
+            new VehicleControlEvent(T0.AddHours(2).AddMinutes(5), "DRAK_Clipper_1", "Clipper", "DRAK", "1", SeatChange.Left),
+            new VehicleControlEvent(T0.AddHours(2).AddMinutes(10), "DRAK_Clipper_1", "Clipper", "DRAK", "1", SeatChange.Left)
+        ).Build();
+
+        Assert.Equal("Clipper", summary.Ships[0].Model);
+        Assert.Equal(2, summary.Ships[0].Sorties);
+        Assert.Equal("DRAK Clipper", summary.PrimaryShip);
     }
 
     [Fact]
