@@ -13,6 +13,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [log-format-reference.md](log-format-reference.md) | Line formats verified present in the local logs, plus the removed ones. |
 | [architecture.md](architecture.md) | Design decisions for SC Companion and the reasons behind them. |
 | [phase-1-core.md](phase-1-core.md) | Build log: the Core parser, what it verified, and the quirks it uncovered. |
+| [phases-2-5.md](phases-2-5.md) | Build log: server, dashboard, map, overlay, and the dormant combat parser. |
 | [tools/starlogs.md](tools/starlogs.md) | Ozy311/StarLogs — Python/Flask/SSE dashboard |
 | [tools/autotrackr2.md](tools/autotrackr2.md) | BubbaGumpShrump/AutoTrackR2 — C#/WPF kill tracker |
 | [tools/scstats.md](tools/scstats.md) | Maple33-hash/SCStats — read-only session analyser |

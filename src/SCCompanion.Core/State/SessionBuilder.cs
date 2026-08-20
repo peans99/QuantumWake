@@ -61,6 +61,8 @@ public sealed class SessionBuilder
 
     private int _incapacitations;
     private int _disconnects;
+    private int _kills;
+    private int _deaths;
 
     public SessionBuilder(string sourceFile) => _sourceFile = sourceFile;
 
@@ -118,6 +120,22 @@ public sealed class SessionBuilder
 
             case NotificationEvent notification:
                 RecordNotification(notification);
+                break;
+
+            // Dormant on SC 4.9 - no combat events are emitted - but wired so the
+            // counters populate the moment CIG restores them.
+            case ActorDeathEvent death:
+                RecordDeath(death);
+                break;
+
+            case VehicleDestructionEvent destruction:
+                Timeline(
+                    ev.Timestamp,
+                    "vehicle-destroyed",
+                    destruction.To == DestroyLevel.SoftDeath
+                        ? $"{destruction.Vehicle} disabled"
+                        : $"{destruction.Vehicle} destroyed",
+                    destruction.Cause);
                 break;
 
             case DisconnectEvent disconnect:
@@ -265,6 +283,31 @@ public sealed class SessionBuilder
         }
     }
 
+    private void RecordDeath(ActorDeathEvent death)
+    {
+        switch (death.Classification)
+        {
+            case KillKind.PvpKill:
+            case KillKind.PveKill:
+                _kills++;
+                Timeline(death.Timestamp, "kill", $"Killed {death.Victim}", death.Weapon);
+                break;
+
+            case KillKind.Death:
+            case KillKind.PvpDeath:
+                _deaths++;
+                Timeline(death.Timestamp, "death", $"Killed by {death.Killer}", death.Weapon);
+                break;
+
+            case KillKind.Suicide:
+                _deaths++;
+                Timeline(death.Timestamp, "death", "Died", death.DamageType);
+                break;
+
+            // Bystander kills are noise unless the player was involved.
+        }
+    }
+
     private void Timeline(DateTimeOffset at, string kind, string text, string? detail) =>
         _timeline.Add(new TimelineEntry(at, kind, text, detail));
 
@@ -302,10 +345,10 @@ public sealed class SessionBuilder
             Timeline = [.. _timeline.OrderBy(t => t.At)],
             Incapacitations = _incapacitations,
 
-            // Deaths and Kills stay zero until Phase 5 wires the dormant combat
-            // parser. SC 4.9 emits no combat events at all - see docs/findings.md.
-            Deaths = 0,
-            Kills = 0,
+            // Always zero on SC 4.9: the game emits no combat events at all.
+            // These populate automatically if CIG restores them.
+            Deaths = _deaths,
+            Kills = _kills,
 
             Disconnects = _disconnects,
             GameRules = _gameRules
