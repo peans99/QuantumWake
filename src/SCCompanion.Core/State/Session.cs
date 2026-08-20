@@ -41,6 +41,16 @@ public sealed record QuantumJump(
     string ToId,
     string ToName);
 
+/// <summary>How a contract ended, where the log says.</summary>
+public enum ContractOutcome
+{
+    /// <summary>Seen, but no objective state reported.</summary>
+    Unknown,
+    InProgress,
+    Completed,
+    Abandoned
+}
+
 /// <summary>A contract seen during a session.</summary>
 public sealed record ContractRecord(
     DateTimeOffset FirstSeen,
@@ -50,7 +60,53 @@ public sealed record ContractRecord(
     string? System,
     string? Difficulty,
     string? Type,
-    bool Accepted);
+    bool Accepted)
+{
+    /// <summary>Mission id, used to join objective state onto the contract.</summary>
+    public string? MissionId { get; init; }
+
+    public ContractOutcome Outcome { get; init; } = ContractOutcome.Unknown;
+
+    public DateTimeOffset? CompletedAt { get; init; }
+
+    /// <summary>Wall-clock time from first sighting to completion.</summary>
+    public TimeSpan? TimeToComplete => CompletedAt is null ? null : CompletedAt - FirstSeen;
+}
+
+/// <summary>A confirmed kiosk purchase.</summary>
+/// <param name="Confirmed">
+/// True only when the server answered <c>result[Success]</c>. Unconfirmed
+/// requests are kept but excluded from spend totals, since the player may have
+/// cancelled or lacked the funds.
+/// </param>
+public sealed record PurchaseRecord(
+    DateTimeOffset At,
+    string Shop,
+    string Item,
+    decimal Price,
+    int Quantity,
+    bool Confirmed)
+{
+    public decimal Total => Price * Quantity;
+}
+
+/// <summary>One equipped item, at the slot it occupied.</summary>
+public sealed record LoadoutItem(
+    string Port,
+    string ItemClass,
+    DateTimeOffset FirstSeen);
+
+/// <summary>
+/// An item observed in a location's inventory.
+/// </summary>
+/// <remarks>
+/// Item removals are never logged, so this is "seen at", not a live stock level.
+/// </remarks>
+public sealed record StashEntry(
+    DateTimeOffset SeenAt,
+    string LocationId,
+    string LocationName,
+    string ItemClass);
 
 /// <summary>An entry on the session timeline.</summary>
 public sealed record TimelineEntry(
@@ -88,6 +144,17 @@ public sealed record SessionSummary
     public IReadOnlyList<QuantumJump> Jumps { get; init; } = [];
     public IReadOnlyList<ContractRecord> Contracts { get; init; } = [];
     public IReadOnlyList<TimelineEntry> Timeline { get; init; } = [];
+    public IReadOnlyList<PurchaseRecord> Purchases { get; init; } = [];
+    public IReadOnlyList<LoadoutItem> Loadout { get; init; } = [];
+    public IReadOnlyList<StashEntry> Stash { get; init; } = [];
+
+    /// <summary>Largest owned-vehicle count seen this session, or null if not reported.</summary>
+    public int? FleetSize { get; init; }
+
+    /// <summary>Confirmed spend only.</summary>
+    public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
+
+    public int ContractsCompleted => Contracts.Count(c => c.Outcome == ContractOutcome.Completed);
 
     public int Incapacitations { get; init; }
     public int Deaths { get; init; }

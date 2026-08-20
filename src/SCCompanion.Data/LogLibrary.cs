@@ -24,7 +24,48 @@ public sealed record LibraryStats
     public IReadOnlyList<PlaceTotal> Destinations { get; init; } = [];
     public IReadOnlyList<FacetTotal> ContractIssuers { get; init; } = [];
     public IReadOnlyList<FacetTotal> ContractTypes { get; init; } = [];
+
+    // ---- commerce ----
+
+    /// <summary>Confirmed spend across every session.</summary>
+    public decimal Spend { get; init; }
+
+    public int PurchaseCount { get; init; }
+    public IReadOnlyList<FacetTotal> Shops { get; init; } = [];
+    public IReadOnlyList<SpendTotal> Items { get; init; } = [];
+
+    // ---- contracts ----
+
+    public int ContractsCompleted { get; init; }
+    public int ContractsAbandoned { get; init; }
+    public int ContractsSeen { get; init; }
+
+    // ---- fleet, loadout, stash ----
+
+    /// <summary>Largest owned-vehicle count ever reported.</summary>
+    public int? FleetSize { get; init; }
+
+    /// <summary>Owned-vehicle count over time, for the fleet chart.</summary>
+    public IReadOnlyList<FleetPoint> FleetHistory { get; init; } = [];
+
+    public IReadOnlyList<LoadoutSlot> Loadout { get; init; } = [];
+    public IReadOnlyList<StashLocation> Stash { get; init; } = [];
 }
+
+/// <param name="Total">Confirmed spend on this item across all sessions.</param>
+public sealed record SpendTotal(string Name, decimal Total, int Quantity);
+
+public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
+
+/// <summary>Items seen in one slot, most recent first.</summary>
+public sealed record LoadoutSlot(string Port, IReadOnlyList<FacetTotal> Items);
+
+/// <summary>Items seen stored at one location.</summary>
+public sealed record StashLocation(
+    string LocationId,
+    string Name,
+    DateTimeOffset LastSeen,
+    IReadOnlyList<string> Items);
 
 /// <param name="Sorties">Flights - the reliable metric.</param>
 /// <param name="EstimatedTime">Inferred time aboard; see <see cref="ShipUsage"/>.</param>
@@ -173,6 +214,43 @@ public sealed class LogLibrary : IDisposable
             .ToList();
 
         var contracts = sessions.SelectMany(s => s.Contracts).ToList();
+        var purchases = sessions.SelectMany(s => s.Purchases).Where(p => p.Confirmed).ToList();
+
+        var items = purchases
+            .GroupBy(p => p.Item, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new SpendTotal(g.Key, g.Sum(p => p.Total), g.Sum(p => p.Quantity)))
+            .OrderByDescending(i => i.Total)
+            .ToList();
+
+        var fleetHistory = sessions
+            .Where(s => s.FleetSize is > 0)
+            .OrderBy(s => s.StartedAt)
+            .Select(s => new FleetPoint(s.StartedAt, s.FleetSize!.Value))
+            .ToList();
+
+        var loadout = sessions
+            .SelectMany(s => s.Loadout)
+            .GroupBy(l => l.Port, StringComparer.Ordinal)
+            .Select(g => new LoadoutSlot(
+                g.Key,
+                [.. g.GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
+                     .Select(i => new FacetTotal(i.Key, i.Count()))
+                     .OrderByDescending(i => i.Count)]))
+            .OrderByDescending(s => s.Items.Sum(i => i.Count))
+            .ToList();
+
+        // Items are only ever added to the log, never removed, so this is the
+        // union of everything seen at each place rather than current contents.
+        var stash = sessions
+            .SelectMany(s => s.Stash)
+            .GroupBy(e => e.LocationId, StringComparer.Ordinal)
+            .Select(g => new StashLocation(
+                g.Key,
+                g.First().LocationName,
+                g.Max(e => e.SeenAt),
+                [.. g.Select(e => e.ItemClass).Distinct(StringComparer.OrdinalIgnoreCase).Order()]))
+            .OrderByDescending(l => l.Items.Count)
+            .ToList();
 
         return new LibraryStats
         {
@@ -189,7 +267,21 @@ public sealed class LogLibrary : IDisposable
             Locations = locations,
             Destinations = destinations,
             ContractIssuers = Facet(contracts.Select(c => c.Issuer)),
-            ContractTypes = Facet(contracts.Select(c => c.Type))
+            ContractTypes = Facet(contracts.Select(c => c.Type)),
+
+            Spend = purchases.Sum(p => p.Total),
+            PurchaseCount = purchases.Count,
+            Shops = Facet(purchases.Select(p => p.Shop)),
+            Items = items,
+
+            ContractsSeen = contracts.Count,
+            ContractsCompleted = contracts.Count(c => c.Outcome == ContractOutcome.Completed),
+            ContractsAbandoned = contracts.Count(c => c.Outcome == ContractOutcome.Abandoned),
+
+            FleetSize = fleetHistory.Count > 0 ? fleetHistory.Max(f => f.Vehicles) : null,
+            FleetHistory = fleetHistory,
+            Loadout = loadout,
+            Stash = stash
         };
     }
 

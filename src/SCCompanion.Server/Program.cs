@@ -137,6 +137,33 @@ app.MapPost("/api/scan", (LogLibrary lib, bool? force) =>
     return Results.Ok(new { parsed, sessions = lib.Store.Count() });
 });
 
+app.MapGet("/api/fleet", (LogLibrary lib) =>
+{
+    var stats = lib.Stats();
+    return Results.Ok(new
+    {
+        owned = stats.FleetSize,
+        history = stats.FleetHistory,
+        flown = stats.Ships
+    });
+});
+
+app.MapGet("/api/spending", (LogLibrary lib) =>
+{
+    var stats = lib.Stats();
+    return Results.Ok(new
+    {
+        total = stats.Spend,
+        count = stats.PurchaseCount,
+        shops = stats.Shops,
+        items = stats.Items
+    });
+});
+
+app.MapGet("/api/loadout", (LogLibrary lib) => lib.Stats().Loadout);
+
+app.MapGet("/api/stash", (LogLibrary lib) => lib.Stats().Stash);
+
 app.MapGet("/api/map", (LogLibrary lib) =>
 {
     var stats = lib.Stats();
@@ -162,7 +189,7 @@ if (install is not null)
     });
 }
 
-app.Logger.LogInformation("SC Companion on http://{Host}:{Port}", host, port);
+app.Logger.LogInformation("SC Companion by nekron - http://{Host}:{Port}", host, port);
 app.Run();
 return;
 

@@ -187,25 +187,14 @@ function bars(container, rows, format) {
 async function loadHistory() {
   const [stats, sessions] = await Promise.all([getJson('/api/stats'), getJson('/api/sessions')]);
 
-  // Summary tiles.
-  const strip = $('#lib-summary');
-  strip.textContent = '';
-
-  const tiles = [
+  tiles('#lib-summary', [
     ['Sessions', stats.sessions],
     ['In game', duration(toSeconds(stats.inGameTime))],
     ['In menus', duration(toSeconds(stats.menuTime))],
     ['Ships flown', stats.ships.length],
     ['Places visited', stats.locations.length],
     ['Incapacitations', stats.incapacitations],
-  ];
-
-  for (const [label, value] of tiles) {
-    const tile = el('div', 'tile');
-    tile.append(el('div', 'n', String(value)));
-    tile.append(el('div', 'l', label));
-    strip.append(tile);
-  }
+  ]);
 
   // Sessions table.
   const body = $('#sessions-table tbody');
@@ -225,16 +214,19 @@ async function loadHistory() {
     body.append(tr);
   }
 
-  // Flights lead, because Star Citizen 4.9 logs no seat-entry event: every
-  // vehicle line is a control-token release. Time aboard is an estimate and is
-  // shown as a secondary, clearly-approximate figure.
-  bars('#ships-chart',
-    stats.ships.slice(0, 20).map((s) => ({
-      label: s.name,
-      value: s.sorties,
-      note: toSeconds(s.estimatedTime) > 0 ? `~${duration(toSeconds(s.estimatedTime))}` : null,
-    })),
-    (v) => `${v} flight${v === 1 ? '' : 's'}`);
+  renderFleet(stats);
+  renderSpending(stats);
+  renderLoadout(stats);
+  renderStash(stats);
+
+  tiles('#contract-summary', [
+    ['Contracts seen', stats.contractsSeen],
+    ['Completed', stats.contractsCompleted],
+    ['Abandoned', stats.contractsAbandoned],
+    ['Completion rate', stats.contractsSeen
+      ? `${Math.round((stats.contractsCompleted / stats.contractsSeen) * 100)}%`
+      : '—'],
+  ]);
 
   bars('#places-chart',
     stats.locations.slice(0, 20).map((l) => ({
@@ -273,6 +265,232 @@ function toSeconds(timespan) {
 
   const [h = 0, m = 0, s = 0] = String(clockPart).split(':').map(parseFloat);
   return days * 86400 + h * 3600 + m * 60 + s;
+}
+
+/* ---------- shared widgets ---------- */
+
+function tiles(container, entries) {
+  const node = $(container);
+  node.textContent = '';
+
+  for (const [label, value] of entries) {
+    const tile = el('div', 'tile');
+    tile.append(el('div', 'n', String(value)));
+    tile.append(el('div', 'l', label));
+    node.append(tile);
+  }
+}
+
+/* Manufacturer prefixes as they appear in vehicle ids. */
+const MANUFACTURERS = {
+  DRAK: 'Drake Interplanetary', ANVL: 'Anvil Aerospace', RSI: 'Roberts Space Industries',
+  MISC: 'MISC', ORIG: 'Origin Jumpworks', AEGS: 'Aegis Dynamics',
+  CRUS: 'Crusader Industries', CNOU: 'Consolidated Outland', TMBL: 'Tumbril',
+  ESPR: 'Esperia', BANU: 'Banu', KRIG: 'Kruger Intergalactic',
+  ARGO: 'ARGO Astronautics', AOPO: 'Aopoa', GATS: 'Gatac', MRAI: 'Mirai',
+};
+
+const money = (n) => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
+
+/* ---------- fleet ---------- */
+
+function renderFleet(stats) {
+  const owned = stats.fleetSize;
+
+  tiles('#fleet-summary', [
+    ['Ships owned', owned ?? '—'],
+    ['Models flown', stats.ships.length],
+    ['Total flights', stats.ships.reduce((sum, s) => sum + s.sorties, 0)],
+    ['Time aboard', `~${duration(stats.ships.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
+  ]);
+
+  drawFleetChart(stats.fleetHistory || []);
+
+  const grid = $('#fleet-ships');
+  grid.textContent = '';
+
+  if (!stats.ships.length) {
+    grid.append(el('p', 'muted', 'No ships recorded yet.'));
+    return;
+  }
+
+  for (const ship of stats.ships) {
+    // "DRAK Clipper" -> prefix + model.
+    const [prefix, ...rest] = ship.name.split(' ');
+    const card = el('article', 'ship-card');
+
+    const badge = el('div', 'ship-logo');
+    if (MANUFACTURERS[prefix]) {
+      const img = document.createElement('img');
+      img.src = `assets/manufacturers/${prefix}.png`;
+      img.alt = MANUFACTURERS[prefix];
+      img.loading = 'lazy';
+      badge.append(img);
+    } else {
+      badge.append(el('span', 'ship-logo-text', prefix));
+    }
+    card.append(badge);
+
+    const body = el('div', 'ship-body');
+    body.append(el('div', 'ship-name', rest.join(' ') || ship.name));
+    body.append(el('div', 'ship-maker', MANUFACTURERS[prefix] || prefix));
+
+    const stat = el('div', 'ship-stats');
+    stat.append(el('b', null, String(ship.sorties)));
+    stat.append(el('span', null, ` flight${ship.sorties === 1 ? '' : 's'}`));
+
+    const seconds = toSeconds(ship.estimatedTime);
+    if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
+
+    body.append(stat);
+    card.append(body);
+    grid.append(card);
+  }
+}
+
+/** Step chart of owned-vehicle count over time. */
+function drawFleetChart(history) {
+  const svg = $('#fleet-chart');
+  svg.textContent = '';
+
+  if (history.length < 2) {
+    const text = svgEl('text', { x: 500, y: 110, 'text-anchor': 'middle', class: 'map-label' });
+    text.textContent = 'NOT ENOUGH DATA YET';
+    svg.append(text);
+    return;
+  }
+
+  const max = Math.max(...history.map((p) => p.vehicles));
+  const min = Math.min(...history.map((p) => p.vehicles));
+  const span = Math.max(1, max - min);
+
+  const x = (i) => 30 + (i / (history.length - 1)) * 940;
+  const y = (v) => 190 - ((v - min) / span) * 150;
+
+  // Baseline and top gridlines.
+  for (const value of [min, max]) {
+    svg.append(svgEl('line', {
+      x1: 30, y1: y(value), x2: 970, y2: y(value),
+      stroke: 'rgba(53,200,240,.12)', 'stroke-width': '1',
+    }));
+    const label = svgEl('text', { x: 8, y: y(value) + 4, class: 'map-label' });
+    label.textContent = String(value);
+    svg.append(label);
+  }
+
+  // Fleet size only ever steps up, so a step line is the honest shape.
+  let path = `M ${x(0)} ${y(history[0].vehicles)}`;
+  history.forEach((point, i) => {
+    if (i === 0) return;
+    path += ` L ${x(i)} ${y(history[i - 1].vehicles)} L ${x(i)} ${y(point.vehicles)}`;
+  });
+
+  svg.append(svgEl('path', {
+    d: path, fill: 'none', stroke: '#35c8f0', 'stroke-width': '2', filter: 'url(#glow)',
+  }));
+
+  history.forEach((point, i) => {
+    if (i % Math.ceil(history.length / 40) !== 0) return;
+    svg.append(svgEl('circle', { cx: x(i), cy: y(point.vehicles), r: 2.5, fill: '#7fe4ff' }));
+  });
+
+  // Reuse the map's glow filter definition.
+  const defs = svgEl('defs');
+  const glow = svgEl('filter', { id: 'glow', x: '-60%', y: '-60%', width: '220%', height: '220%' });
+  glow.append(svgEl('feGaussianBlur', { stdDeviation: '2.4', result: 'b' }));
+  const merge = svgEl('feMerge');
+  merge.append(svgEl('feMergeNode', { in: 'b' }));
+  merge.append(svgEl('feMergeNode', { in: 'SourceGraphic' }));
+  glow.append(merge);
+  defs.append(glow);
+  svg.prepend(defs);
+}
+
+/* ---------- spending ---------- */
+
+function renderSpending(stats) {
+  tiles('#spend-summary', [
+    ['Confirmed spend', money(stats.spend)],
+    ['Purchases', stats.purchaseCount],
+    ['Shops used', stats.shops.length],
+    ['Distinct items', stats.items.length],
+  ]);
+
+  bars('#shops-chart',
+    stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count })),
+    (v) => `${v} buy${v === 1 ? '' : 's'}`);
+
+  bars('#items-chart',
+    stats.items.slice(0, 20).map((i) => ({
+      label: i.name,
+      value: Number(i.total),
+      note: i.quantity > 1 ? `×${i.quantity}` : null,
+    })),
+    money);
+}
+
+/* ---------- loadout ---------- */
+
+function renderLoadout(stats) {
+  const grid = $('#loadout-grid');
+  grid.textContent = '';
+
+  if (!stats.loadout || !stats.loadout.length) {
+    grid.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    return;
+  }
+
+  for (const slot of stats.loadout) {
+    const card = el('article', 'card');
+    card.append(el('div', 'card-label', prettySlot(slot.port)));
+
+    const list = el('ul', 'slot-list');
+    for (const item of slot.items.slice(0, 6)) {
+      const li = el('li');
+      li.append(el('span', 'slot-item', prettyItem(item.name)));
+      li.append(el('span', 'slot-count', `×${item.count}`));
+      list.append(li);
+    }
+    card.append(list);
+
+    if (slot.items.length > 6)
+      card.append(el('div', 'note', `and ${slot.items.length - 6} more`));
+
+    grid.append(card);
+  }
+}
+
+const prettySlot = (port) => port.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const prettyItem = (name) => name.replace(/_/g, ' ');
+
+/* ---------- stash ---------- */
+
+function renderStash(stats) {
+  const grid = $('#stash-grid');
+  grid.textContent = '';
+
+  if (!stats.stash || !stats.stash.length) {
+    grid.append(el('p', 'muted',
+      'Nothing recorded yet. Open a local inventory in game and it will appear here.'));
+    return;
+  }
+
+  for (const place of stats.stash) {
+    const card = el('article', 'card');
+    card.append(el('div', 'card-label', place.name));
+    card.append(el('div', 'sub', `${place.items.length} item types · last seen ${dateOf(place.lastSeen)}`));
+
+    const list = el('ul', 'slot-list');
+    for (const item of place.items.slice(0, 14))
+      list.append(el('li', null, prettyItem(item)));
+
+    card.append(list);
+
+    if (place.items.length > 14)
+      card.append(el('div', 'note', `and ${place.items.length - 14} more`));
+
+    grid.append(card);
+  }
 }
 
 /* ---------- map ---------- */

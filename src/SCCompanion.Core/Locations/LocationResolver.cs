@@ -28,6 +28,27 @@ public static partial class LocationResolver
 {
     private static readonly ConcurrentDictionary<string, ResolvedLocation> Cache = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Ids that name a category rather than a place.
+    /// </summary>
+    /// <remarks>
+    /// Quantum destinations are not always specific. <c>ObjectContainer_RestStop</c>
+    /// is used for <i>every</i> rest stop - a trip from Area18 to
+    /// "ObjectContainer_RestStop" actually arrived at microTech LEO. Counting
+    /// these as one place merges unrelated destinations into a meaningless
+    /// bucket, so callers should resolve them to the location actually reached.
+    /// </remarks>
+    public static bool IsAmbiguous(string rawId)
+    {
+        if (string.IsNullOrWhiteSpace(rawId))
+            return true;
+
+        return rawId.Equals("ObjectContainer_RestStop", StringComparison.OrdinalIgnoreCase)
+            || rawId.Equals("RestStop", StringComparison.OrdinalIgnoreCase)
+            || NavPointRegex.IsMatch(rawId)
+            || MissionBeaconRegex.IsMatch(rawId);
+    }
+
     /// <summary>Resolves an id, caching the result.</summary>
     public static ResolvedLocation Resolve(string rawId)
     {

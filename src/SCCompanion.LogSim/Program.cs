@@ -24,6 +24,8 @@ var backupsDirectory = Path.Combine(liveDirectory, "logbackups");
 
 Directory.CreateDirectory(backupsDirectory);
 
+Console.WriteLine("SC Companion log simulator  ·  by nekron");
+Console.WriteLine();
 Console.WriteLine($"Fake install : {liveDirectory}");
 Console.WriteLine($"Handle       : {options.Handle}");
 Console.WriteLine($"Combat       : {(options.Combat ? "enabled (exercises the dormant parser)" : "off, matching real 4.9 logs")}");

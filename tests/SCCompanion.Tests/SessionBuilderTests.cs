@@ -206,6 +206,50 @@ public class SessionBuilderTests
         Assert.Equal("Pyro – Stanton Jump Point", summary.Jumps[0].ToName);
     }
 
+    /// <summary>
+    /// ObjectContainer_RestStop names a category, not a place - the same string
+    /// is used for every rest stop. Left as-is it merges unrelated destinations
+    /// into one bucket, so the actual arrival must replace it.
+    /// </summary>
+    [Fact]
+    public void Resolves_generic_destinations_to_the_place_actually_reached()
+    {
+        var summary = Build(
+            new LocationInventoryEvent(T0, "nekron", "Stanton3_Area18"),
+            new QuantumRouteEvent(T0.AddMinutes(2), "Clipper", "Area18", "ObjectContainer_RestStop"),
+            new LocationInventoryEvent(T0.AddMinutes(9), "nekron", "RR_MIC_LEO")
+        ).Build();
+
+        var jump = Assert.Single(summary.Jumps);
+        Assert.Equal("RR_MIC_LEO", jump.ToId);
+        Assert.Equal("microTech LEO Rest Stop", jump.ToName);
+        Assert.Contains(summary.Timeline, t => t.Kind == "quantum" && t.Text.Contains("microTech LEO"));
+    }
+
+    /// <summary>With no arrival signal there is nothing to resolve to; the
+    /// generic label must survive rather than being guessed at.</summary>
+    [Fact]
+    public void Leaves_generic_destination_alone_when_arrival_is_unknown()
+    {
+        var summary = Build(
+            new LocationInventoryEvent(T0, "nekron", "Stanton3_Area18"),
+            new QuantumRouteEvent(T0.AddMinutes(2), "Clipper", "Area18", "ObjectContainer_RestStop")
+        ).Build();
+
+        Assert.Equal("Rest Stop", Assert.Single(summary.Jumps).ToName);
+    }
+
+    [Fact]
+    public void Specific_destinations_are_never_rewritten()
+    {
+        var summary = Build(
+            new QuantumRouteEvent(T0, "Clipper", null, "Stanton4_NewBabbage"),
+            new LocationInventoryEvent(T0.AddMinutes(6), "nekron", "RR_MIC_LEO")
+        ).Build();
+
+        Assert.Equal("New Babbage", Assert.Single(summary.Jumps).ToName);
+    }
+
     [Fact]
     public void Deduplicates_incapacitation_notifications()
     {

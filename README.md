@@ -1,5 +1,7 @@
 # SC Companion
 
+**by nekron**
+
 A companion app for Star Citizen driven by `Game.log`. Second-screen dashboard,
 transparent in-game overlay, and a map of where you've been — read-only, offline,
 and anti-cheat safe.
@@ -142,6 +144,8 @@ silently dropped).
 - [docs/tools/](docs/tools/) — analysis of seven existing SC log tools
 
 ## Credits
+
+Built by **nekron**.
 
 Prior art studied while building this: [StarLogs](https://github.com/Ozy311/StarLogs)
 (architecture and archived combat patterns), [all-slain](https://github.com/DimmaDont/all-slain)
