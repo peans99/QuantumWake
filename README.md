@@ -81,6 +81,23 @@ than fatal — and the health report names the tag and shows a sample so breakag
 after a patch is visible immediately instead of appearing as silently empty
 charts.
 
+## Try it without playing
+
+`SCCompanion.LogSim` builds a fake install whose logs match the real format,
+quirks included:
+
+```powershell
+dotnet run --project src\SCCompanion.LogSim -c Release -- --backups 12 --combat
+.\start.ps1 -Path "$env:TEMP\SCCompanionFakeInstall\LIVE"
+```
+
+`--combat` emits kill and vehicle-destruction events, which is the only way to
+see the dormant killboard populate — real 4.9 logs never will. `--live` appends
+to `Game.log` in real time so the Now view and overlay update as you watch.
+
+The cache is scoped per install, so a simulated install never blends into your
+real totals. Full options in [docs/log-simulator.md](docs/log-simulator.md).
+
 ## Architecture
 
 One web UI, hosted three ways — a browser today, WebView2 in the overlay, and

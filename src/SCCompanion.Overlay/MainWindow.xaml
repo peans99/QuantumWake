@@ -15,34 +15,66 @@
         <!-- Hosts the same web UI the browser loads, in overlay layout. -->
         <wv2:WebView2 x:Name="Browser" DefaultBackgroundColor="Transparent" />
 
-        <!-- Shown until the server answers, and while the overlay is starting. -->
-        <Border x:Name="Splash"
-                Background="#E60E131B"
-                CornerRadius="10"
-                BorderBrush="#1E2735"
-                BorderThickness="1">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
-                <TextBlock Text="SC COMPANION"
-                           Foreground="#35C8F0"
-                           FontFamily="Segoe UI"
-                           FontSize="13"
-                           HorizontalAlignment="Center" />
-                <TextBlock x:Name="SplashText"
-                           Text="Starting…"
-                           Foreground="#7C8BA1"
-                           FontFamily="Segoe UI"
-                           FontSize="12"
-                           Margin="0,10,0,0"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           MaxWidth="300" />
-                <TextBlock Text="Ctrl+Alt+O  toggles click-through"
-                           Foreground="#4D5A6D"
-                           FontFamily="Segoe UI"
-                           FontSize="11"
-                           Margin="0,18,0,0"
-                           HorizontalAlignment="Center" />
-            </StackPanel>
+        <!-- Shown until the server answers. Matches the web UI's HUD styling so
+             the two halves of the app look like one product. -->
+        <Border x:Name="Splash" BorderBrush="#17293C" BorderThickness="1">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#E80A121C" Offset="0" />
+                    <GradientStop Color="#E404070C" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+
+            <Grid>
+                <!-- Cyan bracket along the top edge, the mobiGlas panel motif. -->
+                <Rectangle Height="2" Width="46" Fill="#35C8F0"
+                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                           Margin="12,0,0,0" />
+
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="26">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,14">
+                        <Rectangle Width="9" Height="9" Fill="#35C8F0"
+                                   RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center">
+                            <Rectangle.RenderTransform>
+                                <RotateTransform Angle="45" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                        <TextBlock Text="SC COMPANION"
+                                   Foreground="#7FE4FF"
+                                   FontFamily="Bahnschrift, Segoe UI"
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Margin="14,0,0,0">
+                            <TextBlock.Effect>
+                                <DropShadowEffect Color="#35C8F0" BlurRadius="14" ShadowDepth="0" Opacity="0.7" />
+                            </TextBlock.Effect>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <TextBlock x:Name="SplashText"
+                               Text="INITIALISING…"
+                               Foreground="#7796B0"
+                               FontFamily="Bahnschrift, Segoe UI"
+                               FontSize="12"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="300" />
+
+                    <Rectangle Height="1" Fill="#17293C" Margin="0,20,0,14" />
+
+                    <TextBlock Text="CTRL + ALT + O   TOGGLE CLICK-THROUGH"
+                               Foreground="#46617A"
+                               FontFamily="Bahnschrift, Segoe UI"
+                               FontSize="10"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="REQUIRES BORDERLESS WINDOWED"
+                               Foreground="#46617A"
+                               FontFamily="Bahnschrift, Segoe UI"
+                               FontSize="10"
+                               Margin="0,5,0,0"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>
