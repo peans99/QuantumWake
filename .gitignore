@@ -1,0 +1,23 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+
+# Local app data
+*.db
+*.db-shm
+*.db-wal
+cache/
+
+# IDE
+.vs/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+desktop.ini
