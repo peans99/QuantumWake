@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SCCompanion.Cli/SCCompanion.Cli.csproj" />
+    <Project Path="src/SCCompanion.Core/SCCompanion.Core.csproj" />
+    <Project Path="src/SCCompanion.Data/SCCompanion.Data.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SCCompanion.Tests/SCCompanion.Tests.csproj" />
+  </Folder>
+</Solution>
