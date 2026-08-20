@@ -27,6 +27,18 @@ public sealed partial class LogEventParser
     private string? _pendingBuildTag;
     private DateTimeOffset? _pendingSessionStart;
 
+    /// <summary>
+    /// The local player's handle, learned from the login line. Used to tell a
+    /// kill from a death when combat events are present.
+    /// </summary>
+    public string? LocalHandle { get; private set; }
+
+    private static double ParseDouble(string value) =>
+        double.TryParse(value, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var result)
+            ? result
+            : 0;
+
     /// <summary>Per-kind match counts, for the parser-health panel.</summary>
     public Dictionary<string, int> MatchCounts { get; } = [];
 
@@ -84,7 +96,10 @@ public sealed partial class LogEventParser
         return line.Tag switch
         {
             "Legacy login response" => Match(LoginRegex, line, m =>
-                new LoginEvent(line.Timestamp, m.Groups["handle"].Value)),
+            {
+                LocalHandle ??= m.Groups["handle"].Value;
+                return new LoginEvent(line.Timestamp, m.Groups["handle"].Value);
+            }),
 
             "AccountLoginCharacterStatus_Character" => Match(CharacterRegex, line, m =>
                 new CharacterEvent(
@@ -142,6 +157,42 @@ public sealed partial class LogEventParser
                     m.Groups["mission"].Success && m.Groups["mission"].Value.Length > 0
                         ? m.Groups["mission"].Value
                         : null)),
+
+            // Dormant on SC 4.9: these events are no longer emitted. Implemented
+            // from the archived format so the feature revives automatically if
+            // CIG restores them. See docs/findings.md.
+            "Actor Death" => Match(ActorDeathRegex, line, m =>
+            {
+                var victim = m.Groups["victim"].Value;
+                var killer = m.Groups["killer"].Value;
+
+                return new ActorDeathEvent(
+                    line.Timestamp,
+                    victim,
+                    m.Groups["victimId"].Value,
+                    m.Groups["zone"].Value,
+                    killer,
+                    m.Groups["killerId"].Value,
+                    m.Groups["weapon"].Value,
+                    m.Groups["class"].Value,
+                    m.Groups["damage"].Value,
+                    ParseDouble(m.Groups["x"].Value),
+                    ParseDouble(m.Groups["y"].Value),
+                    ParseDouble(m.Groups["z"].Value),
+                    NpcNames.Classify(victim, killer, LocalHandle));
+            }),
+
+            "Vehicle Destruction" => Match(VehicleDestructionRegex, line, m =>
+                new VehicleDestructionEvent(
+                    line.Timestamp,
+                    m.Groups["vehicle"].Value,
+                    m.Groups["vehicleId"].Value,
+                    m.Groups["zone"].Value,
+                    m.Groups["driver"].Value,
+                    m.Groups["attacker"].Value,
+                    (DestroyLevel)int.Parse(m.Groups["from"].ValueSpan),
+                    (DestroyLevel)int.Parse(m.Groups["to"].ValueSpan),
+                    m.Groups["cause"].Value)),
 
             "Channel Disconnected" => Match(DisconnectRegex, line, m =>
                 new DisconnectEvent(
@@ -369,4 +420,22 @@ public sealed partial class LogEventParser
 
     [GeneratedRegex(@"_\d{4,}$", RegexOptions.Compiled)]
     private static partial Regex TrailingIdRegex { get; }
+
+    // ---- Dormant combat patterns (archived format; not emitted by SC 4.9) ----
+
+    [GeneratedRegex(
+        @"CActor::Kill: '(?<victim>[^']+)' \[(?<victimId>\d+)\] in zone '(?<zone>[^']*)' " +
+        @"killed by '(?<killer>[^']+)' \[(?<killerId>\d+)\] using '(?<weapon>[^']*)' " +
+        @"\[Class (?<class>[^\]]*)\] with damage type '(?<damage>[^']*)' " +
+        @"from direction x: (?<x>[-\d.]+), y: (?<y>[-\d.]+), z: (?<z>[-\d.]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex ActorDeathRegex { get; }
+
+    [GeneratedRegex(
+        @"CVehicle::OnAdvanceDestroyLevel: Vehicle '(?<vehicle>[^']+)' \[(?<vehicleId>\d+)\] " +
+        @"in zone '(?<zone>[^']*)'.*?driven by '(?<driver>[^']*)' \[\d+\] " +
+        @"advanced from destroy level (?<from>\d+) to (?<to>\d+) " +
+        @"caused by '(?<attacker>[^']*)' \[\d+\] with '(?<cause>[^']*)'",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex VehicleDestructionRegex { get; }
 }

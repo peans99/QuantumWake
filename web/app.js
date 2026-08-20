@@ -104,6 +104,13 @@ function renderNow(state) {
   $('#now-incaps').textContent = state.incapacitations ?? 0;
   $('#now-kills').textContent = state.kills ?? 0;
 
+  // Be explicit that zero kills is the game not reporting them, not a bug.
+  $('#combat-note').textContent = (state.kills ?? 0) === 0
+    ? 'Star Citizen 4.9 no longer writes kill or vehicle-destruction events to Game.log, '
+      + 'so combat cannot be counted. Incapacitations are still reported. '
+      + 'The parser is in place and will populate if CIG restores them.'
+    : '';
+
   sessionStarted = state.sessionStarted || null;
 
   const feed = $('#now-feed');

@@ -34,12 +34,30 @@ html, body {
   font-size: 15px;
 }
 
-/* Overlay mode: the WPF shell loads /?overlay=1 and the page paints no
-   background so the game shows through. */
-body.overlay { background: transparent; }
-body.overlay .topbar,
-body.overlay .status { display: none; }
-body.overlay .card { background: rgba(14, 19, 27, .82); backdrop-filter: blur(6px); }
+/* Overlay mode: the WPF shell loads /?overlay=1. The page paints no background
+   so the game shows through, the chrome is dropped, and the Now view collapses
+   to a single narrow column that reads at a glance. */
+body.overlay { background: transparent; font-size: 13px; }
+body.overlay .topbar { display: none; }
+body.overlay main { padding: 10px; max-width: none; }
+
+body.overlay .card {
+  background: rgba(12, 17, 24, .84);
+  border-color: rgba(53, 200, 240, .16);
+  backdrop-filter: blur(8px);
+  padding: 11px 13px;
+  min-height: 0;
+}
+
+body.overlay .now-grid { grid-template-columns: 1fr; gap: 8px; }
+body.overlay .card.hero,
+body.overlay .card.span2 { grid-column: span 1; }
+
+body.overlay .hero-value { font-size: 21px; }
+body.overlay .value { font-size: 16px; }
+body.overlay .card-label { margin-bottom: 6px; font-size: 9px; }
+body.overlay .feed { max-height: 190px; }
+body.overlay .feed li { padding: 4px 0; font-size: 12px; }
 
 /* ---------- top bar ---------- */
 
