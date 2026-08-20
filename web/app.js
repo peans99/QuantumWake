@@ -9,19 +9,20 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const KIND_COLOURS = {
-  City: '#35c8f0',
+  City: '#7fe4ff',
   RestStop: '#4fd48a',
-  Outpost: '#f0a935',
+  Outpost: '#ffab3d',
   Research: '#b58cf0',
-  DistributionCentre: '#f0553f',
-  JumpPoint: '#e8eef7',
+  DistributionCentre: '#ff5a4d',
+  JumpPoint: '#eaf6ff',
   Mine: '#c78b4a',
   Asteroid: '#8fa0b6',
-  Planet: '#7c8ba1',
-  Moon: '#63718a',
-  NavPoint: '#4d5a6d',
-  MissionBeacon: '#f0a935',
-  Unknown: '#4d5a6d',
+  Station: '#35c8f0',
+  Planet: '#7796b0',
+  Moon: '#46617a',
+  NavPoint: '#46617a',
+  MissionBeacon: '#ffab3d',
+  Unknown: '#46617a',
 };
 
 /* Body order defines the ring layout, innermost first. */
@@ -294,6 +295,17 @@ function drawMap(locations) {
   const map = $('#map');
   map.textContent = '';
 
+  // Soft glow, applied to stars and jump lanes for the HUD look.
+  const defs = svgEl('defs');
+  const glow = svgEl('filter', { id: 'glow', x: '-60%', y: '-60%', width: '220%', height: '220%' });
+  glow.append(svgEl('feGaussianBlur', { stdDeviation: '3.4', result: 'blur' }));
+  const merge = svgEl('feMerge');
+  merge.append(svgEl('feMergeNode', { in: 'blur' }));
+  merge.append(svgEl('feMergeNode', { in: 'SourceGraphic' }));
+  glow.append(merge);
+  defs.append(glow);
+  map.append(defs);
+
   const centres = { Stanton: { x: 290, y: 300 }, Pyro: { x: 790, y: 300 } };
   const grouped = { Stanton: new Map(), Pyro: new Map(), other: [] };
 
@@ -313,11 +325,21 @@ function drawMap(locations) {
   // Stars, orbit rings and system labels.
   for (const [system, centre] of Object.entries(centres)) {
     map.append(svgEl('circle', {
-      cx: centre.x, cy: centre.y, r: 9,
-      fill: system === 'Stanton' ? '#ffd98a' : '#ff9a6e',
-      opacity: '.85',
+      cx: centre.x, cy: centre.y, r: 8,
+      fill: system === 'Stanton' ? '#ffdc9a' : '#ff8f66',
+      filter: 'url(#glow)',
     }));
     map.append(svgEl('circle', { cx: centre.x, cy: centre.y, r: 165, class: 'map-orbit' }));
+
+    // Reticle ticks around each star, echoing the in-game starmap.
+    for (let tick = 0; tick < 4; tick++) {
+      const angle = (tick / 4) * Math.PI * 2 + Math.PI / 4;
+      map.append(svgEl('line', {
+        x1: centre.x + Math.cos(angle) * 20, y1: centre.y + Math.sin(angle) * 20,
+        x2: centre.x + Math.cos(angle) * 28, y2: centre.y + Math.sin(angle) * 28,
+        stroke: '#1e4763', 'stroke-width': '1',
+      }));
+    }
 
     const label = svgEl('text', { x: centre.x, y: centre.y + 205, 'text-anchor': 'middle', class: 'map-sys-label' });
     label.textContent = system;
@@ -326,12 +348,18 @@ function drawMap(locations) {
 
   // Jump-point link between the two systems.
   map.append(svgEl('path', {
-    d: `M ${centres.Stanton.x + 170} 300 Q 540 240 ${centres.Pyro.x - 170} 300`,
-    class: 'map-edge', 'stroke-width': '2', 'stroke-dasharray': '6 6',
+    d: `M ${centres.Stanton.x + 170} 300 Q 540 238 ${centres.Pyro.x - 170} 300`,
+    class: 'map-edge', 'stroke-width': '1.5', 'stroke-dasharray': '5 7', filter: 'url(#glow)',
   }));
 
-  const jumpLabel = svgEl('text', { x: 540, y: 258, 'text-anchor': 'middle', class: 'map-label' });
-  jumpLabel.textContent = 'jump point';
+  map.append(svgEl('rect', {
+    x: 534, y: 262, width: 12, height: 12,
+    fill: 'none', stroke: '#35c8f0', 'stroke-width': '1.2',
+    transform: 'rotate(45 540 268)', filter: 'url(#glow)',
+  }));
+
+  const jumpLabel = svgEl('text', { x: 540, y: 252, 'text-anchor': 'middle', class: 'map-label' });
+  jumpLabel.textContent = 'JUMP POINT';
   map.append(jumpLabel);
 
   // Bodies and their locations.
@@ -353,12 +381,12 @@ function drawMap(locations) {
 
       map.append(svgEl('line', {
         x1: centre.x, y1: centre.y, x2: bx, y2: by,
-        stroke: '#141d29', 'stroke-width': '1',
+        stroke: 'rgba(53,200,240,.13)', 'stroke-width': '1',
       }));
 
       const bodyLabel = svgEl('text', {
         x: bx, y: by - 16, 'text-anchor': 'middle', class: 'map-label',
-        style: 'fill:#93a3b8;font-size:11px',
+        style: 'fill:#7796b0;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase',
       });
       bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
       map.append(bodyLabel);

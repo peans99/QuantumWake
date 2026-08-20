@@ -189,9 +189,19 @@ internal sealed class Report
         Top("Contracts", _contracts);
 
         Section("Combat");
-        Console.WriteLine($"  incapacitations : {_incapacitations} across {_incapacitationFiles.Count} sessions");
-        Console.WriteLine($"  kill events     : {_eventKinds.GetValueOrDefault("combat.kill")}   " +
-                          "(none expected on 4.9 - see docs/findings.md)");
+        Console.WriteLine($"  incapacitations   : {_incapacitations} across {_incapacitationFiles.Count} sessions");
+
+        var deaths = _eventKinds.GetValueOrDefault("combat.death");
+        var destructions = _eventKinds.GetValueOrDefault("combat.vehicle");
+
+        Console.WriteLine($"  actor deaths      : {deaths}");
+        Console.WriteLine($"  vehicle destroyed : {destructions}");
+
+        if (deaths == 0 && destructions == 0)
+        {
+            Console.WriteLine("  -> none found, which is expected on SC 4.9: the game no longer");
+            Console.WriteLine("     writes these events. See docs/findings.md.");
+        }
 
         Section("Parser health");
         foreach (var (kind, count) in _eventKinds.OrderByDescending(p => p.Value))

@@ -62,7 +62,7 @@ public partial class MainWindow : Window
 
     private async Task StartAsync()
     {
-        SplashText.Text = "Looking for the SC Companion server…";
+        SplashText.Text = "LOCATING SERVER…";
 
         if (!await IsServerUpAsync() && !TryStartServer())
         {
@@ -71,7 +71,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SplashText.Text = "Waiting for the server…";
+        SplashText.Text = "AWAITING LINK…";
 
         if (!await WaitForServerAsync(TimeSpan.FromSeconds(40)))
         {

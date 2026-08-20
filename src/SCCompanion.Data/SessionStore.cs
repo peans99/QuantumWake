@@ -46,11 +46,36 @@ public sealed class SessionStore : IDisposable
     }
 
     /// <summary>Default location under the user's local app data.</summary>
-    public static string DefaultDatabasePath =>
-        Path.Combine(
+    public static string DefaultDatabasePath => DatabasePathFor(null);
+
+    /// <summary>
+    /// Database path scoped to one install.
+    /// </summary>
+    /// <remarks>
+    /// Each install gets its own file, keyed by a hash of its root path. Sharing
+    /// a single database would merge unrelated installs - pointing the app at a
+    /// PTU channel, or at a simulated install for testing, would silently blend
+    /// its sessions into the LIVE totals.
+    /// </remarks>
+    public static string DatabasePathFor(string? installRoot)
+    {
+        var directory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SCCompanion",
-            "sessions.db");
+            "SCCompanion");
+
+        if (string.IsNullOrWhiteSpace(installRoot))
+            return Path.Combine(directory, "sessions.db");
+
+        var normalised = Path.GetFullPath(installRoot)
+            .TrimEnd(Path.DirectorySeparatorChar)
+            .ToLowerInvariant();
+
+        var hash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(normalised)))[..12];
+
+        return Path.Combine(directory, $"sessions-{hash}.db");
+    }
 
     private void Initialise()
     {

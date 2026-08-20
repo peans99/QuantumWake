@@ -14,7 +14,13 @@ using SCCompanion.Server;
 var builder = WebApplication.CreateBuilder(args);
 
 var install = ResolveInstall(args, builder.Configuration);
-var library = new LogLibrary(builder.Configuration["Database"]);
+
+// Scope the cache to the install, so a PTU channel or a simulated install never
+// blends its sessions into the LIVE totals.
+var database = builder.Configuration["Database"]
+    ?? SessionStore.DatabasePathFor(install?.RootPath);
+
+var library = new LogLibrary(database);
 
 builder.Services.AddSingleton(library);
 builder.Services.AddSingleton(install!);
