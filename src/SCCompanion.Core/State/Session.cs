@@ -3,11 +3,22 @@ using SCCompanion.Core.Locations;
 
 namespace SCCompanion.Core.State;
 
-/// <summary>Time spent in one ship during a session.</summary>
+/// <summary>Use of one ship during a session.</summary>
+/// <param name="Sorties">
+/// Number of flights, counted from control-token releases. This is the reliable
+/// metric and should lead in any UI.
+/// </param>
+/// <param name="EstimatedTime">
+/// Approximate time aboard. SC 4.9 logs no seat-entry event at all - 497 of 497
+/// vehicle events are <c>ClearDriver</c> - so this is inferred as the span from
+/// the last known ground anchor (a location visit, spawn, or previous flight)
+/// to the moment control was released, capped to avoid absurd values across
+/// idle gaps. Treat it as indicative, never exact.
+/// </param>
 public sealed record ShipUsage(
     string Model,
     string? Manufacturer,
-    TimeSpan TimeInSeat,
+    TimeSpan EstimatedTime,
     int Sorties)
 {
     public string DisplayName => Manufacturer is null ? Model : $"{Manufacturer} {Model.Replace('_', ' ')}";
@@ -87,6 +98,7 @@ public sealed record SessionSummary
     public IReadOnlyDictionary<string, int> GameRules { get; init; } =
         new Dictionary<string, int>();
 
-    public string? PrimaryShip => Ships.MaxBy(s => s.TimeInSeat)?.DisplayName;
+    /// <summary>Most-flown ship, by sortie count.</summary>
+    public string? PrimaryShip => Ships.MaxBy(s => s.Sorties)?.DisplayName;
     public string? LastLocation => Locations.Count > 0 ? Locations[^1].DisplayName : null;
 }

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SC Companion</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark"></span>
+    <span class="name">SC<b>Companion</b></span>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="now" class="active">Now</button>
+    <button data-view="map">Map</button>
+    <button data-view="sessions">Sessions</button>
+    <button data-view="ships">Ships</button>
+    <button data-view="places">Places</button>
+    <button data-view="contracts">Contracts</button>
+  </nav>
+
+  <div class="status">
+    <span id="install" class="muted">detecting…</span>
+    <span id="link" class="dot" title="disconnected"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- NOW -->
+  <section id="view-now" class="view active">
+    <div class="now-grid">
+
+      <article class="card hero">
+        <div class="card-label">Location</div>
+        <div class="hero-value" id="now-location">—</div>
+        <div class="hero-sub" id="now-location-sub"></div>
+        <div class="confidence" id="now-confidence"></div>
+        <div class="travel" id="now-travel" hidden>
+          <span class="travel-arrow">▸</span>
+          <span id="now-travel-to"></span>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-label">Ship</div>
+        <div class="value" id="now-ship">—</div>
+      </article>
+
+      <article class="card">
+        <div class="card-label">Session</div>
+        <div class="value" id="now-clock">—</div>
+        <div class="sub" id="now-mode"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-label">Handle</div>
+        <div class="value" id="now-handle">—</div>
+        <div class="sub" id="now-version"></div>
+      </article>
+
+      <article class="card span2">
+        <div class="card-label">Live feed</div>
+        <ul class="feed" id="now-feed">
+          <li class="empty">Waiting for the game…</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-label">This session</div>
+        <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
+        <div class="statline"><span>Kills</span><b id="now-kills">0</b></div>
+        <div class="note" id="combat-note"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- MAP -->
+  <section id="view-map" class="view">
+    <div class="map-head">
+      <h2>Where you've been</h2>
+      <p class="muted">
+        Star Citizen does not log player position, so this is a topology map built
+        from location and quantum-travel events — last known place, not a live radar.
+      </p>
+    </div>
+    <div class="map-wrap">
+      <svg id="map" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="legend" id="map-legend"></div>
+  </section>
+
+  <!-- SESSIONS -->
+  <section id="view-sessions" class="view">
+    <div class="summary-strip" id="lib-summary"></div>
+    <div class="table-wrap">
+      <table id="sessions-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>In game</th><th>Menus</th>
+            <th>Ship</th><th>Last location</th>
+            <th class="num">Jumps</th><th class="num">Contracts</th><th class="num">Incap</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SHIPS -->
+  <section id="view-ships" class="view">
+    <h2>Ships flown</h2>
+    <p class="muted caption">
+      Counted from control-token releases. Star Citizen 4.9 logs no boarding
+      event, so flight counts are exact while times aboard (~) are estimated from
+      the last known stop.
+    </p>
+    <div id="ships-chart" class="bars"></div>
+  </section>
+
+  <!-- PLACES -->
+  <section id="view-places" class="view">
+    <h2>Most visited</h2>
+    <div id="places-chart" class="bars"></div>
+    <h2 class="spaced">Quantum destinations</h2>
+    <div id="dests-chart" class="bars"></div>
+  </section>
+
+  <!-- CONTRACTS -->
+  <section id="view-contracts" class="view">
+    <h2>Contracts by issuer</h2>
+    <div id="issuers-chart" class="bars"></div>
+    <h2 class="spaced">Contracts by type</h2>
+    <div id="types-chart" class="bars"></div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
