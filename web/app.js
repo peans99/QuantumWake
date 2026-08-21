@@ -1077,6 +1077,27 @@ function renderFleetShips() {
 
     body.append(stat);
     body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
+
+    // Community reference, when enabled and matched: what the ship is for and
+    // what losing one costs.
+    if (ship.reference) {
+      const r = ship.reference;
+      const bits = [];
+
+      if (r.role && r.career && r.role !== r.career) bits.push(`${r.career} · ${r.role}`);
+      else if (r.role || r.career) bits.push(r.role || r.career);
+      if (r.crew > 0) bits.push(`crew ${r.crew}`);
+
+      if (bits.length)
+        body.append(el('div', 'ship-ref', bits.join(' · ')));
+
+      if (r.expeditedCost > 0) {
+        body.append(el('div', 'ship-ref muted',
+          `claim: expedite ${money(r.expeditedCost)}`
+          + (r.standardClaimTime ? ` · ~${Math.round(r.standardClaimTime)}m wait` : '')));
+      }
+    }
+
     card.append(body);
     grid.append(card);
   }
@@ -1322,6 +1343,17 @@ function renderLoadout(stats) {
         const line = el('div', 'slot-current');
         line.append(el('span', null, prettyItem(item.name)));
         if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
+
+        // Community reference: size, grade, maker - when enabled and matched.
+        if (item.reference) {
+          const r = item.reference;
+          const bits = [];
+          if (r.size > 0) bits.push(`S${r.size}`);
+          if (r.grade > 0) bits.push(`grade ${r.grade}`);
+          if (r.manufacturer) bits.push(r.manufacturer);
+          if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
+        }
+
         body.append(line);
       }
 

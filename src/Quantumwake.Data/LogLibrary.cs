@@ -169,7 +169,11 @@ public sealed record LoadoutSlot(
     DateTimeOffset? CurrentSeen);
 
 /// <param name="Count">Number of slots in the family holding this item.</param>
-public sealed record LoadoutEntry(string Name, int Count, DateTimeOffset LastSeen);
+public sealed record LoadoutEntry(
+    string Name,
+    int Count,
+    DateTimeOffset LastSeen,
+    ItemInfo? Reference = null);
 
 /// <summary>
 /// Groups character item ports into something a person would recognise.
@@ -456,13 +460,15 @@ public static class ItemCategories
 /// <param name="EstimatedTime">Inferred time aboard; see <see cref="ShipUsage"/>.</param>
 /// <param name="FirstFlown">Start of the earliest session this ship appears in.</param>
 /// <param name="LastFlown">Start of the most recent session this ship appears in.</param>
+/// <param name="Reference">Community ship data - role, crew, claim costs - when the dataset is enabled and the name matched.</param>
 public sealed record ShipTotal(
     string Name,
     TimeSpan EstimatedTime,
     int Sorties,
     int Sessions,
     DateTimeOffset FirstFlown,
-    DateTimeOffset LastFlown);
+    DateTimeOffset LastFlown,
+    ShipInfo? Reference = null);
 public sealed record PlaceTotal(
     string RawId,
     string Name,
@@ -939,7 +945,14 @@ public sealed class LogLibrary : IDisposable
                 g.Sum(x => x.Ship.Sorties),
                 g.Select(x => x.Session).Distinct().Count(),
                 g.Min(x => x.StartedAt),
-                g.Max(x => x.StartedAt)))
+                g.Max(x => x.StartedAt),
+
+                // The raw log tokens ARE the class name (DRAK_Corsair), so try
+                // those first; the localised display name only matches when CIG
+                // named the class after it.
+                g.Select(x => Community.Ship($"{x.Ship.Manufacturer}_{x.Ship.Model}"))
+                    .FirstOrDefault(r => r is not null)
+                 ?? Community.Ship(g.Key)))
             .OrderByDescending(s => s.Sorties)
             .ThenByDescending(s => s.EstimatedTime)
             .ToList();
@@ -1022,7 +1035,8 @@ public sealed class LogLibrary : IDisposable
                 var items = equipped
                     .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .Select(i => new LoadoutEntry(
-                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
+                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen),
+                        Community.Item(i.Key)))
                     .OrderByDescending(i => i.Count)
                     .ThenByDescending(i => i.LastSeen)
                     .ToList();
