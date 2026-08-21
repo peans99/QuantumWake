@@ -11,6 +11,8 @@
 
 <header class="topbar">
   <span class="railmark">Quantum Wake · a pilot's logbook</span>
+  <div class="brandmark" aria-hidden="true"></div>
+
   <div class="brand">
     <img class="mark" src="assets/mark.svg" alt="" width="22" height="22">
     <span class="name">Quantum <b>Wake</b></span>
@@ -29,6 +31,7 @@
     <button data-view="commodities">Cargo</button>
     <button data-view="loadout">Loadout</button>
     <button data-view="stash">Stash</button>
+    <button data-view="about">About</button>
   </nav>
 
   <div class="status">
@@ -344,9 +347,49 @@
     <div id="types-chart" class="bars"></div>
   </section>
 
+  <section id="view-about" class="view">
+    <div class="about">
+      <img class="about-logo" src="assets/emblem.jpg" alt="Quantum Wake">
+
+      <div class="about-copy">
+        <h2>About</h2>
+
+        <p class="about-goal">
+          The goal is a frictionless companion for Star Citizen — one that gathers
+          the useful information the game already writes down, and hands it back to
+          fellow players without asking anything of them.
+        </p>
+
+        <p class="about-note">
+          No account, no configuration, no upload. It reads <code>Game.log</code>
+          and the backups beside it, resolves the names from your own copy of the
+          game, and shows you what is there. Nothing is written to the game
+          directory, and no request leaves your machine.
+        </p>
+
+        <dl class="about-facts">
+          <div><dt>Version</dt><dd id="about-version">—</dd></div>
+          <div><dt>Install</dt><dd id="about-install">—</dd></div>
+          <div><dt>Dashboard</dt><dd>127.0.0.1:31337</dd></div>
+          <div><dt>Licence</dt><dd>Apache 2.0</dd></div>
+          <div><dt>Built by</dt><dd>nekron</dd></div>
+        </dl>
+
+        <p class="about-legal">
+          Star Citizen®, Roberts Space Industries® and Cloud Imperium® are
+          registered trademarks of Cloud Imperium Rights LLC. An unofficial fan
+          tool, not affiliated with or endorsed by Cloud Imperium Games. Built on
+          log-format research published by the community — full attribution in
+          <code>docs/credits.md</code>.
+        </p>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <footer class="foot">
+  <img src="assets/emblem.jpg" alt="Quantum Wake" class="emblem">
   <img src="assets/manufacturers/_madebycommunity.png" alt="Made by the Community" class="mbc">
   <span>
     Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
