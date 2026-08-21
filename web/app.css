@@ -1482,6 +1482,26 @@ td.map-links .ghost + .ghost { margin-left: 5px; }
 
 /* ---------- jobs ---------- */
 
+/* The pinned job on Now, and so in the overlay: title, bar, what is missing. */
+.now-job-title { font-size: 15px; color: var(--cyan-hot, #7fe4ff); margin-bottom: 2px; }
+
+.now-job-items { list-style: none; margin: 7px 0 0; padding: 0; }
+.now-job-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(53, 200, 240, .06);
+}
+.now-job-items li:last-child { border-bottom: 0; }
+.now-job-items .n { color: var(--text); }
+
+body.overlay .now-job-title { font-size: 12px; }
+body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
+
+.ghost.on { color: var(--green); border-color: var(--green); }
+
 .job-card {
   display: block;
   border: 1px solid var(--rule);

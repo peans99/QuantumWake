@@ -1510,6 +1510,53 @@ async function loadJobs() {
   await Promise.all([loadJobContracts(), loadJobList()]);
 }
 
+/**
+ * The pinned job on the Now page - and so in the overlay, where what is still
+ * missing is worth having in the corner of the screen while flying.
+ */
+async function renderPinnedJob(jobs) {
+  const card = $('#now-job-card');
+  if (!card) return;
+
+  const job = (jobs ?? await getJson('/api/jobs').catch(() => [])).find((j) => j.pinned && !j.done);
+
+  if (!job) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#now-job-title').textContent = job.title;
+
+  const progress = $('#now-job-progress');
+  progress.textContent = '';
+  progress.append(jobProgress(job.haveCount, job.totalCount,
+    `${job.haveCount} of ${job.totalCount} in hand`));
+
+  // What is still missing, which is the only part worth reading mid-flight.
+  const list = $('#now-job-items');
+  list.textContent = '';
+
+  const missing = job.items.filter((i) => !i.have);
+
+  if (!missing.length) {
+    list.append(el('li', 'inward', 'Everything on this list is in hand.'));
+  } else {
+    for (const item of missing.slice(0, 6)) {
+      const li = el('li');
+      li.append(el('span', 'n', item.name
+        + (item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '')));
+
+      if (item.buyAt) li.append(el('span', 'muted', `buy at ${item.buyAt}`));
+      list.append(li);
+    }
+
+    if (missing.length > 6)
+      list.append(el('li', 'muted', `+${missing.length - 6} more`));
+  }
+
+  card.hidden = false;
+}
+
 async function loadJobContracts() {
   const host = $('#jobs-contracts');
   host.textContent = '';
@@ -1570,6 +1617,8 @@ async function loadJobList() {
     jobs = await getJson('/api/jobs');
   } catch { /* server down; the page still shows contracts */ }
 
+  renderPinnedJob(jobs);
+
   if (!jobs.length) {
     host.append(el('p', 'muted',
       'No lists yet. Start one here, or plan a blueprint from Reference → Crafting.'));
@@ -1585,6 +1634,18 @@ async function loadJobList() {
 
     const spacer = el('span', 'spacer');
     head.append(spacer);
+
+    // Pinning puts the job on Now, which is also what the overlay shows.
+    const pin = el('button', job.pinned ? 'ghost on' : 'ghost', job.pinned ? 'On Now' : 'Pin to Now');
+    pin.title = job.pinned
+      ? 'Showing on the Now page and in the overlay'
+      : 'Show this job on the Now page and in the overlay';
+
+    pin.addEventListener('click', async () => {
+      await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
+      loadJobList();
+    });
+    head.append(pin);
 
     const toggle = el('button', 'ghost', job.done ? 'Reopen' : 'Mark done');
     toggle.addEventListener('click', async () => {

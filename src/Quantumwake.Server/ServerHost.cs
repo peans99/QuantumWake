@@ -693,6 +693,7 @@ public static class ServerHost
                     job.Source,
                     job.CreatedAt,
                     job.Done,
+                    job.Pinned,
                     items = lines,
                     haveCount = lines.Count(l => l.have),
                     totalCount = lines.Count
@@ -709,6 +710,9 @@ public static class ServerHost
 
         app.MapPost("/api/jobs/{id}/toggle", (string id, JobStore jobs) =>
             jobs.Toggle(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/jobs/{id}/pin", (string id, JobStore jobs) =>
+            jobs.TogglePin(id) ? Results.Ok(new { id }) : Results.NotFound());
 
         app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
             jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());

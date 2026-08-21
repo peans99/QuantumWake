@@ -12,6 +12,10 @@ public sealed record JobItem(string Name, double Needed, string Unit = "");
 /// </summary>
 /// <param name="Kind">"craft" or "list" - only the wording differs.</param>
 /// <param name="Source">The blueprint this came from, when it came from one.</param>
+/// <param name="Pinned">
+/// Shown on the Now page - and so in the overlay, where a job is worth having
+/// while actually flying.
+/// </param>
 public sealed record Job(
     string Id,
     string Title,
@@ -19,7 +23,8 @@ public sealed record Job(
     string? Source,
     DateTimeOffset CreatedAt,
     bool Done,
-    IReadOnlyList<JobItem> Items);
+    IReadOnlyList<JobItem> Items,
+    bool Pinned = false);
 
 /// <summary>
 /// The player's own plans, kept in a file beside the caches.
@@ -82,6 +87,30 @@ public sealed class JobStore
                 return false;
 
             _jobs[index] = _jobs[index] with { Done = !_jobs[index].Done };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Pins a job to the Now page. Only one at a time: the overlay is a
+    /// glance, and two jobs there is a list nobody reads mid-flight.
+    /// </summary>
+    public bool TogglePin(string id)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Id == id);
+            if (index < 0)
+                return false;
+
+            var pin = !_jobs[index].Pinned;
+
+            for (var i = 0; i < _jobs.Count; i++)
+                if (_jobs[i].Pinned)
+                    _jobs[i] = _jobs[i] with { Pinned = false };
+
+            _jobs[index] = _jobs[index] with { Pinned = pin };
             Save();
             return true;
         }
