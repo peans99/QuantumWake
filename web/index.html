@@ -406,6 +406,7 @@
             <th>Commodity</th><th>Groups</th>
             <th class="num">Sellable at</th><th class="num">Stocked at</th>
             <th class="num">Your SCU sold</th><th class="num">Your revenue</th>
+            <th class="num uex-col" hidden>UEX best sell</th>
             <th></th>
           </tr>
         </thead>
@@ -482,6 +483,43 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>UEX live prices</h3>
+        <button class="ghost" id="uex-enable" hidden>Fetch prices</button>
+        <button class="ghost" id="uex-refresh" hidden>Refresh</button>
+        <button class="ghost" id="uex-disable" hidden>Disable</button>
+      </div>
+      <p class="muted">
+        Crowd-sourced market prices from <em>uexcorp.space</em> — a third party,
+        separate from the community dataset. Enabling fetches the current price
+        table and shows best sell prices on the Market page. Like everything
+        here: only on your click, never on a timer.
+      </p>
+      <span class="muted" id="uex-status"></span>
+
+      <div class="uex-push" id="uex-push-block">
+        <p class="muted">
+          <b>Report your prices back.</b> Every logged kiosk sale carries an
+          exact unit price at a known terminal — the numbers UEX datarunners
+          type in by hand. With your own UEX application token and secret key
+          (from your UEX account), you can contribute them. Keys are stored in
+          local app data only; every report is a button you press, previewed
+          first.
+        </p>
+        <div class="uex-creds">
+          <input type="password" id="uex-token" placeholder="UEX bearer token" autocomplete="off">
+          <input type="password" id="uex-secret" placeholder="UEX secret key" autocomplete="off">
+          <button class="ghost" id="uex-save-creds">Save keys</button>
+        </div>
+        <div class="uex-report">
+          <button class="ghost" id="uex-preview" hidden>Preview report</button>
+          <button class="ghost" id="uex-send" hidden>Send to UEX</button>
+          <span class="muted" id="uex-push-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Log cache</h3>
         <button class="ghost" id="settings-rescan">Re-read every log</button>
       </div>
@@ -528,8 +566,9 @@
           StarLogs (Ozy311), all-slain (DimmaDont), SCStats (Maple33),
           SCPlay (ckuma), AutoTrackR2, SC-Kill-Monitor and citizenmon.
           The <code>Data.p4k</code> format: the scdatatools lineage.
-          The optional commodity names: StarCitizenWiki's
-          <code>scunpacked-data</code>, generated with octfx's ScDataDumper.
+          The optional commodity names, trade locations and ship reference:
+          StarCitizenWiki's <code>scunpacked-data</code>, generated with octfx's
+          ScDataDumper. The optional live prices: UEX and its datarunners.
           Manufacturer marks from the official Star Citizen Fankit, under the
           Fankit Agreement. Full attribution, with what was taken from each,
           in <code>docs/credits.md</code>.
