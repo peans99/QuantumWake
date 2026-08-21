@@ -147,6 +147,12 @@ public sealed class CommunityData
     public ItemInfo? Item(string? itemClass) =>
         itemClass is not null && _items.TryGetValue(itemClass, out var info) ? info : null;
 
+    /// <summary>Every ship in the digest, keyed by class name, for the reference catalogue.</summary>
+    public IReadOnlyDictionary<string, ShipInfo> Ships => _ships;
+
+    /// <summary>Every item in the digest, keyed by class name, for the reference catalogue.</summary>
+    public IReadOnlyDictionary<string, ItemInfo> Items => _items;
+
     /// <summary>Real body positions for a system, body name (lower) to coordinates. Empty when unknown.</summary>
     public IReadOnlyDictionary<string, BodyPosition> BodyPositions(string system) =>
         _positions.TryGetValue(system, out var bodies)

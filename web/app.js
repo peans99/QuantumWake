@@ -378,6 +378,8 @@ async function loadHistory() {
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
   loadLogbook().catch((e) => console.error('logbook', e));
+  loadShipsRef().catch((e) => console.error('ships', e));
+  loadPartsRef().catch((e) => console.error('parts', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -1006,6 +1008,146 @@ let lastLootRows = [];
 
 onInput('#loot-search', () => renderLoot(lastLootRows));
 onInput('#loot-period', loadLoot);
+
+/* ---------- reference catalogues: ships, parts ---------- */
+
+let shipCatalogue = [];
+let partCatalogue = [];
+
+async function loadShipsRef() {
+  try {
+    shipCatalogue = await getJson('/api/reference/ships');
+  } catch {
+    shipCatalogue = [];
+  }
+
+  const careers = [...new Set(shipCatalogue.map((s) => s.career).filter(Boolean))].sort();
+  const select = $('#ships-career');
+  const previous = select.value;
+
+  select.textContent = '';
+  select.append(new Option('All careers', ''));
+  for (const career of careers) select.append(new Option(career, career));
+  if (careers.includes(previous)) select.value = previous;
+
+  renderShipsRef();
+}
+
+function renderShipsRef() {
+  const term = ($('#ships-search').value || '').trim().toLowerCase();
+  const career = $('#ships-career').value;
+  const body = $('#ships-table tbody');
+  body.textContent = '';
+
+  const rows = shipCatalogue.filter((s) =>
+    (!career || s.career === career)
+    && (!term || s.name.toLowerCase().includes(term)
+      || (s.role || '').toLowerCase().includes(term)));
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', shipCatalogue.length
+      ? 'No ships match that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 8;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const ship of rows) {
+    const tr = el('tr');
+    const name = el('td', null, ship.name);
+    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ' · ground'));
+    tr.append(name);
+
+    tr.append(el('td', 'muted', ship.career ?? '—'));
+    tr.append(el('td', 'muted', ship.role ?? '—'));
+    tr.append(el('td', 'num', ship.crew > 0 ? String(ship.crew) : '—'));
+    tr.append(el('td', 'num muted', ship.expeditedCost > 0 ? money(ship.expeditedCost) : '—'));
+    tr.append(el('td', 'num muted', ship.standardClaimTime > 0 ? `~${Math.round(ship.standardClaimTime)}m` : '—'));
+    tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold'));
+    tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
+    body.append(tr);
+  }
+}
+
+async function loadPartsRef() {
+  try {
+    partCatalogue = await getJson('/api/reference/items');
+  } catch {
+    partCatalogue = [];
+  }
+
+  const types = [...new Set(partCatalogue.map((p) => p.type).filter(Boolean))].sort();
+  const select = $('#parts-type');
+  const previous = select.value;
+
+  select.textContent = '';
+  select.append(new Option('All types', ''));
+  for (const type of types) select.append(new Option(prettyType(type), type));
+  if (types.includes(previous)) select.value = previous;
+
+  renderPartsRef();
+}
+
+/** "Char_Clothing_Hat" -> "Clothing Hat": the digest's type keys, made legible. */
+const prettyType = (type) => (type ? type.replace(/^Char_/, '').replace(/_/g, ' ') : '—');
+
+/** The digest holds thousands of items; rendering caps so the page stays quick. */
+const PARTS_CAP = 500;
+
+function renderPartsRef() {
+  const term = ($('#parts-search').value || '').trim().toLowerCase();
+  const type = $('#parts-type').value;
+  const body = $('#parts-table tbody');
+  body.textContent = '';
+
+  const rows = partCatalogue.filter((p) =>
+    (!type || p.type === type)
+    && (!term
+      || p.className.toLowerCase().includes(term)
+      || prettyItem(p.className).toLowerCase().includes(term)
+      || (p.manufacturer || '').toLowerCase().includes(term)))
+
+    // Priced items first: the ones a shop actually stocks are the ones worth
+    // reading about; header sorting still reorders freely.
+    .sort((a, b) => Number(Boolean(b.price)) - Number(Boolean(a.price))
+      || a.className.localeCompare(b.className));
+
+  const counter = $('#parts-count');
+  counter.textContent = rows.length > PARTS_CAP
+    ? `Showing ${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or pick a type.`
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', partCatalogue.length
+      ? 'Nothing matches that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const part of rows.slice(0, PARTS_CAP)) {
+    const tr = el('tr');
+    tr.append(el('td', null, prettyItem(part.className)));
+    tr.append(el('td', 'muted', prettyType(part.type)));
+    tr.append(el('td', 'muted', part.subType ?? '—'));
+    tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
+    tr.append(el('td', 'num', part.grade > 0 ? String(part.grade) : '—'));
+    tr.append(el('td', 'muted', part.manufacturer ?? '—'));
+    tr.append(el('td', part.price ? 'num' : 'num muted', part.price ? money(part.price) : '—'));
+    body.append(tr);
+  }
+}
+
+onInput('#ships-search', renderShipsRef);
+$('#ships-career')?.addEventListener('change', renderShipsRef);
+onInput('#parts-search', renderPartsRef);
+$('#parts-type')?.addEventListener('change', renderPartsRef);
 
 /* ---------- logbook ---------- */
 

@@ -45,6 +45,13 @@
       </div>
     </div>
     <div class="tab-group">
+      <button type="button" class="group-btn">Reference<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="ships">Ships</button>
+        <button data-view="parts">Parts</button>
+      </div>
+    </div>
+    <div class="tab-group">
       <button type="button" class="group-btn">Gear<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="loadout">Loadout</button>
@@ -494,6 +501,68 @@
         <tbody></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- REFERENCE: ships -->
+  <section id="view-ships" class="view">
+    <div class="section-bar">
+      <h2>Ship catalogue</h2>
+      <div class="controls">
+        <select id="ships-career" class="select" title="Filter by career"></select>
+        <input type="search" id="ships-search" class="search" placeholder="Search ships…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Every flyable the community dataset describes — career, crew and what an
+      insurance claim costs — priced at UEX in-game purchase prices where a
+      shop sells one. Pure reference: your own hangar lives on the Fleet page.
+      Needs the community dataset (and UEX for prices) in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="ships-table">
+        <thead>
+          <tr>
+            <th>Ship</th><th>Career</th><th>Role</th>
+            <th class="num">Crew</th>
+            <th class="num">Expedite fee</th><th class="num">Claim wait</th>
+            <th class="num">Buy price</th><th>Cheapest at</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- REFERENCE: parts and gear -->
+  <section id="view-parts" class="view">
+    <div class="section-bar">
+      <h2>Parts &amp; gear catalogue</h2>
+      <div class="controls">
+        <select id="parts-type" class="select" title="Filter by type"></select>
+        <input type="search" id="parts-search" class="search" placeholder="Search parts and gear…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Every ship component and piece of personal gear in the community digest —
+      type, size, grade, maker — with UEX in-game prices joined by entity uuid
+      where a shop stocks one. Needs the community dataset (and UEX for prices)
+      in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="parts-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Type</th><th>Sub-type</th>
+            <th class="num">Size</th><th class="num">Grade</th>
+            <th>Maker</th><th class="num">Price</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="parts-count"></p>
   </section>
 
   <section id="view-loot" class="view">

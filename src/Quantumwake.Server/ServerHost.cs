@@ -488,6 +488,40 @@ public static class ServerHost
                 uex = uex.Best(entry.Name)
             }));
 
+        // ---- reference catalogues: pure information display, no player ----
+        // ---- data - what the community digest describes, priced by UEX ----
+
+        app.MapGet("/api/reference/ships", (LogLibrary lib, UexData uex) =>
+            lib.Community.Ships.Values
+                .GroupBy(s => s.Name)
+                .Select(g => g.First())
+                .Select(s => new
+                {
+                    s.Name,
+                    s.Career,
+                    s.Role,
+                    s.Crew,
+                    s.IsSpaceship,
+                    s.ExpeditedCost,
+                    s.StandardClaimTime,
+                    price = uex.VehiclePrice(s.Name)
+                })
+                .OrderBy(s => s.Name));
+
+        app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
+            lib.Community.Items
+                .Select(kv => new
+                {
+                    className = kv.Key,
+                    kv.Value.Type,
+                    kv.Value.SubType,
+                    kv.Value.Size,
+                    kv.Value.Grade,
+                    kv.Value.Manufacturer,
+                    price = uex.ItemPrice(kv.Value.Uuid)
+                })
+                .OrderBy(i => i.className));
+
         // ---- UEX: live prices in, logged sale prices out. Both opt-in. ----
 
         app.MapGet("/api/uex", (UexData uex) => new
