@@ -463,7 +463,14 @@ public sealed record ShipTotal(
     int Sessions,
     DateTimeOffset FirstFlown,
     DateTimeOffset LastFlown);
-public sealed record PlaceTotal(string RawId, string Name, string? System, string? Body, string Kind, int Visits);
+public sealed record PlaceTotal(
+    string RawId,
+    string Name,
+    string? System,
+    string? Body,
+    string Kind,
+    int Visits,
+    DateTimeOffset? LastVisit = null);
 public sealed record FacetTotal(string Name, int Count);
 
 /// <summary>
@@ -946,7 +953,8 @@ public sealed class LogLibrary : IDisposable
                 g.First().System,
                 g.First().Body,
                 g.First().Kind.ToString(),
-                g.Count()))
+                g.Count(),
+                g.Max(x => x.At)))
             .OrderByDescending(l => l.Visits)
             .ToList();
 

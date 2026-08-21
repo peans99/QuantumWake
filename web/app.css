@@ -1245,3 +1245,76 @@ body.overlay .foot { display: none; }
 body.overlay .slot-card { gap: 9px; }
 body.overlay .slot-icon { flex-basis: 32px; width: 32px; height: 32px; }
 body.overlay .slot-icon svg { width: 19px; height: 19px; }
+
+/* ---------- map: commodity highlight, follow, detail card ---------- */
+
+/* Commodity mode: sellers glow green, the rest recede but stay for context. */
+.map-node.dim { opacity: .16; }
+.map-node.hl .hl-ring { animation: hl-breathe 2.4s ease-in-out infinite; }
+
+@keyframes hl-breathe {
+  0%, 100% { opacity: .9; }
+  50% { opacity: .45; }
+}
+
+#map-follow.active {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* The detail card sits inside the map, so it never pushes the layout around. */
+.map-info {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 240px;
+  padding: 13px 15px;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .96), rgba(6, 12, 20, .94));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12px;
+  line-height: 1.55;
+  z-index: 5;
+}
+.map-info[hidden] { display: none; }
+
+.map-info-close {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 15px;
+  cursor: pointer;
+}
+.map-info-close:hover { color: var(--text); }
+
+.map-info-name { font-size: 14px; font-weight: 600; color: var(--cyan-hot); padding-right: 14px; }
+.map-info-where { margin-bottom: 7px; }
+
+.map-info-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+
+.map-info-kind {
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+}
+
+/* The map hosts an absolutely-positioned card, so it needs to be the anchor. */
+.map-wrap { position: relative; }
+
+/* ---------- sortable tables ---------- */
+
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--cyan-hot); }
+th.sortable.sort-desc::after { content: " ▾"; color: var(--cyan); }
+th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
