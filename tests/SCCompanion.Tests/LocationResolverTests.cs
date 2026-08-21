@@ -72,6 +72,50 @@ public class LocationResolverTests
         Assert.Equal(LocationKind.Station, location.Kind);
     }
 
+    /// <summary>
+    /// Nyx shares none of the id grammar Stanton and Pyro use, so without a rule
+    /// of its own the whole system collapsed to Levski - the one place the
+    /// well-known table happened to list - and the map showed a system of one.
+    /// </summary>
+    /// <remarks>
+    /// Display names come from the localisation table at runtime, which the test
+    /// has no access to, so these assert the system and kind the id encodes.
+    /// </remarks>
+    [Theory]
+    [InlineData("Nyx_SocialStation_003", LocationKind.Station, null)]
+    [InlineData("Nyx_RockCracker_007", LocationKind.Mine, null)]
+    [InlineData("Nyx_OutlawStation_Keeger", LocationKind.Station, "Keeger Belt")]
+    [InlineData("Nyx_Glaciem_Segment_Social_001", LocationKind.Station, "Glaciem Ring")]
+    [InlineData("Nyx_AsteroidBelt1", LocationKind.Asteroid, null)]
+    [InlineData("Nyx_JumpPoint_Stanton", LocationKind.JumpPoint, null)]
+
+    // A gateway station sits on the far side of a jump, so Nyx's are filed
+    // under the system they are reached from.
+    [InlineData("Nyx_Stanton_JPStation", LocationKind.Station, null)]
+    [InlineData("Stanton_Nyx_JPStation", LocationKind.Station, null)]
+    public void Resolves_Nyx(string id, LocationKind kind, string? body)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.Equal("Nyx", location.System);
+        Assert.Equal(kind, location.Kind);
+        Assert.Equal(body, location.Body);
+        Assert.True(location.IsResolved);
+    }
+
+    /// <summary>
+    /// The Nyx prefix is also all over the UI strings and the bodies themselves.
+    /// None of those is somewhere you fly to, so they must not become map nodes.
+    /// </summary>
+    [Theory]
+    [InlineData("Nyx_Star")]
+    [InlineData("Nyx2")]
+    [InlineData("nyx_transit_Glaciem_01")]
+    public void Ignores_Nyx_ids_that_are_not_places(string id)
+    {
+        Assert.NotEqual("Nyx", LocationResolver.Resolve(id).System);
+    }
+
     [Theory]
     [InlineData("RR_MIC_L1", "microTech L1 Rest Stop", "microTech")]
     [InlineData("RR_S4_L2", "microTech L2 Rest Stop", "microTech")]

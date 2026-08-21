@@ -17,13 +17,14 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [log-simulator.md](log-simulator.md) | The fake-log generator: how to use it and why it reproduces the format's quirks. |
 | [untapped-signals.md](untapped-signals.md) | Log signals we have not used yet, ranked, with formats and counts. |
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |
-| [tools/starlogs.md](tools/starlogs.md) | Ozy311/StarLogs — Python/Flask/SSE dashboard |
-| [tools/autotrackr2.md](tools/autotrackr2.md) | BubbaGumpShrump/AutoTrackR2 — C#/WPF kill tracker |
-| [tools/scstats.md](tools/scstats.md) | Maple33-hash/SCStats — read-only session analyser |
-| [tools/scplay.md](tools/scplay.md) | ckuma/scplay — playtime totaliser |
-| [tools/sc-kill-monitor.md](tools/sc-kill-monitor.md) | greluc/SC-Kill-Monitor — Java/JavaFX "who killed me" |
-| [tools/all-slain.md](tools/all-slain.md) | DimmaDont/all-slain — Python event viewer, best patch-history notes |
-| [tools/citizenmon.md](tools/citizenmon.md) | danieldeschain/citizenmon — Go killfeed |
+
+The seven per-tool write-ups that used to sit in `docs/tools/` have been
+removed. Everything worth keeping from them was already lifted into the docs
+above — the archived combat patterns and StarLogs' classification tree into
+[log-format-reference.md](log-format-reference.md), the per-patch event
+availability into [findings.md](findings.md), and the design lessons into
+[architecture.md](architecture.md). The summary and matrix below are the rest of
+the residue. The originals are in git history if they are ever wanted back.
 
 ## The one-line summary
 

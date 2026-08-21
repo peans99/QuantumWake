@@ -33,6 +33,7 @@ const SYSTEMS = {
   Stanton: ['Hurston', 'Arial', 'Aberdeen', 'Magda', 'Ita', 'Crusader', 'Cellin', 'Daymar',
             'Yela', 'ArcCorp', 'Lyria', 'Wala', 'microTech', 'Calliope', 'Clio', 'Euterpe'],
   Pyro: ['Pyro I', 'Monox', 'Bloom', 'Pyro IV', 'Pyro V', 'Terminus'],
+  Nyx: ['Delamar', 'Glaciem Ring', 'Keeger Belt'],
 };
 
 /* ---------- helpers ---------- */
@@ -1049,8 +1050,90 @@ const nodeAt = new Map();
 /** Where the player is, kept in step with the live feed. */
 let hereId = null;
 
-const HOME_VIEW = { x: 0, y: 0, w: 1000, h: 620 };
+const SYSTEM_COLOURS = { Stanton: '#ffdc9a', Pyro: '#ff8f66', Nyx: '#9fb8ff' };
+
+/** Jump lanes, drawn between the stars they connect. */
+const JUMP_LANES = [
+  ['Stanton', 'Pyro'],
+  ['Pyro', 'Nyx'],
+  ['Stanton', 'Nyx'],
+];
+
+/** How far a body's sites reach, given how many it has. */
+const clusterRadius = (count) => (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1));
+
+/**
+ * Works out where each star sits and how far its bodies orbit, from what the
+ * system actually contains.
+ *
+ * A fixed orbit cannot work once every location is on the map rather than only
+ * the visited handful: microTech alone carries over a hundred sites, and its
+ * cluster spilled straight over Calliope's next door. Each system is therefore
+ * sized so neighbouring clusters clear each other with room for their labels,
+ * which makes Stanton's disc several times Nyx's.
+ *
+ * Systems are then laid out as a triangle rather than a row - that is the real
+ * topology, since Stanton, Pyro and Nyx each have a jump point to the other
+ * two, and three discs in a line make a map that is all width and no height.
+ */
+function layoutSystems(grouped) {
+  const layout = {};
+
+  for (const [system, bodies] of Object.entries(grouped)) {
+    if (system === 'other' || !bodies.size) continue;
+
+    const reach = Math.max(...[...bodies.values()].map((sites) => clusterRadius(sites.length)));
+    const spacing = reach * 2 + 34;
+    const orbit = Math.max(190, (spacing * bodies.size) / (2 * Math.PI));
+
+    layout[system] = {
+      orbit,
+      reach,
+      radius: orbit + reach + 34,
+      colour: SYSTEM_COLOURS[system] || '#9fb8ff',
+    };
+  }
+
+  // Stanton and Pyro share the top row; anything else goes underneath.
+  const pad = 70;
+  const gap = 90;
+  const top = ['Stanton', 'Pyro'].filter((s) => layout[s]);
+  const rest = Object.keys(layout).filter((s) => !top.includes(s));
+
+  const rowHeight = top.length ? Math.max(...top.map((s) => layout[s].radius)) : 0;
+  let x = pad;
+
+  for (const system of top) {
+    layout[system].x = x + layout[system].radius;
+    layout[system].y = pad + rowHeight;
+    x = layout[system].x + layout[system].radius + gap;
+  }
+
+  const rowWidth = Math.max(pad, x - gap);
+  let y = top.length ? pad + rowHeight * 2 + gap : pad;
+
+  for (const system of rest) {
+    layout[system].x = Math.max(rowWidth / 2, pad + layout[system].radius);
+    layout[system].y = y + layout[system].radius;
+    y = layout[system].y + layout[system].radius + gap;
+  }
+
+  const width = Math.max(rowWidth, ...Object.values(layout).map((s) => s.x + s.radius)) + pad;
+  const height = Math.max(y - gap, pad + rowHeight * 2) + pad;
+
+  return { layout, width, height };
+}
+
+let SYSTEM_LAYOUT = {};
+let HOME_VIEW = { x: 0, y: 0, w: 1340, h: 1240 };
 let view = { ...HOME_VIEW };
+
+/**
+ * Label size in map units, chosen so text keeps a constant size on screen
+ * however far the view is zoomed. Without this, zooming in magnifies the labels
+ * along with everything else and they pile into each other.
+ */
+const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
   const data = await getJson('/api/map');
@@ -1058,14 +1141,18 @@ async function loadAtlas() {
   drawMap();
 }
 
-/** Width below which every node gets a label rather than only visited ones. */
-const LABEL_ZOOM = 340;
+/**
+ * True once the view is close enough for every node to carry a label, rather
+ * than only the ones with visit history. Held as a fraction of the whole map so
+ * it still means the same thing when the layout resizes.
+ */
+const isDetailed = () => view.w < HOME_VIEW.w * 0.34;
 
 /** Applies the current pan/zoom to the SVG, redrawing when detail changes. */
 function applyView() {
   const map = $('#map');
   const wasDetailed = map.dataset.detailed === 'true';
-  const detailed = view.w < LABEL_ZOOM;
+  const detailed = isDetailed();
 
   map.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
   map.dataset.detailed = String(detailed);
@@ -1083,9 +1170,11 @@ function centreOn(rawId, zoom = true) {
   const point = nodeAt.get(rawId);
   if (!point) return false;
 
-  if (zoom && view.w > 420) {
-    view.w = 420;
-    view.h = 420 * (HOME_VIEW.h / HOME_VIEW.w);
+  const close = HOME_VIEW.w * 0.28;
+
+  if (zoom && view.w > close) {
+    view.w = close;
+    view.h = close * (HOME_VIEW.h / HOME_VIEW.w);
   }
 
   view.x = point.x - view.w / 2;
@@ -1112,12 +1201,21 @@ function drawHere() {
   if (!point) return;
 
   // Two rings: a steady one to read against the dot, and an expanding pulse.
+  // Sized in map units against the current zoom so the marker stays the same
+  // size on screen however far in the view is.
+  const zoom = view.w / HOME_VIEW.w;
+  const ring = 15 * zoom;
   const group = svgEl('g', { class: 'map-here' });
-  group.append(svgEl('circle', { cx: point.x, cy: point.y, r: 15, class: 'here-ring' }));
 
-  const pulse = svgEl('circle', { cx: point.x, cy: point.y, r: 15, class: 'here-pulse' });
+  group.append(svgEl('circle', {
+    cx: point.x, cy: point.y, r: ring, class: 'here-ring', 'stroke-width': 1.6 * zoom,
+  }));
+
+  const pulse = svgEl('circle', {
+    cx: point.x, cy: point.y, r: ring, class: 'here-pulse', 'stroke-width': zoom,
+  });
   pulse.append(svgEl('animate', {
-    attributeName: 'r', values: '13;30', dur: '2.2s', repeatCount: 'indefinite',
+    attributeName: 'r', values: `${13 * zoom};${30 * zoom}`, dur: '2.2s', repeatCount: 'indefinite',
   }));
   pulse.append(svgEl('animate', {
     attributeName: 'opacity', values: '.65;0', dur: '2.2s', repeatCount: 'indefinite',
@@ -1125,7 +1223,8 @@ function drawHere() {
   group.append(pulse);
 
   const label = svgEl('text', {
-    x: point.x, y: point.y - 22, 'text-anchor': 'middle', class: 'map-label here-label',
+    x: point.x, y: point.y - ring - 7 * zoom, 'text-anchor': 'middle',
+    class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
   });
   label.textContent = 'YOU ARE HERE';
   group.append(label);
@@ -1147,7 +1246,7 @@ function initMap() {
     const fy = (e.clientY - box.top) / box.height;
 
     const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-    const w = Math.min(HOME_VIEW.w * 1.6, Math.max(90, view.w * factor));
+    const w = Math.min(HOME_VIEW.w * 1.6, Math.max(HOME_VIEW.w * 0.05, view.w * factor));
     const h = w * (HOME_VIEW.h / HOME_VIEW.w);
 
     view.x += (view.w - w) * fx;
@@ -1226,11 +1325,12 @@ function drawMap() {
   defs.append(glow);
   map.append(defs);
 
-  const centres = { Stanton: { x: 290, y: 300 }, Pyro: { x: 790, y: 300 } };
-  const grouped = { Stanton: new Map(), Pyro: new Map(), other: [] };
+  const grouped = { other: [] };
 
   for (const location of locations) {
-    if (location.system && grouped[location.system]) {
+    if (location.system && SYSTEM_COLOURS[location.system]) {
+      grouped[location.system] ??= new Map();
+
       const key = location.body || '—';
       if (!grouped[location.system].has(key)) grouped[location.system].set(key, []);
       grouped[location.system].get(key).push(location);
@@ -1239,54 +1339,91 @@ function drawMap() {
     }
   }
 
+  // The layout depends on what is on screen, so it is worked out per draw -
+  // filtering to visited places shrinks every system.
+  const sized = layoutSystems(grouped);
+  SYSTEM_LAYOUT = sized.layout;
+
+  const home = { x: 0, y: 0, w: sized.width, h: sized.height };
+  const wasHome = view.w === HOME_VIEW.w && view.h === HOME_VIEW.h
+    && view.x === HOME_VIEW.x && view.y === HOME_VIEW.y;
+
+  HOME_VIEW = home;
+  if (wasHome) view = { ...home };
+
   const maxVisits = Math.max(1, ...locations.map((l) => l.visits));
   const radiusFor = (visits) => 4 + Math.sqrt(visits / maxVisits) * 13;
 
   // Stars, orbit rings and system labels.
-  for (const [system, centre] of Object.entries(centres)) {
+  for (const [system, centre] of Object.entries(SYSTEM_LAYOUT)) {
     map.append(svgEl('circle', {
-      cx: centre.x, cy: centre.y, r: 8,
-      fill: system === 'Stanton' ? '#ffdc9a' : '#ff8f66',
-      filter: 'url(#glow)',
+      cx: centre.x, cy: centre.y, r: 9, fill: centre.colour, filter: 'url(#glow)',
     }));
-    map.append(svgEl('circle', { cx: centre.x, cy: centre.y, r: 165, class: 'map-orbit' }));
+    map.append(svgEl('circle', { cx: centre.x, cy: centre.y, r: centre.orbit, class: 'map-orbit' }));
 
     // Reticle ticks around each star, echoing the in-game starmap.
     for (let tick = 0; tick < 4; tick++) {
       const angle = (tick / 4) * Math.PI * 2 + Math.PI / 4;
       map.append(svgEl('line', {
-        x1: centre.x + Math.cos(angle) * 20, y1: centre.y + Math.sin(angle) * 20,
-        x2: centre.x + Math.cos(angle) * 28, y2: centre.y + Math.sin(angle) * 28,
+        x1: centre.x + Math.cos(angle) * 22, y1: centre.y + Math.sin(angle) * 22,
+        x2: centre.x + Math.cos(angle) * 31, y2: centre.y + Math.sin(angle) * 31,
         stroke: '#1e4763', 'stroke-width': '1',
       }));
     }
 
-    const label = svgEl('text', { x: centre.x, y: centre.y + 205, 'text-anchor': 'middle', class: 'map-sys-label' });
+    const label = svgEl('text', {
+      x: centre.x, y: centre.y + centre.radius - 6, 'text-anchor': 'middle',
+      class: 'map-sys-label', style: `font-size:${labelSize(1.5)}px`,
+    });
     label.textContent = system;
     map.append(label);
   }
 
-  // Jump-point link between the two systems.
-  map.append(svgEl('path', {
-    d: `M ${centres.Stanton.x + 170} 300 Q 540 238 ${centres.Pyro.x - 170} 300`,
-    class: 'map-edge', 'stroke-width': '1.5', 'stroke-dasharray': '5 7', filter: 'url(#glow)',
-  }));
+  // Jump lanes, drawn star to star and stopping short of each orbit ring.
+  for (const [fromName, toName] of JUMP_LANES) {
+    const from = SYSTEM_LAYOUT[fromName];
+    const to = SYSTEM_LAYOUT[toName];
+    if (!from || !to) continue;
 
-  map.append(svgEl('rect', {
-    x: 534, y: 262, width: 12, height: 12,
-    fill: 'none', stroke: '#35c8f0', 'stroke-width': '1.2',
-    transform: 'rotate(45 540 268)', filter: 'url(#glow)',
-  }));
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length;
+    const uy = dy / length;
 
-  const jumpLabel = svgEl('text', { x: 540, y: 252, 'text-anchor': 'middle', class: 'map-label' });
-  jumpLabel.textContent = 'JUMP POINT';
-  map.append(jumpLabel);
+    const ax = from.x + ux * (from.radius + 10);
+    const ay = from.y + uy * (from.radius + 10);
+    const bx = to.x - ux * (to.radius + 10);
+    const by = to.y - uy * (to.radius + 10);
+
+    // Bowed away from the midpoint so the three lanes stay distinguishable.
+    const mx = (ax + bx) / 2 - uy * 26;
+    const my = (ay + by) / 2 + ux * 26;
+
+    map.append(svgEl('path', {
+      d: `M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`,
+      class: 'map-edge', 'stroke-width': '1.5', 'stroke-dasharray': '5 7', filter: 'url(#glow)',
+    }));
+
+    map.append(svgEl('rect', {
+      x: mx - 6, y: my - 6, width: 12, height: 12,
+      fill: 'none', stroke: '#35c8f0', 'stroke-width': '1.2',
+      transform: `rotate(45 ${mx} ${my})`, filter: 'url(#glow)',
+    }));
+
+    const jumpLabel = svgEl('text', {
+      x: mx, y: my - 14, 'text-anchor': 'middle', class: 'map-label',
+      style: `font-size:${labelSize()}px`,
+    });
+    jumpLabel.textContent = 'JUMP POINT';
+    map.append(jumpLabel);
+  }
 
   // Bodies and their locations.
   for (const [system, bodies] of Object.entries(grouped)) {
     if (system === 'other') continue;
 
-    const centre = centres[system];
+    const centre = SYSTEM_LAYOUT[system];
     const order = SYSTEMS[system] || [];
     const present = [...bodies.keys()].sort((a, b) => {
       const ia = order.indexOf(a);
@@ -1296,58 +1433,72 @@ function drawMap() {
 
     present.forEach((bodyName, index) => {
       const angle = (index / Math.max(1, present.length)) * Math.PI * 2 - Math.PI / 2;
-      const bx = centre.x + Math.cos(angle) * 165;
-      const by = centre.y + Math.sin(angle) * 165;
+      const bx = centre.x + Math.cos(angle) * centre.orbit;
+      const by = centre.y + Math.sin(angle) * centre.orbit;
 
       map.append(svgEl('line', {
         x1: centre.x, y1: centre.y, x2: bx, y2: by,
         stroke: 'rgba(53,200,240,.13)', 'stroke-width': '1',
       }));
 
+      const sites = bodies.get(bodyName);
+      const reach = clusterRadius(sites.length);
+
+      // Body names sit outside the cluster they head, so the sites below have
+      // clear air to put their own labels in.
       const bodyLabel = svgEl('text', {
-        x: bx, y: by - 16, 'text-anchor': 'middle', class: 'map-label',
-        style: 'fill:#7796b0;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase',
+        x: bx + Math.cos(angle) * (reach + 16), y: by + Math.sin(angle) * (reach + 16),
+        'text-anchor': 'middle', class: 'map-label',
+        style: `fill:#7796b0;font-size:${labelSize(1.15)}px;letter-spacing:.14em;text-transform:uppercase`,
       });
       bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
       map.append(bodyLabel);
 
-      // Sites orbit their body in rings of twelve. A single line ran off the
-      // edge of the map as soon as the atlas brought in every location rather
-      // than only the visited handful - microTech alone has over a hundred.
-      const sites = bodies.get(bodyName);
-      const perRing = 12;
-
+      // Sites are spread by golden angle rather than in rings. Rings of a fixed
+      // size put every twelfth node on the same spoke, which reads as spokes
+      // rather than a cluster and stacks the labels on top of each other;
+      // phyllotaxis fills the disc evenly at any count, and microTech alone has
+      // over a hundred.
       sites.forEach((site, siteIndex) => {
-        const ring = Math.floor(siteIndex / perRing);
-        const slot = siteIndex % perRing;
-        const inRing = Math.min(perRing, sites.length - ring * perRing);
-
-        const spin = (slot / inRing) * Math.PI * 2 + ring * 0.42;
-        const distance = 20 + ring * 15;
+        const spin = siteIndex * 2.39996;
+        const distance = clusterRadius(siteIndex + 1);
 
         drawNode(
           map,
           bx + Math.cos(spin) * distance,
-          by + Math.sin(spin) * distance * 0.8,
+          by + Math.sin(spin) * distance,
           site,
-          radiusFor(site.visits));
+          radiusFor(site.visits),
+          { x: bx, y: by });
       });
     });
   }
 
-  // Anything the resolver could not place: shown, never dropped.
+  // Anything the resolver could not place: shown below the systems, never
+  // dropped, since an unmapped place the player has been is still worth seeing.
+  const perRow = Math.max(6, Math.floor(sized.width / 150));
+
   grouped.other.forEach((location, index) => {
-    const x = 60 + (index % 12) * 78;
-    const y = 560 + Math.floor(index / 12) * 30;
+    const x = 70 + (index % perRow) * 150;
+    const y = sized.height + 40 + Math.floor(index / perRow) * 34;
     drawNode(map, x, y, location, radiusFor(location.visits));
   });
+
+  if (grouped.other.length) {
+    HOME_VIEW.h = sized.height + 80 + Math.ceil(grouped.other.length / perRow) * 34;
+    if (wasHome) view.h = HOME_VIEW.h;
+  }
 
   drawLegend(locations);
   applyView();
   drawHere();
 }
 
-function drawNode(map, x, y, location, radius) {
+/**
+ * @param anchor The body this site belongs to, if any. Labels are pushed away
+ *   from it so a cluster fans its names outwards instead of stacking them.
+ */
+function drawNode(map, x, y, location, radius, anchor = null) {
   const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
   const been = location.visits > 0;
   const group = svgEl('g', { class: been ? 'map-node' : 'map-node unvisited' });
@@ -1371,14 +1522,31 @@ function drawNode(map, x, y, location, radius) {
     : `${location.name} — never visited`;
   group.append(title);
 
-  // Labelling everything is unreadable at 1,000 nodes, so only places with
+  // Labelling everything is unreadable at this density, so only places with
   // history get one until the view is zoomed in far enough to have room.
-  if ((been && radius > 7) || view.w < LABEL_ZOOM) {
-    const label = svgEl('text', {
-      x, y: y + radius + 11, 'text-anchor': 'middle', class: 'map-label',
-      style: view.w < LABEL_ZOOM ? `font-size:${Math.max(3, view.w / 60)}px` : '',
-    });
-    label.textContent = location.name.length > 22 ? `${location.name.slice(0, 21)}…` : location.name;
+  if ((been && radius > 7) || isDetailed()) {
+    const size = labelSize();
+    const label = svgEl('text', { class: 'map-label', style: `font-size:${size}px` });
+
+    // Radially outwards from the body when there is one, so a dense cluster
+    // spreads its names like spokes rather than piling them all underneath.
+    const dx = anchor ? x - anchor.x : 0;
+    const dy = anchor ? y - anchor.y : 0;
+    const length = Math.hypot(dx, dy);
+
+    if (length > 0.5) {
+      const gap = radius + size * 0.5 + 2;
+      label.setAttribute('x', x + (dx / length) * gap);
+      label.setAttribute('y', y + (dy / length) * gap);
+      label.setAttribute('text-anchor', dx >= 0 ? 'start' : 'end');
+      label.setAttribute('dominant-baseline', 'middle');
+    } else {
+      label.setAttribute('x', x);
+      label.setAttribute('y', y + radius + size + 1);
+      label.setAttribute('text-anchor', 'middle');
+    }
+
+    label.textContent = location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name;
     group.append(label);
   }
 

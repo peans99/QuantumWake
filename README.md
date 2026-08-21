@@ -141,7 +141,7 @@ silently dropped).
 - [docs/log-format-reference.md](docs/log-format-reference.md) — verified line formats and quirks
 - [docs/architecture.md](docs/architecture.md) — decisions and why
 - [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
-- [docs/tools/](docs/tools/) — analysis of seven existing SC log tools
+- [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
 
 ## Credits
 
