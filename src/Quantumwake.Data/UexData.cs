@@ -32,6 +32,9 @@ public sealed record UexMarketRow(
 /// <summary>Cheapest in-game purchase of a vehicle.</summary>
 public sealed record UexVehiclePrice(decimal Price, string Terminal);
 
+/// <summary>One item's buy price at one terminal - where a part is stocked.</summary>
+public sealed record UexItemRow(string Terminal, decimal Buy);
+
 /// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
 public sealed record UexOpportunity(
     string Commodity,
@@ -96,6 +99,9 @@ public sealed class UexData
     /// <summary>Cheapest buy per item uuid, for kit and stash value.</summary>
     private Dictionary<string, decimal> _itemPrices = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Every terminal stocking each item uuid - where to actually buy a part.</summary>
+    private Dictionary<string, List<UexItemRow>> _itemMarket = new(StringComparer.OrdinalIgnoreCase);
+
     public UexData(string? directory = null)
     {
         _directory = directory ?? Path.Combine(
@@ -113,6 +119,7 @@ public sealed class UexData
     private string MatrixPath => Path.Combine(_directory, "matrix.json");
     private string VehiclesPath => Path.Combine(_directory, "vehicles.json");
     private string ItemPricesPath => Path.Combine(_directory, "item-prices.json");
+    private string ItemMarketPath => Path.Combine(_directory, "item-market.json");
 
     public bool IsEnabled => _prices.Count > 0;
     public int Count => _prices.Count;
@@ -148,6 +155,10 @@ public sealed class UexData
     /// <summary>Cheapest known buy price for an item, by the game's entity uuid.</summary>
     public decimal? ItemPrice(string? uuid) =>
         uuid is not null && _itemPrices.TryGetValue(uuid, out var price) ? price : null;
+
+    /// <summary>Every terminal stocking an item, by uuid. Empty when unknown.</summary>
+    public IReadOnlyList<UexItemRow> ItemMarket(string? uuid) =>
+        uuid is not null && _itemMarket.TryGetValue(uuid, out var rows) ? rows : [];
 
     /// <summary>
     /// Trading opportunities from one place: what its terminal sells, and where
@@ -212,7 +223,7 @@ public sealed class UexData
 
         var terminals = DigestTerminals(terminalDoc);
         var vehicles = DigestVehicles(vehicleDoc);
-        var itemPrices = DigestItemPrices(itemDoc);
+        var (itemPrices, itemMarket) = DigestItemPrices(itemDoc);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
@@ -221,6 +232,7 @@ public sealed class UexData
         File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
         File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
         File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
+        File.WriteAllText(ItemMarketPath, JsonSerializer.Serialize(itemMarket));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _prices = prices;
@@ -229,6 +241,7 @@ public sealed class UexData
         _matrix = matrix;
         _vehicles = vehicles;
         _itemPrices = itemPrices;
+        _itemMarket = itemMarket;
         FetchedAt = DateTimeOffset.UtcNow;
         return _prices.Count;
     }
@@ -236,7 +249,11 @@ public sealed class UexData
     /// <summary>Deletes the price cache. Credentials are removed separately.</summary>
     public void Disable()
     {
-        foreach (var path in new[] { PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath, ItemPricesPath })
+        foreach (var path in new[]
+        {
+            PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath,
+            ItemPricesPath, ItemMarketPath,
+        })
             if (File.Exists(path))
                 File.Delete(path);
 
@@ -246,6 +263,7 @@ public sealed class UexData
         _matrix = new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
         _vehicles = new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
         _itemPrices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        _itemMarket = new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
     }
 
@@ -466,26 +484,36 @@ public sealed class UexData
         return vehicles;
     }
 
-    private static Dictionary<string, decimal> DigestItemPrices(JsonElement root)
+    private static (Dictionary<string, decimal>, Dictionary<string, List<UexItemRow>>)
+        DigestItemPrices(JsonElement root)
     {
         var items = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var market = new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
 
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-            return items;
+            return (items, market);
 
         foreach (var row in data.EnumerateArray())
         {
             var uuid = Str(row, "item_uuid");
             var price = (decimal)(Num(row, "price_buy") ?? 0);
+            var terminal = Str(row, "terminal_name");
 
             if (uuid is null || price <= 0)
                 continue;
 
             if (!items.TryGetValue(uuid, out var existing) || price < existing)
                 items[uuid] = price;
+
+            if (terminal is not null)
+            {
+                if (!market.TryGetValue(uuid, out var rows))
+                    market[uuid] = rows = [];
+                rows.Add(new UexItemRow(terminal, price));
+            }
         }
 
-        return items;
+        return (items, market);
     }
 
     private static List<(int Id, string Name)> DigestTerminals(JsonElement root)
@@ -539,6 +567,11 @@ public sealed class UexData
                 _itemPrices = JsonSerializer.Deserialize<Dictionary<string, decimal>>(File.ReadAllText(ItemPricesPath))
                     is { } ip ? new Dictionary<string, decimal>(ip, StringComparer.OrdinalIgnoreCase)
                               : new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+            if (File.Exists(ItemMarketPath))
+                _itemMarket = JsonSerializer.Deserialize<Dictionary<string, List<UexItemRow>>>(File.ReadAllText(ItemMarketPath))
+                    is { } im ? new Dictionary<string, List<UexItemRow>>(im, StringComparer.OrdinalIgnoreCase)
+                              : new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;

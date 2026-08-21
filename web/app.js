@@ -1125,7 +1125,7 @@ function renderPartsRef() {
     const td = el('td', 'muted', partCatalogue.length
       ? 'Nothing matches that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 7;
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -1140,6 +1140,13 @@ function renderPartsRef() {
     tr.append(el('td', 'num', part.grade > 0 ? String(part.grade) : '—'));
     tr.append(el('td', 'muted', part.manufacturer ?? '—'));
     tr.append(el('td', part.price ? 'num' : 'num muted', part.price ? money(part.price) : '—'));
+
+    // Where a part is actually stocked; the full shop list rides the tooltip.
+    const stocked = el('td', 'num muted', part.stockedAt > 0 ? String(part.stockedAt) : '—');
+    if (part.terminals?.length) stocked.title = part.terminals.join('\n');
+    tr.append(stocked);
+    tr.append(el('td', 'muted', part.cheapestAt ?? '—'));
+
     body.append(tr);
   }
 }

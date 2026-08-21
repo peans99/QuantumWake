@@ -510,15 +510,26 @@ public static class ServerHost
 
         app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
             lib.Community.Items
-                .Select(kv => new
+                .Select(kv =>
                 {
-                    className = kv.Key,
-                    kv.Value.Type,
-                    kv.Value.SubType,
-                    kv.Value.Size,
-                    kv.Value.Grade,
-                    kv.Value.Manufacturer,
-                    price = uex.ItemPrice(kv.Value.Uuid)
+                    var stock = uex.ItemMarket(kv.Value.Uuid);
+                    var cheapest = stock.Count > 0 ? stock.MinBy(r => r.Buy) : null;
+
+                    return new
+                    {
+                        className = kv.Key,
+                        kv.Value.Type,
+                        kv.Value.SubType,
+                        kv.Value.Size,
+                        kv.Value.Grade,
+                        kv.Value.Manufacturer,
+                        price = uex.ItemPrice(kv.Value.Uuid),
+                        stockedAt = stock.Count,
+                        cheapestAt = cheapest?.Terminal,
+                        terminals = stock.Count > 0
+                            ? stock.OrderBy(r => r.Buy).Select(r => $"{r.Terminal} — {r.Buy:N0} aUEC")
+                            : null
+                    };
                 })
                 .OrderBy(i => i.className));
 
