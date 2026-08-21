@@ -223,13 +223,26 @@ body.overlay .tabs {
   gap: 0;
 }
 body.overlay .tabs::-webkit-scrollbar { display: none; }
-body.overlay .tabs button {
-  padding: 5px 9px;
-  font-size: 10px;
-  letter-spacing: .1em;
+
+/* The widget is ~330px wide and the full strip is fifteen tabs; at that size
+   most of them scrolled out of reach and the strip only worked fullscreen.
+   The overlay keeps the glanceable views - the ones worth having over the
+   game - and Ctrl+Alt+arrows cycles the same set. Everything else is one
+   browser tab away. */
+body.overlay .tabs button { display: none; }
+body.overlay .tabs button[data-view="now"],
+body.overlay .tabs button[data-view="map"],
+body.overlay .tabs button[data-view="commodities"],
+body.overlay .tabs button[data-view="market"],
+body.overlay .tabs button[data-view="loadout"],
+body.overlay .tabs button[data-view="stash"] {
+  display: inline-block;
+  padding: 4px 7px;
+  font-size: 9.5px;
+  letter-spacing: .07em;
   white-space: nowrap;
 }
-body.overlay .tabs button::after { left: 5px; right: 5px; bottom: 0; }
+body.overlay .tabs button::after { left: 4px; right: 4px; bottom: 0; }
 
 body.overlay .card {
   background: linear-gradient(160deg, rgba(10, 20, 32, .88), rgba(6, 12, 20, .86));
@@ -1145,3 +1158,188 @@ body.overlay .foot { display: none; }
   .about-logo { width: 200px; }
   .about-facts { justify-items: center; }
 }
+
+/* ---------- community-data offer ---------- */
+
+/* The opt-in block on the Cargo page. Visually a panel like any other, but the
+   copy carries the weight: it says exactly what will be downloaded, from where,
+   and that it happens once and only on the click. */
+.community-offer {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 18px;
+  padding: 13px 16px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 980px;
+}
+.community-offer b { color: var(--text); display: block; }
+.community-offer button { flex: 0 0 auto; white-space: nowrap; }
+
+/* display: flex on the class outranks the UA sheet's [hidden] rule, so being
+   hidden must be said at equal strength or the offer never goes away. */
+.community-offer[hidden] { display: none; }
+
+/* ---------- options ---------- */
+
+.option-block {
+  max-width: 880px;
+  margin: 0 0 16px;
+  padding: 16px 20px 14px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+
+.option-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+.option-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--text);
+  flex: 1;
+}
+.option-block p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.65; max-width: 72ch; }
+.option-block code { font-family: var(--mono); color: var(--muted); }
+
+/* The toggle reads as a state, not just a verb. */
+#overlay-toggle.on { color: var(--green); border-color: var(--green); }
+
+/* ---------- loadout slot icons ---------- */
+
+.slot-card { display: flex; gap: 13px; align-items: flex-start; }
+
+/* The glyph well: a small lit panel so the icon reads as instrumentation
+   rather than clip-art. */
+.slot-icon {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  background: linear-gradient(160deg, rgba(53, 200, 240, .10), rgba(53, 200, 240, .03));
+  border: 1px solid var(--rule-hot);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.slot-icon svg {
+  width: 27px;
+  height: 27px;
+  filter: drop-shadow(0 0 6px rgba(53, 200, 240, .55));
+}
+
+.slot-body { flex: 1; min-width: 0; }
+
+body.overlay .slot-card { gap: 9px; }
+body.overlay .slot-icon { flex-basis: 32px; width: 32px; height: 32px; }
+body.overlay .slot-icon svg { width: 19px; height: 19px; }
+
+/* ---------- map: commodity highlight, follow, detail card ---------- */
+
+/* Commodity mode: sellers glow green, the rest recede but stay for context. */
+.map-node.dim { opacity: .16; }
+.map-node.hl .hl-ring { animation: hl-breathe 2.4s ease-in-out infinite; }
+
+@keyframes hl-breathe {
+  0%, 100% { opacity: .9; }
+  50% { opacity: .45; }
+}
+
+#map-follow.active {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* The detail card sits inside the map, so it never pushes the layout around. */
+.map-info {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 240px;
+  padding: 13px 15px;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .96), rgba(6, 12, 20, .94));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12px;
+  line-height: 1.55;
+  z-index: 5;
+}
+.map-info[hidden] { display: none; }
+
+.map-info-close {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 15px;
+  cursor: pointer;
+}
+.map-info-close:hover { color: var(--text); }
+
+.map-info-name { font-size: 14px; font-weight: 600; color: var(--cyan-hot); padding-right: 14px; }
+.map-info-where { margin-bottom: 7px; }
+
+.map-info-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+
+.map-info-kind {
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+}
+
+/* The map hosts an absolutely-positioned card, so it needs to be the anchor. */
+.map-wrap { position: relative; }
+
+/* ---------- sortable tables ---------- */
+
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--cyan-hot); }
+th.sortable.sort-desc::after { content: " ▾"; color: var(--cyan); }
+th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
+
+/* Community reference lines on fleet and loadout cards. */
+.ship-ref { font-size: 10.5px; color: var(--muted); margin-top: 3px; letter-spacing: .04em; }
+.slot-ref { font-size: 10.5px; color: var(--dim); }
+
+/* ---------- UEX integration ---------- */
+
+.uex-push { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.uex-push b { color: var(--text); }
+
+.uex-creds { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.uex-creds input {
+  flex: 1 1 220px;
+  background: var(--deep);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 9px;
+}
+.uex-creds input:focus { outline: none; border-color: var(--rule-hot); }
+
+.uex-report { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.uex-terminal { font-size: 9.5px; }

@@ -77,6 +77,10 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 /// Where the sale happened, back-tracked from the last arrival before it. Cargo
 /// terminals all share a single kiosk id, so their own name says nothing.
 /// </param>
+/// <param name="Commodity">
+/// What was in the boxes — resolved from the opt-in community dataset, null
+/// when it is disabled or the id is unknown to it.
+/// </param>
 public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
@@ -84,7 +88,33 @@ public sealed record TradeRecord(
     int Scu,
     decimal Amount,
     decimal UnitPrice,
-    string? Mode);
+    string? Mode,
+    string? Commodity = null);
+
+/// <summary>An item observed entering the player's inventories.</summary>
+/// <remarks>
+/// A signal, not a certainty: the source event fires when the inventory UI
+/// pages in an item it has not shown before, which covers looting but also
+/// buying and receiving, and only while the inventory is open.
+/// </remarks>
+public sealed record PickupRecord(
+    DateTimeOffset At,
+    string Item,
+    string ItemClass,
+    string Place);
+
+/// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
+/// <param name="Sold">Facility keys where kiosks accept it.</param>
+/// <param name="Bought">Facility keys where kiosks stock it.</param>
+public sealed record MarketEntry(
+    string Id,
+    string Name,
+    IReadOnlyList<string> Groups,
+    IReadOnlyList<string> Sold,
+    IReadOnlyList<string> Bought,
+    int MyScuSold,
+    decimal MyRevenue,
+    int MyTrades);
 
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
@@ -139,7 +169,11 @@ public sealed record LoadoutSlot(
     DateTimeOffset? CurrentSeen);
 
 /// <param name="Count">Number of slots in the family holding this item.</param>
-public sealed record LoadoutEntry(string Name, int Count, DateTimeOffset LastSeen);
+public sealed record LoadoutEntry(
+    string Name,
+    int Count,
+    DateTimeOffset LastSeen,
+    ItemInfo? Reference = null);
 
 /// <summary>
 /// Groups character item ports into something a person would recognise.
@@ -426,14 +460,23 @@ public static class ItemCategories
 /// <param name="EstimatedTime">Inferred time aboard; see <see cref="ShipUsage"/>.</param>
 /// <param name="FirstFlown">Start of the earliest session this ship appears in.</param>
 /// <param name="LastFlown">Start of the most recent session this ship appears in.</param>
+/// <param name="Reference">Community ship data - role, crew, claim costs - when the dataset is enabled and the name matched.</param>
 public sealed record ShipTotal(
     string Name,
     TimeSpan EstimatedTime,
     int Sorties,
     int Sessions,
     DateTimeOffset FirstFlown,
-    DateTimeOffset LastFlown);
-public sealed record PlaceTotal(string RawId, string Name, string? System, string? Body, string Kind, int Visits);
+    DateTimeOffset LastFlown,
+    ShipInfo? Reference = null);
+public sealed record PlaceTotal(
+    string RawId,
+    string Name,
+    string? System,
+    string? Body,
+    string Kind,
+    int Visits,
+    DateTimeOffset? LastVisit = null);
 public sealed record FacetTotal(string Name, int Count);
 
 /// <summary>
@@ -455,6 +498,13 @@ public sealed class LogLibrary : IDisposable
     /// Empty when Data.p4k is unavailable, in which case raw ids are shown.
     /// </summary>
     public GameNames Names { get; private set; } = GameNames.Empty;
+
+    /// <summary>
+    /// The opt-in community dataset, following the same pattern as
+    /// <see cref="Names"/>: empty means every lookup quietly returns null and
+    /// the views say nothing rather than guessing.
+    /// </summary>
+    public CommunityData Community { get; set; } = new();
 
     /// <summary>
     /// Loads display names for an install. Safe to skip - every lookup falls
@@ -574,10 +624,15 @@ public sealed class LogLibrary : IDisposable
 
             foreach (var trade in session.Trades)
             {
+                // "Waste · 304 SCU" with the community dataset, "304 SCU" without.
+                var what = Community.Commodity(trade.ResourceId) is { } commodity
+                    ? $"{commodity} · {trade.Quantity} SCU"
+                    : $"{trade.Quantity} SCU";
+
                 movements.Add((
                     trade.At,
                     trade.IsSell ? "Cargo sold" : "Cargo bought",
-                    $"{trade.Quantity} SCU",
+                    what,
                     PlaceAt(session, trade.At),
                     ShopLabel(trade.Shop),
                     trade.IsSell ? trade.Amount : -trade.Amount,
@@ -762,13 +817,90 @@ public sealed class LogLibrary : IDisposable
                 t.Quantity,
                 t.Amount,
                 t.Quantity > 0 ? t.Amount / t.Quantity : 0,
-                t.Mode)))
+                t.Mode,
+                Community.Commodity(t.ResourceId))))
             .OrderByDescending(t => t.At)];
     }
 
     public IReadOnlyList<SessionSummary> Sessions() => _store.All();
 
     public SessionSummary? Session(string id) => _store.Get(id);
+
+    /// <summary>
+    /// When each item class was first seen in the player's inventories, newest
+    /// first, with the place back-tracked the same way trades are.
+    /// </summary>
+    /// <remarks>
+    /// Deduplicated across the whole history: a class that has ever been seen
+    /// before is not news again. The source event is a listing rather than a
+    /// transfer, so this is an acquisition <i>signal</i> — first sighting is
+    /// roughly when the item entered the player's life, whether looted, bought
+    /// or received — and the view says so.
+    /// </remarks>
+    public IReadOnlyList<PickupRecord> Pickups(int days = 0)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var firsts = new List<PickupRecord>();
+
+        // Oldest first, so the first sighting wins and later ones are noise.
+        foreach (var session in _store.All().OrderBy(s => s.StartedAt))
+        {
+            foreach (var pickup in session.Pickups.OrderBy(p => p.At))
+            {
+                if (!seen.Add(pickup.ItemClass))
+                    continue;
+
+                firsts.Add(new PickupRecord(
+                    pickup.At,
+                    Names.Item(pickup.ItemClass),
+                    pickup.ItemClass,
+                    PlaceAt(session, pickup.At)));
+            }
+        }
+
+        if (days > 0)
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+            firsts = [.. firsts.Where(p => p.At >= cutoff)];
+        }
+
+        return [.. firsts.OrderByDescending(p => p.At)];
+    }
+
+    /// <summary>
+    /// The community commodity catalogue joined onto the player's own trades:
+    /// every commodity the dataset knows, with this install's volume and
+    /// revenue against each. Empty when the dataset is disabled.
+    /// </summary>
+    public IReadOnlyList<MarketEntry> Market()
+    {
+        if (!Community.IsEnabled)
+            return [];
+
+        var trades = _store.All()
+            .SelectMany(s => s.Trades)
+            .Where(t => t.ResourceId is not null)
+            .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return [.. Community.All
+            .Select(pair =>
+            {
+                var mine = trades.GetValueOrDefault(pair.Key);
+
+                return new MarketEntry(
+                    pair.Key,
+                    pair.Value.Name,
+                    pair.Value.Groups,
+                    pair.Value.Sold,
+                    pair.Value.Bought,
+                    mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
+                    mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
+                    mine?.Count ?? 0);
+            })
+            .OrderByDescending(e => e.MyRevenue)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    }
 
     /// <summary>
     /// Rolls stored sessions up into library-wide totals.
@@ -813,7 +945,14 @@ public sealed class LogLibrary : IDisposable
                 g.Sum(x => x.Ship.Sorties),
                 g.Select(x => x.Session).Distinct().Count(),
                 g.Min(x => x.StartedAt),
-                g.Max(x => x.StartedAt)))
+                g.Max(x => x.StartedAt),
+
+                // The raw log tokens ARE the class name (DRAK_Corsair), so try
+                // those first; the localised display name only matches when CIG
+                // named the class after it.
+                g.Select(x => Community.Ship($"{x.Ship.Manufacturer}_{x.Ship.Model}"))
+                    .FirstOrDefault(r => r is not null)
+                 ?? Community.Ship(g.Key)))
             .OrderByDescending(s => s.Sorties)
             .ThenByDescending(s => s.EstimatedTime)
             .ToList();
@@ -827,7 +966,8 @@ public sealed class LogLibrary : IDisposable
                 g.First().System,
                 g.First().Body,
                 g.First().Kind.ToString(),
-                g.Count()))
+                g.Count(),
+                g.Max(x => x.At)))
             .OrderByDescending(l => l.Visits)
             .ToList();
 
@@ -895,7 +1035,8 @@ public sealed class LogLibrary : IDisposable
                 var items = equipped
                     .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .Select(i => new LoadoutEntry(
-                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
+                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen),
+                        Community.Item(i.Key)))
                     .OrderByDescending(i => i.Count)
                     .ThenByDescending(i => i.LastSeen)
                     .ToList();

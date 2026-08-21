@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -59,6 +60,13 @@ public partial class App : System.Windows.Application
         {
             _server = ServerHost.Build(args);
             await _server.StartAsync();
+
+            // Let the dashboard's Settings page show and hide the overlay. The
+            // callback arrives on a request thread; everything WPF happens on
+            // the dispatcher.
+            _server.Services.GetRequiredService<OverlayBridge>().Attach(
+                _settings.ShowOverlay,
+                visible => Dispatcher.Invoke(() => SetOverlayVisible(visible)));
         }
         catch (Exception ex)
         {
@@ -82,13 +90,21 @@ public partial class App : System.Windows.Application
         }
     }
 
-    /// <summary>Shows or hides the overlay, and remembers the choice.</summary>
+    /// <summary>
+    /// Shows or hides the overlay, and remembers the choice. Reached from the
+    /// tray menu and from the dashboard's Settings page alike, so it keeps every
+    /// surface truthful: the tray checkbox and the bridge both learn of a
+    /// change the other one made.
+    /// </summary>
     private void SetOverlayVisible(bool visible)
     {
         if (visible)
             (_overlay ??= new MainWindow()).Show();
         else
             _overlay?.Hide();
+
+        _tray?.SetOverlayVisible(visible);
+        _server?.Services.GetRequiredService<OverlayBridge>().Report(visible);
 
         _settings = _settings with { ShowOverlay = visible };
         _settings.Save();

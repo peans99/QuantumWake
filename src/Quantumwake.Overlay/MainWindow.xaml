@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Quantum Wake Overlay"
-        Width="330" Height="440"
+        Width="360" Height="460"
         MinWidth="230" MinHeight="150"
         WindowStyle="None"
         AllowsTransparency="False"
