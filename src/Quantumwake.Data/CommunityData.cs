@@ -48,6 +48,23 @@ public sealed record ItemInfo(
 public sealed record BodyPosition(double X, double Y);
 
 /// <summary>
+/// One resource spawning at one named location: the game's own deposit tables.
+/// </summary>
+/// <param name="Resource">The material or thing ("Quartz", "Amiant Pod", a derelict hull).</param>
+/// <param name="Deposit">The vein context when the data carries one ("Asteroid C Type Mineable Rock").</param>
+/// <param name="GroupChance">The spawn group's probability, 0..1.</param>
+/// <param name="Share">This deposit's share within its group, 0..1.</param>
+public sealed record ResourceSpawn(
+    string Resource,
+    string? Deposit,
+    string Kind,
+    string Location,
+    string? System,
+    string Group,
+    double GroupChance,
+    double Share);
+
+/// <summary>
 /// The optional community dataset: commodity names for the resource ids the
 /// game logs but never explains, and where each commodity trades.
 /// </summary>
@@ -95,6 +112,12 @@ public sealed class CommunityData
     public const string ManufacturersUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/manufacturers.json";
 
+    public const string ResourcesUrl =
+        "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/resources/resources.json";
+
+    public const string ResourceLocationsUrl =
+        "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/resources/locations.json";
+
     public const string StarmapUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/starmap_positions.json";
 
@@ -104,6 +127,7 @@ public sealed class CommunityData
     private Dictionary<string, ItemInfo> _items = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, Dictionary<string, BodyPosition>> _positions = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _manufacturers = new(StringComparer.OrdinalIgnoreCase);
+    private List<ResourceSpawn> _resourceSpawns = [];
 
     public CommunityData(string? directory = null)
     {
@@ -120,6 +144,7 @@ public sealed class CommunityData
     private string ItemsDigestPath => Path.Combine(_directory, "digest-items.json");
     private string PositionsDigestPath => Path.Combine(_directory, "digest-positions.json");
     private string ManufacturersDigestPath => Path.Combine(_directory, "digest-manufacturers.json");
+    private string ResourceSpawnsDigestPath => Path.Combine(_directory, "digest-resource-spawns.json");
 
     public bool IsEnabled => _byId.Count > 0;
     public int Count => _byId.Count;
@@ -167,6 +192,9 @@ public sealed class CommunityData
     /// <summary>Manufacturer code to full name ("BEHR" -> "Behring Applied Technology").</summary>
     public IReadOnlyDictionary<string, string> Manufacturers => _manufacturers;
 
+    /// <summary>The game's resource deposit tables: what spawns where, and how likely.</summary>
+    public IReadOnlyList<ResourceSpawn> ResourceSpawns => _resourceSpawns;
+
     /// <summary>Every item in the digest, keyed by class name, for the reference catalogue.</summary>
     public IReadOnlyDictionary<string, ItemInfo> Items => _items;
 
@@ -190,6 +218,8 @@ public sealed class CommunityData
         var shipItemsJson = await http.GetStringAsync(ShipItemsUrl, token);
         var starmapJson = await http.GetStringAsync(StarmapUrl, token);
         var manufacturersJson = await http.GetStringAsync(ManufacturersUrl, token);
+        var resourcesJson = await http.GetStringAsync(ResourcesUrl, token);
+        var resourceLocationsJson = await http.GetStringAsync(ResourceLocationsUrl, token);
 
         // Digest before persisting: a failed download or a moved file must not
         // leave a cache that then fails on every startup.
@@ -201,6 +231,7 @@ public sealed class CommunityData
         var items = DigestItems(fpsItemsJson, shipItemsJson);
         var positions = DigestPositions(starmapJson);
         var manufacturers = DigestManufacturers(manufacturersJson);
+        var spawns = DigestResourceSpawns(resourcesJson, resourceLocationsJson);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));
@@ -208,6 +239,7 @@ public sealed class CommunityData
         File.WriteAllText(ItemsDigestPath, JsonSerializer.Serialize(items));
         File.WriteAllText(PositionsDigestPath, JsonSerializer.Serialize(positions));
         File.WriteAllText(ManufacturersDigestPath, JsonSerializer.Serialize(manufacturers));
+        File.WriteAllText(ResourceSpawnsDigestPath, JsonSerializer.Serialize(spawns));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _byId = digest;
@@ -215,6 +247,7 @@ public sealed class CommunityData
         _items = items;
         _positions = positions;
         _manufacturers = manufacturers;
+        _resourceSpawns = spawns;
         FetchedAt = DateTimeOffset.UtcNow;
         return _byId.Count;
     }
@@ -229,6 +262,7 @@ public sealed class CommunityData
         _ships = new Dictionary<string, ShipInfo>(StringComparer.OrdinalIgnoreCase);
         _items = new Dictionary<string, ItemInfo>(StringComparer.OrdinalIgnoreCase);
         _manufacturers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        _resourceSpawns = [];
         FetchedAt = null;
     }
 
@@ -253,6 +287,10 @@ public sealed class CommunityData
                         File.ReadAllText(ManufacturersDigestPath))
                     is { } m ? new Dictionary<string, string>(m, StringComparer.OrdinalIgnoreCase)
                              : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (File.Exists(ResourceSpawnsDigestPath))
+                _resourceSpawns = JsonSerializer.Deserialize<List<ResourceSpawn>>(
+                    File.ReadAllText(ResourceSpawnsDigestPath)) ?? [];
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;
@@ -440,6 +478,135 @@ public sealed class CommunityData
     /// ship item files - the loadout holds armour and the spending history
     /// holds power plants, and both deserve a size and a maker.
     /// </summary>
+    /// <summary>
+    /// The game's own deposit spawn tables, flattened: every (resource, named
+    /// location) pair with its spawn group's probability and this deposit's
+    /// share within the group. Mineable names carry the material as a suffix
+    /// ("AsteroidCTypeMineableRock_Quartz"), so the suffix becomes the resource
+    /// and the rest the vein context; test, template and lootbox rows are noise
+    /// and dropped.
+    /// </summary>
+    public static List<ResourceSpawn> DigestResourceSpawns(string resourcesJson, string locationsJson)
+    {
+        // uuid -> (display name source, kind)
+        var byUuid = new Dictionary<string, (string Name, string Kind)>(StringComparer.OrdinalIgnoreCase);
+
+        using (var resourceDoc = JsonDocument.Parse(resourcesJson))
+        {
+            if (resourceDoc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in resourceDoc.RootElement.EnumerateArray())
+                {
+                    var uuid = Str(entry, "UUID");
+                    var kind = Str(entry, "Kind");
+                    var name = Str(entry, "Name");
+
+                    // Placeholder display names fall back to the class key,
+                    // which still names the deposit ("GPI_Icicle").
+                    if (name is null || name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                        name = Str(entry, "Key");
+
+                    if (uuid is null || kind is null || name is null)
+                        continue;
+
+                    if (name.Contains("Test", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("template", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("Lootbox", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("Placeholder", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("Blocker", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("Obstacle", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    byUuid[uuid] = (name, kind);
+                }
+            }
+        }
+
+        var spawns = new List<ResourceSpawn>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        using var locationDoc = JsonDocument.Parse(locationsJson);
+        if (locationDoc.RootElement.ValueKind != JsonValueKind.Array)
+            return spawns;
+
+        foreach (var provider in locationDoc.RootElement.EnumerateArray())
+        {
+            if (!provider.TryGetProperty("Locations", out var locations)
+                || locations.ValueKind != JsonValueKind.Array
+                || !provider.TryGetProperty("Groups", out var groups)
+                || groups.ValueKind != JsonValueKind.Array)
+                continue;
+
+            var places = locations.EnumerateArray()
+                .Select(l => (Name: Str(l, "Name"), System: Str(l, "System")))
+                .Where(l => l.Name is { Length: > 0 })
+                .Distinct()
+                .ToList();
+
+            if (places.Count == 0)
+                continue;
+
+            foreach (var group in groups.EnumerateArray())
+            {
+                var groupName = Str(group, "GroupName") ?? "?";
+                var groupChance = Num(group, "GroupProbability") ?? 0;
+
+                if (!group.TryGetProperty("Deposits", out var deposits)
+                    || deposits.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                var rows = deposits.EnumerateArray()
+                    .Select(d => (Uuid: Str(d, "ResourceUUID"), Weight: Num(d, "RelativeProbability") ?? 0))
+                    .Where(d => d.Uuid is not null && byUuid.ContainsKey(d.Uuid!))
+                    .ToList();
+
+                var totalWeight = rows.Sum(d => d.Weight);
+                if (totalWeight <= 0)
+                    continue;
+
+                foreach (var (uuid, weight) in rows)
+                {
+                    var (rawName, kind) = byUuid[uuid!];
+                    var (resource, deposit) = SplitResource(rawName);
+
+                    foreach (var (placeName, system) in places)
+                    {
+                        // The same provider is often attached to a location
+                        // several times; one row per fact is enough.
+                        if (!seen.Add($"{resource}|{deposit}|{placeName}|{groupName}"))
+                            continue;
+
+                        spawns.Add(new ResourceSpawn(
+                            resource, deposit, kind, placeName!, system,
+                            groupName.Replace('_', ' '),
+                            Math.Round(groupChance, 4),
+                            Math.Round(weight / totalWeight, 4)));
+                    }
+                }
+            }
+        }
+
+        return spawns;
+    }
+
+    /// <summary>"AsteroidCTypeMineableRock_Quartz" -> ("Quartz", "Asteroid C Type Mineable Rock").</summary>
+    private static (string Resource, string? Deposit) SplitResource(string name)
+    {
+        var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length >= 2 && parts[^1].Length >= 3 && parts[^1].All(char.IsLetter))
+            return (PrettyWords(parts[^1]), PrettyWords(string.Join(' ', parts[..^1])));
+
+        return (PrettyWords(name), null);
+    }
+
+    /// <summary>"MineableRockFPS" -> "Mineable Rock FPS": camel-case split for display.</summary>
+    private static string PrettyWords(string value) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            value.Replace('_', ' '),
+            "(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+            " ");
+
     /// <summary>Manufacturer code to full display name, placeholders skipped.</summary>
     public static Dictionary<string, string> DigestManufacturers(string manufacturersJson)
     {

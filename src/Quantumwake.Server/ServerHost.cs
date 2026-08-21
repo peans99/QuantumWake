@@ -516,6 +516,28 @@ public static class ServerHost
         // Manufacturer codes to full names, for every page that shows a maker.
         app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);
 
+        // The game's own deposit spawn tables, with UEX's best sell joined on
+        // resources that are also commodities - what to mine AND what it pays.
+        app.MapGet("/api/reference/resources", (LogLibrary lib, UexData uex) =>
+            lib.Community.ResourceSpawns.Select(s =>
+            {
+                var best = uex.Best(s.Resource);
+
+                return new
+                {
+                    s.Resource,
+                    s.Deposit,
+                    s.Kind,
+                    s.Location,
+                    s.System,
+                    s.Group,
+                    s.GroupChance,
+                    s.Share,
+                    bestSell = best?.BestSell > 0 ? best.BestSell : (decimal?)null,
+                    bestSellTerminal = best?.BestSell > 0 ? best.BestSellTerminal : null
+                };
+            }));
+
         app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
             lib.Community.Items
                 .Select(kv =>

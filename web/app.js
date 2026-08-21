@@ -381,6 +381,7 @@ async function loadHistory() {
   await loadManufacturers();
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
+  loadMiningRef().catch((e) => console.error('mining', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -1172,6 +1173,107 @@ onInput('#ships-search', renderShipsRef);
 $('#ships-career')?.addEventListener('change', renderShipsRef);
 onInput('#parts-search', renderPartsRef);
 $('#parts-type')?.addEventListener('change', renderPartsRef);
+
+/* ---------- mining and salvage spawns ---------- */
+
+let miningCatalogue = [];
+
+const KIND_LABELS = {
+  mineable: 'Mineable',
+  cave_harvestable: 'Cave harvestable',
+  harvestable: 'Harvestable',
+  salvageable: 'Salvageable',
+};
+
+async function loadMiningRef() {
+  try {
+    miningCatalogue = await getJson('/api/reference/resources');
+  } catch {
+    miningCatalogue = [];
+  }
+
+  const fill = (selector, values, allLabel, labelOf = (v) => v) => {
+    const select = $(selector);
+    const previous = select.value;
+    select.textContent = '';
+    select.append(new Option(allLabel, ''));
+    for (const value of values) select.append(new Option(labelOf(value), value));
+    if (values.includes(previous)) select.value = previous;
+  };
+
+  fill('#mining-kind',
+    [...new Set(miningCatalogue.map((s) => s.kind))].sort(),
+    'All kinds', (k) => KIND_LABELS[k] || k);
+
+  fill('#mining-system',
+    [...new Set(miningCatalogue.map((s) => s.system).filter(Boolean))].sort(),
+    'All systems');
+
+  renderMiningRef();
+}
+
+const MINING_CAP = 500;
+
+function renderMiningRef() {
+  const term = ($('#mining-search').value || '').trim().toLowerCase();
+  const kind = $('#mining-kind').value;
+  const system = $('#mining-system').value;
+  const body = $('#mining-table tbody');
+  body.textContent = '';
+
+  const rows = miningCatalogue.filter((s) =>
+    (!kind || s.kind === kind)
+    && (!system || s.system === system)
+    && (!term
+      || s.resource.toLowerCase().includes(term)
+      || s.location.toLowerCase().includes(term)
+      || (s.deposit || '').toLowerCase().includes(term)))
+
+    // Payers first, then the likeliest finds - the order a miner plans in.
+    .sort((a, b) => (b.bestSell ?? 0) - (a.bestSell ?? 0)
+      || (b.groupChance * b.share) - (a.groupChance * a.share));
+
+  const counter = $('#mining-count');
+  counter.textContent = rows.length > MINING_CAP
+    ? `Showing ${MINING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', miningCatalogue.length
+      ? 'Nothing matches that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 9;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  const percent = (v) => `${(v * 100).toFixed(v * 100 >= 10 ? 0 : 1)}%`;
+
+  for (const spawn of rows.slice(0, MINING_CAP)) {
+    const tr = el('tr');
+    tr.append(el('td', null, spawn.resource));
+    tr.append(el('td', 'muted', spawn.deposit ?? '—'));
+    tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
+    tr.append(tdPlace(spawn.location));
+    tr.append(el('td', 'muted', spawn.system ?? '—'));
+    tr.append(el('td', 'muted', spawn.group));
+    tr.append(el('td', 'num', percent(spawn.groupChance)));
+    tr.append(el('td', 'num muted', percent(spawn.share)));
+
+    const sell = el('td', spawn.bestSell ? 'num inward' : 'num muted',
+      spawn.bestSell ? money(spawn.bestSell) : '—');
+    if (spawn.bestSellTerminal) sell.title = `at ${spawn.bestSellTerminal}`;
+    tr.append(sell);
+
+    body.append(tr);
+  }
+}
+
+onInput('#mining-search', renderMiningRef);
+$('#mining-kind')?.addEventListener('change', renderMiningRef);
+$('#mining-system')?.addEventListener('change', renderMiningRef);
 
 /* ---------- logbook ---------- */
 
