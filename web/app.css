@@ -244,6 +244,16 @@ body.overlay .tabs button[data-view="stash"] {
 }
 body.overlay .tabs button::after { left: 4px; right: 4px; bottom: 0; }
 
+/* Fullscreen widget: every view fits at full size, so the whole strip comes
+   back while the shell reports itself expanded. */
+body.overlay.expanded .tabs button {
+  display: inline-block;
+  padding: 6px 10px;
+  font-size: 11px;
+  letter-spacing: .1em;
+  white-space: nowrap;
+}
+
 body.overlay .card {
   background: linear-gradient(160deg, rgba(10, 20, 32, .88), rgba(6, 12, 20, .86));
   backdrop-filter: blur(9px);
