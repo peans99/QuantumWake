@@ -117,6 +117,13 @@ public static class ServerHost
             });
         });
 
+        // Shown on the About page. Reflection rather than a constant so it can
+        // never disagree with the assembly that is actually running.
+        app.MapGet("/api/version", () => new
+        {
+            version = typeof(ServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"
+        });
+
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
