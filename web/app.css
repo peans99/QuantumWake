@@ -677,6 +677,20 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
   box-shadow: 0 0 0 1px rgba(53, 200, 240, .25);
 }
 .select { min-width: 130px; cursor: pointer; }
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.toggle input { accent-color: var(--cyan); cursor: pointer; }
+.toggle:hover { color: var(--text); }
 .select option { background: var(--panel); color: var(--text); }
 
 .ship-seen {
