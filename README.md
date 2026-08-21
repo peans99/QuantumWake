@@ -9,7 +9,7 @@
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
 ![154 tests](https://img.shields.io/badge/tests-154%20passing-4fd48a)
-![No network](https://img.shields.io/badge/network-none-46617a)
+![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
 Quantum Wake reads it — the live file and every backup — and gives you back the
@@ -17,7 +17,9 @@ flight it recorded: where you have been, what you flew, what you hauled and what
 it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
 of the whole 'verse with your own trail across it.
 
-It is read-only, entirely offline, and never touches the game.
+It is read-only, offline by default, and never touches the game. The one
+exception is opt-in: naming your cargo means fetching a single community file,
+and it happens only if you press the button.
 
 **[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)
 and double-click it.** That is the whole installation — one file, no runtime to
@@ -87,10 +89,11 @@ things here are not in the others:
 - **The whole map, not just your trail.** Others plot where you went. This draws
   every place it can resolve — 292 of them, against the 72 this install has
   actually visited — so the map shows how much 'verse is left, not just a trail.
-- **Offline all the way down.** Every other tool that shows real item names
-  fetches them from UEX, the wiki or scunpacked. This reads `Data.p4k` directly
-  with its own ZIP64 + ZStd reader, so "no outbound network calls" survives
-  contact with the naming problem.
+- **Offline by default, all the way down.** Every other tool that shows real
+  item names fetches them from UEX, the wiki or scunpacked. This reads
+  `Data.p4k` directly with its own ZIP64 + ZStd reader. The single exception is
+  commodity names, which exist nowhere in the local install - naming them is an
+  opt-in, one-file community download that never happens without a click.
 - **It says what the logs cannot support.** Inferred locations carry a
   confidence level, estimates are labelled and capped, and an event CIG removed
   produces an explanation rather than a bare zero.
@@ -117,7 +120,8 @@ running Easy Anti-Cheat:
 
 - Reads log files only; nothing is ever written to the game directory
 - No memory access, no DLL injection, no DirectX or WinAPI hooking
-- No outbound network calls in standalone mode — no CDN, no telemetry
+- No outbound network calls — no CDN, no telemetry. One opt-in exception: the
+  community commodity names, a single file fetched once at your explicit request
 - The overlay is an ordinary top-most window using documented Win32 styles
 
 The trade-off of doing it safely: an always-on-top window is **not** composited

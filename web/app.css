@@ -1145,3 +1145,29 @@ body.overlay .foot { display: none; }
   .about-logo { width: 200px; }
   .about-facts { justify-items: center; }
 }
+
+/* ---------- community-data offer ---------- */
+
+/* The opt-in block on the Cargo page. Visually a panel like any other, but the
+   copy carries the weight: it says exactly what will be downloaded, from where,
+   and that it happens once and only on the click. */
+.community-offer {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 18px;
+  padding: 13px 16px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 980px;
+}
+.community-offer b { color: var(--text); display: block; }
+.community-offer button { flex: 0 0 auto; white-space: nowrap; }
+
+/* display: flex on the class outranks the UA sheet's [hidden] rule, so being
+   hidden must be said at equal strength or the offer never goes away. */
+.community-offer[hidden] { display: none; }

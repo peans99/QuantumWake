@@ -183,7 +183,7 @@ public sealed class SessionBuilder
             case CommodityTradeEvent trade:
                 _trades.Add(new CommodityTrade(
                     trade.Timestamp, PrettyShop(trade.ShopName), trade.Amount,
-                    trade.Quantity, trade.IsSell, trade.TransactionMode));
+                    trade.Quantity, trade.IsSell, trade.TransactionMode, trade.ResourceId));
 
                 Timeline(
                     trade.Timestamp,

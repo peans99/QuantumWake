@@ -77,6 +77,10 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 /// Where the sale happened, back-tracked from the last arrival before it. Cargo
 /// terminals all share a single kiosk id, so their own name says nothing.
 /// </param>
+/// <param name="Commodity">
+/// What was in the boxes — resolved from the opt-in community dataset, null
+/// when it is disabled or the id is unknown to it.
+/// </param>
 public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
@@ -84,7 +88,8 @@ public sealed record TradeRecord(
     int Scu,
     decimal Amount,
     decimal UnitPrice,
-    string? Mode);
+    string? Mode,
+    string? Commodity = null);
 
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
@@ -457,6 +462,13 @@ public sealed class LogLibrary : IDisposable
     public GameNames Names { get; private set; } = GameNames.Empty;
 
     /// <summary>
+    /// The opt-in community dataset, following the same pattern as
+    /// <see cref="Names"/>: empty means every lookup quietly returns null and
+    /// the views say nothing rather than guessing.
+    /// </summary>
+    public CommunityData Community { get; set; } = new();
+
+    /// <summary>
     /// Loads display names for an install. Safe to skip - every lookup falls
     /// back to the raw identifier.
     /// </summary>
@@ -574,10 +586,15 @@ public sealed class LogLibrary : IDisposable
 
             foreach (var trade in session.Trades)
             {
+                // "Waste · 304 SCU" with the community dataset, "304 SCU" without.
+                var what = Community.Commodity(trade.ResourceId) is { } commodity
+                    ? $"{commodity} · {trade.Quantity} SCU"
+                    : $"{trade.Quantity} SCU";
+
                 movements.Add((
                     trade.At,
                     trade.IsSell ? "Cargo sold" : "Cargo bought",
-                    $"{trade.Quantity} SCU",
+                    what,
                     PlaceAt(session, trade.At),
                     ShopLabel(trade.Shop),
                     trade.IsSell ? trade.Amount : -trade.Amount,
@@ -762,7 +779,8 @@ public sealed class LogLibrary : IDisposable
                 t.Quantity,
                 t.Amount,
                 t.Quantity > 0 ? t.Amount / t.Quantity : 0,
-                t.Mode)))
+                t.Mode,
+                Community.Commodity(t.ResourceId))))
             .OrderByDescending(t => t.At)];
     }
 

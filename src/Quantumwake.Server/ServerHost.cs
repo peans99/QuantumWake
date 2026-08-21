@@ -48,6 +48,14 @@ public static class ServerHost
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
+        // Solely for the opt-in community-dataset download; nothing else in the
+        // application makes an outbound request.
+        builder.Services.AddHttpClient("community", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("QuantumWake");
+        });
+
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -97,6 +105,40 @@ public static class ServerHost
                     places = lib.Names.PlaceCount
                 }
             }));
+
+        // The community dataset: commodity names for the resource ids the game
+        // logs but never explains. Enabling it performs the application's one
+        // and only outbound request - a single file, fetched on the user's
+        // explicit click, cached locally. See CommunityData for the reasoning.
+        app.MapGet("/api/community", (LogLibrary lib) => new
+        {
+            enabled = lib.Community.IsEnabled,
+            commodities = lib.Community.Count,
+            fetchedAt = lib.Community.FetchedAt,
+            source = CommunityData.CommoditiesUrl
+        });
+
+        app.MapPost("/api/community/enable", async (LogLibrary lib, IHttpClientFactory httpFactory) =>
+        {
+            try
+            {
+                var count = await lib.Community.EnableAsync(httpFactory.CreateClient("community"));
+                return Results.Ok(new { enabled = true, commodities = count });
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidDataException)
+            {
+                return Results.Problem(
+                    title: "The community dataset could not be fetched.",
+                    detail: e.Message,
+                    statusCode: 502);
+            }
+        });
+
+        app.MapPost("/api/community/disable", (LogLibrary lib) =>
+        {
+            lib.Community.Disable();
+            return Results.Ok(new { enabled = false });
+        });
 
         // Display names come out of the game's own localisation table, so they go stale
         // when Star Citizen patches. The cache is stamped with Data.p4k's write time and

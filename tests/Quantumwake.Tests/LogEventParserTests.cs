@@ -358,4 +358,40 @@ public class LogEventParserTests
         Assert.Null(parser.Parse(line));
         Assert.Equal(0, parser.UnmatchedKnownTags);
     }
+
+    [Fact]
+    public void Extracts_commodity_sale_with_resource_id()
+    {
+        var trade = ParseOne<CommodityTradeEvent>(
+            "<2026-08-15T03:12:41.100Z> [Notice] <CEntityComponentCommodityUIProvider::SendCommoditySellRequest> " +
+            "Sending SShopCommoditySellRequest - playerId[204721322607] shopId[730090005328] " +
+            "shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] amount[146240.000000] " +
+            "resourceGUID[B999EF65-35BE-45BF-908A-5EAC6E06BA12] autoLoading[0] quantity[320] " +
+            "transactionMode[Location] Cargo Box Data:  [boxSize[16] | unitAmount[20]]");
+
+        Assert.True(trade.IsSell);
+        Assert.Equal(146240m, trade.Amount);
+        Assert.Equal(320, trade.Quantity);
+        Assert.Equal("Location", trade.TransactionMode);
+
+        // Normalised to lower case: the community dataset is keyed that way.
+        Assert.Equal("b999ef65-35be-45bf-908a-5eac6e06ba12", trade.ResourceId);
+    }
+
+    /// <summary>
+    /// Some builds have written trade lines without the resource id; the field
+    /// is optional, not a new way for the whole line to stop parsing.
+    /// </summary>
+    [Fact]
+    public void Commodity_sale_survives_a_missing_resource_id()
+    {
+        var trade = ParseOne<CommodityTradeEvent>(
+            "<2026-08-15T03:12:41.100Z> [Notice] <CEntityComponentCommodityUIProvider::SendCommoditySellRequest> " +
+            "Sending SShopCommoditySellRequest - playerId[204721322607] shopId[730090005328] " +
+            "shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] amount[1058400.000000] " +
+            "quantity[288] transactionMode[ResourceContainer]");
+
+        Assert.Equal(288, trade.Quantity);
+        Assert.Null(trade.ResourceId);
+    }
 }
