@@ -6,7 +6,7 @@ machine are the remaining Phase 1 items.
 ## What exists
 
 ```
-src/SCCompanion.Core/
+src/Verselog.Core/
   Logging/
     LogLine.cs          LogLine record + LogEnvelope.TryParse
     LogFileReader.cs    streaming reader, multi-line entry reconstruction, offset resume
@@ -15,9 +15,9 @@ src/SCCompanion.Core/
     GameEvent.cs        13 event records
   Parsing/
     LogEventParser.cs   tag dispatch + GeneratedRegex patterns + health stats
-src/SCCompanion.Cli/
+src/Verselog.Cli/
   Program.cs            backfill and verification harness
-tests/SCCompanion.Tests/
+tests/Verselog.Tests/
   LogEnvelopeTests.cs   6 tests
   LogEventParserTests.cs 30 tests
   LogFileReaderTests.cs 10 tests
@@ -119,9 +119,9 @@ which is enough for the faceted contract view in Phase 2 with no extra data.
 ## Running it
 
 ```powershell
-dotnet run --project src\SCCompanion.Cli -c Release -- --path "C:\Program Files\Roberts Space Industries\StarCitizen\LIVE"
-dotnet run --project src\SCCompanion.Cli -c Release -- --live-only   # skip backups
-dotnet test SCCompanion.slnx
+dotnet run --project src\Verselog.Cli -c Release -- --path "C:\Program Files\Roberts Space Industries\StarCitizen\LIVE"
+dotnet run --project src\Verselog.Cli -c Release -- --live-only   # skip backups
+dotnet test Verselog.slnx
 ```
 
 Install detection is automatic when `--path` is omitted.

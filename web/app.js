@@ -1,4 +1,4 @@
-/* SC Companion dashboard.
+/* Verselog dashboard.
  *
  * No framework and no external requests: the page is served by the local
  * process and also loaded by the overlay's WebView2, so it stays dependency

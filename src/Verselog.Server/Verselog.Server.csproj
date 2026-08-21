@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Verselog.Core\Verselog.Core.csproj" />
+    <ProjectReference Include="..\Verselog.Data\Verselog.Data.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- Ship the shared web UI next to the binary so a published build and the
+       overlay's WebView2 both find it without depending on the repo layout. -->
+  <ItemGroup>
+    <Content Include="..\..\web\**\*" Link="web\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

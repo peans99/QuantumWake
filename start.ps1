@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds and launches SC Companion.
+    Builds and launches Verselog.
 
 .DESCRIPTION
     Starts the dashboard on http://127.0.0.1:31337 and, unless -NoOverlay is
@@ -41,18 +41,18 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 Write-Host 'Building…' -ForegroundColor Cyan
-dotnet build SCCompanion.slnx -c Release -v q --nologo | Out-Null
+dotnet build Verselog.slnx -c Release -v q --nologo | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 
 if ($Rescan) {
-    $db = Join-Path $env:LOCALAPPDATA 'SCCompanion\sessions.db'
+    $db = Join-Path $env:LOCALAPPDATA 'Verselog\sessions.db'
     if (Test-Path $db) {
         Remove-Item $db -Force
         Write-Host 'Cache cleared; the next scan will re-read every log.' -ForegroundColor Yellow
     }
 }
 
-$serverArgs = @('--project', 'src\SCCompanion.Server', '-c', 'Release', '--no-build')
+$serverArgs = @('--project', 'src\Verselog.Server', '-c', 'Release', '--no-build')
 if ($Path) { $serverArgs += @('--path', $Path) }
 if ($Lan)  { $serverArgs += @('--Lan', 'true') }
 if ($Port -ne 31337) { $serverArgs += @('--Port', "$Port") }
@@ -73,7 +73,7 @@ foreach ($attempt in 1..60) {
 
 if (-not $ready) {
     Write-Host 'The server did not come up. Run it directly to see why:' -ForegroundColor Red
-    Write-Host '  dotnet run --project src\SCCompanion.Server -c Release' -ForegroundColor DarkGray
+    Write-Host '  dotnet run --project src\Verselog.Server -c Release' -ForegroundColor DarkGray
     if (-not $server.HasExited) { Stop-Process $server.Id -Force }
     exit 1
 }
@@ -82,7 +82,7 @@ Write-Host "Dashboard ready: http://127.0.0.1:$Port" -ForegroundColor Green
 Start-Process "http://127.0.0.1:$Port"
 
 if (-not $NoOverlay) {
-    $overlay = 'src\SCCompanion.Overlay\bin\Release\net10.0-windows\SCCompanion.Overlay.exe'
+    $overlay = 'src\Verselog.Overlay\bin\Release\net10.0-windows\Verselog.Overlay.exe'
     if (Test-Path $overlay) {
         Start-Process $overlay
         Write-Host 'Overlay running. Ctrl+Alt+O toggles click-through.' -ForegroundColor Green
