@@ -59,12 +59,13 @@ if ($Rescan) {
 # QuantumWake.exe is the whole application - it hosts the server in-process and
 # puts an icon in the notification area. -NoOverlay runs the bare server
 # instead, which is also what a headless or second-machine setup wants.
-$app = $NoOverlay
-    ? 'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
-    : 'src\Quantumwake.Overlay\bin\Release\net10.0-windows\QuantumWake.exe'
+$serverExe = if ($NoOverlay) {
+    'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
+} else {
+    'src\Quantumwake.Overlay\bin\Release\net10.0-windows\QuantumWake.exe'
+}
 
-if (-not (Test-Path $app)) { throw "Not built: $app" }
-$serverExe = $app
+if (-not (Test-Path $serverExe)) { throw "Not built: $serverExe" }
 
 $serverArgs = @()
 if ($Path) { $serverArgs += @('--path', $Path) }
