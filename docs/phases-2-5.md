@@ -132,3 +132,43 @@ If CIG restores the events, the killboard works with no further code.
   tray so the gap is obvious.
 - **Parser-health panel in the UI.** The data is collected and exposed by the
   CLI, but the dashboard does not surface it yet.
+
+## One executable, and somewhere to click
+
+Added 2026-08-21, after the question "how do we simplify this for users who are
+not technical?" The honest answer was that the release defeated them four times
+over: install the .NET Desktop Runtime first, then pick the right file out of a
+fifty-file zip, then get past SmartScreen, and then find no way to stop the
+thing short of Task Manager.
+
+**The server moved inside the overlay process.** `Program.cs` became a three-line
+entry point over a new `ServerHost.Build`, which the WPF app calls at startup and
+the standalone server still calls for itself. The overlay no longer hunts for
+`Quantumwake.Server.exe` and starts it as a child, which also removes a failure
+mode: an orphaned server surviving an overlay crash.
+
+**The dashboard is embedded in the assembly.** `web/` still copies next to the
+binary and that copy wins - editing a stylesheet should not need a rebuild - but
+the same files are compiled in as resources, and `EmbeddedWeb` serves those when
+no directory exists beside the executable. A middleware rather than an
+`IFileProvider`: twenty lines against a class that would have to lie about
+directory listings, range requests and change tokens.
+
+The result is a self-contained single file of **87 MB** that needs no runtime.
+Measured before committing to it - a self-contained WPF build was expected to be
+far worse, and at 87 MB compressed the trade against "install .NET first" is not
+close.
+
+**A tray icon, because there was nowhere to click.** Open dashboard, show or hide
+the overlay, quit. Hiding the overlay leaves the dashboard served, which is what
+a second-monitor user wants, and the choice persists in `settings.json` - kept
+separate from `overlay.json` deliberately: geometry is rewritten on every drag,
+and a preference someone chose should not share a file with that.
+
+Shutdown is explicit rather than tied to the window, so closing the overlay does
+not kill the app.
+
+What was deliberately not built: an installer, because a single exe does not need
+one; and a code-signing certificate, because it costs a few hundred a year and a
+free fan tool cannot justify it. The SmartScreen prompt is documented in the
+release notes instead, which is what every tool in this niche does.

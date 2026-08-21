@@ -19,12 +19,24 @@ of the whole 'verse with your own trail across it.
 
 It is read-only, entirely offline, and never touches the game.
 
+**[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)
+and double-click it.** That is the whole installation — one file, no runtime to
+install, nothing to unpack or configure. It finds your Star Citizen install
+itself, across every fixed drive.
+
+It then sits in the notification area. Right-click to open the dashboard, show
+or hide the overlay, or quit; the overlay choice is remembered. `Ctrl+Alt+O`
+toggles overlay click-through, and the dashboard is on
+<http://127.0.0.1:31337>.
+
+Windows will warn that the publisher is unknown — the binary is not code signed,
+which costs money a free fan tool does not have. **More info → Run anyway**.
+
+From source instead:
+
 ```powershell
 .\start.ps1
 ```
-
-Dashboard on <http://127.0.0.1:31337>. `Ctrl+Alt+O` toggles overlay
-click-through. Your install is found automatically across every fixed drive.
 
 ![The star map](docs/images/map.png)
 
@@ -114,14 +126,20 @@ for the overlay to be visible. The dashboard has no such limitation.
 
 ## Requirements
 
-- Windows 10/11, [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- WebView2 runtime (ships with Windows 11) — overlay only
+**To run the release:** Windows 10 or 11. Nothing else — the executable is
+self-contained, so no .NET install is needed. The overlay additionally wants the
+WebView2 runtime, which ships with Windows 11; on Windows 10 the dashboard works
+regardless and the overlay stays blank until
+[the runtime](https://developer.microsoft.com/microsoft-edge/webview2/) is
+installed.
+
+**To build from source:** the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ## Usage
 
 ```powershell
-.\start.ps1                     # dashboard + overlay
-.\start.ps1 -NoOverlay          # dashboard only
+.\start.ps1                     # the app: tray icon, dashboard, overlay
+.\start.ps1 -NoOverlay          # the bare server, no tray and no overlay
 .\start.ps1 -Lan                # allow a tablet as second screen
 .\start.ps1 -Rescan             # force a full re-parse
 .\start.ps1 -Path "D:\...\StarCitizen\LIVE"
@@ -164,14 +182,21 @@ One web UI, hosted three ways — a browser today, WebView2 in the overlay, and
 remote clients when server mode lands. Writing it once is why the overlay cost
 almost nothing to add.
 
+It is also **one process**. `QuantumWake.exe` runs the web server inside itself
+and carries the dashboard as embedded resources, which is what lets the whole
+application ship as a single file with no runtime to install. The server is
+still its own project and its own executable, for headless use and for the
+Linux-hosted server mode later.
+
 ```
-Overlay (WPF + WebView2)   Browser / tablet        Remote clients (later)
-            └──────────── HTTP + SSE / SignalR ───────────┘
-                                  │
-                    Quantumwake.Server (ASP.NET Core)
-                                  │
-              Quantumwake.Core          Quantumwake.Data
-              tail → parse → state      SQLite + location graph
+        QuantumWake.exe  (one process, one file)
+   ┌──────────────────────────────────────────┐
+   │  tray icon      overlay (WPF+WebView2)   │      Browser / tablet
+   │            ASP.NET Core, in-process ─────┼───── HTTP + SSE / SignalR
+   └──────────────────────┬───────────────────┘      Remote clients (later)
+                          │
+        Quantumwake.Core        Quantumwake.Data
+        tail → parse → state    SQLite + location graph
 ```
 
 | Project | Target | Role |
@@ -179,7 +204,7 @@ Overlay (WPF + WebView2)   Browser / tablet        Remote clients (later)
 | `Quantumwake.Core` | `net10.0` | Log tailing, parsing, location + session state |
 | `Quantumwake.Data` | `net10.0` | SQLite cache, library aggregates |
 | `Quantumwake.Server` | `net10.0` | REST + SSE + static UI |
-| `Quantumwake.Overlay` | `net10.0-windows` | Transparent WPF shell |
+| `Quantumwake.Overlay` | `net10.0-windows` | The application: tray icon, transparent WPF overlay, and the server hosted in-process |
 | `Quantumwake.Cli` | `net10.0` | Backfill and verification |
 | `Quantumwake.LogSim` | `net10.0` | Fake-install generator for testing without the game |
 
@@ -201,6 +226,7 @@ silently dropped).
 - [docs/architecture.md](docs/architecture.md) — decisions and why
 - [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
+- [docs/commodity-catalogue.md](docs/commodity-catalogue.md) — parked: how to learn what sells where
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
 - [docs/naming.md](docs/naming.md) — why the project is called Quantum Wake
 - [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
