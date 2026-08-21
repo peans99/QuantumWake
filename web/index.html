@@ -125,13 +125,26 @@
       <input type="search" id="map-search" placeholder="Find a place…">
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
+      <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
       <button class="ghost" id="map-here">Centre on me</button>
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="map-hint muted">Scroll to zoom · drag to pan</div>
+      <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details</div>
+
+      <aside class="map-info" id="map-info" hidden>
+        <button class="map-info-close" id="map-info-close" aria-label="Close">×</button>
+        <div class="map-info-name" id="map-info-name"></div>
+        <div class="map-info-where muted" id="map-info-where"></div>
+        <div class="map-info-row">
+          <span class="map-info-kind" id="map-info-kind"></span>
+          <span id="map-info-visits"></span>
+        </div>
+        <div class="muted" id="map-info-last"></div>
+        <div id="map-info-trade" hidden></div>
+      </aside>
     </div>
     <div class="legend" id="map-legend"></div>
   </section>

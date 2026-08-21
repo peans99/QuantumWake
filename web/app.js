@@ -929,6 +929,59 @@ function renderCommodities(trades) {
 
 /* ---------- shared widgets ---------- */
 
+/**
+ * Every table sorts by clicking its headers. One generic pass over the DOM
+ * rather than per-page wiring, so a table added next month is sortable for
+ * free. Numbers sort as numbers, dates as dates, everything else as text;
+ * re-rendering (a period change, a rescan) resets to the page's own order.
+ */
+function makeTablesSortable() {
+  for (const table of document.querySelectorAll('main table')) {
+    [...table.querySelectorAll('thead th')].forEach((th, index) => {
+      if (!th.textContent.trim()) return;
+
+      th.classList.add('sortable');
+      th.title = 'Sort';
+
+      th.addEventListener('click', () => {
+        const descending = !th.classList.contains('sort-desc');
+
+        for (const other of table.querySelectorAll('thead th'))
+          other.classList.remove('sort-asc', 'sort-desc');
+        th.classList.add(descending ? 'sort-desc' : 'sort-asc');
+
+        const body = table.tBodies[0];
+        if (!body) return;
+
+        // Empty-state rows span the table and stay where they are.
+        const rows = [...body.rows].filter((r) => r.cells.length > 1);
+
+        rows.sort((a, b) => compareCells(a, b, index) * (descending ? -1 : 1));
+        rows.forEach((r) => body.append(r));
+      });
+    });
+  }
+}
+
+function compareCells(rowA, rowB, index) {
+  const a = (rowA.cells[index]?.textContent ?? '').trim();
+  const b = (rowB.cells[index]?.textContent ?? '').trim();
+
+  // Dates first: "Aug 17, 2026" parsed numerically would sort by day-of-month.
+  const dateish = /^[A-Z][a-z]{2} \d{1,2}, \d{4}/;
+  if (dateish.test(a) && dateish.test(b))
+    return Date.parse(a) - Date.parse(b);
+
+  const numA = parseFloat(a.replace(/[^0-9.-]/g, ''));
+  const numB = parseFloat(b.replace(/[^0-9.-]/g, ''));
+  if (Number.isFinite(numA) && Number.isFinite(numB) && /\d/.test(a) && /\d/.test(b))
+    return numA - numB;
+
+  return a.localeCompare(b);
+}
+
+makeTablesSortable();
+
 function tiles(container, entries) {
   const node = $(container);
   node.textContent = '';
@@ -1438,6 +1491,16 @@ const svgEl = (tag, attrs = {}) => {
 let atlas = [];
 const nodeAt = new Map();
 
+/** Non-null while a commodity search is active: the rawIds to light up. */
+let highlightIds = null;
+
+/**
+ * Whether the map keeps itself centred on the live marker. Persisted: someone
+ * who plays with the map on a second monitor wants this every session.
+ */
+let followHere = false;
+try { followHere = localStorage.getItem('qw-map-follow') === '1'; } catch { /* private mode */ }
+
 /** Where the player is, kept in step with the live feed. */
 let hereId = null;
 
@@ -1579,8 +1642,14 @@ function centreOn(rawId, zoom = true) {
  * drawn - the marker is re-applied on every draw from {@link hereId}.
  */
 function setHere(rawId) {
+  const changed = (rawId || null) !== hereId;
   hereId = rawId || null;
   drawHere();
+
+  // Follow mode: the map pans itself as the player moves, so a second monitor
+  // shows the journey without being touched.
+  if (followHere && changed && hereId)
+    centreOn(hereId);
 }
 
 function drawHere() {
@@ -1682,6 +1751,70 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   onInput('#map-search', () => drawMap());
+
+  const follow = $('#map-follow');
+  follow.classList.toggle('active', followHere);
+
+  follow.addEventListener('click', () => {
+    followHere = !followHere;
+    follow.classList.toggle('active', followHere);
+    try { localStorage.setItem('qw-map-follow', followHere ? '1' : '0'); } catch { /* fine */ }
+
+    if (followHere && hereId) centreOn(hereId);
+  });
+
+  // Clicking empty map space dismisses the detail card.
+  map.addEventListener('click', () => $('#map-info').hidden = true);
+  $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
+
+  // Keyboard zoom for anyone without a wheel: +/- around the view centre.
+  document.addEventListener('keydown', (e) => {
+    if (!$('#view-map').classList.contains('active')) return;
+    if (e.target.matches('input, select, textarea')) return;
+
+    if (e.key === '+' || e.key === '=' || e.key === '-') {
+      const factor = e.key === '-' ? 1.25 : 1 / 1.25;
+      const w = Math.min(HOME_VIEW.w * 1.6, Math.max(HOME_VIEW.w * 0.05, view.w * factor));
+      const h = w * (HOME_VIEW.h / HOME_VIEW.w);
+      view.x += (view.w - w) / 2;
+      view.y += (view.h - h) / 2;
+      view.w = w;
+      view.h = h;
+      applyView();
+      e.preventDefault();
+    }
+  });
+}
+
+/** The card that opens when a node is clicked. */
+function showMapInfo(location) {
+  const info = $('#map-info');
+
+  $('#map-info-name').textContent = location.name;
+  $('#map-info-where').textContent =
+    [location.body, location.system].filter(Boolean).join(' · ') || 'unmapped';
+  $('#map-info-kind').textContent = location.kind.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  $('#map-info-visits').textContent = location.visits > 0
+    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
+    : 'never visited';
+
+  $('#map-info-last').textContent = location.lastVisit
+    ? `last there ${relative(location.lastVisit)}`
+    : '';
+
+  // In commodity mode, say which side of the search this place is on.
+  const trade = $('#map-info-trade');
+  if (highlightIds) {
+    const sells = highlightIds.has(location.rawId);
+    trade.textContent = sells ? 'sells the searched commodity' : 'does not sell it';
+    trade.className = sells ? 'inward' : 'muted';
+    trade.hidden = false;
+  } else {
+    trade.hidden = true;
+  }
+
+  info.hidden = false;
 }
 
 function drawMap() {
@@ -1692,18 +1825,27 @@ function drawMap() {
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
 
-  // A term that names a commodity searches for where it sells; anything else
-  // searches places, as it always did. Either way the search wins over the
-  // visited-only toggle: looking for somewhere you have never been should
-  // find it.
+  // A term that names a commodity HIGHLIGHTS where it sells rather than
+  // filtering the map down to it. Most commodities sell at hundreds of
+  // facilities, so filtering produced what looked like the whole map with
+  // nothing marked; keeping every node and lighting the sellers reads as an
+  // answer. Any other term still filters places, and either search wins over
+  // the visited-only toggle.
   const sites = term ? commoditySites(term) : null;
 
-  const locations = atlas.filter((l) => {
-    if (sites) {
-      const compact = `${l.name} ${l.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return [...sites].some((token) => compact.includes(token));
-    }
+  highlightIds = null;
 
+  if (sites) {
+    highlightIds = new Set(atlas
+      .filter((l) => {
+        const compact = `${l.name} ${l.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return [...sites].some((token) => compact.includes(token));
+      })
+      .map((l) => l.rawId));
+  }
+
+  const locations = atlas.filter((l) => {
+    if (sites) return true;
     if (term) return l.name.toLowerCase().includes(term) || l.rawId.toLowerCase().includes(term);
     return !visitedOnly || l.visits > 0;
   });
@@ -1712,7 +1854,7 @@ function drawMap() {
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
     count.textContent = sites
-      ? `${locations.length} places the map can name sell this`
+      ? `sells at ${highlightIds.size} places the map can name`
       : `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
@@ -1903,11 +2045,25 @@ function drawMap() {
 function drawNode(map, x, y, location, radius, anchor = null) {
   const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
   const been = location.visits > 0;
-  const group = svgEl('g', { class: been ? 'map-node' : 'map-node unvisited' });
+
+  let cls = been ? 'map-node' : 'map-node unvisited';
+
+  // In commodity mode the sellers glow and everything else recedes.
+  const highlighted = highlightIds?.has(location.rawId) ?? false;
+  if (highlightIds) cls += highlighted ? ' hl' : ' dim';
+
+  const group = svgEl('g', { class: cls });
 
   nodeAt.set(location.rawId, { x, y });
 
   group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
+
+  if (highlighted) {
+    group.append(svgEl('circle', {
+      cx: x, cy: y, r: radius + 5, fill: 'none',
+      stroke: '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
+    }));
+  }
 
   // Somewhere never visited is drawn as an outline, so the places that carry
   // history read as solid against the rest of the map.
@@ -1923,6 +2079,13 @@ function drawNode(map, x, y, location, radius, anchor = null) {
     ? `${location.name} — ${location.visits} visit${location.visits === 1 ? '' : 's'}`
     : `${location.name} — never visited`;
   group.append(title);
+
+  // Click for the detail card; the hit circle above makes small nodes easy to
+  // land on.
+  group.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showMapInfo(location);
+  });
 
   // Labelling everything is unreadable at this density, so only places with
   // history get one until the view is zoomed in far enough to have room.
@@ -2082,6 +2245,11 @@ async function boot() {
 
   const requested = viewFromHash();
   if (requested) showView(requested);
+
+  // ?q= pre-fills the map search, so a commodity view is a shareable link:
+  // /?q=Copper#map opens the map with the sellers lit.
+  const q = params.get('q');
+  if (q) $('#map-search').value = q;
 
   initMap();
 
