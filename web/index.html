@@ -102,6 +102,21 @@
 
   <!-- SESSIONS -->
   <section id="view-sessions" class="view">
+    <div class="section-bar">
+      <h2>Play history</h2>
+      <div class="controls">
+        <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
+               autocomplete="off" spellcheck="false">
+        <select id="sessions-period" class="select" title="Filter by date">
+          <option value="0">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+        </select>
+      </div>
+    </div>
     <div class="summary-strip" id="lib-summary"></div>
     <div class="table-wrap">
       <table id="sessions-table">
@@ -109,7 +124,8 @@
           <tr>
             <th>Date</th><th>In game</th><th>Menus</th>
             <th>Ship</th><th>Last location</th>
-            <th class="num">Jumps</th><th class="num">Contracts</th><th class="num">Incap</th>
+            <th class="num">Jumps</th><th class="num">Contracts</th>
+            <th class="num">Deaths</th><th class="num">Incap</th>
           </tr>
         </thead>
         <tbody></tbody>

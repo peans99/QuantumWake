@@ -120,6 +120,7 @@ app.MapGet("/api/sessions", (LogLibrary lib) => lib.Sessions().Select(s => new
     jumps = s.Jumps.Count,
     contracts = s.Contracts.Count,
     s.Incapacitations,
+    s.Deaths,
     s.Disconnects
 }));
 
