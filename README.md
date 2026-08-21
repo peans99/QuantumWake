@@ -1,6 +1,6 @@
 # Verselog
 
-**Your log of the 'verse** — by nekron
+**A pilot's logbook for the 'verse** — by nekron
 
 A companion app for Star Citizen driven by `Game.log`. Second-screen dashboard,
 transparent in-game overlay, and a map of where you've been — read-only, offline,
