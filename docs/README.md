@@ -11,14 +11,14 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 |---|---|
 | [findings.md](findings.md) | **Read this first.** The kill-event problem, with evidence. |
 | [log-format-reference.md](log-format-reference.md) | Line formats verified present in the local logs, plus the removed ones. |
-| [architecture.md](architecture.md) | Design decisions for Verselog and the reasons behind them. |
+| [architecture.md](architecture.md) | Design decisions for Quantumwake and the reasons behind them. |
 | [phase-1-core.md](phase-1-core.md) | Build log: the Core parser, what it verified, and the quirks it uncovered. |
 | [phases-2-5.md](phases-2-5.md) | Build log: server, dashboard, map, overlay, and the dormant combat parser. |
 | [log-simulator.md](log-simulator.md) | The fake-log generator: how to use it and why it reproduces the format's quirks. |
 | [untapped-signals.md](untapped-signals.md) | Log signals we have not used yet, ranked, with formats and counts. |
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |
 | [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
-| [naming.md](naming.md) | Why the project is called Verselog, and what the name had to survive. |
+| [naming.md](naming.md) | Why the project is called Quantumwake, and what the name had to survive. |
 | [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
 
 The seven per-tool write-ups that used to sit in `docs/tools/` have been
