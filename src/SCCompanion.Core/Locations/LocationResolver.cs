@@ -217,6 +217,20 @@ public static partial class LocationResolver
         var bodyToken = m.Groups["body"].Value;
         var slot = m.Groups["slot"].Value.ToUpperInvariant();
 
+        // Low orbit carries a real station, and the id sometimes numbers it:
+        // rs_ext_cru-leo1 is Seraphim Station, not "Crusader LEO1 Rest Stop".
+        // Same treatment as the RR_CRU_LEO form of the same place.
+        if (slot.StartsWith("LEO", StringComparison.Ordinal)
+            && Universe.LeoStations.TryGetValue(bodyToken, out var leo))
+        {
+            var known = Universe.RestStopBodies.TryGetValue(bodyToken, out var orbit)
+                ? orbit
+                : default;
+
+            return new ResolvedLocation(
+                rawId, leo, known.System, known.Body, LocationKind.Station, true);
+        }
+
         // "pyro3" style: system name plus body number.
         var pyro = PyroNumberedRegex.Match(bodyToken);
         if (pyro.Success && Universe.PyroBodies.TryGetValue(pyro.Groups["n"].Value, out var pyroBody))

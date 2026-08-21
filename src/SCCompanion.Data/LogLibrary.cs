@@ -73,10 +73,14 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 
 /// <summary>One cargo trade.</summary>
 /// <param name="UnitPrice">aUEC per SCU, worked out from amount and quantity.</param>
+/// <param name="Place">
+/// Where the sale happened, back-tracked from the last arrival before it. Cargo
+/// terminals all share a single kiosk id, so their own name says nothing.
+/// </param>
 public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
-    string Shop,
+    string Place,
     int Scu,
     decimal Amount,
     decimal UnitPrice,
@@ -89,11 +93,19 @@ public sealed record TradeRecord(
 /// so those are amounts requested at the kiosk.
 /// </param>
 /// <param name="Running">Cumulative net at this point, oldest movement first.</param>
+/// <param name="Where">
+/// Where the player was standing, back-tracked from the log. The kiosk id is no
+/// use for this - every cargo terminal in the game reports itself as
+/// <c>SCShop_Admin_lt_base_g</c> - so the place comes from the most recent
+/// arrival before the transaction instead.
+/// </param>
+/// <param name="Shop">The vendor, resolved to its brand where the game names one.</param>
 public sealed record LedgerEntry(
     DateTimeOffset At,
     string Kind,
     string What,
     string Where,
+    string Shop,
     decimal Amount,
     int Quantity,
     bool Confirmed,
@@ -549,14 +561,15 @@ public sealed class LogLibrary : IDisposable
             sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
         }
 
-        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, decimal Amount, int Quantity, bool Confirmed)>();
+        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, string Shop, decimal Amount, int Quantity, bool Confirmed)>();
 
         foreach (var session in sessions)
         {
             foreach (var purchase in session.Purchases)
             {
                 movements.Add((purchase.At, "Item bought", Names.Item(purchase.Item),
-                    purchase.Shop, -purchase.Total, purchase.Quantity, purchase.Confirmed));
+                    PlaceAt(session, purchase.At), ShopLabel(purchase.Shop),
+                    -purchase.Total, purchase.Quantity, purchase.Confirmed));
             }
 
             foreach (var trade in session.Trades)
@@ -565,7 +578,8 @@ public sealed class LogLibrary : IDisposable
                     trade.At,
                     trade.IsSell ? "Cargo sold" : "Cargo bought",
                     $"{trade.Quantity} SCU",
-                    trade.Shop,
+                    PlaceAt(session, trade.At),
+                    ShopLabel(trade.Shop),
                     trade.IsSell ? trade.Amount : -trade.Amount,
                     trade.Quantity,
 
@@ -583,11 +597,78 @@ public sealed class LogLibrary : IDisposable
         foreach (var m in ordered)
         {
             running += m.Amount;
-            entries.Add(new LedgerEntry(m.At, m.Kind, m.What, m.Where, m.Amount, m.Quantity, m.Confirmed, running));
+            entries.Add(new LedgerEntry(
+                m.At, m.Kind, m.What, m.Where, m.Shop, m.Amount, m.Quantity, m.Confirmed, running));
         }
 
         entries.Reverse();
         return entries;
+    }
+
+    /// <summary>
+    /// Where the player was at a given moment in a session.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Transactions name a kiosk, not a place, and the cargo terminals all share
+    /// one id - <c>SCShop_Admin_lt_base_g</c> - so a ledger built on shop names
+    /// reads "Admin lt base g" for every sale ever made. The player's position is
+    /// recoverable anyway: arrivals and quantum jumps are both logged with
+    /// timestamps, so the last one before the transaction says where it happened.
+    /// </para>
+    /// <para>
+    /// Jumps count as well as arrivals because a sale can follow a jump before
+    /// anything asks for a location inventory. Whichever signal is more recent
+    /// wins. Both lists are already in order, so this walks backwards and stops
+    /// at the first hit.
+    /// </para>
+    /// </remarks>
+    private static string PlaceAt(SessionSummary session, DateTimeOffset at)
+    {
+        DateTimeOffset? bestAt = null;
+        string? best = null;
+
+        for (var i = session.Locations.Count - 1; i >= 0; i--)
+        {
+            if (session.Locations[i].At <= at)
+            {
+                bestAt = session.Locations[i].At;
+                best = session.Locations[i].DisplayName;
+                break;
+            }
+        }
+
+        for (var i = session.Jumps.Count - 1; i >= 0; i--)
+        {
+            var jump = session.Jumps[i];
+            if (jump.At > at)
+                continue;
+
+            if (bestAt is null || jump.At > bestAt)
+            {
+                best = jump.ToName;
+            }
+
+            break;
+        }
+
+        return best ?? "Unknown";
+    }
+
+    /// <summary>The vendor's brand name where the game publishes one.</summary>
+    /// <remarks>
+    /// Commodity kiosks have no brand - every one of them logs as
+    /// <c>SCShop_Admin_lt_base_g</c> - so they get a plain description instead of
+    /// the mangled id.
+    /// </remarks>
+    private string ShopLabel(string shop)
+    {
+        if (Names.Shop(shop) is { } branded)
+            return branded;
+
+        return shop.StartsWith("Admin", StringComparison.OrdinalIgnoreCase)
+            ? "Cargo terminal"
+            : shop;
     }
 
     /// <summary>
@@ -610,15 +691,14 @@ public sealed class LogLibrary : IDisposable
         }
 
         return [.. sessions
-            .SelectMany(s => s.Trades)
-            .Select(t => new TradeRecord(
+            .SelectMany(s => s.Trades.Select(t => new TradeRecord(
                 t.At,
                 t.IsSell,
-                t.Shop,
+                PlaceAt(s, t.At),
                 t.Quantity,
                 t.Amount,
                 t.Quantity > 0 ? t.Amount / t.Quantity : 0,
-                t.Mode))
+                t.Mode)))
             .OrderByDescending(t => t.At)];
     }
 

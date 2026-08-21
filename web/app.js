@@ -494,7 +494,7 @@ function renderLedger() {
   if (!page.length) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No transactions in that range.');
-    td.colSpan = 6;
+    td.colSpan = 7;
     tr.append(td);
     body.append(tr);
   }
@@ -507,6 +507,7 @@ function renderLedger() {
     tr.append(el('td', null, entry.kind));
     tr.append(el('td', null, prettyItem(entry.what)));
     tr.append(el('td', null, entry.where));
+    tr.append(el('td', 'muted', entry.shop));
 
     // Unconfirmed amounts are marked rather than silently presented as settled.
     const amount = el('td', `num ${inward ? 'inward' : 'outward'}`,
@@ -571,10 +572,10 @@ function renderCommodities(trades) {
   // Revenue by place, with the volume that produced it.
   const byShop = new Map();
   for (const trade of sells) {
-    const current = byShop.get(trade.shop) || { amount: 0, scu: 0 };
+    const current = byShop.get(trade.place) || { amount: 0, scu: 0 };
     current.amount += Number(trade.amount);
     current.scu += trade.scu;
-    byShop.set(trade.shop, current);
+    byShop.set(trade.place, current);
   }
 
   bars('#cargo-shops',
@@ -599,7 +600,7 @@ function renderCommodities(trades) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
     tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
-    tr.append(el('td', null, trade.shop));
+    tr.append(el('td', null, trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
     tr.append(el('td', 'num muted', money(trade.unitPrice)));

@@ -15,6 +15,12 @@ namespace SCCompanion.Core.Events;
 /// <see cref="ShopFlowResponseEvent"/> reports success - the player may cancel,
 /// or lack the funds.
 /// </remarks>
+/// <param name="Price">
+/// <b>The order total, not a unit price.</b> A line reading
+/// <c>client_price[52520] quantity[101]</c> is 101 magazines for 52,520 aUEC
+/// altogether - about 520 each - not 52,520 apiece. Multiplying by quantity
+/// inflated that single purchase to 5.3 million.
+/// </param>
 public sealed record ShopRequestEvent(
     DateTimeOffset Timestamp,
     string ShopName,
@@ -26,8 +32,10 @@ public sealed record ShopRequestEvent(
 {
     public override string Kind => "shop.request";
 
-    /// <summary>Total for the line, price being per unit.</summary>
-    public decimal Total => Price * Quantity;
+    public decimal Total => Price;
+
+    /// <summary>Worked out, since the log gives the total rather than the unit.</summary>
+    public decimal UnitPrice => Quantity > 0 ? Price / Quantity : Price;
 }
 
 /// <summary>The server's answer to a kiosk request.</summary>
