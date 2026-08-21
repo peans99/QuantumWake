@@ -40,9 +40,26 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
+# A running copy holds its own assemblies open, so the build fails on a file
+# lock and says nothing about why. This script exists to start the app, so
+# stopping the previous one first is what was meant anyway.
+$running = @(Get-Process QuantumWake, Quantumwake.Server -ErrorAction SilentlyContinue)
+if ($running.Count) {
+    Write-Host "Stopping $($running.Count) running instance(s) first…" -ForegroundColor Yellow
+    $running | Stop-Process -Force
+    Start-Sleep -Milliseconds 700
+}
+
 Write-Host 'Building…' -ForegroundColor Cyan
-dotnet build Quantumwake.slnx -c Release -v q --nologo | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+
+# Keep the output. A bare 'Build failed.' sends you looking in the wrong place;
+# the reason is almost always in the last few lines.
+$build = dotnet build Quantumwake.slnx -c Release -v q --nologo 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $build | Select-String -Pattern 'error|MSB\d' | Select-Object -First 10 |
+        ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    throw 'Build failed.'
+}
 
 if ($Rescan) {
     $db = Join-Path $env:LOCALAPPDATA 'Quantumwake\sessions.db'
@@ -59,12 +76,13 @@ if ($Rescan) {
 # QuantumWake.exe is the whole application - it hosts the server in-process and
 # puts an icon in the notification area. -NoOverlay runs the bare server
 # instead, which is also what a headless or second-machine setup wants.
-$app = $NoOverlay
-    ? 'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
-    : 'src\Quantumwake.Overlay\bin\Release\net10.0-windows\QuantumWake.exe'
+$serverExe = if ($NoOverlay) {
+    'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
+} else {
+    'src\Quantumwake.Overlay\bin\Release\net10.0-windows\QuantumWake.exe'
+}
 
-if (-not (Test-Path $app)) { throw "Not built: $app" }
-$serverExe = $app
+if (-not (Test-Path $serverExe)) { throw "Not built: $serverExe" }
 
 $serverArgs = @()
 if ($Path) { $serverArgs += @('--path', $Path) }
@@ -123,10 +141,24 @@ if (-not $NoOverlay) {
 }
 
 Write-Host ''
-Write-Host 'Press Ctrl+C to stop the server.' -ForegroundColor DarkGray
 
-try {
-    Wait-Process -Id $server.Id
-} finally {
-    if (-not $server.HasExited) { Stop-Process $server.Id -Force }
+if ($NoOverlay) {
+    # The bare server has no tray icon and no window, so this console is the only
+    # thing that can stop it. Ctrl+C ends the wait and the finally kills it.
+    Write-Host 'Press Ctrl+C to stop the server.' -ForegroundColor DarkGray
+
+    try {
+        Wait-Process -Id $server.Id
+    } finally {
+        if (-not $server.HasExited) { Stop-Process $server.Id -Force }
+    }
+}
+else {
+    # The app owns itself: it has a tray icon with Quit, and it holds the server
+    # inside its own process. This script used to sit on Wait-Process and kill it
+    # in a finally, which left the widget running whenever the finally did not
+    # run - closing the terminal, or Ctrl+C, which PowerShell does not guarantee
+    # to unwind. Worse, it implied the console was in charge when it was not.
+    Write-Host 'Quantum Wake is running on its own now; this window can be closed.' -ForegroundColor DarkGray
+    Write-Host 'Quit it from the notification-area icon.' -ForegroundColor DarkGray
 }
