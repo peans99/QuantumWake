@@ -28,7 +28,7 @@ itself, across every fixed drive.
 
 It then sits in the notification area. Right-click to open the dashboard, show
 or hide the overlay, or quit. The in-game overlay is off until you turn it on -
-from the Options page or the tray - and the choice is remembered. `Ctrl+Alt+O`
+from the Settings page or the tray - and the choice is remembered. `Ctrl+Alt+O`
 toggles overlay click-through, and the dashboard is on
 <http://127.0.0.1:31337>.
 

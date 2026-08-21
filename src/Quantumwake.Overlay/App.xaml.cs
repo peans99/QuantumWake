@@ -61,7 +61,7 @@ public partial class App : System.Windows.Application
             _server = ServerHost.Build(args);
             await _server.StartAsync();
 
-            // Let the dashboard's Options page show and hide the overlay. The
+            // Let the dashboard's Settings page show and hide the overlay. The
             // callback arrives on a request thread; everything WPF happens on
             // the dispatcher.
             _server.Services.GetRequiredService<OverlayBridge>().Attach(
@@ -92,7 +92,7 @@ public partial class App : System.Windows.Application
 
     /// <summary>
     /// Shows or hides the overlay, and remembers the choice. Reached from the
-    /// tray menu and from the dashboard's Options page alike, so it keeps every
+    /// tray menu and from the dashboard's Settings page alike, so it keeps every
     /// surface truthful: the tray checkbox and the bridge both learn of a
     /// change the other one made.
     /// </summary>
