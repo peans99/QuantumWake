@@ -127,12 +127,16 @@
 
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="26">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,14">
-                            <Rectangle Width="9" Height="9" Fill="#35C8F0"
-                                       RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center">
-                                <Rectangle.RenderTransform>
-                                    <RotateTransform Angle="45" />
-                                </Rectangle.RenderTransform>
-                            </Rectangle>
+                            <!-- The wake mark, kept in step with web/assets/mark.svg. -->
+                            <Viewbox Width="24" Height="24" VerticalAlignment="Center">
+                                <Canvas Width="64" Height="64">
+                                    <Path Data="M7 45 C 13 57, 33 59, 43 47 C 50 39, 52 29, 48 21"
+                                          Stroke="#35C8F0" StrokeThickness="7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    <Path Data="M49 3 L52.8 14.2 L64 18 L52.8 21.8 L49 33 L45.2 21.8 L34 18 L45.2 14.2 Z"
+                                          Fill="#7FE4FF" />
+                                </Canvas>
+                            </Viewbox>
                             <TextBlock Text="QUANTUM WAKE"
                                        Foreground="#7FE4FF"
                                        FontFamily="Bahnschrift, Segoe UI"
