@@ -35,11 +35,11 @@ Target frameworks are split so only the WPF shell is Windows-bound:
 
 | Project | TFM | Role |
 |---|---|---|
-| `SCCompanion.Core` | `net10.0` | tailing, parsing, event model, state machines |
-| `SCCompanion.Data` | `net10.0` | EF Core + SQLite, location graph, seed data |
-| `SCCompanion.Server` | `net10.0` | ASP.NET Core minimal API + SignalR hub |
-| `SCCompanion.Cli` | `net10.0` | backfill / verification harness |
-| `SCCompanion.Overlay` | `net10.0-windows` | WPF shell hosting WebView2 |
+| `Verselog.Core` | `net10.0` | tailing, parsing, event model, state machines |
+| `Verselog.Data` | `net10.0` | EF Core + SQLite, location graph, seed data |
+| `Verselog.Server` | `net10.0` | ASP.NET Core minimal API + SignalR hub |
+| `Verselog.Cli` | `net10.0` | backfill / verification harness |
+| `Verselog.Overlay` | `net10.0-windows` | WPF shell hosting WebView2 |
 
 Keeping Core/Data/Server portable leaves a Linux-hosted server mode open for
 Phase 6 with no restructuring.
@@ -53,10 +53,10 @@ Phase 6 with no restructuring.
 └──────────────┬─────────────┘   └───────────────┬───────────────┘   └─────────┬──────────┘
                └──────────────── HTTP + SignalR ─┴───────────────────────────  ┘
                                         │
-                          SCCompanion.Server (ASP.NET Core)
+                          Verselog.Server (ASP.NET Core)
                                         │
                      ┌──────────────────┴──────────────────┐
-              SCCompanion.Core                      SCCompanion.Data
+              Verselog.Core                      Verselog.Data
               tail → parse → state machine          SQLite + location graph
 ```
 

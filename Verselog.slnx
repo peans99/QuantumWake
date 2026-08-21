@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Verselog.Cli/Verselog.Cli.csproj" />
+    <Project Path="src/Verselog.Core/Verselog.Core.csproj" />
+    <Project Path="src/Verselog.Data/Verselog.Data.csproj" />
+    <Project Path="src/Verselog.LogSim/Verselog.LogSim.csproj" />
+    <Project Path="src/Verselog.Overlay/Verselog.Overlay.csproj" />
+    <Project Path="src/Verselog.Server/Verselog.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Verselog.Tests/Verselog.Tests.csproj" />
+  </Folder>
+</Solution>

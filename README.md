@@ -1,6 +1,6 @@
-# SC Companion
+# Verselog
 
-**by nekron**
+**Your log of the 'verse** — by nekron
 
 A companion app for Star Citizen driven by `Game.log`. Second-screen dashboard,
 transparent in-game overlay, and a map of where you've been — read-only, offline,
@@ -74,7 +74,7 @@ Installs are auto-detected across all fixed drives (LIVE/PTU/EPTU).
 The CLI is useful for verification without a UI:
 
 ```powershell
-dotnet run --project src\SCCompanion.Cli -c Release
+dotnet run --project src\Verselog.Cli -c Release
 ```
 
 It prints per-event match counts and a **parser health** section. Because CIG
@@ -85,12 +85,12 @@ charts.
 
 ## Try it without playing
 
-`SCCompanion.LogSim` builds a fake install whose logs match the real format,
+`Verselog.LogSim` builds a fake install whose logs match the real format,
 quirks included:
 
 ```powershell
-dotnet run --project src\SCCompanion.LogSim -c Release -- --backups 12 --combat
-.\start.ps1 -Path "$env:TEMP\SCCompanionFakeInstall\LIVE"
+dotnet run --project src\Verselog.LogSim -c Release -- --backups 12 --combat
+.\start.ps1 -Path "$env:TEMP\VerselogFakeInstall\LIVE"
 ```
 
 `--combat` emits kill and vehicle-destruction events, which is the only way to
@@ -110,24 +110,24 @@ almost nothing to add.
 Overlay (WPF + WebView2)   Browser / tablet        Remote clients (later)
             └──────────── HTTP + SSE / SignalR ───────────┘
                                   │
-                    SCCompanion.Server (ASP.NET Core)
+                    Verselog.Server (ASP.NET Core)
                                   │
-              SCCompanion.Core          SCCompanion.Data
+              Verselog.Core          Verselog.Data
               tail → parse → state      SQLite + location graph
 ```
 
 | Project | Target | Role |
 |---|---|---|
-| `SCCompanion.Core` | `net10.0` | Log tailing, parsing, location + session state |
-| `SCCompanion.Data` | `net10.0` | SQLite cache, library aggregates |
-| `SCCompanion.Server` | `net10.0` | REST + SSE + static UI |
-| `SCCompanion.Overlay` | `net10.0-windows` | Transparent WPF shell |
-| `SCCompanion.Cli` | `net10.0` | Backfill and verification |
+| `Verselog.Core` | `net10.0` | Log tailing, parsing, location + session state |
+| `Verselog.Data` | `net10.0` | SQLite cache, library aggregates |
+| `Verselog.Server` | `net10.0` | REST + SSE + static UI |
+| `Verselog.Overlay` | `net10.0-windows` | Transparent WPF shell |
+| `Verselog.Cli` | `net10.0` | Backfill and verification |
 
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test SCCompanion.slnx      # 127 tests
+dotnet test Verselog.slnx      # 127 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -142,6 +142,8 @@ silently dropped).
 - [docs/architecture.md](docs/architecture.md) — decisions and why
 - [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
+- [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
+- [docs/naming.md](docs/naming.md) — why the project is called Verselog
 
 ## Credits
 

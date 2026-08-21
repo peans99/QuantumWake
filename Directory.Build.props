@@ -6,7 +6,7 @@
   <PropertyGroup>
     <Authors>nekron</Authors>
     <Company>nekron</Company>
-    <Product>SC Companion</Product>
+    <Product>Verselog</Product>
     <Copyright>Copyright © nekron</Copyright>
     <Description>Companion app for Star Citizen: second-screen dashboard, in-game overlay, and flight-log analysis driven by Game.log.</Description>
 
