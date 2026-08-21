@@ -71,27 +71,10 @@ body::before {
 /* An ultrawide left two thirds of the glass empty: the column was capped at
    1440px with dead black either side. The column is wider now, and what it
    still cannot use is given to the brand rather than left blank. Everything
-   here is decorative, appears only past 1600px, and never in the overlay. */
+   here is decorative, appears only past 1400px, and never in the overlay. */
 .railmark { display: none; }
 
-@media (min-width: 1600px) {
-  /* The emblem, stripped to its geometry, sitting in the right margin and
-     running off the edge of the screen. Positioned from the content column's
-     right rail outwards - anchoring it to the viewport instead put it entirely
-     off-screen on an ultrawide, where the margin is 700px deep. */
-  body::after {
-    content: "";
-    position: fixed;
-    left: calc(50% + var(--page) / 2 - 110px);
-    top: 50%;
-    width: min(34vw, 640px);
-    aspect-ratio: 1;
-    transform: translateY(-50%);
-    background: url("assets/watermark.svg") center / contain no-repeat;
-    opacity: .06;
-    pointer-events: none;
-    z-index: 0;
-  }
+@media (min-width: 1400px) {
 
   /* A vertical wordmark down the left margin, the way a HUD labels a panel. */
   .railmark {
@@ -120,8 +103,43 @@ body::before {
   }
 }
 
+/* The mark in both margins, drawn rather than photographic.
+
+   The emblem was tried here and pulled back out. It is a raster with a dark
+   ground, so it needed screen blending and a circular mask to sit on the page
+   at all, and it still had to bleed off the corners to be big enough to read.
+   The drawn geometry has real transparency, holds a thin line at any size, and
+   asks nothing of the compositor. The emblem keeps the places where it is the
+   subject: the About page and the footer.
+
+   Each mark fills its whole margin and centres inside it, so the two are
+   symmetric, vertically aligned, and never cut off by an edge. That is also why
+   this needs 2400px: below it the margins are too narrow to hold a mark without
+   it either overlapping the content or being clipped. */
+.brandmark { display: none; }
+
+@media (min-width: 2400px) {
+  .brandmark,
+  body::after {
+    content: "";
+    display: block;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: calc((100vw - var(--page)) / 2);
+    background: url("assets/watermark.svg") center center / min(64%, 460px) auto no-repeat;
+    opacity: .09;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .brandmark { left: 0; }
+  body::after { right: 0; }
+}
+
 body.overlay::after { display: none; }
-body.overlay .railmark { display: none; }
+body.overlay .railmark,
+body.overlay .brandmark { display: none; }
 
 /* ---------- overlay mode ---------- */
 
@@ -1038,4 +1056,92 @@ body.overlay
   line-height: 1.65;
 }
 .foot .mbc { width: 78px; opacity: .5; flex: 0 0 auto; }
+
+/* The emblem, at a size where its ring text is actually readable. Branding that
+   only appears past 1400px is branding most people never see. */
+.foot .emblem {
+  width: 76px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 22px rgba(53, 200, 240, .18);
+}
 body.overlay .foot { display: none; }
+
+/* ---------- about ---------- */
+
+/* One panel, the emblem at a size where it is the point rather than decoration,
+   and as few words as the question needs. */
+.about {
+  display: flex;
+  align-items: flex-start;
+  gap: 46px;
+  max-width: 1180px;
+  padding: 26px 30px 34px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+
+.about-logo {
+  width: 260px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 60px rgba(53, 200, 240, .22);
+}
+
+.about-copy { min-width: 0; }
+
+.about-goal {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 16px;
+  max-width: 62ch;
+}
+
+.about-note {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0 0 22px;
+  max-width: 62ch;
+}
+
+.about-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px 22px;
+  margin: 0 0 22px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--rule);
+}
+.about-facts dt {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.about-facts dd {
+  margin: 3px 0 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--cyan-hot);
+}
+
+.about-legal {
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: var(--dim);
+  margin: 0;
+  max-width: 78ch;
+}
+
+.about code { font-family: var(--mono); color: var(--muted); }
+
+/* The emblem is the largest thing on the page; stack it above the words when
+   there is not room to sit beside them. */
+@media (max-width: 900px) {
+  .about { flex-direction: column; gap: 24px; align-items: center; text-align: center; }
+  .about-logo { width: 200px; }
+  .about-facts { justify-items: center; }
+}

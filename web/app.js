@@ -1721,8 +1721,16 @@ async function boot() {
   try {
     const install = await getJson('/api/install');
     $('#install').textContent = `${install.channel} · ${install.backups} logs`;
+    $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
   } catch {
     $('#install').textContent = 'no install found';
+    $('#about-install').textContent = 'none found';
+  }
+
+  try {
+    $('#about-version').textContent = (await getJson('/api/version')).version;
+  } catch {
+    $('#about-version').textContent = 'unknown';
   }
 
   if (!isSnapshot) {

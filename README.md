@@ -1,4 +1,4 @@
-<img src="web/assets/logo.svg" width="150" align="right" alt="">
+<img src="web/assets/emblem.jpg" width="150" align="right" alt="">
 
 # Quantum Wake
 
