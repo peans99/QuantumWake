@@ -29,7 +29,10 @@ public sealed record NowState
     public DateTimeOffset? SessionStarted { get; init; }
     public int Incapacitations { get; init; }
 
-    /// <summary>Always zero on SC 4.9 - the log events no longer exist.</summary>
+    /// <summary>Deaths, detected from corpse item-recovery bursts.</summary>
+    public int Deaths { get; init; }
+
+    /// <summary>Always zero on SC 4.9 - no event identifies a killer any more.</summary>
     public int Kills { get; init; }
 
     public IReadOnlyList<TimelineEntry> RecentEvents { get; init; } = [];
@@ -118,14 +121,10 @@ public sealed class LiveSessionService : BackgroundService
         {
             _builder.Add(ev);
 
-            if (ev is VehicleControlEvent vehicle)
-            {
-                _currentShip = vehicle.Change == SeatChange.Entered
-                    ? (vehicle.Manufacturer is null
-                        ? vehicle.Model
-                        : $"{vehicle.Manufacturer} {vehicle.Model.Replace('_', ' ')}")
-                    : null;
-            }
+            // Leaving a ship clears it; retrieval is tracked by the builder,
+            // which is the only signal a ship swap produces on SC 4.9.
+            if (ev is VehicleControlEvent { Change: SeatChange.Left })
+                _currentShip = null;
 
             Current = Snapshot();
         }
@@ -179,9 +178,10 @@ public sealed class LiveSessionService : BackgroundService
             Travelling = location.IsTravelling,
             TravellingTo = location.TravellingTo?.DisplayName,
             TravellingToId = location.TravellingTo?.RawId,
-            Ship = _currentShip ?? summary.PrimaryShip,
+            Ship = _builder.CurrentShip ?? _currentShip ?? summary.PrimaryShip,
             SessionStarted = summary.StartedAt == default ? null : summary.StartedAt,
             Incapacitations = summary.Incapacitations,
+            Deaths = summary.Deaths,
             Kills = summary.Kills,
             RecentEvents = [.. _recent]
         };

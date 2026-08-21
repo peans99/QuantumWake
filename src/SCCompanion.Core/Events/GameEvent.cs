@@ -155,6 +155,43 @@ public sealed record NotificationEvent(
         Text.StartsWith("Contract Accepted", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// A ship being retrieved at a hangar or landing pad.
+/// </summary>
+/// <remarks>
+/// The only signal that a ship was taken out. SC 4.9 logs no boarding event, so
+/// without this a ship swap goes unrecorded until the player leaves the vehicle.
+/// The line carries only an entity id - the model name arrives separately, on
+/// quantum-navigation lines - so <see cref="VehicleIdentifiedEvent"/> is what
+/// puts a name to it.
+/// </remarks>
+public sealed record VehicleSpawnEvent(
+    DateTimeOffset Timestamp,
+    string EntityId,
+    string? LandingArea) : GameEvent(Timestamp)
+{
+    public override string Kind => "vehicle.spawn";
+}
+
+/// <summary>
+/// Ties a vehicle entity id to its model, seen incidentally on another line.
+/// </summary>
+/// <remarks>
+/// Ship names appear embedded in unrelated chatter as
+/// <c>DRAK_Corsair_771478242932[771478242932]</c>. Harvesting them builds an
+/// id-to-name registry, which is the only way to name a retrieved ship before
+/// the player gets out of it.
+/// </remarks>
+public sealed record VehicleIdentifiedEvent(
+    DateTimeOffset Timestamp,
+    string EntityId,
+    string VehicleId,
+    string Model,
+    string? Manufacturer) : GameEvent(Timestamp)
+{
+    public override string Kind => "vehicle.identified";
+}
+
 /// <summary>Local client spawned into the world.</summary>
 public sealed record ClientSpawnedEvent(DateTimeOffset Timestamp) : GameEvent(Timestamp)
 {

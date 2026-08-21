@@ -84,6 +84,26 @@ public sealed class SessionBuilder
     private int _kills;
     private int _deaths;
 
+    /// <summary>Timestamp of the last corpse-item line, for burst grouping.</summary>
+    private DateTimeOffset? _lastCorpseAt;
+    private readonly HashSet<string> _corpseItems = [];
+
+    // Vehicle entity id registries. Retrieval lines carry only an id, so the
+    // display name has to be joined in from incidental sightings elsewhere.
+    private readonly Dictionary<string, string> _vehicleNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string Model, string? Manufacturer)> _vehicleModels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, VehicleSpawnEvent> _pendingSpawns = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _spawnedVehicles = [];
+    private readonly HashSet<string> _creditedSpawns = [];
+
+    private string? _currentVehicleId;
+
+    /// <summary>Ship most recently retrieved, once its name is known.</summary>
+    public string? CurrentShip =>
+        _currentVehicleId is not null && _vehicleNames.TryGetValue(_currentVehicleId, out var name)
+            ? name
+            : null;
+
     public SessionBuilder(string sourceFile) => _sourceFile = sourceFile;
 
     /// <summary>Current location estimate, for live use.</summary>
@@ -124,6 +144,16 @@ public sealed class SessionBuilder
 
             case VehicleControlEvent vehicle:
                 RecordSeat(vehicle);
+                break;
+
+            case VehicleIdentifiedEvent identified:
+                _vehicleNames[identified.EntityId] = Describe(identified.Manufacturer, identified.Model);
+                _vehicleModels[identified.EntityId] = (identified.Model, identified.Manufacturer);
+                ResolvePendingSpawns();
+                break;
+
+            case VehicleSpawnEvent spawn:
+                RecordSpawn(spawn);
                 break;
 
             case LocationInventoryEvent location:
@@ -179,6 +209,10 @@ public sealed class SessionBuilder
             // counters populate the moment CIG restores them.
             case ActorDeathEvent death:
                 RecordDeath(death);
+                break;
+
+            case CorpseItemEvent corpse:
+                RecordCorpse(corpse);
                 break;
 
             case VehicleDestructionEvent destruction:
@@ -280,6 +314,68 @@ public sealed class SessionBuilder
 
     private static string? Format(TimeSpan span) =>
         span <= TimeSpan.Zero ? null : $"~{span.TotalMinutes:F0} min";
+
+    /// <summary>
+    /// Records a ship being retrieved. The name may not be known yet - the spawn
+    /// line carries only an entity id - so unnamed spawns are parked and resolved
+    /// when a sighting names them.
+    /// </summary>
+    private void RecordSpawn(VehicleSpawnEvent spawn)
+    {
+        // The same retrieval logs a "spawning" then a "spawned" line.
+        if (!_spawnedVehicles.Add(spawn.EntityId))
+            return;
+
+        _currentVehicleId = spawn.EntityId;
+
+        if (_vehicleNames.TryGetValue(spawn.EntityId, out var name))
+        {
+            Timeline(spawn.Timestamp, "ship", $"Retrieved {name}", spawn.LandingArea);
+            CreditSpawnedShip(spawn.EntityId);
+        }
+        else
+        {
+            _pendingSpawns[spawn.EntityId] = spawn;
+        }
+    }
+
+    /// <summary>Names any retrieval that was waiting on an identification.</summary>
+    private void ResolvePendingSpawns()
+    {
+        if (_pendingSpawns.Count == 0)
+            return;
+
+        foreach (var entityId in _pendingSpawns.Keys.ToList())
+        {
+            if (!_vehicleNames.TryGetValue(entityId, out var name))
+                continue;
+
+            var spawn = _pendingSpawns[entityId];
+            _pendingSpawns.Remove(entityId);
+
+            Timeline(spawn.Timestamp, "ship", $"Retrieved {name}", spawn.LandingArea);
+            CreditSpawnedShip(entityId);
+        }
+    }
+
+    /// <summary>
+    /// Counts a retrieval as a sortie even if the player never disembarks, so a
+    /// ship swap shows up immediately rather than only on exit.
+    /// </summary>
+    private void CreditSpawnedShip(string entityId)
+    {
+        if (!_vehicleModels.TryGetValue(entityId, out var vehicle))
+            return;
+
+        if (!_creditedSpawns.Add(entityId))
+            return;
+
+        var existing = _ships.GetValueOrDefault(vehicle.Model);
+        _ships[vehicle.Model] = (existing.Time, existing.Sorties + 1, vehicle.Manufacturer);
+    }
+
+    private static string Describe(string? manufacturer, string model) =>
+        manufacturer is null ? model.Replace('_', ' ') : $"{manufacturer} {model.Replace('_', ' ')}";
 
     private static string Describe(VehicleControlEvent vehicle) =>
         vehicle.Manufacturer is null
@@ -501,6 +597,37 @@ public sealed class SessionBuilder
         _loadout.Add(new LoadoutItem(attachment.Port, attachment.ItemClass, attachment.Timestamp));
     }
 
+    /// <summary>
+    /// Gap between corpse-item bursts that separates one death from the next.
+    /// Observed bursts of 19-40 lines complete in well under a second, while
+    /// real deaths in a session were minutes apart.
+    /// </summary>
+    private static readonly TimeSpan DeathBurstGap = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Counts a death from the burst of corpse-item lines it produces.
+    /// </summary>
+    /// <remarks>
+    /// One line per carried item, so the burst is grouped by time. This is the
+    /// only death signal SC 4.9 still emits reliably - see
+    /// <see cref="CorpseItemEvent"/>.
+    /// </remarks>
+    private void RecordCorpse(CorpseItemEvent corpse)
+    {
+        _corpseItems.Add(corpse.ItemClass);
+
+        if (_lastCorpseAt is { } last && corpse.Timestamp - last < DeathBurstGap)
+        {
+            _lastCorpseAt = corpse.Timestamp;
+            return;
+        }
+
+        _lastCorpseAt = corpse.Timestamp;
+        _deaths++;
+
+        Timeline(corpse.Timestamp, "death", "Died", _locationState.State.Current?.DisplayName);
+    }
+
     private void RecordDeath(ActorDeathEvent death)
     {
         switch (death.Classification)
@@ -567,8 +694,8 @@ public sealed class SessionBuilder
             FleetSize = _fleetSize,
             Incapacitations = _incapacitations,
 
-            // Always zero on SC 4.9: the game emits no combat events at all.
-            // These populate automatically if CIG restores them.
+            // Deaths come from corpse-item bursts, which SC 4.9 still emits.
+            // Kills stay zero: no event identifies a killer any more.
             Deaths = _deaths,
             Kills = _kills,
 

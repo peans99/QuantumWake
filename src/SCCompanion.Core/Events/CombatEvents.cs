@@ -47,6 +47,35 @@ public sealed record ActorDeathEvent(
     public bool IsFps => DamageType.Equals("Bullet", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// One item recorded on the player's corpse for recovery.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The only reliable death signal left in SC 4.9. <c>&lt;Actor Death&gt;</c> is
+/// gone and an <c>Incapacitated</c> HUD notification is not always raised - a
+/// session with three confirmed deaths logged zero of them - but every death
+/// produces a burst of these as the game records what was being carried:
+/// </para>
+/// <code>
+/// &lt;Adding non kept item [CSCActorCorpseUtils::PopulateItemPortForItemRecoveryEntitlement]&gt;
+///   Item 'body_01_noMagicPocket_200000000218 - Class(body_01_noMagicPocket) - ...',
+///   Recorded data is: Port Name 'Body_ItemPort', Class ...
+/// </code>
+/// <para>
+/// One line is emitted per carried item, so they arrive in tight clusters -
+/// 40, 38 and 19 lines for three separate deaths. Consumers must group by time
+/// rather than counting lines.
+/// </para>
+/// </remarks>
+public sealed record CorpseItemEvent(
+    DateTimeOffset Timestamp,
+    string ItemClass,
+    string Port) : GameEvent(Timestamp)
+{
+    public override string Kind => "combat.corpse";
+}
+
 /// <summary>Destruction level reached by a vehicle.</summary>
 public enum DestroyLevel
 {
