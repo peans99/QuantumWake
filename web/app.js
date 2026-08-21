@@ -2415,7 +2415,15 @@ async function boot() {
   }
 
   try {
-    $('#about-version').textContent = (await getJson('/api/version')).version;
+    const info = await getJson('/api/version');
+
+    // The build string carries the commit ("0.2.0+9c3cdf7..."); seven hash
+    // characters identify it and forty just wrap the layout.
+    const build = (info.build || info.version).replace(/\+([0-9a-f]{7})[0-9a-f]*$/i, '+$1');
+
+    $('#about-version').textContent = build;
+    $('#foot-version').textContent = `v${info.version}`;
+    $('#foot-version').title = `Build ${build}`;
   } catch {
     $('#about-version').textContent = 'unknown';
   }
