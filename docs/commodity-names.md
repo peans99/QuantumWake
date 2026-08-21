@@ -16,9 +16,11 @@ A cargo sale is fully described except for the one field that matters:
 ```
 
 Money, volume, box layout, mode and kiosk — all exact. The commodity appears
-only as `resourceGUID`, and that id is never repeated anywhere in any of the
-144 backup logs alongside a name. Four distinct ids show up across the whole
-history.
+only as `resourceGUID`, and that id is never repeated anywhere in the logs
+alongside a name. **Thirteen** distinct ids show up across the full history of
+146 log files — an earlier figure of four here came from a sample rather than
+from every backup, and is corrected in
+[commodity-catalogue.md](commodity-catalogue.md).
 
 Buys carry one extra field, `shopPricePerCentiSCU`, which gives an exact unit
 price but still no name.
@@ -32,7 +34,7 @@ place to look, and it does hold the commodity catalogue —
 `.../natural/sunsetberry.xml`, `.../scrap/scrap.xml` — plus 24,442 guid-shaped
 strings.
 
-All four log ids were searched through the entire file three ways:
+All thirteen log ids were searched through the entire file three ways:
 
 | Form | Result |
 |---|---|

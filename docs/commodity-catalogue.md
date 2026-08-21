@@ -1,65 +1,104 @@
-# Parked: what commodities can be sold where
+# What commodities can be sold where
 
-Raised 2026-08-21 by nekron, parked to come back to. This is the state of the
-question and the routes out of it, written down while the detail is fresh.
+Raised 2026-08-21 by nekron. Route 1 — write a DataForge reader — was tried the
+same day. This page is now the result rather than the plan.
 
-The related finding — that a cargo sale in *our own logs* cannot be named — is in
-[commodity-names.md](commodity-names.md) and is not repeated here. This page is
-about the other half: a **reference table of which kiosk trades which commodity**,
-which needs no logs at all, only the game's own static data.
+**The short answer: half of it is possible offline, and the interesting half is
+not.** The commodity catalogue is in the DataCore and can be read today. Which
+kiosk trades which commodity is not in there at all, and neither is the join that
+would name a sale in our own logs.
 
-## The three layers between us and it
+The related finding — that a cargo sale cannot be named from the log alone — is
+in [commodity-names.md](commodity-names.md).
 
-| Layer | What it is | Where we stand |
-|---|---|---|
-| **Archive encryption** | `Data.p4k` is a ZIP64 container; CryEngine/Lumberyard encrypts some entries | Partly a non-issue. The localisation table is *not* encrypted and `P4kArchive` already reads it, which is where 9,527 item and 1,343 place names come from. Encrypted entries are reported, never guessed at. |
-| **CryXMLB** | XML compiled to a binary format; opens as junk in a text editor | Not hit yet. The files read so far are plain. Community tools (`unforge`, `CryXMLConverter`) convert it, and the format is documented. |
-| **DataForge** | `Data\Game2.dcb`, the record database — ships, items, shops, prices | **Readable.** 330 MB, unencrypted, extractable today with `P4kArchive`. It holds the commodity catalogue: `libs/foundry/records/entities/commodities/minerals/dolivine.xml`, `.../natural/sunsetberry.xml`, `.../scrap/scrap.xml`. |
+## What was done
 
-The community's account of these layers is accurate, but on this install the
-DataCore is *not* the wall. It is open. What we have not done is **parse** it —
-every search so far has been a raw byte scan, which finds strings and misses
-structure. A DataForge reader resolves records, enums, string tables and
-pointers, and only then can a shop record be asked what it stocks.
+`Data\Game2.dcb` was pulled out of `Data.p4k` with the existing `P4kArchive`,
+no external tool involved, and examined in four passes. It is **330,491,142
+bytes**, unencrypted, and its header reads cleanly: version 8, then the
+definition counts — **6,685 structs, 23,722 properties, 772 enums, 116,512
+records**.
 
-## The routes, and what each costs
+So the community's account of the three protection layers is accurate in
+general, and beside the point here: on this install the DataCore is open.
 
-**1. Write a DataForge reader.** Parse `Game2.dcb` from the user's own install,
-the way `P4kArchive` already parses the container. Offline, no redistribution, no
-new dependency, and it either answers the question or proves the answer is not
-in there. The format is community-documented and `ScDataDumper` is a working
-reference implementation to check behaviour against.
+## 1. The commodity catalogue is there
 
-*Recommended.* It is the only route that keeps every promise the README makes.
+**135 commodity records**, named and categorised:
 
-**2. Ship pre-extracted JSON** from `StarCitizenWiki/scunpacked-data`.
-Fastest by far, and it directly contradicts our own `NOTICE`: *no game data is
-contained in this repository, and none may be added to it*. It also redistributes
-data derived from CIG's build. Rejected unless that policy changes deliberately.
+| Category | | Category | | Category | |
+|---|---:|---|---:|---|---:|
+| minerals | 21 | manmade | 12 | agriculturalsupplies | 4 |
+| metals | 17 | gas | 7 | halogens | 4 |
+| vice | 17 | processedgoods | 5 | food | 3 |
+| natural | 16 | alloys | 4 | counterfeit | 3 |
+| consumergoods | 12 | medicalsupplies | 3 | scrap | 2 |
+| mixedmining | 2 | non_metals | 2 | waste | 1 |
 
-**3. Fetch UEX or scunpacked at runtime.** Would give live prices too, which is
-genuinely useful for trading and is what most neighbours do. It breaks "no
-outbound network calls", which is the thing that distinguishes this app in
-[landscape.md](landscape.md). Only ever as an opt-in that is off by default and
-says plainly what it contacts.
+Real names, not ids: `aphorite`, `bexalite`, `dolivine`, `agricium`,
+`quantumfuel`, `rmc`, `sunsetberry`, `altruciatoxin`. This is a usable reference
+table and it costs nothing but a parser.
 
-**4. Decrypt `Data\ShopInventories\*.json`.** These are the shop stock tables and
-are the most likely home of the `resourceGUID` mapping. They are deliberately
-encrypted. Reading what CIG left open is one thing; circumventing a protection
-measure they chose to apply is another, and it would break on any key change
-besides. **Not planned.**
+Shops are represented too, but only as **brands**: 58 kiosk manufacturer records
+and 58 brand styles — CenterMass, Casaba, Astro Armada, Cordry's. The app
+already resolves those from the localisation table.
 
-## What to try first, if this is picked up
+## 2. The kiosks are not
 
-1. Extract `Data\Game2.dcb` with the existing `P4kArchive` — already proven.
-2. Parse the DataForge header: structure definitions, property tables, enums,
-   string tables, then records.
-3. Look for shop or kiosk records that reference commodity records, and for any
-   id form matching the four `resourceGUID` values in the logs.
-4. If the mapping is there, the Cargo view gains real names and a
-   "where to sell this" reference, entirely offline.
-5. If it is not, say so here, and the decision becomes route 3 or nothing.
+The log names shops as `SCShop_OmegaPro_NewBabbage` and
+`SCShop_Admin_lt_base_g`. The DataCore contains **zero strings beginning
+`SCShop`**. The only location-flavoured shop records are seven UI map section
+definitions (`shop_admin`, `shop_centermass`, `shop_wallys` and four more),
+which are map furniture, not stock lists.
 
-Whatever comes of it, the rule from [architecture.md](architecture.md) holds: if
-a name cannot be established, show what is provably known and stay quiet about
-the rest rather than guessing from unit price.
+There is no shop→commodity table in this file. Nothing to parse harder for.
+
+## 3. The join is not there either
+
+Every `resourceGUID` this install has ever logged was extracted — **13 distinct
+ids across 146 log files** — and each was searched through the whole DataCore in
+three forms: ASCII text, little-endian bytes, big-endian bytes.
+
+**None of the 13 appears, in any form.** That settles the question the earlier
+note left open: the ids in the sale log belong to a different numbering from
+anything the DataCore holds. (The earlier note said four ids; the true figure
+across every backup is thirteen.)
+
+## 4. There is no second copy
+
+The DataCore is compiled from source records, so the archive was checked for
+those too — `Data\Libs\Foundry\Records\...` in both slash styles and both cases,
+five root spellings. **All misses.** The compiled database is the only copy in
+the archive.
+
+## Where that leaves it
+
+| Want | Possible offline? |
+|---|---|
+| A catalogue of every commodity, by category | **Yes.** 135 records, names and all, from the user's own install |
+| Which brand a kiosk belongs to | **Yes**, and already done |
+| What a given kiosk buys or sells | **No.** Not in the DataCore |
+| Naming a commodity in our own sale log | **No.** The id does not resolve against anything here |
+
+The last two most likely live in `Data\ShopInventories\*.json`, which ships
+encrypted. Reading what CIG leaves open is one thing; circumventing a protection
+measure they deliberately applied is another, and it would break on any key
+change besides. Still not planned.
+
+That leaves exactly two honest options for "where can I sell this":
+
+1. **An opt-in network lookup** (UEX or similar), off by default, clearly
+   labelled, and never contacted unless the user turns it on. It would also give
+   live prices, which is the part players actually want.
+2. **Nothing**, and the Cargo view keeps reporting what is provably known.
+
+## If the catalogue is wanted
+
+Parsing 135 records out of a 315 MB file needs the DataForge structure walked
+properly — the string tables are readable without it, but the category and the
+display name of a record are not reliably recoverable from loose strings. That
+is a real piece of work: header, struct and property definitions, then records.
+The header is understood (above), which is the part that usually stops people.
+
+Worth doing only if the catalogue is worth having on its own, because it will not
+lead to the shop mapping. It does not exist in this file.
