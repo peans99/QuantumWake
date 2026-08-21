@@ -305,7 +305,19 @@ function bars(container, rows, format) {
 
   for (const row of rows) {
     const wrapper = el('div', 'bar-row');
-    wrapper.append(el('div', 'label', row.label));
+
+    // Rows can carry a click-through - the places charts fly to the map.
+    if (row.onClick) {
+      const label = el('div', 'label');
+      const link = el('button', 'place-link', row.label);
+      link.type = 'button';
+      link.title = 'Show on the map';
+      link.addEventListener('click', row.onClick);
+      label.append(link);
+      wrapper.append(label);
+    } else {
+      wrapper.append(el('div', 'label', row.label));
+    }
 
     const track = el('div', 'bar-track');
     const fill = el('div', 'bar-fill');
@@ -398,13 +410,16 @@ function renderPlaces(stats) {
 
   bars('#places-chart',
     stats.locations.filter((l) => match(l.name)).slice(0, 25).map((l) => ({
-      label: l.name, value: l.visits, colour: KIND_COLOURS[l.kind],
+      label: l.name,
+      value: l.visits,
+      colour: KIND_COLOURS[l.kind],
+      onClick: () => jumpToPlace(l.name),
     })),
     (v) => `${v}`);
 
   bars('#dests-chart',
     stats.destinations.filter((d) => match(d.name)).slice(0, 25)
-      .map((d) => ({ label: d.name, value: d.visits })),
+      .map((d) => ({ label: d.name, value: d.visits, onClick: () => jumpToPlace(d.name) })),
     (v) => `${v}`);
 }
 
@@ -581,7 +596,7 @@ function renderLedger() {
     tr.append(el('td', null, dateOf(entry.at)));
     tr.append(el('td', null, entry.kind));
     tr.append(el('td', null, prettyItem(entry.what)));
-    tr.append(el('td', null, entry.where));
+    tr.append(tdPlace(entry.where));
     tr.append(el('td', 'muted', entry.shop));
 
     // Unconfirmed amounts are marked rather than silently presented as settled.
@@ -919,7 +934,7 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
-    tr.append(el('td', 'muted', pickup.place));
+    tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
 
@@ -982,7 +997,7 @@ function renderAssets() {
 
   for (const s of [...assets.stash].sort((a, b) => b.value - a.value)) {
     const tr = el('tr');
-    tr.append(el('td', null, s.location));
+    tr.append(tdPlace(s.location));
     tr.append(el('td', 'num', String(s.items)));
     tr.append(el('td', 'num muted', String(s.priced)));
     tr.append(el('td', 'num inward', s.value > 0 ? money(s.value) : '—'));
@@ -1235,7 +1250,7 @@ function renderCommodities(trades) {
     tr.append(el('td', null, dateOf(trade.at)));
     tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
     tr.append(el('td', trade.commodity ? null : 'muted', trade.commodity ?? '—'));
-    tr.append(el('td', null, trade.place));
+    tr.append(tdPlace(trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
     tr.append(el('td', 'num muted', money(trade.unitPrice)));
@@ -1872,7 +1887,7 @@ function renderStash(stats) {
 
   for (const place of places) {
     const card = el('article', 'card');
-    card.append(el('div', 'card-label', place.name));
+    { const label = el('div', 'card-label'); label.append(placeLink(place.name)); card.append(label); }
     card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
 
     for (const group of place.groups) {
@@ -2050,12 +2065,18 @@ function bodyLayout(system, present, centre, sizeOf) {
     return key && (real[key].x || real[key].y) ? real[key] : null;
   };
 
+  // Zoomed in, the bodies move apart: every site carries a label at that
+  // range and the names need the room. applyView anchors the view across the
+  // redraw so the spread happens around what the eye is on.
+  const spread = isDetailed() ? 1.6 : 1;
+  const orbit = centre.orbit * spread;
+
   if (!present.some((name) => lookup(name))) {
     present.forEach((bodyName, index) => {
       const angle = (index / Math.max(1, present.length)) * Math.PI * 2 - Math.PI / 2;
       placements.set(bodyName, {
-        x: centre.x + Math.cos(angle) * centre.orbit,
-        y: centre.y + Math.sin(angle) * centre.orbit,
+        x: centre.x + Math.cos(angle) * orbit,
+        y: centre.y + Math.sin(angle) * orbit,
         angle,
         from: { x: centre.x, y: centre.y },
       });
@@ -2089,7 +2110,7 @@ function bodyLayout(system, present, centre, sizeOf) {
 
     if (group.pos) {
       angle = Math.atan2(group.pos.y, group.pos.x);
-      const radius = centre.orbit
+      const radius = orbit
         * (0.3 + 0.7 * Math.sqrt(Math.hypot(group.pos.x, group.pos.y) / maxR));
       gx = centre.x + Math.cos(angle) * radius;
       gy = centre.y + Math.sin(angle) * radius;
@@ -2097,8 +2118,8 @@ function bodyLayout(system, present, centre, sizeOf) {
       // No coordinates for this body — park it on the outer ring, stepping
       // around so uncharted bodies do not stack on one another.
       angle = Math.PI / 3 + (orphanIndex++) * (Math.PI / 2.5);
-      gx = centre.x + Math.cos(angle) * centre.orbit * 1.1;
-      gy = centre.y + Math.sin(angle) * centre.orbit * 1.1;
+      gx = centre.x + Math.cos(angle) * orbit * 1.1;
+      gy = centre.y + Math.sin(angle) * orbit * 1.1;
     }
 
     group.members.forEach((bodyName, index) => {
@@ -2112,7 +2133,7 @@ function bodyLayout(system, present, centre, sizeOf) {
       // Moons fan across the outward-facing half so they stay clear of the
       // star and of the planet's own label, spaced past both clusters.
       const arc = angle + (index - (group.members.length) / 2) * (Math.PI / 3.2);
-      const gap = sizeOf(group.members[0]) + sizeOf(bodyName) + 34;
+      const gap = (sizeOf(group.members[0]) + sizeOf(bodyName) + 34) * (spread > 1 ? 1.25 : 1);
 
       placements.set(bodyName, {
         x: gx + Math.cos(arc) * gap,
@@ -2144,7 +2165,48 @@ function applyView() {
 
   // Labels appear on zoom-in, so crossing the threshold means redrawing. The
   // redraw calls back into applyView, but the flag now matches, so it stops.
-  if (detailed !== wasDetailed && atlas.length) drawMap();
+  // The detailed layout also spreads bodies apart to give the names room, so
+  // the node nearest mid-view is re-found afterwards and the view shifted to
+  // keep it exactly where the eye left it.
+  if (detailed !== wasDetailed && atlas.length) {
+    // Anchor on where the eye is headed: the glide's destination when one is
+    // in flight, the current centre otherwise.
+    const goal = viewAnimTarget ?? view;
+    const cx = goal.x + goal.w / 2;
+    const cy = goal.y + goal.h / 2;
+    let anchor = null;
+    let nearest = Infinity;
+
+    for (const [id, p] of nodeAt) {
+      const d = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+      if (d < nearest) {
+        nearest = d;
+        anchor = { id, x: p.x, y: p.y };
+      }
+    }
+
+    drawMap();
+
+    const moved = anchor && nodeAt.get(anchor.id);
+    if (moved && (moved.x !== anchor.x || moved.y !== anchor.y)) {
+      const dx = moved.x - anchor.x;
+      const dy = moved.y - anchor.y;
+
+      view.x += dx;
+      view.y += dy;
+
+      // A glide in progress must move with the world, or it lands where its
+      // destination used to be.
+      if (viewAnimFrom) {
+        viewAnimFrom.x += dx;
+        viewAnimFrom.y += dy;
+        viewAnimTarget.x += dx;
+        viewAnimTarget.y += dy;
+      }
+
+      map.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+    }
+  }
 }
 
 /**
@@ -2154,25 +2216,35 @@ function applyView() {
  */
 let viewAnimation = null;
 
+// Endpoints live outside the closure so a mid-flight layout change (the
+// detailed zoom spreads bodies apart) can shift them with the world instead
+// of letting the glide land on stale coordinates.
+let viewAnimFrom = null;
+let viewAnimTarget = null;
+
 function animateViewTo(target, ms = 420) {
   cancelAnimationFrame(viewAnimation);
 
-  const from = { ...view };
+  viewAnimFrom = { ...view };
+  viewAnimTarget = { ...target };
   const start = performance.now();
   const ease = (t) => 1 - Math.pow(1 - t, 3);
 
   const step = (now) => {
     const k = ease(Math.min(1, (now - start) / ms));
+    const from = viewAnimFrom;
+    const to = viewAnimTarget;
 
     view = {
-      x: from.x + (target.x - from.x) * k,
-      y: from.y + (target.y - from.y) * k,
-      w: from.w + (target.w - from.w) * k,
-      h: from.h + (target.h - from.h) * k,
+      x: from.x + (to.x - from.x) * k,
+      y: from.y + (to.y - from.y) * k,
+      w: from.w + (to.w - from.w) * k,
+      h: from.h + (to.h - from.h) * k,
     };
     applyView();
 
     if (k < 1) viewAnimation = requestAnimationFrame(step);
+    else viewAnimFrom = viewAnimTarget = null;
   };
 
   viewAnimation = requestAnimationFrame(step);
@@ -2423,6 +2495,49 @@ function initMap() {
       e.preventDefault();
     }
   });
+}
+
+/**
+ * Flies to a named place: the map view, centred, detail card open. Falls back
+ * to a highlight search when the name is not an exact atlas match - a quantum
+ * destination or a shop name still lights whatever answers to it.
+ */
+function jumpToPlace(name) {
+  const wanted = String(name).trim();
+  const entry = atlas.find((l) => l.name.toLowerCase() === wanted.toLowerCase());
+
+  $('#map-search').value = entry ? '' : wanted;
+  $('#map-results').hidden = true;
+  showView('map');
+  drawMap();
+
+  if (entry) {
+    centreOn(entry.rawId);
+    showMapInfo(entry);
+  }
+}
+
+/**
+ * A place name that flies to the map when clicked. Used everywhere a location
+ * appears in a table or card, so "where is that?" is always one click.
+ */
+function placeLink(name) {
+  const link = el('button', 'place-link', name);
+  link.type = 'button';
+  link.title = 'Show on the map';
+  link.addEventListener('click', (e) => {
+    e.stopPropagation();
+    jumpToPlace(name);
+  });
+  return link;
+}
+
+/** A table cell holding a place link, or a plain dash when there is nothing. */
+function tdPlace(name, cls = null) {
+  const td = el('td', cls);
+  if (name && name !== '—' && name !== '?') td.append(placeLink(name));
+  else td.textContent = name || '—';
+  return td;
 }
 
 /**
@@ -3480,6 +3595,14 @@ async function boot() {
   if (q) $('#map-search').value = q;
 
   initMap();
+
+  // The current location on Now flies to the map like every other place name.
+  $('#now-location').classList.add('now-jump');
+  $('#now-location').title = 'Show on the map';
+  $('#now-location').addEventListener('click', () => {
+    const name = $('#now-location').textContent.trim();
+    if (name && name !== '—') jumpToPlace(name);
+  });
 
   try {
     const install = await getJson('/api/install');
