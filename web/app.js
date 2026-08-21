@@ -438,12 +438,29 @@ function drawFleetChart(history) {
 /* ---------- spending ---------- */
 
 function renderSpending(stats) {
+  const net = Number(stats.net) || 0;
+
   tiles('#spend-summary', [
-    ['Confirmed spend', money(stats.spend)],
+    ['Cargo income', money(stats.income)],
+    ['Item spend', money(stats.spend)],
+    ['Cargo spend', money(stats.commoditySpend)],
+    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net))],
     ['Purchases', stats.purchaseCount],
-    ['Shops used', stats.shops.length],
-    ['Distinct items', stats.items.length],
+    ['Cargo trades', stats.tradeCount],
   ]);
+
+  if (stats.tradeShops && stats.tradeShops.length) {
+    bars('#trade-chart',
+      stats.tradeShops.map((s) => ({
+        label: s.name,
+        value: Number(s.total),
+        note: `${s.quantity} SCU`,
+      })),
+      money);
+  } else {
+    $('#trade-chart').textContent = '';
+    $('#trade-chart').append(el('p', 'muted', 'No commodity sales recorded yet.'));
+  }
 
   bars('#shops-chart',
     stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count })),

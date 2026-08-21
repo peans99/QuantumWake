@@ -227,6 +227,17 @@ public sealed partial class LogEventParser
                     m.Groups["result"].Value,
                     m.Groups["type"].Value)),
 
+            "CEntityComponentCommodityUIProvider::SendCommoditySellRequest" or
+            "CEntityComponentCommodityUIProvider::SendCommodityBuyRequest" =>
+                Match(CommodityRegex, line, m =>
+                    new CommodityTradeEvent(
+                        line.Timestamp,
+                        m.Groups["shop"].Value,
+                        decimal.Parse(m.Groups["amount"].ValueSpan, System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(m.Groups["qty"].ValueSpan),
+                        line.Tag.EndsWith("SellRequest", StringComparison.Ordinal),
+                        m.Groups["mode"].Success ? m.Groups["mode"].Value : null)),
+
             "ObjectiveUpserted" => Match(ObjectiveRegex, line, m =>
                 new MissionObjectiveEvent(
                     line.Timestamp,
@@ -590,6 +601,12 @@ public sealed partial class LogEventParser
         @"result\[(?<result>[^\]]*)\] type\[(?<type>[^\]]*)\]",
         RegexOptions.Compiled)]
     private static partial Regex ShopResponseRegex { get; }
+
+    [GeneratedRegex(
+        @"shopName\[(?<shop>[^\]]+)\].*?amount\[(?<amount>[\d.]+)\].*?quantity\[(?<qty>\d+)\]" +
+        @"(?:.*?transactionMode\[(?<mode>[^\]]*)\])?",
+        RegexOptions.Compiled)]
+    private static partial Regex CommodityRegex { get; }
 
     [GeneratedRegex(
         @"mission_id (?<mission>[0-9a-fA-F-]+) - objective_id (?<objective>\S+) - " +

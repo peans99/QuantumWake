@@ -144,7 +144,16 @@
   <!-- SPENDING -->
   <section id="view-spending" class="view">
     <div class="summary-strip" id="spend-summary"></div>
-    <h2>Where it went</h2>
+
+    <h2>Cargo sales</h2>
+    <p class="muted caption">
+      The only income the logs record. Commodity trades carry no server
+      confirmation, unlike item purchases, so these are amounts requested at the
+      kiosk rather than settled transactions.
+    </p>
+    <div id="trade-chart" class="bars"></div>
+
+    <h2 class="spaced">Where it went</h2>
     <div id="shops-chart" class="bars"></div>
     <h2 class="spaced">Most bought</h2>
     <div id="items-chart" class="bars"></div>

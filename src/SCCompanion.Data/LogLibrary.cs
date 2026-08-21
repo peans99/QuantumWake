@@ -34,6 +34,17 @@ public sealed record LibraryStats
     public IReadOnlyList<FacetTotal> Shops { get; init; } = [];
     public IReadOnlyList<SpendTotal> Items { get; init; } = [];
 
+    /// <summary>Commodity sales - the only income the logs record.</summary>
+    public decimal Income { get; init; }
+
+    public decimal CommoditySpend { get; init; }
+    public int TradeCount { get; init; }
+
+    /// <summary>Income less all outgoings.</summary>
+    public decimal Net { get; init; }
+
+    public IReadOnlyList<SpendTotal> TradeShops { get; init; } = [];
+
     // ---- contracts ----
 
     public int ContractsCompleted { get; init; }
@@ -222,6 +233,17 @@ public sealed class LogLibrary : IDisposable
             .OrderByDescending(i => i.Total)
             .ToList();
 
+        var trades = sessions.SelectMany(s => s.Trades).ToList();
+        var income = trades.Where(t => t.IsSell).Sum(t => t.Amount);
+        var commoditySpend = trades.Where(t => !t.IsSell).Sum(t => t.Amount);
+
+        var tradeShops = trades
+            .Where(t => t.IsSell)
+            .GroupBy(t => t.Shop, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new SpendTotal(g.Key, g.Sum(t => t.Amount), g.Sum(t => t.Quantity)))
+            .OrderByDescending(s => s.Total)
+            .ToList();
+
         var fleetHistory = sessions
             .Where(s => s.FleetSize is > 0)
             .OrderBy(s => s.StartedAt)
@@ -273,6 +295,12 @@ public sealed class LogLibrary : IDisposable
             PurchaseCount = purchases.Count,
             Shops = Facet(purchases.Select(p => p.Shop)),
             Items = items,
+
+            Income = income,
+            CommoditySpend = commoditySpend,
+            TradeCount = trades.Count,
+            Net = income - purchases.Sum(p => p.Total) - commoditySpend,
+            TradeShops = tradeShops,
 
             ContractsSeen = contracts.Count,
             ContractsCompleted = contracts.Count(c => c.Outcome == ContractOutcome.Completed),

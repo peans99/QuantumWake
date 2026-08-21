@@ -90,6 +90,21 @@ public sealed record PurchaseRecord(
     public decimal Total => Price * Quantity;
 }
 
+/// <summary>
+/// A commodity bought or sold at a kiosk.
+/// </summary>
+/// <remarks>
+/// No server response accompanies these, so they are requests rather than
+/// confirmed settlements.
+/// </remarks>
+public sealed record CommodityTrade(
+    DateTimeOffset At,
+    string Shop,
+    decimal Amount,
+    int Quantity,
+    bool IsSell,
+    string? Mode);
+
 /// <summary>One equipped item, at the slot it occupied.</summary>
 public sealed record LoadoutItem(
     string Port,
@@ -151,8 +166,18 @@ public sealed record SessionSummary
     /// <summary>Largest owned-vehicle count seen this session, or null if not reported.</summary>
     public int? FleetSize { get; init; }
 
+    public IReadOnlyList<CommodityTrade> Trades { get; init; } = [];
+
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
+
+    /// <summary>Commodity sales - the only income the logs record.</summary>
+    public decimal Income => Trades.Where(t => t.IsSell).Sum(t => t.Amount);
+
+    /// <summary>Commodity purchases, kept apart from item purchases.</summary>
+    public decimal CommoditySpend => Trades.Where(t => !t.IsSell).Sum(t => t.Amount);
+
+    public decimal Net => Income - Spend - CommoditySpend;
 
     public int ContractsCompleted => Contracts.Count(c => c.Outcome == ContractOutcome.Completed);
 
