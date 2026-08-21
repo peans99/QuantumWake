@@ -565,11 +565,15 @@ public sealed class LogLibrary : IDisposable
             .GroupBy(e => e.LocationId, StringComparer.Ordinal)
             .Select(g =>
             {
-                // Keep the most recent sighting per item so the view can filter
-                // on how long ago something was actually seen.
+                // Only the newest listing describes what is there now. Item
+                // removals are never logged, so merging older listings would
+                // show things taken away long ago.
+                var latest = g.Max(e => e.SeenAt);
+
                 var items = g
-                    .GroupBy(e => e.ItemClass, StringComparer.OrdinalIgnoreCase)
-                    .Select(i => (ItemClass: i.Key, SeenAt: i.Max(e => e.SeenAt)))
+                    .Where(e => e.SeenAt == latest)
+                    .Select(e => (e.ItemClass, e.SeenAt))
+                    .DistinctBy(e => e.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
                 var groups = ItemCategories.Group(items, Names.Item);
@@ -577,7 +581,7 @@ public sealed class LogLibrary : IDisposable
                 return new StashLocation(
                     g.Key,
                     g.First().LocationName,
-                    g.Max(e => e.SeenAt),
+                    latest,
                     groups.Sum(x => x.Items.Count),
                     groups);
             })

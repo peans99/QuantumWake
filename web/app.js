@@ -745,6 +745,23 @@ function renderStash(stats) {
   const term = ($('#stash-search').value || '').trim().toLowerCase();
   const days = Number($('#stash-period').value) || 0;
   const cutoff = days ? Date.now() - days * 86400000 : null;
+  const latestOnly = $('#stash-latest').checked;
+
+  // The same item often sits in several stashes. When asked, keep only the
+  // place it was most recently seen, so "where is my MedPen" has one answer.
+  const newestPlace = new Map();
+
+  if (latestOnly) {
+    for (const place of stats.stash) {
+      for (const group of place.groups) {
+        for (const item of group.items) {
+          const seen = new Date(item.lastSeen).getTime();
+          const best = newestPlace.get(item.name);
+          if (!best || seen > best.seen) newestPlace.set(item.name, { seen, place: place.locationId });
+        }
+      }
+    }
+  }
 
   // Searching by place keeps the whole location; searching by item narrows to
   // the matching items, so "where is my sniper" answers in one glance. The
@@ -760,6 +777,7 @@ function renderStash(stats) {
           items: g.items.filter((i) => {
             if (cutoff && new Date(i.lastSeen).getTime() < cutoff) return false;
             if (term && !placeHit && !i.name.toLowerCase().includes(term)) return false;
+            if (latestOnly && newestPlace.get(i.name)?.place !== place.locationId) return false;
             return true;
           }),
         }))
@@ -992,6 +1010,7 @@ onInput('#fleet-period', renderFleetShips);
 onInput('#loadout-search', () => libraryStats && renderLoadout(libraryStats));
 onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-period', () => libraryStats && renderStash(libraryStats));
+onInput('#stash-latest', () => libraryStats && renderStash(libraryStats));
 
 /* ---------- boot ---------- */
 

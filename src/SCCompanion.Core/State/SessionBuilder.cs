@@ -44,8 +44,11 @@ public sealed class SessionBuilder
     private readonly Dictionary<string, string> _contractsByMission = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ObjectiveState> _objectiveStates = new(StringComparer.Ordinal);
 
-    private readonly List<StashEntry> _stash = [];
-    private readonly HashSet<string> _stashKeys = [];
+    /// <summary>
+    /// Latest inventory listing per scope key. Replaced wholesale on each query,
+    /// so it always holds current contents rather than an accumulation.
+    /// </summary>
+    private readonly Dictionary<string, (DateTimeOffset At, List<string> Items)> _listings = new(StringComparer.Ordinal);
 
     /// <summary>Opaque inventory scope key to the location id it belongs to.</summary>
     private readonly Dictionary<string, string> _locationKeys = new(StringComparer.Ordinal);
@@ -202,6 +205,15 @@ public sealed class SessionBuilder
             case InventoryQueryEvent query when query.IsLocation:
                 if (_lastLocationId is not null)
                     _locationKeys[query.ScopeKey] = _lastLocationId;
+
+                // A query lists only the page currently on screen - the lines are
+                // literally tagged "End Page" - so listings are unioned across
+                // the session rather than replacing each other. One session's
+                // union is the best available picture of a location's contents.
+                if (_listings.TryGetValue(query.ScopeKey, out var open))
+                    _listings[query.ScopeKey] = (query.Timestamp, open.Items);
+                else
+                    _listings[query.ScopeKey] = (query.Timestamp, []);
                 break;
 
             case InventoryItemEvent item when item.IsLocation:
@@ -583,17 +595,62 @@ public sealed class SessionBuilder
     /// </remarks>
     private void RecordStashItem(InventoryItemEvent item)
     {
-        var locationId = _locationKeys.GetValueOrDefault(item.ScopeKey);
-        if (locationId is null)
+        if (!_listings.TryGetValue(item.ScopeKey, out var listing))
             return;
 
-        if (!_stashKeys.Add($"{locationId}|{item.ItemClass}"))
-            return;
+        // Paging through an inventory repeats entries; one row per item is enough.
+        if (!listing.Items.Contains(item.ItemClass, StringComparer.OrdinalIgnoreCase))
+            listing.Items.Add(item.ItemClass);
+    }
 
-        var location = LocationResolver.Resolve(locationId);
+    /// <summary>
+    /// Turns the final listing of each location into stash entries.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every entry from one session shares that session's last query time for the
+    /// location, which lets the library keep only the newest session per place.
+    /// Merging sessions would be wrong: item removals are never logged, so an
+    /// all-time union shows things taken away long ago.
+    /// </para>
+    /// <para>
+    /// This is still an approximation. Listings are paged, so it reflects what
+    /// was actually browsed on the last visit, not guaranteed full contents.
+    /// </para>
+    /// </remarks>
+    private List<StashEntry> BuildStash()
+    {
+        var byLocation = new Dictionary<string, (DateTimeOffset At, List<string> Items)>(StringComparer.Ordinal);
 
-        _stash.Add(new StashEntry(
-            item.Timestamp, locationId, location.DisplayName, item.ItemClass));
+        foreach (var (scopeKey, listing) in _listings)
+        {
+            var locationId = _locationKeys.GetValueOrDefault(scopeKey);
+            if (locationId is null || listing.Items.Count == 0)
+                continue;
+
+            if (!byLocation.TryGetValue(locationId, out var merged))
+                merged = (listing.At, []);
+
+            foreach (var itemClass in listing.Items)
+            {
+                if (!merged.Items.Contains(itemClass, StringComparer.OrdinalIgnoreCase))
+                    merged.Items.Add(itemClass);
+            }
+
+            byLocation[locationId] = (listing.At > merged.At ? listing.At : merged.At, merged.Items);
+        }
+
+        var entries = new List<StashEntry>();
+
+        foreach (var (locationId, merged) in byLocation)
+        {
+            var location = LocationResolver.Resolve(locationId);
+
+            foreach (var itemClass in merged.Items)
+                entries.Add(new StashEntry(merged.At, locationId, location.DisplayName, itemClass));
+        }
+
+        return entries;
     }
 
     /// <summary>
@@ -710,7 +767,7 @@ public sealed class SessionBuilder
             Purchases = _purchases,
             Trades = _trades,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
-            Stash = _stash,
+            Stash = BuildStash(),
             FleetSize = _fleetSize,
             Incapacitations = _incapacitations,
 
