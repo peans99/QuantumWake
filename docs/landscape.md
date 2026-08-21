@@ -59,7 +59,7 @@ without checking:
 Stripped of wishful thinking, three things:
 
 1. **The atlas.** Others map where you *went*. Quantumwake draws **every place in
-   the game** — 1,343 of them resolved out of the localisation table — with the
+   the game** — 292 resolved out of the localisation table, against 72 visited — with the
    visited ones solid and the rest hollow, so the map shows how much of the
    'verse is left rather than just a trail. Unresolved ids stay visible in a tray
    instead of being dropped.
