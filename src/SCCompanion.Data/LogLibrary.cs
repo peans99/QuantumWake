@@ -1,3 +1,4 @@
+using SCCompanion.Core.GameData;
 using SCCompanion.Core.Logging;
 using SCCompanion.Core.State;
 
@@ -281,12 +282,27 @@ public static class ItemCategories
     private static bool Has(string value, string token) =>
         value.Contains(token, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Buckets and orders a set of item classes.</summary>
-    public static IReadOnlyList<ItemGroup> Group(IEnumerable<string> items) =>
-        [.. items
+    /// <summary>
+    /// Buckets and orders a set of item classes.
+    /// </summary>
+    /// <param name="display">
+    /// Turns a class into its display name. Classification always uses the raw
+    /// class, since the engine name is what carries the type information -
+    /// "P4-AR Boneyard Rifle" does not contain the word "rifle" reliably, but
+    /// <c>behr_rifle_ballistic_01</c> does.
+    /// </param>
+    public static IReadOnlyList<ItemGroup> Group(
+        IEnumerable<string> items, Func<string, string>? display = null)
+    {
+        display ??= x => x;
+
+        return [.. items
             .GroupBy(Of, StringComparer.Ordinal)
-            .Select(g => new ItemGroup(g.Key, [.. g.Distinct(StringComparer.OrdinalIgnoreCase).Order()]))
+            .Select(g => new ItemGroup(
+                g.Key,
+                [.. g.Select(display).Distinct(StringComparer.OrdinalIgnoreCase).Order()]))
             .OrderBy(g => Rank(g.Category))];
+    }
 }
 
 /// <param name="Sorties">Flights - the reliable metric.</param>
@@ -316,6 +332,25 @@ public sealed class LogLibrary : IDisposable
 {
     private readonly SessionStore _store;
     private readonly bool _ownsStore;
+
+    /// <summary>
+    /// Engine id to display name, read from the game's own localisation table.
+    /// Empty when Data.p4k is unavailable, in which case raw ids are shown.
+    /// </summary>
+    public GameNames Names { get; private set; } = GameNames.Empty;
+
+    /// <summary>
+    /// Loads display names for an install. Safe to skip - every lookup falls
+    /// back to the raw identifier.
+    /// </summary>
+    public void LoadNames(string installRoot)
+    {
+        var cache = Path.Combine(
+            Path.GetDirectoryName(SessionStore.DatabasePathFor(installRoot))!,
+            "names.json");
+
+        Names = GameNames.Load(installRoot, cache);
+    }
 
     public LogLibrary(SessionStore store, bool ownsStore = false)
     {
@@ -413,7 +448,7 @@ public sealed class LogLibrary : IDisposable
 
         var ships = sessions
             .SelectMany(s => s.Ships.Select(ship => (Session: s.Id, s.StartedAt, Ship: ship)))
-            .GroupBy(x => x.Ship.DisplayName, StringComparer.Ordinal)
+            .GroupBy(x => ShipName(x.Ship), StringComparer.Ordinal)
             .Select(g => new ShipTotal(
                 g.Key,
                 TimeSpan.FromTicks(g.Sum(x => x.Ship.EstimatedTime.Ticks)),
@@ -479,7 +514,7 @@ public sealed class LogLibrary : IDisposable
                 LoadoutCategories.Of(g.Key),
                 LoadoutCategories.Label(g.Key),
                 [.. g.GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
-                     .Select(i => new FacetTotal(i.Key, i.Count()))
+                     .Select(i => new FacetTotal(Names.Item(i.Key), i.Count()))
                      .OrderByDescending(i => i.Count)]))
             // Category order first, then busiest slot within each category.
             .OrderBy(s => LoadoutCategories.Rank(s.Category))
@@ -502,7 +537,7 @@ public sealed class LogLibrary : IDisposable
                     g.First().LocationName,
                     g.Max(e => e.SeenAt),
                     items.Count,
-                    ItemCategories.Group(items));
+                    ItemCategories.Group(items, Names.Item));
             })
             .OrderByDescending(l => l.ItemCount)
             .ToList();
@@ -544,6 +579,25 @@ public sealed class LogLibrary : IDisposable
             Loadout = loadout,
             Stash = stash
         };
+    }
+
+    /// <summary>
+    /// Prefers the game's own vehicle name over the one built from the log id,
+    /// so "DRAK Corsair" reads as "Drake Corsair".
+    /// </summary>
+    private string ShipName(ShipUsage ship)
+    {
+        if (ship.Manufacturer is null)
+            return Names.Item(ship.Model) is var item && item != ship.Model ? item : ship.DisplayName;
+
+        var vehicleId = $"{ship.Manufacturer}_{ship.Model}";
+        var resolved = Names.Vehicle(vehicleId);
+
+        // Vehicle() tidies underscores when it finds nothing, which is not an
+        // improvement over the name we already had.
+        return resolved.Equals(vehicleId.Replace('_', ' '), StringComparison.Ordinal)
+            ? ship.DisplayName
+            : resolved;
     }
 
     private static List<FacetTotal> Facet(IEnumerable<string?> values) =>
