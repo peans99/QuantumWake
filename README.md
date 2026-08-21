@@ -4,6 +4,7 @@
 
 **A pilot's logbook for Star Citizen** — by nekron
 
+[![CI](https://github.com/peans99/QuantumWake/actions/workflows/ci.yml/badge.svg)](https://github.com/peans99/QuantumWake/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
@@ -25,6 +26,13 @@ It is read-only, entirely offline, and never touches the game.
 Dashboard on <http://127.0.0.1:31337>. `Ctrl+Alt+O` toggles overlay
 click-through. Your install is found automatically across every fixed drive.
 
+![The star map](docs/images/map.png)
+
+*Stanton, Pyro and Nyx. Solid nodes are places this install has actually been —
+72 of the 292 the resolver can place — sized by how often. Star Citizen logs no
+player position, so this is a topology map built from location and quantum-travel
+events, not a radar.*
+
 ---
 
 ## What it shows
@@ -43,6 +51,17 @@ click-through. Your install is found automatically across every fixed drive.
 | **Loadout** | The kit you are wearing, by slot |
 | **Stash** | What is in your inventory and where you left it |
 
+<table>
+  <tr>
+    <td width="50%"><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="Fleet"></a><br><sub><b>Fleet</b> — ships owned over time, from the entitlement query the game runs each session</sub></td>
+    <td width="50%"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="Ledger"></a><br><sub><b>Ledger</b> — every confirmed transaction, back-tracked to the place it happened</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><sub><b>Sessions</b> — in-game time kept separate from time spent in menus</sub></td>
+    <td width="50%"><a href="docs/images/stash.png"><img src="docs/images/stash.png" alt="Stash"></a><br><sub><b>Stash</b> — what you are carrying and where you left the rest</sub></td>
+  </tr>
+</table>
+
 Names are real names — New Babbage, not `Stanton4_NewBabbage`; a Genoa power
 plant, not `POWR_JUST_S02_Genoa_SCItem` — read from your own `Data.p4k` at
 runtime with no external lookup service involved.
@@ -54,7 +73,8 @@ surveys them honestly, including the one that overlaps this heavily. Three
 things here are not in the others:
 
 - **The whole map, not just your trail.** Others plot where you went. This draws
-  all 1,343 places the game names, so the map shows how much 'verse is left.
+  every place it can resolve — 292 of them, against the 72 this install has
+  actually visited — so the map shows how much 'verse is left, not just a trail.
 - **Offline all the way down.** Every other tool that shows real item names
   fetches them from UEX, the wiki or scunpacked. This reads `Data.p4k` directly
   with its own ZIP64 + ZStd reader, so "no outbound network calls" survives
