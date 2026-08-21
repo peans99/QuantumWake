@@ -323,27 +323,47 @@ const money = (n) => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 
 /* ---------- fleet ---------- */
 
+/* Kept so the filter controls can re-render without another fetch. */
+let libraryStats = null;
+
 function renderFleet(stats) {
-  const owned = stats.fleetSize;
+  libraryStats = stats;
 
   tiles('#fleet-summary', [
-    ['Ships owned', owned ?? '—'],
+    ['Ships owned', stats.fleetSize ?? '—'],
     ['Models flown', stats.ships.length],
     ['Total flights', stats.ships.reduce((sum, s) => sum + s.sorties, 0)],
     ['Time aboard', `~${duration(stats.ships.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
   ]);
 
   drawFleetChart(stats.fleetHistory || []);
+  renderFleetShips();
+}
 
+/** Applies the search box and the last-flown period filter. */
+function renderFleetShips() {
   const grid = $('#fleet-ships');
   grid.textContent = '';
 
-  if (!stats.ships.length) {
-    grid.append(el('p', 'muted', 'No ships recorded yet.'));
+  if (!libraryStats) return;
+
+  const term = ($('#fleet-search').value || '').trim().toLowerCase();
+  const days = Number($('#fleet-period').value) || 0;
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+
+  const ships = libraryStats.ships.filter((s) => {
+    if (term && !s.name.toLowerCase().includes(term)) return false;
+    if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
+    return true;
+  });
+
+  if (!ships.length) {
+    grid.append(el('p', 'muted',
+      libraryStats.ships.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
     return;
   }
 
-  for (const ship of stats.ships) {
+  for (const ship of ships) {
     // "DRAK Clipper" -> prefix + model.
     const [prefix, ...rest] = ship.name.split(' ');
     const card = el('article', 'ship-card');
@@ -372,9 +392,23 @@ function renderFleet(stats) {
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
+    body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
     card.append(body);
     grid.append(card);
   }
+}
+
+/** "3 days ago", "2 months ago" - easier to scan than a date. */
+function relative(iso) {
+  if (!iso) return 'unknown';
+
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+
+  const months = Math.round(days / 30);
+  return months <= 1 ? 'a month ago' : `${months} months ago`;
 }
 
 /** Step chart of owned-vehicle count over time. */
@@ -478,6 +512,8 @@ function renderSpending(stats) {
 /* ---------- loadout ---------- */
 
 function renderLoadout(stats) {
+  libraryStats = stats;
+
   const host = $('#loadout-grid');
   host.textContent = '';
 
@@ -486,9 +522,31 @@ function renderLoadout(stats) {
     return;
   }
 
+  const term = ($('#loadout-search').value || '').trim().toLowerCase();
+
+  // A slot matches on its own name, or keeps only the items that match.
+  const slots = stats.loadout
+    .map((slot) => {
+      if (!term) return slot;
+
+      const slotHit = (slot.label || slot.port).toLowerCase().includes(term)
+        || slot.port.toLowerCase().includes(term);
+
+      if (slotHit) return slot;
+
+      const items = slot.items.filter((i) => i.name.toLowerCase().includes(term));
+      return items.length ? { ...slot, items } : null;
+    })
+    .filter(Boolean);
+
+  if (!slots.length) {
+    host.append(el('p', 'muted', 'Nothing matches that search.'));
+    return;
+  }
+
   // The server already orders slots by category; preserve that grouping.
   const byCategory = new Map();
-  for (const slot of stats.loadout) {
+  for (const slot of slots) {
     if (!byCategory.has(slot.category)) byCategory.set(slot.category, []);
     byCategory.get(slot.category).push(slot);
   }
@@ -535,6 +593,8 @@ const prettyItem = (name) => name.replace(/_/g, ' ');
 /* ---------- stash ---------- */
 
 function renderStash(stats) {
+  libraryStats = stats;
+
   const grid = $('#stash-grid');
   grid.textContent = '';
 
@@ -544,7 +604,31 @@ function renderStash(stats) {
     return;
   }
 
-  for (const place of stats.stash) {
+  const term = ($('#stash-search').value || '').trim().toLowerCase();
+
+  // Searching by place keeps the whole location; searching by item narrows to
+  // the matching items, so "where is my sniper" answers in one glance.
+  const places = stats.stash
+    .map((place) => {
+      if (!term) return place;
+      if (place.name.toLowerCase().includes(term)) return place;
+
+      const groups = place.groups
+        .map((g) => ({ ...g, items: g.items.filter((i) => i.toLowerCase().includes(term)) }))
+        .filter((g) => g.items.length);
+
+      if (!groups.length) return null;
+
+      return { ...place, groups, itemCount: groups.reduce((n, g) => n + g.items.length, 0) };
+    })
+    .filter(Boolean);
+
+  if (!places.length) {
+    grid.append(el('p', 'muted', 'Nothing matches that search.'));
+    return;
+  }
+
+  for (const place of places) {
     const card = el('article', 'card');
     card.append(el('div', 'card-label', place.name));
     card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
@@ -739,6 +823,28 @@ function drawLegend(locations) {
     legend.append(item);
   }
 }
+
+/* ---------- filters ---------- */
+
+/** Debounced so typing does not re-render on every keystroke. */
+function onInput(selector, handler) {
+  const node = $(selector);
+  if (!node) return;
+
+  let timer = null;
+  const run = () => {
+    clearTimeout(timer);
+    timer = setTimeout(handler, 120);
+  };
+
+  node.addEventListener('input', run);
+  node.addEventListener('change', handler);
+}
+
+onInput('#fleet-search', renderFleetShips);
+onInput('#fleet-period', renderFleetShips);
+onInput('#loadout-search', () => libraryStats && renderLoadout(libraryStats));
+onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 
 /* ---------- boot ---------- */
 

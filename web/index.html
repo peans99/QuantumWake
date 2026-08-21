@@ -132,7 +132,20 @@
       <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
     </div>
 
-    <h2 class="spaced">Ships flown</h2>
+    <div class="section-bar">
+      <h2 class="spaced">Ships flown</h2>
+      <div class="controls">
+        <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
+               autocomplete="off" spellcheck="false">
+        <select id="fleet-period" class="select" title="Filter by when last flown">
+          <option value="0">Any time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="180">Last 6 months</option>
+        </select>
+      </div>
+    </div>
     <p class="muted caption">
       Counted from control-token releases. Star Citizen 4.9 logs no boarding
       event, so flight counts are exact while times aboard (~) are estimated from
@@ -161,7 +174,13 @@
 
   <!-- LOADOUT -->
   <section id="view-loadout" class="view">
-    <h2>Equipment by slot</h2>
+    <div class="section-bar">
+      <h2>Equipment by slot</h2>
+      <div class="controls">
+        <input type="search" id="loadout-search" class="search" placeholder="Search items or slots…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
     <p class="muted caption">
       Reconstructed from attachment events. These fire on every spawn and
       inventory refresh, so each slot lists everything seen in it, most frequent
@@ -172,7 +191,13 @@
 
   <!-- STASH -->
   <section id="view-stash" class="view">
-    <h2>Items seen by location</h2>
+    <div class="section-bar">
+      <h2>Items seen by location</h2>
+      <div class="controls">
+        <input type="search" id="stash-search" class="search" placeholder="Search items or places…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
     <p class="muted caption">
       Built by binding each location's inventory query to the place you opened it
       at. Removals are never logged, so this is what has been <em>seen</em> stored

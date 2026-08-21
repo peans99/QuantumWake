@@ -291,7 +291,15 @@ public static class ItemCategories
 
 /// <param name="Sorties">Flights - the reliable metric.</param>
 /// <param name="EstimatedTime">Inferred time aboard; see <see cref="ShipUsage"/>.</param>
-public sealed record ShipTotal(string Name, TimeSpan EstimatedTime, int Sorties, int Sessions);
+/// <param name="FirstFlown">Start of the earliest session this ship appears in.</param>
+/// <param name="LastFlown">Start of the most recent session this ship appears in.</param>
+public sealed record ShipTotal(
+    string Name,
+    TimeSpan EstimatedTime,
+    int Sorties,
+    int Sessions,
+    DateTimeOffset FirstFlown,
+    DateTimeOffset LastFlown);
 public sealed record PlaceTotal(string RawId, string Name, string? System, string? Body, string Kind, int Visits);
 public sealed record FacetTotal(string Name, int Count);
 
@@ -404,13 +412,15 @@ public sealed class LogLibrary : IDisposable
         }
 
         var ships = sessions
-            .SelectMany(s => s.Ships.Select(ship => (Session: s.Id, Ship: ship)))
+            .SelectMany(s => s.Ships.Select(ship => (Session: s.Id, s.StartedAt, Ship: ship)))
             .GroupBy(x => x.Ship.DisplayName, StringComparer.Ordinal)
             .Select(g => new ShipTotal(
                 g.Key,
                 TimeSpan.FromTicks(g.Sum(x => x.Ship.EstimatedTime.Ticks)),
                 g.Sum(x => x.Ship.Sorties),
-                g.Select(x => x.Session).Distinct().Count()))
+                g.Select(x => x.Session).Distinct().Count(),
+                g.Min(x => x.StartedAt),
+                g.Max(x => x.StartedAt)))
             .OrderByDescending(s => s.Sorties)
             .ThenByDescending(s => s.EstimatedTime)
             .ToList();

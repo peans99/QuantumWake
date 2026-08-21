@@ -565,6 +565,46 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
 }
 .loadout-grid .card, .stash-grid .card { min-height: 0; }
 
+/* Heading with filter controls on the right. */
+.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 13px;
+}
+.section-bar h2 { margin: 0; }
+.section-bar h2.spaced { margin-top: 32px; }
+.controls { display: flex; gap: 8px; align-items: center; }
+
+.search, .select {
+  background: var(--deep);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 12px;
+  padding: 6px 10px;
+  min-width: 170px;
+  outline: none;
+  transition: border-color .14s, box-shadow .14s;
+}
+.search::placeholder { color: var(--dim); }
+.search:focus, .select:focus {
+  border-color: var(--cyan-deep);
+  box-shadow: 0 0 0 1px rgba(53, 200, 240, .25);
+}
+.select { min-width: 130px; cursor: pointer; }
+.select option { background: var(--panel); color: var(--text); }
+
+.ship-seen {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 5px;
+}
+
 /* Category heading inside a grouped view. */
 .group-head {
   display: flex;
