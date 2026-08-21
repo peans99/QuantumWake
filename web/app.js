@@ -709,20 +709,38 @@ async function loadMarket() {
     marketEntries = [];
   }
 
+  // The group dropdown offers every group the catalogue actually uses,
+  // rebuilt on load and keeping the user's pick when it still exists.
+  const groupSelect = $('#market-group');
+  const previous = groupSelect.value;
+  const groups = [...new Set(marketEntries.flatMap((e) => e.groups))].sort();
+
+  groupSelect.textContent = '';
+  groupSelect.append(new Option('All groups', ''));
+  for (const group of groups) groupSelect.append(new Option(group, group));
+  if (groups.includes(previous)) groupSelect.value = previous;
+
   renderMarket();
+
+  // The map's commodity search reads this catalogue, and the map usually draws
+  // first. A search already standing (a ?q= link opened cold) would have found
+  // nothing; redraw it now the names exist.
+  if (($('#map-search')?.value || '').trim() && atlas.length) drawMap();
 }
 
 function renderMarket() {
   $('#market-offer').hidden = marketEntries.length > 0;
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
+  const group = $('#market-group').value;
   const body = $('#market-table tbody');
   body.textContent = '';
 
   const rows = marketEntries.filter((e) =>
-    !term
-    || e.name.toLowerCase().includes(term)
-    || e.groups.some((g) => g.toLowerCase().includes(term)));
+    (!group || e.groups.includes(group))
+    && (!term
+      || e.name.toLowerCase().includes(term)
+      || e.groups.some((g) => g.toLowerCase().includes(term))));
 
   if (!rows.length) {
     const tr = el('tr');
@@ -789,6 +807,7 @@ function renderMarket() {
 }
 
 onInput('#market-search', renderMarket);
+$('#market-group')?.addEventListener('change', renderMarket);
 
 /**
  * Facility keys to search tokens the atlas can meet. The class name
@@ -878,17 +897,40 @@ onInput('#loot-period', loadLoot);
 
 /* ---------- assets ---------- */
 
+let assetsData = null;
+
+/**
+ * Ships struck off the asset count. The fleet is inferred from the logs, so
+ * rentals and ships since sold appear in it; which of those the player truly
+ * owns is something only they know, so it is their tick-box, kept per-browser.
+ */
+let excludedShips = new Set();
+try {
+  excludedShips = new Set(JSON.parse(localStorage.getItem('qw-assets-excluded') || '[]'));
+} catch { /* private mode; exclusions just will not stick */ }
+
 async function loadAssets() {
-  renderAssets(await getJson('/api/assets'));
+  assetsData = await getJson('/api/assets');
+  renderAssets();
 }
 
-function renderAssets(assets) {
-  const total = Number(assets.fleetValue) + Number(assets.loadoutValue) + Number(assets.stashValue);
+function renderAssets() {
+  const assets = assetsData;
+  if (!assets) return;
+
+  // Fleet totals are recomputed here rather than trusted from the server,
+  // because exclusion is a client-side choice.
+  const counted = assets.fleet.filter((s) => !excludedShips.has(s.name));
+  const fleetValue = counted.reduce((sum, s) => sum + (s.price ? Number(s.price.price) : 0), 0);
+  const fleetPriced = counted.filter((s) => s.price).length;
+  const excluded = assets.fleet.length - counted.length;
+
+  const total = fleetValue + Number(assets.loadoutValue) + Number(assets.stashValue);
 
   tiles('#assets-summary', assets.priced
     ? [
         ['Estimated worth*', money(total)],
-        ['Fleet', `${money(assets.fleetValue)} (${assets.fleetPriced} priced)`],
+        ['Fleet', `${money(fleetValue)} (${fleetPriced} priced${excluded ? `, ${excluded} unticked` : ''})`],
         ['Kit worn', `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
         ['Stashed', money(assets.stashValue)],
         ['Claim exposure*', money(assets.claimExposure)],
@@ -899,7 +941,28 @@ function renderAssets(assets) {
   fleetBody.textContent = '';
 
   for (const ship of assets.fleet) {
+    const off = excludedShips.has(ship.name);
     const tr = el('tr');
+    if (off) tr.className = 'excluded';
+
+    const tick = el('td', 'tick');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = !off;
+    box.title = off ? 'Not counted - tick to include' : 'Counted - untick if rented or sold';
+
+    box.addEventListener('change', () => {
+      if (box.checked) excludedShips.delete(ship.name);
+      else excludedShips.add(ship.name);
+      try {
+        localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
+      } catch { /* fine */ }
+      renderAssets();
+    });
+
+    tick.append(box);
+    tr.append(tick);
+
     tr.append(el('td', null, ship.name));
     tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold in game'));
     tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
@@ -2014,6 +2077,37 @@ function applyView() {
 }
 
 /**
+ * Eases the viewport towards a target rectangle. A cut to a new view loses the
+ * reader - the glide is what tells them where on the map they went. Cancelled
+ * the moment the user pans or zooms by hand, so the map never fights them.
+ */
+let viewAnimation = null;
+
+function animateViewTo(target, ms = 420) {
+  cancelAnimationFrame(viewAnimation);
+
+  const from = { ...view };
+  const start = performance.now();
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+  const step = (now) => {
+    const k = ease(Math.min(1, (now - start) / ms));
+
+    view = {
+      x: from.x + (target.x - from.x) * k,
+      y: from.y + (target.y - from.y) * k,
+      w: from.w + (target.w - from.w) * k,
+      h: from.h + (target.h - from.h) * k,
+    };
+    applyView();
+
+    if (k < 1) viewAnimation = requestAnimationFrame(step);
+  };
+
+  viewAnimation = requestAnimationFrame(step);
+}
+
+/**
  * Moves the view so a place sits in the middle, zooming in if the map is still
  * showing the whole system.
  */
@@ -2022,16 +2116,69 @@ function centreOn(rawId, zoom = true) {
   if (!point) return false;
 
   const close = HOME_VIEW.w * 0.28;
+  const w = zoom && view.w > close ? close : view.w;
+  const h = zoom && view.w > close ? close * (HOME_VIEW.h / HOME_VIEW.w) : view.h;
 
-  if (zoom && view.w > close) {
-    view.w = close;
-    view.h = close * (HOME_VIEW.h / HOME_VIEW.w);
+  animateViewTo({ x: point.x - w / 2, y: point.y - h / 2, w, h });
+  return true;
+}
+
+/**
+ * Frames the current search matches: the answer to "where is it?" should not
+ * require finding the lit dots on a full-width map by eye. Runs once per new
+ * term so it never fights a pan the user makes while the term stands, and
+ * glides home when the search is cleared.
+ */
+let lastFitTerm = null;
+
+function fitToHighlights(term) {
+  if (term === lastFitTerm) return;
+  const hadTerm = Boolean(lastFitTerm);
+  lastFitTerm = term;
+
+  if (!term || !highlightIds || highlightIds.size === 0) {
+    if (hadTerm && !term) animateViewTo(HOME_VIEW);
+    return;
   }
 
-  view.x = point.x - view.w / 2;
-  view.y = point.y - view.h / 2;
-  applyView();
-  return true;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const id of highlightIds) {
+    const p = nodeAt.get(id);
+    if (!p) continue;
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+
+  if (minX === Infinity) return;
+
+  const padX = Math.max((maxX - minX) * 0.22, HOME_VIEW.w * 0.07);
+  const padY = Math.max((maxY - minY) * 0.22, HOME_VIEW.h * 0.07);
+
+  let w = maxX - minX + padX * 2;
+  let h = maxY - minY + padY * 2;
+
+  // Preserve the map's aspect so the frame is a zoom, not a stretch.
+  const aspect = HOME_VIEW.h / HOME_VIEW.w;
+  if (h < w * aspect) h = w * aspect;
+  else w = h / aspect;
+
+  // Clamped both ways: never wider than home, and never closer than the
+  // "centre on" zoom - a single match filling the frame reads as an error.
+  w = Math.max(Math.min(w, HOME_VIEW.w), HOME_VIEW.w * 0.26);
+  h = Math.max(Math.min(h, HOME_VIEW.h), HOME_VIEW.h * 0.26);
+
+  animateViewTo({
+    x: (minX + maxX) / 2 - w / 2,
+    y: (minY + maxY) / 2 - h / 2,
+    w,
+    h,
+  });
 }
 
 /**
@@ -2095,6 +2242,7 @@ function initMap() {
 
   map.addEventListener('wheel', (e) => {
     e.preventDefault();
+    cancelAnimationFrame(viewAnimation);
 
     // Zoom about the cursor rather than the centre, so the place being
     // inspected stays under the pointer.
@@ -2116,6 +2264,7 @@ function initMap() {
   let drag = null;
 
   map.addEventListener('pointerdown', (e) => {
+    cancelAnimationFrame(viewAnimation);
     drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
     map.setPointerCapture(e.pointerId);
     map.classList.add('dragging');
@@ -2140,14 +2289,25 @@ function initMap() {
   map.addEventListener('pointerup', endDrag);
   map.addEventListener('pointercancel', endDrag);
 
-  $('#map-reset').addEventListener('click', () => {
-    view = { ...HOME_VIEW };
-    applyView();
-  });
+  $('#map-reset').addEventListener('click', () => animateViewTo(HOME_VIEW));
 
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
-  onInput('#map-search', () => drawMap());
+  onInput('#map-search', () => { drawMap(); renderSearchResults(); });
+
+  // Escape clears the search and glides home; clicking anywhere else just
+  // closes the suggestion list.
+  $('#map-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.target.value = '';
+      $('#map-results').hidden = true;
+      drawMap();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.map-search-box')) $('#map-results').hidden = true;
+  });
 
   const follow = $('#map-follow');
   follow.classList.toggle('active', followHere);
@@ -2181,6 +2341,88 @@ function initMap() {
       e.preventDefault();
     }
   });
+}
+
+/**
+ * The suggestion list under the search box: the top place-name matches, most
+ * visited first. Highlighting shows WHERE matches are; this list is for
+ * jumping straight to ONE of them by name.
+ */
+function renderSearchResults() {
+  const box = $('#map-results');
+  if (!box) return;
+
+  const term = ($('#map-search')?.value || '').trim().toLowerCase();
+
+  if (!term) {
+    box.hidden = true;
+    return;
+  }
+
+  const matches = atlas
+    .filter((l) => l.name.toLowerCase().includes(term))
+    .sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name))
+    .slice(0, 8);
+
+  box.textContent = '';
+
+  if (matches.length === 0) {
+    box.hidden = true;
+    return;
+  }
+
+  for (const match of matches) {
+    const row = el('button', 'map-result');
+    row.type = 'button';
+    row.append(el('span', 'name', match.name));
+    row.append(el('span', 'where',
+      [match.body, match.system].filter(Boolean).join(' · ') || 'unmapped'));
+
+    row.addEventListener('click', () => {
+      box.hidden = true;
+      centreOn(match.rawId);
+      showMapInfo(match);
+    });
+
+    box.append(row);
+  }
+
+  box.hidden = false;
+}
+
+/** The hover tooltip: name, kind and history at the cursor, instantly. */
+function showMapTip(location) {
+  const tip = $('#map-tip');
+  if (!tip) return;
+
+  tip.textContent = '';
+  tip.append(el('strong', null, location.name));
+  tip.append(el('span', 'muted', location.kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
+  tip.append(el('span', null, location.visits > 0
+    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
+    : 'never visited'));
+  tip.hidden = false;
+}
+
+function moveMapTip(e) {
+  const tip = $('#map-tip');
+  if (!tip || tip.hidden) return;
+
+  const wrap = tip.parentElement.getBoundingClientRect();
+  let x = e.clientX - wrap.left + 16;
+  let y = e.clientY - wrap.top + 12;
+
+  // Flip to the other side of the cursor rather than clipping at the frame.
+  if (x + tip.offsetWidth > wrap.width - 8) x = e.clientX - wrap.left - tip.offsetWidth - 12;
+  if (y + tip.offsetHeight > wrap.height - 8) y = e.clientY - wrap.top - tip.offsetHeight - 10;
+
+  tip.style.left = `${x}px`;
+  tip.style.top = `${y}px`;
+}
+
+function hideMapTip() {
+  const tip = $('#map-tip');
+  if (tip) tip.hidden = true;
 }
 
 /** The card that opens when a node is clicked. */
@@ -2218,16 +2460,18 @@ function drawMap() {
   const map = $('#starmap');
   map.textContent = '';
   nodeAt.clear();
+  hideMapTip();
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
 
-  // A term that names a commodity HIGHLIGHTS where it sells rather than
-  // filtering the map down to it. Most commodities sell at hundreds of
-  // facilities, so filtering produced what looked like the whole map with
-  // nothing marked; keeping every node and lighting the sellers reads as an
-  // answer. Any other term still filters places, and either search wins over
-  // the visited-only toggle.
+  // Any search HIGHLIGHTS rather than filters. Filtering removed the context:
+  // the remaining nodes re-clustered into what looked like the whole map with
+  // nothing marked, and there was no way to see WHERE the matches sat among
+  // everything else. Keeping every node, dimming the rest and framing the lit
+  // ones reads as an answer. A term that names a commodity lights where it
+  // sells; any other term lights the places whose names match. Either search
+  // wins over the visited-only toggle.
   const sites = term ? commoditySites(term) : null;
 
   highlightIds = null;
@@ -2239,20 +2483,25 @@ function drawMap() {
         return [...sites].some((token) => compact.includes(token));
       })
       .map((l) => l.rawId));
+  } else if (term) {
+    highlightIds = new Set(atlas
+      .filter((l) => l.name.toLowerCase().includes(term) || l.rawId.toLowerCase().includes(term))
+      .map((l) => l.rawId));
   }
 
-  const locations = atlas.filter((l) => {
-    if (sites) return true;
-    if (term) return l.name.toLowerCase().includes(term) || l.rawId.toLowerCase().includes(term);
-    return !visitedOnly || l.visits > 0;
-  });
+  // An empty highlight set would dim the whole map to say "nothing"; saying it
+  // in the counter and leaving the map lit is kinder.
+  if (highlightIds && highlightIds.size === 0) highlightIds = null;
+
+  const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
 
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
-    count.textContent = sites
-      ? `sells at ${highlightIds.size} places the map can name`
-      : `${locations.length} shown · ${seen} of ${atlas.length} visited`;
+    if (term && !highlightIds) count.textContent = 'no match';
+    else if (sites) count.textContent = `sells at ${highlightIds.size} places the map can name`;
+    else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.
@@ -2265,6 +2514,22 @@ function drawMap() {
   glow.append(merge);
   defs.append(glow);
   map.append(defs);
+
+  // A sparse starfield behind everything. Deterministic - a hash of the index,
+  // not Math.random - so redraws do not make the sky shimmer.
+  for (let i = 0; i < 140; i++) {
+    const h1 = Math.abs(Math.sin(i * 127.1 + 311.7) * 43758.5453) % 1;
+    const h2 = Math.abs(Math.sin(i * 269.5 + 183.3) * 28001.8384) % 1;
+    const h3 = Math.abs(Math.sin(i * 419.2 + 371.9) * 12345.6789) % 1;
+
+    map.append(svgEl('circle', {
+      cx: (h1 * 1340).toFixed(1),
+      cy: (h2 * 1240).toFixed(1),
+      r: (0.5 + h3 * 0.9).toFixed(2),
+      class: 'map-star',
+      style: `opacity:${(0.10 + h3 * 0.3).toFixed(2)}`,
+    }));
+  }
 
   const grouped = { other: [] };
 
@@ -2375,6 +2640,20 @@ function drawMap() {
     const layout = bodyLayout(system, present, centre,
       (name) => clusterRadius(bodies.get(name).length));
 
+    // Faint orbit rings through each planet, drawn under the nodes. They give
+    // the disc its structure - the eye reads rings as orbits and the layout
+    // stops looking like scattered dots.
+    const ringRadii = new Set();
+
+    for (const placement of layout.values()) {
+      if (placement.from.x !== centre.x || placement.from.y !== centre.y) continue;
+      const r = Math.round(Math.hypot(placement.x - centre.x, placement.y - centre.y));
+      if (r > 12) ringRadii.add(r);
+    }
+
+    for (const r of ringRadii)
+      map.append(svgEl('circle', { cx: centre.x, cy: centre.y, r, class: 'map-orbit' }));
+
     present.forEach((bodyName) => {
       const place = layout.get(bodyName);
       const angle = place.angle;
@@ -2437,6 +2716,7 @@ function drawMap() {
   drawLegend(locations);
   applyView();
   drawHere();
+  fitToHighlights(term || null);
 }
 
 /**
@@ -2475,11 +2755,11 @@ function drawNode(map, x, y, location, radius, anchor = null) {
         stroke: colour, 'stroke-width': '1.1', opacity: '.42',
       }));
 
-  const title = svgEl('title');
-  title.textContent = been
-    ? `${location.name} — ${location.visits} visit${location.visits === 1 ? '' : 's'}`
-    : `${location.name} — never visited`;
-  group.append(title);
+  // A styled tooltip that appears instantly - the native <title> takes a
+  // second to show and cannot be read against the game-HUD styling.
+  group.addEventListener('pointerenter', () => showMapTip(location));
+  group.addEventListener('pointermove', moveMapTip);
+  group.addEventListener('pointerleave', hideMapTip);
 
   // Click for the detail card; the hit circle above makes small nodes easy to
   // land on.
@@ -2490,7 +2770,12 @@ function drawNode(map, x, y, location, radius, anchor = null) {
 
   // Labelling everything is unreadable at this density, so only places with
   // history get one until the view is zoomed in far enough to have room.
-  if ((been && radius > 7) || isDetailed()) {
+  // Search matches are the exception - a lit dot the user cannot name is not
+  // an answer - but only while there are few enough for the names to have
+  // air; two hundred sellers of a common ore label themselves on zoom instead.
+  const nameable = highlighted && (highlightIds.size <= 40 || isDetailed());
+
+  if ((been && radius > 7) || isDetailed() || nameable) {
     const size = labelSize();
     const label = svgEl('text', { class: 'map-label', style: `font-size:${size}px` });
 
