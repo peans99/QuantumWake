@@ -240,3 +240,25 @@ One layout bug fell out of the new pages: sixteen tabs outgrew a 1600px
 window, and the overflowing strip both put a horizontal scrollbar on every
 page and let tab-centring drag the whole document sideways. The strip now
 scrolls itself.
+
+## 0.4.0 - the widget grows up, the map learns to answer
+
+The overlay stopped needing a hotkey cheat-sheet: previous/next tab,
+fullscreen and close are buttons on its interactive header, the how-to strap
+became tooltips so the header fits a 230px widget, and Ctrl+Alt+F (or the
+button) grows the widget to cover its monitor - where the six-tab whitelist
+lifts and the whole dashboard is available - then restores the exact compact
+bounds, which are the only geometry ever persisted.
+
+The map got the UX pass its search deserved. Searching used to light dots on
+a full-width map and leave the reader to find them by eye; now non-matches
+recede to a deep dim, matches glow and name themselves (up to the point
+where names would be a wall), and the view glides to frame the answer -
+cancelled the instant the user pans, because a map must never fight its
+reader. A suggestion list jumps to a place by name, a styled tooltip answers
+hovers instantly, and the disc gained orbit rings and a still starfield.
+
+Around it: Market grew a commodity-group dropdown, and the Assets fleet
+gained an Owned tick per ship - the fleet is inferred from logs, so rentals
+and ships since sold appear in it, and only the player knows which; untick
+them and the totals recompute, remembered per-browser.
