@@ -141,10 +141,24 @@ if (-not $NoOverlay) {
 }
 
 Write-Host ''
-Write-Host 'Press Ctrl+C to stop the server.' -ForegroundColor DarkGray
 
-try {
-    Wait-Process -Id $server.Id
-} finally {
-    if (-not $server.HasExited) { Stop-Process $server.Id -Force }
+if ($NoOverlay) {
+    # The bare server has no tray icon and no window, so this console is the only
+    # thing that can stop it. Ctrl+C ends the wait and the finally kills it.
+    Write-Host 'Press Ctrl+C to stop the server.' -ForegroundColor DarkGray
+
+    try {
+        Wait-Process -Id $server.Id
+    } finally {
+        if (-not $server.HasExited) { Stop-Process $server.Id -Force }
+    }
+}
+else {
+    # The app owns itself: it has a tray icon with Quit, and it holds the server
+    # inside its own process. This script used to sit on Wait-Process and kill it
+    # in a finally, which left the widget running whenever the finally did not
+    # run - closing the terminal, or Ctrl+C, which PowerShell does not guarantee
+    # to unwind. Worse, it implied the console was in charge when it was not.
+    Write-Host 'Quantum Wake is running on its own now; this window can be closed.' -ForegroundColor DarkGray
+    Write-Host 'Quit it from the notification-area icon.' -ForegroundColor DarkGray
 }
