@@ -8,6 +8,9 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+/** True when hosted in the overlay shell, which wants a denser layout. */
+const isOverlay = new URLSearchParams(location.search).has('overlay');
+
 const KIND_COLOURS = {
   City: '#7fe4ff',
   RestStop: '#4fd48a',
@@ -149,7 +152,10 @@ function renderNow(state) {
   if (!state.recentEvents || state.recentEvents.length === 0) {
     feed.append(el('li', 'empty', state.connected ? 'Nothing yet this session.' : 'Waiting for the game…'));
   } else {
-    for (const entry of state.recentEvents) {
+    // The widget shows a short tail; the full feed belongs on the page.
+    const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
+
+    for (const entry of entries) {
       const li = el('li');
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, entry.kind));
@@ -914,9 +920,7 @@ onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 /* ---------- boot ---------- */
 
 async function boot() {
-  if (new URLSearchParams(location.search).has('overlay')) {
-    document.body.classList.add('overlay');
-  }
+  if (isOverlay) document.body.classList.add('overlay');
 
   try {
     const install = await getJson('/api/install');
