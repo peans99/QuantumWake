@@ -40,9 +40,26 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
+# A running copy holds its own assemblies open, so the build fails on a file
+# lock and says nothing about why. This script exists to start the app, so
+# stopping the previous one first is what was meant anyway.
+$running = @(Get-Process QuantumWake, Quantumwake.Server -ErrorAction SilentlyContinue)
+if ($running.Count) {
+    Write-Host "Stopping $($running.Count) running instance(s) first…" -ForegroundColor Yellow
+    $running | Stop-Process -Force
+    Start-Sleep -Milliseconds 700
+}
+
 Write-Host 'Building…' -ForegroundColor Cyan
-dotnet build Quantumwake.slnx -c Release -v q --nologo | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+
+# Keep the output. A bare 'Build failed.' sends you looking in the wrong place;
+# the reason is almost always in the last few lines.
+$build = dotnet build Quantumwake.slnx -c Release -v q --nologo 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $build | Select-String -Pattern 'error|MSB\d' | Select-Object -First 10 |
+        ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    throw 'Build failed.'
+}
 
 if ($Rescan) {
     $db = Join-Path $env:LOCALAPPDATA 'Quantumwake\sessions.db'
