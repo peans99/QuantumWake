@@ -290,6 +290,10 @@ async function loadHistory() {
   safeRender('Map', () => drawMap(stats.locations));
   safeRender('Contracts', () => renderContracts(stats));
   safeRender('Places', () => renderPlaces(stats));
+
+  // These fetch their own data, so they are kicked off rather than awaited.
+  loadLedger().catch((e) => console.error('ledger', e));
+  loadCommodities().catch((e) => console.error('cargo', e));
 }
 
 function renderContracts(stats) {
@@ -449,6 +453,158 @@ function renderPager(pages, start, shown, total) {
   nav.append(step('Older ›', 1, sessionPage >= pages - 1));
 
   pager.append(nav);
+}
+
+/* ---------- ledger ---------- */
+
+const LEDGER_PER_PAGE = 40;
+let ledgerEntries = [];
+let ledgerPage = 0;
+
+async function loadLedger() {
+  const days = Number($('#ledger-period').value) || 0;
+  ledgerEntries = await getJson(`/api/ledger?days=${days}`);
+  ledgerPage = 0;
+  renderLedger();
+}
+
+function renderLedger() {
+  const body = $('#ledger-table tbody');
+  body.textContent = '';
+
+  const inbound = ledgerEntries.filter((e) => e.amount > 0);
+  const outbound = ledgerEntries.filter((e) => e.amount < 0);
+
+  const sum = (rows) => rows.reduce((total, e) => total + Number(e.amount), 0);
+  const net = sum(ledgerEntries);
+
+  tiles('#ledger-summary', [
+    ['Money in', money(sum(inbound))],
+    ['Money out', money(Math.abs(sum(outbound)))],
+    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net))],
+    ['Movements', ledgerEntries.length],
+  ]);
+
+  const pages = Math.max(1, Math.ceil(ledgerEntries.length / LEDGER_PER_PAGE));
+  ledgerPage = Math.min(Math.max(0, ledgerPage), pages - 1);
+
+  const start = ledgerPage * LEDGER_PER_PAGE;
+  const page = ledgerEntries.slice(start, start + LEDGER_PER_PAGE);
+
+  if (!page.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No transactions in that range.');
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+  }
+
+  for (const entry of page) {
+    const tr = el('tr');
+    const inward = Number(entry.amount) > 0;
+
+    tr.append(el('td', null, dateOf(entry.at)));
+    tr.append(el('td', null, entry.kind));
+    tr.append(el('td', null, prettyItem(entry.what)));
+    tr.append(el('td', null, entry.where));
+
+    // Unconfirmed amounts are marked rather than silently presented as settled.
+    const amount = el('td', `num ${inward ? 'inward' : 'outward'}`,
+      `${inward ? '+' : '−'}${entry.confirmed ? '' : '~'}${money(Math.abs(entry.amount))}`);
+    tr.append(amount);
+
+    tr.append(el('td', 'num muted', money(entry.running)));
+    body.append(tr);
+  }
+
+  renderLedgerPager(pages, start, page.length);
+}
+
+function renderLedgerPager(pages, start, shown) {
+  const pager = $('#ledger-pager');
+  pager.textContent = '';
+
+  if (!ledgerEntries.length) return;
+
+  pager.append(el('span', 'pager-info',
+    `${start + 1}–${start + shown} of ${ledgerEntries.length}`));
+
+  const nav = el('div', 'pager-nav');
+  const step = (label, delta, disabled) => {
+    const button = el('button', 'pager-btn', label);
+    button.disabled = disabled;
+    button.addEventListener('click', () => { ledgerPage += delta; renderLedger(); });
+    return button;
+  };
+
+  nav.append(step('‹ Newer', -1, ledgerPage === 0));
+  nav.append(el('span', 'pager-page', `${ledgerPage + 1} / ${pages}`));
+  nav.append(step('Older ›', 1, ledgerPage >= pages - 1));
+
+  pager.append(nav);
+}
+
+/* ---------- cargo trading ---------- */
+
+async function loadCommodities() {
+  const days = Number($('#commodities-period').value) || 0;
+  renderCommodities(await getJson(`/api/commodities?days=${days}`));
+}
+
+function renderCommodities(trades) {
+  const sells = trades.filter((t) => t.isSell);
+  const buys = trades.filter((t) => !t.isSell);
+
+  const revenue = sells.reduce((total, t) => total + Number(t.amount), 0);
+  const scuSold = sells.reduce((total, t) => total + t.scu, 0);
+  const outlay = buys.reduce((total, t) => total + Number(t.amount), 0);
+
+  tiles('#cargo-summary', [
+    ['Revenue', money(revenue)],
+    ['SCU sold', scuSold.toLocaleString()],
+    ['Average per SCU', scuSold ? money(revenue / scuSold) : '—'],
+    ['Cargo bought', money(outlay)],
+    ['Sales', sells.length],
+    ['Best sale', sells.length ? money(Math.max(...sells.map((t) => Number(t.amount)))) : '—'],
+  ]);
+
+  // Revenue by place, with the volume that produced it.
+  const byShop = new Map();
+  for (const trade of sells) {
+    const current = byShop.get(trade.shop) || { amount: 0, scu: 0 };
+    current.amount += Number(trade.amount);
+    current.scu += trade.scu;
+    byShop.set(trade.shop, current);
+  }
+
+  bars('#cargo-shops',
+    [...byShop.entries()]
+      .sort((a, b) => b[1].amount - a[1].amount)
+      .map(([shop, v]) => ({ label: shop, value: v.amount, note: `${v.scu} SCU` })),
+    money);
+
+  const body = $('#cargo-table tbody');
+  body.textContent = '';
+
+  if (!trades.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No cargo trades in that range.');
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const trade of trades) {
+    const tr = el('tr');
+    tr.append(el('td', null, dateOf(trade.at)));
+    tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', null, trade.shop));
+    tr.append(el('td', 'num', String(trade.scu)));
+    tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
+    tr.append(el('td', 'num muted', money(trade.unitPrice)));
+    body.append(tr);
+  }
 }
 
 /* ---------- shared widgets ---------- */
@@ -1073,10 +1229,68 @@ onInput('#spending-period', () => refreshForPeriod('#spending-period', renderSpe
 onInput('#contracts-period', () => refreshForPeriod('#contracts-period', renderContracts));
 onInput('#places-period', () => refreshForPeriod('#places-period', renderPlaces));
 onInput('#places-search', () => libraryStats && renderPlaces(libraryStats));
+onInput('#ledger-period', loadLedger);
+onInput('#commodities-period', loadCommodities);
 onInput('#loadout-search', () => libraryStats && renderLoadout(libraryStats));
 onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-period', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-latest', () => libraryStats && renderStash(libraryStats));
+
+/* ---------- scan progress ---------- */
+
+/**
+ * Polls the scan and reflects it in a progress bar.
+ *
+ * A cold backfill reads 400 MB across ~145 files. Previously the page simply sat
+ * empty while boot() retried in silence, which is indistinguishable from being
+ * broken.
+ */
+async function watchScan() {
+  const panel = $('#scan');
+  let sawRunning = false;
+
+  for (;;) {
+    let status;
+    try {
+      status = await getJson('/api/scan/status');
+    } catch {
+      await wait(1000);
+      continue;
+    }
+
+    if (status.running) {
+      sawRunning = true;
+      panel.hidden = false;
+
+      $('#scan-fill').style.width = `${status.percent}%`;
+      $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
+      $('#scan-file').textContent = status.file || '';
+
+      $('#scan-label').textContent = status.parsed > 0
+        ? `Parsing logs — ${status.parsed} new`
+        : 'Checking logs…';
+    } else if (sawRunning) {
+      // Finished: fill the bar, then reload the views with the new data.
+      $('#scan-fill').style.width = '100%';
+      $('#scan-label').textContent = 'Scan complete';
+      $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
+      $('#scan-file').textContent = '';
+
+      await wait(1200);
+      panel.hidden = true;
+
+      try {
+        await loadHistory();
+      } catch { /* the retry loop in boot covers this */ }
+
+      return;
+    }
+
+    await wait(status.running ? 400 : 1000);
+  }
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* ---------- boot ---------- */
 
@@ -1091,6 +1305,7 @@ async function boot() {
   }
 
   connectStream();
+  watchScan();
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -1099,7 +1314,7 @@ async function boot() {
       const count = (await getJson('/api/sessions')).length;
       if (count > 0) break;
     } catch { /* server still warming up */ }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await wait(2000);
   }
 }
 
