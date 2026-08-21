@@ -1468,9 +1468,21 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 .sold-chip:hover { border-color: var(--cyan); color: var(--cyan-hot, #7fe4ff); }
 
-/* Market's two map links sit in one cell without wrapping oddly. */
+/* Market's map links and track button sit in one cell without wrapping oddly. */
 td.map-links { white-space: nowrap; }
 td.map-links .ghost + .ghost { margin-left: 5px; }
+
+/* "+ list" on every catalogue row: quiet until wanted, green once used. */
+.ghost.track { font-size: 10.5px; padding: 2px 7px; }
+.ghost.track:disabled { color: var(--green); border-color: var(--green); opacity: 1; }
+
+/* Where the button shares a cell with the name, it hides until the row is
+   hovered - eleven columns is enough to read without a button in every line. */
+td.with-track { display: flex; align-items: center; gap: 9px; }
+td.with-track .track { opacity: 0; transition: opacity .12s; }
+tr:hover td.with-track .track,
+td.with-track .track:disabled,
+td.with-track .track:focus-visible { opacity: 1; }
 
 /* ---------- market: price ages ---------- */
 

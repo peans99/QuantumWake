@@ -725,6 +725,14 @@ public static class ServerHost
                 body.Source,
                 body.Items ?? [])));
 
+        // One thing added from a catalogue page, into whichever list the
+        // player is currently filling.
+        app.MapPost("/api/jobs/collect", (JobStore jobs, JobItem body) =>
+        {
+            var job = jobs.Collect(body);
+            return Results.Ok(new { job.Id, job.Title });
+        });
+
         app.MapPost("/api/jobs/{id}/toggle", (string id, JobStore jobs) =>
             jobs.Toggle(id) ? Results.Ok(new { id }) : Results.NotFound());
 

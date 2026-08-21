@@ -989,6 +989,7 @@ function renderMarket() {
     if (entry.bought.length)
       link('buy on map', `buy:${entry.name}`, 'Light every place that stocks this for sale');
 
+    actions.append(trackButton(entry.name, 1, 'SCU'));
     tr.append(actions);
 
     body.append(tr);
@@ -1251,8 +1252,12 @@ function renderPartsRef() {
     const tr = el('tr');
 
     // The localised name when the data carries one; my class-name
-    // prettification is the fallback, not the headline.
-    const label = el('td', null, part.name || prettyItem(part.className));
+    // prettification is the fallback, not the headline. The track button
+    // shares the cell rather than claiming a tenth column.
+    const shown = part.name || prettyItem(part.className);
+    const label = el('td', 'with-track');
+    label.append(el('span', null, shown));
+    label.append(trackButton(shown));
     if (part.name) label.title = part.className;
     tr.append(label);
     tr.append(el('td', 'muted', prettyType(part.type)));
@@ -1356,7 +1361,13 @@ function renderMiningRef() {
 
   for (const spawn of rows.slice(0, MINING_CAP)) {
     const tr = el('tr');
-    tr.append(el('td', null, spawn.resource));
+
+    // The track button rides in the name cell here: the table already carries
+    // eleven columns and a twelfth falls off the screen.
+    const name = el('td', 'with-track');
+    name.append(el('span', null, spawn.resource));
+    name.append(trackButton(spawn.resource, 1, spawn.kind === 'mineable' ? 'SCU' : ''));
+    tr.append(name);
     tr.append(el('td', 'muted', spawn.deposit ?? '—'));
     tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
     tr.append(tdPlace(spawn.location));
@@ -1733,6 +1744,36 @@ async function loadJobContracts() {
 
     host.append(card);
   }
+}
+
+/**
+ * A "track this" button for any catalogue row: one click puts the thing on
+ * the list the player is filling - the pinned job, else the newest open list,
+ * else a new one - and says where it went.
+ */
+function trackButton(name, needed = 1, unit = '') {
+  const button = el('button', 'ghost track', '+ list');
+  button.title = `Add ${name} to your shopping list`;
+
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+
+    try {
+      const result = await fetch('/api/jobs/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, needed, unit }),
+      }).then((r) => r.json());
+
+      button.textContent = '✓ added';
+      button.title = `On "${result.title}"`;
+    } catch {
+      button.textContent = 'failed';
+      button.disabled = false;
+    }
+  });
+
+  return button;
 }
 
 /** The shared progress bar: done over total, with its own wording. */

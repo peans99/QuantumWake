@@ -77,6 +77,54 @@ public sealed class JobStore
         return job;
     }
 
+    /// <summary>
+    /// Adds one thing to the list the player is filling: the pinned job if
+    /// there is one, else the newest open list, else a new "Shopping list".
+    /// Returns the job it landed in, so the page can say where it went.
+    /// </summary>
+    public Job Collect(JobItem item)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Pinned && !j.Done);
+
+            if (index < 0)
+                index = _jobs.FindIndex(j => j.Kind == "list" && !j.Done);
+
+            if (index < 0)
+            {
+                var created = new Job(
+                    Guid.NewGuid().ToString("N")[..8],
+                    "Shopping list",
+                    "list",
+                    null,
+                    DateTimeOffset.UtcNow,
+                    Done: false,
+                    [item]);
+
+                _jobs.Insert(0, created);
+                Save();
+                return created;
+            }
+
+            var job = _jobs[index];
+
+            // Asking for the same thing twice adds up rather than repeating.
+            var items = job.Items.ToList();
+            var existing = items.FindIndex(i =>
+                string.Equals(i.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (existing >= 0)
+                items[existing] = items[existing] with { Needed = items[existing].Needed + item.Needed };
+            else
+                items.Add(item);
+
+            _jobs[index] = job with { Items = items };
+            Save();
+            return _jobs[index];
+        }
+    }
+
     /// <summary>Flips a job between open and done. False when the id is unknown.</summary>
     public bool Toggle(string id)
     {
