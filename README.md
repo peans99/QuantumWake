@@ -226,7 +226,7 @@ silently dropped).
 - [docs/architecture.md](docs/architecture.md) — decisions and why
 - [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
-- [docs/commodity-catalogue.md](docs/commodity-catalogue.md) — parked: how to learn what sells where
+- [docs/commodity-catalogue.md](docs/commodity-catalogue.md) — what the game data can and cannot tell us about trade
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
 - [docs/naming.md](docs/naming.md) — why the project is called Quantum Wake
 - [docs/releasing.md](docs/releasing.md) — how a release is cut, and what enforces the version bump
