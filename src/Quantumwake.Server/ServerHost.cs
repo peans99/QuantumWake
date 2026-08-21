@@ -63,6 +63,7 @@ public static class ServerHost
         // UEX price integration, opt-in in both directions.
         builder.Services.AddSingleton<UexData>();
         builder.Services.AddSingleton<UexFeeds>();
+        builder.Services.AddSingleton<JobStore>();
 
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
@@ -616,6 +617,102 @@ public static class ServerHost
                 })
                 .OrderBy(i => i.className));
 
+        // ---- jobs: the player's own plans, checked against what they hold ----
+
+        app.MapGet("/api/jobs", (JobStore jobs, LogLibrary lib, UexData uex) =>
+        {
+            var stats = lib.Stats();
+
+            // Where each held thing is. Stash listings are per location and
+            // record presence, not counts - removals are never logged - so a
+            // job can say WHERE something is but never how many.
+            var held = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var place in stats.Stash)
+                foreach (var group in place.Groups)
+                    foreach (var item in group.Items)
+                    {
+                        if (!held.TryGetValue(item.Name, out var places))
+                            held[item.Name] = places = [];
+
+                        if (!places.Contains(place.Name, StringComparer.OrdinalIgnoreCase))
+                            places.Add(place.Name);
+                    }
+
+            var worn = stats.Loadout
+                .SelectMany(slot => slot.Items)
+                .Select(i => i.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return jobs.All().Select(job =>
+            {
+                var lines = job.Items.Select(item =>
+                {
+                    // Held: an exact stash name, else anything containing it -
+                    // "Hadanite" should find "Hadanite (Raw)".
+                    var where = held.TryGetValue(item.Name, out var exact)
+                        ? exact
+                        : held.Where(h => h.Key.Contains(item.Name, StringComparison.OrdinalIgnoreCase))
+                            .SelectMany(h => h.Value)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                    // Where to get what is missing: a commodity has a cheapest
+                    // terminal, an item has a shop.
+                    var commodity = uex.Best(item.Name);
+                    var buyPrice = commodity?.BestBuy > 0 ? commodity.BestBuy : (decimal?)null;
+                    var buyAt = commodity?.BestBuy > 0 ? commodity.BestBuyTerminal : null;
+
+                    if (buyPrice is null)
+                    {
+                        var reference = lib.Community.Items
+                            .FirstOrDefault(kv => string.Equals(kv.Value.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+
+                        if (reference.Value?.Uuid is { } uuid)
+                            buyPrice = uex.ItemPrice(uuid);
+                    }
+
+                    return new
+                    {
+                        item.Name,
+                        item.Needed,
+                        item.Unit,
+                        have = where.Count > 0 || worn.Contains(item.Name),
+                        where,
+                        wornNow = worn.Contains(item.Name),
+                        buyPrice,
+                        buyAt
+                    };
+                }).ToList();
+
+                return new
+                {
+                    job.Id,
+                    job.Title,
+                    job.Kind,
+                    job.Source,
+                    job.CreatedAt,
+                    job.Done,
+                    items = lines,
+                    haveCount = lines.Count(l => l.have),
+                    totalCount = lines.Count
+                };
+            });
+        });
+
+        app.MapPost("/api/jobs", (JobStore jobs, JobRequest body) =>
+            Results.Ok(jobs.Add(
+                body.Title ?? "Untitled job",
+                body.Kind ?? "list",
+                body.Source,
+                body.Items ?? [])));
+
+        app.MapPost("/api/jobs/{id}/toggle", (string id, JobStore jobs) =>
+            jobs.Toggle(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
+            jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
         // ---- optional UEX feeds, each switched on by itself ----
 
         app.MapGet("/api/uex/feeds", (UexFeeds feeds) =>
@@ -841,6 +938,9 @@ public static class ServerHost
 
 /// <summary>Body of POST /api/uex/credentials. Empty values clear the store.</summary>
 public sealed record UexCredentialsRequest(string? Token, string? Secret);
+
+/// <summary>Body of POST /api/jobs.</summary>
+public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
 
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(

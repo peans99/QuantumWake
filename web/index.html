@@ -25,6 +25,7 @@
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
+    <button data-view="jobs">Jobs</button>
     <div class="tab-group">
       <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
       <div class="group-menu">
@@ -195,6 +196,39 @@
       </aside>
     </div>
     <div class="legend" id="map-legend"></div>
+  </section>
+
+  <!-- JOBS -->
+  <section id="view-jobs" class="view">
+    <h2>Jobs</h2>
+    <p class="muted caption">
+      What you are working towards. Contracts come from the logs by themselves;
+      crafting jobs and shopping lists are yours to write, and check themselves
+      against what your stashes hold — so a job knows what is still missing and
+      where the rest is sold.
+    </p>
+
+    <h2 class="spaced">Contracts in progress</h2>
+    <div id="jobs-contracts"></div>
+
+    <div class="section-bar spaced">
+      <h2>Crafting &amp; shopping</h2>
+      <div class="controls">
+        <button class="ghost" id="jobs-new">New list</button>
+      </div>
+    </div>
+
+    <form class="job-form" id="job-form" hidden>
+      <input type="text" id="job-title" placeholder="What is this for? e.g. Omnisky IX build" autocomplete="off">
+      <textarea id="job-items" rows="5"
+                placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
+      <div class="job-form-actions">
+        <button type="submit" class="ghost">Save list</button>
+        <button type="button" class="ghost" id="job-cancel">Cancel</button>
+      </div>
+    </form>
+
+    <div id="jobs-list"></div>
   </section>
 
   <!-- LOGBOOK -->
@@ -671,7 +705,7 @@
           <tr>
             <th>Makes</th><th>Type</th><th class="num">Grade</th>
             <th class="num">Time</th><th>Materials</th>
-            <th>Obtained</th><th class="num">Buy instead</th>
+            <th>Obtained</th><th class="num">Buy instead</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>

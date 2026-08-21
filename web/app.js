@@ -131,6 +131,9 @@ function showView(name) {
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
 
+  // Jobs change from the Crafting page and from play, so re-read on entry too.
+  if (name === 'jobs') loadJobs().catch(() => {});
+
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
 
@@ -383,6 +386,7 @@ async function loadHistory() {
   loadPartsRef().catch((e) => console.error('parts', e));
   loadMiningRef().catch((e) => console.error('mining', e));
   loadCraftingRef().catch((e) => console.error('crafting', e));
+  loadJobs().catch((e) => console.error('jobs', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -1435,7 +1439,7 @@ function renderCraftingRef() {
     const td = el('td', 'muted', craftingCatalogue.length
       ? 'Nothing matches that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 7;
+    td.colSpan = 8;
     tr.append(td);
     body.append(tr);
     return;
@@ -1461,6 +1465,32 @@ function renderCraftingRef() {
     tr.append(el('td', bp.shopPrice ? 'num' : 'num muted',
       bp.shopPrice ? money(bp.shopPrice) : 'not sold'));
 
+    // Turning a recipe into a job is the whole point of having both pages.
+    const plan = el('td', 'num');
+    if (bp.materials.length) {
+      const button = el('button', 'ghost', 'Plan');
+      button.title = 'Track this build on the Jobs page';
+
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'planned';
+
+        await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Craft ${bp.output}`,
+            kind: 'craft',
+            source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`,
+            items: parseJobItems(bp.materials.join('\n')),
+          }),
+        }).catch(() => { button.textContent = 'failed'; });
+      });
+
+      plan.append(button);
+    }
+    tr.append(plan);
+
     body.append(tr);
   }
 }
@@ -1468,6 +1498,207 @@ function renderCraftingRef() {
 onInput('#crafting-search', renderCraftingRef);
 $('#crafting-type')?.addEventListener('change', renderCraftingRef);
 $('#crafting-obtained')?.addEventListener('change', renderCraftingRef);
+
+/* ---------- jobs ---------- */
+
+/**
+ * The jobs page: contracts the logs already know about, plus the player's own
+ * crafting jobs and shopping lists - which check themselves against the stash,
+ * because knowing what is still missing is the whole point of a list.
+ */
+async function loadJobs() {
+  await Promise.all([loadJobContracts(), loadJobList()]);
+}
+
+async function loadJobContracts() {
+  const host = $('#jobs-contracts');
+  host.textContent = '';
+
+  let rows = [];
+  try {
+    rows = await getJson('/api/contracts?days=30');
+  } catch { /* nothing to show */ }
+
+  const open = rows.filter((c) => c.outcome === 'InProgress');
+
+  if (!open.length) {
+    host.append(el('p', 'muted', 'No contract left open in the last 30 days.'));
+    return;
+  }
+
+  for (const contract of open) {
+    const card = el('article', 'job-card');
+
+    const head = el('div', 'job-head');
+    head.append(el('b', null, `${contract.issuer} · ${contract.type}`));
+    if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
+    card.append(head);
+
+    const sub = [contract.system, `taken ${relative(contract.at)}`].filter(Boolean).join(' · ');
+    card.append(el('div', 'muted', sub));
+
+    if (contract.steps > 0) {
+      card.append(jobProgress(contract.stepsDone, contract.steps,
+        `${contract.stepsDone} of ${contract.steps} objectives done`));
+    }
+
+    host.append(card);
+  }
+}
+
+/** The shared progress bar: done over total, with its own wording. */
+function jobProgress(done, total, label) {
+  const wrap = el('div', 'job-progress');
+  const track = el('div', 'job-track');
+  const fill = el('div', 'job-fill');
+
+  fill.style.width = `${total > 0 ? Math.round((done / total) * 100) : 0}%`;
+  if (done >= total && total > 0) fill.classList.add('full');
+
+  track.append(fill);
+  wrap.append(track);
+  wrap.append(el('span', 'muted', label));
+  return wrap;
+}
+
+async function loadJobList() {
+  const host = $('#jobs-list');
+  host.textContent = '';
+
+  let jobs = [];
+  try {
+    jobs = await getJson('/api/jobs');
+  } catch { /* server down; the page still shows contracts */ }
+
+  if (!jobs.length) {
+    host.append(el('p', 'muted',
+      'No lists yet. Start one here, or plan a blueprint from Reference → Crafting.'));
+    return;
+  }
+
+  for (const job of jobs) {
+    const card = el('article', job.done ? 'job-card done' : 'job-card');
+
+    const head = el('div', 'job-head');
+    head.append(el('b', null, job.title));
+    head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
+
+    const spacer = el('span', 'spacer');
+    head.append(spacer);
+
+    const toggle = el('button', 'ghost', job.done ? 'Reopen' : 'Mark done');
+    toggle.addEventListener('click', async () => {
+      await fetch(`/api/jobs/${job.id}/toggle`, { method: 'POST' });
+      loadJobList();
+    });
+    head.append(toggle);
+
+    const remove = el('button', 'ghost', 'Delete');
+    remove.addEventListener('click', async () => {
+      await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      loadJobList();
+    });
+    head.append(remove);
+    card.append(head);
+
+    if (job.source) card.append(el('div', 'muted', `from ${job.source}`));
+
+    card.append(jobProgress(job.haveCount, job.totalCount,
+      `${job.haveCount} of ${job.totalCount} in hand`));
+
+    const table = el('table', 'job-items');
+    const body = el('tbody');
+
+    for (const item of job.items) {
+      const tr = el('tr', item.have ? 'have' : null);
+
+      const need = item.needed > 0
+        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+        : '';
+      tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
+      tr.append(el('td', null, item.name));
+      tr.append(el('td', 'num muted', need));
+
+      // Where it is, or where to buy what is missing.
+      const whereCell = el('td', 'muted');
+
+      if (item.wornNow) {
+        whereCell.textContent = 'worn now';
+      } else if (item.where.length) {
+        whereCell.append(placeLink(item.where[0]));
+        if (item.where.length > 1) {
+          const more = el('span', 'note-inline', ` +${item.where.length - 1}`);
+          more.title = item.where.slice(1).join('\n');
+          whereCell.append(more);
+        }
+      } else if (item.buyAt) {
+        whereCell.append(el('span', 'note-inline', 'buy at '));
+        whereCell.append(placeLink(item.buyAt));
+      } else {
+        whereCell.textContent = '—';
+      }
+      tr.append(whereCell);
+
+      tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
+        item.buyPrice ? money(item.buyPrice) : '—'));
+
+      body.append(tr);
+    }
+
+    table.append(body);
+    card.append(table);
+    host.append(card);
+  }
+}
+
+/**
+ * Parses a written list into job items: "Hadanite 23", "Agricium 1.16 SCU",
+ * or a bare name. Quantities are optional - a list of names is still a list.
+ */
+function parseJobItems(text) {
+  return text.split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(.*?)[\s·x×]*?([\d.]+)\s*(SCU|scu)?$/);
+
+      if (match && match[1].trim()) {
+        return {
+          name: match[1].replace(/[\s×x·]+$/, '').trim(),
+          needed: Number(match[2]) || 0,
+          unit: match[3] ? 'SCU' : '',
+        };
+      }
+
+      return { name: line, needed: 0, unit: '' };
+    });
+}
+
+$('#jobs-new')?.addEventListener('click', () => {
+  const form = $('#job-form');
+  form.hidden = !form.hidden;
+  if (!form.hidden) $('#job-title').focus();
+});
+
+$('#job-cancel')?.addEventListener('click', () => { $('#job-form').hidden = true; });
+
+$('#job-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const items = parseJobItems($('#job-items').value);
+  if (!items.length) return;
+
+  await fetch('/api/jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: $('#job-title').value, kind: 'list', items }),
+  });
+
+  $('#job-title').value = '';
+  $('#job-items').value = '';
+  $('#job-form').hidden = true;
+  loadJobList();
+});
 
 /* ---------- logbook ---------- */
 
