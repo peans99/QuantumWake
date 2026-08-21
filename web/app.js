@@ -684,7 +684,7 @@ function renderLoadout(stats) {
     if (!term) return true;
 
     return (slot.label || slot.port).toLowerCase().includes(term)
-      || (slot.current || '').toLowerCase().includes(term)
+      || slot.items.some((i) => i.name.toLowerCase().includes(term))
       || slot.history.some((h) => h.name.toLowerCase().includes(term));
   });
 
@@ -707,10 +707,20 @@ function renderLoadout(stats) {
 
     for (const slot of slots) {
       const card = el('article', 'card');
-      card.append(el('div', 'card-label', slot.label || slot.port));
 
-      // The headline is what is in the slot now; the churn goes behind a toggle.
-      card.append(el('div', 'slot-current', prettyItem(slot.current || '—')));
+      const label = slot.slotCount > 1
+        ? `${slot.label} · ${slot.slotCount} slots`
+        : slot.label || slot.port;
+
+      card.append(el('div', 'card-label', label));
+
+      // What is in the family now; the churn goes behind a toggle.
+      for (const item of slot.items) {
+        const line = el('div', 'slot-current');
+        line.append(el('span', null, prettyItem(item.name)));
+        if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
+        card.append(line);
+      }
 
       if (slot.currentSeen)
         card.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
