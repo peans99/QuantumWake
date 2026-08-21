@@ -113,6 +113,22 @@ public static class ServerHost
                 }
             }));
 
+        // First-run marker: the dashboard shows its setup screen until this
+        // file exists. A file rather than a database row so wiping the cache
+        // to rescan does not resurrect the wizard.
+        var setupPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Quantumwake", "setup-done");
+
+        app.MapGet("/api/setup", () => new { done = File.Exists(setupPath) });
+
+        app.MapPost("/api/setup/done", () =>
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(setupPath)!);
+            File.WriteAllText(setupPath, DateTimeOffset.UtcNow.ToString("O"));
+            return Results.Ok(new { done = true });
+        });
+
         // The community dataset: commodity names for the resource ids the game
         // logs but never explains. Enabling it performs the application's one
         // and only outbound request - a single file, fetched on the user's

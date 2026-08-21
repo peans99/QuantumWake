@@ -3392,6 +3392,82 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* ---------- boot ---------- */
 
+/**
+ * The first-flight wizard: shown once, over everything, while the initial
+ * backfill runs. It fronts the three choices that matter on day one - the
+ * overlay, the community dataset, UEX prices - because they are opt-in and
+ * would otherwise hide in Settings while the app looked half-empty. Applying
+ * them reloads the page so every view boots with the datasets in.
+ */
+async function maybeShowSetup() {
+  if (isOverlay) return;
+
+  // ?setup=1 forces the wizard - a preview that skips nothing permanent.
+  if (!params.has('setup')) {
+    if (isSnapshot) return;
+    if ((await getJson('/api/setup')).done) return;
+  }
+
+  const panel = $('#setup');
+  panel.hidden = false;
+
+  // The overlay choice only exists when this server lives inside the app.
+  try {
+    const overlay = await getJson('/api/overlay');
+    $('#setup-overlay-row').hidden = !overlay.available;
+  } catch { $('#setup-overlay-row').hidden = true; }
+
+  // The wizard has its own copy of the scan bar - the page's one sits
+  // underneath it where nobody can see it.
+  const poll = setInterval(async () => {
+    try {
+      const status = await getJson('/api/scan/status');
+
+      if (status.running) {
+        $('#setup-scan-fill').style.width = `${status.percent}%`;
+        $('#setup-scan-label').textContent = status.parsed > 0
+          ? `Reading logs — ${status.parsed} events so far`
+          : 'Checking logs…';
+        $('#setup-scan-count').textContent = `${status.done} / ${status.total} files`;
+      } else {
+        $('#setup-scan-fill').style.width = '100%';
+        $('#setup-scan-label').textContent = 'Logs read — history ready';
+        $('#setup-scan-count').textContent = '';
+      }
+    } catch { /* server between restarts; the next tick answers */ }
+  }, 700);
+
+  $('#setup-start').addEventListener('click', async () => {
+    const button = $('#setup-start');
+    const status = $('#setup-status');
+    button.disabled = true;
+
+    try {
+      if (!$('#setup-overlay-row').hidden && $('#setup-overlay').checked)
+        await fetch('/api/overlay?visible=true', { method: 'POST' }).catch(() => {});
+
+      if ($('#setup-community').checked) {
+        status.textContent = 'Fetching the community dataset — a minute or two…';
+        await fetch('/api/community/enable', { method: 'POST' });
+      }
+
+      if ($('#setup-uex').checked) {
+        status.textContent = 'Fetching UEX prices…';
+        await fetch('/api/uex/enable', { method: 'POST' });
+      }
+
+      await fetch('/api/setup/done', { method: 'POST' });
+      clearInterval(poll);
+
+      // A clean reboot with everything enabled beats patching each view.
+      location.reload();
+    } catch {
+      status.textContent = 'Something did not fetch — you can finish any of this in Settings.';
+      button.disabled = false;
+    }
+  });
+}
+
 async function boot() {
   if (isOverlay) document.body.classList.add('overlay');
 
@@ -3432,6 +3508,8 @@ async function boot() {
     connectStream();
     watchScan();
   }
+
+  maybeShowSetup().catch(() => { /* wizard is a nicety, never a blocker */ });
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {

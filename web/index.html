@@ -663,6 +663,67 @@
   <span class="foot-version" id="foot-version" title="Build version"></span>
 </footer>
 
+  <!-- First flight: shown once, over everything, until /api/setup says done.
+       The initial backfill runs while the user picks the main options. -->
+  <div class="setup" id="setup" hidden>
+    <div class="setup-card">
+      <div class="setup-brand">
+        <img src="assets/mark.svg" width="30" height="30" alt="">
+        <div>
+          <b>Quantum Wake</b>
+          <span>first flight setup</span>
+        </div>
+      </div>
+
+      <p class="muted">
+        Reading your Star Citizen logs for the first time — your whole history
+        is being rebuilt from the log backups on this machine. While that runs,
+        pick how the app should behave. Everything here can be changed later in
+        Settings, and nothing talks to the internet unless you turn it on.
+      </p>
+
+      <div class="setup-progress">
+        <div class="scan-head">
+          <span id="setup-scan-label">Checking logs…</span>
+          <span class="scan-count" id="setup-scan-count"></span>
+        </div>
+        <div class="scan-track"><div class="scan-fill" id="setup-scan-fill"></div></div>
+      </div>
+
+      <label class="setup-opt" id="setup-overlay-row">
+        <input type="checkbox" id="setup-overlay">
+        <div>
+          <b>In-game overlay widget</b>
+          <span>A compact always-on-top readout over the game. Ctrl+Alt+O unlocks
+          it, Ctrl+Alt+←/→ change page, Ctrl+Alt+F goes fullscreen.</span>
+        </div>
+      </label>
+
+      <label class="setup-opt">
+        <input type="checkbox" id="setup-community">
+        <div>
+          <b>Community dataset <em>one download, ~110 MB</em></b>
+          <span>Names the commodities in your cargo history and adds ship and
+          item reference plus real star-map positions. From StarCitizenWiki's
+          scunpacked-data.</span>
+        </div>
+      </label>
+
+      <label class="setup-opt">
+        <input type="checkbox" id="setup-uex">
+        <div>
+          <b>UEX market prices <em>online</em></b>
+          <span>Crowd-sourced prices: best places to sell, trade advice from
+          where you are, and what your fleet and stash are worth.</span>
+        </div>
+      </label>
+
+      <div class="setup-actions">
+        <button id="setup-start" class="primary">Start flying</button>
+        <span class="muted" id="setup-status"></span>
+      </div>
+    </div>
+  </div>
 <script src="app.js"></script>
 </body>
 </html>
