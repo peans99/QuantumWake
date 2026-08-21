@@ -1203,3 +1203,32 @@ body.overlay .foot { display: none; }
 
 /* The toggle reads as a state, not just a verb. */
 #overlay-toggle.on { color: var(--green); border-color: var(--green); }
+
+/* ---------- loadout slot icons ---------- */
+
+.slot-card { display: flex; gap: 13px; align-items: flex-start; }
+
+/* The glyph well: a small lit panel so the icon reads as instrumentation
+   rather than clip-art. */
+.slot-icon {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  background: linear-gradient(160deg, rgba(53, 200, 240, .10), rgba(53, 200, 240, .03));
+  border: 1px solid var(--rule-hot);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.slot-icon svg {
+  width: 27px;
+  height: 27px;
+  filter: drop-shadow(0 0 6px rgba(53, 200, 240, .55));
+}
+
+.slot-body { flex: 1; min-width: 0; }
+
+body.overlay .slot-card { gap: 9px; }
+body.overlay .slot-icon { flex-basis: 32px; width: 32px; height: 32px; }
+body.overlay .slot-icon svg { width: 19px; height: 19px; }
