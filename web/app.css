@@ -1318,3 +1318,7 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--cyan-hot); }
 th.sortable.sort-desc::after { content: " ▾"; color: var(--cyan); }
 th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
+
+/* Community reference lines on fleet and loadout cards. */
+.ship-ref { font-size: 10.5px; color: var(--muted); margin-top: 3px; letter-spacing: .04em; }
+.slot-ref { font-size: 10.5px; color: var(--dim); }
