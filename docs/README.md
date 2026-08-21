@@ -19,8 +19,9 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |
 | [commodity-catalogue.md](commodity-catalogue.md) | Parked: routes to a table of what each kiosk trades, and what each costs. |
 | [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
-| [naming.md](naming.md) | Why the project is called Quantumwake, and what the name had to survive. |
+| [naming.md](naming.md) | Why the project is called Quantum Wake, and what the name had to survive. |
 | [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
+| [releasing.md](releasing.md) | Bump, tag, and what the pipeline does with it. |
 
 The seven per-tool write-ups that used to sit in `docs/tools/` have been
 removed. Everything worth keeping from them was already lifted into the docs
