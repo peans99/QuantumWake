@@ -115,11 +115,13 @@ RR_JP_StantonPyro      → Rest stop at the Stanton→Pyro jump point
 LOC_rs_ext_stan-pyro_jp1 → Stanton↔Pyro jump point
 ```
 
-Static node data is seeded from public APIs
-([api.star-citizen.wiki](https://api.star-citizen.wiki/locations),
-[starcitizen-api.com](https://starcitizen-api.com/api.php)) and then
-**committed as a local JSON file**. No runtime network dependency — the app keeps
-SCStats' offline, read-only posture.
+Node data is not seeded from any web API. Display names come from the game's
+own localisation table inside `Data.p4k`, and system/body/kind come from rules
+over the id grammar above, so there is no data file to go stale and no runtime
+network dependency - the app keeps SCStats' offline, read-only posture.
+[api.star-citizen.wiki](https://api.star-citizen.wiki) and
+[starcitizen-api.com](https://starcitizen-api.com) were used during research as a
+cross-check on body and station names only; see [credits.md](credits.md).
 
 ### The atlas: the whole map, not just the visited part
 

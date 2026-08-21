@@ -17,6 +17,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [log-simulator.md](log-simulator.md) | The fake-log generator: how to use it and why it reproduces the format's quirks. |
 | [untapped-signals.md](untapped-signals.md) | Log signals we have not used yet, ranked, with formats and counts. |
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |
+| [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
 
 The seven per-tool write-ups that used to sit in `docs/tools/` have been
 removed. Everything worth keeping from them was already lifted into the docs

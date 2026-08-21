@@ -145,12 +145,33 @@ silently dropped).
 
 ## Credits
 
-Built by **nekron**.
+Built by **nekron**, on top of work that was not mine. Full attribution — what
+was taken from whom — is in [docs/credits.md](docs/credits.md). The short
+version:
 
-Prior art studied while building this: [StarLogs](https://github.com/Ozy311/StarLogs)
-(architecture and archived combat patterns), [all-slain](https://github.com/DimmaDont/all-slain)
-(per-patch event availability), [SCStats](https://github.com/Maple33-hash/SCStats)
-(read-only posture), [SCPlay](https://github.com/ckuma/scplay) (timestamp-span
-playtime), [AutoTrackR2](https://github.com/BubbaGumpShrump/AutoTrackR2),
-[SC-Kill-Monitor](https://github.com/greluc/SC-Kill-Monitor),
-[citizenmon](https://github.com/danieldeschain/citizenmon).
+- **Community log tooling.** [StarLogs](https://github.com/Ozy311/StarLogs) by
+  Ozy311 is owed the most: the archived combat line formats, the
+  kill-classification tree and the NPC-name heuristics in this repo are its
+  `event_parser.py` logic re-implemented in C#.
+  [all-slain](https://github.com/DimmaDont/all-slain) (DimmaDont) supplied the
+  per-patch record of which events CIG removed and when;
+  [SCStats](https://github.com/Maple33-hash/SCStats) (Maple33) the read-only
+  posture and the purchase-correlation idea;
+  [SCPlay](https://github.com/ckuma/scplay) (ckuma) timestamp-span playtime.
+  [AutoTrackR2](https://github.com/BubbaGumpShrump/AutoTrackR2),
+  [SC-Kill-Monitor](https://github.com/greluc/SC-Kill-Monitor) and
+  [citizenmon](https://github.com/danieldeschain/citizenmon) were studied too.
+- **`Data.p4k` format.** The ZIP64-with-ZStd-method-100 structure is community
+  knowledge from the [scdatatools](https://github.com/ventorvar/scdatatools)
+  lineage. The reader here is our own and ships no extractor, but the format was
+  not worked out here.
+- **Artwork.** Manufacturer marks and the *Made by the Community* badge are from
+  the official [Star Citizen Fankit](https://robertsspaceindustries.com/fankit),
+  used under the Fankit Agreement.
+- **Packages.** [ZstdSharp.Port](https://github.com/oleg-st/ZstdSharp) (Oleg
+  Stepanischev), Microsoft.Data.Sqlite, WebView2, xUnit and coverlet. Nothing on
+  the client side — no framework, no bundler, no CDN.
+
+Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
+trademarks of Cloud Imperium Rights LLC. This is an unofficial fan tool, not
+affiliated with or endorsed by Cloud Imperium Games.

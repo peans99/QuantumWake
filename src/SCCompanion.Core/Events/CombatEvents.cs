@@ -109,7 +109,8 @@ public sealed record VehicleDestructionEvent(
 /// <remarks>
 /// NPC entity names embed archetype markers, while player handles do not. The
 /// markers below are drawn from the naming seen in archived logs and the
-/// heuristics used by StarLogs. Two shape-based fallbacks catch archetypes not
+/// heuristics used by StarLogs (https://github.com/Ozy311/StarLogs), whose
+/// marker list this one follows; see docs/credits.md. Two shape-based fallbacks catch archetypes not
 /// listed: names are far longer than any handle, and use several hyphens.
 /// </remarks>
 public static class NpcNames
