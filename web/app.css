@@ -534,7 +534,15 @@ h2.spaced { margin-top: 32px; }
 
 /* ---------- live feed ---------- */
 
-.feed { list-style: none; margin: 0; padding: 0; max-height: 268px; overflow-y: auto; }
+/* On a tall screen the live feed takes the room the viewport offers instead
+   of always stopping at ten lines. The overlay's own cap still wins. */
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: clamp(268px, 100vh - 640px, 760px);
+  overflow-y: auto;
+}
 .feed::-webkit-scrollbar { width: 6px; }
 .feed::-webkit-scrollbar-track { background: rgba(0,0,0,.3); }
 .feed::-webkit-scrollbar-thumb { background: var(--rule-hot); }
@@ -571,6 +579,22 @@ h2.spaced { margin-top: 32px; }
 .feed .k.contract { color: var(--amber); border-color: #6d4715; }
 .feed .d { color: var(--dim); font-size: 11.5px; }
 .feed .empty { color: var(--dim); border-left: 0; letter-spacing: .1em; text-transform: uppercase; font-size: 11px; }
+
+/* ---------- logbook page ---------- */
+
+/* The full-page timeline: same anatomy as the live feed, sized for reading
+   rather than glancing, and never capped - the page scrolls. */
+.feed.logbook { max-height: none; overflow: visible; }
+.feed.logbook li { padding: 8px 4px 8px 10px; gap: 12px; align-items: baseline; }
+.feed.logbook .t { font-size: 11px; flex: 0 0 178px; white-space: nowrap; }
+.feed.logbook .what { color: var(--text); font-size: 12.5px; }
+.feed.logbook .detail { font-size: 11px; }
+.feed.logbook .amt { margin-left: auto; font-family: var(--mono); font-size: 12px; flex: 0 0 auto; }
+
+.feed .k.session { color: var(--cyan); border-color: var(--cyan-deep); }
+.feed .k.sold { color: var(--green); border-color: #1f5c3d; }
+.feed .k.bought { color: var(--amber); border-color: #6d4715; }
+.feed .k.loot { color: var(--violet); border-color: #4a3670; }
 
 /* ---------- bars ---------- */
 

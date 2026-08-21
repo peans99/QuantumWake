@@ -282,6 +282,45 @@ public static class ServerHost
         app.MapGet("/api/sessions/{id}", (string id, LogLibrary lib) =>
             lib.Session(id) is { } session ? Results.Ok(session) : Results.NotFound());
 
+        // The logbook proper: the latest things the pilot did, one merged
+        // timeline from every dated record the library keeps - sessions,
+        // trades and purchases, first-seen pickups.
+        app.MapGet("/api/logbook", (LogLibrary lib, int? days, int? limit) =>
+        {
+            var cutoff = (days ?? 0) > 0 ? DateTimeOffset.UtcNow.AddDays(-days!.Value) : DateTimeOffset.MinValue;
+            var entries = new List<LogbookLine>();
+
+            foreach (var s in lib.Sessions())
+            {
+                if (s.StartedAt < cutoff)
+                    continue;
+
+                var detail = $"{(int)s.Duration.TotalHours}h {s.Duration.Minutes:D2}m"
+                    + $" · {s.Jumps.Count} jump{(s.Jumps.Count == 1 ? "" : "s")}"
+                    + (s.Deaths > 0 ? $" · {s.Deaths} death{(s.Deaths == 1 ? "" : "s")}" : "");
+
+                entries.Add(new LogbookLine(
+                    s.StartedAt, "session",
+                    s.PrimaryShip is { Length: > 0 } ship ? $"Session aboard {ship}" : "Session on foot",
+                    s.LastLocation ?? "", detail, null));
+            }
+
+            foreach (var l in lib.Ledger(days ?? 0))
+            {
+                entries.Add(new LogbookLine(
+                    l.At,
+                    l.Amount > 0 ? "sold" : "bought",
+                    l.What, l.Where, l.Shop, l.Amount));
+            }
+
+            foreach (var p in lib.Pickups(days ?? 0))
+                entries.Add(new LogbookLine(p.At, "loot", p.Item, p.Place, "first seen", null));
+
+            return entries
+                .OrderByDescending(e => e.At)
+                .Take(Math.Clamp(limit ?? 150, 1, 500));
+        });
+
         // Rescan on demand: unchanged backups are skipped by fingerprint, so this is
         // cheap after the first run.
         app.MapPost("/api/scan", (LogLibrary lib, bool? force) =>
@@ -626,3 +665,7 @@ public static class ServerHost
 
 /// <summary>Body of POST /api/uex/credentials. Empty values clear the store.</summary>
 public sealed record UexCredentialsRequest(string? Token, string? Secret);
+
+/// <summary>One line of the merged logbook timeline.</summary>
+public sealed record LogbookLine(
+    DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount);

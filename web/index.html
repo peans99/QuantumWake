@@ -28,6 +28,7 @@
     <div class="tab-group">
       <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
       <div class="group-menu">
+        <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
         <button data-view="fleet">Fleet</button>
         <button data-view="places">Places</button>
@@ -184,6 +185,24 @@
       </aside>
     </div>
     <div class="legend" id="map-legend"></div>
+  </section>
+
+  <!-- LOGBOOK -->
+  <section id="view-logbook" class="view">
+    <div class="section-bar">
+      <h2>Logbook</h2>
+      <div class="controls">
+        <select id="logbook-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      The record itself: the latest things you did in the verse — sessions
+      flown, cargo and gear traded, items first seen — one timeline, newest
+      first. Places fly to the map.
+    </p>
+    <ul class="feed logbook" id="logbook-feed">
+      <li class="empty">Nothing yet.</li>
+    </ul>
   </section>
 
   <!-- SESSIONS -->

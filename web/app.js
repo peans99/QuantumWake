@@ -377,6 +377,7 @@ async function loadHistory() {
 
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
+  loadLogbook().catch((e) => console.error('logbook', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -945,6 +946,57 @@ let lastLootRows = [];
 
 onInput('#loot-search', () => renderLoot(lastLootRows));
 onInput('#loot-period', loadLoot);
+
+/* ---------- logbook ---------- */
+
+/**
+ * The logbook page: one merged timeline of what the pilot actually did -
+ * sessions, trades, purchases, first-seen loot - straight from /api/logbook.
+ */
+async function loadLogbook() {
+  const days = Number($('#logbook-period').value) || 0;
+  const rows = await getJson(`/api/logbook?days=${days}`);
+
+  const feed = $('#logbook-feed');
+  feed.textContent = '';
+
+  if (!rows.length) {
+    feed.append(el('li', 'empty', 'Nothing in that range.'));
+    return;
+  }
+
+  for (const row of rows) {
+    const li = el('li');
+
+    const when = new Date(row.at);
+    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    li.append(el('span', 't', stamp));
+
+    li.append(el('span', `k ${row.kind}`, row.kind));
+
+    // Item-ish lines pretty their class names; a session line is prose.
+    const text = row.kind === 'session' ? row.what : prettyItem(row.what);
+    li.append(el('span', 'd what', text));
+
+    if (row.place) {
+      const place = el('span', 'd');
+      place.append(placeLink(row.place));
+      li.append(place);
+    }
+
+    if (row.detail) li.append(el('span', 'd detail', row.detail));
+
+    if (row.amount != null && row.amount !== 0) {
+      const inward = Number(row.amount) > 0;
+      li.append(el('span', `amt ${inward ? 'inward' : 'outward'}`,
+        `${inward ? '+' : '−'}${money(Math.abs(row.amount))}`));
+    }
+
+    feed.append(li);
+  }
+}
+
+onInput('#logbook-period', loadLogbook);
 
 /* ---------- assets ---------- */
 
