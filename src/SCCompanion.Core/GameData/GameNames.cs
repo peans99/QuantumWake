@@ -142,10 +142,13 @@ public sealed class GameNames
             if (value.Length == 0)
                 continue;
 
+            // Both "item_Namexyz" and "item_Name_xyz" occur, so the separator is
+            // trimmed. Missing it hides everything using the underscored form -
+            // most armour, among others.
             if (key.StartsWith("item_Name", StringComparison.OrdinalIgnoreCase))
-                items.TryAdd(key["item_Name".Length..], value);
+                items.TryAdd(key["item_Name".Length..].TrimStart('_'), value);
             else if (key.StartsWith("vehicle_Name", StringComparison.OrdinalIgnoreCase))
-                vehicles.TryAdd(key["vehicle_Name".Length..], value);
+                vehicles.TryAdd(key["vehicle_Name".Length..].TrimStart('_'), value);
         }
 
         return new GameNames(items, vehicles);
