@@ -70,14 +70,26 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 
 public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 
-/// <summary>Items seen in one slot, most frequent first.</summary>
+/// <summary>What occupies one character slot.</summary>
 /// <param name="Category">Grouping for display, from <see cref="LoadoutCategories"/>.</param>
 /// <param name="Label">Readable slot name.</param>
+/// <param name="Current">Most recently seen occupant - the kit actually in use.</param>
+/// <param name="CurrentSeen">When that occupant was last seen.</param>
+/// <param name="History">
+/// Everything else the slot has held, most recent first. Useful as background,
+/// but it is a record of churn rather than a loadout: a hand slot accumulates
+/// every weapon, tool and drink ever picked up.
+/// </param>
 public sealed record LoadoutSlot(
     string Port,
     string Category,
     string Label,
-    IReadOnlyList<FacetTotal> Items);
+    string? Current,
+    DateTimeOffset? CurrentSeen,
+    IReadOnlyList<LoadoutHistoryItem> History);
+
+/// <param name="Times">How many sessions this item was seen in the slot.</param>
+public sealed record LoadoutHistoryItem(string Name, int Times, DateTimeOffset LastSeen);
 
 /// <summary>
 /// Groups character item ports into something a person would recognise.
@@ -521,16 +533,29 @@ public sealed class LogLibrary : IDisposable
         var loadout = sessions
             .SelectMany(s => s.Loadout)
             .GroupBy(l => l.Port, StringComparer.Ordinal)
-            .Select(g => new LoadoutSlot(
-                g.Key,
-                LoadoutCategories.Of(g.Key),
-                LoadoutCategories.Label(g.Key),
-                [.. g.GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
-                     .Select(i => new FacetTotal(Names.Item(i.Key), i.Count()))
-                     .OrderByDescending(i => i.Count)]))
-            // Category order first, then busiest slot within each category.
+            .Select(g =>
+            {
+                // Most recent sighting wins: that is what is actually equipped.
+                var byItem = g
+                    .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
+                    .Select(i => new LoadoutHistoryItem(
+                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
+                    .OrderByDescending(i => i.LastSeen)
+                    .ToList();
+
+                var current = byItem.FirstOrDefault();
+
+                return new LoadoutSlot(
+                    g.Key,
+                    LoadoutCategories.Of(g.Key),
+                    LoadoutCategories.Label(g.Key),
+                    current?.Name,
+                    current?.LastSeen,
+                    [.. byItem.Skip(1)]);
+            })
+            // Category order first, then most recently used slot.
             .OrderBy(s => LoadoutCategories.Rank(s.Category))
-            .ThenByDescending(s => s.Items.Count)
+            .ThenByDescending(s => s.CurrentSeen)
             .ToList();
 
         // Items are only ever added to the log, never removed, so this is the

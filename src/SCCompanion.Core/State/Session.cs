@@ -105,11 +105,21 @@ public sealed record CommodityTrade(
     bool IsSell,
     string? Mode);
 
-/// <summary>One equipped item, at the slot it occupied.</summary>
+/// <summary>
+/// One item seen in a character slot.
+/// </summary>
+/// <remarks>
+/// <paramref name="LastSeen"/> is what makes a current kit recoverable.
+/// Attachment events fire on every spawn and inventory refresh, so a slot
+/// accumulates everything ever put in it - a hand slot ends up listing every
+/// weapon, tool and drink the player has picked up. Only the most recent
+/// sighting describes what is actually equipped.
+/// </remarks>
 public sealed record LoadoutItem(
     string Port,
     string ItemClass,
-    DateTimeOffset FirstSeen);
+    DateTimeOffset FirstSeen,
+    DateTimeOffset LastSeen);
 
 /// <summary>
 /// An item observed in a location's inventory.
