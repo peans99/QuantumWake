@@ -1322,3 +1322,24 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 /* Community reference lines on fleet and loadout cards. */
 .ship-ref { font-size: 10.5px; color: var(--muted); margin-top: 3px; letter-spacing: .04em; }
 .slot-ref { font-size: 10.5px; color: var(--dim); }
+
+/* ---------- UEX integration ---------- */
+
+.uex-push { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.uex-push b { color: var(--text); }
+
+.uex-creds { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.uex-creds input {
+  flex: 1 1 220px;
+  background: var(--deep);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 9px;
+}
+.uex-creds input:focus { outline: none; border-color: var(--rule-hot); }
+
+.uex-report { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.uex-terminal { font-size: 9.5px; }

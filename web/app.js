@@ -673,11 +673,15 @@ function renderMarket() {
     const td = el('td', 'muted', marketEntries.length
       ? 'No commodities match that search.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 7;
+    td.colSpan = 8;
     tr.append(td);
     body.append(tr);
     return;
   }
+
+  // The UEX column exists only while that integration is on.
+  const anyUex = marketEntries.some((e) => e.uex);
+  $('.uex-col').hidden = !anyUex;
 
   for (const entry of rows) {
     const tr = el('tr');
@@ -687,6 +691,18 @@ function renderMarket() {
     tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
     tr.append(el('td', 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
     tr.append(el('td', 'num inward', entry.myRevenue ? money(entry.myRevenue) : '—'));
+
+    if (anyUex) {
+      const cell = el('td', 'num');
+      if (entry.uex?.bestSell > 0) {
+        cell.append(el('span', 'inward', money(entry.uex.bestSell)));
+        if (entry.uex.bestSellTerminal)
+          cell.append(el('div', 'muted uex-terminal', entry.uex.bestSellTerminal));
+      } else {
+        cell.textContent = '—';
+      }
+      tr.append(cell);
+    }
 
     const actions = el('td', 'num');
     if (entry.sold.length) {
@@ -827,7 +843,111 @@ async function renderSettings() {
       ? `${community.commodities} commodities, fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`
       : 'not downloaded';
   } catch { /* as above */ }
+
+  // UEX.
+  try {
+    const uex = await getJson('/api/uex');
+
+    $('#uex-enable').hidden = uex.enabled;
+    $('#uex-refresh').hidden = !uex.enabled;
+    $('#uex-disable').hidden = !uex.enabled;
+
+    $('#uex-status').textContent = uex.enabled
+      ? `${uex.prices} commodities priced, fetched ${uex.fetchedAt ? dateOf(uex.fetchedAt) : '—'}`
+      : 'not fetched';
+
+    $('#uex-preview').hidden = !(uex.enabled && uex.hasCredentials);
+    $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
+  } catch { /* as above */ }
 }
+
+async function uexAction(path, statusNode, button) {
+  button.disabled = true;
+  statusNode.textContent = 'working…';
+
+  try {
+    const result = await fetch(path, { method: 'POST' });
+    if (!result.ok) throw new Error((await result.json()).title || result.statusText);
+    statusNode.textContent = '';
+  } catch (e) {
+    statusNode.textContent = `failed: ${e.message}`;
+  } finally {
+    button.disabled = false;
+    renderSettings();
+    loadMarket().catch(() => {});
+  }
+}
+
+$('#uex-enable').addEventListener('click', (e) => uexAction('/api/uex/enable', $('#uex-status'), e.currentTarget));
+$('#uex-refresh').addEventListener('click', (e) => uexAction('/api/uex/enable', $('#uex-status'), e.currentTarget));
+$('#uex-disable').addEventListener('click', (e) => uexAction('/api/uex/disable', $('#uex-status'), e.currentTarget));
+
+$('#uex-save-creds').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await fetch('/api/uex/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: $('#uex-token').value, secret: $('#uex-secret').value }),
+    });
+
+    $('#uex-token').value = '';
+    $('#uex-secret').value = '';
+  } finally {
+    button.disabled = false;
+    renderSettings();
+  }
+});
+
+/**
+ * The two-step report: preview says exactly what would be sent and to which
+ * terminals; only the second button transmits anything.
+ */
+$('#uex-preview').addEventListener('click', async () => {
+  const status = $('#uex-push-status');
+
+  try {
+    const rows = await getJson('/api/uex/pushable');
+    const matched = rows.filter((r) => r.terminalId && r.commodityId);
+    const terminals = new Set(matched.map((r) => r.terminalName));
+    const skipped = rows.length - matched.length;
+
+    status.textContent = matched.length
+      ? `${matched.length} price${matched.length === 1 ? '' : 's'} across `
+        + `${terminals.size} terminal${terminals.size === 1 ? '' : 's'}`
+        + (skipped ? ` · ${skipped} skipped (place not matched to a UEX terminal)` : '')
+      : rows.length
+        ? `nothing sendable: ${rows.length} sale${rows.length === 1 ? '' : 's'} but no place matched a UEX terminal`
+        : 'no named sales in the last 30 days';
+
+    $('#uex-send').hidden = matched.length === 0;
+  } catch (e) {
+    status.textContent = `failed: ${e.message}`;
+  }
+});
+
+$('#uex-send').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#uex-push-status');
+
+  button.disabled = true;
+  status.textContent = 'sending…';
+
+  try {
+    const result = await fetch('/api/uex/push', { method: 'POST' });
+    const body = await result.json();
+    if (!result.ok) throw new Error(body.title || result.statusText);
+
+    status.textContent = body.results.join(' · ') || 'nothing sent';
+    button.hidden = true;
+  } catch (err) {
+    status.textContent = `failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $('#overlay-toggle').addEventListener('click', async (e) => {
   const next = e.currentTarget.dataset.visible !== 'true';

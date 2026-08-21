@@ -60,6 +60,9 @@ public static class ServerHost
         // server it stays unattached and the endpoints report unavailable.
         builder.Services.AddSingleton<OverlayBridge>();
 
+        // UEX price integration, opt-in in both directions.
+        builder.Services.AddSingleton<UexData>();
+
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -303,9 +306,86 @@ public static class ServerHost
         // Items observed entering the player's inventories - the Loot page.
         app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
 
-        // The community catalogue joined onto this install's trades. Empty until
-        // the community dataset is enabled, and the page explains that.
-        app.MapGet("/api/market", (LogLibrary lib) => lib.Market());
+        // The community catalogue joined onto this install's trades, plus UEX
+        // live prices when that integration is on. Empty until the community
+        // dataset is enabled, and the page explains that.
+        app.MapGet("/api/market", (LogLibrary lib, UexData uex) =>
+            lib.Market().Select(entry => new
+            {
+                entry.Id,
+                entry.Name,
+                entry.Groups,
+                entry.Sold,
+                entry.Bought,
+                entry.MyScuSold,
+                entry.MyRevenue,
+                entry.MyTrades,
+                uex = uex.Best(entry.Name)
+            }));
+
+        // ---- UEX: live prices in, logged sale prices out. Both opt-in. ----
+
+        app.MapGet("/api/uex", (UexData uex) => new
+        {
+            enabled = uex.IsEnabled,
+            prices = uex.Count,
+            fetchedAt = uex.FetchedAt,
+            hasCredentials = uex.HasCredentials,
+            source = "api.uexcorp.space"
+        });
+
+        app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>
+        {
+            try
+            {
+                var count = await uex.EnableAsync(httpFactory.CreateClient("community"));
+                return Results.Ok(new { enabled = true, prices = count });
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidDataException or JsonException)
+            {
+                return Results.Problem(title: "UEX could not be fetched.", detail: e.Message, statusCode: 502);
+            }
+        });
+
+        app.MapPost("/api/uex/disable", (UexData uex) =>
+        {
+            uex.Disable();
+            return Results.Ok(new { enabled = false });
+        });
+
+        // Stored only in local app data; posting empty values removes them.
+        app.MapPost("/api/uex/credentials", (UexData uex, UexCredentialsRequest body) =>
+        {
+            uex.SetCredentials(body.Token, body.Secret);
+            return Results.Ok(new { hasCredentials = uex.HasCredentials });
+        });
+
+        // What a push would send: every named sale in the last 30 days (the UEX
+        // window), with the terminal match or the reason there is none.
+        app.MapGet("/api/uex/pushable", (LogLibrary lib, UexData uex) =>
+            uex.Pushable(RecentSales(lib)));
+
+        app.MapPost("/api/uex/push", async (LogLibrary lib, UexData uex, IHttpClientFactory httpFactory) =>
+        {
+            if (!uex.HasCredentials)
+                return Results.Problem(title: "No UEX credentials stored.", statusCode: 400);
+
+            var rows = uex.Pushable(RecentSales(lib));
+            var matched = rows.Where(r => r.TerminalId is not null && r.CommodityId is not null).ToList();
+
+            if (matched.Count == 0)
+                return Results.Ok(new { sent = 0, results = Array.Empty<string>() });
+
+            try
+            {
+                var results = await uex.PushAsync(httpFactory.CreateClient("community"), matched);
+                return Results.Ok(new { sent = matched.Count, results });
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+            {
+                return Results.Problem(title: "The UEX submission failed.", detail: e.Message, statusCode: 502);
+            }
+        });
 
         app.MapGet("/api/loadout", (LogLibrary lib) => lib.Stats().Loadout);
         app.MapGet("/api/loadout/asof", (LogLibrary lib) => new { asOf = lib.Stats().LoadoutAsOf });
@@ -357,6 +437,20 @@ public static class ServerHost
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
+    /// <summary>
+    /// The sales a UEX push draws from: named commodity sells inside UEX's
+    /// 30-day submission window, with the unit price the kiosk actually showed.
+    /// </summary>
+    static IEnumerable<(DateTimeOffset At, string Commodity, string Place, decimal UnitPrice, int Scu)>
+        RecentSales(LogLibrary lib)
+    {
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
+
+        return lib.Trades(31)
+            .Where(t => t.IsSell && t.Commodity is not null && t.At >= cutoff && t.Scu > 0)
+            .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
+    }
+
     static GameInstall? ResolveInstall(string[] args, IConfiguration configuration)
     {
         var index = Array.IndexOf(args, "--path");
@@ -383,3 +477,6 @@ public static class ServerHost
         return candidates.FirstOrDefault(Directory.Exists);
     }
 }
+
+/// <summary>Body of POST /api/uex/credentials. Empty values clear the store.</summary>
+public sealed record UexCredentialsRequest(string? Token, string? Secret);
