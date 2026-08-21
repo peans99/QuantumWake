@@ -62,6 +62,9 @@ public sealed record LibraryStats
     public IReadOnlyList<FleetPoint> FleetHistory { get; init; } = [];
 
     public IReadOnlyList<LoadoutSlot> Loadout { get; init; } = [];
+
+    /// <summary>When the kit shown in <see cref="Loadout"/> was worn.</summary>
+    public DateTimeOffset? LoadoutAsOf { get; init; }
     public IReadOnlyList<StashLocation> Stash { get; init; } = [];
 }
 
@@ -449,10 +452,23 @@ public sealed class LogLibrary : IDisposable
 
     public SessionSummary? Session(string id) => _store.Get(id);
 
-    /// <summary>Rolls every stored session up into library-wide totals.</summary>
-    public LibraryStats Stats()
+    /// <summary>
+    /// Rolls stored sessions up into library-wide totals.
+    /// </summary>
+    /// <param name="days">
+    /// Only include sessions started within this many days. Zero means all time.
+    /// Filtering here rather than in the browser keeps the payload small and the
+    /// arithmetic in one place.
+    /// </param>
+    public LibraryStats Stats(int days = 0)
     {
         var sessions = _store.All();
+
+        if (days > 0)
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+            sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
+        }
 
         if (sessions.Count == 0)
         {
@@ -530,28 +546,46 @@ public sealed class LogLibrary : IDisposable
             .Select(s => new FleetPoint(s.StartedAt, s.FleetSize!.Value))
             .ToList();
 
-        var loadout = sessions
+        // The kit is whatever was worn in the most recent session that recorded
+        // any. Taking the newest sighting per slot instead would splice together
+        // a helmet from March with a rifle from August - not a kit anyone wore.
+        var kitSession = sessions
+            .Where(s => s.Loadout.Count > 0)
+            .MaxBy(s => s.StartedAt);
+
+        var kit = kitSession?.Loadout ?? [];
+
+        // Everything from earlier sessions becomes the per-slot history.
+        var earlier = sessions
+            .Where(s => s != kitSession)
             .SelectMany(s => s.Loadout)
+            .ToLookup(l => l.Port, StringComparer.Ordinal);
+
+        var loadout = kit
             .GroupBy(l => l.Port, StringComparer.Ordinal)
             .Select(g =>
             {
-                // Most recent sighting wins: that is what is actually equipped.
-                var byItem = g
+                // Within the kit session, the latest sighting is what was worn.
+                var current = g
+                    .OrderByDescending(l => l.LastSeen)
+                    .Select(l => new LoadoutHistoryItem(Names.Item(l.ItemClass), 1, l.LastSeen))
+                    .First();
+
+                var history = earlier[g.Key]
                     .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .Select(i => new LoadoutHistoryItem(
                         Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
+                    .Where(i => !i.Name.Equals(current.Name, StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(i => i.LastSeen)
                     .ToList();
-
-                var current = byItem.FirstOrDefault();
 
                 return new LoadoutSlot(
                     g.Key,
                     LoadoutCategories.Of(g.Key),
                     LoadoutCategories.Label(g.Key),
-                    current?.Name,
-                    current?.LastSeen,
-                    [.. byItem.Skip(1)]);
+                    current.Name,
+                    current.LastSeen,
+                    history);
             })
             // Category order first, then most recently used slot.
             .OrderBy(s => LoadoutCategories.Rank(s.Category))
@@ -623,6 +657,7 @@ public sealed class LogLibrary : IDisposable
             FleetSize = fleetHistory.Count > 0 ? fleetHistory.Max(f => f.Vehicles) : null,
             FleetHistory = fleetHistory,
             Loadout = loadout,
+            LoadoutAsOf = kitSession?.StartedAt,
             Stash = stash
         };
     }
