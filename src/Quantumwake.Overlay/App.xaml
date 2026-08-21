@@ -1,9 +1,8 @@
-﻿<Application x:Class="Quantumwake.Overlay.App"
+<Application x:Class="Quantumwake.Overlay.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:Quantumwake.Overlay"
-             StartupUri="MainWindow.xaml">
-    <Application.Resources>
-         
-    </Application.Resources>
+             xmlns:local="clr-namespace:Quantumwake.Overlay">
+    <!-- No StartupUri: App.OnStartup starts the server and the tray icon first,
+         then shows the overlay only if the saved setting asks for it. -->
+    <Application.Resources />
 </Application>

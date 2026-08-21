@@ -7,6 +7,14 @@ using System.Windows.Media;
 using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
 
+// Hosting the tray icon means UseWindowsForms, which puts System.Drawing and
+// System.Windows.Forms into the implicit usings and makes Point, Color and
+// Brushes ambiguous. This window is WPF; say so once here rather than
+// qualifying every use.
+using Point = System.Windows.Point;
+using Color = System.Windows.Media.Color;
+using Brushes = System.Windows.Media.Brushes;
+
 namespace Quantumwake.Overlay;
 
 /// <summary>
@@ -30,7 +38,6 @@ public partial class MainWindow : Window
     private static readonly Uri ServerRoot = new("http://127.0.0.1:31337/");
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(2) };
-    private Process? _server;
     private bool _clickThrough = true;
 
     /// <summary>
@@ -91,15 +98,8 @@ public partial class MainWindow : Window
 
     private async Task StartAsync()
     {
-        SplashText.Text = "LOCATING SERVER…";
-
-        if (!await IsServerUpAsync() && !TryStartServer())
-        {
-            SplashText.Text = "Could not start Quantumwake.Server. Run it manually, " +
-                              "then reopen the overlay.";
-            return;
-        }
-
+        // The server runs inside this process now - App starts it before the
+        // window appears - so this only waits for it to finish binding.
         SplashText.Text = "AWAITING LINK…";
 
         if (!await WaitForServerAsync(TimeSpan.FromSeconds(40)))
@@ -159,41 +159,6 @@ public partial class MainWindow : Window
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// Launches the server alongside the overlay so the user starts one thing.
-    /// </summary>
-    private bool TryStartServer()
-    {
-        var candidates = new[]
-        {
-            Path.Combine(AppContext.BaseDirectory, "Quantumwake.Server.exe"),
-            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..",
-                "Quantumwake.Server", "bin", "Release", "net10.0", "Quantumwake.Server.exe")),
-            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..",
-                "Quantumwake.Server", "bin", "Debug", "net10.0", "Quantumwake.Server.exe"))
-        };
-
-        var executable = candidates.FirstOrDefault(File.Exists);
-        if (executable is null)
-            return false;
-
-        try
-        {
-            _server = Process.Start(new ProcessStartInfo(executable)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(executable)!
-            });
-
-            return _server is not null;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private IntPtr HandleWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -367,19 +332,6 @@ public partial class MainWindow : Window
         NativeWindowStyles.UnregisterGlobalHotKey(this, ToggleHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, PrevViewHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, NextViewHotkeyId);
-
-        // Only stop the server if this overlay started it.
-        if (_server is { HasExited: false })
-        {
-            try
-            {
-                _server.Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // Best effort on shutdown.
-            }
-        }
 
         _http.Dispose();
         base.OnClosed(e);

@@ -2,9 +2,13 @@ name: Release
 
 # Cut a release by pushing a tag: git tag -a v0.1.0 -m "..." && git push origin v0.1.0
 #
-# The three executables publish into ONE folder on purpose. The overlay starts
-# the server by looking for Quantumwake.Server.exe next to itself, so splitting
-# them into separate archives would break launching the overlay on its own.
+# What ships is a single self-contained QuantumWake.exe: the server runs inside
+# it and the dashboard is embedded in it, so there is no runtime to install, no
+# folder to unpack and nothing to choose between. That is the whole deployment
+# story for someone who does not want one.
+#
+# The CLI is published beside it for anyone verifying parser health, and is
+# framework-dependent because that audience already has the SDK.
 
 on:
   push:
@@ -46,24 +50,48 @@ jobs:
       - name: Test
         run: dotnet test Quantumwake.slnx -c Release
 
-      - name: Publish
+      - name: Publish the application
         shell: pwsh
         run: |
-          $out = 'dist/QuantumWake'
-          foreach ($project in 'Server', 'Overlay', 'Cli') {
-            dotnet publish "src/Quantumwake.$project" -c Release -r win-x64 --self-contained false `
-              -p:Version=${{ steps.version.outputs.version }} -o $out
-            if ($LASTEXITCODE -ne 0) { throw "publish failed: $project" }
-          }
-          Copy-Item README.md, LICENSE, NOTICE $out
+          dotnet publish src/Quantumwake.Overlay -c Release -r win-x64 `
+            --self-contained true -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:Version=${{ steps.version.outputs.version }} -o dist/app
+          if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
+
+          # A referenced executable project leaves its runtimeconfig behind. The
+          # app's own is inside the single file, so this one is just litter.
+          Remove-Item dist/app/Quantumwake.Server.runtimeconfig.json -ErrorAction SilentlyContinue
+
+          $files = Get-ChildItem dist/app -File
+          if ($files.Count -ne 1) { throw "expected one file, got: $($files.Name -join ', ')" }
+
+      - name: Publish the CLI
+        shell: pwsh
+        run: |
+          dotnet publish src/Quantumwake.Cli -c Release -r win-x64 --self-contained false `
+            -p:Version=${{ steps.version.outputs.version }} -o dist/cli
+          if ($LASTEXITCODE -ne 0) { throw 'cli publish failed' }
 
       - name: Archive
+        id: archive
         shell: pwsh
         run: |
-          $name = "QuantumWake-${{ steps.version.outputs.version }}-win-x64.zip"
-          Compress-Archive -Path dist/QuantumWake -DestinationPath $name
-          "asset=$name" | Out-File $env:GITHUB_OUTPUT -Append
-        id: archive
+          $version = '${{ steps.version.outputs.version }}'
+
+          # The executable ships on its own as well as in the zip: one click from
+          # the releases page, nothing to unpack.
+          Copy-Item dist/app/QuantumWake.exe "QuantumWake.exe"
+
+          $staging = 'dist/QuantumWake'
+          New-Item -ItemType Directory -Force $staging | Out-Null
+          Copy-Item dist/app/QuantumWake.exe $staging
+          Copy-Item dist/cli/* $staging -Recurse
+          Copy-Item README.md, LICENSE, NOTICE $staging
+
+          $zip = "QuantumWake-$version-win-x64.zip"
+          Compress-Archive -Path $staging -DestinationPath $zip
+          "asset=$zip" | Out-File $env:GITHUB_OUTPUT -Append
 
       - name: Release
         shell: pwsh
@@ -73,16 +101,31 @@ jobs:
           $notes = @"
           **Quantum Wake ${{ steps.version.outputs.version }}** - a pilot's logbook for Star Citizen.
 
-          Unzip and run ``Quantumwake.Overlay.exe`` for the overlay, which starts the
-          dashboard itself, or ``Quantumwake.Server.exe`` for the dashboard alone on
-          http://127.0.0.1:31337.
+          ### Getting it running
 
-          Requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
-          Reads ``Game.log`` only - nothing is written to the game directory, and no
-          network request leaves the machine.
+          Download **QuantumWake.exe** and double-click it. That is the whole
+          installation: nothing to unpack, no runtime to install, no settings to fill in.
+          Your Star Citizen install is found automatically.
+
+          Quantum Wake then sits in the notification area. Right-click it to open the
+          dashboard, show or hide the in-game overlay, or quit; the overlay setting is
+          remembered. ``Ctrl+Alt+O`` toggles overlay click-through.
+
+          Windows will warn that the publisher is unknown - the executable is not code
+          signed, which costs money a free fan tool does not have. Choose **More info**,
+          then **Run anyway**.
+
+          The zip additionally contains the command-line tool, which prints per-event
+          match counts and parser health; it needs the .NET 10 runtime.
+
+          ### What it does not do
+
+          Reads ``Game.log`` only. Nothing is written to the game directory, no memory is
+          touched, nothing is injected, and no network request leaves your machine.
 
           Star Citizen must run in Borderless Windowed for the overlay to be visible.
           "@
-          gh release create '${{ steps.version.outputs.tag }}' '${{ steps.archive.outputs.asset }}' `
+          gh release create '${{ steps.version.outputs.tag }}' `
+            'QuantumWake.exe' '${{ steps.archive.outputs.asset }}' `
             --title 'Quantum Wake ${{ steps.version.outputs.version }}' `
             --notes $notes
