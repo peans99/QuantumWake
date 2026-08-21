@@ -33,6 +33,10 @@
 
   /* Chamfered corner, SC's signature panel shape. */
   --chamfer: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+
+  /* One definition of the content column. 1440px wasted most of an ultrawide;
+     2040 is as wide as these tables stay readable. */
+  --page: min(2040px, 94vw);
 }
 
 * { box-sizing: border-box; }
@@ -47,7 +51,9 @@ html, body {
   letter-spacing: .01em;
 }
 
-/* Faint scanlines and a vignette, kept well under the legibility threshold. */
+/* Faint scanlines, an overhead glow and a vignette, all kept well under the
+   legibility threshold. The glow stops the page reading as flat black on a
+   large display, where there is a great deal of it. */
 body::before {
   content: "";
   position: fixed;
@@ -56,8 +62,66 @@ body::before {
   z-index: 100;
   background:
     repeating-linear-gradient(0deg, rgba(53, 200, 240, .022) 0 1px, transparent 1px 3px),
+    radial-gradient(1400px 620px at 50% -12%, rgba(53, 200, 240, .07), transparent 70%),
     radial-gradient(ellipse at 50% 0%, transparent 55%, rgba(0, 0, 0, .55) 100%);
 }
+
+/* ---------- wide displays ---------- */
+
+/* An ultrawide left two thirds of the glass empty: the column was capped at
+   1440px with dead black either side. The column is wider now, and what it
+   still cannot use is given to the brand rather than left blank. Everything
+   here is decorative, appears only past 1600px, and never in the overlay. */
+.railmark { display: none; }
+
+@media (min-width: 1600px) {
+  /* The emblem, stripped to its geometry, sitting in the right margin and
+     running off the edge of the screen. Positioned from the content column's
+     right rail outwards - anchoring it to the viewport instead put it entirely
+     off-screen on an ultrawide, where the margin is 700px deep. */
+  body::after {
+    content: "";
+    position: fixed;
+    left: calc(50% + var(--page) / 2 - 110px);
+    top: 50%;
+    width: min(34vw, 640px);
+    aspect-ratio: 1;
+    transform: translateY(-50%);
+    background: url("assets/watermark.svg") center / contain no-repeat;
+    opacity: .06;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* A vertical wordmark down the left margin, the way a HUD labels a panel. */
+  .railmark {
+    display: block;
+    position: fixed;
+    left: max(16px, calc((100vw - var(--page)) / 2 - 36px));
+    top: 50%;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    font-size: 9.5px;
+    letter-spacing: .42em;
+    text-transform: uppercase;
+    color: var(--dim);
+    opacity: .6;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Hairline rails marking where the content column begins and ends, so the
+     margin reads as framing rather than as something failing to fill. */
+  main {
+    border-inline: 1px solid var(--rule);
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 90px, #000 calc(100% - 90px), transparent);
+    mask-image: linear-gradient(180deg, transparent, #000 90px, #000 calc(100% - 90px), transparent);
+  }
+}
+
+body.overlay::after { display: none; }
+body.overlay .railmark { display: none; }
 
 /* ---------- overlay mode ---------- */
 
@@ -182,7 +246,9 @@ body.overlay .feed .d { display: none; }
   display: flex;
   align-items: center;
   gap: 26px;
-  padding: 0 22px;
+  /* Full-bleed bar, but its contents line up with the content column - on a
+     wide display the brand was stranded a screen away from anything below it. */
+  padding-inline: max(22px, calc((100vw - var(--page)) / 2));
   height: 56px;
   position: sticky;
   top: 0;
@@ -260,7 +326,7 @@ body.overlay .feed .d { display: none; }
 
 /* ---------- layout ---------- */
 
-main { padding: var(--gap) 22px 48px; max-width: 1440px; margin: 0 auto; }
+main { padding: var(--gap) 22px 48px; max-width: var(--page); margin: 0 auto; position: relative; z-index: 1; }
 .view { display: none; }
 .view.active { display: block; animation: fade .18s ease-out; }
 @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
@@ -963,7 +1029,7 @@ body.overlay
   display: flex;
   align-items: center;
   gap: 18px;
-  max-width: 1440px;
+  max-width: var(--page);
   margin: 0 auto;
   padding: 22px 22px 34px;
   border-top: 1px solid var(--rule);
