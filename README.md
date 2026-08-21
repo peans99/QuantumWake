@@ -1,18 +1,29 @@
-<img src="web/assets/logo.svg" width="148" align="right" alt="">
+<img src="web/assets/logo.svg" width="150" align="right" alt="">
 
 # Quantum Wake
 
 **A pilot's logbook for Star Citizen** — by nekron
 
-A companion app for Star Citizen driven by `Game.log`. Second-screen dashboard,
-transparent in-game overlay, and a map of where you've been — read-only, offline,
-and anti-cheat safe.
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
+![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
+![154 tests](https://img.shields.io/badge/tests-154%20passing-4fd48a)
+![No network](https://img.shields.io/badge/network-none-46617a)
+
+Star Citizen writes everything you do to `Game.log` and then rotates it away.
+Quantum Wake reads it — the live file and every backup — and gives you back the
+flight it recorded: where you have been, what you flew, what you hauled and what
+it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
+of the whole 'verse with your own trail across it.
+
+It is read-only, entirely offline, and never touches the game.
 
 ```powershell
 .\start.ps1
 ```
 
-Dashboard on <http://127.0.0.1:31337>. `Ctrl+Alt+O` toggles overlay click-through.
+Dashboard on <http://127.0.0.1:31337>. `Ctrl+Alt+O` toggles overlay
+click-through. Your install is found automatically across every fixed drive.
 
 ---
 
@@ -20,12 +31,37 @@ Dashboard on <http://127.0.0.1:31337>. `Ctrl+Alt+O` toggles overlay click-throug
 
 | View | Contents |
 |---|---|
-| **Now** | Current location with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
-| **Map** | Topology map of Stanton and Pyro with every place you've visited, sized by visit count |
-| **Sessions** | Every session, with in-game time separated from menu time |
-| **Ships** | Flights per ship, with estimated time aboard |
+| **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
+| **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan and a live marker |
+| **Sessions** | Every session you have played, in-game time separated from menu time |
+| **Fleet** | Ships owned over time, flights per ship, estimated time aboard |
 | **Places** | Most-visited locations and quantum destinations |
-| **Contracts** | Faceted by issuer and type |
+| **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
+| **Spending** | Confirmed purchases by shop, item and category |
+| **Ledger** | Every transaction, back-tracked to the place it happened |
+| **Cargo** | Commodity trades, the only income the logs record |
+| **Loadout** | The kit you are wearing, by slot |
+| **Stash** | What is in your inventory and where you left it |
+
+Names are real names — New Babbage, not `Stanton4_NewBabbage`; a Genoa power
+plant, not `POWR_JUST_S02_Genoa_SCItem` — read from your own `Data.p4k` at
+runtime with no external lookup service involved.
+
+## Why another one
+
+There are a dozen `Game.log` tools, and [docs/landscape.md](docs/landscape.md)
+surveys them honestly, including the one that overlaps this heavily. Three
+things here are not in the others:
+
+- **The whole map, not just your trail.** Others plot where you went. This draws
+  all 1,343 places the game names, so the map shows how much 'verse is left.
+- **Offline all the way down.** Every other tool that shows real item names
+  fetches them from UEX, the wiki or scunpacked. This reads `Data.p4k` directly
+  with its own ZIP64 + ZStd reader, so "no outbound network calls" survives
+  contact with the naming problem.
+- **It says what the logs cannot support.** Inferred locations carry a
+  confidence level, estimates are labelled and capped, and an event CIG removed
+  produces an explanation rather than a bare zero.
 
 ## Two things it deliberately does not do
 
@@ -125,11 +161,12 @@ Overlay (WPF + WebView2)   Browser / tablet        Remote clients (later)
 | `Quantumwake.Server` | `net10.0` | REST + SSE + static UI |
 | `Quantumwake.Overlay` | `net10.0-windows` | Transparent WPF shell |
 | `Quantumwake.Cli` | `net10.0` | Backfill and verification |
+| `Quantumwake.LogSim` | `net10.0` | Fake-install generator for testing without the game |
 
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 127 tests
+dotnet test Quantumwake.slnx      # 154 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -145,7 +182,7 @@ silently dropped).
 - [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
-- [docs/naming.md](docs/naming.md) — why the project is called Quantumwake
+- [docs/naming.md](docs/naming.md) — why the project is called Quantum Wake
 - [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
 
 ## Licence
