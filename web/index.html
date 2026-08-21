@@ -41,7 +41,6 @@
         <button data-view="ledger">Ledger</button>
         <button data-view="commodities">Cargo</button>
         <button data-view="market">Market</button>
-        <button data-view="assets">Assets</button>
       </div>
     </div>
     <div class="tab-group">
@@ -221,16 +220,16 @@
 
     <h2>Fleet size over time</h2>
     <p class="muted caption">
-      Owned-vehicle count reported by the entitlement query each session. Ship
-      <em>names</em> are not logged — only the total — so the roster below is what
-      you have actually flown.
+      Owned-vehicle count reported by the game's entitlement query each
+      session — ships <em>and</em> ground vehicles together, which is why it can
+      sit above the ticked roster below. Names are not logged, only the total.
     </p>
     <div class="map-wrap fleet-chart-wrap">
       <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
     </div>
 
     <div class="section-bar">
-      <h2 class="spaced">Ships flown</h2>
+      <h2 class="spaced">Ships</h2>
       <div class="controls">
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
@@ -238,11 +237,31 @@
       </div>
     </div>
     <p class="muted caption">
-      Counted from control-token releases. Star Citizen 4.9 logs no boarding
-      event, so flight counts are exact while times aboard (~) are estimated from
-      the last known stop.
+      Counted from control-token releases — flight counts are exact, times
+      aboard (~) estimated from the last known stop. The roster comes from the
+      logs, so rentals and ships since sold appear too: untick them and they
+      leave every total. Prices are UEX in-game purchase prices, when enabled.
     </p>
     <div id="fleet-ships" class="ship-grid"></div>
+
+    <h2 class="spaced" id="fleet-vehicles-title" hidden>Ground vehicles</h2>
+    <div id="fleet-vehicles" class="ship-grid"></div>
+
+    <h2 class="spaced">Other assets</h2>
+    <p class="muted caption">
+      Worn kit, stashes and claim exposure, priced the same way. Every number
+      is an estimate covering only what the price tables recognise. Needs the
+      community dataset and UEX enabled in Settings.
+    </p>
+    <div class="summary-strip" id="assets-summary"></div>
+
+    <h2 class="spaced">Stashes, by value</h2>
+    <div class="table-wrap">
+      <table id="assets-stash">
+        <thead><tr><th>Location</th><th class="num">Items</th><th class="num">Priced</th><th class="num">Value</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- SPENDING -->
@@ -485,38 +504,6 @@
     </div>
   </section>
 
-  <section id="view-assets" class="view">
-    <h2>Assets</h2>
-    <p class="muted caption">
-      What you own, priced from UEX community data - in-game purchase prices,
-      not pledge value. Every number is an estimate: only items and ships the
-      price tables recognise are counted, and the coverage is shown beside each
-      total. Needs both the community dataset and UEX enabled in Settings.
-    </p>
-
-    <div class="summary-strip" id="assets-summary"></div>
-
-    <h2 class="spaced">Fleet, at in-game prices</h2>
-    <p class="muted caption">
-      The fleet comes from the logs, so rentals and ships you have since sold
-      appear too — untick them and they leave the totals. The choice is
-      remembered in this browser.
-    </p>
-    <div class="table-wrap">
-      <table id="assets-fleet">
-        <thead><tr><th class="tick">Owned</th><th>Ship</th><th class="num">Buy price</th><th>Cheapest at</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-
-    <h2 class="spaced">Stashes, by value</h2>
-    <div class="table-wrap">
-      <table id="assets-stash">
-        <thead><tr><th>Location</th><th class="num">Items</th><th class="num">Priced</th><th class="num">Value</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
 
   <section id="view-settings" class="view">
     <h2>Settings</h2>

@@ -121,6 +121,9 @@ buildPeriodSelects();
 /* ---------- tabs ---------- */
 
 function showView(name) {
+  // Assets merged into Fleet; old #assets links and habits still land somewhere.
+  if (name === 'assets') name = 'fleet';
+
   const buttons = $$('#tabs button');
   const target = buttons.find((b) => b.dataset.view === name);
   if (!target) return;
@@ -945,66 +948,34 @@ try {
 async function loadAssets() {
   assetsData = await getJson('/api/assets');
   renderAssets();
+
+  // Prices arrive after the roster first renders; redraw it with them in.
+  if (libraryStats) renderFleet(libraryStats);
 }
 
+/**
+ * The asset side of the blended Fleet page: the "other assets" strip and the
+ * stash table. The roster and fleet value live in renderFleet/renderFleetShips.
+ */
 function renderAssets() {
   const assets = assetsData;
   if (!assets) return;
 
-  // Fleet totals are recomputed here rather than trusted from the server,
-  // because exclusion is a client-side choice.
+  // Totals are recomputed here rather than trusted from the server, because
+  // exclusion is a client-side choice.
   const counted = assets.fleet.filter((s) => !excludedShips.has(s.name));
   const fleetValue = counted.reduce((sum, s) => sum + (s.price ? Number(s.price.price) : 0), 0);
-  const fleetPriced = counted.filter((s) => s.price).length;
-  const excluded = assets.fleet.length - counted.length;
 
   const total = fleetValue + Number(assets.loadoutValue) + Number(assets.stashValue);
 
   tiles('#assets-summary', assets.priced
     ? [
         ['Estimated worth*', money(total)],
-        ['Fleet', `${money(fleetValue)} (${fleetPriced} priced${excluded ? `, ${excluded} unticked` : ''})`],
         ['Kit worn', `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
         ['Stashed', money(assets.stashValue)],
         ['Claim exposure*', money(assets.claimExposure)],
       ]
     : [['Estimated worth', 'needs Settings → community dataset + UEX']]);
-
-  const fleetBody = $('#assets-fleet tbody');
-  fleetBody.textContent = '';
-
-  for (const ship of assets.fleet) {
-    const off = excludedShips.has(ship.name);
-    const tr = el('tr');
-    if (off) tr.className = 'excluded';
-
-    const tick = el('td', 'tick');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = !off;
-    box.title = off ? 'Not counted - tick to include' : 'Counted - untick if rented or sold';
-
-    box.addEventListener('change', () => {
-      if (box.checked) excludedShips.delete(ship.name);
-      else excludedShips.add(ship.name);
-      try {
-        localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
-      } catch { /* fine */ }
-      renderAssets();
-
-      // Not owned means not in the fleet either - the tick is one truth
-      // shared by both pages.
-      if (libraryStats) renderFleet(libraryStats);
-    });
-
-    tick.append(box);
-    tr.append(tick);
-
-    tr.append(el('td', null, ship.name));
-    tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold in game'));
-    tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
-    fleetBody.append(tr);
-  }
 
   const stashBody = $('#assets-stash tbody');
   stashBody.textContent = '';
@@ -1375,26 +1346,43 @@ let libraryStats = null;
 function renderFleet(stats) {
   libraryStats = stats;
 
-  // Ships unticked on the Assets page are not owned - a rental, or since
-  // sold - and the user asked for them discarded, so the whole page ignores
-  // them. Flight time and sorties still count: those happened.
+  // Unticked ships are not owned - a rental, or since sold - so every total
+  // ignores them. Flight time and sorties still count: those happened.
   const owned = stats.ships.filter((s) => !excludedShips.has(s.name));
 
-  tiles('#fleet-summary', [
-    ['Ships owned', stats.fleetSize ?? '—'],
-    ['Models flown', owned.length],
+  // The game's entitlement count bundles ships and ground vehicles into one
+  // number and never names them, so it is labelled as its own thing rather
+  // than pretending to agree with the ticked roster.
+  const fleetTiles = [
+    ['Owned per game*', stats.fleetSize ?? '—'],
+    ['Roster ticked', `${owned.length} of ${stats.ships.length}`],
     ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
     ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
-  ]);
+  ];
+
+  if (assetsData?.priced) {
+    const value = owned.reduce((sum, s) => sum + shipPriceOf(s.name), 0);
+    fleetTiles.push(['Fleet value*', money(value)]);
+  }
+
+  tiles('#fleet-summary', fleetTiles);
 
   drawFleetChart(stats.fleetHistory || []);
   renderFleetShips();
 }
 
+/** UEX price for one roster ship, 0 when unpriced or assets are off. */
+function shipPriceOf(name) {
+  const row = assetsData?.fleet?.find((f) => f.name === name);
+  return row?.price ? Number(row.price.price) : 0;
+}
+
 /** Applies the search box and the last-flown period filter. */
 function renderFleetShips() {
   const grid = $('#fleet-ships');
+  const vehicleGrid = $('#fleet-vehicles');
   grid.textContent = '';
+  vehicleGrid.textContent = '';
 
   if (!libraryStats) return;
 
@@ -1402,12 +1390,19 @@ function renderFleetShips() {
   const days = Number($('#fleet-period').value) || 0;
   const cutoff = days ? Date.now() - days * 86400000 : null;
 
+  // Unticked ships stay on the page, struck through - this is where the tick
+  // lives, so hiding them would make the choice irreversible. They sort to
+  // the back and count for nothing.
   const ships = libraryStats.ships.filter((s) => {
-    if (excludedShips.has(s.name)) return false;
     if (term && !s.name.toLowerCase().includes(term)) return false;
     if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
     return true;
-  });
+  }).sort((a, b) => Number(excludedShips.has(a.name)) - Number(excludedShips.has(b.name)));
+
+  // Ships and ground vehicles part ways on the community reference; anything
+  // unmatched is assumed to fly.
+  const vehicles = ships.filter((s) => s.reference && !s.reference.isSpaceship);
+  $('#fleet-vehicles-title').hidden = vehicles.length === 0;
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
@@ -1416,9 +1411,33 @@ function renderFleetShips() {
   }
 
   for (const ship of ships) {
+    const grounded = ship.reference && !ship.reference.isSpaceship;
+    const off = excludedShips.has(ship.name);
+
     // "DRAK Clipper" -> prefix + model.
     const [prefix, ...rest] = ship.name.split(' ');
-    const card = el('article', 'ship-card');
+    const card = el('article', off ? 'ship-card excluded' : 'ship-card');
+
+    // The Owned tick: untick a rental or a ship since sold and it leaves
+    // every total on this page. Remembered per browser.
+    const tick = el('label', 'own-tick');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = !off;
+    box.title = off ? 'Not owned - tick to count it again' : 'Owned - untick if rented or sold';
+
+    box.addEventListener('change', () => {
+      if (box.checked) excludedShips.delete(ship.name);
+      else excludedShips.add(ship.name);
+      try {
+        localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
+      } catch { /* fine */ }
+      renderFleet(libraryStats);
+      renderAssets();
+    });
+
+    tick.append(box);
+    card.append(tick);
 
     const badge = el('div', 'ship-logo');
     if (MANUFACTURERS[prefix]) {
@@ -1466,8 +1485,17 @@ function renderFleetShips() {
       }
     }
 
+    // The blended-in asset side: what buying one costs in game, when the
+    // price tables know it.
+    if (assetsData?.priced) {
+      const row = assetsData.fleet?.find((f) => f.name === ship.name);
+      body.append(row?.price
+        ? el('div', 'ship-price', `${money(row.price.price)} · ${row.price.terminal}`)
+        : el('div', 'ship-price muted', 'not sold in game'));
+    }
+
     card.append(body);
-    grid.append(card);
+    (grounded ? vehicleGrid : grid).append(card);
   }
 }
 

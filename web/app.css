@@ -791,7 +791,9 @@ td.outward { color: var(--amber); }
 
 /* ---------- fleet ---------- */
 
-.fleet-chart-wrap { margin-bottom: 6px; }
+/* Height override: this borrows .map-wrap for the frame styling, but the
+   chart is 220px of content and must not inherit the map's 76vh box. */
+.fleet-chart-wrap { margin-bottom: 6px; height: auto; }
 #fleet-chart { width: 100%; height: 220px; display: block; }
 
 .ship-grid {
@@ -1418,11 +1420,25 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 td.map-links { white-space: nowrap; }
 td.map-links .ghost + .ghost { margin-left: 5px; }
 
-/* ---------- assets: fleet exclusions ---------- */
+/* ---------- fleet: ownership ticks and blended prices ---------- */
 
-#assets-fleet th.tick, #assets-fleet td.tick { width: 52px; text-align: center; }
-#assets-fleet td.tick input { accent-color: var(--cyan); cursor: pointer; }
-#assets-fleet tr.excluded td:not(.tick) { opacity: .35; text-decoration: line-through; }
+.ship-card { position: relative; }
+
+.ship-card .own-tick {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  cursor: pointer;
+}
+.ship-card .own-tick input { accent-color: var(--cyan); cursor: pointer; }
+
+/* Not owned: present so it can be re-ticked, but visibly struck from the
+   books. The tick itself stays at full strength. */
+.ship-card.excluded > :not(.own-tick) { opacity: .32; }
+.ship-card.excluded .ship-name { text-decoration: line-through; }
+
+.ship-price { margin-top: 5px; font-size: 11.5px; color: var(--green); }
+.ship-price.muted { color: var(--dim); }
 
 #map-follow.active {
   color: var(--green);
