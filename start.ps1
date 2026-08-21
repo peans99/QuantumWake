@@ -52,12 +52,19 @@ if ($Rescan) {
     }
 }
 
-# Launch the built executable rather than `dotnet run`. Two reasons: it starts
-# in about a second instead of going back through the SDK, and app arguments go
-# straight through instead of needing a `--` separator that is easy to get
-# wrong. The overlay spawns the same exe, so both paths behave identically.
-$serverExe = 'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
-if (-not (Test-Path $serverExe)) { throw "Server not built: $serverExe" }
+# Launch a built executable rather than `dotnet run`. Two reasons: it starts in
+# about a second instead of going back through the SDK, and app arguments go
+# straight through instead of needing a `--` separator that is easy to get wrong.
+#
+# QuantumWake.exe is the whole application - it hosts the server in-process and
+# puts an icon in the notification area. -NoOverlay runs the bare server
+# instead, which is also what a headless or second-machine setup wants.
+$app = $NoOverlay
+    ? 'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
+    : 'src\Quantumwake.Overlay\bin\Release\net10.0-windows\QuantumWake.exe'
+
+if (-not (Test-Path $app)) { throw "Not built: $app" }
+$serverExe = $app
 
 $serverArgs = @()
 if ($Path) { $serverArgs += @('--path', $Path) }
@@ -110,14 +117,9 @@ Write-Host "Dashboard ready: http://127.0.0.1:$Port" -ForegroundColor Green
 Start-Process "http://127.0.0.1:$Port"
 
 if (-not $NoOverlay) {
-    $overlay = 'src\Quantumwake.Overlay\bin\Release\net10.0-windows\Quantumwake.Overlay.exe'
-    if (Test-Path $overlay) {
-        Start-Process $overlay
-        Write-Host 'Overlay running. Ctrl+Alt+O toggles click-through.' -ForegroundColor Green
-        Write-Host 'Run Star Citizen in Borderless Windowed for it to be visible.' -ForegroundColor DarkGray
-    } else {
-        Write-Host "Overlay not found at $overlay" -ForegroundColor Yellow
-    }
+    Write-Host 'Quantum Wake is in the notification area: open the dashboard, show or' -ForegroundColor Green
+    Write-Host 'hide the overlay, or quit from there. Ctrl+Alt+O toggles click-through.' -ForegroundColor Green
+    Write-Host 'Run Star Citizen in Borderless Windowed for the overlay to be visible.' -ForegroundColor DarkGray
 }
 
 Write-Host ''

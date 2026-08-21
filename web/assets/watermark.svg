@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+  <!--
+    Decorative only. The emblem stripped to its geometry - no disc, no text, one
+    flat colour - so it can sit at four per cent opacity in the margin of a wide
+    display without competing with the data. See logo.svg for the real mark.
+  -->
+  <g fill="none" stroke="#35c8f0" stroke-width="3">
+    <circle cx="256" cy="256" r="246" />
+    <circle cx="256" cy="256" r="228" stroke-width="1.5" />
+    <circle cx="256" cy="256" r="150" stroke-width="1.5" />
+  </g>
+
+  <g fill="#35c8f0">
+    <path d="M256 22 l7 7 -7 7 -7 -7 Z" />
+    <path d="M256 476 l7 7 -7 7 -7 -7 Z" />
+    <path d="M22 256 l7 -7 7 7 -7 7 Z" />
+    <path d="M476 256 l7 -7 7 7 -7 7 Z" />
+  </g>
+
+  <g transform="translate(147 131) scale(3.4)">
+    <path d="M7 45 C 13 57, 33 59, 43 47 C 50 39, 52 29, 48 21"
+          fill="none" stroke="#35c8f0" stroke-width="7"
+          stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M49 3 L52.8 14.2 L64 18 L52.8 21.8 L49 33 L45.2 21.8 L34 18 L45.2 14.2 Z"
+          fill="#35c8f0" />
+  </g>
+</svg>

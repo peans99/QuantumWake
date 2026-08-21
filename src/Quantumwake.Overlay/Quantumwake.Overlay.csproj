@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,13 +7,39 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
 
+    <!-- For NotifyIcon, which Windows ships and WPF does not have an equivalent
+         of. Hosting the Forms control costs this flag; the alternative is a
+         NuGet package for something already on every machine. -->
+    <UseWindowsForms>true</UseWindowsForms>
+
     <!-- Required by [LibraryImport] source generation for the Win32 window-style
          calls in NativeWindowStyles. No unsafe code is written by hand. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <ApplicationIcon>app.ico</ApplicationIcon>
+
+    <!-- One file means one file: symbols go inside the executable, and package
+         XML documentation is not copied next to it. -->
+    <DebugType>embedded</DebugType>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <AssemblyName>QuantumWake</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
+  </ItemGroup>
+
+  <!-- The server runs inside this process, so the whole app is one executable. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Quantumwake.Server\Quantumwake.Server.csproj" />
+  </ItemGroup>
+
+  <!-- Embedded as well as set as the application icon: NotifyIcon needs a
+       stream at runtime, and a single-file build has no app.ico on disk. -->
+  <ItemGroup>
+    <EmbeddedResource Include="app.ico">
+      <LogicalName>Quantumwake.Overlay.app.ico</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>
