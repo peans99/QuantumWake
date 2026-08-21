@@ -79,6 +79,10 @@ public sealed record ContractRecord(
 /// requests are kept but excluded from spend totals, since the player may have
 /// cancelled or lacked the funds.
 /// </param>
+/// <param name="Price">
+/// The order total. The kiosk logs <c>client_price</c> as the whole line, not a
+/// unit price - see <see cref="ShopRequestEvent"/>.
+/// </param>
 public sealed record PurchaseRecord(
     DateTimeOffset At,
     string Shop,
@@ -87,7 +91,9 @@ public sealed record PurchaseRecord(
     int Quantity,
     bool Confirmed)
 {
-    public decimal Total => Price * Quantity;
+    public decimal Total => Price;
+
+    public decimal UnitPrice => Quantity > 0 ? Price / Quantity : Price;
 }
 
 /// <summary>

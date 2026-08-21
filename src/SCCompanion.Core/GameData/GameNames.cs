@@ -28,6 +28,9 @@ public sealed class GameNames
 {
     private const string LocalizationEntry = @"Data\Localization\english\global.ini";
 
+    /// <summary>Bumped whenever the cached shape changes.</summary>
+    private const int CacheVersion = 2;
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
     /// <summary>
@@ -41,19 +44,23 @@ public sealed class GameNames
     private readonly Dictionary<string, string> _items;
     private readonly Dictionary<string, string> _vehicles;
     private readonly Dictionary<string, string> _places;
+    private readonly Dictionary<string, string> _shops;
 
     private GameNames(
         Dictionary<string, string> items,
         Dictionary<string, string> vehicles,
-        Dictionary<string, string> places)
+        Dictionary<string, string> places,
+        Dictionary<string, string> shops)
     {
         _items = items;
         _vehicles = vehicles;
         _places = places;
+        _shops = shops;
     }
 
     /// <summary>An empty table, used when the archive is unavailable.</summary>
     public static GameNames Empty { get; } = new(
+        new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase));
@@ -61,6 +68,7 @@ public sealed class GameNames
     public int ItemCount => _items.Count;
     public int VehicleCount => _vehicles.Count;
     public int PlaceCount => _places.Count;
+    public int ShopCount => _shops.Count;
     public bool IsLoaded => _items.Count > 0 || _vehicles.Count > 0;
 
     /// <summary>
@@ -78,6 +86,57 @@ public sealed class GameNames
 
         return _places.TryGetValue(locationId, out var name) ? name : null;
     }
+
+    /// <summary>
+    /// The game's name for a shop id, or null.
+    /// </summary>
+    /// <remarks>
+    /// Shop ids bury the brand among layout tokens -
+    /// <c>SCShop_lt_a_casaba_small_base_a-002</c> is a Casaba Outlet - so every
+    /// token is tested rather than just the first, and a token matches a table
+    /// key if either is a prefix of the other (<c>LiveFire</c> finds
+    /// <c>livefireweapons</c>, <c>ShubinInterstellar</c> finds <c>shubin</c>).
+    /// The longest match wins so "Casaba Outlet" beats a stray short key.
+    /// Spaces count as separators too, so an id already broken up for display
+    /// resolves as readily as the raw one.
+    /// </remarks>
+    public string? Shop(string shopId)
+    {
+        if (string.IsNullOrWhiteSpace(shopId) || _shops.Count == 0)
+            return null;
+
+        var body = shopId.StartsWith("SCShop_", StringComparison.OrdinalIgnoreCase)
+            ? shopId["SCShop_".Length..]
+            : shopId;
+
+        string? best = null;
+        var bestLength = 0;
+
+        foreach (var token in body.Split(['_', '-', ' '], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var probe = Normalise(token);
+            if (probe.Length < 3)
+                continue;
+
+            foreach (var (key, name) in _shops)
+            {
+                var related = probe.Equals(key, StringComparison.OrdinalIgnoreCase)
+                    || probe.StartsWith(key, StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith(probe, StringComparison.OrdinalIgnoreCase);
+
+                if (related && key.Length > bestLength)
+                {
+                    best = name;
+                    bestLength = key.Length;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private static string Normalise(string value) =>
+        new([.. value.Where(char.IsLetterOrDigit)]);
 
     /// <summary>Display name for an item class, or the class itself.</summary>
     public string Item(string itemClass)
@@ -131,7 +190,9 @@ public sealed class GameNames
         if (!File.Exists(archivePath))
             return Empty;
 
-        var stamp = new FileInfo(archivePath).LastWriteTimeUtc.Ticks.ToString();
+        // The schema version is part of the stamp so adding a table rebuilds the
+        // cache. Without it a new table stays empty until the next game patch.
+        var stamp = $"{CacheVersion}:{new FileInfo(archivePath).LastWriteTimeUtc.Ticks}";
 
         if (TryLoadCache(cachePath, stamp) is { } cached)
             return cached;
@@ -162,6 +223,7 @@ public sealed class GameNames
         var items = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var vehicles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var places = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var shops = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var line in ini.Split('\n'))
         {
@@ -183,6 +245,9 @@ public sealed class GameNames
             if (IsPlaceKey(key))
                 places.TryAdd(key, value);
 
+            if (key.StartsWith("shop_name_", StringComparison.OrdinalIgnoreCase))
+                shops.TryAdd(key["shop_name_".Length..], value);
+
             // Both "item_Namexyz" and "item_Name_xyz" occur, so the separator is
             // trimmed. Missing it hides everything using the underscored form -
             // most armour, among others.
@@ -192,7 +257,7 @@ public sealed class GameNames
                 vehicles.TryAdd(key["vehicle_Name".Length..].TrimStart('_'), value);
         }
 
-        return new GameNames(items, vehicles, places);
+        return new GameNames(items, vehicles, places, shops);
     }
 
     /// <summary>
@@ -236,7 +301,8 @@ public sealed class GameNames
             return new GameNames(
                 new Dictionary<string, string>(cache.Items, StringComparer.OrdinalIgnoreCase),
                 new Dictionary<string, string>(cache.Vehicles, StringComparer.OrdinalIgnoreCase),
-                new Dictionary<string, string>(cache.Places, StringComparer.OrdinalIgnoreCase));
+                new Dictionary<string, string>(cache.Places, StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>(cache.Shops, StringComparer.OrdinalIgnoreCase));
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -255,7 +321,8 @@ public sealed class GameNames
                 Stamp = stamp,
                 Items = names._items,
                 Vehicles = names._vehicles,
-                Places = names._places
+                Places = names._places,
+                Shops = names._shops
             };
 
             File.WriteAllText(cachePath, JsonSerializer.Serialize(cache, Json));
@@ -272,5 +339,6 @@ public sealed class GameNames
         public Dictionary<string, string> Items { get; set; } = [];
         public Dictionary<string, string> Vehicles { get; set; } = [];
         public Dictionary<string, string> Places { get; set; } = [];
+        public Dictionary<string, string> Shops { get; set; } = [];
     }
 }

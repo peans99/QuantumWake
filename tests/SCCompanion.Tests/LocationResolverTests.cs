@@ -57,6 +57,10 @@ public class LocationResolverTests
     [Theory]
     [InlineData("RR_MIC_LEO", "Port Tressler", "microTech")]
     [InlineData("RR_CRU_LEO", "Seraphim Station", "Crusader")]
+
+    // The same station also shows up in the rs_ext form, sometimes numbered.
+    [InlineData("rs_ext_cru-leo1", "Seraphim Station", "Crusader")]
+    [InlineData("rs_ext_mic-leo", "Port Tressler", "microTech")]
     [InlineData("RR_ARC_LEO", "Baijini Point", "ArcCorp")]
     [InlineData("RR_HUR_LEO", "Everus Harbor", "Hurston")]
     public void Resolves_low_orbit_stations_by_name(string id, string name, string body)
