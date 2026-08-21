@@ -26,9 +26,11 @@ below are theirs, re-implemented.
 | [AutoTrackR2](https://github.com/BubbaGumpShrump/AutoTrackR2) | BubbaGumpShrump | Studied for its live-tail loop and overlay approach. |
 | [SC-Kill-Monitor](https://github.com/greluc/SC-Kill-Monitor) | greluc | Studied as the cautionary case: one regex, no fallback, total failure when the format moved. |
 | [citizenmon](https://github.com/danieldeschain/citizenmon) | danieldeschain | Studied for its tailing strategy. |
+| [scunpacked-data](https://github.com/StarCitizenWiki/scunpacked-data) | StarCitizenWiki | **The optional commodity names.** A cargo sale logs the commodity as an id nothing in the local install can resolve; this repository publishes the id-to-name table, regenerated after each patch, and it resolved every id this project had ever logged. Fetched only when the user opts in — never vendored, never fetched silently. |
+| [ScDataDumper](https://github.com/octfx/ScDataDumper) | octfx | The loader that generates scunpacked-data from the game files. Not run or shipped here, but the names the opt-in feature shows exist because of it. |
 
-The comparison of all seven, and what each one does on a current install, is in
-[docs/README.md](README.md).
+The comparison of the seven log tools, and what each one does on a current
+install, is in [docs/README.md](README.md).
 
 ## Game data and file formats
 

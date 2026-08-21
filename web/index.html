@@ -31,6 +31,7 @@
     <button data-view="commodities">Cargo</button>
     <button data-view="loadout">Loadout</button>
     <button data-view="stash">Stash</button>
+    <button data-view="options">Options</button>
     <button data-view="about">About</button>
   </nav>
 
@@ -359,6 +360,54 @@
     <div id="types-chart" class="bars"></div>
   </section>
 
+  <section id="view-options" class="view">
+    <h2>Options</h2>
+
+    <div class="option-block" id="option-overlay">
+      <div class="option-head">
+        <h3>In-game overlay</h3>
+        <button class="ghost" id="overlay-toggle" hidden>—</button>
+      </div>
+      <p class="muted" id="overlay-copy">
+        Off by default. Turning it on shows a transparent panel over the game —
+        Star Citizen must run in Borderless Windowed for it to be visible, and
+        <code>Ctrl+Alt+O</code> toggles click-through. The choice is remembered.
+      </p>
+      <p class="muted" id="overlay-unavailable" hidden>
+        Not available here: this dashboard is served by the bare server, which
+        has no overlay window. Run <code>QuantumWake.exe</code> to get one.
+      </p>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Community commodity names</h3>
+        <button class="ghost" id="options-community-enable" hidden>Download</button>
+        <button class="ghost" id="options-community-disable" hidden>Disable and delete</button>
+      </div>
+      <p class="muted" id="options-community-copy">
+        Cargo sales log the commodity as an id that nothing in the local install
+        can resolve. The community keeps the id-to-name table as a public file
+        (StarCitizenWiki / scunpacked-data). Enabling downloads it once into
+        local app data — the only network request this app can make, and only on
+        your click. Disabling deletes the local copy.
+      </p>
+      <span class="muted" id="options-community-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Log cache</h3>
+        <button class="ghost" id="options-rescan">Re-read every log</button>
+      </div>
+      <p class="muted">
+        Sessions are cached and only changed logs are re-read. Force a full
+        re-parse if something looks stale.
+      </p>
+      <span class="muted" id="options-rescan-status"></span>
+    </div>
+  </section>
+
   <section id="view-about" class="view">
     <div class="about">
       <img class="about-logo" src="assets/emblem.jpg" alt="Quantum Wake">
@@ -387,12 +436,23 @@
           <div><dt>Built by</dt><dd>nekron</dd></div>
         </dl>
 
+        <h2 class="spaced">Credits</h2>
+        <p class="about-note">
+          Built on work the community published first. The log formats:
+          StarLogs (Ozy311), all-slain (DimmaDont), SCStats (Maple33),
+          SCPlay (ckuma), AutoTrackR2, SC-Kill-Monitor and citizenmon.
+          The <code>Data.p4k</code> format: the scdatatools lineage.
+          The optional commodity names: StarCitizenWiki's
+          <code>scunpacked-data</code>, generated with octfx's ScDataDumper.
+          Manufacturer marks from the official Star Citizen Fankit, under the
+          Fankit Agreement. Full attribution, with what was taken from each,
+          in <code>docs/credits.md</code>.
+        </p>
+
         <p class="about-legal">
           Star Citizen®, Roberts Space Industries® and Cloud Imperium® are
           registered trademarks of Cloud Imperium Rights LLC. An unofficial fan
-          tool, not affiliated with or endorsed by Cloud Imperium Games. Built on
-          log-format research published by the community — full attribution in
-          <code>docs/credits.md</code>.
+          tool, not affiliated with or endorsed by Cloud Imperium Games.
         </p>
       </div>
     </div>
@@ -412,7 +472,8 @@
     Log-format research by the community made this possible - StarLogs (Ozy311),
     all-slain (DimmaDont), SCStats (Maple33), SCPlay (ckuma), AutoTrackR2,
     SC-Kill-Monitor and citizenmon - with the p4k format from the scdatatools
-    lineage. Full attribution in docs/credits.md.
+    lineage. Optional commodity names come from StarCitizenWiki's scunpacked-data,
+    built with octfx's ScDataDumper. Full attribution in docs/credits.md.
   </span>
 </footer>
 

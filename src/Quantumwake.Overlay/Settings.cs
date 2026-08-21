@@ -16,11 +16,13 @@ namespace Quantumwake.Overlay;
 internal sealed record Settings
 {
     /// <summary>
-    /// Whether the transparent in-game overlay is shown. False leaves Quantum
-    /// Wake running in the tray with the dashboard still available, which is
-    /// what a second-monitor user wants.
+    /// Whether the transparent in-game overlay is shown. Off by default, at
+    /// nekron's call: a first run should put an icon in the tray and a
+    /// dashboard in the browser, not an unexpected window over the game. The
+    /// overlay is switched on from the Options page or the tray menu, and the
+    /// choice sticks.
     /// </summary>
-    public bool ShowOverlay { get; init; } = true;
+    public bool ShowOverlay { get; init; } = false;
 
     private static string Path_ => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
