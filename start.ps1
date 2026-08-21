@@ -52,18 +52,40 @@ if ($Rescan) {
     }
 }
 
-$serverArgs = @('--project', 'src\Quantumwake.Server', '-c', 'Release', '--no-build')
+# Launch the built executable rather than `dotnet run`. Two reasons: it starts
+# in about a second instead of going back through the SDK, and app arguments go
+# straight through instead of needing a `--` separator that is easy to get
+# wrong. The overlay spawns the same exe, so both paths behave identically.
+$serverExe = 'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
+if (-not (Test-Path $serverExe)) { throw "Server not built: $serverExe" }
+
+$serverArgs = @()
 if ($Path) { $serverArgs += @('--path', $Path) }
 if ($Lan)  { $serverArgs += @('--Lan', 'true') }
 if ($Port -ne 31337) { $serverArgs += @('--Port', "$Port") }
 
 Write-Host "Starting server on http://127.0.0.1:$Port …" -ForegroundColor Cyan
-$server = Start-Process dotnet -ArgumentList $serverArgs -PassThru -WindowStyle Hidden
 
-# Wait for the first response rather than sleeping a fixed amount.
+# Keep the child's output so a startup failure can be shown rather than guessed
+# at - a hidden window swallows it otherwise.
+$serverLog = Join-Path $env:TEMP 'quantumwake-server.log'
+$startArgs = @{
+    FilePath               = $serverExe
+    PassThru               = $true
+    WindowStyle            = 'Hidden'
+    RedirectStandardOutput = $serverLog
+    RedirectStandardError  = "$serverLog.err"
+}
+if ($serverArgs.Count) { $startArgs.ArgumentList = $serverArgs }
+$server = Start-Process @startArgs
+
+# Wait for the first response rather than sleeping a fixed amount. Give up early
+# if the process is already gone: it will never answer, and 30 s of polling a
+# dead port only delays the error message.
 $ready = $false
-foreach ($attempt in 1..60) {
-    Start-Sleep -Milliseconds 500
+foreach ($attempt in 1..40) {
+    Start-Sleep -Milliseconds 400
+    if ($server.HasExited) { break }
     try {
         Invoke-WebRequest "http://127.0.0.1:$Port/api/install" -UseBasicParsing -TimeoutSec 2 | Out-Null
         $ready = $true
@@ -72,8 +94,14 @@ foreach ($attempt in 1..60) {
 }
 
 if (-not $ready) {
-    Write-Host 'The server did not come up. Run it directly to see why:' -ForegroundColor Red
-    Write-Host '  dotnet run --project src\Quantumwake.Server -c Release' -ForegroundColor DarkGray
+    Write-Host 'The server did not come up.' -ForegroundColor Red
+    foreach ($log in @("$serverLog.err", $serverLog)) {
+        if ((Test-Path $log) -and (Get-Item $log).Length -gt 0) {
+            Get-Content $log -Tail 12 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+            break
+        }
+    }
+    Write-Host '  Full output: dotnet run --project src\Quantumwake.Server -c Release' -ForegroundColor DarkGray
     if (-not $server.HasExited) { Stop-Process $server.Id -Force }
     exit 1
 }
