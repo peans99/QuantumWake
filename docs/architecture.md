@@ -121,6 +121,33 @@ Static node data is seeded from public APIs
 **committed as a local JSON file**. No runtime network dependency — the app keeps
 SCStats' offline, read-only posture.
 
+### The atlas: the whole map, not just the visited part
+
+Drawing only visited places gives a map of nowhere — dots with no context, and no
+sense of how much of the system is left. The game's own localisation table names
+about 1,300 locations, and running each id back through the resolver puts a
+system, body and kind on it. That is everything the layout needs, so unvisited
+places are drawn as hollow rings beside the solid ones, behind a **Visited only**
+toggle.
+
+Most of that table is interiors. `Pyro1_L2_03_Entrance` and its 800-odd siblings
+are elevator landings inside one building; including them buries the 240 places
+that are somewhere you actually fly to. The atlas therefore keeps only ids the
+resolver can give a real category to — plus every visited place regardless, since
+somewhere the player has stood earns its dot whatever its id looks like.
+
+### Where a transaction happened
+
+Kiosks name a vendor, not a place, and every commodity terminal in the game logs
+itself as `SCShop_Admin_lt_base_g`. A ledger built on shop names reads "Admin lt
+base g" for every cargo sale ever made.
+
+The position is recoverable anyway. Arrivals and quantum jumps are both logged
+with timestamps, so the last one before the transaction says where it happened —
+which is how the ledger and Cargo pages report Port Tressler and Seraphim Station
+rather than a kiosk id. Vendors keep a column of their own, resolved through the
+game's `shop_name_*` table where it publishes a brand.
+
 ---
 
 ## Resilience: fail soft, and say so

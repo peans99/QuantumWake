@@ -552,6 +552,76 @@ td.outward { color: var(--amber); }
 
 .map-node circle { transition: opacity .15s; }
 .map-node:hover circle.hit { opacity: .22; }
+.map-node.unvisited:hover circle { opacity: .9; }
+
+/* Toolbar above the map: filter, search, and view controls. */
+.map-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 10px;
+  flex-wrap: wrap;
+}
+.map-tools .spacer { flex: 1; }
+.map-tools input[type="search"] { min-width: 200px; }
+
+.map-tools .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-family: var(--display);
+  color: var(--muted);
+}
+.map-tools .toggle input { accent-color: var(--cyan); cursor: pointer; }
+.map-tools .toggle:hover { color: var(--fg); }
+
+.map-tools button.ghost {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  padding: 5px 12px;
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.map-tools button.ghost:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.map-tools button.ghost:disabled { opacity: .35; cursor: default; }
+
+#map { cursor: grab; touch-action: none; }
+#map.dragging { cursor: grabbing; }
+
+.map-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: .55;
+}
+
+/* Player marker. */
+.map-here { pointer-events: none; }
+.map-here .here-ring {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.6;
+  opacity: .9;
+}
+.map-here .here-pulse { fill: none; stroke: var(--cyan); stroke-width: 1; }
+.map-here .here-label {
+  fill: var(--cyan);
+  font-size: 8px;
+  letter-spacing: .22em;
+}
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {
   font-size: 14px;

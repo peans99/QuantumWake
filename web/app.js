@@ -155,6 +155,9 @@ function renderNow(state) {
   $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
 
+  // The map follows the live feed, so the marker moves as the player does.
+  setHere(state.locationId);
+
   const confidence = $('#now-confidence');
   confidence.textContent = state.location ? `${state.confidence.toLowerCase()} confidence` : '';
   confidence.className = `confidence ${(state.confidence || '').toLowerCase()}`;
@@ -287,7 +290,7 @@ async function loadHistory() {
   safeRender('Spending', () => renderSpending(stats));
   safeRender('Loadout', () => renderLoadout(stats));
   safeRender('Stash', () => renderStash(stats));
-  safeRender('Map', () => drawMap(stats.locations));
+  loadAtlas().catch((e) => console.error('map', e));
   safeRender('Contracts', () => renderContracts(stats));
   safeRender('Places', () => renderPlaces(stats));
 
@@ -1033,9 +1036,184 @@ const svgEl = (tag, attrs = {}) => {
  * coordinates, so bodies are laid out on fixed rings and each location is
  * clustered around the body it belongs to. Node size encodes visit count.
  */
-function drawMap(locations) {
+/* ---------- map ---------- */
+
+/**
+ * Every place in the game, visited or not, with the layout worked out once.
+ * Positions are cached by raw id so the live marker and "centre on me" can find
+ * a node without re-running the layout.
+ */
+let atlas = [];
+const nodeAt = new Map();
+
+/** Where the player is, kept in step with the live feed. */
+let hereId = null;
+
+const HOME_VIEW = { x: 0, y: 0, w: 1000, h: 620 };
+let view = { ...HOME_VIEW };
+
+async function loadAtlas() {
+  const data = await getJson('/api/map');
+  atlas = data.nodes || [];
+  drawMap();
+}
+
+/** Width below which every node gets a label rather than only visited ones. */
+const LABEL_ZOOM = 340;
+
+/** Applies the current pan/zoom to the SVG, redrawing when detail changes. */
+function applyView() {
+  const map = $('#map');
+  const wasDetailed = map.dataset.detailed === 'true';
+  const detailed = view.w < LABEL_ZOOM;
+
+  map.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+  map.dataset.detailed = String(detailed);
+
+  // Labels appear on zoom-in, so crossing the threshold means redrawing. The
+  // redraw calls back into applyView, but the flag now matches, so it stops.
+  if (detailed !== wasDetailed && atlas.length) drawMap();
+}
+
+/**
+ * Moves the view so a place sits in the middle, zooming in if the map is still
+ * showing the whole system.
+ */
+function centreOn(rawId, zoom = true) {
+  const point = nodeAt.get(rawId);
+  if (!point) return false;
+
+  if (zoom && view.w > 420) {
+    view.w = 420;
+    view.h = 420 * (HOME_VIEW.h / HOME_VIEW.w);
+  }
+
+  view.x = point.x - view.w / 2;
+  view.y = point.y - view.h / 2;
+  applyView();
+  return true;
+}
+
+/**
+ * Marks the player's current place, and is safe to call before the map has been
+ * drawn - the marker is re-applied on every draw from {@link hereId}.
+ */
+function setHere(rawId) {
+  hereId = rawId || null;
+  drawHere();
+}
+
+function drawHere() {
+  const map = $('#map');
+  map.querySelectorAll('.map-here').forEach((n) => n.remove());
+
+  const point = hereId && nodeAt.get(hereId);
+  $('#map-here').disabled = !point;
+  if (!point) return;
+
+  // Two rings: a steady one to read against the dot, and an expanding pulse.
+  const group = svgEl('g', { class: 'map-here' });
+  group.append(svgEl('circle', { cx: point.x, cy: point.y, r: 15, class: 'here-ring' }));
+
+  const pulse = svgEl('circle', { cx: point.x, cy: point.y, r: 15, class: 'here-pulse' });
+  pulse.append(svgEl('animate', {
+    attributeName: 'r', values: '13;30', dur: '2.2s', repeatCount: 'indefinite',
+  }));
+  pulse.append(svgEl('animate', {
+    attributeName: 'opacity', values: '.65;0', dur: '2.2s', repeatCount: 'indefinite',
+  }));
+  group.append(pulse);
+
+  const label = svgEl('text', {
+    x: point.x, y: point.y - 22, 'text-anchor': 'middle', class: 'map-label here-label',
+  });
+  label.textContent = 'YOU ARE HERE';
+  group.append(label);
+
+  map.append(group);
+}
+
+/** Wheel zoom, drag pan, and the toolbar. Wired once. */
+function initMap() {
+  const map = $('#map');
+
+  map.addEventListener('wheel', (e) => {
+    e.preventDefault();
+
+    // Zoom about the cursor rather than the centre, so the place being
+    // inspected stays under the pointer.
+    const box = map.getBoundingClientRect();
+    const fx = (e.clientX - box.left) / box.width;
+    const fy = (e.clientY - box.top) / box.height;
+
+    const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+    const w = Math.min(HOME_VIEW.w * 1.6, Math.max(90, view.w * factor));
+    const h = w * (HOME_VIEW.h / HOME_VIEW.w);
+
+    view.x += (view.w - w) * fx;
+    view.y += (view.h - h) * fy;
+    view.w = w;
+    view.h = h;
+    applyView();
+  }, { passive: false });
+
+  let drag = null;
+
+  map.addEventListener('pointerdown', (e) => {
+    drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+    map.setPointerCapture(e.pointerId);
+    map.classList.add('dragging');
+  });
+
+  map.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+
+    const box = map.getBoundingClientRect();
+    view.x = drag.vx - ((e.clientX - drag.x) / box.width) * view.w;
+    view.y = drag.vy - ((e.clientY - drag.y) / box.height) * view.h;
+    applyView();
+  });
+
+  const endDrag = (e) => {
+    if (!drag) return;
+    drag = null;
+    map.releasePointerCapture?.(e.pointerId);
+    map.classList.remove('dragging');
+  };
+
+  map.addEventListener('pointerup', endDrag);
+  map.addEventListener('pointercancel', endDrag);
+
+  $('#map-reset').addEventListener('click', () => {
+    view = { ...HOME_VIEW };
+    applyView();
+  });
+
+  $('#map-here').addEventListener('click', () => centreOn(hereId));
+  $('#map-visited-only').addEventListener('change', () => drawMap());
+  onInput('#map-search', () => drawMap());
+}
+
+function drawMap() {
   const map = $('#map');
   map.textContent = '';
+  nodeAt.clear();
+
+  const visitedOnly = $('#map-visited-only')?.checked;
+  const term = ($('#map-search')?.value || '').trim().toLowerCase();
+
+  // The search always wins over the toggle: looking for somewhere you have
+  // never been should find it.
+  const locations = atlas.filter((l) => {
+    if (term) return l.name.toLowerCase().includes(term) || l.rawId.toLowerCase().includes(term);
+    return !visitedOnly || l.visits > 0;
+  });
+
+  const count = $('#map-count');
+  if (count) {
+    const seen = atlas.filter((l) => l.visits > 0).length;
+    count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
+  }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.
   const defs = svgEl('defs');
@@ -1133,12 +1311,26 @@ function drawMap(locations) {
       bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
       map.append(bodyLabel);
 
+      // Sites orbit their body in rings of twelve. A single line ran off the
+      // edge of the map as soon as the atlas brought in every location rather
+      // than only the visited handful - microTech alone has over a hundred.
       const sites = bodies.get(bodyName);
+      const perRing = 12;
+
       sites.forEach((site, siteIndex) => {
-        const spread = (siteIndex - (sites.length - 1) / 2) * 0.55;
-        const sx = bx + Math.cos(angle + Math.PI / 2) * spread * 26;
-        const sy = by + Math.sin(angle + Math.PI / 2) * spread * 26 + (siteIndex % 2 ? 14 : -2);
-        drawNode(map, sx, sy, site, radiusFor(site.visits));
+        const ring = Math.floor(siteIndex / perRing);
+        const slot = siteIndex % perRing;
+        const inRing = Math.min(perRing, sites.length - ring * perRing);
+
+        const spin = (slot / inRing) * Math.PI * 2 + ring * 0.42;
+        const distance = 20 + ring * 15;
+
+        drawNode(
+          map,
+          bx + Math.cos(spin) * distance,
+          by + Math.sin(spin) * distance * 0.8,
+          site,
+          radiusFor(site.visits));
       });
     });
   }
@@ -1151,21 +1343,41 @@ function drawMap(locations) {
   });
 
   drawLegend(locations);
+  applyView();
+  drawHere();
 }
 
 function drawNode(map, x, y, location, radius) {
   const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
-  const group = svgEl('g', { class: 'map-node' });
+  const been = location.visits > 0;
+  const group = svgEl('g', { class: been ? 'map-node' : 'map-node unvisited' });
+
+  nodeAt.set(location.rawId, { x, y });
 
   group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
-  group.append(svgEl('circle', { cx: x, cy: y, r: radius, fill: colour, opacity: '.85' }));
+
+  // Somewhere never visited is drawn as an outline, so the places that carry
+  // history read as solid against the rest of the map.
+  group.append(been
+    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: colour, opacity: '.85' })
+    : svgEl('circle', {
+        cx: x, cy: y, r: radius, fill: 'none',
+        stroke: colour, 'stroke-width': '1.1', opacity: '.42',
+      }));
 
   const title = svgEl('title');
-  title.textContent = `${location.name} — ${location.visits} visit${location.visits === 1 ? '' : 's'}`;
+  title.textContent = been
+    ? `${location.name} — ${location.visits} visit${location.visits === 1 ? '' : 's'}`
+    : `${location.name} — never visited`;
   group.append(title);
 
-  if (radius > 7) {
-    const label = svgEl('text', { x, y: y + radius + 11, 'text-anchor': 'middle', class: 'map-label' });
+  // Labelling everything is unreadable at 1,000 nodes, so only places with
+  // history get one until the view is zoomed in far enough to have room.
+  if ((been && radius > 7) || view.w < LABEL_ZOOM) {
+    const label = svgEl('text', {
+      x, y: y + radius + 11, 'text-anchor': 'middle', class: 'map-label',
+      style: view.w < LABEL_ZOOM ? `font-size:${Math.max(3, view.w / 60)}px` : '',
+    });
     label.textContent = location.name.length > 22 ? `${location.name.slice(0, 21)}…` : location.name;
     group.append(label);
   }
@@ -1297,6 +1509,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function boot() {
   if (isOverlay) document.body.classList.add('overlay');
+
+  initMap();
 
   try {
     const install = await getJson('/api/install');

@@ -102,14 +102,28 @@
   <!-- MAP -->
   <section id="view-map" class="view">
     <div class="map-head">
-      <h2>Where you've been</h2>
+      <h2>Star map</h2>
       <p class="muted">
         Star Citizen does not log player position, so this is a topology map built
         from location and quantum-travel events — last known place, not a live radar.
       </p>
     </div>
+
+    <div class="map-tools">
+      <label class="toggle">
+        <input type="checkbox" id="map-visited-only">
+        <span>Visited only</span>
+      </label>
+      <input type="search" id="map-search" placeholder="Find a place…">
+      <span class="spacer"></span>
+      <span class="muted" id="map-count"></span>
+      <button class="ghost" id="map-here">Centre on me</button>
+      <button class="ghost" id="map-reset">Reset view</button>
+    </div>
+
     <div class="map-wrap">
       <svg id="map" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="map-hint muted">Scroll to zoom · drag to pan</div>
     </div>
     <div class="legend" id="map-legend"></div>
   </section>
