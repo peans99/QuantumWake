@@ -129,14 +129,16 @@ function renderNow(state) {
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
   $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
+  $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
   $('#now-kills').textContent = state.kills ?? 0;
 
-  // Be explicit that zero kills is the game not reporting them, not a bug.
+  // Be explicit about what each number is and is not. Deaths are inferred, and
+  // zero kills is the game not reporting them rather than a bug.
   $('#combat-note').textContent = (state.kills ?? 0) === 0
-    ? 'Star Citizen 4.9 no longer writes kill or vehicle-destruction events to Game.log, '
-      + 'so combat cannot be counted. Incapacitations are still reported. '
-      + 'The parser is in place and will populate if CIG restores them.'
+    ? 'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
+      + '<Actor Death>, and an Incapacitated notification is not always raised. '
+      + 'Kills cannot be counted at all: no surviving event names a killer.'
     : '';
 
   sessionStarted = state.sessionStarted || null;
