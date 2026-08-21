@@ -504,9 +504,17 @@ public static class ServerHost
                     s.IsSpaceship,
                     s.ExpeditedCost,
                     s.StandardClaimTime,
+                    s.CargoScu,
+                    s.ScmSpeed,
+                    s.MaxSpeed,
+                    s.ShieldHp,
+                    s.Health,
                     price = uex.VehiclePrice(s.Name)
                 })
                 .OrderBy(s => s.Name));
+
+        // Manufacturer codes to full names, for every page that shows a maker.
+        app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);
 
         app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
             lib.Community.Items
@@ -518,6 +526,7 @@ public static class ServerHost
                     return new
                     {
                         className = kv.Key,
+                        kv.Value.Name,
                         kv.Value.Type,
                         kv.Value.SubType,
                         kv.Value.Size,

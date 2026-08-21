@@ -378,6 +378,7 @@ async function loadHistory() {
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
   loadLogbook().catch((e) => console.error('logbook', e));
+  await loadManufacturers();
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
   loadCommodities().catch((e) => console.error('cargo', e));
@@ -1049,7 +1050,7 @@ function renderShipsRef() {
     const td = el('td', 'muted', shipCatalogue.length
       ? 'No ships match that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 8;
+    td.colSpan = 12;
     tr.append(td);
     body.append(tr);
     return;
@@ -1064,6 +1065,16 @@ function renderShipsRef() {
     tr.append(el('td', 'muted', ship.career ?? '—'));
     tr.append(el('td', 'muted', ship.role ?? '—'));
     tr.append(el('td', 'num', ship.crew > 0 ? String(ship.crew) : '—'));
+
+    // The spec sheet: zeros mean a cache digested before the fields existed,
+    // shown as dashes rather than lies.
+    tr.append(el('td', 'num', ship.cargoScu > 0 ? `${ship.cargoScu} SCU` : '—'));
+    tr.append(el('td', 'num muted', ship.scmSpeed > 0
+      ? `${Math.round(ship.scmSpeed)} / ${Math.round(ship.maxSpeed)}`
+      : '—'));
+    tr.append(el('td', 'num muted', ship.shieldHp > 0 ? ship.shieldHp.toLocaleString() : '—'));
+    tr.append(el('td', 'num muted', ship.health > 0 ? ship.health.toLocaleString() : '—'));
+
     tr.append(el('td', 'num muted', ship.expeditedCost > 0 ? money(ship.expeditedCost) : '—'));
     tr.append(el('td', 'num muted', ship.standardClaimTime > 0 ? `~${Math.round(ship.standardClaimTime)}m` : '—'));
     tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold'));
@@ -1107,6 +1118,7 @@ function renderPartsRef() {
     (!type || p.type === type)
     && (!term
       || p.className.toLowerCase().includes(term)
+      || (p.name || '').toLowerCase().includes(term)
       || prettyItem(p.className).toLowerCase().includes(term)
       || (p.manufacturer || '').toLowerCase().includes(term)))
 
@@ -1133,7 +1145,12 @@ function renderPartsRef() {
 
   for (const part of rows.slice(0, PARTS_CAP)) {
     const tr = el('tr');
-    tr.append(el('td', null, prettyItem(part.className)));
+
+    // The localised name when the data carries one; my class-name
+    // prettification is the fallback, not the headline.
+    const label = el('td', null, part.name || prettyItem(part.className));
+    if (part.name) label.title = part.className;
+    tr.append(label);
     tr.append(el('td', 'muted', prettyType(part.type)));
     tr.append(el('td', 'muted', part.subType ?? '—'));
     tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
@@ -1604,6 +1621,11 @@ function tiles(container, entries) {
 }
 
 /* Manufacturer prefixes as they appear in vehicle ids. */
+/**
+ * Manufacturer codes to names. The hand-typed entries are the fallback and
+ * the source of logo files; the community dataset's full table is merged over
+ * them at boot when it is enabled, so every code the game knows resolves.
+ */
 const MANUFACTURERS = {
   DRAK: 'Drake Interplanetary', ANVL: 'Anvil Aerospace', RSI: 'Roberts Space Industries',
   MISC: 'MISC', ORIG: 'Origin Jumpworks', AEGS: 'Aegis Dynamics',
@@ -1611,6 +1633,17 @@ const MANUFACTURERS = {
   ESPR: 'Esperia', BANU: 'Banu', KRIG: 'Kruger Intergalactic',
   ARGO: 'ARGO Astronautics', AOPO: 'Aopoa', GATS: 'Gatac', MRAI: 'Mirai',
 };
+
+/** The codes with a local logo image; the merged map must not grow this set. */
+const MANUFACTURER_LOGOS = new Set(Object.keys(MANUFACTURERS));
+
+async function loadManufacturers() {
+  try {
+    const table = await getJson('/api/manufacturers');
+    for (const [code, name] of Object.entries(table))
+      if (!MANUFACTURERS[code]) MANUFACTURERS[code] = name;
+  } catch { /* community data off; the fallback covers the common fleet */ }
+}
 
 const money = (n) => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 
@@ -1716,7 +1749,7 @@ function renderFleetShips() {
     card.append(tick);
 
     const badge = el('div', 'ship-logo');
-    if (MANUFACTURERS[prefix]) {
+    if (MANUFACTURER_LOGOS.has(prefix)) {
       const img = document.createElement('img');
       img.src = `assets/manufacturers/${prefix}.png`;
       img.alt = MANUFACTURERS[prefix];

@@ -15,6 +15,8 @@ public sealed record CommodityInfo(
 /// <param name="ExpeditedCost">Fee to expedite an insurance claim, aUEC.</param>
 /// <param name="ExpeditedClaimTime">Expedited claim wait, as the game data states it.</param>
 /// <param name="StandardClaimTime">Standard claim wait, same unit.</param>
+/// <param name="CargoScu">Cargo grid capacity, SCU. 0 on caches digested before the field existed.</param>
+/// <param name="ScmSpeed">SCM speed, m/s. Same caveat, as are the rest.</param>
 public sealed record ShipInfo(
     string Name,
     string? Career,
@@ -23,17 +25,24 @@ public sealed record ShipInfo(
     bool IsSpaceship,
     decimal? ExpeditedCost,
     double? ExpeditedClaimTime,
-    double? StandardClaimTime);
+    double? StandardClaimTime,
+    double CargoScu = 0,
+    double ScmSpeed = 0,
+    double MaxSpeed = 0,
+    double ShieldHp = 0,
+    double Health = 0);
 
 /// <summary>Reference data for one item: what kind of thing it is.</summary>
 /// <param name="Uuid">The game's entity uuid — the precise join key to UEX item prices.</param>
+/// <param name="Name">The localised display name, when the data carries a real one.</param>
 public sealed record ItemInfo(
     string? Type,
     string? SubType,
     int Size,
     int Grade,
     string? Manufacturer,
-    string? Uuid = null);
+    string? Uuid = null,
+    string? Name = null);
 
 /// <summary>A body's real position within its system, star at the origin.</summary>
 public sealed record BodyPosition(double X, double Y);
@@ -83,6 +92,9 @@ public sealed class CommunityData
     public const string ShipItemsUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/ship-items.json";
 
+    public const string ManufacturersUrl =
+        "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/manufacturers.json";
+
     public const string StarmapUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/starmap_positions.json";
 
@@ -91,6 +103,7 @@ public sealed class CommunityData
     private Dictionary<string, ShipInfo> _ships = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ItemInfo> _items = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, Dictionary<string, BodyPosition>> _positions = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string> _manufacturers = new(StringComparer.OrdinalIgnoreCase);
 
     public CommunityData(string? directory = null)
     {
@@ -106,6 +119,7 @@ public sealed class CommunityData
     private string ShipsDigestPath => Path.Combine(_directory, "digest-ships.json");
     private string ItemsDigestPath => Path.Combine(_directory, "digest-items.json");
     private string PositionsDigestPath => Path.Combine(_directory, "digest-positions.json");
+    private string ManufacturersDigestPath => Path.Combine(_directory, "digest-manufacturers.json");
 
     public bool IsEnabled => _byId.Count > 0;
     public int Count => _byId.Count;
@@ -150,6 +164,9 @@ public sealed class CommunityData
     /// <summary>Every ship in the digest, keyed by class name, for the reference catalogue.</summary>
     public IReadOnlyDictionary<string, ShipInfo> Ships => _ships;
 
+    /// <summary>Manufacturer code to full name ("BEHR" -> "Behring Applied Technology").</summary>
+    public IReadOnlyDictionary<string, string> Manufacturers => _manufacturers;
+
     /// <summary>Every item in the digest, keyed by class name, for the reference catalogue.</summary>
     public IReadOnlyDictionary<string, ItemInfo> Items => _items;
 
@@ -172,6 +189,7 @@ public sealed class CommunityData
         var fpsItemsJson = await http.GetStringAsync(FpsItemsUrl, token);
         var shipItemsJson = await http.GetStringAsync(ShipItemsUrl, token);
         var starmapJson = await http.GetStringAsync(StarmapUrl, token);
+        var manufacturersJson = await http.GetStringAsync(ManufacturersUrl, token);
 
         // Digest before persisting: a failed download or a moved file must not
         // leave a cache that then fails on every startup.
@@ -182,18 +200,21 @@ public sealed class CommunityData
         var ships = DigestShips(shipsJson);
         var items = DigestItems(fpsItemsJson, shipItemsJson);
         var positions = DigestPositions(starmapJson);
+        var manufacturers = DigestManufacturers(manufacturersJson);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));
         File.WriteAllText(ShipsDigestPath, JsonSerializer.Serialize(ships));
         File.WriteAllText(ItemsDigestPath, JsonSerializer.Serialize(items));
         File.WriteAllText(PositionsDigestPath, JsonSerializer.Serialize(positions));
+        File.WriteAllText(ManufacturersDigestPath, JsonSerializer.Serialize(manufacturers));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _byId = digest;
         _ships = ships;
         _items = items;
         _positions = positions;
+        _manufacturers = manufacturers;
         FetchedAt = DateTimeOffset.UtcNow;
         return _byId.Count;
     }
@@ -207,6 +228,7 @@ public sealed class CommunityData
         _byId = new Dictionary<string, CommodityInfo>(StringComparer.OrdinalIgnoreCase);
         _ships = new Dictionary<string, ShipInfo>(StringComparer.OrdinalIgnoreCase);
         _items = new Dictionary<string, ItemInfo>(StringComparer.OrdinalIgnoreCase);
+        _manufacturers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
     }
 
@@ -225,6 +247,12 @@ public sealed class CommunityData
                 _positions = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, BodyPosition>>>(
                         File.ReadAllText(PositionsDigestPath))
                     ?? new Dictionary<string, Dictionary<string, BodyPosition>>(StringComparer.OrdinalIgnoreCase);
+
+            if (File.Exists(ManufacturersDigestPath))
+                _manufacturers = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                        File.ReadAllText(ManufacturersDigestPath))
+                    is { } m ? new Dictionary<string, string>(m, StringComparer.OrdinalIgnoreCase)
+                             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;
@@ -374,6 +402,20 @@ public sealed class CommunityData
                 standard = Num(insurance, "StandardClaimTime");
             }
 
+            // The spec-sheet numbers: SCM and top speed sit under
+            // FlightCharacteristics.Speeds; the rest are top-level.
+            double scm = 0;
+            double max = 0;
+
+            if (entry.TryGetProperty("FlightCharacteristics", out var flight)
+                && flight.ValueKind == JsonValueKind.Object
+                && flight.TryGetProperty("Speeds", out var speeds)
+                && speeds.ValueKind == JsonValueKind.Object)
+            {
+                scm = Num(speeds, "Scm") ?? 0;
+                max = Num(speeds, "Max") ?? 0;
+            }
+
             result[className] = new ShipInfo(
                 name,
                 Str(entry, "Career"),
@@ -382,7 +424,12 @@ public sealed class CommunityData
                 entry.TryGetProperty("IsSpaceship", out var s) && s.ValueKind == JsonValueKind.True,
                 expeditedCost,
                 expedited,
-                standard);
+                standard,
+                Num(entry, "Cargo") ?? 0,
+                scm,
+                max,
+                Num(entry, "ShieldHp") ?? 0,
+                Num(entry, "Health") ?? 0);
         }
 
         return result;
@@ -393,6 +440,29 @@ public sealed class CommunityData
     /// ship item files - the loadout holds armour and the spending history
     /// holds power plants, and both deserve a size and a maker.
     /// </summary>
+    /// <summary>Manufacturer code to full display name, placeholders skipped.</summary>
+    public static Dictionary<string, string> DigestManufacturers(string manufacturersJson)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        using var doc = JsonDocument.Parse(manufacturersJson);
+
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var entry in doc.RootElement.EnumerateArray())
+        {
+            var code = Str(entry, "Code");
+            var name = Str(entry, "Name");
+
+            if (code is { Length: > 0 } && name is { Length: > 0 }
+                && !name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                result[code] = name;
+        }
+
+        return result;
+    }
+
     public static Dictionary<string, ItemInfo> DigestItems(params string[] jsonFiles)
     {
         var result = new Dictionary<string, ItemInfo>(StringComparer.OrdinalIgnoreCase);
@@ -419,13 +489,19 @@ public sealed class CommunityData
                         manufacturer = null;
                 }
 
+                // The real display name, when localisation gave the item one.
+                var name = Str(entry, "name");
+                if (name is null || name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                    name = null;
+
                 result[className] = new ItemInfo(
                     Str(entry, "type"),
                     Str(entry, "subType") is "UNDEFINED" or null ? null : Str(entry, "subType"),
                     (int)(Num(entry, "size") ?? 0),
                     (int)(Num(entry, "grade") ?? 0),
                     manufacturer,
-                    Str(entry, "reference"));
+                    Str(entry, "reference"),
+                    name);
             }
         }
 
