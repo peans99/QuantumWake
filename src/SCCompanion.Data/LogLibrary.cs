@@ -1,4 +1,5 @@
 using SCCompanion.Core.GameData;
+using SCCompanion.Core.Locations;
 using SCCompanion.Core.Logging;
 using SCCompanion.Core.State;
 
@@ -350,6 +351,11 @@ public sealed class LogLibrary : IDisposable
             "names.json");
 
         Names = GameNames.Load(installRoot, cache);
+
+        // Let the resolver prefer the game's own place names, and drop anything
+        // resolved before they were available.
+        LocationResolver.NameLookup = Names.Place;
+        LocationResolver.ClearCache();
     }
 
     public LogLibrary(SessionStore store, bool ownsStore = false)

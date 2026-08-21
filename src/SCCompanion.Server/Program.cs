@@ -67,7 +67,8 @@ app.MapGet("/api/install", (LogLibrary lib) => install is null
         {
             loaded = lib.Names.IsLoaded,
             items = lib.Names.ItemCount,
-            vehicles = lib.Names.VehicleCount
+            vehicles = lib.Names.VehicleCount,
+            places = lib.Names.PlaceCount
         }
     }));
 
@@ -85,7 +86,8 @@ app.MapPost("/api/names/refresh", (LogLibrary lib) =>
     {
         loaded = lib.Names.IsLoaded,
         items = lib.Names.ItemCount,
-        vehicles = lib.Names.VehicleCount
+        vehicles = lib.Names.VehicleCount,
+        places = lib.Names.PlaceCount
     });
 });
 

@@ -30,22 +30,54 @@ public sealed class GameNames
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
+    /// <summary>
+    /// Key prefixes that identify a place rather than an item or a line of
+    /// dialogue. Location keys carry no functional prefix of their own, so they
+    /// have to be recognised by the id itself.
+    /// </summary>
+    private static readonly string[] PlacePrefixes =
+        ["Stanton", "Pyro", "RR_", "ATC_", "OOC_", "LOC_", "Terra", "Nyx"];
+
     private readonly Dictionary<string, string> _items;
     private readonly Dictionary<string, string> _vehicles;
+    private readonly Dictionary<string, string> _places;
 
-    private GameNames(Dictionary<string, string> items, Dictionary<string, string> vehicles)
+    private GameNames(
+        Dictionary<string, string> items,
+        Dictionary<string, string> vehicles,
+        Dictionary<string, string> places)
     {
         _items = items;
         _vehicles = vehicles;
+        _places = places;
     }
 
     /// <summary>An empty table, used when the archive is unavailable.</summary>
-    public static GameNames Empty { get; } = new(new(StringComparer.OrdinalIgnoreCase),
-                                                 new(StringComparer.OrdinalIgnoreCase));
+    public static GameNames Empty { get; } = new(
+        new(StringComparer.OrdinalIgnoreCase),
+        new(StringComparer.OrdinalIgnoreCase),
+        new(StringComparer.OrdinalIgnoreCase));
 
     public int ItemCount => _items.Count;
     public int VehicleCount => _vehicles.Count;
+    public int PlaceCount => _places.Count;
     public bool IsLoaded => _items.Count > 0 || _vehicles.Count > 0;
+
+    /// <summary>
+    /// The game's own name for a location id, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// Worth preferring over anything derived: <c>RR_P5_L2</c> is really
+    /// "Gaslight" and <c>Pyro2_Outpost_col_m_scrp_indy_001</c> is "Sunset Mesa",
+    /// neither of which is guessable from the id.
+    /// </remarks>
+    public string? Place(string locationId)
+    {
+        if (string.IsNullOrWhiteSpace(locationId))
+            return null;
+
+        return _places.TryGetValue(locationId, out var name) ? name : null;
+    }
 
     /// <summary>Display name for an item class, or the class itself.</summary>
     public string Item(string itemClass)
@@ -129,6 +161,7 @@ public sealed class GameNames
     {
         var items = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var vehicles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var places = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var line in ini.Split('\n'))
         {
@@ -142,6 +175,14 @@ public sealed class GameNames
             if (value.Length == 0)
                 continue;
 
+            // Some keys carry a ",P" grammatical variant suffix.
+            var comma = key.IndexOf(',');
+            if (comma > 0)
+                key = key[..comma];
+
+            if (IsPlaceKey(key))
+                places.TryAdd(key, value);
+
             // Both "item_Namexyz" and "item_Name_xyz" occur, so the separator is
             // trimmed. Missing it hides everything using the underscored form -
             // most armour, among others.
@@ -151,7 +192,33 @@ public sealed class GameNames
                 vehicles.TryAdd(key["vehicle_Name".Length..].TrimStart('_'), value);
         }
 
-        return new GameNames(items, vehicles);
+        return new GameNames(items, vehicles, places);
+    }
+
+    /// <summary>
+    /// True for keys that name a place. Descriptive and sub-facility suffixes
+    /// are excluded so a station's blurb never becomes its name.
+    /// </summary>
+    private static bool IsPlaceKey(string key)
+    {
+        var matchesPrefix = false;
+
+        foreach (var prefix in PlacePrefixes)
+        {
+            if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                matchesPrefix = true;
+                break;
+            }
+        }
+
+        if (!matchesPrefix)
+            return false;
+
+        return !key.EndsWith("_desc", StringComparison.OrdinalIgnoreCase)
+            && !key.EndsWith("_addr", StringComparison.OrdinalIgnoreCase)
+            && !key.Contains("_SK_", StringComparison.Ordinal)
+            && !key.Contains("_MG_", StringComparison.Ordinal);
     }
 
     private static GameNames? TryLoadCache(string cachePath, string stamp)
@@ -168,7 +235,8 @@ public sealed class GameNames
 
             return new GameNames(
                 new Dictionary<string, string>(cache.Items, StringComparer.OrdinalIgnoreCase),
-                new Dictionary<string, string>(cache.Vehicles, StringComparer.OrdinalIgnoreCase));
+                new Dictionary<string, string>(cache.Vehicles, StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>(cache.Places, StringComparer.OrdinalIgnoreCase));
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -186,7 +254,8 @@ public sealed class GameNames
             {
                 Stamp = stamp,
                 Items = names._items,
-                Vehicles = names._vehicles
+                Vehicles = names._vehicles,
+                Places = names._places
             };
 
             File.WriteAllText(cachePath, JsonSerializer.Serialize(cache, Json));
@@ -202,5 +271,6 @@ public sealed class GameNames
         public string Stamp { get; set; } = string.Empty;
         public Dictionary<string, string> Items { get; set; } = [];
         public Dictionary<string, string> Vehicles { get; set; } = [];
+        public Dictionary<string, string> Places { get; set; } = [];
     }
 }

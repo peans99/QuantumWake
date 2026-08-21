@@ -29,6 +29,22 @@ public static partial class LocationResolver
     private static readonly ConcurrentDictionary<string, ResolvedLocation> Cache = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Optional hook returning the game's own name for a location id.
+    /// </summary>
+    /// <remarks>
+    /// The game knows names no rule could derive - <c>RR_P5_L2</c> is "Gaslight",
+    /// <c>Pyro2_Outpost_col_m_scrp_indy_001</c> is "Sunset Mesa" - so when one is
+    /// available it wins over anything the rules below produce. System, body and
+    /// kind still come from the id, because the name alone does not carry them.
+    /// This is an ambient hook rather than a constructor argument because the
+    /// resolver is static and called from deep inside parsing.
+    /// </remarks>
+    public static Func<string, string?>? NameLookup { get; set; }
+
+    /// <summary>Drops cached resolutions, needed after <see cref="NameLookup"/> changes.</summary>
+    public static void ClearCache() => Cache.Clear();
+
+    /// <summary>
     /// Ids that name a category rather than a place.
     /// </summary>
     /// <remarks>
@@ -77,7 +93,7 @@ public static partial class LocationResolver
                .Replace("ObjectContainer_", string.Empty, StringComparison.OrdinalIgnoreCase)
                .Replace("_LOC", string.Empty, StringComparison.OrdinalIgnoreCase);
 
-        return TryNamedPlace(rawId, id)
+        var resolved = TryNamedPlace(rawId, id)
             ?? TryJumpPointRestStop(rawId, id)
             ?? TryRestStop(rawId, id)
             ?? TryJumpPoint(rawId, id)
@@ -88,6 +104,15 @@ public static partial class LocationResolver
             ?? TryNavPoint(rawId, id)
             ?? TryWellKnown(rawId, id)
             ?? ResolvedLocation.Unresolved(rawId);
+
+        // The game's own name beats a derived one, but the id still supplies the
+        // system, body and kind that the name cannot.
+        var official = NameLookup?.Invoke(rawId) ?? NameLookup?.Invoke(id);
+
+        if (!string.IsNullOrWhiteSpace(official))
+            resolved = resolved with { DisplayName = official, IsResolved = true };
+
+        return resolved;
     }
 
     /// <summary>Places known only by name, with no system prefix in the id.</summary>
