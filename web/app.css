@@ -71,24 +71,38 @@ body::before {
 /* An ultrawide left two thirds of the glass empty: the column was capped at
    1440px with dead black either side. The column is wider now, and what it
    still cannot use is given to the brand rather than left blank. Everything
-   here is decorative, appears only past 1600px, and never in the overlay. */
+   here is decorative, appears only past 1400px, and never in the overlay. */
 .railmark { display: none; }
 
-@media (min-width: 1600px) {
-  /* The emblem, stripped to its geometry, sitting in the right margin and
-     running off the edge of the screen. Positioned from the content column's
-     right rail outwards - anchoring it to the viewport instead put it entirely
-     off-screen on an ultrawide, where the margin is 700px deep. */
+@media (min-width: 1400px) {
+  /* The emblem itself, glowing out of the bottom-right corner.
+
+     It was drawn geometry at six per cent in the right margin before, which is
+     invisible on anything narrower than an ultrawide - on a 1920 screen the
+     margin is 58px and the mark fell off the edge entirely. Anchored to the
+     viewport corner it is always on screen, and it grows into the margin when
+     there is one.
+
+     mix-blend-mode: screen is what makes the artwork usable here: the JPEG has
+     a dark navy ground and no transparency, and screen drops anything darker
+     than the page, leaving only the glow. */
   body::after {
     content: "";
     position: fixed;
-    left: calc(50% + var(--page) / 2 - 110px);
-    top: 50%;
-    width: min(34vw, 640px);
+    right: clamp(-150px, calc((100vw - var(--page)) / 2 - 280px), 30px);
+    bottom: -80px;
+    width: min(30vw, 540px);
     aspect-ratio: 1;
-    transform: translateY(-50%);
-    background: url("assets/watermark.svg") center / contain no-repeat;
-    opacity: .06;
+    background: url("assets/emblem.jpg") center / contain no-repeat;
+    mix-blend-mode: screen;
+    opacity: .34;
+
+    /* The artwork is square and its ground sits a shade lighter than the page,
+       so screen blending drew a visible rectangle around it. Fading past the
+       emblem's own rim leaves only the disc. */
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
+    mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
+
     pointer-events: none;
     z-index: 0;
   }
@@ -1038,4 +1052,13 @@ body.overlay
   line-height: 1.65;
 }
 .foot .mbc { width: 78px; opacity: .5; flex: 0 0 auto; }
+
+/* The emblem, at a size where its ring text is actually readable. Branding that
+   only appears past 1400px is branding most people never see. */
+.foot .emblem {
+  width: 76px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 22px rgba(53, 200, 240, .18);
+}
 body.overlay .foot { display: none; }
