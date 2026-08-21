@@ -12,6 +12,41 @@
         ShowInTaskbar="False"
         ResizeMode="CanResize">
 
+    <Window.Resources>
+        <!-- Header buttons share one flat template; the close button recolours
+             its hover through the HoverBrush so danger reads as red. -->
+        <SolidColorBrush x:Key="HeaderHover" Color="#12314A" />
+        <SolidColorBrush x:Key="CloseHover" Color="#FF5A4D" />
+
+        <Style x:Key="HeaderButton" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Foreground" Value="#7796B0" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Tag" Value="{StaticResource HeaderHover}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background"
+                                        Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <!-- The outer border is the resize gutter. WebView2 is inset by GutterWidth
          so it never covers the window edges - without that inset the browser
          control swallows the hit-testing that resizing depends on.
@@ -36,7 +71,16 @@
                     BorderThickness="1,1,1,0"
                     Height="26" MouseLeftButtonDown="HeaderBar_MouseLeftButtonDown" Cursor="SizeAll">
                 <Grid>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="9,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- The long how-to strap did not fit a 230px widget; the
+                         hints live in the buttons' tooltips instead, and the
+                         strap trims itself when the window is narrow. -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                VerticalAlignment="Center" Margin="9,0,0,0">
                         <Rectangle Width="7" Height="7" Fill="#35C8F0"
                                    RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center">
                             <Rectangle.RenderTransform>
@@ -49,47 +93,34 @@
                                    FontSize="10"
                                    VerticalAlignment="Center"
                                    Margin="9,0,0,0" />
-                        <TextBlock Text="DRAG TO MOVE  ·  EDGES TO RESIZE  ·  CTRL+ALT+←/→ PAGE  ·  CTRL+ALT+O TO LOCK"
+                        <TextBlock Text="DRAG TO MOVE · CTRL+ALT+O TO LOCK"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
                                    VerticalAlignment="Center"
-                                   Margin="14,0,0,0" />
+                                   Margin="14,0,0,0"
+                                   TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
-                    <Button x:Name="CloseButton"
-                            Content="✕"
-                            Click="CloseButton_Click"
-                            HorizontalAlignment="Right"
-                            Width="30"
-                            Foreground="#7796B0"
-                            FontFamily="Segoe UI"
-                            FontSize="11"
-                            BorderThickness="0"
-                            Background="Transparent"
-                            Cursor="Hand"
-                            ToolTip="Close the overlay">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border x:Name="Bg" Background="Transparent">
-                                                <ContentPresenter HorizontalAlignment="Center"
-                                                                  VerticalAlignment="Center" />
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Bg" Property="Background" Value="#FF5A4D" />
-                                                    <Setter Property="Foreground" Value="White" />
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="PrevButton" Content="◀"
+                                Style="{StaticResource HeaderButton}"
+                                Click="PrevButton_Click" FontSize="9"
+                                ToolTip="Previous tab (Ctrl+Alt+←)" />
+                        <Button x:Name="NextButton" Content="▶"
+                                Style="{StaticResource HeaderButton}"
+                                Click="NextButton_Click" FontSize="9"
+                                ToolTip="Next tab (Ctrl+Alt+→)" />
+                        <Button x:Name="FullscreenButton" Content="⛶"
+                                Style="{StaticResource HeaderButton}"
+                                Click="FullscreenButton_Click" FontSize="13"
+                                ToolTip="Fullscreen (Ctrl+Alt+F)" />
+                        <Button x:Name="CloseButton" Content="✕"
+                                Style="{StaticResource HeaderButton}"
+                                Tag="{StaticResource CloseHover}"
+                                Click="CloseButton_Click"
+                                ToolTip="Close the overlay" />
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -173,6 +204,12 @@
                                    FontSize="10"
                                    HorizontalAlignment="Center" />
                         <TextBlock Text="CTRL + ALT + ← / →   CHANGE PAGE"
+                                   Foreground="#46617A"
+                                   FontFamily="Bahnschrift, Segoe UI"
+                                   FontSize="10"
+                                   Margin="0,5,0,0"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="CTRL + ALT + F   FULLSCREEN"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
