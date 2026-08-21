@@ -129,7 +129,10 @@
         <input type="checkbox" id="map-visited-only">
         <span>Visited only</span>
       </label>
-      <input type="search" id="map-search" placeholder="Find a place…">
+      <span class="map-search-box">
+        <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
+        <div class="map-results" id="map-results" hidden></div>
+      </span>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
@@ -139,6 +142,7 @@
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="map-tip" id="map-tip" hidden></div>
       <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details</div>
 
       <aside class="map-info" id="map-info" hidden>
@@ -387,6 +391,7 @@
     <div class="section-bar">
       <h2>Commodity market</h2>
       <div class="controls">
+        <select id="market-group" class="select" title="Filter by commodity group"></select>
         <input type="search" id="market-search" class="search" placeholder="Search commodities…"
                autocomplete="off" spellcheck="false">
       </div>
@@ -465,9 +470,14 @@
     <div class="summary-strip" id="assets-summary"></div>
 
     <h2 class="spaced">Fleet, at in-game prices</h2>
+    <p class="muted caption">
+      The fleet comes from the logs, so rentals and ships you have since sold
+      appear too — untick them and they leave the totals. The choice is
+      remembered in this browser.
+    </p>
     <div class="table-wrap">
       <table id="assets-fleet">
-        <thead><tr><th>Ship</th><th class="num">Buy price</th><th>Cheapest at</th></tr></thead>
+        <thead><tr><th class="tick">Owned</th><th>Ship</th><th class="num">Buy price</th><th>Cheapest at</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>

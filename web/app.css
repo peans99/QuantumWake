@@ -1268,16 +1268,102 @@ body.overlay .slot-card { gap: 9px; }
 body.overlay .slot-icon { flex-basis: 32px; width: 32px; height: 32px; }
 body.overlay .slot-icon svg { width: 19px; height: 19px; }
 
-/* ---------- map: commodity highlight, follow, detail card ---------- */
+/* ---------- map: search, highlight, follow, detail card ---------- */
 
-/* Commodity mode: sellers glow green, the rest recede but stay for context. */
-.map-node.dim { opacity: .16; }
+/* Search mode: matches glow, the rest recede but stay for context. The dim is
+   deep - at .16 the crowd still competed with the answer. */
+.map-node.dim { opacity: .07; }
 .map-node.hl .hl-ring { animation: hl-breathe 2.4s ease-in-out infinite; }
+.map-node.hl .map-label { fill: #a9f5c9; }
 
 @keyframes hl-breathe {
   0%, 100% { opacity: .9; }
   50% { opacity: .45; }
 }
+
+/* Scenery: deterministic star specks and the orbit rings under each system. */
+.map-star { fill: #cfe9ff; }
+.map-orbit {
+  fill: none;
+  stroke: rgba(53, 200, 240, .07);
+  stroke-width: 1;
+  stroke-dasharray: 2 7;
+}
+
+/* The search input, in the HUD's own materials rather than the browser's. */
+.map-search-box { position: relative; display: inline-flex; }
+
+#map-search {
+  background: rgba(8, 18, 30, .9);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  width: 220px;
+  outline: none;
+}
+#map-search:focus { border-color: var(--cyan); }
+#map-search::placeholder { color: var(--dim); }
+
+/* The suggestion list: top matches by name, click to fly there. */
+.map-results {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  min-width: 100%;
+  max-width: 320px;
+  background: rgba(7, 14, 23, .97);
+  border: 1px solid var(--rule-hot);
+  z-index: 30;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+}
+.map-results[hidden] { display: none; }
+
+.map-result {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.map-result:last-child { border-bottom: 0; }
+.map-result:hover { background: rgba(53, 200, 240, .1); }
+.map-result .name { color: var(--cyan-hot, #7fe4ff); }
+.map-result .where { color: var(--dim); font-size: 11px; }
+
+/* The hover tooltip: instant, styled, and never in the pointer's way. */
+.map-tip {
+  position: absolute;
+  z-index: 25;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(7, 14, 23, .96);
+  border: 1px solid var(--rule-hot);
+  padding: 7px 10px;
+  font-size: 11px;
+  max-width: 240px;
+}
+.map-tip[hidden] { display: none; }
+.map-tip strong { color: var(--cyan-hot, #7fe4ff); font-weight: 600; font-size: 12px; }
+
+/* ---------- assets: fleet exclusions ---------- */
+
+#assets-fleet th.tick, #assets-fleet td.tick { width: 52px; text-align: center; }
+#assets-fleet td.tick input { accent-color: var(--cyan); cursor: pointer; }
+#assets-fleet tr.excluded td:not(.tick) { opacity: .35; text-decoration: line-through; }
 
 #map-follow.active {
   color: var(--green);
