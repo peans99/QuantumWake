@@ -30,8 +30,10 @@ public partial class MainWindow : Window
     private const int ToggleHotkeyId = 0xA11;
     private const int PrevViewHotkeyId = 0xA12;
     private const int NextViewHotkeyId = 0xA13;
+    private const int FullscreenHotkeyId = 0xA14;
 
     private const uint VkO = 0x4F;
+    private const uint VkF = 0x46;
     private const uint VkLeft = 0x25;
     private const uint VkRight = 0x27;
 
@@ -39,6 +41,10 @@ public partial class MainWindow : Window
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(2) };
     private bool _clickThrough = true;
+
+    /// <summary>The widget-sized bounds to return to when fullscreen ends.</summary>
+    private Rect _restoreBounds;
+    private bool _isFullscreen;
 
     /// <summary>
     /// Width of the transparent gutter around the WebView2 that acts as the
@@ -89,9 +95,12 @@ public partial class MainWindow : Window
         }
 
         // View switching works even while click-through is on, so the widget can
-        // be paged through mid-flight without unlocking it.
+        // be paged through mid-flight without unlocking it. Fullscreen too: a
+        // locked overlay blown up to full size is a HUD over the whole game.
         NativeWindowStyles.RegisterGlobalHotKey(this, PrevViewHotkeyId, ctrlAlt, VkLeft);
         NativeWindowStyles.RegisterGlobalHotKey(this, NextViewHotkeyId, ctrlAlt, VkRight);
+        NativeWindowStyles.RegisterGlobalHotKey(
+            this, FullscreenHotkeyId, ctrlAlt | NativeWindowStyles.Modifiers.NoRepeat, VkF);
 
         await StartAsync();
     }
@@ -184,13 +193,18 @@ public partial class MainWindow : Window
                     CycleView(1);
                     handled = true;
                     return IntPtr.Zero;
+
+                case FullscreenHotkeyId:
+                    ToggleFullscreen();
+                    handled = true;
+                    return IntPtr.Zero;
             }
         }
 
         // WebView2 covers the client area and swallows the mouse, so WPF's own
         // resize borders never see it. Claiming the outer gutter here hands the
         // edges back to the system resize loop.
-        if (msg == WM_NCHITTEST && !_clickThrough)
+        if (msg == WM_NCHITTEST && !_clickThrough && !_isFullscreen)
         {
             var hit = HitTestGutter(lParam);
             if (hit != HitTest.Client)
@@ -277,6 +291,64 @@ public partial class MainWindow : Window
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+    private void PrevButton_Click(object sender, RoutedEventArgs e) => CycleView(-1);
+    private void NextButton_Click(object sender, RoutedEventArgs e) => CycleView(1);
+    private void FullscreenButton_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
+
+    /// <summary>
+    /// Grows the widget to cover the monitor it is on, and back. The page is
+    /// told, because at full size the six-tab whitelist lifts and the widget
+    /// briefly is the whole dashboard; the compact bounds come back on exit
+    /// and are the only geometry ever persisted.
+    /// </summary>
+    private async void ToggleFullscreen()
+    {
+        _isFullscreen = !_isFullscreen;
+
+        if (_isFullscreen)
+        {
+            _restoreBounds = new Rect(Left, Top, Width, Height);
+
+            // The monitor under the window, in WPF units. Screen reports device
+            // pixels; the presentation source carries the DPI transform.
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var bounds = System.Windows.Forms.Screen.FromHandle(hwnd).Bounds;
+            var transform = ((HwndSource)PresentationSource.FromVisual(this)!)
+                .CompositionTarget.TransformFromDevice;
+
+            var topLeft = transform.Transform(new Point(bounds.Left, bounds.Top));
+            var bottomRight = transform.Transform(new Point(bounds.Right, bounds.Bottom));
+
+            Left = topLeft.X;
+            Top = topLeft.Y;
+            Width = bottomRight.X - topLeft.X;
+            Height = bottomRight.Y - topLeft.Y;
+        }
+        else
+        {
+            Left = _restoreBounds.Left;
+            Top = _restoreBounds.Top;
+            Width = _restoreBounds.Width;
+            Height = _restoreBounds.Height;
+        }
+
+        FullscreenButton.ToolTip = _isFullscreen
+            ? "Back to widget size (Ctrl+Alt+F)"
+            : "Fullscreen (Ctrl+Alt+F)";
+
+        if (Browser.CoreWebView2 is not null)
+        {
+            try
+            {
+                await Browser.ExecuteScriptAsync(
+                    $"window.scOverlayExpanded && window.scOverlayExpanded({(_isFullscreen ? "true" : "false")})");
+            }
+            catch (InvalidOperationException)
+            {
+                // Still initialising; the page will simply start compact.
+            }
+        }
+    }
 
     /// <summary>
     /// Switches between "informational" (clicks reach the game) and
@@ -321,17 +393,25 @@ public partial class MainWindow : Window
     /// <summary>Dragging is offered from the header strip only.</summary>
     private void HeaderBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
+        // A fullscreen overlay has nowhere to be dragged to.
+        if (!_isFullscreen && e.ButtonState == MouseButtonState.Pressed)
             DragMove();
     }
 
     protected override void OnClosed(EventArgs e)
     {
-        new OverlayGeometry(Left, Top, Width, Height).Save();
+        // Closing while fullscreen must not turn the saved widget geometry
+        // into a monitor-sized window next launch.
+        var saved = _isFullscreen
+            ? _restoreBounds
+            : new Rect(Left, Top, Width, Height);
+
+        new OverlayGeometry(saved.Left, saved.Top, saved.Width, saved.Height).Save();
 
         NativeWindowStyles.UnregisterGlobalHotKey(this, ToggleHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, PrevViewHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, NextViewHotkeyId);
+        NativeWindowStyles.UnregisterGlobalHotKey(this, FullscreenHotkeyId);
 
         _http.Dispose();
         base.OnClosed(e);

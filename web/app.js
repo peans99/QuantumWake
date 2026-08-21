@@ -181,6 +181,10 @@ window.scCycleView = (delta) => {
 
 window.scShowView = showView;
 
+/* Driven by the overlay shell's fullscreen toggle: at full size the widget can
+   afford the whole tab strip, so the six-tab whitelist lifts while expanded. */
+window.scOverlayExpanded = (on) => document.body.classList.toggle('expanded', Boolean(on));
+
 document.addEventListener('keydown', (event) => {
   if (!event.ctrlKey || !event.altKey) return;
 
