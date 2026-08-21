@@ -1,6 +1,6 @@
-# Verselog
+# Quantum Wake
 
-**A pilot's logbook for the 'verse** — by nekron
+**A pilot's logbook for Star Citizen** — by nekron
 
 A companion app for Star Citizen driven by `Game.log`. Second-screen dashboard,
 transparent in-game overlay, and a map of where you've been — read-only, offline,
@@ -74,7 +74,7 @@ Installs are auto-detected across all fixed drives (LIVE/PTU/EPTU).
 The CLI is useful for verification without a UI:
 
 ```powershell
-dotnet run --project src\Verselog.Cli -c Release
+dotnet run --project src\Quantumwake.Cli -c Release
 ```
 
 It prints per-event match counts and a **parser health** section. Because CIG
@@ -85,12 +85,12 @@ charts.
 
 ## Try it without playing
 
-`Verselog.LogSim` builds a fake install whose logs match the real format,
+`Quantumwake.LogSim` builds a fake install whose logs match the real format,
 quirks included:
 
 ```powershell
-dotnet run --project src\Verselog.LogSim -c Release -- --backups 12 --combat
-.\start.ps1 -Path "$env:TEMP\VerselogFakeInstall\LIVE"
+dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
+.\start.ps1 -Path "$env:TEMP\QuantumwakeFakeInstall\LIVE"
 ```
 
 `--combat` emits kill and vehicle-destruction events, which is the only way to
@@ -110,24 +110,24 @@ almost nothing to add.
 Overlay (WPF + WebView2)   Browser / tablet        Remote clients (later)
             └──────────── HTTP + SSE / SignalR ───────────┘
                                   │
-                    Verselog.Server (ASP.NET Core)
+                    Quantumwake.Server (ASP.NET Core)
                                   │
-              Verselog.Core          Verselog.Data
+              Quantumwake.Core          Quantumwake.Data
               tail → parse → state      SQLite + location graph
 ```
 
 | Project | Target | Role |
 |---|---|---|
-| `Verselog.Core` | `net10.0` | Log tailing, parsing, location + session state |
-| `Verselog.Data` | `net10.0` | SQLite cache, library aggregates |
-| `Verselog.Server` | `net10.0` | REST + SSE + static UI |
-| `Verselog.Overlay` | `net10.0-windows` | Transparent WPF shell |
-| `Verselog.Cli` | `net10.0` | Backfill and verification |
+| `Quantumwake.Core` | `net10.0` | Log tailing, parsing, location + session state |
+| `Quantumwake.Data` | `net10.0` | SQLite cache, library aggregates |
+| `Quantumwake.Server` | `net10.0` | REST + SSE + static UI |
+| `Quantumwake.Overlay` | `net10.0-windows` | Transparent WPF shell |
+| `Quantumwake.Cli` | `net10.0` | Backfill and verification |
 
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Verselog.slnx      # 127 tests
+dotnet test Quantumwake.slnx      # 127 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -143,7 +143,7 @@ silently dropped).
 - [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
-- [docs/naming.md](docs/naming.md) — why the project is called Verselog
+- [docs/naming.md](docs/naming.md) — why the project is called Quantumwake
 - [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
 
 ## Credits

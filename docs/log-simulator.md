@@ -1,6 +1,6 @@
 # Log simulator
 
-`Verselog.LogSim` generates a fake Star Citizen install so the dashboard,
+`Quantumwake.LogSim` generates a fake Star Citizen install so the dashboard,
 map and overlay can be exercised without launching the game — and, crucially,
 so the **dormant combat parser can be tested at all**, since real 4.9 logs
 contain no combat events.
@@ -9,19 +9,19 @@ contain no combat events.
 
 ```powershell
 # A fake install with 12 historical sessions and a finished Game.log
-dotnet run --project src\Verselog.LogSim -c Release -- --backups 12
+dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12
 
 # Include kill and vehicle-destruction events
-dotnet run --project src\Verselog.LogSim -c Release -- --backups 12 --combat
+dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
 
 # Append to Game.log in real time, 120 simulated seconds per real second
-dotnet run --project src\Verselog.LogSim -c Release -- --live --speed 120
+dotnet run --project src\Quantumwake.LogSim -c Release -- --live --speed 120
 ```
 
 Then point the app at it:
 
 ```powershell
-.\start.ps1 -Path "$env:TEMP\VerselogFakeInstall\LIVE"
+.\start.ps1 -Path "$env:TEMP\QuantumwakeFakeInstall\LIVE"
 ```
 
 The cache is scoped per install, so a simulated install never blends into your
@@ -31,7 +31,7 @@ real LIVE totals.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--install <dir>` | `%TEMP%\VerselogFakeInstall` | Where to build the fake install |
+| `--install <dir>` | `%TEMP%\QuantumwakeFakeInstall` | Where to build the fake install |
 | `--backups <n>` | 10 | Historical sessions; 0 to skip |
 | `--live` | off | Append to `Game.log` in real time instead of writing a finished file |
 | `--speed <x>` | 60 | Live mode: simulated seconds per real second |

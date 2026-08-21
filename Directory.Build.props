@@ -6,9 +6,9 @@
   <PropertyGroup>
     <Authors>nekron</Authors>
     <Company>nekron</Company>
-    <Product>Verselog</Product>
+    <Product>Quantum Wake</Product>
     <Copyright>Copyright © nekron</Copyright>
-    <Description>A pilot's logbook for the 'verse: second-screen dashboard, in-game overlay, and flight-log analysis for Star Citizen, driven by Game.log.</Description>
+    <Description>A pilot's logbook for Star Citizen: second-screen dashboard, in-game overlay, and flight-log analysis for Star Citizen, driven by Game.log.</Description>
 
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>

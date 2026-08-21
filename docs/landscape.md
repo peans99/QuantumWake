@@ -5,7 +5,7 @@ research in [README.md](README.md) was compiled in April and its headline —
 "six of the seven tools are built on kill events, so they all show an empty
 dashboard" — is no longer the shape of this space. The kill-event tools are
 still there, but a second generation has grown up around everything *else*
-`Game.log` records, which is exactly the ground Verselog stands on.
+`Game.log` records, which is exactly the ground Quantumwake stands on.
 
 ## The one that overlaps almost entirely
 
@@ -29,7 +29,7 @@ Two differences worth naming, neither of them flattering to assume in our favour
 without checking:
 
 - Its cargo and price features depend on **community APIs** (UEX and friends),
-  and it offers optional Discord OAuth cloud sync. Verselog makes *no* outbound
+  and it offers optional Discord OAuth cloud sync. Quantumwake makes *no* outbound
   request at all, including for names. That is a real difference in kind, not
   degree — but it is also a difference most users will not care about.
 - It advertises **combat stats — kills, deaths, K/D, favourite weapon, last
@@ -58,14 +58,14 @@ without checking:
 
 Stripped of wishful thinking, three things:
 
-1. **The atlas.** Others map where you *went*. Verselog draws **every place in
+1. **The atlas.** Others map where you *went*. Quantumwake draws **every place in
    the game** — 1,343 of them resolved out of the localisation table — with the
    visited ones solid and the rest hollow, so the map shows how much of the
    'verse is left rather than just a trail. Unresolved ids stay visible in a tray
    instead of being dropped.
 2. **Offline all the way down, including names.** Every other tool that shows
    real item and place names fetches them from UEX, the wiki or scunpacked.
-   Verselog reads `Data.p4k` directly with its own ZIP64 + ZStd reader, so the
+   Quantumwake reads `Data.p4k` directly with its own ZIP64 + ZStd reader, so the
    "no outbound network calls" promise survives contact with the naming problem.
    See [credits.md](credits.md) for what that owes to the community.
 3. **Saying what the logs cannot support.** Confidence levels on inferred

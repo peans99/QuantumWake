@@ -35,11 +35,11 @@ Target frameworks are split so only the WPF shell is Windows-bound:
 
 | Project | TFM | Role |
 |---|---|---|
-| `Verselog.Core` | `net10.0` | tailing, parsing, event model, state machines |
-| `Verselog.Data` | `net10.0` | EF Core + SQLite, location graph, seed data |
-| `Verselog.Server` | `net10.0` | ASP.NET Core minimal API + SignalR hub |
-| `Verselog.Cli` | `net10.0` | backfill / verification harness |
-| `Verselog.Overlay` | `net10.0-windows` | WPF shell hosting WebView2 |
+| `Quantumwake.Core` | `net10.0` | tailing, parsing, event model, state machines |
+| `Quantumwake.Data` | `net10.0` | EF Core + SQLite, location graph, seed data |
+| `Quantumwake.Server` | `net10.0` | ASP.NET Core minimal API + SignalR hub |
+| `Quantumwake.Cli` | `net10.0` | backfill / verification harness |
+| `Quantumwake.Overlay` | `net10.0-windows` | WPF shell hosting WebView2 |
 
 Keeping Core/Data/Server portable leaves a Linux-hosted server mode open for
 Phase 6 with no restructuring.
@@ -53,10 +53,10 @@ Phase 6 with no restructuring.
 └──────────────┬─────────────┘   └───────────────┬───────────────┘   └─────────┬──────────┘
                └──────────────── HTTP + SignalR ─┴───────────────────────────  ┘
                                         │
-                          Verselog.Server (ASP.NET Core)
+                          Quantumwake.Server (ASP.NET Core)
                                         │
                      ┌──────────────────┴──────────────────┐
-              Verselog.Core                      Verselog.Data
+              Quantumwake.Core                      Quantumwake.Data
               tail → parse → state machine          SQLite + location graph
 ```
 

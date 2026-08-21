@@ -6,7 +6,7 @@ machine are the remaining Phase 1 items.
 ## What exists
 
 ```
-src/Verselog.Core/
+src/Quantumwake.Core/
   Logging/
     LogLine.cs          LogLine record + LogEnvelope.TryParse
     LogFileReader.cs    streaming reader, multi-line entry reconstruction, offset resume
@@ -15,9 +15,9 @@ src/Verselog.Core/
     GameEvent.cs        13 event records
   Parsing/
     LogEventParser.cs   tag dispatch + GeneratedRegex patterns + health stats
-src/Verselog.Cli/
+src/Quantumwake.Cli/
   Program.cs            backfill and verification harness
-tests/Verselog.Tests/
+tests/Quantumwake.Tests/
   LogEnvelopeTests.cs   6 tests
   LogEventParserTests.cs 30 tests
   LogFileReaderTests.cs 10 tests
@@ -119,9 +119,9 @@ which is enough for the faceted contract view in Phase 2 with no extra data.
 ## Running it
 
 ```powershell
-dotnet run --project src\Verselog.Cli -c Release -- --path "C:\Program Files\Roberts Space Industries\StarCitizen\LIVE"
-dotnet run --project src\Verselog.Cli -c Release -- --live-only   # skip backups
-dotnet test Verselog.slnx
+dotnet run --project src\Quantumwake.Cli -c Release -- --path "C:\Program Files\Roberts Space Industries\StarCitizen\LIVE"
+dotnet run --project src\Quantumwake.Cli -c Release -- --live-only   # skip backups
+dotnet test Quantumwake.slnx
 ```
 
 Install detection is automatic when `--path` is omitted.

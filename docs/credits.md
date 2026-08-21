@@ -1,6 +1,6 @@
 # Credits and third-party resources
 
-Verselog is built by **nekron**. Everything below came from someone else,
+Quantumwake is built by **nekron**. Everything below came from someone else,
 and this page says exactly what was taken from where.
 
 The rule this page follows: if a line of logic, a regular expression, an image
