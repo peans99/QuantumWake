@@ -125,6 +125,9 @@ function showView(name) {
   const target = buttons.find((b) => b.dataset.view === name);
   if (!target) return;
 
+  // Options reflects live state (the tray can change it), so re-read on entry.
+  if (name === 'options') renderOptions().catch(() => {});
+
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
 
@@ -609,25 +612,105 @@ async function refreshCommunityOffer() {
   }
 }
 
-$('#community-enable').addEventListener('click', async () => {
-  const status = $('#community-status');
-  const button = $('#community-enable');
-
+async function setCommunity(enabled, statusNode, button) {
   button.disabled = true;
-  status.textContent = 'downloading…';
+  statusNode.textContent = enabled ? 'downloading…' : 'removing…';
 
   try {
-    const result = await fetch('/api/community/enable', { method: 'POST' });
+    const result = await fetch(`/api/community/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
     if (!result.ok) throw new Error((await result.json()).title || result.statusText);
 
-    status.textContent = '';
+    statusNode.textContent = '';
     await loadCommodities();
-    await loadHistory();  // the ledger names its cargo rows too
+    await loadHistory();       // the ledger names its cargo rows too
+    await renderOptions();
   } catch (e) {
-    status.textContent = `failed: ${e.message}`;
+    statusNode.textContent = `failed: ${e.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#community-enable').addEventListener('click', (e) =>
+  setCommunity(true, $('#community-status'), e.currentTarget));
+
+/* ---------- options ---------- */
+
+/**
+ * The Options page: the overlay switch, the community dataset, the cache.
+ * Everything here re-reads its state from the server on every render, so the
+ * page cannot disagree with the tray menu or another browser tab for long.
+ */
+async function renderOptions() {
+  // Overlay - only offered when the server is hosted inside QuantumWake.exe.
+  try {
+    const overlay = await getJson('/api/overlay');
+    const toggle = $('#overlay-toggle');
+
+    toggle.hidden = !overlay.available;
+    $('#overlay-unavailable').hidden = overlay.available;
+    $('#overlay-copy').hidden = !overlay.available;
+
+    if (overlay.available) {
+      toggle.textContent = overlay.visible ? 'Overlay is on — hide it' : 'Show the overlay';
+      toggle.classList.toggle('on', overlay.visible);
+      toggle.dataset.visible = String(overlay.visible);
+    }
+  } catch { /* server unreachable; the page will retry on next visit */ }
+
+  // Community dataset.
+  try {
+    const community = await getJson('/api/community');
+
+    $('#options-community-enable').hidden = community.enabled;
+    $('#options-community-disable').hidden = !community.enabled;
+
+    $('#options-community-status').textContent = community.enabled
+      ? `${community.commodities} commodities, fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`
+      : 'not downloaded';
+  } catch { /* as above */ }
+}
+
+$('#overlay-toggle').addEventListener('click', async (e) => {
+  const next = e.currentTarget.dataset.visible !== 'true';
+
+  try {
+    await fetch(`/api/overlay?visible=${next}`, { method: 'POST' });
+  } finally {
+    renderOptions();
+  }
+});
+
+$('#options-community-enable').addEventListener('click', (e) =>
+  setCommunity(true, $('#options-community-status'), e.currentTarget));
+
+$('#options-community-disable').addEventListener('click', (e) =>
+  setCommunity(false, $('#options-community-status'), e.currentTarget));
+
+$('#options-rescan').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#options-rescan-status');
+
+  button.disabled = true;
+  status.textContent = 'rescanning…';
+
+  try {
+    const result = await getJson2('/api/scan?force=true');
+    status.textContent = `${result.sessions} sessions from a full re-read`;
+    await loadHistory();
+  } catch (err) {
+    status.textContent = `failed: ${err.message}`;
+  } finally {
     button.disabled = false;
   }
 });
+
+/** POST that expects JSON back; getJson is GET-only. */
+async function getJson2(url) {
+  const response = await fetch(url, { method: 'POST' });
+  if (!response.ok) throw new Error(`${url} -> ${response.status}`);
+  return response.json();
+}
 
 function renderCommodities(trades) {
   const sells = trades.filter((t) => t.isSell);

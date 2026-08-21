@@ -56,6 +56,10 @@ public static class ServerHost
             client.DefaultRequestHeaders.UserAgent.ParseAdd("QuantumWake");
         });
 
+        // The overlay shell attaches to this after startup; under the bare
+        // server it stays unattached and the endpoints report unavailable.
+        builder.Services.AddSingleton<OverlayBridge>();
+
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -139,6 +143,23 @@ public static class ServerHost
             lib.Community.Disable();
             return Results.Ok(new { enabled = false });
         });
+
+        // The in-game overlay, controllable from the dashboard when the server
+        // is hosted inside QuantumWake.exe. The bare server has no window, so
+        // these report unavailable rather than pretending.
+        app.MapGet("/api/overlay", (OverlayBridge overlay) => new
+        {
+            available = overlay.Available,
+            visible = overlay.Visible
+        });
+
+        app.MapPost("/api/overlay", (OverlayBridge overlay, bool visible) =>
+            overlay.TrySet(visible)
+                ? Results.Ok(new { available = true, visible })
+                : Results.Conflict(new
+                {
+                    message = "No overlay in this process - the dashboard is running under the bare server."
+                }));
 
         // Display names come out of the game's own localisation table, so they go stale
         // when Star Citizen patches. The cache is stamped with Data.p4k's write time and

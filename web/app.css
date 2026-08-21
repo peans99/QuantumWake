@@ -1171,3 +1171,35 @@ body.overlay .foot { display: none; }
 /* display: flex on the class outranks the UA sheet's [hidden] rule, so being
    hidden must be said at equal strength or the offer never goes away. */
 .community-offer[hidden] { display: none; }
+
+/* ---------- options ---------- */
+
+.option-block {
+  max-width: 880px;
+  margin: 0 0 16px;
+  padding: 16px 20px 14px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+
+.option-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+.option-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--text);
+  flex: 1;
+}
+.option-block p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.65; max-width: 72ch; }
+.option-block code { font-family: var(--mono); color: var(--muted); }
+
+/* The toggle reads as a state, not just a verb. */
+#overlay-toggle.on { color: var(--green); border-color: var(--green); }

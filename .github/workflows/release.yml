@@ -121,8 +121,9 @@ jobs:
           Your Star Citizen install is found automatically.
 
           Quantum Wake then sits in the notification area. Right-click it to open the
-          dashboard, show or hide the in-game overlay, or quit; the overlay setting is
-          remembered. ``Ctrl+Alt+O`` toggles overlay click-through.
+          dashboard or quit. The in-game overlay is off by default - switch it on from
+          the dashboard's Options page or the tray menu, and the choice is remembered.
+          ``Ctrl+Alt+O`` toggles overlay click-through.
 
           Windows will warn that the publisher is unknown - the executable is not code
           signed, which costs money a free fan tool does not have. Choose **More info**,
