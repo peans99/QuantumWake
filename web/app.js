@@ -125,6 +125,9 @@ function showView(name) {
   const target = buttons.find((b) => b.dataset.view === name);
   if (!target) return;
 
+  // Settings reflects live state (the tray can change it), so re-read on entry.
+  if (name === 'settings') renderSettings().catch(() => {});
+
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
 
@@ -165,10 +168,15 @@ $('#tabs').addEventListener('click', (event) => {
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
    unlocking click-through. Also bound to the arrow keys for browser use. */
 window.scCycleView = (delta) => {
-  const views = $$('#tabs button').map((b) => b.dataset.view);
-  const current = $$('#tabs button').findIndex((b) => b.classList.contains('active'));
-  const next = (current + delta + views.length) % views.length;
-  showView(views[next]);
+  // Only the tabs actually on show: the overlay hides most of the strip, and
+  // cycling into an invisible view would strand the widget somewhere its own
+  // tab bar cannot reach.
+  const buttons = $$('#tabs button').filter((b) => b.offsetParent !== null);
+  if (!buttons.length) return;
+
+  const current = buttons.findIndex((b) => b.classList.contains('active'));
+  const next = (current + delta + buttons.length) % buttons.length;
+  showView(buttons[next].dataset.view);
 };
 
 window.scShowView = showView;
@@ -333,6 +341,8 @@ async function loadHistory() {
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
   loadCommodities().catch((e) => console.error('cargo', e));
+  loadMarket().catch((e) => console.error('market', e));
+  loadLoot().catch((e) => console.error('loot', e));
 }
 
 function renderContracts(stats) {
@@ -589,6 +599,395 @@ function renderLedgerPager(pages, start, shown) {
 async function loadCommodities() {
   const days = Number($('#commodities-period').value) || 0;
   renderCommodities(await getJson(`/api/commodities?days=${days}`));
+  refreshCommunityOffer().catch(() => {});
+}
+
+/**
+ * The opt-in that names the cargo. The offer is shown only while the dataset is
+ * absent; enabling it is a deliberate click, and the app's one network request.
+ */
+async function refreshCommunityOffer() {
+  const community = await getJson('/api/community');
+
+  $('#community-offer').hidden = community.enabled;
+
+  if (community.enabled) {
+    $('#cargo-caption').textContent =
+      'Volume, price and place come straight from the kiosk. Commodity names '
+      + `come from the community dataset (${community.commodities} commodities, `
+      + 'StarCitizenWiki / scunpacked-data), fetched once at your request.';
+  }
+}
+
+async function setCommunity(enabled, statusNode, button) {
+  button.disabled = true;
+  statusNode.textContent = enabled ? 'downloading…' : 'removing…';
+
+  try {
+    const result = await fetch(`/api/community/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
+    if (!result.ok) throw new Error((await result.json()).title || result.statusText);
+
+    statusNode.textContent = '';
+    await loadCommodities();
+    await loadHistory();       // the ledger names its cargo rows too
+    await renderSettings();
+  } catch (e) {
+    statusNode.textContent = `failed: ${e.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#community-enable').addEventListener('click', (e) =>
+  setCommunity(true, $('#community-status'), e.currentTarget));
+
+/* ---------- market ---------- */
+
+/** The community catalogue, cached for the map's commodity search too. */
+let marketEntries = [];
+
+async function loadMarket() {
+  try {
+    marketEntries = await getJson('/api/market');
+  } catch {
+    marketEntries = [];
+  }
+
+  renderMarket();
+}
+
+function renderMarket() {
+  $('#market-offer').hidden = marketEntries.length > 0;
+
+  const term = ($('#market-search').value || '').trim().toLowerCase();
+  const body = $('#market-table tbody');
+  body.textContent = '';
+
+  const rows = marketEntries.filter((e) =>
+    !term
+    || e.name.toLowerCase().includes(term)
+    || e.groups.some((g) => g.toLowerCase().includes(term)));
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', marketEntries.length
+      ? 'No commodities match that search.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 8;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  // The UEX column exists only while that integration is on.
+  const anyUex = marketEntries.some((e) => e.uex);
+  $('.uex-col').hidden = !anyUex;
+
+  for (const entry of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, entry.name));
+    tr.append(el('td', 'muted', entry.groups.join(', ')));
+    tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
+    tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
+    tr.append(el('td', 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
+    tr.append(el('td', 'num inward', entry.myRevenue ? money(entry.myRevenue) : '—'));
+
+    if (anyUex) {
+      const cell = el('td', 'num');
+      if (entry.uex?.bestSell > 0) {
+        cell.append(el('span', 'inward', money(entry.uex.bestSell)));
+        if (entry.uex.bestSellTerminal)
+          cell.append(el('div', 'muted uex-terminal', entry.uex.bestSellTerminal));
+      } else {
+        cell.textContent = '—';
+      }
+      tr.append(cell);
+    }
+
+    const actions = el('td', 'num');
+    if (entry.sold.length) {
+      const show = el('button', 'ghost', 'show on map');
+      show.addEventListener('click', () => {
+        $('#map-search').value = entry.name;
+        showView('map');
+        drawMap();
+      });
+      actions.append(show);
+    }
+    tr.append(actions);
+
+    body.append(tr);
+  }
+}
+
+onInput('#market-search', renderMarket);
+
+/**
+ * Facility keys to search tokens the atlas can meet. The class name
+ * DC_Stan_Hurston_S1_Farnesway carries exactly one atlas-matchable word;
+ * everything else is scaffolding, listed here so it never becomes a token.
+ */
+const FACILITY_NOISE = new Set([
+  'dc', 'outpost', 'reststop', 'landingzone', 'junksite', 'ugf', 'hangar',
+  'spaceport', 'portolisar', 'inhabited', 'planet', 'distributioncentre',
+  'stan', 'stanton', 'pyro', 'nyx', 'outlaw', 'sublocation',
+  'hurston', 'microtech', 'crusader', 'arccorp',
+  'admin', 'gate', 'habs', 'medical', 'metrostation', 'store', 'lobby',
+]);
+
+function facilityTokens(keys) {
+  const tokens = new Set();
+
+  for (const key of keys) {
+    for (const part of key.split('_')) {
+      const compact = part.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (compact.length >= 4 && !FACILITY_NOISE.has(compact) && !/^s\d+$/.test(compact))
+        tokens.add(compact);
+    }
+  }
+
+  return tokens;
+}
+
+/**
+ * If the map search term names a commodity, the nodes to light are the ones
+ * whose name matches a facility token for that commodity. Null when the term
+ * is not a commodity, in which case the search means places, as it always did.
+ */
+function commoditySites(term) {
+  const entry = marketEntries.find((e) => e.name.toLowerCase() === term);
+  if (!entry || !entry.sold.length) return null;
+
+  return facilityTokens(entry.sold);
+}
+
+/* ---------- loot ---------- */
+
+async function loadLoot() {
+  const days = Number($('#loot-period').value) || 0;
+  renderLoot(await getJson(`/api/loot?days=${days}`));
+}
+
+function renderLoot(pickups) {
+  const term = ($('#loot-search').value || '').trim().toLowerCase();
+
+  const rows = pickups.filter((p) =>
+    !term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term));
+
+  tiles('#loot-summary', [
+    ['New items', rows.length],
+    ['Last 7 days', rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
+    ['Places', new Set(rows.map((p) => p.place)).size],
+  ]);
+
+  const body = $('#loot-table tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'Nothing in that range.');
+    td.colSpan = 3;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const pickup of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, dateOf(pickup.at)));
+    tr.append(el('td', null, prettyItem(pickup.item)));
+    tr.append(el('td', 'muted', pickup.place));
+    body.append(tr);
+  }
+
+  lastLootRows = pickups;
+}
+
+let lastLootRows = [];
+
+onInput('#loot-search', () => renderLoot(lastLootRows));
+onInput('#loot-period', loadLoot);
+
+/* ---------- settings ---------- */
+
+/**
+ * The Settings page: the overlay switch, the community dataset, the cache.
+ * Everything here re-reads its state from the server on every render, so the
+ * page cannot disagree with the tray menu or another browser tab for long.
+ */
+async function renderSettings() {
+  // Overlay - only offered when the server is hosted inside QuantumWake.exe.
+  try {
+    const overlay = await getJson('/api/overlay');
+    const toggle = $('#overlay-toggle');
+
+    toggle.hidden = !overlay.available;
+    $('#overlay-unavailable').hidden = overlay.available;
+    $('#overlay-copy').hidden = !overlay.available;
+
+    if (overlay.available) {
+      toggle.textContent = overlay.visible ? 'Overlay is on — hide it' : 'Show the overlay';
+      toggle.classList.toggle('on', overlay.visible);
+      toggle.dataset.visible = String(overlay.visible);
+    }
+  } catch { /* server unreachable; the page will retry on next visit */ }
+
+  // Community dataset.
+  try {
+    const community = await getJson('/api/community');
+
+    $('#settings-community-enable').hidden = community.enabled;
+    $('#settings-community-disable').hidden = !community.enabled;
+
+    $('#settings-community-status').textContent = community.enabled
+      ? `${community.commodities} commodities, fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`
+      : 'not downloaded';
+  } catch { /* as above */ }
+
+  // UEX.
+  try {
+    const uex = await getJson('/api/uex');
+
+    $('#uex-enable').hidden = uex.enabled;
+    $('#uex-refresh').hidden = !uex.enabled;
+    $('#uex-disable').hidden = !uex.enabled;
+
+    $('#uex-status').textContent = uex.enabled
+      ? `${uex.prices} commodities priced, fetched ${uex.fetchedAt ? dateOf(uex.fetchedAt) : '—'}`
+      : 'not fetched';
+
+    $('#uex-preview').hidden = !(uex.enabled && uex.hasCredentials);
+    $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
+  } catch { /* as above */ }
+}
+
+async function uexAction(path, statusNode, button) {
+  button.disabled = true;
+  statusNode.textContent = 'working…';
+
+  try {
+    const result = await fetch(path, { method: 'POST' });
+    if (!result.ok) throw new Error((await result.json()).title || result.statusText);
+    statusNode.textContent = '';
+  } catch (e) {
+    statusNode.textContent = `failed: ${e.message}`;
+  } finally {
+    button.disabled = false;
+    renderSettings();
+    loadMarket().catch(() => {});
+  }
+}
+
+$('#uex-enable').addEventListener('click', (e) => uexAction('/api/uex/enable', $('#uex-status'), e.currentTarget));
+$('#uex-refresh').addEventListener('click', (e) => uexAction('/api/uex/enable', $('#uex-status'), e.currentTarget));
+$('#uex-disable').addEventListener('click', (e) => uexAction('/api/uex/disable', $('#uex-status'), e.currentTarget));
+
+$('#uex-save-creds').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await fetch('/api/uex/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: $('#uex-token').value, secret: $('#uex-secret').value }),
+    });
+
+    $('#uex-token').value = '';
+    $('#uex-secret').value = '';
+  } finally {
+    button.disabled = false;
+    renderSettings();
+  }
+});
+
+/**
+ * The two-step report: preview says exactly what would be sent and to which
+ * terminals; only the second button transmits anything.
+ */
+$('#uex-preview').addEventListener('click', async () => {
+  const status = $('#uex-push-status');
+
+  try {
+    const rows = await getJson('/api/uex/pushable');
+    const matched = rows.filter((r) => r.terminalId && r.commodityId);
+    const terminals = new Set(matched.map((r) => r.terminalName));
+    const skipped = rows.length - matched.length;
+
+    status.textContent = matched.length
+      ? `${matched.length} price${matched.length === 1 ? '' : 's'} across `
+        + `${terminals.size} terminal${terminals.size === 1 ? '' : 's'}`
+        + (skipped ? ` · ${skipped} skipped (place not matched to a UEX terminal)` : '')
+      : rows.length
+        ? `nothing sendable: ${rows.length} sale${rows.length === 1 ? '' : 's'} but no place matched a UEX terminal`
+        : 'no named sales in the last 30 days';
+
+    $('#uex-send').hidden = matched.length === 0;
+  } catch (e) {
+    status.textContent = `failed: ${e.message}`;
+  }
+});
+
+$('#uex-send').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#uex-push-status');
+
+  button.disabled = true;
+  status.textContent = 'sending…';
+
+  try {
+    const result = await fetch('/api/uex/push', { method: 'POST' });
+    const body = await result.json();
+    if (!result.ok) throw new Error(body.title || result.statusText);
+
+    status.textContent = body.results.join(' · ') || 'nothing sent';
+    button.hidden = true;
+  } catch (err) {
+    status.textContent = `failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#overlay-toggle').addEventListener('click', async (e) => {
+  const next = e.currentTarget.dataset.visible !== 'true';
+
+  try {
+    await fetch(`/api/overlay?visible=${next}`, { method: 'POST' });
+  } finally {
+    renderSettings();
+  }
+});
+
+$('#settings-community-enable').addEventListener('click', (e) =>
+  setCommunity(true, $('#settings-community-status'), e.currentTarget));
+
+$('#settings-community-disable').addEventListener('click', (e) =>
+  setCommunity(false, $('#settings-community-status'), e.currentTarget));
+
+$('#settings-rescan').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#settings-rescan-status');
+
+  button.disabled = true;
+  status.textContent = 'rescanning…';
+
+  try {
+    const result = await getJson2('/api/scan?force=true');
+    status.textContent = `${result.sessions} sessions from a full re-read`;
+    await loadHistory();
+  } catch (err) {
+    status.textContent = `failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/** POST that expects JSON back; getJson is GET-only. */
+async function getJson2(url) {
+  const response = await fetch(url, { method: 'POST' });
+  if (!response.ok) throw new Error(`${url} -> ${response.status}`);
+  return response.json();
 }
 
 function renderCommodities(trades) {
@@ -629,7 +1028,7 @@ function renderCommodities(trades) {
   if (!trades.length) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No cargo trades in that range.');
-    td.colSpan = 6;
+    td.colSpan = 7;
     tr.append(td);
     body.append(tr);
     return;
@@ -639,6 +1038,7 @@ function renderCommodities(trades) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
     tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', trade.commodity ? null : 'muted', trade.commodity ?? '—'));
     tr.append(el('td', null, trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
@@ -648,6 +1048,59 @@ function renderCommodities(trades) {
 }
 
 /* ---------- shared widgets ---------- */
+
+/**
+ * Every table sorts by clicking its headers. One generic pass over the DOM
+ * rather than per-page wiring, so a table added next month is sortable for
+ * free. Numbers sort as numbers, dates as dates, everything else as text;
+ * re-rendering (a period change, a rescan) resets to the page's own order.
+ */
+function makeTablesSortable() {
+  for (const table of document.querySelectorAll('main table')) {
+    [...table.querySelectorAll('thead th')].forEach((th, index) => {
+      if (!th.textContent.trim()) return;
+
+      th.classList.add('sortable');
+      th.title = 'Sort';
+
+      th.addEventListener('click', () => {
+        const descending = !th.classList.contains('sort-desc');
+
+        for (const other of table.querySelectorAll('thead th'))
+          other.classList.remove('sort-asc', 'sort-desc');
+        th.classList.add(descending ? 'sort-desc' : 'sort-asc');
+
+        const body = table.tBodies[0];
+        if (!body) return;
+
+        // Empty-state rows span the table and stay where they are.
+        const rows = [...body.rows].filter((r) => r.cells.length > 1);
+
+        rows.sort((a, b) => compareCells(a, b, index) * (descending ? -1 : 1));
+        rows.forEach((r) => body.append(r));
+      });
+    });
+  }
+}
+
+function compareCells(rowA, rowB, index) {
+  const a = (rowA.cells[index]?.textContent ?? '').trim();
+  const b = (rowB.cells[index]?.textContent ?? '').trim();
+
+  // Dates first: "Aug 17, 2026" parsed numerically would sort by day-of-month.
+  const dateish = /^[A-Z][a-z]{2} \d{1,2}, \d{4}/;
+  if (dateish.test(a) && dateish.test(b))
+    return Date.parse(a) - Date.parse(b);
+
+  const numA = parseFloat(a.replace(/[^0-9.-]/g, ''));
+  const numB = parseFloat(b.replace(/[^0-9.-]/g, ''));
+  if (Number.isFinite(numA) && Number.isFinite(numB) && /\d/.test(a) && /\d/.test(b))
+    return numA - numB;
+
+  return a.localeCompare(b);
+}
+
+makeTablesSortable();
 
 function tiles(container, entries) {
   const node = $(container);
@@ -744,6 +1197,27 @@ function renderFleetShips() {
 
     body.append(stat);
     body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
+
+    // Community reference, when enabled and matched: what the ship is for and
+    // what losing one costs.
+    if (ship.reference) {
+      const r = ship.reference;
+      const bits = [];
+
+      if (r.role && r.career && r.role !== r.career) bits.push(`${r.career} · ${r.role}`);
+      else if (r.role || r.career) bits.push(r.role || r.career);
+      if (r.crew > 0) bits.push(`crew ${r.crew}`);
+
+      if (bits.length)
+        body.append(el('div', 'ship-ref', bits.join(' · ')));
+
+      if (r.expeditedCost > 0) {
+        body.append(el('div', 'ship-ref muted',
+          `claim: expedite ${money(r.expeditedCost)}`
+          + (r.standardClaimTime ? ` · ~${Math.round(r.standardClaimTime)}m wait` : '')));
+      }
+    }
+
     card.append(body);
     grid.append(card);
   }
@@ -862,6 +1336,75 @@ function renderSpending(stats) {
 
 /* ---------- loadout ---------- */
 
+/**
+ * Slot glyphs, drawn in the HUD's own line style.
+ *
+ * Not from the Fankit - it carries logos and wallpapers, not equipment icons -
+ * and not lifted from the game files, which the Fankit Agreement does not
+ * cover. Original 24x24 strokes on currentColor, so they follow the theme.
+ */
+const SLOT_ICONS = {
+  helmet: 'M5 17v-4a7 7 0 0 1 14 0v4l-2 2H7z M8.5 13h7',
+  torso: 'M7 4 4 7v7l3 6h10l3-6V7l-3-3z M9 12l3 3 3-3 M12 4v3',
+  arms: 'M5 19v-7a7 7 0 0 1 7-7h7 M9 19v-4a5 5 0 0 1 5-5h5',
+  legs: 'M8 4v7l-2 9 M16 4v7l2 9 M8 4h8 M12 11v9',
+  undersuit: 'M12 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M6 20v-2a6 6 0 0 1 12 0v2',
+  backpack: 'M7 8h10v12H7z M9 8V6a3 3 0 0 1 6 0v2 M9 15h6',
+  rifle: 'M2 11h12l1-3h4v3h3v2h-8l-1 3h-3l1-3H8l-1 3H4l1-3H2z',
+  pistol: 'M4 9h14v4h-4l-1 5h-4l1-5H4z M16 9V7',
+  magazine: 'M9 4h7l-1 8c-.3 2-1.2 4-3.2 4H9z M10 8h5',
+  optic: 'M10 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M10 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M14 12h7',
+  attachment: 'M4 10h12v4H4z M16 11h4v2h-4 M7 10V8h6v2',
+  grenade: 'M9 9h6v7a3 3 0 0 1-3 3 3 3 0 0 1-3-3z M10 9V6h4v3 M14 5a2.5 2.5 0 1 1 5 0',
+  medical: 'M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z',
+  tool: 'M13 6a4 4 0 0 1 6-3l-3 3 2 2 3-3a4 4 0 0 1-5 5L8 18l-2-2z',
+  light: 'M8 3h6v3l-2 3v11h-2V9L8 6z M16 5h3 M16 9h5 M16 13h3',
+  mobiglas: 'M8 8h8v8H8z M4 10v4 M20 10v4 M10 11h4',
+  shirt: 'M8 4 4 7l2 3 2-1v11h8V9l2 1 2-3-4-3a4 4 0 0 1-8 0z',
+  box: 'M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8',
+  diamond: 'M12 3l7 9-7 9-7-9z M12 8l3 4-3 4-3-4z',
+};
+
+/** Slot first, category as the fallback, diamond when nothing matches. */
+function slotIconKey(slot) {
+  const name = `${(slot.port || '')} ${(slot.label || '')}`.toLowerCase();
+
+  const byName = [
+    ['helmet', 'helmet'], ['undersuit', 'undersuit'], ['backpack', 'backpack'],
+    ['core', 'torso'], ['torso', 'torso'], ['chest', 'torso'],
+    ['arms', 'arms'], ['shoulder', 'arms'], ['legs', 'legs'],
+    ['sidearm', 'pistol'], ['pistol', 'pistol'],
+    ['magazine', 'magazine'], ['optic', 'optic'], ['scope', 'optic'],
+    ['barrel', 'attachment'], ['underbarrel', 'attachment'],
+    ['grenade', 'grenade'], ['medpen', 'medical'], ['oxypen', 'medical'],
+    ['multitool', 'tool'], ['tool', 'tool'],
+    ['flashlight', 'light'], ['light', 'light'], ['mobiglas', 'mobiglas'],
+    ['wep', 'rifle'], ['weapon', 'rifle'],
+  ];
+
+  for (const [needle, icon] of byName)
+    if (name.includes(needle)) return icon;
+
+  return {
+    'Weapons': 'rifle',
+    'Weapon attachments': 'attachment',
+    'Throwables': 'grenade',
+    'Armour': 'torso',
+    'Medical': 'medical',
+    'Utility': 'tool',
+    'Carried': 'box',
+    'Appearance': 'shirt',
+  }[slot.category] ?? 'diamond';
+}
+
+function slotIconSvg(slot) {
+  const path = SLOT_ICONS[slotIconKey(slot)] ?? SLOT_ICONS.diamond;
+
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" '
+    + `aria-hidden="true"><path d="${path}"/></svg>`;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -901,25 +1444,43 @@ function renderLoadout(stats) {
     const grid = el('div', 'card-grid');
 
     for (const slot of slots) {
-      const card = el('article', 'card');
+      const card = el('article', 'card slot-card');
+
+      const icon = el('div', 'slot-icon');
+      icon.innerHTML = slotIconSvg(slot);
+      card.append(icon);
+
+      const body = el('div', 'slot-body');
 
       const label = slot.slotCount > 1
         ? `${slot.label} · ${slot.slotCount} slots`
         : slot.label || slot.port;
 
-      card.append(el('div', 'card-label', label));
+      body.append(el('div', 'card-label', label));
 
       // What is in the family now; the churn goes behind a toggle.
       for (const item of slot.items) {
         const line = el('div', 'slot-current');
         line.append(el('span', null, prettyItem(item.name)));
         if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
-        card.append(line);
+
+        // Community reference: size, grade, maker - when enabled and matched.
+        if (item.reference) {
+          const r = item.reference;
+          const bits = [];
+          if (r.size > 0) bits.push(`S${r.size}`);
+          if (r.grade > 0) bits.push(`grade ${r.grade}`);
+          if (r.manufacturer) bits.push(r.manufacturer);
+          if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
+        }
+
+        body.append(line);
       }
 
       if (slot.currentSeen)
-        card.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
+        body.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
 
+      card.append(body);
       grid.append(card);
     }
 
@@ -1082,6 +1643,16 @@ const svgEl = (tag, attrs = {}) => {
 let atlas = [];
 const nodeAt = new Map();
 
+/** Non-null while a commodity search is active: the rawIds to light up. */
+let highlightIds = null;
+
+/**
+ * Whether the map keeps itself centred on the live marker. Persisted: someone
+ * who plays with the map on a second monitor wants this every session.
+ */
+let followHere = false;
+try { followHere = localStorage.getItem('qw-map-follow') === '1'; } catch { /* private mode */ }
+
 /** Where the player is, kept in step with the live feed. */
 let hereId = null;
 
@@ -1223,8 +1794,14 @@ function centreOn(rawId, zoom = true) {
  * drawn - the marker is re-applied on every draw from {@link hereId}.
  */
 function setHere(rawId) {
+  const changed = (rawId || null) !== hereId;
   hereId = rawId || null;
   drawHere();
+
+  // Follow mode: the map pans itself as the player moves, so a second monitor
+  // shows the journey without being touched.
+  if (followHere && changed && hereId)
+    centreOn(hereId);
 }
 
 function drawHere() {
@@ -1326,6 +1903,70 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   onInput('#map-search', () => drawMap());
+
+  const follow = $('#map-follow');
+  follow.classList.toggle('active', followHere);
+
+  follow.addEventListener('click', () => {
+    followHere = !followHere;
+    follow.classList.toggle('active', followHere);
+    try { localStorage.setItem('qw-map-follow', followHere ? '1' : '0'); } catch { /* fine */ }
+
+    if (followHere && hereId) centreOn(hereId);
+  });
+
+  // Clicking empty map space dismisses the detail card.
+  map.addEventListener('click', () => $('#map-info').hidden = true);
+  $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
+
+  // Keyboard zoom for anyone without a wheel: +/- around the view centre.
+  document.addEventListener('keydown', (e) => {
+    if (!$('#view-map').classList.contains('active')) return;
+    if (e.target.matches('input, select, textarea')) return;
+
+    if (e.key === '+' || e.key === '=' || e.key === '-') {
+      const factor = e.key === '-' ? 1.25 : 1 / 1.25;
+      const w = Math.min(HOME_VIEW.w * 1.6, Math.max(HOME_VIEW.w * 0.05, view.w * factor));
+      const h = w * (HOME_VIEW.h / HOME_VIEW.w);
+      view.x += (view.w - w) / 2;
+      view.y += (view.h - h) / 2;
+      view.w = w;
+      view.h = h;
+      applyView();
+      e.preventDefault();
+    }
+  });
+}
+
+/** The card that opens when a node is clicked. */
+function showMapInfo(location) {
+  const info = $('#map-info');
+
+  $('#map-info-name').textContent = location.name;
+  $('#map-info-where').textContent =
+    [location.body, location.system].filter(Boolean).join(' · ') || 'unmapped';
+  $('#map-info-kind').textContent = location.kind.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  $('#map-info-visits').textContent = location.visits > 0
+    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
+    : 'never visited';
+
+  $('#map-info-last').textContent = location.lastVisit
+    ? `last there ${relative(location.lastVisit)}`
+    : '';
+
+  // In commodity mode, say which side of the search this place is on.
+  const trade = $('#map-info-trade');
+  if (highlightIds) {
+    const sells = highlightIds.has(location.rawId);
+    trade.textContent = sells ? 'sells the searched commodity' : 'does not sell it';
+    trade.className = sells ? 'inward' : 'muted';
+    trade.hidden = false;
+  } else {
+    trade.hidden = true;
+  }
+
+  info.hidden = false;
 }
 
 function drawMap() {
@@ -1336,9 +1977,27 @@ function drawMap() {
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
 
-  // The search always wins over the toggle: looking for somewhere you have
-  // never been should find it.
+  // A term that names a commodity HIGHLIGHTS where it sells rather than
+  // filtering the map down to it. Most commodities sell at hundreds of
+  // facilities, so filtering produced what looked like the whole map with
+  // nothing marked; keeping every node and lighting the sellers reads as an
+  // answer. Any other term still filters places, and either search wins over
+  // the visited-only toggle.
+  const sites = term ? commoditySites(term) : null;
+
+  highlightIds = null;
+
+  if (sites) {
+    highlightIds = new Set(atlas
+      .filter((l) => {
+        const compact = `${l.name} ${l.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return [...sites].some((token) => compact.includes(token));
+      })
+      .map((l) => l.rawId));
+  }
+
   const locations = atlas.filter((l) => {
+    if (sites) return true;
     if (term) return l.name.toLowerCase().includes(term) || l.rawId.toLowerCase().includes(term);
     return !visitedOnly || l.visits > 0;
   });
@@ -1346,7 +2005,9 @@ function drawMap() {
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
-    count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
+    count.textContent = sites
+      ? `sells at ${highlightIds.size} places the map can name`
+      : `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.
@@ -1536,11 +2197,25 @@ function drawMap() {
 function drawNode(map, x, y, location, radius, anchor = null) {
   const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
   const been = location.visits > 0;
-  const group = svgEl('g', { class: been ? 'map-node' : 'map-node unvisited' });
+
+  let cls = been ? 'map-node' : 'map-node unvisited';
+
+  // In commodity mode the sellers glow and everything else recedes.
+  const highlighted = highlightIds?.has(location.rawId) ?? false;
+  if (highlightIds) cls += highlighted ? ' hl' : ' dim';
+
+  const group = svgEl('g', { class: cls });
 
   nodeAt.set(location.rawId, { x, y });
 
   group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
+
+  if (highlighted) {
+    group.append(svgEl('circle', {
+      cx: x, cy: y, r: radius + 5, fill: 'none',
+      stroke: '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
+    }));
+  }
 
   // Somewhere never visited is drawn as an outline, so the places that carry
   // history read as solid against the rest of the map.
@@ -1556,6 +2231,13 @@ function drawNode(map, x, y, location, radius, anchor = null) {
     ? `${location.name} — ${location.visits} visit${location.visits === 1 ? '' : 's'}`
     : `${location.name} — never visited`;
   group.append(title);
+
+  // Click for the detail card; the hit circle above makes small nodes easy to
+  // land on.
+  group.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showMapInfo(location);
+  });
 
   // Labelling everything is unreadable at this density, so only places with
   // history get one until the view is zoomed in far enough to have room.
@@ -1715,6 +2397,11 @@ async function boot() {
 
   const requested = viewFromHash();
   if (requested) showView(requested);
+
+  // ?q= pre-fills the map search, so a commodity view is a shareable link:
+  // /?q=Copper#map opens the map with the sellers lit.
+  const q = params.get('q');
+  if (q) $('#map-search').value = q;
 
   initMap();
 

@@ -103,13 +103,19 @@ public sealed record PurchaseRecord(
 /// No server response accompanies these, so they are requests rather than
 /// confirmed settlements.
 /// </remarks>
+/// <param name="ResourceId">
+/// The game's resource id for the commodity, lower-cased. Defaults to null so
+/// sessions cached before it existed still deserialize; those trades stay
+/// unnamed until a rescan.
+/// </param>
 public sealed record CommodityTrade(
     DateTimeOffset At,
     string Shop,
     decimal Amount,
     int Quantity,
     bool IsSell,
-    string? Mode);
+    string? Mode,
+    string? ResourceId = null);
 
 /// <summary>
 /// One item seen in a character slot.
@@ -184,6 +190,9 @@ public sealed record SessionSummary
 
     public IReadOnlyList<CommodityTrade> Trades { get; init; } = [];
 
+    /// <summary>Items observed entering the player's inventories.</summary>
+    public IReadOnlyList<ItemPickup> Pickups { get; init; } = [];
+
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
 
@@ -210,3 +219,14 @@ public sealed record SessionSummary
     public string? PrimaryShip => Ships.MaxBy(s => s.Sorties)?.DisplayName;
     public string? LastLocation => Locations.Count > 0 ? Locations[^1].DisplayName : null;
 }
+
+/// <summary>
+/// An item observed entering one of the player's inventories.
+/// </summary>
+/// <remarks>
+/// A signal, not a certainty: the source event fires when the inventory UI
+/// pages in an item it has not shown before, which covers looting but also
+/// buying and receiving, and only while the inventory is open. Views built on
+/// it say so.
+/// </remarks>
+public sealed record ItemPickup(DateTimeOffset At, string ItemClass);

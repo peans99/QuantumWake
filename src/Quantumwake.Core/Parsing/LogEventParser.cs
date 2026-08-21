@@ -236,7 +236,8 @@ public sealed partial class LogEventParser
                         decimal.Parse(m.Groups["amount"].ValueSpan, System.Globalization.CultureInfo.InvariantCulture),
                         int.Parse(m.Groups["qty"].ValueSpan),
                         line.Tag.EndsWith("SellRequest", StringComparison.Ordinal),
-                        m.Groups["mode"].Success ? m.Groups["mode"].Value : null)),
+                        m.Groups["mode"].Success ? m.Groups["mode"].Value : null,
+                        m.Groups["resource"].Success ? m.Groups["resource"].Value.ToLowerInvariant() : null)),
 
             "ObjectiveUpserted" => Match(ObjectiveRegex, line, m =>
                 new MissionObjectiveEvent(
@@ -603,8 +604,9 @@ public sealed partial class LogEventParser
     private static partial Regex ShopResponseRegex { get; }
 
     [GeneratedRegex(
-        @"shopName\[(?<shop>[^\]]+)\].*?amount\[(?<amount>[\d.]+)\].*?quantity\[(?<qty>\d+)\]" +
-        @"(?:.*?transactionMode\[(?<mode>[^\]]*)\])?",
+        @"shopName\[(?<shop>[^\]]+)\].*?amount\[(?<amount>[\d.]+)\]" +
+        @"(?:.*?resourceGUID\[(?<resource>[0-9a-fA-F-]{36})\])?" +
+        @".*?quantity\[(?<qty>\d+)\](?:.*?transactionMode\[(?<mode>[^\]]*)\])?",
         RegexOptions.Compiled)]
     private static partial Regex CommodityRegex { get; }
 

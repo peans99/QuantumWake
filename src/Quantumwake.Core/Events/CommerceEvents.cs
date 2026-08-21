@@ -76,13 +76,20 @@ public sealed record ShopFlowResponseEvent(
 /// labelled accordingly.
 /// </para>
 /// </remarks>
+/// <param name="ResourceId">
+/// The commodity, as the game's own resource id (<c>resourceGUID[...]</c>).
+/// The id resolves against nothing in the local install - not the DataCore in
+/// any byte order, not the localisation table - so it is carried verbatim and
+/// becomes a name only if the user opts into the community dataset.
+/// </param>
 public sealed record CommodityTradeEvent(
     DateTimeOffset Timestamp,
     string ShopName,
     decimal Amount,
     int Quantity,
     bool IsSell,
-    string? TransactionMode) : GameEvent(Timestamp)
+    string? TransactionMode,
+    string? ResourceId = null) : GameEvent(Timestamp)
 {
     public override string Kind => IsSell ? "commodity.sell" : "commodity.buy";
 }

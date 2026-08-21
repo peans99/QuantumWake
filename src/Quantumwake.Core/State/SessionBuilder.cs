@@ -38,6 +38,8 @@ public sealed class SessionBuilder
     private readonly List<TimelineEntry> _timeline = [];
     private readonly List<PurchaseRecord> _purchases = [];
     private readonly List<CommodityTrade> _trades = [];
+    private readonly List<ItemPickup> _pickups = [];
+    private readonly HashSet<string> _pickupClasses = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, LoadoutItem> _loadoutSeen = new(StringComparer.Ordinal);
 
     /// <summary>Mission id to contract key, so objective state can find its contract.</summary>
@@ -183,7 +185,7 @@ public sealed class SessionBuilder
             case CommodityTradeEvent trade:
                 _trades.Add(new CommodityTrade(
                     trade.Timestamp, PrettyShop(trade.ShopName), trade.Amount,
-                    trade.Quantity, trade.IsSell, trade.TransactionMode));
+                    trade.Quantity, trade.IsSell, trade.TransactionMode, trade.ResourceId));
 
                 Timeline(
                     trade.Timestamp,
@@ -191,6 +193,7 @@ public sealed class SessionBuilder
                     $"{(trade.IsSell ? "Sold" : "Bought")} {trade.Quantity} SCU",
                     $"{trade.Amount:N0} aUEC · {PrettyShop(trade.ShopName)}");
                 break;
+
 
             case MissionObjectiveEvent objective:
                 ApplyObjectiveState(objective);
@@ -216,8 +219,17 @@ public sealed class SessionBuilder
                     _listings[query.ScopeKey] = (query.Timestamp, []);
                 break;
 
-            case InventoryItemEvent item when item.IsLocation:
-                RecordStashItem(item);
+            case InventoryItemEvent item:
+                // First sighting per item class this session. The event is a
+                // listing, not a transfer - browsing a full stash pages in
+                // everything it holds - so only the first appearance carries
+                // any acquisition signal, and the Loot view dedupes again
+                // across sessions to when a class was first seen at all.
+                if (_pickupClasses.Add(item.ItemClass))
+                    _pickups.Add(new ItemPickup(item.Timestamp, item.ItemClass));
+
+                if (item.IsLocation)
+                    RecordStashItem(item);
                 break;
 
             case FleetQueryEvent fleet:
@@ -766,6 +778,7 @@ public sealed class SessionBuilder
             Timeline = [.. _timeline.OrderBy(t => t.At)],
             Purchases = _purchases,
             Trades = _trades,
+            Pickups = _pickups,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,
