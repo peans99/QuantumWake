@@ -205,3 +205,38 @@ sort by their headers everywhere.
 The pre-1.0 notice went into the README and the release notes in the same
 breath: until 1.0 the ground will keep moving, and the cache schema version
 plus the rebuild-from-logs design are what make that safe to say.
+
+## 0.3.0 - the joins
+
+With three datasets in hand - the logs, the community reference, UEX prices -
+this release is what falls out of joining them. No new data was fetched;
+every feature below is a join across what 0.2.0 already downloaded.
+
+**The trade advisor** is logs x UEX: the tail already knows where the player
+is, the price matrix knows what that place buys and what everywhere else
+pays, so the Now page shows the best cargo to haul out of the current
+station. Matching a log place to a UEX terminal is the fiddly part - stations
+carry several terminals, so the join prefers the Admin/TDD one.
+
+**Sale scoring** is the same join pointed backwards: every sell the logs
+recorded, compared with the best price UEX knows anywhere. The Cargo page
+totals the difference as "left on the table" and marks each row green when it
+was within 3% of best - a post-hoc report card for trading instinct.
+
+**The Assets page** is the three-way join: fleet from the logs priced through
+UEX vehicle tables (their names drop the manufacturer, so "Drake Corsair"
+falls back to "Corsair"), worn kit and stash priced item-by-item through the
+community uuid into UEX item prices, and claim exposure - deaths times the
+session's average expedite fee. Every total states its coverage, because a
+sum over the recognised half of a fleet is an estimate and should say so.
+
+**The map got geometry**: starmap_positions places each body at its true
+bearing and square-root-compressed distance. The catch is scale - a moon sits
+on its planet's pixel and their site clusters collide - so bodies are grouped
+by proximity and moons fan on a local ring around their planet, the way the
+game's own starmap solves it.
+
+One layout bug fell out of the new pages: sixteen tabs outgrew a 1600px
+window, and the overflowing strip both put a horizontal scrollbar on every
+page and let tab-centring drag the whole document sideways. The strip now
+scrolls itself.
