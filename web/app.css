@@ -223,13 +223,26 @@ body.overlay .tabs {
   gap: 0;
 }
 body.overlay .tabs::-webkit-scrollbar { display: none; }
-body.overlay .tabs button {
-  padding: 5px 9px;
-  font-size: 10px;
-  letter-spacing: .1em;
+
+/* The widget is ~330px wide and the full strip is fifteen tabs; at that size
+   most of them scrolled out of reach and the strip only worked fullscreen.
+   The overlay keeps the glanceable views - the ones worth having over the
+   game - and Ctrl+Alt+arrows cycles the same set. Everything else is one
+   browser tab away. */
+body.overlay .tabs button { display: none; }
+body.overlay .tabs button[data-view="now"],
+body.overlay .tabs button[data-view="map"],
+body.overlay .tabs button[data-view="commodities"],
+body.overlay .tabs button[data-view="market"],
+body.overlay .tabs button[data-view="loadout"],
+body.overlay .tabs button[data-view="stash"] {
+  display: inline-block;
+  padding: 4px 7px;
+  font-size: 9.5px;
+  letter-spacing: .07em;
   white-space: nowrap;
 }
-body.overlay .tabs button::after { left: 5px; right: 5px; bottom: 0; }
+body.overlay .tabs button::after { left: 4px; right: 4px; bottom: 0; }
 
 body.overlay .card {
   background: linear-gradient(160deg, rgba(10, 20, 32, .88), rgba(6, 12, 20, .86));

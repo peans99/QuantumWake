@@ -168,10 +168,15 @@ $('#tabs').addEventListener('click', (event) => {
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
    unlocking click-through. Also bound to the arrow keys for browser use. */
 window.scCycleView = (delta) => {
-  const views = $$('#tabs button').map((b) => b.dataset.view);
-  const current = $$('#tabs button').findIndex((b) => b.classList.contains('active'));
-  const next = (current + delta + views.length) % views.length;
-  showView(views[next]);
+  // Only the tabs actually on show: the overlay hides most of the strip, and
+  // cycling into an invisible view would strand the widget somewhere its own
+  // tab bar cannot reach.
+  const buttons = $$('#tabs button').filter((b) => b.offsetParent !== null);
+  if (!buttons.length) return;
+
+  const current = buttons.findIndex((b) => b.classList.contains('active'));
+  const next = (current + delta + buttons.length) % buttons.length;
+  showView(buttons[next].dataset.view);
 };
 
 window.scShowView = showView;
