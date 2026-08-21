@@ -229,6 +229,7 @@ silently dropped).
 - [docs/commodity-catalogue.md](docs/commodity-catalogue.md) — parked: how to learn what sells where
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
 - [docs/naming.md](docs/naming.md) — why the project is called Quantum Wake
+- [docs/releasing.md](docs/releasing.md) — how a release is cut, and what enforces the version bump
 - [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
 
 ## Licence

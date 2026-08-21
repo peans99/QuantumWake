@@ -42,6 +42,19 @@ jobs:
           $tag = '${{ github.event.inputs.tag }}'
           if (-not $tag) { $tag = '${{ github.ref_name }}' }
           $version = $tag.TrimStart('v')
+
+          # The tag and the repository must agree, or the release lies about
+          # itself. Publishing passes -p:Version from the tag, so a forgotten
+          # bump would still produce a correctly stamped binary while the source
+          # - and the About page of anyone building locally - claimed the old
+          # number. Failing here is what makes "always bump the version" a rule
+          # rather than a habit.
+          $declared = ([xml](Get-Content Directory.Build.props)).SelectSingleNode('//Version').InnerText.Trim()
+          if ($declared -ne $version) {
+            throw "Tag $tag wants $version, but Directory.Build.props declares $declared. Bump the version, merge it, then tag the merge commit."
+          }
+
+          Write-Host "Releasing $version (tag and Directory.Build.props agree)"
           "tag=$tag"         | Out-File $env:GITHUB_OUTPUT -Append
           "version=$version" | Out-File $env:GITHUB_OUTPUT -Append
 
