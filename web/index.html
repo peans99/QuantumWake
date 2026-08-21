@@ -460,6 +460,25 @@
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
     <div id="types-chart" class="bars"></div>
+
+    <h2 class="spaced">Every contract</h2>
+    <p class="muted caption">
+      Newest first. Steps counts the objectives the game showed in your journal
+      and how many finished — the game never names them, so the count is the
+      story: abandoned four steps in reads differently from dropped at the first.
+    </p>
+    <div class="table-wrap">
+      <table id="contracts-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
+            <th>System</th><th>Outcome</th>
+            <th class="num">Steps</th><th class="num">Took</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <section id="view-market" class="view">
@@ -488,6 +507,21 @@
         Enable it from the Settings page — one file, downloaded once, only on
         your click.
       </div>
+    </div>
+
+    <div id="fuel-block" hidden>
+      <h2 class="spaced">Fuel</h2>
+      <p class="muted caption">
+        What a refill costs, per terminal — cheapest first. Needs the fuel feed
+        in Settings.
+      </p>
+      <div class="table-wrap">
+        <table id="fuel-table">
+          <thead><tr><th>Fuel</th><th>Terminal</th><th class="num">Price</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h2 class="spaced">Commodities</h2>
     </div>
 
     <div class="table-wrap">
@@ -534,6 +568,7 @@
             <th class="num">Hull</th>
             <th class="num">Expedite fee</th><th class="num">Claim wait</th>
             <th class="num">Buy price</th><th>Cheapest at</th>
+            <th class="num">Rent</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -599,6 +634,8 @@
             <th>Where</th><th>System</th><th>Spawn group</th>
             <th class="num">Chance</th><th class="num">Share</th>
             <th class="num">Best sell</th>
+            <th class="num" title="What the unrefined rock fetches">Raw</th>
+            <th class="num" title="Best refinery yield for this ore">Yield</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -729,6 +766,15 @@
         <input type="checkbox" id="uex-age-toggle" checked>
         <span>Show how old each price is on the Market page</span>
       </label>
+
+      <div class="uex-feeds" id="uex-feeds">
+        <p class="muted">
+          <b>Extra feeds.</b> Narrower tables that each serve one page — take
+          only what you need. Every one is a separate download on your click,
+          and can be dropped again without touching the rest.
+        </p>
+        <div id="uex-feed-list"></div>
+      </div>
 
       <div class="uex-push" id="uex-push-block">
         <p class="muted">
@@ -891,6 +937,11 @@
           where you are, and what your fleet and stash are worth.</span>
         </div>
       </label>
+
+      <div class="setup-feeds" id="setup-feeds" hidden>
+        <div class="setup-feeds-head">Extra UEX feeds — take only what you need</div>
+        <div id="setup-feed-list"></div>
+      </div>
 
       <div class="setup-actions">
         <button id="setup-start" class="primary">Start flying</button>

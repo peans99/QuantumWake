@@ -69,6 +69,16 @@ public sealed record ContractRecord(
 
     public DateTimeOffset? CompletedAt { get; init; }
 
+    /// <summary>
+    /// Objective steps the game showed in the player's journal, and how many
+    /// finished. The objective ids are opaque uuids, so the steps cannot be
+    /// named - but "4 of 5 done" is the difference between a near miss and a
+    /// walk-away, and neither was visible before.
+    /// </summary>
+    public int Steps { get; init; }
+
+    public int StepsDone { get; init; }
+
     /// <summary>Wall-clock time from first sighting to completion.</summary>
     public TimeSpan? TimeToComplete => CompletedAt is null ? null : CompletedAt - FirstSeen;
 }

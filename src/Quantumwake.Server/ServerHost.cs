@@ -62,6 +62,7 @@ public static class ServerHost
 
         // UEX price integration, opt-in in both directions.
         builder.Services.AddSingleton<UexData>();
+        builder.Services.AddSingleton<UexFeeds>();
 
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
@@ -398,14 +399,18 @@ public static class ServerHost
         // What the pilot owns, priced: fleet at in-game purchase prices, kit
         // and stash at item prices, plus what dying costs. Every number here is
         // an estimate built on community prices and says so in the UI.
-        app.MapGet("/api/assets", (LogLibrary lib, UexData uex) =>
+        app.MapGet("/api/assets", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
         {
             var stats = lib.Stats();
 
             var fleet = stats.Ships.Select(s => new
             {
                 s.Name,
-                price = uex.VehiclePrice(s.Reference?.Name ?? s.Name)
+                price = uex.VehiclePrice(s.Reference?.Name ?? s.Name),
+
+                // A ship you can rent is a ship that might be a rental; the
+                // page says so rather than deciding for the player.
+                rental = feeds.CheapestRental(s.Reference?.Name ?? s.Name)
             }).ToList();
 
             var loadout = stats.Loadout
@@ -470,6 +475,7 @@ public static class ServerHost
 
         // Items observed entering the player's inventories - the Loot page.
         app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
+        app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
         // The community catalogue joined onto this install's trades, plus UEX
         // live prices when that integration is on. Empty until the community
@@ -491,12 +497,13 @@ public static class ServerHost
         // ---- reference catalogues: pure information display, no player ----
         // ---- data - what the community digest describes, priced by UEX ----
 
-        app.MapGet("/api/reference/ships", (LogLibrary lib, UexData uex) =>
+        app.MapGet("/api/reference/ships", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
             lib.Community.Ships.Values
                 .GroupBy(s => s.Name)
                 .Select(g => g.First())
                 .Select(s => new
                 {
+                    rental = feeds.CheapestRental(s.Name),
                     s.Name,
                     s.Career,
                     s.Role,
@@ -540,10 +547,28 @@ public static class ServerHost
 
         // The game's own deposit spawn tables, with UEX's best sell joined on
         // resources that are also commodities - what to mine AND what it pays.
-        app.MapGet("/api/reference/resources", (LogLibrary lib, UexData uex) =>
-            lib.Community.ResourceSpawns.Select(s =>
+        app.MapGet("/api/reference/resources", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
+        {
+            // Raw ore is listed under its own name ("Quartz (Raw)"), so the
+            // join tries the decorated form the raw tables actually use.
+            var raw = feeds.RawOrePrices
+                .GroupBy(r => r.Commodity, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.MaxBy(r => r.Sell)!, StringComparer.OrdinalIgnoreCase);
+
+            var refineries = feeds.RefineryYields
+                .GroupBy(r => r.Commodity, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Yield).ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            return lib.Community.ResourceSpawns.Select(s =>
             {
                 var best = uex.Best(s.Resource);
+                raw.TryGetValue($"{s.Resource} (Raw)", out var rawRow);
+                rawRow ??= raw.GetValueOrDefault(s.Resource);
+
+                var refinery = refineries.GetValueOrDefault($"{s.Resource} (Ore)")
+                    ?? refineries.GetValueOrDefault(s.Resource);
+                var bestRefinery = refinery?.FirstOrDefault();
 
                 return new
                 {
@@ -556,9 +581,14 @@ public static class ServerHost
                     s.GroupChance,
                     s.Share,
                     bestSell = best?.BestSell > 0 ? best.BestSell : (decimal?)null,
-                    bestSellTerminal = best?.BestSell > 0 ? best.BestSellTerminal : null
+                    bestSellTerminal = best?.BestSell > 0 ? best.BestSellTerminal : null,
+                    rawSell = rawRow?.Sell,
+                    rawTerminal = rawRow?.Terminal,
+                    refineryYield = bestRefinery?.Yield,
+                    refineryTerminal = bestRefinery?.Terminal
                 };
-            }));
+            });
+        });
 
         app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
             lib.Community.Items
@@ -585,6 +615,53 @@ public static class ServerHost
                     };
                 })
                 .OrderBy(i => i.className));
+
+        // ---- optional UEX feeds, each switched on by itself ----
+
+        app.MapGet("/api/uex/feeds", (UexFeeds feeds) =>
+            UexFeeds.All.Select(f => new
+            {
+                f.Key,
+                f.Title,
+                f.Description,
+                f.Cost,
+                enabled = feeds.IsEnabled(f.Key),
+                fetchedAt = feeds.FetchedAt(f.Key)
+            }));
+
+        app.MapPost("/api/uex/feeds/{key}/enable",
+            async (string key, UexFeeds feeds, IHttpClientFactory httpFactory) =>
+            {
+                try
+                {
+                    var count = await feeds.EnableAsync(key, httpFactory.CreateClient("community"));
+                    return Results.Ok(new { key, enabled = true, rows = count });
+                }
+                catch (ArgumentException)
+                {
+                    return Results.NotFound(new { message = $"No UEX feed called '{key}'." });
+                }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidDataException or JsonException)
+                {
+                    return Results.Problem(
+                        title: $"The UEX {key} feed could not be fetched.",
+                        detail: e.Message,
+                        statusCode: 502);
+                }
+            });
+
+        app.MapPost("/api/uex/feeds/{key}/disable", (string key, UexFeeds feeds) =>
+        {
+            feeds.Disable(key);
+            return Results.Ok(new { key, enabled = false });
+        });
+
+        // What each feed knows, for the pages that show it.
+        app.MapGet("/api/uex/rentals", (UexFeeds feeds) => feeds.RentalPrices);
+        app.MapGet("/api/uex/fuel", (UexFeeds feeds) => feeds.FuelPrices);
+        app.MapGet("/api/uex/refineries", (UexFeeds feeds) => feeds.RefineryYields);
+        app.MapGet("/api/uex/raw-prices", (UexFeeds feeds) => feeds.RawOrePrices);
+        app.MapGet("/api/uex/places", (UexFeeds feeds) => feeds.PlaceDirectory);
 
         // ---- UEX: live prices in, logged sale prices out. Both opt-in. ----
 

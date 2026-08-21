@@ -406,6 +406,69 @@ function renderContracts(stats) {
   bars('#types-chart',
     stats.contractTypes.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
     (v) => `${v}`);
+
+  loadContractList().catch((e) => console.error('contracts', e));
+}
+
+/**
+ * The contract list, with the objective progress the game pushes but never
+ * showed anywhere: how many journal steps a contract had and how many closed.
+ */
+async function loadContractList() {
+  const days = Number($('#contracts-period').value) || 0;
+  const rows = await getJson(`/api/contracts?days=${days}`);
+  const body = $('#contracts-table tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No contracts in that range.');
+    td.colSpan = 8;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  const OUTCOMES = {
+    Completed: ['done', 'completed'],
+    Abandoned: ['outward', 'abandoned'],
+    InProgress: ['muted', 'in progress'],
+    Unknown: ['muted', '—'],
+  };
+
+  for (const row of rows.slice(0, 400)) {
+    const tr = el('tr');
+    tr.append(el('td', null, dateOf(row.at)));
+
+    // The composed name repeats issuer, type and difficulty, so the columns
+    // carry those and the full name rides the row's tooltip.
+    tr.append(el('td', null, row.issuer || '—'));
+    tr.append(el('td', 'muted', row.type || '—'));
+    tr.append(el('td', 'muted', row.difficulty || '—'));
+    tr.append(el('td', 'muted', row.system || '—'));
+    tr.title = row.name;
+
+    const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
+    tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+
+    // Steps only exist for missions whose objectives were pushed while the
+    // log was being written; older contracts honestly show nothing.
+    const steps = el('td', 'num');
+    if (row.steps > 0) {
+      steps.textContent = `${row.stepsDone} / ${row.steps}`;
+      if (row.stepsDone < row.steps) steps.classList.add('muted');
+    } else {
+      steps.textContent = '—';
+      steps.classList.add('muted');
+    }
+    tr.append(steps);
+
+    tr.append(el('td', 'num muted', row.minutes
+      ? (row.minutes < 60 ? `${Math.round(row.minutes)}m` : `${(row.minutes / 60).toFixed(1)}h`)
+      : '—'));
+
+    body.append(tr);
+  }
 }
 
 function renderPlaces(stats) {
@@ -773,6 +836,23 @@ async function loadMarket() {
     marketEntries = [];
   }
 
+  // Fuel, when that feed is on: cheapest refill per terminal.
+  try {
+    const fuel = await getJson('/api/uex/fuel');
+    $('#fuel-block').hidden = fuel.length === 0;
+
+    const fuelBody = $('#fuel-table tbody');
+    fuelBody.textContent = '';
+
+    for (const row of [...fuel].sort((a, b) => a.fuel.localeCompare(b.fuel) || a.price - b.price)) {
+      const tr = el('tr');
+      tr.append(el('td', null, row.fuel));
+      tr.append(tdPlace(row.terminal, 'muted'));
+      tr.append(el('td', 'num', money(row.price)));
+      fuelBody.append(tr);
+    }
+  } catch { $('#fuel-block').hidden = true; }
+
   // The snapshot's own age and the shortcut to renew it, next to the search -
   // the Settings page should not be the only road to a fresh number.
   try {
@@ -1052,7 +1132,7 @@ function renderShipsRef() {
     const td = el('td', 'muted', shipCatalogue.length
       ? 'No ships match that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 12;
+    td.colSpan = 13;
     tr.append(td);
     body.append(tr);
     return;
@@ -1081,6 +1161,13 @@ function renderShipsRef() {
     tr.append(el('td', 'num muted', ship.standardClaimTime > 0 ? `~${Math.round(ship.standardClaimTime)}m` : '—'));
     tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold'));
     tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
+
+    // Rentals only exist when that feed is on; otherwise the column is dashes.
+    const rent = el('td', ship.rental ? 'num' : 'num muted',
+      ship.rental ? money(ship.rental.price) : '—');
+    if (ship.rental) rent.title = `at ${ship.rental.terminal}`;
+    tr.append(rent);
+
     body.append(tr);
   }
 }
@@ -1244,7 +1331,7 @@ function renderMiningRef() {
     const td = el('td', 'muted', miningCatalogue.length
       ? 'Nothing matches that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 9;
+    td.colSpan = 11;
     tr.append(td);
     body.append(tr);
     return;
@@ -1267,6 +1354,18 @@ function renderMiningRef() {
       spawn.bestSell ? money(spawn.bestSell) : '—');
     if (spawn.bestSellTerminal) sell.title = `at ${spawn.bestSellTerminal}`;
     tr.append(sell);
+
+    // Raw ore price and refinery yield: both from optional feeds, so both are
+    // dashes until those are switched on.
+    const raw = el('td', spawn.rawSell ? 'num' : 'num muted',
+      spawn.rawSell ? money(spawn.rawSell) : '—');
+    if (spawn.rawTerminal) raw.title = `at ${spawn.rawTerminal}`;
+    tr.append(raw);
+
+    const yieldCell = el('td', spawn.refineryYield ? 'num' : 'num muted',
+      spawn.refineryYield ? `${spawn.refineryYield.toFixed(0)}%` : '—');
+    if (spawn.refineryTerminal) yieldCell.title = `best at ${spawn.refineryTerminal}`;
+    tr.append(yieldCell);
 
     body.append(tr);
   }
@@ -1531,6 +1630,61 @@ async function renderSettings() {
     $('#uex-preview').hidden = !(uex.enabled && uex.hasCredentials);
     $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
   } catch { /* as above */ }
+
+  await renderUexFeeds();
+}
+
+/**
+ * The optional UEX feeds, each with its own switch: they serve different
+ * pages, so a trader and a miner should not have to take each other's bytes.
+ */
+async function renderUexFeeds() {
+  const list = $('#uex-feed-list');
+  if (!list) return;
+
+  let feeds;
+  try {
+    feeds = await getJson('/api/uex/feeds');
+  } catch {
+    return;
+  }
+
+  list.textContent = '';
+
+  for (const feed of feeds) {
+    const row = el('div', 'uex-feed');
+
+    const head = el('div', 'uex-feed-head');
+    head.append(el('b', null, feed.title));
+    head.append(el('span', 'cost', feed.cost));
+    row.append(head);
+
+    row.append(el('div', 'muted feed-copy', feed.description));
+
+    const actions = el('div', 'uex-feed-actions');
+    const button = el('button', 'ghost', feed.enabled ? 'Refresh' : 'Fetch');
+    const status = el('span', 'muted');
+
+    status.textContent = feed.enabled
+      ? `on · fetched ${feed.fetchedAt ? ago(feed.fetchedAt) : '—'}`
+      : 'off';
+
+    button.addEventListener('click', () =>
+      uexAction(`/api/uex/feeds/${feed.key}/enable`, status, button));
+
+    actions.append(button);
+
+    if (feed.enabled) {
+      const drop = el('button', 'ghost', 'Drop');
+      drop.addEventListener('click', () =>
+        uexAction(`/api/uex/feeds/${feed.key}/disable`, status, drop));
+      actions.append(drop);
+    }
+
+    actions.append(status);
+    row.append(actions);
+    list.append(row);
+  }
 }
 
 async function uexAction(path, statusNode, button) {
@@ -1993,11 +2147,21 @@ function renderFleetShips() {
 
     // The blended-in asset side: what buying one costs in game, when the
     // price tables know it.
+    const assetRow = assetsData?.fleet?.find((f) => f.name === ship.name);
+
     if (assetsData?.priced) {
-      const row = assetsData.fleet?.find((f) => f.name === ship.name);
-      body.append(row?.price
-        ? el('div', 'ship-price', `${money(row.price.price)} · ${row.price.terminal}`)
+      body.append(assetRow?.price
+        ? el('div', 'ship-price', `${money(assetRow.price.price)} · ${assetRow.price.terminal}`)
         : el('div', 'ship-price muted', 'not sold in game'));
+    }
+
+    // A rentable model might be a rental rather than yours; the card says so
+    // and leaves the tick to the only person who knows.
+    if (assetRow?.rental) {
+      const hint = el('div', 'ship-rental muted',
+        `rentable ${money(assetRow.rental.price)} at ${assetRow.rental.terminal}`);
+      hint.title = 'If this one was rented, untick it above';
+      body.append(hint);
     }
 
     card.append(body);
@@ -4045,6 +4209,35 @@ async function maybeShowSetup() {
     $('#setup-overlay-row').hidden = !overlay.available;
   } catch { $('#setup-overlay-row').hidden = true; }
 
+  // The extra UEX feeds, offered here too - but only once UEX itself is
+  // ticked, since they are useless without the core price tables.
+  try {
+    const feeds = await getJson('/api/uex/feeds');
+    const list = $('#setup-feed-list');
+    list.textContent = '';
+
+    for (const feed of feeds) {
+      const row = el('label', 'setup-feed');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.dataset.feed = feed.key;
+
+      const text = el('div');
+      text.append(el('b', null, feed.title));
+      text.append(el('span', 'cost', ` ${feed.cost}`));
+      text.append(el('span', null, feed.description));
+
+      row.append(box);
+      row.append(text);
+      list.append(row);
+    }
+
+    const uexBox = $('#setup-uex');
+    const syncFeeds = () => { $('#setup-feeds').hidden = !uexBox.checked; };
+    uexBox.addEventListener('change', syncFeeds);
+    syncFeeds();
+  } catch { /* no feed list; the wizard still works */ }
+
   // The wizard has its own copy of the scan bar - the page's one sits
   // underneath it where nobody can see it.
   const poll = setInterval(async () => {
@@ -4082,6 +4275,13 @@ async function maybeShowSetup() {
       if ($('#setup-uex').checked) {
         status.textContent = 'Fetching UEX prices…';
         await fetch('/api/uex/enable', { method: 'POST' });
+
+        // Extra feeds one at a time, so one failing does not take the rest.
+        for (const box of $$('#setup-feed-list input:checked')) {
+          status.textContent = `Fetching the ${box.dataset.feed} feed…`;
+          await fetch(`/api/uex/feeds/${box.dataset.feed}/enable`, { method: 'POST' })
+            .catch(() => {});
+        }
       }
 
       await fetch('/api/setup/done', { method: 'POST' });
