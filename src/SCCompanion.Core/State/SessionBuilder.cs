@@ -38,8 +38,7 @@ public sealed class SessionBuilder
     private readonly List<TimelineEntry> _timeline = [];
     private readonly List<PurchaseRecord> _purchases = [];
     private readonly List<CommodityTrade> _trades = [];
-    private readonly List<LoadoutItem> _loadout = [];
-    private readonly HashSet<string> _loadoutKeys = [];
+    private readonly Dictionary<string, LoadoutItem> _loadoutSeen = new(StringComparer.Ordinal);
 
     /// <summary>Mission id to contract key, so objective state can find its contract.</summary>
     private readonly Dictionary<string, string> _contractsByMission = new(StringComparer.Ordinal);
@@ -604,10 +603,17 @@ public sealed class SessionBuilder
     private void RecordAttachment(AttachmentEvent attachment)
     {
         var key = $"{attachment.Port}|{attachment.ItemClass}";
-        if (!_loadoutKeys.Add(key))
-            return;
 
-        _loadout.Add(new LoadoutItem(attachment.Port, attachment.ItemClass, attachment.Timestamp));
+        // Keep both ends of the sighting window: the first tells us when the item
+        // appeared, the last is what identifies the kit actually in use.
+        if (_loadoutSeen.TryGetValue(key, out var existing))
+        {
+            _loadoutSeen[key] = existing with { LastSeen = attachment.Timestamp };
+            return;
+        }
+
+        _loadoutSeen[key] = new LoadoutItem(
+            attachment.Port, attachment.ItemClass, attachment.Timestamp, attachment.Timestamp);
     }
 
     /// <summary>
@@ -703,7 +709,7 @@ public sealed class SessionBuilder
             Timeline = [.. _timeline.OrderBy(t => t.At)],
             Purchases = _purchases,
             Trades = _trades,
-            Loadout = [.. _loadout.OrderBy(l => l.Port, StringComparer.Ordinal)],
+            Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = _stash,
             FleetSize = _fleetSize,
             Incapacitations = _incapacitations,
