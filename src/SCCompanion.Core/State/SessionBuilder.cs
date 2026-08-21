@@ -37,6 +37,7 @@ public sealed class SessionBuilder
     private readonly List<QuantumJump> _jumps = [];
     private readonly List<TimelineEntry> _timeline = [];
     private readonly List<PurchaseRecord> _purchases = [];
+    private readonly List<CommodityTrade> _trades = [];
     private readonly List<LoadoutItem> _loadout = [];
     private readonly HashSet<string> _loadoutKeys = [];
 
@@ -175,6 +176,18 @@ public sealed class SessionBuilder
 
             case ShopFlowResponseEvent response:
                 ResolvePurchase(response);
+                break;
+
+            case CommodityTradeEvent trade:
+                _trades.Add(new CommodityTrade(
+                    trade.Timestamp, PrettyShop(trade.ShopName), trade.Amount,
+                    trade.Quantity, trade.IsSell, trade.TransactionMode));
+
+                Timeline(
+                    trade.Timestamp,
+                    trade.IsSell ? "sold" : "bought",
+                    $"{(trade.IsSell ? "Sold" : "Bought")} {trade.Quantity} SCU",
+                    $"{trade.Amount:N0} aUEC · {PrettyShop(trade.ShopName)}");
                 break;
 
             case MissionObjectiveEvent objective:
@@ -689,6 +702,7 @@ public sealed class SessionBuilder
             Contracts = [.. _contracts.Values.OrderBy(c => c.FirstSeen)],
             Timeline = [.. _timeline.OrderBy(t => t.At)],
             Purchases = _purchases,
+            Trades = _trades,
             Loadout = [.. _loadout.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = _stash,
             FleetSize = _fleetSize,

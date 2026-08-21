@@ -48,6 +48,37 @@ public sealed record ShopFlowResponseEvent(
     public bool IsSelling => TransactionType.Equals("Selling", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// A commodity traded at a cargo or admin kiosk.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The only income the logs record, and it dwarfs everything else - single
+/// sales over a million aUEC:
+/// </para>
+/// <code>
+/// &lt;CEntityComponentCommodityUIProvider::SendCommoditySellRequest&gt;
+///   ... shopName[SCShop_Admin_lt_base_g] ... amount[1058400.000000]
+///   ... quantity[288] transactionMode[ResourceContainer]
+///   Cargo Box Data: [boxSize[16] | unitAmount[18]]
+/// </code>
+/// <para>
+/// Unlike item purchases there is no matching server response, so a trade is
+/// recorded as requested rather than confirmed. Totals built on it should be
+/// labelled accordingly.
+/// </para>
+/// </remarks>
+public sealed record CommodityTradeEvent(
+    DateTimeOffset Timestamp,
+    string ShopName,
+    decimal Amount,
+    int Quantity,
+    bool IsSell,
+    string? TransactionMode) : GameEvent(Timestamp)
+{
+    public override string Kind => IsSell ? "commodity.sell" : "commodity.buy";
+}
+
 /// <summary>Lifecycle state of a mission objective.</summary>
 public enum ObjectiveState
 {
