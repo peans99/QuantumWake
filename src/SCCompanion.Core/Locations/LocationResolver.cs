@@ -178,6 +178,10 @@ public static partial class LocationResolver
         if (!Universe.RestStopBodies.TryGetValue(bodyToken, out var body))
             return new ResolvedLocation(rawId, $"{bodyToken} {slot} Rest Stop", null, null, LocationKind.RestStop, false);
 
+        // LEO stations are named places, not rest stops.
+        if (slot == "LEO" && Universe.LeoStations.TryGetValue(bodyToken, out var station))
+            return new ResolvedLocation(rawId, station, body.System, body.Body, LocationKind.Station, true);
+
         return new ResolvedLocation(
             rawId,
             $"{body.Body} {slot} Rest Stop",

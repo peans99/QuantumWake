@@ -219,17 +219,40 @@ function bars(container, rows, format) {
 
 /* ---------- history ---------- */
 
+/**
+ * Runs one view's render in isolation.
+ *
+ * Without this a single failing view takes every later one down with it - a
+ * throw in the fleet chart left Loadout and Stash blank - and boot()'s retry
+ * loop swallowed the error, so the page just sat empty with no clue why.
+ */
+function safeRender(name, render) {
+  try {
+    render();
+  } catch (error) {
+    console.error(`${name} failed to render`, error);
+
+    const banner = $('#render-errors');
+    banner.hidden = false;
+    banner.append(el('div', null, `${name}: ${error && error.message ? error.message : error}`));
+  }
+}
+
 async function loadHistory() {
   const [stats, sessions] = await Promise.all([getJson('/api/stats'), getJson('/api/sessions')]);
 
+  $('#render-errors').textContent = '';
+  $('#render-errors').hidden = true;
+
   allSessions = sessions;
   sessionPage = 0;
-  renderSessions();
 
-  renderFleet(stats);
-  renderSpending(stats);
-  renderLoadout(stats);
-  renderStash(stats);
+  safeRender('Sessions', () => renderSessions());
+  safeRender('Fleet', () => renderFleet(stats));
+  safeRender('Spending', () => renderSpending(stats));
+  safeRender('Loadout', () => renderLoadout(stats));
+  safeRender('Stash', () => renderStash(stats));
+  safeRender('Map', () => drawMap(stats.locations));
 
   tiles('#contract-summary', [
     ['Contracts seen', stats.contractsSeen],
@@ -257,8 +280,6 @@ async function loadHistory() {
   bars('#types-chart',
     stats.contractTypes.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
     (v) => `${v}`);
-
-  drawMap(stats.locations);
 }
 
 /* .NET serialises TimeSpan as "hh:mm:ss" or "d.hh:mm:ss". */
