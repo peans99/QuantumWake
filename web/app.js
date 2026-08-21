@@ -225,23 +225,9 @@ async function loadHistory() {
     ['Incapacitations', stats.incapacitations],
   ]);
 
-  // Sessions table.
-  const body = $('#sessions-table tbody');
-  body.textContent = '';
-
-  for (const session of sessions) {
-    const tr = el('tr');
-    const cells = [
-      dateOf(session.startedAt),
-      duration(session.inGame),
-      duration(session.menu),
-      session.primaryShip || '—',
-      session.lastLocation || '—',
-    ];
-    cells.forEach((text) => tr.append(el('td', null, text)));
-    [session.jumps, session.contracts, session.incapacitations].forEach((n) => tr.append(el('td', 'num', String(n))));
-    body.append(tr);
-  }
+  allSessions = sessions;
+  sessionPage = 0;
+  renderSessions();
 
   renderFleet(stats);
   renderSpending(stats);
@@ -294,6 +280,66 @@ function toSeconds(timespan) {
 
   const [h = 0, m = 0, s = 0] = String(clockPart).split(':').map(parseFloat);
   return days * 86400 + h * 3600 + m * 60 + s;
+}
+
+/* ---------- sessions ---------- */
+
+const SESSIONS_PER_PAGE = 25;
+let allSessions = [];
+let sessionPage = 0;
+
+/** Paged because a real library runs to well over a hundred sessions. */
+function renderSessions() {
+  const body = $('#sessions-table tbody');
+  body.textContent = '';
+
+  const pages = Math.max(1, Math.ceil(allSessions.length / SESSIONS_PER_PAGE));
+  sessionPage = Math.min(Math.max(0, sessionPage), pages - 1);
+
+  const start = sessionPage * SESSIONS_PER_PAGE;
+  const page = allSessions.slice(start, start + SESSIONS_PER_PAGE);
+
+  for (const session of page) {
+    const tr = el('tr');
+    const cells = [
+      dateOf(session.startedAt),
+      duration(session.inGame),
+      duration(session.menu),
+      session.primaryShip || '—',
+      session.lastLocation || '—',
+    ];
+    cells.forEach((text) => tr.append(el('td', null, text)));
+    [session.jumps, session.contracts, session.incapacitations]
+      .forEach((n) => tr.append(el('td', 'num', String(n))));
+    body.append(tr);
+  }
+
+  renderPager(pages, start, page.length);
+}
+
+function renderPager(pages, start, shown) {
+  const pager = $('#sessions-pager');
+  pager.textContent = '';
+
+  if (allSessions.length === 0) return;
+
+  pager.append(el('span', 'pager-info',
+    `${start + 1}–${start + shown} of ${allSessions.length}`));
+
+  const nav = el('div', 'pager-nav');
+
+  const step = (label, delta, disabled) => {
+    const button = el('button', 'pager-btn', label);
+    button.disabled = disabled;
+    button.addEventListener('click', () => { sessionPage += delta; renderSessions(); });
+    return button;
+  };
+
+  nav.append(step('‹ Newer', -1, sessionPage === 0));
+  nav.append(el('span', 'pager-page', `${sessionPage + 1} / ${pages}`));
+  nav.append(step('Older ›', 1, sessionPage >= pages - 1));
+
+  pager.append(nav);
 }
 
 /* ---------- shared widgets ---------- */
@@ -561,23 +607,48 @@ function renderLoadout(stats) {
       const card = el('article', 'card');
       card.append(el('div', 'card-label', slot.label || slot.port));
 
-      const list = el('ul', 'slot-list');
-      for (const item of slot.items.slice(0, 6)) {
+      expandableList(card, slot.items, 6, (item) => {
         const li = el('li');
         li.append(el('span', 'slot-item', prettyItem(item.name)));
         li.append(el('span', 'slot-count', `×${item.count}`));
-        list.append(li);
-      }
-      card.append(list);
-
-      if (slot.items.length > 6)
-        card.append(el('div', 'note', `and ${slot.items.length - 6} more`));
+        return li;
+      }, Boolean(term));
 
       grid.append(card);
     }
 
     host.append(grid);
   }
+}
+
+/**
+ * Builds a list that shows `limit` items and reveals the rest on click.
+ * Truncation is skipped while a search is active, since the user has already
+ * narrowed the set and hiding matches would be perverse.
+ */
+function expandableList(card, items, limit, renderItem, expanded) {
+  const list = el('ul', 'slot-list');
+
+  items.forEach((item, index) => {
+    const li = renderItem(item);
+    if (!expanded && index >= limit) li.classList.add('extra');
+    list.append(li);
+  });
+
+  card.append(list);
+
+  if (expanded || items.length <= limit)
+    return;
+
+  const hidden = items.length - limit;
+  const toggle = el('button', 'more-toggle', `show ${hidden} more`);
+
+  toggle.addEventListener('click', () => {
+    const showing = list.classList.toggle('show-all');
+    toggle.textContent = showing ? 'show less' : `show ${hidden} more`;
+  });
+
+  card.append(toggle);
 }
 
 /** A category heading with a count on the right. */
@@ -639,14 +710,8 @@ function renderStash(stats) {
       head.append(el('span', 'slot-count', String(group.items.length)));
       card.append(head);
 
-      const list = el('ul', 'slot-list');
-      for (const item of group.items.slice(0, 8))
-        list.append(el('li', null, prettyItem(item)));
-
-      card.append(list);
-
-      if (group.items.length > 8)
-        card.append(el('div', 'note', `and ${group.items.length - 8} more`));
+      expandableList(card, group.items, 8,
+        (item) => el('li', null, prettyItem(item)), Boolean(term));
     }
 
     grid.append(card);
