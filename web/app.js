@@ -717,16 +717,26 @@ function renderStash(stats) {
   }
 
   const term = ($('#stash-search').value || '').trim().toLowerCase();
+  const days = Number($('#stash-period').value) || 0;
+  const cutoff = days ? Date.now() - days * 86400000 : null;
 
   // Searching by place keeps the whole location; searching by item narrows to
-  // the matching items, so "where is my sniper" answers in one glance.
+  // the matching items, so "where is my sniper" answers in one glance. The
+  // period filter always applies per item, since a location's most recent visit
+  // says nothing about when a particular item was last seen in it.
   const places = stats.stash
     .map((place) => {
-      if (!term) return place;
-      if (place.name.toLowerCase().includes(term)) return place;
+      const placeHit = term && place.name.toLowerCase().includes(term);
 
       const groups = place.groups
-        .map((g) => ({ ...g, items: g.items.filter((i) => i.toLowerCase().includes(term)) }))
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => {
+            if (cutoff && new Date(i.lastSeen).getTime() < cutoff) return false;
+            if (term && !placeHit && !i.name.toLowerCase().includes(term)) return false;
+            return true;
+          }),
+        }))
         .filter((g) => g.items.length);
 
       if (!groups.length) return null;
@@ -751,8 +761,12 @@ function renderStash(stats) {
       head.append(el('span', 'slot-count', String(group.items.length)));
       card.append(head);
 
-      expandableList(card, group.items, 8,
-        (item) => el('li', null, prettyItem(item)), Boolean(term));
+      expandableList(card, group.items, 8, (item) => {
+        const li = el('li');
+        li.append(el('span', 'slot-item', prettyItem(item.name)));
+        li.append(el('span', 'slot-count', relative(item.lastSeen)));
+        return li;
+      }, Boolean(term));
     }
 
     grid.append(card);
@@ -951,6 +965,7 @@ onInput('#fleet-search', renderFleetShips);
 onInput('#fleet-period', renderFleetShips);
 onInput('#loadout-search', () => libraryStats && renderLoadout(libraryStats));
 onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
+onInput('#stash-period', () => libraryStats && renderStash(libraryStats));
 
 /* ---------- boot ---------- */
 

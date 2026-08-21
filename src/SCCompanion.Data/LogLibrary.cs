@@ -175,8 +175,11 @@ public static class LoadoutCategories
         port.Contains(token, StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>One item in a stash, with when it was last seen there.</summary>
+public sealed record StashItem(string Name, DateTimeOffset LastSeen);
+
 /// <summary>Items of one kind, within a stash or elsewhere.</summary>
-public sealed record ItemGroup(string Category, IReadOnlyList<string> Items);
+public sealed record ItemGroup(string Category, IReadOnlyList<StashItem> Items);
 
 /// <summary>Items seen stored at one location, grouped by kind.</summary>
 public sealed record StashLocation(
@@ -293,15 +296,18 @@ public static class ItemCategories
     /// <c>behr_rifle_ballistic_01</c> does.
     /// </param>
     public static IReadOnlyList<ItemGroup> Group(
-        IEnumerable<string> items, Func<string, string>? display = null)
+        IEnumerable<(string ItemClass, DateTimeOffset SeenAt)> items,
+        Func<string, string>? display = null)
     {
         display ??= x => x;
 
         return [.. items
-            .GroupBy(Of, StringComparer.Ordinal)
+            .GroupBy(x => Of(x.ItemClass), StringComparer.Ordinal)
             .Select(g => new ItemGroup(
                 g.Key,
-                [.. g.Select(display).Distinct(StringComparer.OrdinalIgnoreCase).Order()]))
+                [.. g.GroupBy(x => display(x.ItemClass), StringComparer.OrdinalIgnoreCase)
+                     .Select(i => new StashItem(i.Key, i.Max(x => x.SeenAt)))
+                     .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)]))
             .OrderBy(g => Rank(g.Category))];
     }
 }
@@ -534,16 +540,21 @@ public sealed class LogLibrary : IDisposable
             .GroupBy(e => e.LocationId, StringComparer.Ordinal)
             .Select(g =>
             {
-                var items = g.Select(e => e.ItemClass)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                // Keep the most recent sighting per item so the view can filter
+                // on how long ago something was actually seen.
+                var items = g
+                    .GroupBy(e => e.ItemClass, StringComparer.OrdinalIgnoreCase)
+                    .Select(i => (ItemClass: i.Key, SeenAt: i.Max(e => e.SeenAt)))
                     .ToList();
+
+                var groups = ItemCategories.Group(items, Names.Item);
 
                 return new StashLocation(
                     g.Key,
                     g.First().LocationName,
                     g.Max(e => e.SeenAt),
-                    items.Count,
-                    ItemCategories.Group(items, Names.Item));
+                    groups.Sum(x => x.Items.Count),
+                    groups);
             })
             .OrderByDescending(l => l.ItemCount)
             .ToList();
