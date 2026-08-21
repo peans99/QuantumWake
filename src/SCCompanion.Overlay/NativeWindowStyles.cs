@@ -50,6 +50,34 @@ internal static partial class NativeWindowStyles
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    private const int LWA_ALPHA = 0x2;
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte alpha, uint flags);
+
+    /// <summary>
+    /// Sets uniform window translucency at the HWND level.
+    /// </summary>
+    /// <remarks>
+    /// Used instead of WPF's <c>AllowsTransparency</c>, which is not supported
+    /// with WebView2: in that mode WPF renders the window as a layered surface
+    /// and the OS hit-tests it from the alpha WPF painted. WebView2 draws itself
+    /// through child HWNDs, so the region behind it stays alpha 0, reads as "no
+    /// window here", and every click is dropped before the browser sees it -
+    /// producing an overlay that looks interactive but ignores input.
+    /// A uniform layered alpha keeps hit-testing intact.
+    /// </remarks>
+    /// <param name="alpha">0 fully transparent, 255 fully opaque.</param>
+    public static void SetWindowAlpha(Window window, byte alpha)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero)
+            return;
+
+        SetLayeredWindowAttributes(handle, 0, alpha, LWA_ALPHA);
+    }
+
     /// <summary>Applies the base overlay styles: tool window, never activated.</summary>
     public static void ApplyOverlayStyles(Window window)
     {
@@ -62,9 +90,21 @@ internal static partial class NativeWindowStyles
     }
 
     /// <summary>
-    /// Turns mouse click-through on or off. On means the overlay is purely
-    /// informational and every click reaches the game.
+    /// Turns mouse click-through on or off.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="WS_EX_NOACTIVATE"/> is cleared alongside
+    /// <see cref="WS_EX_TRANSPARENT"/>, and this matters: a window that cannot
+    /// activate never takes focus, and the hosted WebView2 will not route mouse
+    /// input to the page without it. Clearing only WS_EX_TRANSPARENT produces an
+    /// overlay that looks interactive but silently ignores every click.
+    /// </para>
+    /// <para>
+    /// Both flags go back on when click-through is restored, so the informational
+    /// mode still never steals focus from the game.
+    /// </para>
+    /// </remarks>
     public static void SetClickThrough(Window window, bool enabled)
     {
         var handle = new WindowInteropHelper(window).Handle;
@@ -74,8 +114,8 @@ internal static partial class NativeWindowStyles
         var style = GetWindowLong(handle, GWL_EXSTYLE);
 
         SetWindowLong(handle, GWL_EXSTYLE, enabled
-            ? style | WS_EX_TRANSPARENT
-            : style & ~WS_EX_TRANSPARENT);
+            ? style | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE
+            : style & ~WS_EX_TRANSPARENT & ~WS_EX_NOACTIVATE);
     }
 
     /// <summary>Registers a system-wide hotkey. Returns false if it is already taken.</summary>

@@ -6,15 +6,20 @@
         Width="420" Height="560"
         MinWidth="260" MinHeight="180"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
+        AllowsTransparency="False"
+        Background="#0A121C"
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="CanResize">
 
     <!-- The outer border is the resize gutter. WebView2 is inset by GutterWidth
          so it never covers the window edges - without that inset the browser
-         control swallows the hit-testing that resizing depends on. -->
+         control swallows the hit-testing that resizing depends on.
+
+         The window is deliberately NOT AllowsTransparency: WebView2 does not
+         support it, and in that mode clicks over the browser are dropped before
+         it ever sees them. Translucency comes from a uniform layered alpha on
+         the HWND instead. See NativeWindowStyles.SetWindowAlpha. -->
     <Border x:Name="Frame" BorderThickness="1" BorderBrush="Transparent" Background="Transparent">
         <Grid Margin="6">
             <Grid.RowDefinitions>
@@ -44,7 +49,7 @@
                                    FontSize="10"
                                    VerticalAlignment="Center"
                                    Margin="9,0,0,0" />
-                        <TextBlock Text="DRAG TO MOVE  ·  EDGES TO RESIZE  ·  CTRL+ALT+O TO LOCK"
+                        <TextBlock Text="DRAG TO MOVE  ·  EDGES TO RESIZE  ·  CTRL+ALT+←/→ PAGE  ·  CTRL+ALT+O TO LOCK"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
@@ -162,6 +167,12 @@
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="CTRL + ALT + ← / →   CHANGE PAGE"
+                                   Foreground="#46617A"
+                                   FontFamily="Bahnschrift, Segoe UI"
+                                   FontSize="10"
+                                   Margin="0,5,0,0"
                                    HorizontalAlignment="Center" />
                         <TextBlock Text="REQUIRES BORDERLESS WINDOWED"
                                    Foreground="#46617A"

@@ -20,7 +20,12 @@ namespace SCCompanion.Overlay;
 public partial class MainWindow : Window
 {
     private const int ToggleHotkeyId = 0xA11;
+    private const int PrevViewHotkeyId = 0xA12;
+    private const int NextViewHotkeyId = 0xA13;
+
     private const uint VkO = 0x4F;
+    private const uint VkLeft = 0x25;
+    private const uint VkRight = 0x27;
 
     private static readonly Uri ServerRoot = new("http://127.0.0.1:31337/");
 
@@ -67,15 +72,19 @@ public partial class MainWindow : Window
         var source = (HwndSource)PresentationSource.FromVisual(this)!;
         source.AddHook(HandleWindowMessage);
 
+        const uint ctrlAlt = NativeWindowStyles.Modifiers.Control | NativeWindowStyles.Modifiers.Alt;
+
         if (!NativeWindowStyles.RegisterGlobalHotKey(
-                this,
-                ToggleHotkeyId,
-                NativeWindowStyles.Modifiers.Control | NativeWindowStyles.Modifiers.Alt | NativeWindowStyles.Modifiers.NoRepeat,
-                VkO))
+                this, ToggleHotkeyId, ctrlAlt | NativeWindowStyles.Modifiers.NoRepeat, VkO))
         {
             SplashText.Text = "Ctrl+Alt+O is already in use by another app; " +
                               "click-through cannot be toggled.";
         }
+
+        // View switching works even while click-through is on, so the widget can
+        // be paged through mid-flight without unlocking it.
+        NativeWindowStyles.RegisterGlobalHotKey(this, PrevViewHotkeyId, ctrlAlt, VkLeft);
+        NativeWindowStyles.RegisterGlobalHotKey(this, NextViewHotkeyId, ctrlAlt, VkRight);
 
         await StartAsync();
     }
@@ -192,11 +201,25 @@ public partial class MainWindow : Window
         const int WM_HOTKEY = 0x0312;
         const int WM_NCHITTEST = 0x0084;
 
-        if (msg == WM_HOTKEY && wParam.ToInt32() == ToggleHotkeyId)
+        if (msg == WM_HOTKEY)
         {
-            ToggleClickThrough();
-            handled = true;
-            return IntPtr.Zero;
+            switch (wParam.ToInt32())
+            {
+                case ToggleHotkeyId:
+                    ToggleClickThrough();
+                    handled = true;
+                    return IntPtr.Zero;
+
+                case PrevViewHotkeyId:
+                    CycleView(-1);
+                    handled = true;
+                    return IntPtr.Zero;
+
+                case NextViewHotkeyId:
+                    CycleView(1);
+                    handled = true;
+                    return IntPtr.Zero;
+            }
         }
 
         // WebView2 covers the client area and swallows the mouse, so WPF's own
@@ -268,6 +291,26 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Pages the hosted dashboard forward or back. Driven from the shell rather
+    /// than the page so it works while click-through is on and the WebView2
+    /// receives no input at all.
+    /// </summary>
+    private async void CycleView(int delta)
+    {
+        if (Browser.CoreWebView2 is null)
+            return;
+
+        try
+        {
+            await Browser.ExecuteScriptAsync($"window.scCycleView && window.scCycleView({delta})");
+        }
+        catch (InvalidOperationException)
+        {
+            // The browser is still initialising; the hotkey is a no-op until then.
+        }
+    }
+
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
     /// <summary>
@@ -297,8 +340,17 @@ public partial class MainWindow : Window
             ? new SolidColorBrush(Color.FromRgb(0x35, 0xC8, 0xF0))
             : Brushes.Transparent;
 
-        // WebView2 exposes no settable Opacity, so this is applied to the window.
-        Opacity = interactive ? 1.0 : 0.92;
+        // Translucency is applied at the HWND level. WPF's Window.Opacity needs
+        // AllowsTransparency, which cannot be used with WebView2.
+        NativeWindowStyles.SetWindowAlpha(this, interactive ? (byte)255 : (byte)235);
+
+        // WebView2 only routes mouse input once the window holds focus, so the
+        // switch to interactive has to actually claim it.
+        if (interactive)
+        {
+            Activate();
+            Browser.Focus();
+        }
     }
 
     /// <summary>Dragging is offered from the header strip only.</summary>
@@ -313,6 +365,8 @@ public partial class MainWindow : Window
         new OverlayGeometry(Left, Top, Width, Height).Save();
 
         NativeWindowStyles.UnregisterGlobalHotKey(this, ToggleHotkeyId);
+        NativeWindowStyles.UnregisterGlobalHotKey(this, PrevViewHotkeyId);
+        NativeWindowStyles.UnregisterGlobalHotKey(this, NextViewHotkeyId);
 
         // Only stop the server if this overlay started it.
         if (_server is { HasExited: false })
