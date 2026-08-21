@@ -71,6 +71,34 @@ public sealed record LibraryStats
 /// <param name="Total">Confirmed spend on this item across all sessions.</param>
 public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 
+/// <summary>One cargo trade.</summary>
+/// <param name="UnitPrice">aUEC per SCU, worked out from amount and quantity.</param>
+public sealed record TradeRecord(
+    DateTimeOffset At,
+    bool IsSell,
+    string Shop,
+    int Scu,
+    decimal Amount,
+    decimal UnitPrice,
+    string? Mode);
+
+/// <summary>One money movement.</summary>
+/// <param name="Amount">Negative for money out, positive for money in.</param>
+/// <param name="Confirmed">
+/// Item purchases are confirmed by a server response; commodity trades are not,
+/// so those are amounts requested at the kiosk.
+/// </param>
+/// <param name="Running">Cumulative net at this point, oldest movement first.</param>
+public sealed record LedgerEntry(
+    DateTimeOffset At,
+    string Kind,
+    string What,
+    string Where,
+    decimal Amount,
+    int Quantity,
+    bool Confirmed,
+    decimal Running);
+
 public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 
 /// <summary>What occupies one character slot.</summary>
@@ -501,6 +529,97 @@ public sealed class LogLibrary : IDisposable
             builder.Add(ev);
 
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Every money movement, newest first, with a running net.
+    /// </summary>
+    /// <remarks>
+    /// Item purchases and commodity trades are the only transactions the logs
+    /// record. There is no wallet event, so this is a movement ledger rather than
+    /// a balance: it says what went out and came in, not what is left.
+    /// </remarks>
+    public IReadOnlyList<LedgerEntry> Ledger(int days = 0)
+    {
+        var sessions = _store.All();
+
+        if (days > 0)
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+            sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
+        }
+
+        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, decimal Amount, int Quantity, bool Confirmed)>();
+
+        foreach (var session in sessions)
+        {
+            foreach (var purchase in session.Purchases)
+            {
+                movements.Add((purchase.At, "Item bought", Names.Item(purchase.Item),
+                    purchase.Shop, -purchase.Total, purchase.Quantity, purchase.Confirmed));
+            }
+
+            foreach (var trade in session.Trades)
+            {
+                movements.Add((
+                    trade.At,
+                    trade.IsSell ? "Cargo sold" : "Cargo bought",
+                    $"{trade.Quantity} SCU",
+                    trade.Shop,
+                    trade.IsSell ? trade.Amount : -trade.Amount,
+                    trade.Quantity,
+
+                    // Commodity trades carry no server confirmation.
+                    false));
+            }
+        }
+
+        // Running total is computed oldest-first, then the list is reversed so the
+        // newest movement leads.
+        var ordered = movements.OrderBy(m => m.At).ToList();
+        var entries = new List<LedgerEntry>(ordered.Count);
+        decimal running = 0;
+
+        foreach (var m in ordered)
+        {
+            running += m.Amount;
+            entries.Add(new LedgerEntry(m.At, m.Kind, m.What, m.Where, m.Amount, m.Quantity, m.Confirmed, running));
+        }
+
+        entries.Reverse();
+        return entries;
+    }
+
+    /// <summary>
+    /// Cargo trades, newest first, with unit price worked out.
+    /// </summary>
+    /// <remarks>
+    /// The commodity itself is not recoverable: the log names it only by
+    /// <c>resourceGUID</c>, and that mapping lives in the DataCore rather than
+    /// anywhere the logs reach. Volume, price and place are all present, so the
+    /// view reports those and stays quiet about what was in the boxes.
+    /// </remarks>
+    public IReadOnlyList<TradeRecord> Trades(int days = 0)
+    {
+        var sessions = _store.All();
+
+        if (days > 0)
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+            sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
+        }
+
+        return [.. sessions
+            .SelectMany(s => s.Trades)
+            .Select(t => new TradeRecord(
+                t.At,
+                t.IsSell,
+                t.Shop,
+                t.Quantity,
+                t.Amount,
+                t.Quantity > 0 ? t.Amount / t.Quantity : 0,
+                t.Mode))
+            .OrderByDescending(t => t.At)];
     }
 
     public IReadOnlyList<SessionSummary> Sessions() => _store.All();

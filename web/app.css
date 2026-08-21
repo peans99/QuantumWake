@@ -521,6 +521,8 @@ tbody td { padding: 9px 15px; border-top: 1px solid rgba(23, 41, 60, .55); white
 tbody tr:hover { background: rgba(53, 200, 240, .05); }
 tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 12px; }
 .num, td.num { text-align: right; font-family: var(--mono); font-size: 12px; }
+td.inward { color: var(--green); }
+td.outward { color: var(--amber); }
 
 /* ---------- map ---------- */
 
@@ -646,6 +648,53 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
   font-size: 11.5px;
   line-height: 1.6;
 }
+
+/* Scan progress. A cold backfill takes about half a minute; without this the
+   page looks broken rather than busy. */
+.scan {
+  border: 1px solid var(--rule-hot);
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+  padding: 11px 15px;
+  margin-bottom: var(--gap);
+}
+.scan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--cyan-hot);
+}
+.scan-count { color: var(--dim); font-family: var(--mono); letter-spacing: 0; }
+
+.scan-track {
+  height: 4px;
+  background: #060c14;
+  border: 1px solid var(--rule);
+  margin-top: 9px;
+  overflow: hidden;
+}
+.scan-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--cyan-deep), var(--cyan));
+  box-shadow: 0 0 10px rgba(53, 200, 240, .5);
+  transition: width .3s ease-out;
+}
+
+.scan-file {
+  margin-top: 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.overlay .scan-file { display: none; }
 
 /* Heading with filter controls on the right. */
 .section-bar {

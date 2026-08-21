@@ -23,6 +23,8 @@
     <button data-view="places">Places</button>
     <button data-view="contracts">Contracts</button>
     <button data-view="spending">Spending</button>
+    <button data-view="ledger">Ledger</button>
+    <button data-view="commodities">Cargo</button>
     <button data-view="loadout">Loadout</button>
     <button data-view="stash">Stash</button>
   </nav>
@@ -36,6 +38,15 @@
 <main>
 
   <div class="render-errors" id="render-errors" hidden></div>
+
+  <div class="scan" id="scan" hidden>
+    <div class="scan-head">
+      <span id="scan-label">Reading logs…</span>
+      <span class="scan-count" id="scan-count"></span>
+    </div>
+    <div class="scan-track"><div class="scan-fill" id="scan-fill"></div></div>
+    <div class="scan-file" id="scan-file"></div>
+  </div>
 
 
   <!-- NOW -->
@@ -183,6 +194,67 @@
     <div id="shops-chart" class="bars"></div>
     <h2 class="spaced">Most bought</h2>
     <div id="items-chart" class="bars"></div>
+  </section>
+
+  <!-- LEDGER -->
+  <section id="view-ledger" class="view">
+    <div class="section-bar">
+      <h2>Money in and out</h2>
+      <div class="controls">
+        <select id="ledger-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="ledger-summary"></div>
+    <p class="muted caption">
+      Every movement the logs record, newest first. There is no wallet event in
+      Game.log, so this is a record of what went out and came in — not a balance.
+      Item purchases are confirmed by the server; cargo trades are amounts
+      requested at the kiosk, marked with ~.
+    </p>
+    <div class="table-wrap">
+      <table id="ledger-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Type</th><th>What</th><th>Where</th>
+            <th class="num">Amount</th><th class="num">Running</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pager" id="ledger-pager"></div>
+  </section>
+
+  <!-- COMMODITIES -->
+  <section id="view-commodities" class="view">
+    <div class="section-bar">
+      <h2>Cargo trading</h2>
+      <div class="controls">
+        <select id="commodities-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="cargo-summary"></div>
+    <p class="muted caption">
+      Volume, price and place come straight from the kiosk. What was in the boxes
+      does not: the log names the commodity only by an internal id, and that
+      mapping lives in the game's DataCore rather than in any log.
+    </p>
+
+    <h2 class="spaced">Revenue by location</h2>
+    <div id="cargo-shops" class="bars"></div>
+
+    <h2 class="spaced">Every trade</h2>
+    <div class="table-wrap">
+      <table id="cargo-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Type</th><th>Where</th>
+            <th class="num">SCU</th><th class="num">Amount</th><th class="num">Per SCU</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- LOADOUT -->

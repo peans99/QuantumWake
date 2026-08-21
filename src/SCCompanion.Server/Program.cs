@@ -25,6 +25,7 @@ var library = new LogLibrary(database);
 builder.Services.AddSingleton(library);
 builder.Services.AddSingleton(install!);
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<ScanStatus>();
 builder.Services.AddSingleton<LiveSessionService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
@@ -90,6 +91,8 @@ app.MapPost("/api/names/refresh", (LogLibrary lib) =>
         places = lib.Names.PlaceCount
     });
 });
+
+app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
 
 app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -161,8 +164,18 @@ app.MapPost("/api/scan", (LogLibrary lib, bool? force) =>
     if (install is null)
         return Results.NotFound(new { message = "No install." });
 
-    var parsed = lib.Scan(install, force: force ?? false);
-    return Results.Ok(new { parsed, sessions = lib.Store.Count() });
+    var status = app.Services.GetRequiredService<ScanStatus>();
+    status.Begin();
+
+    try
+    {
+        var parsed = lib.Scan(install, Progress(status), force ?? false);
+        return Results.Ok(new { parsed, sessions = lib.Store.Count() });
+    }
+    finally
+    {
+        status.Finish();
+    }
 });
 
 app.MapGet("/api/fleet", (LogLibrary lib) =>
@@ -188,6 +201,10 @@ app.MapGet("/api/spending", (LogLibrary lib) =>
     });
 });
 
+app.MapGet("/api/ledger", (LogLibrary lib, int? days) => lib.Ledger(days ?? 0));
+
+app.MapGet("/api/commodities", (LogLibrary lib, int? days) => lib.Trades(days ?? 0));
+
 app.MapGet("/api/loadout", (LogLibrary lib) => lib.Stats().Loadout);
 app.MapGet("/api/loadout/asof", (LogLibrary lib) => new { asOf = lib.Stats().LoadoutAsOf });
 
@@ -212,7 +229,11 @@ if (install is not null)
             app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
                 library.Names.ItemCount, library.Names.VehicleCount);
 
-            var parsed = library.Scan(install);
+            var status = app.Services.GetRequiredService<ScanStatus>();
+            status.Begin();
+
+            var parsed = library.Scan(install, Progress(status));
+            status.Finish();
             app.Logger.LogInformation("Library ready: {Parsed} newly parsed, {Total} sessions.",
                 parsed, library.Store.Count());
         }
@@ -226,6 +247,10 @@ if (install is not null)
 app.Logger.LogInformation("SC Companion by nekron - http://{Host}:{Port}", host, port);
 app.Run();
 return;
+
+/// <summary>Bridges the library's progress callback to the shared status.</summary>
+static IProgress<ScanProgress> Progress(ScanStatus status) =>
+    new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
 static GameInstall? ResolveInstall(string[] args, IConfiguration configuration)
 {
