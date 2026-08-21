@@ -144,6 +144,7 @@ silently dropped).
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
 - [docs/naming.md](docs/naming.md) — why the project is called Verselog
+- [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
 
 ## Credits
 

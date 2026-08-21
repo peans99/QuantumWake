@@ -19,6 +19,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |
 | [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
 | [naming.md](naming.md) | Why the project is called Verselog, and what the name had to survive. |
+| [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
 
 The seven per-tool write-ups that used to sit in `docs/tools/` have been
 removed. Everything worth keeping from them was already lifted into the docs
