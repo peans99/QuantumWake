@@ -508,7 +508,8 @@ public static class ServerHost
                 buy = r.Buy,
                 sell = r.Sell,
                 buyScu = r.BuyScu,
-                sellScu = r.SellScu
+                sellScu = r.SellScu,
+                seenAt = r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : (DateTimeOffset?)null
             }));
 
         app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>

@@ -13,13 +13,21 @@ public sealed record UexPrice(
 {
     /// <summary>15-day average sell across terminals, for trend context.</summary>
     public decimal AvgSell { get; init; }
+
+    /// <summary>
+    /// When UEX last saw the best-sell price reported - the age a trader
+    /// judges the number by. Null on caches digested before the field existed.
+    /// </summary>
+    public DateTimeOffset? SeenAt { get; init; }
 }
 
 /// <summary>One commodity's price at one terminal.</summary>
 /// <param name="BuyScu">Stock available to buy, SCU. 0 on caches digested before the field existed.</param>
 /// <param name="SellScu">Demand the terminal accepts when selling to it, SCU. Same caveat.</param>
+/// <param name="Seen">Unix seconds of UEX's date_modified for this row. 0 on older caches.</param>
 public sealed record UexMarketRow(
-    int TerminalId, string Terminal, decimal Buy, decimal Sell, decimal BuyScu = 0, decimal SellScu = 0);
+    int TerminalId, string Terminal, decimal Buy, decimal Sell, decimal BuyScu = 0, decimal SellScu = 0,
+    long Seen = 0);
 
 /// <summary>Cheapest in-game purchase of a vehicle.</summary>
 public sealed record UexVehiclePrice(decimal Price, string Terminal);
@@ -396,11 +404,12 @@ public sealed class UexData
             var sellAvg = (decimal)(Num(row, "price_sell_avg") ?? 0);
             var buyScu = (decimal)(Num(row, "scu_buy") ?? 0);
             var sellScu = (decimal)(Num(row, "scu_sell_stock") ?? 0);
+            var seen = (long)(Num(row, "date_modified") ?? 0);
 
             if (!matrix.TryGetValue(name, out var list))
                 matrix[name] = list = [];
 
-            list.Add(new UexMarketRow(terminalId, terminal, buy, sell, buyScu, sellScu));
+            list.Add(new UexMarketRow(terminalId, terminal, buy, sell, buyScu, sellScu, seen));
 
             if (sellAvg > 0)
             {
@@ -422,7 +431,10 @@ public sealed class UexData
             {
                 AvgSell = avgSells.TryGetValue(name, out var avgs) && avgs.Count > 0
                     ? Math.Round(avgs.Max(), 0)
-                    : 0
+                    : 0,
+                SeenAt = bestSell?.Seen > 0
+                    ? DateTimeOffset.FromUnixTimeSeconds(bestSell.Seen)
+                    : null
             };
         }
 

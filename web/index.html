@@ -456,6 +456,9 @@
     <div class="section-bar">
       <h2>Commodity market</h2>
       <div class="controls">
+        <span class="muted" id="market-age" title="When the UEX snapshot was fetched"></span>
+        <button class="ghost" id="market-refresh" hidden
+                title="Fetch the latest prices from UEX now">Refresh prices</button>
         <select id="market-group" class="select" title="Filter by commodity group"></select>
         <input type="search" id="market-search" class="search" placeholder="Search commodities…"
                autocomplete="off" spellcheck="false">
@@ -574,6 +577,11 @@
         here: only on your click, never on a timer.
       </p>
       <span class="muted" id="uex-status"></span>
+
+      <label class="toggle uex-age-row">
+        <input type="checkbox" id="uex-age-toggle" checked>
+        <span>Show how old each price is on the Market page</span>
+      </label>
 
       <div class="uex-push" id="uex-push-block">
         <p class="muted">

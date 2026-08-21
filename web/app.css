@@ -1444,6 +1444,14 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 td.map-links { white-space: nowrap; }
 td.map-links .ghost + .ghost { margin-left: 5px; }
 
+/* ---------- market: price ages ---------- */
+
+.price-age { color: var(--dim); font-size: 10px; letter-spacing: .05em; }
+.price-age.old { color: var(--amber); }
+.price-age.stale { color: var(--red); }
+
+.uex-age-row { display: flex; margin-top: 9px; font-size: 12px; }
+
 /* ---------- place links: any location jumps to the map ---------- */
 
 .place-link {

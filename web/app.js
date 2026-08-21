@@ -736,12 +736,47 @@ async function refreshTradeAdvice(place) {
 /** The community catalogue, cached for the map's commodity search too. */
 let marketEntries = [];
 
+/**
+ * Whether Market rows show each price's age. On by default - a trader judges
+ * a number by how old it is - and switchable from Settings for anyone who
+ * finds the extra line noise.
+ */
+let showPriceAge = true;
+try { showPriceAge = localStorage.getItem('qw-uex-age') !== '0'; } catch { /* fine */ }
+
+/** Fine-grained "how long ago" for prices, where days are too coarse. */
+function ago(iso) {
+  if (!iso) return 'unknown';
+
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 60) return `${days}d ago`;
+
+  return `${Math.round(days / 30)}mo ago`;
+}
+
 async function loadMarket() {
   try {
     marketEntries = await getJson('/api/market');
   } catch {
     marketEntries = [];
   }
+
+  // The snapshot's own age and the shortcut to renew it, next to the search -
+  // the Settings page should not be the only road to a fresh number.
+  try {
+    const uex = await getJson('/api/uex');
+    $('#market-refresh').hidden = !uex.enabled;
+    $('#market-age').textContent = uex.enabled && uex.fetchedAt
+      ? `prices fetched ${ago(uex.fetchedAt)}`
+      : '';
+  } catch { /* leave the header as it is */ }
 
   // The group dropdown offers every group the catalogue actually uses,
   // rebuilt on load and keeping the user's pick when it still exists.
@@ -818,6 +853,16 @@ function renderMarket() {
 
         if (entry.uex.bestSellTerminal)
           cell.append(el('div', 'muted uex-terminal', entry.uex.bestSellTerminal));
+
+        // How old the number is - the difference between a price and a rumour.
+        // Ambers past three days, reds past two weeks.
+        if (showPriceAge && entry.uex.seenAt) {
+          const age = Date.now() - new Date(entry.uex.seenAt).getTime();
+          const cls = age > 14 * 86400000 ? 'price-age stale'
+            : age > 3 * 86400000 ? 'price-age old'
+            : 'price-age';
+          cell.append(el('div', cls, `seen ${ago(entry.uex.seenAt)}`));
+        }
       } else {
         cell.textContent = '—';
       }
@@ -852,6 +897,21 @@ function renderMarket() {
 
 onInput('#market-search', renderMarket);
 $('#market-group')?.addEventListener('change', renderMarket);
+
+// The shortcut: re-fetch the whole UEX snapshot from right here.
+$('#market-refresh')?.addEventListener('click', (e) =>
+  uexAction('/api/uex/enable', $('#market-age'), e.currentTarget));
+
+// The Settings switch for price ages, live on both pages at once.
+const uexAgeToggle = $('#uex-age-toggle');
+if (uexAgeToggle) {
+  uexAgeToggle.checked = showPriceAge;
+  uexAgeToggle.addEventListener('change', () => {
+    showPriceAge = uexAgeToggle.checked;
+    try { localStorage.setItem('qw-uex-age', showPriceAge ? '1' : '0'); } catch { /* fine */ }
+    renderMarket();
+  });
+}
 
 /**
  * Facility keys to search tokens the atlas can meet. The class name
