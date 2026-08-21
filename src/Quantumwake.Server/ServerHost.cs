@@ -64,6 +64,7 @@ public static class ServerHost
         builder.Services.AddSingleton<UexData>();
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
+        builder.Services.AddSingleton<OverlayLayoutStore>();
 
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
@@ -181,6 +182,18 @@ public static class ServerHost
                 {
                     message = "No overlay in this process - the dashboard is running under the bare server."
                 }));
+
+        // What the widget shows. Read by the overlay itself on every load, so
+        // a change made in the dashboard reaches the other window.
+        app.MapGet("/api/overlay/layout", (OverlayLayoutStore layout) => new
+        {
+            current = layout.Current,
+            tabs = OverlayLayout.SelectableTabs,
+            cards = OverlayLayout.SelectableCards
+        });
+
+        app.MapPost("/api/overlay/layout", (OverlayLayoutStore store, OverlayLayout body) =>
+            Results.Ok(store.Save(body)));
 
         // Display names come out of the game's own localisation table, so they go stale
         // when Star Citizen patches. The cache is stamped with Data.p4k's write time and

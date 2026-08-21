@@ -134,6 +134,12 @@ function showView(name) {
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs') loadJobs().catch(() => {});
 
+  // The overlay page shows live state from both halves of the app.
+  if (name === 'overlay') {
+    renderSettings().catch(() => {});
+    renderOverlayLayout().catch(() => {});
+  }
+
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
 
@@ -204,7 +210,12 @@ window.scShowView = showView;
 
 /* Driven by the overlay shell's fullscreen toggle: at full size the widget can
    afford the whole tab strip, so the six-tab whitelist lifts while expanded. */
-window.scOverlayExpanded = (on) => document.body.classList.toggle('expanded', Boolean(on));
+window.scOverlayExpanded = (on) => {
+  document.body.classList.toggle('expanded', Boolean(on));
+
+  // Fullscreen shows everything; going back re-applies the chosen few.
+  if (isOverlay) applyOverlayLayout().catch(() => {});
+};
 
 document.addEventListener('keydown', (event) => {
   if (!event.ctrlKey || !event.altKey) return;
@@ -1498,6 +1509,111 @@ function renderCraftingRef() {
 onInput('#crafting-search', renderCraftingRef);
 $('#crafting-type')?.addEventListener('change', renderCraftingRef);
 $('#crafting-obtained')?.addEventListener('change', renderCraftingRef);
+
+/* ---------- overlay layout ---------- */
+
+/** Pretty names for the views and cards the layout page offers. */
+const OVERLAY_LABELS = {
+  now: 'Now', jobs: 'Jobs', map: 'Map', commodities: 'Cargo', market: 'Market',
+  loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
+  location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
+  feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
+};
+
+/**
+ * The overlay layout editor, on its own page under Settings. Saving is
+ * immediate - there is no Save button because there is nothing to lose by a
+ * tick going straight through, and the widget picks it up on its next poll.
+ */
+async function renderOverlayLayout() {
+  let data;
+  try {
+    data = await getJson('/api/overlay/layout');
+  } catch {
+    return;
+  }
+
+  const draw = (host, names, chosen) => {
+    const node = $(host);
+    node.textContent = '';
+
+    for (const name of names) {
+      const label = el('label', 'toggle');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = name;
+      box.checked = chosen.includes(name);
+      box.addEventListener('change', saveOverlayLayout);
+
+      label.append(box);
+      label.append(el('span', null, OVERLAY_LABELS[name] || name));
+      node.append(label);
+    }
+  };
+
+  draw('#overlay-tabs', data.tabs, data.current.tabs);
+  draw('#overlay-cards', data.cards, data.current.cards);
+
+  for (const radio of $$('#overlay-density input')) {
+    radio.checked = radio.value === data.current.density;
+    radio.onchange = saveOverlayLayout;
+  }
+
+  $('#overlay-layout-status').textContent = '';
+}
+
+async function saveOverlayLayout() {
+  const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
+  const density = $$('#overlay-density input').find((r) => r.checked)?.value || 'normal';
+
+  const status = $('#overlay-layout-status');
+  status.textContent = 'saving…';
+
+  try {
+    await fetch('/api/overlay/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tabs: pick('#overlay-tabs'), cards: pick('#overlay-cards'), density }),
+    });
+    status.textContent = 'saved';
+  } catch {
+    status.textContent = 'could not save';
+  }
+}
+
+/**
+ * In the widget, applies the chosen layout: which tabs appear, which Now cards
+ * appear, and the type scale. Polled rather than pushed, because the overlay
+ * is a separate browser and a few seconds of lag costs nothing.
+ */
+async function applyOverlayLayout() {
+  let layout;
+  try {
+    layout = (await getJson('/api/overlay/layout')).current;
+  } catch {
+    return;
+  }
+
+  const expanded = document.body.classList.contains('expanded');
+
+  for (const button of $$('#tabs button[data-view]'))
+    button.hidden = !expanded && !layout.tabs.includes(button.dataset.view);
+
+  for (const card of $$('#view-now [data-card]')) {
+    const wanted = expanded || layout.cards.includes(card.dataset.card);
+    card.classList.toggle('layout-off', !wanted);
+  }
+
+  document.body.classList.remove('density-compact', 'density-tiny');
+  if (layout.density !== 'normal') document.body.classList.add(`density-${layout.density}`);
+
+  // The active view may have just been hidden; fall back to the first shown.
+  const active = $('#tabs button.active[data-view]');
+  if (active?.hidden) {
+    const first = $$('#tabs button[data-view]').find((b) => !b.hidden);
+    if (first) showView(first.dataset.view);
+  }
+}
 
 /* ---------- jobs ---------- */
 
@@ -4589,7 +4705,14 @@ async function maybeShowSetup() {
 }
 
 async function boot() {
-  if (isOverlay) document.body.classList.add('overlay');
+  if (isOverlay) {
+    document.body.classList.add('overlay');
+
+    // The widget's layout is chosen in the dashboard, a different browser, so
+    // it is polled rather than pushed.
+    applyOverlayLayout().catch(() => {});
+    setInterval(() => applyOverlayLayout().catch(() => {}), 5000);
+  }
 
   const requested = viewFromHash();
   if (requested) showView(requested);

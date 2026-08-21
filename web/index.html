@@ -62,7 +62,13 @@
         <button data-view="loot">Loot</button>
       </div>
     </div>
-    <button data-view="settings">Settings</button>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Settings<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="settings">General</button>
+        <button data-view="overlay">Overlay</button>
+      </div>
+    </div>
     <button data-view="about">About</button>
   </nav>
 
@@ -90,7 +96,7 @@
   <section id="view-now" class="view active">
     <div class="now-grid">
 
-      <article class="card hero">
+      <article class="card hero" data-card="location">
         <div class="card-label">Location</div>
         <div class="hero-value" id="now-location">—</div>
         <div class="hero-sub" id="now-location-sub"></div>
@@ -101,31 +107,31 @@
         </div>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
         <div class="value" id="now-ship">—</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="session">
         <div class="card-label">Session</div>
         <div class="value" id="now-clock">—</div>
         <div class="sub" id="now-mode"></div>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="handle">
         <div class="card-label">Handle</div>
         <div class="value" id="now-handle">—</div>
         <div class="sub" id="now-version"></div>
       </article>
 
-      <article class="card span2">
+      <article class="card span2" data-card="feed">
         <div class="card-label">Live feed</div>
         <ul class="feed" id="now-feed">
           <li class="empty">Waiting for the game…</li>
         </ul>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="stats">
         <div class="card-label">This session</div>
         <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
         <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
@@ -133,14 +139,14 @@
         <div class="note" id="combat-note"></div>
       </article>
 
-      <article class="card span2" id="now-job-card" hidden>
+      <article class="card span2" id="now-job-card" data-card="job" hidden>
         <div class="card-label">Job in hand</div>
         <div class="now-job-title" id="now-job-title"></div>
         <div id="now-job-progress"></div>
         <ul class="now-job-items" id="now-job-items"></ul>
       </article>
 
-      <article class="card span2" id="trade-advice-card" hidden>
+      <article class="card span2" id="trade-advice-card" data-card="trade" hidden>
         <div class="card-label">Trade from here</div>
         <div class="muted" id="trade-advice-sub"></div>
         <ul class="advice" id="trade-advice"></ul>
@@ -752,8 +758,9 @@
   </section>
 
 
-  <section id="view-settings" class="view">
-    <h2>Settings</h2>
+  <!-- OVERLAY -->
+  <section id="view-overlay" class="view">
+    <h2>Overlay</h2>
 
     <div class="option-block" id="option-overlay">
       <div class="option-head">
@@ -762,14 +769,52 @@
       </div>
       <p class="muted" id="overlay-copy">
         Off by default. Turning it on shows a transparent panel over the game —
-        Star Citizen must run in Borderless Windowed for it to be visible, and
-        <code>Ctrl+Alt+O</code> toggles click-through. The choice is remembered.
+        Star Citizen must run in Borderless Windowed for it to be visible.
+        <code>Ctrl+Alt+O</code> toggles click-through, <code>Ctrl+Alt+←/→</code>
+        changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
+        remembered.
       </p>
       <p class="muted" id="overlay-unavailable" hidden>
         Not available here: this dashboard is served by the bare server, which
         has no overlay window. Run <code>QuantumWake.exe</code> to get one.
       </p>
     </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>What the widget shows</h3>
+        <span class="muted" id="overlay-layout-status"></span>
+      </div>
+      <p class="muted">
+        The widget is small and the dashboard is not, so it should carry a
+        chosen few rather than everything. Changes reach a running overlay
+        within a few seconds — no restart. Fullscreen ignores this and shows
+        the lot.
+      </p>
+
+      <div class="layout-group">
+        <div class="layout-label">Pages</div>
+        <div class="layout-boxes" id="overlay-tabs"></div>
+      </div>
+
+      <div class="layout-group">
+        <div class="layout-label">Cards on the Now page</div>
+        <div class="layout-boxes" id="overlay-cards"></div>
+      </div>
+
+      <div class="layout-group">
+        <div class="layout-label">Density</div>
+        <div class="layout-boxes" id="overlay-density">
+          <label class="toggle"><input type="radio" name="ov-density" value="normal"><span>Normal</span></label>
+          <label class="toggle"><input type="radio" name="ov-density" value="compact"><span>Compact</span></label>
+          <label class="toggle"><input type="radio" name="ov-density" value="tiny"><span>Tiny</span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-settings" class="view">
+    <h2>Settings</h2>
 
     <div class="option-block">
       <div class="option-head">
