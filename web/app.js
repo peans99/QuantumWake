@@ -684,8 +684,7 @@ function renderLoadout(stats) {
     if (!term) return true;
 
     return (slot.label || slot.port).toLowerCase().includes(term)
-      || slot.items.some((i) => i.name.toLowerCase().includes(term))
-      || slot.history.some((h) => h.name.toLowerCase().includes(term));
+      || slot.items.some((i) => i.name.toLowerCase().includes(term));
   });
 
   if (!slots.length) {
@@ -724,19 +723,6 @@ function renderLoadout(stats) {
 
       if (slot.currentSeen)
         card.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
-
-      if (slot.history.length) {
-        const previously = el('div', 'slot-history-label',
-          `previously (${slot.history.length})`);
-        card.append(previously);
-
-        expandableList(card, slot.history, 3, (item) => {
-          const li = el('li');
-          li.append(el('span', 'slot-item', prettyItem(item.name)));
-          li.append(el('span', 'slot-count', relative(item.lastSeen)));
-          return li;
-        }, Boolean(term));
-      }
 
       grid.append(card);
     }
