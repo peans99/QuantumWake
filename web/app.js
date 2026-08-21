@@ -202,6 +202,9 @@ function renderNow(state) {
   // The map follows the live feed, so the marker moves as the player does.
   setHere(state.locationId);
 
+  // The trade card follows too, refreshing only when the place changes.
+  refreshTradeAdvice(state.location).catch(() => {});
+
   const confidence = $('#now-confidence');
   confidence.textContent = state.location ? `${state.confidence.toLowerCase()} confidence` : '';
   confidence.className = `confidence ${(state.confidence || '').toLowerCase()}`;
@@ -343,6 +346,7 @@ async function loadHistory() {
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
+  loadAssets().catch((e) => console.error('assets', e));
 }
 
 function renderContracts(stats) {
@@ -641,6 +645,54 @@ async function setCommunity(enabled, statusNode, button) {
 $('#community-enable').addEventListener('click', (e) =>
   setCommunity(true, $('#community-status'), e.currentTarget));
 
+/* ---------- trade advice ---------- */
+
+let adviceFor = null;
+
+/**
+ * The "trade from here" card on the Now page and the overlay: what this
+ * place's terminal sells cheap and where it fetches the most. Fetched only
+ * when the place changes, and only while UEX is enabled - the card simply
+ * stays hidden otherwise.
+ */
+async function refreshTradeAdvice(place) {
+  const card = $('#trade-advice-card');
+
+  if (!place) {
+    card.hidden = true;
+    adviceFor = null;
+    return;
+  }
+
+  if (place === adviceFor)
+    return;
+
+  adviceFor = place;
+
+  const advice = await getJson(`/api/trade/advice?place=${encodeURIComponent(place)}`);
+
+  if (!advice.terminal || !advice.opportunities.length) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#trade-advice-sub').textContent =
+    `${advice.terminal} · best margins per SCU, UEX community prices`;
+
+  const list = $('#trade-advice');
+  list.textContent = '';
+
+  for (const o of advice.opportunities) {
+    const li = el('li');
+    li.append(el('b', null, o.commodity));
+    li.append(el('span', 'muted', ` buy ${money(o.buyHere)} → sell ${money(o.sellThere)} at ${o.sellTerminal} `));
+    li.append(el('span', 'inward', `+${money(o.marginPerScu)}/SCU`));
+    list.append(li);
+  }
+
+  card.hidden = false;
+}
+
 /* ---------- market ---------- */
 
 /** The community catalogue, cached for the map's commodity search too. */
@@ -696,6 +748,18 @@ function renderMarket() {
       const cell = el('td', 'num');
       if (entry.uex?.bestSell > 0) {
         cell.append(el('span', 'inward', money(entry.uex.bestSell)));
+
+        // Against the 15-day average: is now a good moment to sell this?
+        if (entry.uex.avgSell > 0) {
+          const trend = ((entry.uex.bestSell - entry.uex.avgSell) / entry.uex.avgSell) * 100;
+          if (Math.abs(trend) >= 1) {
+            const arrow = el('span', trend > 0 ? 'inward' : 'outward',
+              ` ${trend > 0 ? '▲' : '▼'}${Math.abs(trend).toFixed(0)}%`);
+            arrow.title = `15-day average: ${money(entry.uex.avgSell)}/SCU`;
+            cell.append(arrow);
+          }
+        }
+
         if (entry.uex.bestSellTerminal)
           cell.append(el('div', 'muted uex-terminal', entry.uex.bestSellTerminal));
       } else {
@@ -807,6 +871,49 @@ let lastLootRows = [];
 
 onInput('#loot-search', () => renderLoot(lastLootRows));
 onInput('#loot-period', loadLoot);
+
+/* ---------- assets ---------- */
+
+async function loadAssets() {
+  renderAssets(await getJson('/api/assets'));
+}
+
+function renderAssets(assets) {
+  const total = Number(assets.fleetValue) + Number(assets.loadoutValue) + Number(assets.stashValue);
+
+  tiles('#assets-summary', assets.priced
+    ? [
+        ['Estimated worth*', money(total)],
+        ['Fleet', `${money(assets.fleetValue)} (${assets.fleetPriced} priced)`],
+        ['Kit worn', `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
+        ['Stashed', money(assets.stashValue)],
+        ['Claim exposure*', money(assets.claimExposure)],
+      ]
+    : [['Estimated worth', 'needs Settings → community dataset + UEX']]);
+
+  const fleetBody = $('#assets-fleet tbody');
+  fleetBody.textContent = '';
+
+  for (const ship of assets.fleet) {
+    const tr = el('tr');
+    tr.append(el('td', null, ship.name));
+    tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold in game'));
+    tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
+    fleetBody.append(tr);
+  }
+
+  const stashBody = $('#assets-stash tbody');
+  stashBody.textContent = '';
+
+  for (const s of [...assets.stash].sort((a, b) => b.value - a.value)) {
+    const tr = el('tr');
+    tr.append(el('td', null, s.location));
+    tr.append(el('td', 'num', String(s.items)));
+    tr.append(el('td', 'num muted', String(s.priced)));
+    tr.append(el('td', 'num inward', s.value > 0 ? money(s.value) : '—'));
+    stashBody.append(tr);
+  }
+}
 
 /* ---------- settings ---------- */
 
@@ -998,14 +1105,25 @@ function renderCommodities(trades) {
   const scuSold = sells.reduce((total, t) => total + t.scu, 0);
   const outlay = buys.reduce((total, t) => total + Number(t.amount), 0);
 
-  tiles('#cargo-summary', [
+  // What better selling would have earned: the gap between each sale's unit
+  // price and UEX's best, over the sold volume. Zero rows when UEX is off.
+  const leftOnTable = sells
+    .filter((t) => t.uexBestSell > 0 && Number(t.uexBestSell) > Number(t.unitPrice))
+    .reduce((total, t) => total + (Number(t.uexBestSell) - Number(t.unitPrice)) * t.scu, 0);
+
+  const cargoTiles = [
     ['Revenue', money(revenue)],
     ['SCU sold', scuSold.toLocaleString()],
     ['Average per SCU', scuSold ? money(revenue / scuSold) : '—'],
     ['Cargo bought', money(outlay)],
     ['Sales', sells.length],
     ['Best sale', sells.length ? money(Math.max(...sells.map((t) => Number(t.amount)))) : '—'],
-  ]);
+  ];
+
+  if (sells.some((t) => t.uexBestSell > 0))
+    cargoTiles.push(['Left on the table*', money(leftOnTable)]);
+
+  tiles('#cargo-summary', cargoTiles);
 
   // Revenue by place, with the volume that produced it.
   const byShop = new Map();
@@ -1028,11 +1146,14 @@ function renderCommodities(trades) {
   if (!trades.length) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No cargo trades in that range.');
-    td.colSpan = 7;
+    td.colSpan = 8;
     tr.append(td);
     body.append(tr);
     return;
   }
+
+  const anyBest = trades.some((t) => t.uexBestSell > 0);
+  $('#cargo-best-col').hidden = !anyBest;
 
   for (const trade of trades) {
     const tr = el('tr');
@@ -1043,6 +1164,23 @@ function renderCommodities(trades) {
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
     tr.append(el('td', 'num muted', money(trade.unitPrice)));
+
+    if (anyBest) {
+      const cell = el('td', 'num');
+
+      if (trade.uexBestSell > 0) {
+        const delta = ((Number(trade.unitPrice) - Number(trade.uexBestSell)) / Number(trade.uexBestSell)) * 100;
+        cell.className = `num ${delta >= -3 ? 'inward' : 'outward'}`;
+        cell.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`;
+        cell.title = `UEX best sell today: ${money(trade.uexBestSell)}/SCU`;
+      } else {
+        cell.className = 'num muted';
+        cell.textContent = '—';
+      }
+
+      tr.append(cell);
+    }
+
     body.append(tr);
   }
 }
@@ -1744,7 +1882,110 @@ const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 async function loadAtlas() {
   const data = await getJson('/api/map');
   atlas = data.nodes || [];
+  bodyPositions = data.positions || {};
   drawMap();
+}
+
+/** Real body coordinates per system, when the community dataset supplies them. */
+let bodyPositions = {};
+
+/**
+ * Where each of a system's bodies sits on its disc.
+ *
+ * With real coordinates the answer is geometry: the true bearing from the
+ * star, distance compressed by a square root so the outer planets do not push
+ * the inner ones into the star. But raw geometry has a catch at system scale —
+ * a moon sits so close to its planet that both land on the same pixel and
+ * their site clusters pile up. So bodies are first grouped by proximity, the
+ * group anchored at its true position, and the moons fanned on a short local
+ * ring around their planet, which is how the game's own starmap solves it too.
+ * Systems without coordinates keep the even ring the map has always drawn.
+ *
+ * Returns a Map of body name → {x, y, angle}; sizeOf gives each body's
+ * cluster radius so a moon lands clear of its planet's spread of sites.
+ */
+function bodyLayout(system, present, centre, sizeOf) {
+  const placements = new Map();
+  const real = bodyPositions[system.toLowerCase()] || {};
+  const lookup = (name) => {
+    const key = Object.keys(real).find((k) => k.toLowerCase() === name.toLowerCase());
+    return key && (real[key].x || real[key].y) ? real[key] : null;
+  };
+
+  if (!present.some((name) => lookup(name))) {
+    present.forEach((bodyName, index) => {
+      const angle = (index / Math.max(1, present.length)) * Math.PI * 2 - Math.PI / 2;
+      placements.set(bodyName, {
+        x: centre.x + Math.cos(angle) * centre.orbit,
+        y: centre.y + Math.sin(angle) * centre.orbit,
+        angle,
+        from: { x: centre.x, y: centre.y },
+      });
+    });
+    return placements;
+  }
+
+  const maxR = Math.max(1, ...Object.values(real).map((b) => Math.hypot(b.x, b.y)));
+
+  // Bodies within 6% of the system's radius of each other are one group: a
+  // planet and its moons. First member in orbit order is the planet.
+  const groups = [];
+  let orphanIndex = 0;
+
+  for (const bodyName of present) {
+    const pos = lookup(bodyName);
+
+    if (pos) {
+      const near = groups.find((g) => g.pos
+        && Math.hypot(g.pos.x - pos.x, g.pos.y - pos.y) < maxR * 0.06);
+      if (near) { near.members.push(bodyName); continue; }
+    }
+
+    groups.push({ members: [bodyName], pos });
+  }
+
+  for (const group of groups) {
+    let angle;
+    let gx;
+    let gy;
+
+    if (group.pos) {
+      angle = Math.atan2(group.pos.y, group.pos.x);
+      const radius = centre.orbit
+        * (0.3 + 0.7 * Math.sqrt(Math.hypot(group.pos.x, group.pos.y) / maxR));
+      gx = centre.x + Math.cos(angle) * radius;
+      gy = centre.y + Math.sin(angle) * radius;
+    } else {
+      // No coordinates for this body — park it on the outer ring, stepping
+      // around so uncharted bodies do not stack on one another.
+      angle = Math.PI / 3 + (orphanIndex++) * (Math.PI / 2.5);
+      gx = centre.x + Math.cos(angle) * centre.orbit * 1.1;
+      gy = centre.y + Math.sin(angle) * centre.orbit * 1.1;
+    }
+
+    group.members.forEach((bodyName, index) => {
+      if (index === 0) {
+        placements.set(bodyName, {
+          x: gx, y: gy, angle, from: { x: centre.x, y: centre.y },
+        });
+        return;
+      }
+
+      // Moons fan across the outward-facing half so they stay clear of the
+      // star and of the planet's own label, spaced past both clusters.
+      const arc = angle + (index - (group.members.length) / 2) * (Math.PI / 3.2);
+      const gap = sizeOf(group.members[0]) + sizeOf(bodyName) + 34;
+
+      placements.set(bodyName, {
+        x: gx + Math.cos(arc) * gap,
+        y: gy + Math.sin(arc) * gap,
+        angle: arc,
+        from: { x: gx, y: gy },
+      });
+    });
+  }
+
+  return placements;
 }
 
 /**
@@ -2127,13 +2368,17 @@ function drawMap() {
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
 
-    present.forEach((bodyName, index) => {
-      const angle = (index / Math.max(1, present.length)) * Math.PI * 2 - Math.PI / 2;
-      const bx = centre.x + Math.cos(angle) * centre.orbit;
-      const by = centre.y + Math.sin(angle) * centre.orbit;
+    const layout = bodyLayout(system, present, centre,
+      (name) => clusterRadius(bodies.get(name).length));
+
+    present.forEach((bodyName) => {
+      const place = layout.get(bodyName);
+      const angle = place.angle;
+      const bx = place.x;
+      const by = place.y;
 
       map.append(svgEl('line', {
-        x1: centre.x, y1: centre.y, x2: bx, y2: by,
+        x1: place.from.x, y1: place.from.y, x2: bx, y2: by,
         stroke: 'rgba(53,200,240,.13)', 'stroke-width': '1',
       }));
 

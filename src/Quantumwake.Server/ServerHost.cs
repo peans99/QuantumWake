@@ -312,7 +312,106 @@ public static class ServerHost
 
         app.MapGet("/api/ledger", (LogLibrary lib, int? days) => lib.Ledger(days ?? 0));
 
-        app.MapGet("/api/commodities", (LogLibrary lib, int? days) => lib.Trades(days ?? 0));
+        // Trades with the UEX comparison joined on: what the best sell was, so
+        // the page can say what a sale left on the table.
+        app.MapGet("/api/commodities", (LogLibrary lib, UexData uex, int? days) =>
+            lib.Trades(days ?? 0).Select(t => new
+            {
+                t.At,
+                t.IsSell,
+                t.Place,
+                t.Scu,
+                t.Amount,
+                t.UnitPrice,
+                t.Mode,
+                t.Commodity,
+                uexBestSell = t.IsSell && t.Commodity is not null
+                    ? uex.Best(t.Commodity)?.BestSell
+                    : null
+            }));
+
+        // Trading opportunities from wherever the player is: what this place's
+        // terminal sells cheap, and where it fetches the most. Empty terminal
+        // means the place matched nothing on UEX and the card says so.
+        app.MapGet("/api/trade/advice", (UexData uex, string place) => new
+        {
+            place,
+            terminal = uex.TerminalFor(place),
+            opportunities = uex.Opportunities(place)
+        });
+
+        // What the pilot owns, priced: fleet at in-game purchase prices, kit
+        // and stash at item prices, plus what dying costs. Every number here is
+        // an estimate built on community prices and says so in the UI.
+        app.MapGet("/api/assets", (LogLibrary lib, UexData uex) =>
+        {
+            var stats = lib.Stats();
+
+            var fleet = stats.Ships.Select(s => new
+            {
+                s.Name,
+                price = uex.VehiclePrice(s.Reference?.Name ?? s.Name)
+            }).ToList();
+
+            var loadout = stats.Loadout
+                .SelectMany(slot => slot.Items)
+                .Select(i => new { i.Name, price = uex.ItemPrice(i.Reference?.Uuid) })
+                .ToList();
+
+            var stash = stats.Stash
+                .Select(s =>
+                {
+                    var items = s.Groups.SelectMany(g => g.Items).ToList();
+                    var priced = items
+                        .Select(i => uex.ItemPrice(lib.Community.Item(i.ItemClass)?.Uuid))
+                        .Where(p => p is not null)
+                        .Select(p => p!.Value)
+                        .ToList();
+
+                    return new
+                    {
+                        location = s.Name,
+                        value = priced.Sum(),
+                        priced = priced.Count,
+                        items = s.ItemCount
+                    };
+                })
+                .ToList();
+
+            // Claim exposure: deaths per session times the expedite fee of the
+            // ships flown that session. The log never says which ship died, so
+            // this is labelled an estimate and computed conservatively from the
+            // session average.
+            decimal claimExposure = 0;
+            foreach (var session in lib.Sessions())
+            {
+                if (session.Deaths == 0)
+                    continue;
+
+                var fees = session.Ships
+                    .Select(ship => lib.Community.Ship($"{ship.Manufacturer}_{ship.Model}")?.ExpeditedCost)
+                    .Where(f => f > 0)
+                    .Select(f => f!.Value)
+                    .ToList();
+
+                if (fees.Count > 0)
+                    claimExposure += session.Deaths * (decimal)fees.Average();
+            }
+
+            return Results.Ok(new
+            {
+                fleet,
+                fleetValue = fleet.Sum(f => f.price?.Price ?? 0),
+                fleetPriced = fleet.Count(f => f.price is not null),
+                loadoutValue = loadout.Sum(l => l.price ?? 0),
+                loadoutPriced = loadout.Count(l => l.price is not null),
+                loadoutItems = loadout.Count,
+                stash,
+                stashValue = stash.Sum(s => s.value),
+                claimExposure,
+                priced = uex.IsEnabled && lib.Community.IsEnabled
+            });
+        });
 
         // Items observed entering the player's inventories - the Loot page.
         app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
@@ -407,9 +506,17 @@ public static class ServerHost
         {
             var stats = lib.Stats();
 
+            // Real body coordinates from the community starmap, per system, so
+            // the layout can be geometry instead of an even ring. Empty until
+            // the dataset is enabled, and the client falls back to the ring.
+            var positions = new[] { "stanton", "pyro", "nyx" }
+                .Select(system => (System: system, Bodies: lib.Community.BodyPositions(system)))
+                .Where(x => x.Bodies.Count > 0)
+                .ToDictionary(x => x.System, x => x.Bodies);
+
             // The atlas carries unvisited places too, so the map can show the whole
             // system and let the player filter down to where they have actually been.
-            return Results.Ok(new { nodes = lib.Atlas(), destinations = stats.Destinations });
+            return Results.Ok(new { nodes = lib.Atlas(), destinations = stats.Destinations, positions });
         });
 
         // Warm the cache in the background so first paint is not blocked by a cold
