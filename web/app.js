@@ -8,8 +8,18 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+const params = new URLSearchParams(location.search);
+
 /** True when hosted in the overlay shell, which wants a denser layout. */
-const isOverlay = new URLSearchParams(location.search).has('overlay');
+const isOverlay = params.has('overlay');
+
+/**
+ * True for ?snapshot=1, which loads the data once and then leaves the page
+ * still. The live event stream never closes, so a headless browser waits on it
+ * forever and never reaches the load event - which is why documentation
+ * screenshots could not be captured until this existed.
+ */
+const isSnapshot = params.has('snapshot');
 
 const KIND_COLOURS = {
   City: '#7fe4ff',
@@ -118,9 +128,34 @@ function showView(name) {
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
 
+  // Switching view shows the top of it.
+  //
+  // The map's SVG is id="starmap" rather than the obvious id="map" for the same
+  // reason: with the view in the fragment, #map would have matched that element
+  // and the browser would anchor-scroll to it after load, leaving the header
+  // stranded mid-screen. Fragments name views here, so no element may share a
+  // view's name.
+  window.scrollTo(0, 0);
+
   // Keep the active tab in view when the strip scrolls, as it does in overlay mode.
   target.scrollIntoView({ block: 'nearest', inline: 'center' });
+
+  // replaceState, not assignment: cycling views with the arrow keys should not
+  // fill the back button with thirty entries.
+  if (location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
 }
+
+/* The view lives in the URL fragment, so #map is a link that can be sent to
+   someone and a page that survives a refresh. */
+function viewFromHash() {
+  const name = decodeURIComponent(location.hash.replace(/^#/, ''));
+  return $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
+}
+
+window.addEventListener('hashchange', () => {
+  const name = viewFromHash();
+  if (name) showView(name);
+});
 
 $('#tabs').addEventListener('click', (event) => {
   const button = event.target.closest('button');
@@ -1150,7 +1185,7 @@ const isDetailed = () => view.w < HOME_VIEW.w * 0.34;
 
 /** Applies the current pan/zoom to the SVG, redrawing when detail changes. */
 function applyView() {
-  const map = $('#map');
+  const map = $('#starmap');
   const wasDetailed = map.dataset.detailed === 'true';
   const detailed = isDetailed();
 
@@ -1193,7 +1228,7 @@ function setHere(rawId) {
 }
 
 function drawHere() {
-  const map = $('#map');
+  const map = $('#starmap');
   map.querySelectorAll('.map-here').forEach((n) => n.remove());
 
   const point = hereId && nodeAt.get(hereId);
@@ -1234,7 +1269,7 @@ function drawHere() {
 
 /** Wheel zoom, drag pan, and the toolbar. Wired once. */
 function initMap() {
-  const map = $('#map');
+  const map = $('#starmap');
 
   map.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -1294,7 +1329,7 @@ function initMap() {
 }
 
 function drawMap() {
-  const map = $('#map');
+  const map = $('#starmap');
   map.textContent = '';
   nodeAt.clear();
 
@@ -1678,6 +1713,9 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function boot() {
   if (isOverlay) document.body.classList.add('overlay');
 
+  const requested = viewFromHash();
+  if (requested) showView(requested);
+
   initMap();
 
   try {
@@ -1687,8 +1725,10 @@ async function boot() {
     $('#install').textContent = 'no install found';
   }
 
-  connectStream();
-  watchScan();
+  if (!isSnapshot) {
+    connectStream();
+    watchScan();
+  }
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {

@@ -553,7 +553,7 @@ td.outward { color: var(--amber); }
  * preserveAspectRatio centres whatever fits.
  */
 .map-wrap { height: min(76vh, 900px); }
-#map { width: 100%; height: 100%; display: block; position: relative; }
+#starmap { width: 100%; height: 100%; display: block; position: relative; }
 
 .map-node circle { transition: opacity .15s; }
 .map-node:hover circle.hit { opacity: .22; }
@@ -599,8 +599,8 @@ td.outward { color: var(--amber); }
 .map-tools button.ghost:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
 .map-tools button.ghost:disabled { opacity: .35; cursor: default; }
 
-#map { cursor: grab; touch-action: none; }
-#map.dragging { cursor: grabbing; }
+#starmap { cursor: grab; touch-action: none; }
+#starmap.dragging { cursor: grabbing; }
 
 .map-hint {
   position: absolute;
