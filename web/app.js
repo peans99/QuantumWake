@@ -336,6 +336,8 @@ async function loadHistory() {
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
   loadCommodities().catch((e) => console.error('cargo', e));
+  loadMarket().catch((e) => console.error('market', e));
+  loadLoot().catch((e) => console.error('loot', e));
 }
 
 function renderContracts(stats) {
@@ -633,6 +635,157 @@ async function setCommunity(enabled, statusNode, button) {
 
 $('#community-enable').addEventListener('click', (e) =>
   setCommunity(true, $('#community-status'), e.currentTarget));
+
+/* ---------- market ---------- */
+
+/** The community catalogue, cached for the map's commodity search too. */
+let marketEntries = [];
+
+async function loadMarket() {
+  try {
+    marketEntries = await getJson('/api/market');
+  } catch {
+    marketEntries = [];
+  }
+
+  renderMarket();
+}
+
+function renderMarket() {
+  $('#market-offer').hidden = marketEntries.length > 0;
+
+  const term = ($('#market-search').value || '').trim().toLowerCase();
+  const body = $('#market-table tbody');
+  body.textContent = '';
+
+  const rows = marketEntries.filter((e) =>
+    !term
+    || e.name.toLowerCase().includes(term)
+    || e.groups.some((g) => g.toLowerCase().includes(term)));
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', marketEntries.length
+      ? 'No commodities match that search.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const entry of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, entry.name));
+    tr.append(el('td', 'muted', entry.groups.join(', ')));
+    tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
+    tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
+    tr.append(el('td', 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
+    tr.append(el('td', 'num inward', entry.myRevenue ? money(entry.myRevenue) : '—'));
+
+    const actions = el('td', 'num');
+    if (entry.sold.length) {
+      const show = el('button', 'ghost', 'show on map');
+      show.addEventListener('click', () => {
+        $('#map-search').value = entry.name;
+        showView('map');
+        drawMap();
+      });
+      actions.append(show);
+    }
+    tr.append(actions);
+
+    body.append(tr);
+  }
+}
+
+onInput('#market-search', renderMarket);
+
+/**
+ * Facility keys to search tokens the atlas can meet. The class name
+ * DC_Stan_Hurston_S1_Farnesway carries exactly one atlas-matchable word;
+ * everything else is scaffolding, listed here so it never becomes a token.
+ */
+const FACILITY_NOISE = new Set([
+  'dc', 'outpost', 'reststop', 'landingzone', 'junksite', 'ugf', 'hangar',
+  'spaceport', 'portolisar', 'inhabited', 'planet', 'distributioncentre',
+  'stan', 'stanton', 'pyro', 'nyx', 'outlaw', 'sublocation',
+  'hurston', 'microtech', 'crusader', 'arccorp',
+  'admin', 'gate', 'habs', 'medical', 'metrostation', 'store', 'lobby',
+]);
+
+function facilityTokens(keys) {
+  const tokens = new Set();
+
+  for (const key of keys) {
+    for (const part of key.split('_')) {
+      const compact = part.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (compact.length >= 4 && !FACILITY_NOISE.has(compact) && !/^s\d+$/.test(compact))
+        tokens.add(compact);
+    }
+  }
+
+  return tokens;
+}
+
+/**
+ * If the map search term names a commodity, the nodes to light are the ones
+ * whose name matches a facility token for that commodity. Null when the term
+ * is not a commodity, in which case the search means places, as it always did.
+ */
+function commoditySites(term) {
+  const entry = marketEntries.find((e) => e.name.toLowerCase() === term);
+  if (!entry || !entry.sold.length) return null;
+
+  return facilityTokens(entry.sold);
+}
+
+/* ---------- loot ---------- */
+
+async function loadLoot() {
+  const days = Number($('#loot-period').value) || 0;
+  renderLoot(await getJson(`/api/loot?days=${days}`));
+}
+
+function renderLoot(pickups) {
+  const term = ($('#loot-search').value || '').trim().toLowerCase();
+
+  const rows = pickups.filter((p) =>
+    !term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term));
+
+  tiles('#loot-summary', [
+    ['New items', rows.length],
+    ['Last 7 days', rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
+    ['Places', new Set(rows.map((p) => p.place)).size],
+  ]);
+
+  const body = $('#loot-table tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'Nothing in that range.');
+    td.colSpan = 3;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const pickup of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, dateOf(pickup.at)));
+    tr.append(el('td', null, prettyItem(pickup.item)));
+    tr.append(el('td', 'muted', pickup.place));
+    body.append(tr);
+  }
+
+  lastLootRows = pickups;
+}
+
+let lastLootRows = [];
+
+onInput('#loot-search', () => renderLoot(lastLootRows));
+onInput('#loot-period', loadLoot);
 
 /* ---------- settings ---------- */
 
@@ -1534,9 +1687,18 @@ function drawMap() {
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
 
-  // The search always wins over the toggle: looking for somewhere you have
-  // never been should find it.
+  // A term that names a commodity searches for where it sells; anything else
+  // searches places, as it always did. Either way the search wins over the
+  // visited-only toggle: looking for somewhere you have never been should
+  // find it.
+  const sites = term ? commoditySites(term) : null;
+
   const locations = atlas.filter((l) => {
+    if (sites) {
+      const compact = `${l.name} ${l.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return [...sites].some((token) => compact.includes(token));
+    }
+
     if (term) return l.name.toLowerCase().includes(term) || l.rawId.toLowerCase().includes(term);
     return !visitedOnly || l.visits > 0;
   });
@@ -1544,7 +1706,9 @@ function drawMap() {
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
-    count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
+    count.textContent = sites
+      ? `${locations.length} places the map can name sell this`
+      : `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.

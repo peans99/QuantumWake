@@ -300,6 +300,13 @@ public static class ServerHost
 
         app.MapGet("/api/commodities", (LogLibrary lib, int? days) => lib.Trades(days ?? 0));
 
+        // Items observed entering the player's inventories - the Loot page.
+        app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
+
+        // The community catalogue joined onto this install's trades. Empty until
+        // the community dataset is enabled, and the page explains that.
+        app.MapGet("/api/market", (LogLibrary lib) => lib.Market());
+
         app.MapGet("/api/loadout", (LogLibrary lib) => lib.Stats().Loadout);
         app.MapGet("/api/loadout/asof", (LogLibrary lib) => new { asOf = lib.Stats().LoadoutAsOf });
 

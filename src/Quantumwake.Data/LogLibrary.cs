@@ -91,6 +91,31 @@ public sealed record TradeRecord(
     string? Mode,
     string? Commodity = null);
 
+/// <summary>An item observed entering the player's inventories.</summary>
+/// <remarks>
+/// A signal, not a certainty: the source event fires when the inventory UI
+/// pages in an item it has not shown before, which covers looting but also
+/// buying and receiving, and only while the inventory is open.
+/// </remarks>
+public sealed record PickupRecord(
+    DateTimeOffset At,
+    string Item,
+    string ItemClass,
+    string Place);
+
+/// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
+/// <param name="Sold">Facility keys where kiosks accept it.</param>
+/// <param name="Bought">Facility keys where kiosks stock it.</param>
+public sealed record MarketEntry(
+    string Id,
+    string Name,
+    IReadOnlyList<string> Groups,
+    IReadOnlyList<string> Sold,
+    IReadOnlyList<string> Bought,
+    int MyScuSold,
+    decimal MyRevenue,
+    int MyTrades);
+
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
 /// <param name="Confirmed">
@@ -787,6 +812,82 @@ public sealed class LogLibrary : IDisposable
     public IReadOnlyList<SessionSummary> Sessions() => _store.All();
 
     public SessionSummary? Session(string id) => _store.Get(id);
+
+    /// <summary>
+    /// When each item class was first seen in the player's inventories, newest
+    /// first, with the place back-tracked the same way trades are.
+    /// </summary>
+    /// <remarks>
+    /// Deduplicated across the whole history: a class that has ever been seen
+    /// before is not news again. The source event is a listing rather than a
+    /// transfer, so this is an acquisition <i>signal</i> — first sighting is
+    /// roughly when the item entered the player's life, whether looted, bought
+    /// or received — and the view says so.
+    /// </remarks>
+    public IReadOnlyList<PickupRecord> Pickups(int days = 0)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var firsts = new List<PickupRecord>();
+
+        // Oldest first, so the first sighting wins and later ones are noise.
+        foreach (var session in _store.All().OrderBy(s => s.StartedAt))
+        {
+            foreach (var pickup in session.Pickups.OrderBy(p => p.At))
+            {
+                if (!seen.Add(pickup.ItemClass))
+                    continue;
+
+                firsts.Add(new PickupRecord(
+                    pickup.At,
+                    Names.Item(pickup.ItemClass),
+                    pickup.ItemClass,
+                    PlaceAt(session, pickup.At)));
+            }
+        }
+
+        if (days > 0)
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+            firsts = [.. firsts.Where(p => p.At >= cutoff)];
+        }
+
+        return [.. firsts.OrderByDescending(p => p.At)];
+    }
+
+    /// <summary>
+    /// The community commodity catalogue joined onto the player's own trades:
+    /// every commodity the dataset knows, with this install's volume and
+    /// revenue against each. Empty when the dataset is disabled.
+    /// </summary>
+    public IReadOnlyList<MarketEntry> Market()
+    {
+        if (!Community.IsEnabled)
+            return [];
+
+        var trades = _store.All()
+            .SelectMany(s => s.Trades)
+            .Where(t => t.ResourceId is not null)
+            .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return [.. Community.All
+            .Select(pair =>
+            {
+                var mine = trades.GetValueOrDefault(pair.Key);
+
+                return new MarketEntry(
+                    pair.Key,
+                    pair.Value.Name,
+                    pair.Value.Groups,
+                    pair.Value.Sold,
+                    pair.Value.Bought,
+                    mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
+                    mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
+                    mine?.Count ?? 0);
+            })
+            .OrderByDescending(e => e.MyRevenue)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    }
 
     /// <summary>
     /// Rolls stored sessions up into library-wide totals.

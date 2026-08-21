@@ -17,9 +17,9 @@ flight it recorded: where you have been, what you flew, what you hauled and what
 it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
 of the whole 'verse with your own trail across it.
 
-It is read-only, offline by default, and never touches the game. The one
-exception is opt-in: naming your cargo means fetching a single community file,
-and it happens only if you press the button.
+It is read-only and never touches the game. It connects to the internet only
+when you ask it to - the optional community dataset, fetched from the Settings
+page - and never on its own.
 
 **[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)
 and double-click it.** That is the whole installation — one file, no runtime to
@@ -121,8 +121,9 @@ running Easy Anti-Cheat:
 
 - Reads log files only; nothing is ever written to the game directory
 - No memory access, no DLL injection, no DirectX or WinAPI hooking
-- No outbound network calls — no CDN, no telemetry. One opt-in exception: the
-  community commodity names, a single file fetched once at your explicit request
+- No CDN, no telemetry, no phoning home. The app connects to the internet only
+  at your request, from the Settings page - the optional community dataset - and
+  never on its own
 - The overlay is an ordinary top-most window using documented Win32 styles
 
 The trade-off of doing it safely: an always-on-top window is **not** composited
