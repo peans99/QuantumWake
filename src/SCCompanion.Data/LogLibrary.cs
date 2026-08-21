@@ -85,20 +85,21 @@ public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 /// </param>
 /// <param name="SlotCount">How many ports in this family, e.g. 9 magazine slots.</param>
 /// <param name="Items">What currently occupies them, with how many hold each.</param>
+/// <remarks>
+/// Deliberately carries no history. Everything a slot has ever held is a record
+/// of churn, not a loadout, and showing it alongside the current occupant only
+/// made the page harder to read.
+/// </remarks>
 public sealed record LoadoutSlot(
     string Port,
     string Category,
     string Label,
     int SlotCount,
     IReadOnlyList<LoadoutEntry> Items,
-    DateTimeOffset? CurrentSeen,
-    IReadOnlyList<LoadoutHistoryItem> History);
+    DateTimeOffset? CurrentSeen);
 
 /// <param name="Count">Number of slots in the family holding this item.</param>
 public sealed record LoadoutEntry(string Name, int Count, DateTimeOffset LastSeen);
-
-/// <param name="Times">How many sessions this item was seen in the slot.</param>
-public sealed record LoadoutHistoryItem(string Name, int Times, DateTimeOffset LastSeen);
 
 /// <summary>
 /// Groups character item ports into something a person would recognise.
@@ -227,6 +228,12 @@ public static class LoadoutCategories
 
         // The character model, not equipment.
         if (port.EndsWith("_ItemPort", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Hands hold things transiently - a tool, a drink, a helmet being taken
+        // off - which is handling, not equipment. They churned harder than any
+        // other slot: 88 distinct items in the right hand alone.
+        if (Has(port, "weapon_attach_hand"))
             return false;
 
         // Fixtures with exactly one possible occupant.
@@ -625,26 +632,13 @@ public sealed class LogLibrary : IDisposable
                     .ThenByDescending(i => i.LastSeen)
                     .ToList();
 
-                var equippedNames = items
-                    .Select(i => i.Name)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                var history = g
-                    .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
-                    .Select(i => new LoadoutHistoryItem(
-                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
-                    .Where(i => !equippedNames.Contains(i.Name))
-                    .OrderByDescending(i => i.LastSeen)
-                    .ToList();
-
                 return new LoadoutSlot(
                     g.Key,
                     LoadoutCategories.Of(g.Key),
                     LoadoutCategories.Label(g.Key),
                     slotCount,
                     items,
-                    items.Count > 0 ? items.Max(i => i.LastSeen) : null,
-                    history);
+                    items.Count > 0 ? items.Max(i => i.LastSeen) : null);
             })
             // Category order first, then most recently used slot.
             .OrderBy(s => LoadoutCategories.Rank(s.Category))
