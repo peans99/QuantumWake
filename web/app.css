@@ -134,8 +134,33 @@ body::before {
   }
 }
 
+/* A second emblem in the left margin, for displays with a margin worth filling.
+   A 4K screen or a 3440 ultrawide leaves some 900px either side of the content
+   column, and one corner lit with the other empty reads as lopsided rather than
+   restrained. Below 2200px there is no room, and this stays hidden. */
+.brandmark { display: none; }
+
+@media (min-width: 2200px) {
+  .brandmark {
+    display: block;
+    position: fixed;
+    left: clamp(-150px, calc((100vw - var(--page)) / 2 - 300px), 30px);
+    top: 7%;
+    width: min(26vw, 500px);
+    aspect-ratio: 1;
+    background: url("assets/emblem.jpg") center / contain no-repeat;
+    mix-blend-mode: screen;
+    opacity: .3;
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
+    mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
+    pointer-events: none;
+    z-index: 0;
+  }
+}
+
 body.overlay::after { display: none; }
-body.overlay .railmark { display: none; }
+body.overlay .railmark,
+body.overlay .brandmark { display: none; }
 
 /* ---------- overlay mode ---------- */
 
@@ -1062,3 +1087,82 @@ body.overlay
   box-shadow: 0 0 22px rgba(53, 200, 240, .18);
 }
 body.overlay .foot { display: none; }
+
+/* ---------- about ---------- */
+
+/* One panel, the emblem at a size where it is the point rather than decoration,
+   and as few words as the question needs. */
+.about {
+  display: flex;
+  align-items: flex-start;
+  gap: 46px;
+  max-width: 1180px;
+  padding: 26px 30px 34px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+
+.about-logo {
+  width: 260px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 60px rgba(53, 200, 240, .22);
+}
+
+.about-copy { min-width: 0; }
+
+.about-goal {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 16px;
+  max-width: 62ch;
+}
+
+.about-note {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0 0 22px;
+  max-width: 62ch;
+}
+
+.about-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px 22px;
+  margin: 0 0 22px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--rule);
+}
+.about-facts dt {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.about-facts dd {
+  margin: 3px 0 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--cyan-hot);
+}
+
+.about-legal {
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: var(--dim);
+  margin: 0;
+  max-width: 78ch;
+}
+
+.about code { font-family: var(--mono); color: var(--muted); }
+
+/* The emblem is the largest thing on the page; stack it above the words when
+   there is not room to sit beside them. */
+@media (max-width: 900px) {
+  .about { flex-direction: column; gap: 24px; align-items: center; text-align: center; }
+  .about-logo { width: 200px; }
+  .about-facts { justify-items: center; }
+}
