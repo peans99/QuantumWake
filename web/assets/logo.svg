@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Quantum Wake">
+  <title>Quantum Wake</title>
+  <!--
+    The full emblem. Deliberately carries no Cloud Imperium trademark inside the
+    mark - "for Star Citizen" belongs in a tagline beside the logo, not in a
+    badge that could read as endorsement. The lower arc says what the app is
+    instead. Use assets/mark.svg anywhere under ~128px; the ring text is
+    illegible below that.
+  -->
+  <defs>
+    <linearGradient id="lwake" x1="180" y1="330" x2="320" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d5c78" stop-opacity="0.25" />
+      <stop offset="0.45" stop-color="#35c8f0" />
+      <stop offset="1" stop-color="#7fe4ff" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#35c8f0" stop-opacity="0.20" />
+      <stop offset="1" stop-color="#35c8f0" stop-opacity="0" />
+    </radialGradient>
+    <path id="arc-top" d="M 66 256 A 190 190 0 0 1 446 256" />
+    <path id="arc-bottom" d="M 428 256 A 172 172 0 0 1 84 256" />
+  </defs>
+
+  <circle cx="256" cy="256" r="252" fill="#070c14" />
+  <circle cx="256" cy="256" r="200" fill="url(#glow)" />
+
+  <circle cx="256" cy="256" r="246" fill="none" stroke="#1e4763" stroke-width="3" />
+  <circle cx="256" cy="256" r="228" fill="none" stroke="#17293c" stroke-width="1.5" />
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#17293c" stroke-width="1.5" opacity="0.7" />
+
+  <!-- Cardinal ticks: the diamond motif the rest of the UI uses. -->
+  <g fill="#1e4763">
+    <path d="M256 22 l7 7 -7 7 -7 -7 Z" />
+    <path d="M256 476 l7 7 -7 7 -7 -7 Z" />
+    <path d="M22 256 l7 -7 7 7 -7 7 Z" />
+    <path d="M476 256 l7 -7 7 7 -7 7 Z" />
+  </g>
+
+  <!-- The wake and the point that left it, scaled from assets/mark.svg. -->
+  <g transform="translate(147 131) scale(3.4)">
+    <path d="M7 45 C 13 57, 33 59, 43 47 C 50 39, 52 29, 48 21"
+          fill="none" stroke="url(#lwake)" stroke-width="7"
+          stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M49 3 L52.8 14.2 L64 18 L52.8 21.8 L49 33 L45.2 21.8 L34 18 L45.2 14.2 Z"
+          fill="#7fe4ff" />
+  </g>
+
+  <g font-family="Bahnschrift, 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif"
+     text-anchor="middle">
+    <text font-size="46" font-weight="600" letter-spacing="7" fill="#cfe4f5">
+      <textPath href="#arc-top" startOffset="50%">QUANTUM WAKE</textPath>
+    </text>
+    <text font-size="23" font-weight="400" letter-spacing="6.5" fill="#7796b0">
+      <textPath href="#arc-bottom" startOffset="50%">A PILOT'S LOGBOOK</textPath>
+    </text>
+  </g>
+</svg>

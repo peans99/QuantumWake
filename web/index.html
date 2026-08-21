@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quantum Wake</title>
+<link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <img class="mark" src="assets/mark.svg" alt="" width="22" height="22">
+    <span class="name">Quantum <b>Wake</b></span>
+    <span class="by">by nekron</span>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="now" class="active">Now</button>
+    <button data-view="map">Map</button>
+    <button data-view="sessions">Sessions</button>
+    <button data-view="fleet">Fleet</button>
+    <button data-view="places">Places</button>
+    <button data-view="contracts">Contracts</button>
+    <button data-view="spending">Spending</button>
+    <button data-view="ledger">Ledger</button>
+    <button data-view="commodities">Cargo</button>
+    <button data-view="loadout">Loadout</button>
+    <button data-view="stash">Stash</button>
+  </nav>
+
+  <div class="status">
+    <span id="install" class="muted">detecting…</span>
+    <span id="link" class="dot" title="disconnected"></span>
+  </div>
+</header>
+
+<main>
+
+  <div class="render-errors" id="render-errors" hidden></div>
+
+  <div class="scan" id="scan" hidden>
+    <div class="scan-head">
+      <span id="scan-label">Reading logs…</span>
+      <span class="scan-count" id="scan-count"></span>
+    </div>
+    <div class="scan-track"><div class="scan-fill" id="scan-fill"></div></div>
+    <div class="scan-file" id="scan-file"></div>
+  </div>
+
+
+  <!-- NOW -->
+  <section id="view-now" class="view active">
+    <div class="now-grid">
+
+      <article class="card hero">
+        <div class="card-label">Location</div>
+        <div class="hero-value" id="now-location">—</div>
+        <div class="hero-sub" id="now-location-sub"></div>
+        <div class="confidence" id="now-confidence"></div>
+        <div class="travel" id="now-travel" hidden>
+          <span class="travel-arrow">▸</span>
+          <span id="now-travel-to"></span>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-label">Ship</div>
+        <div class="value" id="now-ship">—</div>
+      </article>
+
+      <article class="card">
+        <div class="card-label">Session</div>
+        <div class="value" id="now-clock">—</div>
+        <div class="sub" id="now-mode"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-label">Handle</div>
+        <div class="value" id="now-handle">—</div>
+        <div class="sub" id="now-version"></div>
+      </article>
+
+      <article class="card span2">
+        <div class="card-label">Live feed</div>
+        <ul class="feed" id="now-feed">
+          <li class="empty">Waiting for the game…</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-label">This session</div>
+        <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
+        <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
+        <div class="statline"><span>Kills</span><b id="now-kills">0</b></div>
+        <div class="note" id="combat-note"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- MAP -->
+  <section id="view-map" class="view">
+    <div class="map-head">
+      <h2>Star map</h2>
+      <p class="muted">
+        Star Citizen does not log player position, so this is a topology map built
+        from location and quantum-travel events — last known place, not a live radar.
+      </p>
+    </div>
+
+    <div class="map-tools">
+      <label class="toggle">
+        <input type="checkbox" id="map-visited-only">
+        <span>Visited only</span>
+      </label>
+      <input type="search" id="map-search" placeholder="Find a place…">
+      <span class="spacer"></span>
+      <span class="muted" id="map-count"></span>
+      <button class="ghost" id="map-here">Centre on me</button>
+      <button class="ghost" id="map-reset">Reset view</button>
+    </div>
+
+    <div class="map-wrap">
+      <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="map-hint muted">Scroll to zoom · drag to pan</div>
+    </div>
+    <div class="legend" id="map-legend"></div>
+  </section>
+
+  <!-- SESSIONS -->
+  <section id="view-sessions" class="view">
+    <div class="section-bar">
+      <h2>Play history</h2>
+      <div class="controls">
+        <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
+               autocomplete="off" spellcheck="false">
+        <select id="sessions-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="lib-summary"></div>
+    <div class="table-wrap">
+      <table id="sessions-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>In game</th><th>Menus</th>
+            <th>Ship</th><th>Last location</th>
+            <th class="num">Jumps</th><th class="num">Contracts</th>
+            <th class="num">Deaths</th><th class="num">Incap</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pager" id="sessions-pager"></div>
+  </section>
+
+  <!-- SHIPS -->
+  <!-- FLEET -->
+  <section id="view-fleet" class="view">
+    <div class="summary-strip" id="fleet-summary"></div>
+
+    <h2>Fleet size over time</h2>
+    <p class="muted caption">
+      Owned-vehicle count reported by the entitlement query each session. Ship
+      <em>names</em> are not logged — only the total — so the roster below is what
+      you have actually flown.
+    </p>
+    <div class="map-wrap fleet-chart-wrap">
+      <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="section-bar">
+      <h2 class="spaced">Ships flown</h2>
+      <div class="controls">
+        <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
+               autocomplete="off" spellcheck="false">
+        <select id="fleet-period" class="select period" data-all="Any time" title="Filter by when last flown"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      Counted from control-token releases. Star Citizen 4.9 logs no boarding
+      event, so flight counts are exact while times aboard (~) are estimated from
+      the last known stop.
+    </p>
+    <div id="fleet-ships" class="ship-grid"></div>
+  </section>
+
+  <!-- SPENDING -->
+  <section id="view-spending" class="view">
+    <div class="section-bar">
+      <h2>Economy</h2>
+      <div class="controls">
+        <select id="spending-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="spend-summary"></div>
+
+    <h2 class="spaced">Cargo sales</h2>
+    <p class="muted caption">
+      The only income the logs record. Commodity trades carry no server
+      confirmation, unlike item purchases, so these are amounts requested at the
+      kiosk rather than settled transactions.
+    </p>
+    <div id="trade-chart" class="bars"></div>
+
+    <h2 class="spaced">Where it went</h2>
+    <div id="shops-chart" class="bars"></div>
+    <h2 class="spaced">Most bought</h2>
+    <div id="items-chart" class="bars"></div>
+  </section>
+
+  <!-- LEDGER -->
+  <section id="view-ledger" class="view">
+    <div class="section-bar">
+      <h2>Money in and out</h2>
+      <div class="controls">
+        <select id="ledger-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="ledger-summary"></div>
+    <p class="muted caption">
+      Every movement the logs record, newest first. There is no wallet event in
+      Game.log, so this is a record of what went out and came in — not a balance.
+      Item purchases are confirmed by the server; cargo trades are amounts
+      requested at the kiosk, marked with ~.
+    </p>
+    <div class="table-wrap">
+      <table id="ledger-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Type</th><th>What</th><th>Where</th><th>Vendor</th>
+            <th class="num">Amount</th><th class="num">Running</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pager" id="ledger-pager"></div>
+  </section>
+
+  <!-- COMMODITIES -->
+  <section id="view-commodities" class="view">
+    <div class="section-bar">
+      <h2>Cargo trading</h2>
+      <div class="controls">
+        <select id="commodities-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="cargo-summary"></div>
+    <p class="muted caption">
+      Volume, price and place come straight from the kiosk. What was in the boxes
+      does not: the log names the commodity only by an internal id, and that
+      mapping lives in the game's DataCore rather than in any log.
+    </p>
+
+    <h2 class="spaced">Revenue by location</h2>
+    <div id="cargo-shops" class="bars"></div>
+
+    <h2 class="spaced">Every trade</h2>
+    <div class="table-wrap">
+      <table id="cargo-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Type</th><th>Where</th>
+            <th class="num">SCU</th><th class="num">Amount</th><th class="num">Per SCU</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- LOADOUT -->
+  <section id="view-loadout" class="view">
+    <div class="section-bar">
+      <h2>Equipment by slot</h2>
+      <div class="controls">
+        <input type="search" id="loadout-search" class="search" placeholder="Search items or slots…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      What was last equipped in each slot. Numbered siblings are merged — nine
+      magazine ports read as one row with counts — and slots that are not really
+      equipment are left out: the character model, the mobiGlas and radar
+      fixtures, and the hands, which hold things transiently rather than equip them.
+    </p>
+    <div id="loadout-grid" class="loadout-grid"></div>
+  </section>
+
+  <!-- STASH -->
+  <section id="view-stash" class="view">
+    <div class="section-bar">
+      <h2>Items seen by location</h2>
+      <div class="controls">
+        <input type="search" id="stash-search" class="search" placeholder="Search items or places…"
+               autocomplete="off" spellcheck="false">
+        <select id="stash-period" class="select period" data-all="Seen any time" title="Filter by when last seen"></select>
+        <label class="toggle" title="Show each item only where it was seen most recently">
+          <input type="checkbox" id="stash-latest">
+          <span>Latest place only</span>
+        </label>
+      </div>
+    </div>
+    <p class="muted caption">
+      Built by binding each location's inventory query to the place you opened it
+      at. Removals are never logged, so this is what has been <em>seen</em> stored
+      somewhere, not a live stock level.
+    </p>
+    <div id="stash-grid" class="stash-grid"></div>
+  </section>
+
+  <!-- PLACES -->
+  <section id="view-places" class="view">
+    <div class="section-bar">
+      <h2>Places</h2>
+      <div class="controls">
+        <input type="search" id="places-search" class="search" placeholder="Search places…"
+               autocomplete="off" spellcheck="false">
+        <select id="places-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <h2 class="spaced">Most visited</h2>
+    <div id="places-chart" class="bars"></div>
+    <h2 class="spaced">Quantum destinations</h2>
+    <div id="dests-chart" class="bars"></div>
+  </section>
+
+  <!-- CONTRACTS -->
+  <section id="view-contracts" class="view">
+    <div class="section-bar">
+      <h2>Contracts</h2>
+      <div class="controls">
+        <select id="contracts-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <div class="summary-strip" id="contract-summary"></div>
+    <h2 class="spaced">Contracts by issuer</h2>
+    <div id="issuers-chart" class="bars"></div>
+    <h2 class="spaced">Contracts by type</h2>
+    <div id="types-chart" class="bars"></div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <img src="assets/manufacturers/_madebycommunity.png" alt="Made by the Community" class="mbc">
+  <span>
+    Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
+    trademarks of Cloud Imperium Rights LLC. Manufacturer marks from the official
+    Star Citizen Fankit, used under the Fankit Agreement. This is an unofficial
+    fan tool, not affiliated with or endorsed by Cloud Imperium Games.
+    <br>
+    Log-format research by the community made this possible - StarLogs (Ozy311),
+    all-slain (DimmaDont), SCStats (Maple33), SCPlay (ckuma), AutoTrackR2,
+    SC-Kill-Monitor and citizenmon - with the p4k format from the scdatatools
+    lineage. Full attribution in docs/credits.md.
+  </span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
