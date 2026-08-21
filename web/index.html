@@ -110,14 +110,7 @@
       <div class="controls">
         <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
                autocomplete="off" spellcheck="false">
-        <select id="sessions-period" class="select" title="Filter by date">
-          <option value="0">All time</option>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-          <option value="180">Last 6 months</option>
-          <option value="365">Last year</option>
-        </select>
+        <select id="sessions-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
     <div class="summary-strip" id="lib-summary"></div>
@@ -157,13 +150,7 @@
       <div class="controls">
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
-        <select id="fleet-period" class="select" title="Filter by when last flown">
-          <option value="0">Any time</option>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-          <option value="180">Last 6 months</option>
-        </select>
+        <select id="fleet-period" class="select period" data-all="Any time" title="Filter by when last flown"></select>
       </div>
     </div>
     <p class="muted caption">
@@ -176,9 +163,15 @@
 
   <!-- SPENDING -->
   <section id="view-spending" class="view">
+    <div class="section-bar">
+      <h2>Economy</h2>
+      <div class="controls">
+        <select id="spending-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
     <div class="summary-strip" id="spend-summary"></div>
 
-    <h2>Cargo sales</h2>
+    <h2 class="spaced">Cargo sales</h2>
     <p class="muted caption">
       The only income the logs record. Commodity trades carry no server
       confirmation, unlike item purchases, so these are amounts requested at the
@@ -217,13 +210,7 @@
       <div class="controls">
         <input type="search" id="stash-search" class="search" placeholder="Search items or places…"
                autocomplete="off" spellcheck="false">
-        <select id="stash-period" class="select" title="Filter by when last seen">
-          <option value="0">Seen any time</option>
-          <option value="7">Seen in 7 days</option>
-          <option value="30">Seen in 30 days</option>
-          <option value="90">Seen in 90 days</option>
-          <option value="180">Seen in 6 months</option>
-        </select>
+        <select id="stash-period" class="select period" data-all="Seen any time" title="Filter by when last seen"></select>
         <label class="toggle" title="Show each item only where it was seen most recently">
           <input type="checkbox" id="stash-latest">
           <span>Latest place only</span>
@@ -240,7 +227,15 @@
 
   <!-- PLACES -->
   <section id="view-places" class="view">
-    <h2>Most visited</h2>
+    <div class="section-bar">
+      <h2>Places</h2>
+      <div class="controls">
+        <input type="search" id="places-search" class="search" placeholder="Search places…"
+               autocomplete="off" spellcheck="false">
+        <select id="places-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <h2 class="spaced">Most visited</h2>
     <div id="places-chart" class="bars"></div>
     <h2 class="spaced">Quantum destinations</h2>
     <div id="dests-chart" class="bars"></div>
@@ -248,8 +243,14 @@
 
   <!-- CONTRACTS -->
   <section id="view-contracts" class="view">
+    <div class="section-bar">
+      <h2>Contracts</h2>
+      <div class="controls">
+        <select id="contracts-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
     <div class="summary-strip" id="contract-summary"></div>
-    <h2>Contracts by issuer</h2>
+    <h2 class="spaced">Contracts by issuer</h2>
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
     <div id="types-chart" class="bars"></div>

@@ -72,6 +72,41 @@ function el(tag, className, text) {
   return node;
 }
 
+/* ---------- period selector ---------- */
+
+/**
+ * The one definition of the time windows every view offers.
+ *
+ * Six views needed the same control, so it is built from here rather than
+ * repeated in markup - adding a window means editing this list once.
+ */
+const PERIODS = [
+  { days: 0, label: 'All time' },
+  { days: 1, label: 'Last 24 hours' },
+  { days: 3, label: 'Last 3 days' },
+  { days: 7, label: 'Last 7 days' },
+  { days: 30, label: 'Last 30 days' },
+  { days: 90, label: 'Last 90 days' },
+  { days: 180, label: 'Last 6 months' },
+  { days: 365, label: 'Last year' },
+];
+
+/** Fills every `select.period`. A view can reword its all-time option via data-all. */
+function buildPeriodSelects() {
+  for (const select of $$('select.period')) {
+    const allLabel = select.dataset.all || PERIODS[0].label;
+
+    for (const period of PERIODS) {
+      const option = document.createElement('option');
+      option.value = String(period.days);
+      option.textContent = period.days === 0 ? allLabel : period.label;
+      select.append(option);
+    }
+  }
+}
+
+buildPeriodSelects();
+
 /* ---------- tabs ---------- */
 
 function showView(name) {
@@ -253,7 +288,11 @@ async function loadHistory() {
   safeRender('Loadout', () => renderLoadout(stats));
   safeRender('Stash', () => renderStash(stats));
   safeRender('Map', () => drawMap(stats.locations));
+  safeRender('Contracts', () => renderContracts(stats));
+  safeRender('Places', () => renderPlaces(stats));
+}
 
+function renderContracts(stats) {
   tiles('#contract-summary', [
     ['Contracts seen', stats.contractsSeen],
     ['Completed', stats.contractsCompleted],
@@ -263,22 +302,30 @@ async function loadHistory() {
       : '—'],
   ]);
 
-  bars('#places-chart',
-    stats.locations.slice(0, 20).map((l) => ({
-      label: l.name, value: l.visits, colour: KIND_COLOURS[l.kind],
-    })),
-    (v) => `${v}`);
-
-  bars('#dests-chart',
-    stats.destinations.slice(0, 20).map((d) => ({ label: d.name, value: d.visits })),
-    (v) => `${v}`);
-
   bars('#issuers-chart',
     stats.contractIssuers.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
     (v) => `${v}`);
 
   bars('#types-chart',
     stats.contractTypes.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
+    (v) => `${v}`);
+}
+
+function renderPlaces(stats) {
+  libraryStats = stats;
+
+  const term = ($('#places-search').value || '').trim().toLowerCase();
+  const match = (name) => !term || name.toLowerCase().includes(term);
+
+  bars('#places-chart',
+    stats.locations.filter((l) => match(l.name)).slice(0, 25).map((l) => ({
+      label: l.name, value: l.visits, colour: KIND_COLOURS[l.kind],
+    })),
+    (v) => `${v}`);
+
+  bars('#dests-chart',
+    stats.destinations.filter((d) => match(d.name)).slice(0, 25)
+      .map((d) => ({ label: d.name, value: d.visits })),
     (v) => `${v}`);
 }
 
@@ -1005,8 +1052,31 @@ function onInput(selector, handler) {
   node.addEventListener('change', handler);
 }
 
+/**
+ * Re-fetches totals for one view's chosen window and re-renders just that view.
+ *
+ * Aggregation happens server-side, so a period change is a round trip rather
+ * than a client-side filter - the browser never holds per-session detail for
+ * spending, contracts or places.
+ */
+async function refreshForPeriod(selectId, render) {
+  const days = Number($(selectId).value) || 0;
+
+  try {
+    const stats = await getJson(`/api/stats?days=${days}`);
+    render(stats);
+  } catch (error) {
+    console.error(`period refresh failed for ${selectId}`, error);
+  }
+}
+
 onInput('#fleet-search', renderFleetShips);
 onInput('#fleet-period', renderFleetShips);
+
+onInput('#spending-period', () => refreshForPeriod('#spending-period', renderSpending));
+onInput('#contracts-period', () => refreshForPeriod('#contracts-period', renderContracts));
+onInput('#places-period', () => refreshForPeriod('#places-period', renderPlaces));
+onInput('#places-search', () => libraryStats && renderPlaces(libraryStats));
 onInput('#loadout-search', () => libraryStats && renderLoadout(libraryStats));
 onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-period', () => libraryStats && renderStash(libraryStats));

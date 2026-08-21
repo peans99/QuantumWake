@@ -127,7 +127,8 @@ app.MapGet("/api/stream", async (HttpContext context, LiveSessionService live, C
     }
 });
 
-app.MapGet("/api/stats", (LogLibrary lib) => lib.Stats());
+// days=0 (or absent) means all time; the views each pick their own window.
+app.MapGet("/api/stats", (LogLibrary lib, int? days) => lib.Stats(days ?? 0));
 
 app.MapGet("/api/sessions", (LogLibrary lib) => lib.Sessions().Select(s => new
 {
@@ -188,6 +189,7 @@ app.MapGet("/api/spending", (LogLibrary lib) =>
 });
 
 app.MapGet("/api/loadout", (LogLibrary lib) => lib.Stats().Loadout);
+app.MapGet("/api/loadout/asof", (LogLibrary lib) => new { asOf = lib.Stats().LoadoutAsOf });
 
 app.MapGet("/api/stash", (LogLibrary lib) => lib.Stats().Stash);
 
