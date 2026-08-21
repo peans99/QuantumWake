@@ -320,7 +320,8 @@ public static class LoadoutCategories
 }
 
 /// <summary>One item in a stash, with when it was last seen there.</summary>
-public sealed record StashItem(string Name, DateTimeOffset LastSeen);
+/// <param name="ItemClass">Engine class, kept so prices can join precisely.</param>
+public sealed record StashItem(string Name, DateTimeOffset LastSeen, string? ItemClass = null);
 
 /// <summary>Items of one kind, within a stash or elsewhere.</summary>
 public sealed record ItemGroup(string Category, IReadOnlyList<StashItem> Items);
@@ -450,7 +451,7 @@ public static class ItemCategories
             .Select(g => new ItemGroup(
                 g.Key,
                 [.. g.GroupBy(x => display(x.ItemClass), StringComparer.OrdinalIgnoreCase)
-                     .Select(i => new StashItem(i.Key, i.Max(x => x.SeenAt)))
+                     .Select(i => new StashItem(i.Key, i.Max(x => x.SeenAt), i.First().ItemClass))
                      .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)]))
             .OrderBy(g => Rank(g.Category))];
     }

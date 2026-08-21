@@ -26,12 +26,17 @@ public sealed record ShipInfo(
     double? StandardClaimTime);
 
 /// <summary>Reference data for one item: what kind of thing it is.</summary>
+/// <param name="Uuid">The game's entity uuid — the precise join key to UEX item prices.</param>
 public sealed record ItemInfo(
     string? Type,
     string? SubType,
     int Size,
     int Grade,
-    string? Manufacturer);
+    string? Manufacturer,
+    string? Uuid = null);
+
+/// <summary>A body's real position within its system, star at the origin.</summary>
+public sealed record BodyPosition(double X, double Y);
 
 /// <summary>
 /// The optional community dataset: commodity names for the resource ids the
@@ -78,10 +83,14 @@ public sealed class CommunityData
     public const string ShipItemsUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/ship-items.json";
 
+    public const string StarmapUrl =
+        "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/starmap_positions.json";
+
     private readonly string _directory;
     private Dictionary<string, CommodityInfo> _byId = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ShipInfo> _ships = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ItemInfo> _items = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, Dictionary<string, BodyPosition>> _positions = new(StringComparer.OrdinalIgnoreCase);
 
     public CommunityData(string? directory = null)
     {
@@ -96,6 +105,7 @@ public sealed class CommunityData
     private string MetaPath => Path.Combine(_directory, "meta.json");
     private string ShipsDigestPath => Path.Combine(_directory, "digest-ships.json");
     private string ItemsDigestPath => Path.Combine(_directory, "digest-items.json");
+    private string PositionsDigestPath => Path.Combine(_directory, "digest-positions.json");
 
     public bool IsEnabled => _byId.Count > 0;
     public int Count => _byId.Count;
@@ -137,6 +147,12 @@ public sealed class CommunityData
     public ItemInfo? Item(string? itemClass) =>
         itemClass is not null && _items.TryGetValue(itemClass, out var info) ? info : null;
 
+    /// <summary>Real body positions for a system, body name (lower) to coordinates. Empty when unknown.</summary>
+    public IReadOnlyDictionary<string, BodyPosition> BodyPositions(string system) =>
+        _positions.TryGetValue(system, out var bodies)
+            ? bodies
+            : new Dictionary<string, BodyPosition>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Downloads the dataset files, digests them into the local cache, and
     /// loads the result. The only scunpacked requests in the application;
@@ -149,6 +165,7 @@ public sealed class CommunityData
         var shipsJson = await http.GetStringAsync(ShipsUrl, token);
         var fpsItemsJson = await http.GetStringAsync(FpsItemsUrl, token);
         var shipItemsJson = await http.GetStringAsync(ShipItemsUrl, token);
+        var starmapJson = await http.GetStringAsync(StarmapUrl, token);
 
         // Digest before persisting: a failed download or a moved file must not
         // leave a cache that then fails on every startup.
@@ -158,16 +175,19 @@ public sealed class CommunityData
 
         var ships = DigestShips(shipsJson);
         var items = DigestItems(fpsItemsJson, shipItemsJson);
+        var positions = DigestPositions(starmapJson);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));
         File.WriteAllText(ShipsDigestPath, JsonSerializer.Serialize(ships));
         File.WriteAllText(ItemsDigestPath, JsonSerializer.Serialize(items));
+        File.WriteAllText(PositionsDigestPath, JsonSerializer.Serialize(positions));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _byId = digest;
         _ships = ships;
         _items = items;
+        _positions = positions;
         FetchedAt = DateTimeOffset.UtcNow;
         return _byId.Count;
     }
@@ -194,6 +214,11 @@ public sealed class CommunityData
             _byId = Load<CommodityInfo>(DigestPath);
             _ships = Load<ShipInfo>(ShipsDigestPath);
             _items = Load<ItemInfo>(ItemsDigestPath);
+
+            if (File.Exists(PositionsDigestPath))
+                _positions = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, BodyPosition>>>(
+                        File.ReadAllText(PositionsDigestPath))
+                    ?? new Dictionary<string, Dictionary<string, BodyPosition>>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;
@@ -393,8 +418,48 @@ public sealed class CommunityData
                     Str(entry, "subType") is "UNDEFINED" or null ? null : Str(entry, "subType"),
                     (int)(Num(entry, "size") ?? 0),
                     (int)(Num(entry, "grade") ?? 0),
-                    manufacturer);
+                    manufacturer,
+                    Str(entry, "reference"));
             }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Per system, the real coordinates of its planets and moons - star at the
+    /// origin. Entities repeat and most types are noise; planets and moons are
+    /// what the map lays out.
+    /// </summary>
+    public static Dictionary<string, Dictionary<string, BodyPosition>> DigestPositions(string starmapJson)
+    {
+        var result = new Dictionary<string, Dictionary<string, BodyPosition>>(StringComparer.OrdinalIgnoreCase);
+
+        using var doc = JsonDocument.Parse(starmapJson);
+
+        if (!doc.RootElement.TryGetProperty("entities", out var entities)
+            || entities.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var entry in entities.EnumerateArray())
+        {
+            var type = Str(entry, "type");
+            if (type is not ("Planet" or "Moon"))
+                continue;
+
+            var system = Str(entry, "system");
+            var name = Str(entry, "name");
+            var x = Num(entry, "x");
+            var y = Num(entry, "y");
+
+            if (system is null || name is null || x is null || y is null)
+                continue;
+
+            if (!result.TryGetValue(system, out var bodies))
+                result[system] = bodies = new Dictionary<string, BodyPosition>(StringComparer.OrdinalIgnoreCase);
+
+            // Entities repeat; the coordinates agree, so first wins.
+            bodies.TryAdd(name, new BodyPosition(x.Value, y.Value));
         }
 
         return result;
