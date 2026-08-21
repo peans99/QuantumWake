@@ -114,6 +114,11 @@ jobs:
           $notes = @"
           **Quantum Wake ${{ steps.version.outputs.version }}** - a pilot's logbook for Star Citizen.
 
+          **Pre-1.0:** until version 1.0 this product will keep changing significantly
+          between releases - pages move, data formats shift, an update may re-read your
+          logs or ask you to re-enable an integration. Everything rebuilds from the
+          logs, so nothing is lost.
+
           ### Getting it running
 
           Download **QuantumWake.exe** and double-click it. That is the whole
