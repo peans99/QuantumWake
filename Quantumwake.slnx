@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Quantumwake.Cli/Quantumwake.Cli.csproj" />
+    <Project Path="src/Quantumwake.Core/Quantumwake.Core.csproj" />
+    <Project Path="src/Quantumwake.Data/Quantumwake.Data.csproj" />
+    <Project Path="src/Quantumwake.LogSim/Quantumwake.LogSim.csproj" />
+    <Project Path="src/Quantumwake.Overlay/Quantumwake.Overlay.csproj" />
+    <Project Path="src/Quantumwake.Server/Quantumwake.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Quantumwake.Tests/Quantumwake.Tests.csproj" />
+  </Folder>
+</Solution>

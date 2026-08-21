@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Quantum Wake">
+  <title>Quantum Wake</title>
+  <!--
+    The small mark: a wake and the point that left it. Two shapes only, no ring
+    and no text, so it still reads as a comet at 16px in a browser tab.
+  -->
+  <defs>
+    <linearGradient id="wake" x1="8" y1="46" x2="47" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d5c78" stop-opacity="0.25" />
+      <stop offset="0.45" stop-color="#35c8f0" />
+      <stop offset="1" stop-color="#7fe4ff" />
+    </linearGradient>
+  </defs>
+
+  <path d="M7 45 C 13 57, 33 59, 43 47 C 50 39, 52 29, 48 21"
+        fill="none" stroke="url(#wake)" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round" />
+
+  <path d="M49 3 L52.8 14.2 L64 18 L52.8 21.8 L49 33 L45.2 21.8 L34 18 L45.2 14.2 Z"
+        fill="#7fe4ff" />
+</svg>

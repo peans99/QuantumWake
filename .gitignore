@@ -55,3 +55,22 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# ---- Quantum Wake ----
+
+# Local caches and scratch data
+*.db
+*.db-shm
+*.db-wal
+cache/
+
+# IDE and editor
+*.user
+*.suo
+.vs/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+desktop.ini
