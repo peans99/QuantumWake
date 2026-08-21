@@ -316,7 +316,19 @@ body.overlay .feed .d { display: none; }
   border-left: 1px solid var(--rule-hot);
 }
 
-.tabs { display: flex; gap: 4px; flex: 1; }
+/* Sixteen tabs outgrow a 1600px window; the strip scrolls itself rather than
+   widening the document, which would put a horizontal scrollbar on every page
+   and let tab-centring drag the whole page sideways. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { flex-shrink: 0; }
 
 .tabs button {
   position: relative;
@@ -1353,3 +1365,17 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
   color: var(--dim);
   align-self: flex-end;
 }
+
+/* ---------- trade advice ---------- */
+
+.advice { list-style: none; margin: 6px 0 0; padding: 0; }
+.advice li {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.advice li:last-child { border-bottom: 0; }
+.advice b { color: var(--cyan-hot); }
+
+body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }

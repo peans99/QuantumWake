@@ -9,7 +9,25 @@ public sealed record UexPrice(
     string? BestSellTerminal,
     decimal BestBuy,
     string? BestBuyTerminal,
-    int Terminals);
+    int Terminals)
+{
+    /// <summary>15-day average sell across terminals, for trend context.</summary>
+    public decimal AvgSell { get; init; }
+}
+
+/// <summary>One commodity's price at one terminal.</summary>
+public sealed record UexMarketRow(int TerminalId, string Terminal, decimal Buy, decimal Sell);
+
+/// <summary>Cheapest in-game purchase of a vehicle.</summary>
+public sealed record UexVehiclePrice(decimal Price, string Terminal);
+
+/// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
+public sealed record UexOpportunity(
+    string Commodity,
+    decimal BuyHere,
+    decimal SellThere,
+    string SellTerminal,
+    decimal MarginPerScu);
 
 /// <summary>One row this install could report to UEX: a real logged sale.</summary>
 /// <param name="TerminalId">The matched UEX terminal, or null when the place could not be matched.</param>
@@ -49,12 +67,23 @@ public sealed class UexData
     public const string PricesUrl = "https://api.uexcorp.space/2.0/commodities_prices_all";
     public const string TerminalsUrl = "https://api.uexcorp.space/2.0/terminals?type=commodity";
     public const string SubmitUrl = "https://api.uexcorp.space/2.0/data_submit";
+    public const string VehiclePricesUrl = "https://api.uexcorp.space/2.0/vehicles_purchases_prices_all";
+    public const string ItemPricesUrl = "https://api.uexcorp.space/2.0/items_prices_all";
 
     private readonly string _directory;
 
     private Dictionary<string, UexPrice> _prices = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, int> _commodityIds = new(StringComparer.OrdinalIgnoreCase);
     private List<(int Id, string Name)> _terminals = [];
+
+    /// <summary>Every commodity price row per terminal - the route advisor's raw material.</summary>
+    private Dictionary<string, List<UexMarketRow>> _matrix = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cheapest in-game purchase per vehicle name (compact), for fleet value.</summary>
+    private Dictionary<string, UexVehiclePrice> _vehicles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cheapest buy per item uuid, for kit and stash value.</summary>
+    private Dictionary<string, decimal> _itemPrices = new(StringComparer.OrdinalIgnoreCase);
 
     public UexData(string? directory = null)
     {
@@ -70,6 +99,9 @@ public sealed class UexData
     private string TerminalsPath => Path.Combine(_directory, "terminals.json");
     private string MetaPath => Path.Combine(_directory, "meta.json");
     private string CredentialsPath => Path.Combine(_directory, "credentials.json");
+    private string MatrixPath => Path.Combine(_directory, "matrix.json");
+    private string VehiclesPath => Path.Combine(_directory, "vehicles.json");
+    private string ItemPricesPath => Path.Combine(_directory, "item-prices.json");
 
     public bool IsEnabled => _prices.Count > 0;
     public int Count => _prices.Count;
@@ -82,29 +114,102 @@ public sealed class UexData
         _prices.TryGetValue(commodityName, out var price) ? price : null;
 
     /// <summary>
-    /// Fetches current prices and the terminal list. Anonymous endpoints, on
-    /// the user's click only.
+    /// Cheapest known in-game purchase of a vehicle, matched by name. UEX names
+    /// carry no manufacturer ("Corsair", "Starlancer MAX") while our display
+    /// names do ("Drake Corsair"), so the manufacturer word is stripped when
+    /// the full name misses.
+    /// </summary>
+    public UexVehiclePrice? VehiclePrice(string? vehicleName)
+    {
+        if (string.IsNullOrWhiteSpace(vehicleName))
+            return null;
+
+        if (_vehicles.TryGetValue(Compact(vehicleName), out var exact))
+            return exact;
+
+        var words = vehicleName.Trim().Split(' ', 2);
+        if (words.Length == 2 && _vehicles.TryGetValue(Compact(words[1]), out var stripped))
+            return stripped;
+
+        return null;
+    }
+
+    /// <summary>Cheapest known buy price for an item, by the game's entity uuid.</summary>
+    public decimal? ItemPrice(string? uuid) =>
+        uuid is not null && _itemPrices.TryGetValue(uuid, out var price) ? price : null;
+
+    /// <summary>
+    /// Trading opportunities from one place: what its terminal sells, and where
+    /// each of those goods fetches the most. Empty when the place matches no
+    /// UEX terminal - which the caller should say rather than hide.
+    /// </summary>
+    public List<UexOpportunity> Opportunities(string place, int limit = 6)
+    {
+        var terminal = MatchTerminal(place);
+        if (terminal is null)
+            return [];
+
+        var opportunities = new List<UexOpportunity>();
+
+        foreach (var (commodity, rows) in _matrix)
+        {
+            var here = rows.FirstOrDefault(r => r.TerminalId == terminal.Value.Id && r.Buy > 0);
+            if (here is null)
+                continue;
+
+            var bestElsewhere = rows
+                .Where(r => r.TerminalId != terminal.Value.Id && r.Sell > 0)
+                .OrderByDescending(r => r.Sell)
+                .FirstOrDefault();
+
+            if (bestElsewhere is null || bestElsewhere.Sell <= here.Buy)
+                continue;
+
+            opportunities.Add(new UexOpportunity(
+                commodity, here.Buy, bestElsewhere.Sell, bestElsewhere.Terminal,
+                bestElsewhere.Sell - here.Buy));
+        }
+
+        return [.. opportunities.OrderByDescending(o => o.MarginPerScu).Take(limit)];
+    }
+
+    /// <summary>The matched UEX terminal name for a place, for the UI to show.</summary>
+    public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
+
+    /// <summary>
+    /// Fetches current prices, the terminal list, vehicle purchase prices and
+    /// item prices. Anonymous endpoints, on the user's click only.
     /// </summary>
     public async Task<int> EnableAsync(HttpClient http, CancellationToken token = default)
     {
         var priceDoc = await http.GetFromJsonAsync<JsonElement>(PricesUrl, token);
         var terminalDoc = await http.GetFromJsonAsync<JsonElement>(TerminalsUrl, token);
+        var vehicleDoc = await http.GetFromJsonAsync<JsonElement>(VehiclePricesUrl, token);
+        var itemDoc = await http.GetFromJsonAsync<JsonElement>(ItemPricesUrl, token);
 
-        var (prices, ids) = DigestPrices(priceDoc);
+        var (prices, ids, matrix) = DigestPrices(priceDoc);
         if (prices.Count == 0)
             throw new InvalidDataException("UEX returned no commodity prices.");
 
         var terminals = DigestTerminals(terminalDoc);
+        var vehicles = DigestVehicles(vehicleDoc);
+        var itemPrices = DigestItemPrices(itemDoc);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
         File.WriteAllText(IdsPath, JsonSerializer.Serialize(ids));
         File.WriteAllText(TerminalsPath, JsonSerializer.Serialize(terminals.Select(t => new[] { (object)t.Id, t.Name })));
+        File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
+        File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
+        File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _prices = prices;
         _commodityIds = ids;
         _terminals = terminals;
+        _matrix = matrix;
+        _vehicles = vehicles;
+        _itemPrices = itemPrices;
         FetchedAt = DateTimeOffset.UtcNow;
         return _prices.Count;
     }
@@ -112,13 +217,16 @@ public sealed class UexData
     /// <summary>Deletes the price cache. Credentials are removed separately.</summary>
     public void Disable()
     {
-        foreach (var path in new[] { PricesPath, IdsPath, TerminalsPath, MetaPath })
+        foreach (var path in new[] { PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath, ItemPricesPath })
             if (File.Exists(path))
                 File.Delete(path);
 
         _prices = new Dictionary<string, UexPrice>(StringComparer.OrdinalIgnoreCase);
         _commodityIds = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         _terminals = [];
+        _matrix = new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
+        _vehicles = new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
+        _itemPrices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
     }
 
@@ -249,15 +357,17 @@ public sealed class UexData
     private static string Compact(string value) =>
         new([.. value.Where(char.IsLetterOrDigit)]);
 
-    private static (Dictionary<string, UexPrice>, Dictionary<string, int>) DigestPrices(JsonElement root)
+    private static (Dictionary<string, UexPrice>, Dictionary<string, int>, Dictionary<string, List<UexMarketRow>>)
+        DigestPrices(JsonElement root)
     {
         var prices = new Dictionary<string, UexPrice>(StringComparer.OrdinalIgnoreCase);
         var ids = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var matrix = new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
 
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-            return (prices, ids);
+            return (prices, ids, matrix);
 
-        var byName = new Dictionary<string, List<(decimal Sell, decimal Buy, string Terminal)>>(StringComparer.OrdinalIgnoreCase);
+        var avgSells = new Dictionary<string, List<decimal>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var row in data.EnumerateArray())
         {
@@ -269,27 +379,88 @@ public sealed class UexData
             if (row.TryGetProperty("id_commodity", out var idEl) && idEl.ValueKind == JsonValueKind.Number)
                 ids[name] = idEl.GetInt32();
 
-            var sell = Num(row, "price_sell");
-            var buy = Num(row, "price_buy");
+            var terminalId = (int)(Num(row, "id_terminal") ?? 0);
+            var sell = (decimal)(Num(row, "price_sell") ?? 0);
+            var buy = (decimal)(Num(row, "price_buy") ?? 0);
+            var sellAvg = (decimal)(Num(row, "price_sell_avg") ?? 0);
 
-            if (!byName.TryGetValue(name, out var list))
-                byName[name] = list = [];
+            if (!matrix.TryGetValue(name, out var list))
+                matrix[name] = list = [];
 
-            list.Add(((decimal)(sell ?? 0), (decimal)(buy ?? 0), terminal));
+            list.Add(new UexMarketRow(terminalId, terminal, buy, sell));
+
+            if (sellAvg > 0)
+            {
+                if (!avgSells.TryGetValue(name, out var avgs))
+                    avgSells[name] = avgs = [];
+                avgs.Add(sellAvg);
+            }
         }
 
-        foreach (var (name, list) in byName)
+        foreach (var (name, list) in matrix)
         {
             var bestSell = list.Where(x => x.Sell > 0).OrderByDescending(x => x.Sell).FirstOrDefault();
             var bestBuy = list.Where(x => x.Buy > 0).OrderBy(x => x.Buy).FirstOrDefault();
 
             prices[name] = new UexPrice(
-                bestSell.Sell, bestSell.Sell > 0 ? bestSell.Terminal : null,
-                bestBuy.Buy, bestBuy.Buy > 0 ? bestBuy.Terminal : null,
-                list.Count);
+                bestSell?.Sell ?? 0, bestSell?.Terminal,
+                bestBuy?.Buy ?? 0, bestBuy?.Terminal,
+                list.Count)
+            {
+                AvgSell = avgSells.TryGetValue(name, out var avgs) && avgs.Count > 0
+                    ? Math.Round(avgs.Max(), 0)
+                    : 0
+            };
         }
 
-        return (prices, ids);
+        return (prices, ids, matrix);
+    }
+
+    private static Dictionary<string, UexVehiclePrice> DigestVehicles(JsonElement root)
+    {
+        var vehicles = new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return vehicles;
+
+        foreach (var row in data.EnumerateArray())
+        {
+            var name = Str(row, "vehicle_name");
+            var terminal = Str(row, "terminal_name") ?? "?";
+            var price = (decimal)(Num(row, "price_buy") ?? 0);
+
+            if (name is null || price <= 0)
+                continue;
+
+            var key = Compact(name);
+
+            if (!vehicles.TryGetValue(key, out var existing) || price < existing.Price)
+                vehicles[key] = new UexVehiclePrice(price, terminal);
+        }
+
+        return vehicles;
+    }
+
+    private static Dictionary<string, decimal> DigestItemPrices(JsonElement root)
+    {
+        var items = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return items;
+
+        foreach (var row in data.EnumerateArray())
+        {
+            var uuid = Str(row, "item_uuid");
+            var price = (decimal)(Num(row, "price_buy") ?? 0);
+
+            if (uuid is null || price <= 0)
+                continue;
+
+            if (!items.TryGetValue(uuid, out var existing) || price < existing)
+                items[uuid] = price;
+        }
+
+        return items;
     }
 
     private static List<(int Id, string Name)> DigestTerminals(JsonElement root)
@@ -328,6 +499,21 @@ public sealed class UexData
                 .Where(x => x.ValueKind == JsonValueKind.Array && x.GetArrayLength() == 2)
                 .Select(x => (x[0].GetInt32(), x[1].GetString() ?? ""))
                 .ToList();
+
+            if (File.Exists(MatrixPath))
+                _matrix = JsonSerializer.Deserialize<Dictionary<string, List<UexMarketRow>>>(File.ReadAllText(MatrixPath))
+                    is { } m ? new Dictionary<string, List<UexMarketRow>>(m, StringComparer.OrdinalIgnoreCase)
+                             : new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
+
+            if (File.Exists(VehiclesPath))
+                _vehicles = JsonSerializer.Deserialize<Dictionary<string, UexVehiclePrice>>(File.ReadAllText(VehiclesPath))
+                    is { } v ? new Dictionary<string, UexVehiclePrice>(v, StringComparer.OrdinalIgnoreCase)
+                             : new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
+
+            if (File.Exists(ItemPricesPath))
+                _itemPrices = JsonSerializer.Deserialize<Dictionary<string, decimal>>(File.ReadAllText(ItemPricesPath))
+                    is { } ip ? new Dictionary<string, decimal>(ip, StringComparer.OrdinalIgnoreCase)
+                              : new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;

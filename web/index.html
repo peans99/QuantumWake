@@ -31,6 +31,7 @@
     <button data-view="commodities">Cargo</button>
     <button data-view="market">Market</button>
     <button data-view="loot">Loot</button>
+    <button data-view="assets">Assets</button>
     <button data-view="loadout">Loadout</button>
     <button data-view="stash">Stash</button>
     <button data-view="settings">Settings</button>
@@ -102,6 +103,12 @@
         <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
         <div class="statline"><span>Kills</span><b id="now-kills">0</b></div>
         <div class="note" id="combat-note"></div>
+      </article>
+
+      <article class="card span2" id="trade-advice-card" hidden>
+        <div class="card-label">Trade from here</div>
+        <div class="muted" id="trade-advice-sub"></div>
+        <ul class="advice" id="trade-advice"></ul>
       </article>
 
     </div>
@@ -297,6 +304,7 @@
           <tr>
             <th>When</th><th>Type</th><th>Commodity</th><th>Where</th>
             <th class="num">SCU</th><th class="num">Amount</th><th class="num">Per SCU</th>
+            <th class="num" id="cargo-best-col" hidden title="Your price vs today's UEX best">vs best</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -440,6 +448,34 @@
             <th>First seen</th><th>Item</th><th>Where you were</th>
           </tr>
         </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="view-assets" class="view">
+    <h2>Assets</h2>
+    <p class="muted caption">
+      What you own, priced from UEX community data - in-game purchase prices,
+      not pledge value. Every number is an estimate: only items and ships the
+      price tables recognise are counted, and the coverage is shown beside each
+      total. Needs both the community dataset and UEX enabled in Settings.
+    </p>
+
+    <div class="summary-strip" id="assets-summary"></div>
+
+    <h2 class="spaced">Fleet, at in-game prices</h2>
+    <div class="table-wrap">
+      <table id="assets-fleet">
+        <thead><tr><th>Ship</th><th class="num">Buy price</th><th>Cheapest at</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="spaced">Stashes, by value</h2>
+    <div class="table-wrap">
+      <table id="assets-stash">
+        <thead><tr><th>Location</th><th class="num">Items</th><th class="num">Priced</th><th class="num">Value</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
