@@ -2336,6 +2336,7 @@ function initMap() {
 
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
+  $('#map-shade').addEventListener('change', () => drawMap());
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
   // Escape clears the search and glides home; clicking anywhere else just
@@ -2367,12 +2368,13 @@ function initMap() {
   map.addEventListener('click', () => $('#map-info').hidden = true);
   $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
 
-  // The sold-here checkbox on the detail card, remembered per browser.
-  const soldToggle = $('#map-info-sold-toggle');
-  try { soldToggle.checked = localStorage.getItem('qw-map-sold') === '1'; } catch { /* fine */ }
+  // The Goods checkbox: one switch for goods on hover tips and on the detail
+  // card, remembered per browser.
+  const goodsToggle = $('#map-goods');
+  try { goodsToggle.checked = localStorage.getItem('qw-map-sold') === '1'; } catch { /* fine */ }
 
-  soldToggle.addEventListener('change', () => {
-    try { localStorage.setItem('qw-map-sold', soldToggle.checked ? '1' : '0'); } catch { /* fine */ }
+  goodsToggle.addEventListener('change', () => {
+    try { localStorage.setItem('qw-map-sold', goodsToggle.checked ? '1' : '0'); } catch { /* fine */ }
     renderMapInfoSold();
   });
 
@@ -2442,10 +2444,139 @@ function renderSearchResults() {
   box.hidden = false;
 }
 
+/* ---------- commodity shading ---------- */
+
+/**
+ * In commodity mode the highlight can carry a second dimension: UEX terminal
+ * prices grade each lit place by how good it is - best sell price (or, when
+ * asked, how much SCU it takes), and for a buy: search the cheapest price or
+ * deepest stock. The legend swaps to the gradient while this is on.
+ */
+let shadeRows = { name: null, rows: null };
+let shadeScale = null;
+const nodeShade = new Map();
+
+const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
+
+/** Interpolates the poor-to-best ramp; 1 is the gold end. */
+function shadeColour(t) {
+  const seg = t < 0.5 ? [SHADE_STOPS[0], SHADE_STOPS[1]] : [SHADE_STOPS[1], SHADE_STOPS[2]];
+  const k = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+
+  const mix = (i) => {
+    const a = parseInt(seg[0].slice(1 + i * 2, 3 + i * 2), 16);
+    const b = parseInt(seg[1].slice(1 + i * 2, 3 + i * 2), 16);
+    return Math.round(a + (b - a) * k);
+  };
+
+  return `rgb(${mix(0)},${mix(1)},${mix(2)})`;
+}
+
+function terminalMatchesPlace(terminal, place) {
+  const t = terminal.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const p = place.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (t.length < 4 || p.length < 4) return false;
+  return t.includes(p) || p.includes(t);
+}
+
+/**
+ * Builds the per-node metric for the current search, fetching the commodity's
+ * terminal rows on first sight and redrawing once they land.
+ */
+function prepareShading(term, sites) {
+  nodeShade.clear();
+  shadeScale = null;
+
+  const shadeSelect = $('#map-shade');
+  shadeSelect.hidden = !sites;
+  if (!sites || !highlightIds) return;
+
+  const buying = term.startsWith('buy:');
+  const name = (buying ? term.slice(4) : term).trim();
+  const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
+  if (!entry) return;
+
+  if (shadeRows.name !== entry.name) {
+    shadeRows = { name: entry.name, rows: null };
+
+    getJson(`/api/uex/market?commodity=${encodeURIComponent(entry.name)}`)
+      .then((rows) => {
+        if (shadeRows.name === entry.name) {
+          shadeRows.rows = rows;
+          drawMap();
+        }
+      })
+      .catch(() => { /* UEX off or unreachable; highlight stays ungraded */ });
+
+    return;
+  }
+
+  if (!shadeRows.rows?.length) return;
+
+  const byScu = shadeSelect.value === 'scu';
+
+  const metricOf = (row) => {
+    if (buying) return byScu ? row.buyScu : row.buy;
+    return byScu ? row.sellScu : row.sell;
+  };
+
+  // Lower is better only for a buy price; capacity and sell price want big.
+  const invert = buying && !byScu;
+
+  for (const id of highlightIds) {
+    const place = atlas.find((l) => l.rawId === id);
+    if (!place) continue;
+
+    const matched = shadeRows.rows.filter(
+      (r) => metricOf(r) > 0 && terminalMatchesPlace(r.terminal, place.name));
+    if (!matched.length) continue;
+
+    const value = invert
+      ? Math.min(...matched.map(metricOf))
+      : Math.max(...matched.map(metricOf));
+
+    nodeShade.set(id, { value });
+  }
+
+  if (nodeShade.size === 0) return;
+
+  const values = [...nodeShade.values()].map((s) => s.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  for (const shade of nodeShade.values()) {
+    const t = max === min ? 1 : (shade.value - min) / (max - min);
+    shade.colour = shadeColour(invert ? 1 - t : t);
+  }
+
+  shadeScale = {
+    min,
+    max,
+    invert,
+    unit: byScu ? 'SCU' : 'aUEC/SCU',
+    label: buying
+      ? (byScu ? 'stock on offer' : 'buy price, cheapest is gold')
+      : (byScu ? 'sell capacity' : 'sell price, best is gold'),
+  };
+}
+
+/** What the hover tip currently shows, so pointermove does not rebuild it. */
+let tipKey = null;
+
+/** Appends a capped goods line to the tip when the Goods checkbox is on. */
+function appendTipGoods(tip, names) {
+  if (!names.length) return;
+
+  const shown = names.slice(0, 6).join(', ');
+  const more = names.length > 6 ? ` +${names.length - 6} more` : '';
+  tip.append(el('span', 'goods', `Sells ${shown}${more}`));
+}
+
 /** The hover tooltip: name, kind and history at the cursor, instantly. */
 function showMapTip(location) {
   const tip = $('#map-tip');
   if (!tip) return;
+  tipKey = `site:${location.rawId}`;
 
   tip.textContent = '';
   tip.append(el('strong', null, location.name));
@@ -2453,6 +2584,57 @@ function showMapTip(location) {
   tip.append(el('span', null, location.visits > 0
     ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
     : 'never visited'));
+
+  // In shaded commodity mode, the number behind this node's colour.
+  const shade = nodeShade.get(location.rawId);
+  if (shade && shadeScale) {
+    tip.append(el('span', 'price',
+      `${shadeScale.invert ? 'buy at' : shadeScale.unit === 'SCU' ? 'capacity' : 'sells at'} ` +
+      `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`));
+  }
+
+  if ($('#map-goods').checked) appendTipGoods(tip, commoditiesSoldAt(location));
+
+  tip.hidden = false;
+}
+
+/**
+ * The body-level tooltip, for hovering the space a planet's cluster occupies
+ * rather than one of its dots: the rollup a pilot actually wants at a glance.
+ * Goods are the union across the body's sites, cached per draw - the answer
+ * does not change until the map does.
+ */
+const bodyGoodsCache = new Map();
+
+function showBodyTip(bodyName, system, sites) {
+  const tip = $('#map-tip');
+  if (!tip) return;
+  tipKey = `body:${system}/${bodyName}`;
+
+  const visited = sites.filter((s) => s.visits > 0);
+  const visits = sites.reduce((sum, s) => sum + s.visits, 0);
+  const last = sites.reduce((max, s) =>
+    (s.lastVisit && (!max || s.lastVisit > max) ? s.lastVisit : max), null);
+
+  tip.textContent = '';
+  tip.append(el('strong', null, bodyName));
+  tip.append(el('span', 'muted', system));
+  tip.append(el('span', null, `${sites.length} place${sites.length === 1 ? '' : 's'} · ${visited.length} visited`));
+
+  if (visits > 0)
+    tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
+
+  if ($('#map-goods').checked) {
+    if (!bodyGoodsCache.has(tipKey)) {
+      const union = new Set();
+      for (const site of sites)
+        for (const name of commoditiesSoldAt(site)) union.add(name);
+      bodyGoodsCache.set(tipKey, [...union].sort());
+    }
+
+    appendTipGoods(tip, bodyGoodsCache.get(tipKey));
+  }
+
   tip.hidden = false;
 }
 
@@ -2475,6 +2657,7 @@ function moveMapTip(e) {
 function hideMapTip() {
   const tip = $('#map-tip');
   if (tip) tip.hidden = true;
+  tipKey = null;
 }
 
 /**
@@ -2498,10 +2681,10 @@ function commoditiesSoldAt(location) {
 /** The place the detail card currently shows, for re-rendering on toggle. */
 let mapInfoLocation = null;
 
-/** Fills the card's sold-here list, honouring the checkbox. */
+/** Fills the card's sold-here list, honouring the toolbar's Goods checkbox. */
 function renderMapInfoSold() {
   const list = $('#map-info-sold');
-  const wanted = $('#map-info-sold-toggle').checked;
+  const wanted = $('#map-goods').checked;
 
   if (!wanted || !mapInfoLocation) {
     list.hidden = true;
@@ -2575,6 +2758,7 @@ function drawMap() {
   hideMapTip();
   pendingLabels.length = 0;
   claimedBoxes.length = 0;
+  bodyGoodsCache.clear();
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
@@ -2606,6 +2790,8 @@ function drawMap() {
   // An empty highlight set would dim the whole map to say "nothing"; saying it
   // in the counter and leaving the map lit is kinder.
   if (highlightIds && highlightIds.size === 0) highlightIds = null;
+
+  prepareShading(term, sites);
 
   const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
 
@@ -2806,6 +2992,24 @@ function drawMap() {
           bodyLabelX, bodyLabelY - bodyLabelSize * 0.4, 'middle', bodyLabelSize * 1.25, bodyLabel.textContent));
       }
 
+      // An invisible disc under the cluster: hovering the space a planet
+      // occupies - rather than one of its dots, which sit on top and win the
+      // pointer - shows the body's rollup tip.
+      if (bodyName !== '—') {
+        const bodyKey = `body:${system}/${bodyName}`;
+        const bodyHover = svgEl('circle', {
+          cx: bx, cy: by, r: reach + 12,
+          fill: '#000', 'fill-opacity': '0', 'pointer-events': 'fill',
+        });
+
+        bodyHover.addEventListener('pointermove', (e) => {
+          if (tipKey !== bodyKey) showBodyTip(bodyName, system, sites);
+          moveMapTip(e);
+        });
+        bodyHover.addEventListener('pointerleave', hideMapTip);
+        map.append(bodyHover);
+      }
+
       // Sites are spread by golden angle rather than in rings. Rings of a fixed
       // size put every twelfth node on the same spoke, which reads as spokes
       // rather than a cluster and stacks the labels on top of each other;
@@ -2871,20 +3075,27 @@ function drawNode(map, x, y, location, radius, anchor = null) {
 
   group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
 
+  // In shaded commodity mode the ring and dot carry the price grade; a lit
+  // place UEX has no price for keeps the plain green ring.
+  const shade = highlighted ? nodeShade.get(location.rawId) : null;
+
   if (highlighted) {
     group.append(svgEl('circle', {
       cx: x, cy: y, r: radius + 5, fill: 'none',
-      stroke: '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
+      stroke: shade?.colour ?? '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
     }));
   }
 
   // Somewhere never visited is drawn as an outline, so the places that carry
-  // history read as solid against the rest of the map.
-  group.append(been
-    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: colour, opacity: '.85' })
+  // history read as solid against the rest of the map. A price shade
+  // overrides the kind colour - in that mode the colour IS the price.
+  const dotColour = shade?.colour ?? colour;
+
+  group.append(been || shade
+    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: dotColour, opacity: '.85' })
     : svgEl('circle', {
         cx: x, cy: y, r: radius, fill: 'none',
-        stroke: colour, 'stroke-width': '1.1', opacity: '.42',
+        stroke: dotColour, 'stroke-width': '1.1', opacity: '.42',
       }));
 
   // A styled tooltip that appears instantly - the native <title> takes a
@@ -3006,9 +3217,35 @@ function placeLabels(map) {
 }
 
 function drawLegend(locations) {
-  const kinds = [...new Set(locations.map((l) => l.kind))].sort();
   const legend = $('#map-legend');
   legend.textContent = '';
+
+  // Shaded commodity mode swaps the kind legend for the price gradient: in
+  // that mode colour means price, so the legend must say so.
+  if (shadeScale) {
+    const item = el('div', 'item');
+
+    for (let i = 0; i <= 4; i++) {
+      const swatch = el('span', 'swatch');
+      swatch.style.background = shadeColour(i / 4);
+      item.append(swatch);
+    }
+
+    const lo = Math.round(shadeScale.invert ? shadeScale.max : shadeScale.min).toLocaleString();
+    const hi = Math.round(shadeScale.invert ? shadeScale.min : shadeScale.max).toLocaleString();
+    item.append(el('span', null, `${shadeScale.label} · ${lo} → ${hi} ${shadeScale.unit}`));
+    legend.append(item);
+
+    const plain = el('div', 'item');
+    const swatch = el('span', 'swatch');
+    swatch.style.background = '#4fd48a';
+    plain.append(swatch);
+    plain.append(el('span', null, 'no UEX price for it here'));
+    legend.append(plain);
+    return;
+  }
+
+  const kinds = [...new Set(locations.map((l) => l.kind))].sort();
 
   for (const kind of kinds) {
     const item = el('div', 'item');

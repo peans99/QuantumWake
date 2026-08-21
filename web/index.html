@@ -147,10 +147,18 @@
         <input type="checkbox" id="map-visited-only">
         <span>Visited only</span>
       </label>
+      <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
+        <input type="checkbox" id="map-goods">
+        <span>Goods on hover</span>
+      </label>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
       </span>
+      <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
+        <option value="price">Shade by price</option>
+        <option value="scu">Shade by capacity</option>
+      </select>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
@@ -173,10 +181,6 @@
         </div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
-        <label class="toggle map-info-sold-row">
-          <input type="checkbox" id="map-info-sold-toggle">
-          <span>Show what's sold here</span>
-        </label>
         <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
     </div>

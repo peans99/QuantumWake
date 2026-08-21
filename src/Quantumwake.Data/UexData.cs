@@ -16,7 +16,10 @@ public sealed record UexPrice(
 }
 
 /// <summary>One commodity's price at one terminal.</summary>
-public sealed record UexMarketRow(int TerminalId, string Terminal, decimal Buy, decimal Sell);
+/// <param name="BuyScu">Stock available to buy, SCU. 0 on caches digested before the field existed.</param>
+/// <param name="SellScu">Demand the terminal accepts when selling to it, SCU. Same caveat.</param>
+public sealed record UexMarketRow(
+    int TerminalId, string Terminal, decimal Buy, decimal Sell, decimal BuyScu = 0, decimal SellScu = 0);
 
 /// <summary>Cheapest in-game purchase of a vehicle.</summary>
 public sealed record UexVehiclePrice(decimal Price, string Terminal);
@@ -175,6 +178,14 @@ public sealed class UexData
 
     /// <summary>The matched UEX terminal name for a place, for the UI to show.</summary>
     public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
+
+    /// <summary>
+    /// Every terminal row for one commodity - the map's price shading reads
+    /// this to grade sellers by price or capacity. Empty when UEX is off or
+    /// the commodity is unknown to it.
+    /// </summary>
+    public IReadOnlyList<UexMarketRow> Market(string commodity) =>
+        _matrix.TryGetValue(commodity, out var rows) ? rows : [];
 
     /// <summary>
     /// Fetches current prices, the terminal list, vehicle purchase prices and
@@ -383,11 +394,13 @@ public sealed class UexData
             var sell = (decimal)(Num(row, "price_sell") ?? 0);
             var buy = (decimal)(Num(row, "price_buy") ?? 0);
             var sellAvg = (decimal)(Num(row, "price_sell_avg") ?? 0);
+            var buyScu = (decimal)(Num(row, "scu_buy") ?? 0);
+            var sellScu = (decimal)(Num(row, "scu_sell_stock") ?? 0);
 
             if (!matrix.TryGetValue(name, out var list))
                 matrix[name] = list = [];
 
-            list.Add(new UexMarketRow(terminalId, terminal, buy, sell));
+            list.Add(new UexMarketRow(terminalId, terminal, buy, sell, buyScu, sellScu));
 
             if (sellAvg > 0)
             {

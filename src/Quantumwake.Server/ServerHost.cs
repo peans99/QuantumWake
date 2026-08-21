@@ -444,6 +444,18 @@ public static class ServerHost
             source = "api.uexcorp.space"
         });
 
+        // Every terminal price for one commodity: the map grades its sellers
+        // and buyers by these, by price or by SCU capacity.
+        app.MapGet("/api/uex/market", (UexData uex, string commodity) =>
+            uex.Market(commodity).Select(r => new
+            {
+                terminal = r.Terminal,
+                buy = r.Buy,
+                sell = r.Sell,
+                buyScu = r.BuyScu,
+                sellScu = r.SellScu
+            }));
+
         app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>
         {
             try

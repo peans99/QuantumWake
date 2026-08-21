@@ -1386,6 +1386,8 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 .map-tip[hidden] { display: none; }
 .map-tip strong { color: var(--cyan-hot, #7fe4ff); font-weight: 600; font-size: 12px; }
+.map-tip .goods { color: var(--muted); margin-top: 3px; }
+.map-tip .price { color: var(--green); }
 
 /* The sold-here block on the detail card: a checkbox, then commodity chips
    that each pivot the map into that commodity's search. */
