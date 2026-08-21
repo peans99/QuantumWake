@@ -655,6 +655,67 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
 .stash-group:first-of-type { border-top: 0; padding-top: 4px; }
 .stash-group-name { color: var(--amber); }
 
+/* Overflow rows stay in the DOM so expanding needs no re-render. */
+.slot-list li.extra { display: none; }
+.slot-list.show-all li.extra { display: flex; }
+
+.more-toggle {
+  margin-top: 9px;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--rule-hot);
+  color: var(--cyan);
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.more-toggle:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
+
+/* ---------- pager ---------- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 13px;
+}
+.pager-info {
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-family: var(--mono);
+}
+.pager-nav { display: flex; align-items: center; gap: 8px; }
+
+.pager-btn {
+  background: var(--deep);
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 13px;
+  cursor: pointer;
+  transition: border-color .14s, color .14s;
+}
+.pager-btn:hover:not(:disabled) { border-color: var(--cyan-deep); color: var(--cyan-hot); }
+.pager-btn:disabled { opacity: .3; cursor: default; }
+
+.pager-page {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  min-width: 62px;
+  text-align: center;
+}
+
 .slot-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .slot-list li {
   display: flex;
