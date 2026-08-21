@@ -984,6 +984,75 @@ function renderSpending(stats) {
 
 /* ---------- loadout ---------- */
 
+/**
+ * Slot glyphs, drawn in the HUD's own line style.
+ *
+ * Not from the Fankit - it carries logos and wallpapers, not equipment icons -
+ * and not lifted from the game files, which the Fankit Agreement does not
+ * cover. Original 24x24 strokes on currentColor, so they follow the theme.
+ */
+const SLOT_ICONS = {
+  helmet: 'M5 17v-4a7 7 0 0 1 14 0v4l-2 2H7z M8.5 13h7',
+  torso: 'M7 4 4 7v7l3 6h10l3-6V7l-3-3z M9 12l3 3 3-3 M12 4v3',
+  arms: 'M5 19v-7a7 7 0 0 1 7-7h7 M9 19v-4a5 5 0 0 1 5-5h5',
+  legs: 'M8 4v7l-2 9 M16 4v7l2 9 M8 4h8 M12 11v9',
+  undersuit: 'M12 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M6 20v-2a6 6 0 0 1 12 0v2',
+  backpack: 'M7 8h10v12H7z M9 8V6a3 3 0 0 1 6 0v2 M9 15h6',
+  rifle: 'M2 11h12l1-3h4v3h3v2h-8l-1 3h-3l1-3H8l-1 3H4l1-3H2z',
+  pistol: 'M4 9h14v4h-4l-1 5h-4l1-5H4z M16 9V7',
+  magazine: 'M9 4h7l-1 8c-.3 2-1.2 4-3.2 4H9z M10 8h5',
+  optic: 'M10 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M10 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M14 12h7',
+  attachment: 'M4 10h12v4H4z M16 11h4v2h-4 M7 10V8h6v2',
+  grenade: 'M9 9h6v7a3 3 0 0 1-3 3 3 3 0 0 1-3-3z M10 9V6h4v3 M14 5a2.5 2.5 0 1 1 5 0',
+  medical: 'M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z',
+  tool: 'M13 6a4 4 0 0 1 6-3l-3 3 2 2 3-3a4 4 0 0 1-5 5L8 18l-2-2z',
+  light: 'M8 3h6v3l-2 3v11h-2V9L8 6z M16 5h3 M16 9h5 M16 13h3',
+  mobiglas: 'M8 8h8v8H8z M4 10v4 M20 10v4 M10 11h4',
+  shirt: 'M8 4 4 7l2 3 2-1v11h8V9l2 1 2-3-4-3a4 4 0 0 1-8 0z',
+  box: 'M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8',
+  diamond: 'M12 3l7 9-7 9-7-9z M12 8l3 4-3 4-3-4z',
+};
+
+/** Slot first, category as the fallback, diamond when nothing matches. */
+function slotIconKey(slot) {
+  const name = `${(slot.port || '')} ${(slot.label || '')}`.toLowerCase();
+
+  const byName = [
+    ['helmet', 'helmet'], ['undersuit', 'undersuit'], ['backpack', 'backpack'],
+    ['core', 'torso'], ['torso', 'torso'], ['chest', 'torso'],
+    ['arms', 'arms'], ['shoulder', 'arms'], ['legs', 'legs'],
+    ['sidearm', 'pistol'], ['pistol', 'pistol'],
+    ['magazine', 'magazine'], ['optic', 'optic'], ['scope', 'optic'],
+    ['barrel', 'attachment'], ['underbarrel', 'attachment'],
+    ['grenade', 'grenade'], ['medpen', 'medical'], ['oxypen', 'medical'],
+    ['multitool', 'tool'], ['tool', 'tool'],
+    ['flashlight', 'light'], ['light', 'light'], ['mobiglas', 'mobiglas'],
+    ['wep', 'rifle'], ['weapon', 'rifle'],
+  ];
+
+  for (const [needle, icon] of byName)
+    if (name.includes(needle)) return icon;
+
+  return {
+    'Weapons': 'rifle',
+    'Weapon attachments': 'attachment',
+    'Throwables': 'grenade',
+    'Armour': 'torso',
+    'Medical': 'medical',
+    'Utility': 'tool',
+    'Carried': 'box',
+    'Appearance': 'shirt',
+  }[slot.category] ?? 'diamond';
+}
+
+function slotIconSvg(slot) {
+  const path = SLOT_ICONS[slotIconKey(slot)] ?? SLOT_ICONS.diamond;
+
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" '
+    + `aria-hidden="true"><path d="${path}"/></svg>`;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -1023,25 +1092,32 @@ function renderLoadout(stats) {
     const grid = el('div', 'card-grid');
 
     for (const slot of slots) {
-      const card = el('article', 'card');
+      const card = el('article', 'card slot-card');
+
+      const icon = el('div', 'slot-icon');
+      icon.innerHTML = slotIconSvg(slot);
+      card.append(icon);
+
+      const body = el('div', 'slot-body');
 
       const label = slot.slotCount > 1
         ? `${slot.label} · ${slot.slotCount} slots`
         : slot.label || slot.port;
 
-      card.append(el('div', 'card-label', label));
+      body.append(el('div', 'card-label', label));
 
       // What is in the family now; the churn goes behind a toggle.
       for (const item of slot.items) {
         const line = el('div', 'slot-current');
         line.append(el('span', null, prettyItem(item.name)));
         if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
-        card.append(line);
+        body.append(line);
       }
 
       if (slot.currentSeen)
-        card.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
+        body.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
 
+      card.append(body);
       grid.append(card);
     }
 
