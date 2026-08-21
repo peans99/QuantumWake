@@ -954,6 +954,11 @@ public sealed class LogLibrary : IDisposable
                 g.Select(x => Community.Ship($"{x.Ship.Manufacturer}_{x.Ship.Model}"))
                     .FirstOrDefault(r => r is not null)
                  ?? Community.Ship(g.Key)))
+
+            // "Unmanned" variants (Cutlass Black Unmanned Salvage and kin) are
+            // mission derelicts the player boarded, not ships they own; they
+            // must not count as fleet anywhere.
+            .Where(s => !s.Name.Contains("Unmanned", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(s => s.Sorties)
             .ThenByDescending(s => s.EstimatedTime)
             .ToList();

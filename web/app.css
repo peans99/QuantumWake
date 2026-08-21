@@ -224,6 +224,12 @@ body.overlay .tabs {
 }
 body.overlay .tabs::-webkit-scrollbar { display: none; }
 
+/* The overlay wants the flat strip back: dissolve the dashboard's dropdown
+   groups so the whitelisted tabs line up as siblings again. */
+body.overlay .tab-group,
+body.overlay .group-menu { display: contents; }
+body.overlay .group-btn { display: none; }
+
 /* The widget is ~330px wide and the full strip is fifteen tabs; at that size
    most of them scrolled out of reach and the strip only worked fullscreen.
    The overlay keeps the glanceable views - the ones worth having over the
@@ -326,19 +332,41 @@ body.overlay .feed .d { display: none; }
   border-left: 1px solid var(--rule-hot);
 }
 
-/* Sixteen tabs outgrow a 1600px window; the strip scrolls itself rather than
-   widening the document, which would put a horizontal scrollbar on every page
-   and let tab-centring drag the whole page sideways. */
+/* Grouped since sixteen flat tabs got crowded: seven top-level items, three
+   of them dropdowns. No overflow scrolling here - a scrollable strip would
+   clip the dropdowns; the overlay keeps its own scrolling flat strip. */
 .tabs {
   display: flex;
   gap: 4px;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.tabs::-webkit-scrollbar { display: none; }
-.tabs button { flex-shrink: 0; }
+
+.tab-group { position: relative; }
+
+.group-btn .caret {
+  font-size: 8px;
+  margin-left: 5px;
+  color: var(--dim);
+}
+
+.group-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 148px;
+  display: none;
+  flex-direction: column;
+  background: rgba(7, 14, 23, .97);
+  border: 1px solid var(--rule-hot);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+  z-index: 40;
+}
+
+.tab-group:hover .group-menu,
+.tab-group:focus-within .group-menu { display: flex; }
+
+.group-menu button { text-align: left; }
 
 .tabs button {
   position: relative;
@@ -1358,6 +1386,35 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 .map-tip[hidden] { display: none; }
 .map-tip strong { color: var(--cyan-hot, #7fe4ff); font-weight: 600; font-size: 12px; }
+
+/* The sold-here block on the detail card: a checkbox, then commodity chips
+   that each pivot the map into that commodity's search. */
+.map-info-sold-row { margin-top: 9px; font-size: 11px; }
+
+.map-info-sold {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.map-info-sold[hidden] { display: none; }
+
+.sold-chip {
+  background: rgba(53, 200, 240, .07);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.sold-chip:hover { border-color: var(--cyan); color: var(--cyan-hot, #7fe4ff); }
+
+/* Market's two map links sit in one cell without wrapping oddly. */
+td.map-links { white-space: nowrap; }
+td.map-links .ghost + .ghost { margin-left: 5px; }
 
 /* ---------- assets: fleet exclusions ---------- */
 

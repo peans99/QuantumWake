@@ -19,21 +19,39 @@
     <span class="by">by nekron</span>
   </div>
 
+  <!-- Sixteen flat tabs got crowded; the strip is grouped instead. The
+       overlay flattens the groups back out with display:contents and keeps
+       its own six-tab whitelist. -->
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
-    <button data-view="sessions">Sessions</button>
-    <button data-view="fleet">Fleet</button>
-    <button data-view="places">Places</button>
-    <button data-view="contracts">Contracts</button>
-    <button data-view="spending">Spending</button>
-    <button data-view="ledger">Ledger</button>
-    <button data-view="commodities">Cargo</button>
-    <button data-view="market">Market</button>
-    <button data-view="loot">Loot</button>
-    <button data-view="assets">Assets</button>
-    <button data-view="loadout">Loadout</button>
-    <button data-view="stash">Stash</button>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="sessions">Sessions</button>
+        <button data-view="fleet">Fleet</button>
+        <button data-view="places">Places</button>
+        <button data-view="contracts">Contracts</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Economy<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="spending">Spending</button>
+        <button data-view="ledger">Ledger</button>
+        <button data-view="commodities">Cargo</button>
+        <button data-view="market">Market</button>
+        <button data-view="assets">Assets</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Gear<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="loadout">Loadout</button>
+        <button data-view="stash">Stash</button>
+        <button data-view="loot">Loot</button>
+      </div>
+    </div>
     <button data-view="settings">Settings</button>
     <button data-view="about">About</button>
   </nav>
@@ -155,6 +173,11 @@
         </div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
+        <label class="toggle map-info-sold-row">
+          <input type="checkbox" id="map-info-sold-toggle">
+          <span>Show what's sold here</span>
+        </label>
+        <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
     </div>
     <div class="legend" id="map-legend"></div>

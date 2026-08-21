@@ -131,6 +131,13 @@ function showView(name) {
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
 
+  // A group lights up when the active view lives inside it, so the strip
+  // still shows where you are even with the menu closed.
+  $$('#tabs .tab-group').forEach((g) => {
+    g.querySelector('.group-btn')?.classList
+      .toggle('active', Boolean(g.querySelector('button.active[data-view]')));
+  });
+
   // Switching view shows the top of it.
   //
   // The map's SVG is id="starmap" rather than the obvious id="map" for the same
@@ -162,16 +169,24 @@ window.addEventListener('hashchange', () => {
 
 $('#tabs').addEventListener('click', (event) => {
   const button = event.target.closest('button');
-  if (button) showView(button.dataset.view);
+  if (!button || !button.dataset.view) return;
+
+  showView(button.dataset.view);
+
+  // Dropping focus lets a group menu close once a view is picked; otherwise
+  // :focus-within pins it open over the page.
+  button.blur();
 });
 
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
    unlocking click-through. Also bound to the arrow keys for browser use. */
 window.scCycleView = (delta) => {
-  // Only the tabs actually on show: the overlay hides most of the strip, and
-  // cycling into an invisible view would strand the widget somewhere its own
-  // tab bar cannot reach.
-  const buttons = $$('#tabs button').filter((b) => b.offsetParent !== null);
+  // In the overlay, only the tabs actually on show: it hides most of the
+  // strip, and cycling into an invisible view would strand the widget
+  // somewhere its own tab bar cannot reach. The dashboard cycles everything -
+  // its group menus hide buttons without retiring the views behind them.
+  const buttons = $$('#tabs button').filter((b) => b.dataset.view
+    && (isOverlay ? b.offsetParent !== null : true));
   if (!buttons.length) return;
 
   const current = buttons.findIndex((b) => b.classList.contains('active'));
@@ -790,16 +805,26 @@ function renderMarket() {
       tr.append(cell);
     }
 
-    const actions = el('td', 'num');
-    if (entry.sold.length) {
-      const show = el('button', 'ghost', 'show on map');
+    // Two map links, because "where is it" has two answers: where you can
+    // sell what you hold, and where the shops stock it for buying.
+    const actions = el('td', 'num map-links');
+
+    const link = (label, query, title) => {
+      const show = el('button', 'ghost', label);
+      show.title = title;
       show.addEventListener('click', () => {
-        $('#map-search').value = entry.name;
+        $('#map-search').value = query;
         showView('map');
         drawMap();
       });
       actions.append(show);
-    }
+    };
+
+    if (entry.sold.length)
+      link('sell on map', entry.name, 'Light every place that buys this from you');
+    if (entry.bought.length)
+      link('buy on map', `buy:${entry.name}`, 'Light every place that stocks this for sale');
+
     tr.append(actions);
 
     body.append(tr);
@@ -840,12 +865,20 @@ function facilityTokens(keys) {
  * If the map search term names a commodity, the nodes to light are the ones
  * whose name matches a facility token for that commodity. Null when the term
  * is not a commodity, in which case the search means places, as it always did.
+ *
+ * A "buy:" prefix flips the question - where the commodity is stocked for
+ * buying, rather than where it can be sold. The Market page's two map links
+ * write both forms into the search box, so they survive as shareable ?q= urls.
  */
 function commoditySites(term) {
-  const entry = marketEntries.find((e) => e.name.toLowerCase() === term);
-  if (!entry || !entry.sold.length) return null;
+  const buying = term.startsWith('buy:');
+  const name = (buying ? term.slice(4) : term).trim();
 
-  return facilityTokens(entry.sold);
+  const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
+  if (!entry) return null;
+
+  const keys = buying ? entry.bought : entry.sold;
+  return keys.length ? facilityTokens(keys) : null;
 }
 
 /* ---------- loot ---------- */
@@ -958,6 +991,10 @@ function renderAssets() {
         localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
       } catch { /* fine */ }
       renderAssets();
+
+      // Not owned means not in the fleet either - the tick is one truth
+      // shared by both pages.
+      if (libraryStats) renderFleet(libraryStats);
     });
 
     tick.append(box);
@@ -1338,11 +1375,16 @@ let libraryStats = null;
 function renderFleet(stats) {
   libraryStats = stats;
 
+  // Ships unticked on the Assets page are not owned - a rental, or since
+  // sold - and the user asked for them discarded, so the whole page ignores
+  // them. Flight time and sorties still count: those happened.
+  const owned = stats.ships.filter((s) => !excludedShips.has(s.name));
+
   tiles('#fleet-summary', [
     ['Ships owned', stats.fleetSize ?? '—'],
-    ['Models flown', stats.ships.length],
-    ['Total flights', stats.ships.reduce((sum, s) => sum + s.sorties, 0)],
-    ['Time aboard', `~${duration(stats.ships.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
+    ['Models flown', owned.length],
+    ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
+    ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
   ]);
 
   drawFleetChart(stats.fleetHistory || []);
@@ -1361,6 +1403,7 @@ function renderFleetShips() {
   const cutoff = days ? Date.now() - days * 86400000 : null;
 
   const ships = libraryStats.ships.filter((s) => {
+    if (excludedShips.has(s.name)) return false;
     if (term && !s.name.toLowerCase().includes(term)) return false;
     if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
     return true;
@@ -2324,6 +2367,15 @@ function initMap() {
   map.addEventListener('click', () => $('#map-info').hidden = true);
   $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
 
+  // The sold-here checkbox on the detail card, remembered per browser.
+  const soldToggle = $('#map-info-sold-toggle');
+  try { soldToggle.checked = localStorage.getItem('qw-map-sold') === '1'; } catch { /* fine */ }
+
+  soldToggle.addEventListener('change', () => {
+    try { localStorage.setItem('qw-map-sold', soldToggle.checked ? '1' : '0'); } catch { /* fine */ }
+    renderMapInfoSold();
+  });
+
   // Keyboard zoom for anyone without a wheel: +/- around the view centre.
   document.addEventListener('keydown', (e) => {
     if (!$('#view-map').classList.contains('active')) return;
@@ -2425,8 +2477,66 @@ function hideMapTip() {
   if (tip) tip.hidden = true;
 }
 
+/**
+ * Every commodity the catalogue says this place sells, via the same facility
+ * tokens the map search uses - so the card and the search never disagree.
+ * Token sets are cached per entry; the catalogue does not change under us.
+ */
+function commoditiesSoldAt(location) {
+  const compact = `${location.name} ${location.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  return marketEntries
+    .filter((e) => {
+      if (!e.sold.length) return false;
+      e.soldTokens ??= facilityTokens(e.sold);
+      return [...e.soldTokens].some((token) => compact.includes(token));
+    })
+    .map((e) => e.name)
+    .sort();
+}
+
+/** The place the detail card currently shows, for re-rendering on toggle. */
+let mapInfoLocation = null;
+
+/** Fills the card's sold-here list, honouring the checkbox. */
+function renderMapInfoSold() {
+  const list = $('#map-info-sold');
+  const wanted = $('#map-info-sold-toggle').checked;
+
+  if (!wanted || !mapInfoLocation) {
+    list.hidden = true;
+    return;
+  }
+
+  list.textContent = '';
+
+  if (!marketEntries.length) {
+    list.append(el('span', 'muted', 'Needs the community dataset (Settings).'));
+  } else {
+    const names = commoditiesSoldAt(mapInfoLocation);
+
+    if (!names.length) {
+      list.append(el('span', 'muted', 'Nothing known to sell here.'));
+    } else {
+      for (const name of names) {
+        const chip = el('button', 'sold-chip', name);
+        chip.type = 'button';
+        chip.title = 'Light every place that sells this';
+        chip.addEventListener('click', () => {
+          $('#map-search').value = name;
+          drawMap();
+        });
+        list.append(chip);
+      }
+    }
+  }
+
+  list.hidden = false;
+}
+
 /** The card that opens when a node is clicked. */
 function showMapInfo(location) {
+  mapInfoLocation = location;
   const info = $('#map-info');
 
   $('#map-info-name').textContent = location.name;
@@ -2453,6 +2563,8 @@ function showMapInfo(location) {
     trade.hidden = true;
   }
 
+  renderMapInfoSold();
+
   info.hidden = false;
 }
 
@@ -2461,6 +2573,8 @@ function drawMap() {
   map.textContent = '';
   nodeAt.clear();
   hideMapTip();
+  pendingLabels.length = 0;
+  claimedBoxes.length = 0;
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
@@ -2499,7 +2613,11 @@ function drawMap() {
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
     if (term && !highlightIds) count.textContent = 'no match';
-    else if (sites) count.textContent = `sells at ${highlightIds.size} places the map can name`;
+    else if (sites) {
+      count.textContent = term.startsWith('buy:')
+        ? `stocked at ${highlightIds.size} places the map can name`
+        : `sells at ${highlightIds.size} places the map can name`;
+    }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
@@ -2669,14 +2787,24 @@ function drawMap() {
       const reach = clusterRadius(sites.length);
 
       // Body names sit outside the cluster they head, so the sites below have
-      // clear air to put their own labels in.
+      // clear air to put their own labels in. They are placed first and claim
+      // their box, so site labels flow around them.
+      const bodyLabelX = bx + Math.cos(angle) * (reach + 16);
+      const bodyLabelY = by + Math.sin(angle) * (reach + 16);
+      const bodyLabelSize = labelSize(1.15);
+
       const bodyLabel = svgEl('text', {
-        x: bx + Math.cos(angle) * (reach + 16), y: by + Math.sin(angle) * (reach + 16),
+        x: bodyLabelX, y: bodyLabelY,
         'text-anchor': 'middle', class: 'map-label',
-        style: `fill:#7796b0;font-size:${labelSize(1.15)}px;letter-spacing:.14em;text-transform:uppercase`,
+        style: `fill:#7796b0;font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
       });
       bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
       map.append(bodyLabel);
+
+      if (bodyLabel.textContent) {
+        claimedBoxes.push(labelBox(
+          bodyLabelX, bodyLabelY - bodyLabelSize * 0.4, 'middle', bodyLabelSize * 1.25, bodyLabel.textContent));
+      }
 
       // Sites are spread by golden angle rather than in rings. Rings of a fixed
       // size put every twelfth node on the same spoke, which reads as spokes
@@ -2713,6 +2841,7 @@ function drawMap() {
     if (wasHome) view.h = HOME_VIEW.h;
   }
 
+  placeLabels(map);
   drawLegend(locations);
   applyView();
   drawHere();
@@ -2736,6 +2865,9 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   const group = svgEl('g', { class: cls });
 
   nodeAt.set(location.rawId, { x, y });
+
+  // The dot itself claims its square so no neighbour's label sits on it.
+  claimedBoxes.push({ x0: x - radius - 1, y0: y - radius - 1, x1: x + radius + 1, y1: y + radius + 1 });
 
   group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
 
@@ -2776,32 +2908,101 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   const nameable = highlighted && (highlightIds.size <= 40 || isDetailed());
 
   if ((been && radius > 7) || isDetailed() || nameable) {
-    const size = labelSize();
-    const label = svgEl('text', { class: 'map-label', style: `font-size:${size}px` });
-
-    // Radially outwards from the body when there is one, so a dense cluster
-    // spreads its names like spokes rather than piling them all underneath.
-    const dx = anchor ? x - anchor.x : 0;
-    const dy = anchor ? y - anchor.y : 0;
-    const length = Math.hypot(dx, dy);
-
-    if (length > 0.5) {
-      const gap = radius + size * 0.5 + 2;
-      label.setAttribute('x', x + (dx / length) * gap);
-      label.setAttribute('y', y + (dy / length) * gap);
-      label.setAttribute('text-anchor', dx >= 0 ? 'start' : 'end');
-      label.setAttribute('dominant-baseline', 'middle');
-    } else {
-      label.setAttribute('x', x);
-      label.setAttribute('y', y + radius + size + 1);
-      label.setAttribute('text-anchor', 'middle');
-    }
-
-    label.textContent = location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name;
-    group.append(label);
+    // Not drawn here: every wanted label goes through placeLabels at the end
+    // of the draw, which resolves collisions instead of stacking neighbours.
+    pendingLabels.push({
+      group,
+      x,
+      y,
+      radius,
+      anchor,
+      text: location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name,
+      priority: (highlighted ? 1_000_000 : 0) + location.visits,
+    });
   }
 
   map.append(group);
+}
+
+/* ---------- label placement ---------- */
+
+/**
+ * Labels wanted by this draw, and rectangles already spoken for (body names,
+ * placed labels, the nodes themselves). Both reset per draw.
+ */
+const pendingLabels = [];
+const claimedBoxes = [];
+
+/** Approximate bounding box of a text laid out at x,y with the given anchor. */
+function labelBox(x, y, anchorMode, size, text) {
+  const width = text.length * size * 0.62;
+  const height = size * 1.3;
+  const x0 = anchorMode === 'start' ? x : anchorMode === 'end' ? x - width : x - width / 2;
+  return { x0, y0: y - height / 2, x1: x0 + width, y1: y + height / 2 };
+}
+
+function boxesCollide(a, b) {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+
+/**
+ * Greedy label placement with collision avoidance. Names used to be placed
+ * blind - radially out from the planet - which stacked neighbours on top of
+ * each other the moment two sites shared a bearing. Now every label tries a
+ * handful of positions around its dot, most-visited first, and a label that
+ * fits nowhere is dropped: an unreadable pile names nothing, while a bare dot
+ * still answers on hover and click.
+ */
+function placeLabels(map) {
+  const size = labelSize();
+
+  pendingLabels.sort((a, b) => b.priority - a.priority);
+
+  for (const want of pendingLabels) {
+    const { x, y, radius, anchor } = want;
+
+    const dx = anchor ? x - anchor.x : 0;
+    const dy = anchor ? y - anchor.y : 0;
+    const length = Math.hypot(dx, dy);
+    const gap = radius + size * 0.5 + 2;
+
+    const candidates = [];
+
+    // The radial spot first - it is the one that fans a cluster outwards.
+    if (length > 0.5) {
+      candidates.push({
+        x: x + (dx / length) * gap,
+        y: y + (dy / length) * gap,
+        anchorMode: dx >= 0 ? 'start' : 'end',
+      });
+    }
+
+    candidates.push(
+      { x: x + radius + 3, y, anchorMode: 'start' },
+      { x: x - radius - 3, y, anchorMode: 'end' },
+      { x, y: y + radius + size * 0.85, anchorMode: 'middle' },
+      { x, y: y - radius - size * 0.85, anchorMode: 'middle' },
+    );
+
+    for (const spot of candidates) {
+      const box = labelBox(spot.x, spot.y, spot.anchorMode, size, want.text);
+      if (claimedBoxes.some((other) => boxesCollide(box, other))) continue;
+
+      const label = svgEl('text', {
+        x: spot.x,
+        y: spot.y,
+        'text-anchor': spot.anchorMode,
+        'dominant-baseline': 'middle',
+        class: 'map-label',
+        style: `font-size:${size}px`,
+      });
+      label.textContent = want.text;
+      want.group.append(label);
+
+      claimedBoxes.push(box);
+      break;
+    }
+  }
 }
 
 function drawLegend(locations) {
