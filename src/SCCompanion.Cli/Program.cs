@@ -97,6 +97,9 @@ internal sealed class Report
     private int _sessionHeaders;
     private int _incapacitations;
     private int _unmatchedKnownTags;
+    private int _corpseDeaths;
+    private int _shipRetrievals;
+    private DateTimeOffset? _lastCorpseAt;
 
     public void BeginFile(string fileName) => _currentFile = fileName;
 
@@ -147,6 +150,18 @@ internal sealed class Report
                 break;
 
             // Deduplicate on the notification id: each fires 3-5 times.
+            // Corpse item lines arrive in a burst per death, so group by time.
+            case CorpseItemEvent corpse:
+                if (_lastCorpseAt is not { } last || corpse.Timestamp - last >= TimeSpan.FromSeconds(30))
+                    _corpseDeaths++;
+
+                _lastCorpseAt = corpse.Timestamp;
+                break;
+
+            case VehicleSpawnEvent:
+                _shipRetrievals++;
+                break;
+
             case NotificationEvent notification:
                 if (!_notificationIds.Add($"{_currentFile}|{notification.NotificationId}|{notification.Text}"))
                     break;
@@ -196,13 +211,15 @@ internal sealed class Report
         var deaths = _eventKinds.GetValueOrDefault("combat.death");
         var destructions = _eventKinds.GetValueOrDefault("combat.vehicle");
 
+        Console.WriteLine($"  deaths            : {_corpseDeaths}   (from corpse item-recovery bursts)");
+        Console.WriteLine($"  ship retrievals   : {_shipRetrievals}");
         Console.WriteLine($"  actor deaths      : {deaths}");
         Console.WriteLine($"  vehicle destroyed : {destructions}");
 
         if (deaths == 0 && destructions == 0)
         {
-            Console.WriteLine("  -> none found, which is expected on SC 4.9: the game no longer");
-            Console.WriteLine("     writes these events. See docs/findings.md.");
+            Console.WriteLine("  -> no <Actor Death> or <Vehicle Destruction>, as expected on SC 4.9.");
+            Console.WriteLine("     Deaths above come from corpse bursts, which the game still emits.");
         }
 
         Section("Parser health");

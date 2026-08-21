@@ -27,6 +27,9 @@ public sealed partial class LogEventParser
     private string? _pendingBuildTag;
     private DateTimeOffset? _pendingSessionStart;
 
+    /// <summary>Entity ids already named, so repeat sightings are ignored.</summary>
+    private readonly HashSet<string> _identifiedVehicles = [];
+
     /// <summary>
     /// The local player's handle, learned from the login line. Used to tell a
     /// kill from a death when combat events are present.
@@ -80,7 +83,7 @@ public sealed partial class LogEventParser
         if (line.IsSpam && !includeSpam)
             return null;
 
-        var ev = Dispatch(line);
+        var ev = Dispatch(line) ?? IdentifyVehicle(line);
         if (ev is not null)
             MatchCounts[ev.Kind] = MatchCounts.GetValueOrDefault(ev.Kind) + 1;
 
@@ -92,6 +95,17 @@ public sealed partial class LogEventParser
         // Untagged header and loading lines.
         if (line.Tag is null)
             return ParseUntagged(line);
+
+        // The corpse tag embeds the calling method, so it is matched by substring
+        // rather than by an exact name.
+        if (line.Tag.Contains("CSCActorCorpseUtils", StringComparison.Ordinal))
+        {
+            return TryMatch(CorpseItemRegex, line, m =>
+                new CorpseItemEvent(
+                    line.Timestamp,
+                    m.Groups["class"].Value,
+                    m.Groups["port"].Value));
+        }
 
         return line.Tag switch
         {
@@ -219,6 +233,13 @@ public sealed partial class LogEventParser
                     m.Groups["mission"].Value,
                     m.Groups["objective"].Value,
                     ParseObjectiveState(m.Groups["state"].Value))),
+
+            "CEntityComponentShipListProvider::SetVehicleSpawnedInformations" =>
+                Match(VehicleSpawnRegex, line, m =>
+                    new VehicleSpawnEvent(
+                        line.Timestamp,
+                        m.Groups["entity"].Value,
+                        m.Groups["area"].Success ? m.Groups["area"].Value.Trim() : null)),
 
             "AttachmentReceived" => Match(AttachmentRegex, line, m =>
                 new AttachmentEvent(
@@ -484,6 +505,43 @@ public sealed partial class LogEventParser
     private static partial Regex TrailingIdRegex { get; }
 
     /// <summary>
+    /// Harvests a vehicle id-to-name pairing from a line whose main purpose is
+    /// something else entirely.
+    /// </summary>
+    /// <remarks>
+    /// Ship names show up embedded in navigation chatter as
+    /// <c>DRAK_Corsair_771478242932[771478242932]</c>. Since no event names a
+    /// ship at the moment it is retrieved, these incidental sightings are the
+    /// only way to identify one before the player disembarks.
+    /// Gated on a cheap substring test so the backfill does not pay for a regex
+    /// on every one of several million lines.
+    /// </remarks>
+    private GameEvent? IdentifyVehicle(LogLine line)
+    {
+        var body = line.Body;
+
+        if (body.IndexOf("ItemNavigation", StringComparison.Ordinal) < 0
+            && body.IndexOf("control token", StringComparison.Ordinal) < 0)
+        {
+            return null;
+        }
+
+        var m = VehicleNameRegex.Match(body);
+        if (!m.Success)
+            return null;
+
+        var vehicleId = m.Groups["vehicle"].Value;
+        var entityId = m.Groups["entity"].Value;
+
+        // Only report a pairing once; these lines repeat constantly.
+        if (!_identifiedVehicles.Add(entityId))
+            return null;
+
+        var (manufacturer, model) = SplitVehicleId(vehicleId);
+        return new VehicleIdentifiedEvent(line.Timestamp, entityId, vehicleId, model, manufacturer);
+    }
+
+    /// <summary>
     /// Like <see cref="Match"/>, but a non-match is expected rather than a defect.
     /// Used for tags that cover several line shapes where only one is an event.
     /// </summary>
@@ -559,6 +617,23 @@ public sealed partial class LogEventParser
         @"Entity Class\[(?<item>[^\]]+)\].*?SourceInventory\[\d+:(?<scope>\w+):(?<key>\d+)\]",
         RegexOptions.Compiled)]
     private static partial Regex InventoryItemRegex { get; }
+
+    [GeneratedRegex(
+        @"Class\((?<class>[^)]+)\).*?Port Name '(?<port>[^']*)'",
+        RegexOptions.Compiled)]
+    private static partial Regex CorpseItemRegex { get; }
+
+    [GeneratedRegex(
+        @"VehicleEntityId:\s*\[(?<entity>\d+)\](?:.*?LandingArea:\s*(?<area>.+?)\s*(?:\[Team|$))?",
+        RegexOptions.Compiled)]
+    private static partial Regex VehicleSpawnRegex { get; }
+
+    // The backreference is what keeps this specific: the trailing bracketed id
+    // must repeat the id embedded in the name.
+    [GeneratedRegex(
+        @"(?<vehicle>[A-Za-z][A-Za-z0-9_]*_(?<entity>\d{6,}))\[\k<entity>\]",
+        RegexOptions.Compiled)]
+    private static partial Regex VehicleNameRegex { get; }
 
     // ---- Dormant combat patterns (archived format; not emitted by SC 4.9) ----
 
