@@ -18,8 +18,13 @@ it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
 of the whole 'verse with your own trail across it.
 
 It is read-only and never touches the game. It connects to the internet only
-when you ask it to - the optional community dataset, fetched from the Settings
-page - and never on its own.
+when you ask it to - the optional integrations on the Settings page - and never
+on its own.
+
+> **Pre-1.0.** Until version 1.0 this product will keep changing significantly:
+> pages appear and move, data formats shift, and an update may re-read your logs
+> or ask you to re-enable an integration. Nothing you care about is at risk -
+> everything is rebuilt from the logs - but expect the ground to move.
 
 **[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)
 and double-click it.** That is the whole installation — one file, no runtime to
@@ -55,16 +60,26 @@ events, not a radar.*
 | View | Contents |
 |---|---|
 | **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
-| **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan and a live marker |
+| **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells |
 | **Sessions** | Every session you have played, in-game time separated from menu time |
-| **Fleet** | Ships owned over time, flights per ship, estimated time aboard |
+| **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on |
 | **Places** | Most-visited locations and quantum destinations |
 | **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
 | **Spending** | Confirmed purchases by shop, item and category |
 | **Ledger** | Every transaction, back-tracked to the place it happened |
-| **Cargo** | Commodity trades, the only income the logs record |
-| **Loadout** | The kit you are wearing, by slot |
+| **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
+| **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on |
+| **Loot** | When each item first appeared in your inventories, with the place |
+| **Loadout** | The kit you are wearing, by slot, with size, grade and maker |
 | **Stash** | What is in your inventory and where you left it |
+| **Settings** | The overlay switch, the community dataset, UEX, the log cache |
+
+Every table sorts by its headers. Optional, off-by-default integrations add
+what the logs alone cannot: the **community dataset**
+(StarCitizenWiki/scunpacked-data) names your cargo and supplies the ship and
+item reference, and **UEX** brings live crowd-sourced prices in — and, with
+your own UEX keys, lets you report the sale prices your logs already recorded
+back to the community.
 
 <table>
   <tr>
