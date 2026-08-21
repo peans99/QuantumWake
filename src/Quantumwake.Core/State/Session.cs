@@ -103,13 +103,19 @@ public sealed record PurchaseRecord(
 /// No server response accompanies these, so they are requests rather than
 /// confirmed settlements.
 /// </remarks>
+/// <param name="ResourceId">
+/// The game's resource id for the commodity, lower-cased. Defaults to null so
+/// sessions cached before it existed still deserialize; those trades stay
+/// unnamed until a rescan.
+/// </param>
 public sealed record CommodityTrade(
     DateTimeOffset At,
     string Shop,
     decimal Amount,
     int Quantity,
     bool IsSell,
-    string? Mode);
+    string? Mode,
+    string? ResourceId = null);
 
 /// <summary>
 /// One item seen in a character slot.

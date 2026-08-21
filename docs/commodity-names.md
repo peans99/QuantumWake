@@ -1,6 +1,11 @@
 # Can we name what was sold?
 
-Short answer: no, and not for want of looking. The blocker is real and specific.
+Short answer: **not from the local install** — the blocker below is real and was
+verified three ways, then four more. But the community publishes the missing
+table, and the app now names cargo through it as an opt-in: see
+[commodity-catalogue.md](commodity-catalogue.md). The rest of this page is the
+evidence for why the offline route fails, kept because it took real work to
+establish and the next patch will tempt someone to re-litigate it.
 
 ## What the log gives
 

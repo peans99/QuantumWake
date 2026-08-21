@@ -77,8 +77,31 @@ public sealed class SessionStore : IDisposable
         return Path.Combine(directory, $"sessions-{hash}.db");
     }
 
+    /// <summary>
+    /// Bump when the parser starts capturing something the cached payloads lack.
+    /// A mismatch clears the cache, so the next scan re-reads every log and the
+    /// new field populates without anyone knowing to run -Rescan.
+    ///
+    /// 2: CommodityTrade.ResourceId.
+    /// </summary>
+    private const int SchemaVersion = 2;
+
     private void Initialise()
     {
+        using (var version = _connection.CreateCommand())
+        {
+            version.CommandText = "PRAGMA user_version";
+            var current = Convert.ToInt32(version.ExecuteScalar());
+
+            if (current != SchemaVersion)
+            {
+                using var reset = _connection.CreateCommand();
+                reset.CommandText =
+                    $"DROP TABLE IF EXISTS sessions; PRAGMA user_version = {SchemaVersion}";
+                reset.ExecuteNonQuery();
+            }
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText =
             """

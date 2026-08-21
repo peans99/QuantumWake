@@ -77,28 +77,49 @@ the archive.
 |---|---|
 | A catalogue of every commodity, by category | **Yes.** 135 records, names and all, from the user's own install |
 | Which brand a kiosk belongs to | **Yes**, and already done |
-| What a given kiosk buys or sells | **No.** Not in the DataCore |
-| Naming a commodity in our own sale log | **No.** The id does not resolve against anything here |
+| What a given kiosk buys or sells | **No** — not in the DataCore. Community data has it; see below |
+| Naming a commodity in our own sale log | **Not offline** — solved via the opt-in community dataset; see below |
 
 The last two most likely live in `Data\ShopInventories\*.json`, which ships
 encrypted. Reading what CIG leaves open is one thing; circumventing a protection
 measure they deliberately applied is another, and it would break on any key
 change besides. Still not planned.
 
-That leaves exactly two honest options for "where can I sell this":
+## The break: the community already resolved the join
 
-1. **An opt-in network lookup** (UEX or similar), off by default, clearly
-   labelled, and never contacted unless the user turns it on. It would also give
-   live prices, which is the part players actually want.
-2. **Nothing**, and the Cargo view keeps reporting what is provably known.
+Checked the same day, at nekron's prompting: **StarCitizenWiki/scunpacked-data**
+carries `resources/commodities.json` — 243 KB, regenerated after each game
+patch — and it resolves **every resourceGUID this install has ever logged**.
+All of them, tested, not sampled: the sales were DynaFlex, Waste, Tin, Stims,
+Medical Supplies, Iron, Copper, Aluminum, Nitrogen, Hydrogen, Hephaestanite and
+a Year of the Rat Envelope.
 
-## If the catalogue is wanted
+Seven further byte-order permutations were tried against the DataCore first
+(CryEngine's CigGuid has its own layout) — all misses, so the id genuinely is
+not recoverable from the local install. The community file is the only source.
 
-Parsing 135 records out of a 315 MB file needs the DataForge structure walked
-properly — the string tables are readable without it, but the category and the
-display name of a record are not reliably recoverable from loose strings. That
-is a real piece of work: header, struct and property definitions, then records.
-The header is understood (above), which is the part that usually stops people.
+**Shipped as an opt-in.** The repository carries no licence and the data is
+CIG-derived, so it is not vendored into this repository or the binary — that
+decision is not ours to make. Instead the Cargo page offers a button that
+fetches the one file into local app data, with the source named and the promise
+stated: it is the only network request the application can make, and it never
+happens without the click. `CommunityData` in the Data project holds the
+mechanics; the README's network claims carry the exception.
 
-Worth doing only if the catalogue is worth having on its own, because it will not
-lead to the shop mapping. It does not exist in this file.
+## Still open: what sells where, on the map
+
+The same repository has `resources/commodity_trade_locations.json` (27.9 MB):
+per commodity, the facilities that buy and sell it, with class names like
+`DC_Stan_Hurston_S1_Farnesway_CargoShop` that our resolver's grammar can meet.
+That is the map-enrichment half of nekron's ask — "sell Waste here" markers —
+and it is a second, larger piece of work: download opt-in alongside the first
+file, parse, and join facility class names onto atlas nodes. Parked until the
+naming slice has settled.
+
+## If the offline catalogue is still wanted
+
+Parsing 135 records out of the DataCore needs the DataForge structure walked
+properly. The header is understood (above), which is the part that usually
+stops people. But with the community file resolving ids for anyone who opts in,
+the offline catalogue would only serve those who decline — worth doing someday
+for completeness, not first.

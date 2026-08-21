@@ -589,7 +589,45 @@ function renderLedgerPager(pages, start, shown) {
 async function loadCommodities() {
   const days = Number($('#commodities-period').value) || 0;
   renderCommodities(await getJson(`/api/commodities?days=${days}`));
+  refreshCommunityOffer().catch(() => {});
 }
+
+/**
+ * The opt-in that names the cargo. The offer is shown only while the dataset is
+ * absent; enabling it is a deliberate click, and the app's one network request.
+ */
+async function refreshCommunityOffer() {
+  const community = await getJson('/api/community');
+
+  $('#community-offer').hidden = community.enabled;
+
+  if (community.enabled) {
+    $('#cargo-caption').textContent =
+      'Volume, price and place come straight from the kiosk. Commodity names '
+      + `come from the community dataset (${community.commodities} commodities, `
+      + 'StarCitizenWiki / scunpacked-data), fetched once at your request.';
+  }
+}
+
+$('#community-enable').addEventListener('click', async () => {
+  const status = $('#community-status');
+  const button = $('#community-enable');
+
+  button.disabled = true;
+  status.textContent = 'downloading…';
+
+  try {
+    const result = await fetch('/api/community/enable', { method: 'POST' });
+    if (!result.ok) throw new Error((await result.json()).title || result.statusText);
+
+    status.textContent = '';
+    await loadCommodities();
+    await loadHistory();  // the ledger names its cargo rows too
+  } catch (e) {
+    status.textContent = `failed: ${e.message}`;
+    button.disabled = false;
+  }
+});
 
 function renderCommodities(trades) {
   const sells = trades.filter((t) => t.isSell);
@@ -629,7 +667,7 @@ function renderCommodities(trades) {
   if (!trades.length) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No cargo trades in that range.');
-    td.colSpan = 6;
+    td.colSpan = 7;
     tr.append(td);
     body.append(tr);
     return;
@@ -639,6 +677,7 @@ function renderCommodities(trades) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
     tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', trade.commodity ? null : 'muted', trade.commodity ?? '—'));
     tr.append(el('td', null, trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));

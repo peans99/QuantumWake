@@ -253,11 +253,23 @@
       </div>
     </div>
     <div class="summary-strip" id="cargo-summary"></div>
-    <p class="muted caption">
+    <p class="muted caption" id="cargo-caption">
       Volume, price and place come straight from the kiosk. What was in the boxes
-      does not: the log names the commodity only by an internal id, and that
-      mapping lives in the game's DataCore rather than in any log.
+      does not: the log names the commodity only by an internal id that nothing
+      in the local install can resolve.
     </p>
+
+    <div class="community-offer" id="community-offer" hidden>
+      <div>
+        <b>Name the cargo?</b>
+        The community keeps the id-to-name table as a public file
+        (StarCitizenWiki / scunpacked-data). Enabling this downloads it once —
+        the only network request this app will ever make — and it happens only
+        if you press the button.
+      </div>
+      <button class="ghost" id="community-enable">Download community data</button>
+      <span class="muted" id="community-status"></span>
+    </div>
 
     <h2 class="spaced">Revenue by location</h2>
     <div id="cargo-shops" class="bars"></div>
@@ -267,7 +279,7 @@
       <table id="cargo-table">
         <thead>
           <tr>
-            <th>When</th><th>Type</th><th>Where</th>
+            <th>When</th><th>Type</th><th>Commodity</th><th>Where</th>
             <th class="num">SCU</th><th class="num">Amount</th><th class="num">Per SCU</th>
           </tr>
         </thead>
