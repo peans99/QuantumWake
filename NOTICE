@@ -1,0 +1,69 @@
+Quantum Wake
+Copyright 2026 nekron
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------------
+NOT COVERED BY THAT LICENCE
+--------------------------------------------------------------------------------
+
+The Apache licence above covers the source code in this repository. It does not,
+and cannot, cover the following, which belong to other people:
+
+1. ARTWORK IN web/assets/manufacturers/
+
+   The manufacturer marks and the "Made by the Community" badge are the property
+   of Cloud Imperium Rights LLC, taken unmodified from the official Star Citizen
+   Fankit and used under the Fankit Agreement and the Made by the Community
+   licence. They are redistributed here on those terms only.
+
+   If you fork this repository, the Fankit terms apply to you directly and
+   independently of the Apache licence - in particular, they do not permit
+   commercial use. Nothing in LICENSE grants you any right to Cloud Imperium's
+   artwork, and this project cannot grant one.
+
+   Delete that directory if you intend to distribute a fork commercially. The UI
+   degrades to a text badge when a mark is missing, by design.
+
+2. STAR CITIZEN GAME DATA
+
+   Display names for places, items and ships are read at runtime from the user's
+   own installed copy of Data.p4k. No game data is contained in, or distributed
+   with, this repository, and none may be added to it.
+
+3. TRADEMARKS
+
+   Star Citizen(R), Roberts Space Industries(R), Squadron 42(R) and Cloud
+   Imperium(R) are registered trademarks of Cloud Imperium Rights LLC. This is an
+   unofficial fan tool, not affiliated with or endorsed by Cloud Imperium Games.
+
+   The name "Quantum Wake" and the Quantum Wake logo are not licensed under the
+   Apache licence either. Section 6 of that licence grants no trademark rights,
+   and none are granted here: fork the code freely, but ship it under your own
+   name so that users can tell the two apart.
+
+--------------------------------------------------------------------------------
+DERIVED WORK
+--------------------------------------------------------------------------------
+
+The dormant combat parser - the archived <Actor Death> and <Vehicle Destruction>
+line formats, the kill-classification tree and the NPC-name marker list - is
+re-implemented in C# from StarLogs by Ozy311 (https://github.com/Ozy311/StarLogs),
+which is MIT licensed:
+
+    Copyright (c) Ozy311 and StarLogs contributors
+    Licensed under the MIT License.
+
+docs/credits.md records in full what came from where, including work by
+DimmaDont (all-slain), Maple33 (SCStats) and ckuma (SCPlay), and the p4k format
+knowledge from the scdatatools lineage.
+
+--------------------------------------------------------------------------------
+THIRD-PARTY PACKAGES
+--------------------------------------------------------------------------------
+
+ZstdSharp.Port          Oleg Stepanischev                              MIT
+Microsoft.Data.Sqlite   Microsoft                                      MIT
+Microsoft.Web.WebView2  Microsoft                    Proprietary, redistributable
+xUnit.net               xUnit contributors                      Apache-2.0
+coverlet                Toni Solarin-Sodara and contributors            MIT

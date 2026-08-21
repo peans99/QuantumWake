@@ -1,3 +1,5 @@
+<img src="web/assets/logo.svg" width="148" align="right" alt="">
+
 # Quantum Wake
 
 **A pilot's logbook for Star Citizen** — by nekron
@@ -145,6 +147,23 @@ silently dropped).
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
 - [docs/naming.md](docs/naming.md) — why the project is called Quantumwake
 - [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
+
+## Licence
+
+Code is [Apache 2.0](LICENSE). Fork it, sell it, close your fork — the only ask
+is attribution.
+
+Two things it deliberately does not cover, both spelled out in [NOTICE](NOTICE):
+
+- **The manufacturer artwork is Cloud Imperium's**, used under the Fankit
+  Agreement, which does not permit commercial use. No licence this project grants
+  can extend to it. Delete `web/assets/manufacturers/` if that matters for your
+  fork — the UI falls back to a text badge.
+- **The name and logo are not licensed.** Apache §6 grants no trademark rights,
+  and none are granted here. Take the code; ship it under your own name.
+
+No game data is contained in this repository. Names are read at runtime from your
+own `Data.p4k`.
 
 ## Credits
 

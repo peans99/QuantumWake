@@ -194,12 +194,10 @@ body.overlay .feed .d { display: none; }
 
 .brand { display: flex; align-items: center; gap: 11px; }
 
-/* Rotated square with a glow - SC uses this diamond motif throughout. */
+/* The wake mark. Same file the browser tab uses, so they cannot drift apart. */
 .brand .mark {
-  width: 9px; height: 9px;
-  background: var(--cyan);
-  transform: rotate(45deg);
-  box-shadow: 0 0 12px var(--cyan), 0 0 3px var(--cyan-hot);
+  width: 22px; height: 22px;
+  filter: drop-shadow(0 0 7px rgba(53, 200, 240, .55));
 }
 
 .brand .name {
