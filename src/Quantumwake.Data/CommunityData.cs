@@ -64,6 +64,21 @@ public sealed record ResourceSpawn(
     double GroupChance,
     double Share);
 
+/// <summary>One crafting blueprint: what it makes, from what, and how it is obtained.</summary>
+/// <param name="OutputUuid">The crafted item's entity uuid - joins to UEX item prices.</param>
+/// <param name="Materials">Flattened recipe lines ("Agricium 0.36 SCU", "Hadanite ×7").</param>
+/// <param name="RewardPools">Prettified reward pool keys when not known by default.</param>
+public sealed record BlueprintInfo(
+    string Output,
+    string? OutputUuid,
+    string? Type,
+    int Grade,
+    string Kind,
+    int CraftSeconds,
+    IReadOnlyList<string> Materials,
+    bool Default,
+    IReadOnlyList<string> RewardPools);
+
 /// <summary>
 /// The optional community dataset: commodity names for the resource ids the
 /// game logs but never explains, and where each commodity trades.
@@ -118,6 +133,12 @@ public sealed class CommunityData
     public const string ResourceLocationsUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/resources/locations.json";
 
+    public const string BlueprintsUrl =
+        "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/blueprints.json";
+
+    public const string StarmapInfoUrl =
+        "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/starmap.json";
+
     public const string StarmapUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/starmap_positions.json";
 
@@ -128,6 +149,8 @@ public sealed class CommunityData
     private Dictionary<string, Dictionary<string, BodyPosition>> _positions = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _manufacturers = new(StringComparer.OrdinalIgnoreCase);
     private List<ResourceSpawn> _resourceSpawns = [];
+    private List<BlueprintInfo> _blueprints = [];
+    private Dictionary<string, string> _placeLore = new(StringComparer.OrdinalIgnoreCase);
 
     public CommunityData(string? directory = null)
     {
@@ -145,6 +168,8 @@ public sealed class CommunityData
     private string PositionsDigestPath => Path.Combine(_directory, "digest-positions.json");
     private string ManufacturersDigestPath => Path.Combine(_directory, "digest-manufacturers.json");
     private string ResourceSpawnsDigestPath => Path.Combine(_directory, "digest-resource-spawns.json");
+    private string BlueprintsDigestPath => Path.Combine(_directory, "digest-blueprints.json");
+    private string PlaceLoreDigestPath => Path.Combine(_directory, "digest-place-lore.json");
 
     public bool IsEnabled => _byId.Count > 0;
     public int Count => _byId.Count;
@@ -195,6 +220,13 @@ public sealed class CommunityData
     /// <summary>The game's resource deposit tables: what spawns where, and how likely.</summary>
     public IReadOnlyList<ResourceSpawn> ResourceSpawns => _resourceSpawns;
 
+    /// <summary>Every crafting blueprint the game data describes.</summary>
+    public IReadOnlyList<BlueprintInfo> Blueprints => _blueprints;
+
+    /// <summary>The starmap's own description of a place, by display name. Null when it has none.</summary>
+    public string? PlaceLore(string? name) =>
+        name is not null && _placeLore.TryGetValue(name, out var lore) ? lore : null;
+
     /// <summary>Every item in the digest, keyed by class name, for the reference catalogue.</summary>
     public IReadOnlyDictionary<string, ItemInfo> Items => _items;
 
@@ -220,6 +252,8 @@ public sealed class CommunityData
         var manufacturersJson = await http.GetStringAsync(ManufacturersUrl, token);
         var resourcesJson = await http.GetStringAsync(ResourcesUrl, token);
         var resourceLocationsJson = await http.GetStringAsync(ResourceLocationsUrl, token);
+        var blueprintsJson = await http.GetStringAsync(BlueprintsUrl, token);
+        var starmapInfoJson = await http.GetStringAsync(StarmapInfoUrl, token);
 
         // Digest before persisting: a failed download or a moved file must not
         // leave a cache that then fails on every startup.
@@ -232,6 +266,8 @@ public sealed class CommunityData
         var positions = DigestPositions(starmapJson);
         var manufacturers = DigestManufacturers(manufacturersJson);
         var spawns = DigestResourceSpawns(resourcesJson, resourceLocationsJson);
+        var blueprints = DigestBlueprints(blueprintsJson);
+        var lore = DigestPlaceLore(starmapInfoJson);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));
@@ -240,6 +276,8 @@ public sealed class CommunityData
         File.WriteAllText(PositionsDigestPath, JsonSerializer.Serialize(positions));
         File.WriteAllText(ManufacturersDigestPath, JsonSerializer.Serialize(manufacturers));
         File.WriteAllText(ResourceSpawnsDigestPath, JsonSerializer.Serialize(spawns));
+        File.WriteAllText(BlueprintsDigestPath, JsonSerializer.Serialize(blueprints));
+        File.WriteAllText(PlaceLoreDigestPath, JsonSerializer.Serialize(lore));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _byId = digest;
@@ -248,6 +286,8 @@ public sealed class CommunityData
         _positions = positions;
         _manufacturers = manufacturers;
         _resourceSpawns = spawns;
+        _blueprints = blueprints;
+        _placeLore = lore;
         FetchedAt = DateTimeOffset.UtcNow;
         return _byId.Count;
     }
@@ -263,6 +303,8 @@ public sealed class CommunityData
         _items = new Dictionary<string, ItemInfo>(StringComparer.OrdinalIgnoreCase);
         _manufacturers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _resourceSpawns = [];
+        _blueprints = [];
+        _placeLore = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
     }
 
@@ -291,6 +333,16 @@ public sealed class CommunityData
             if (File.Exists(ResourceSpawnsDigestPath))
                 _resourceSpawns = JsonSerializer.Deserialize<List<ResourceSpawn>>(
                     File.ReadAllText(ResourceSpawnsDigestPath)) ?? [];
+
+            if (File.Exists(BlueprintsDigestPath))
+                _blueprints = JsonSerializer.Deserialize<List<BlueprintInfo>>(
+                    File.ReadAllText(BlueprintsDigestPath)) ?? [];
+
+            if (File.Exists(PlaceLoreDigestPath))
+                _placeLore = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                        File.ReadAllText(PlaceLoreDigestPath))
+                    is { } lore ? new Dictionary<string, string>(lore, StringComparer.OrdinalIgnoreCase)
+                                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;
@@ -606,6 +658,138 @@ public sealed class CommunityData
             value.Replace('_', ' '),
             "(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
             " ");
+
+    /// <summary>
+    /// The crafting blueprints: output item, first-tier craft time and
+    /// materials (the requirement tree flattened to its resource and item
+    /// leaves), and how the blueprint is obtained.
+    /// </summary>
+    public static List<BlueprintInfo> DigestBlueprints(string blueprintsJson)
+    {
+        var result = new List<BlueprintInfo>();
+
+        using var doc = JsonDocument.Parse(blueprintsJson);
+
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var entry in doc.RootElement.EnumerateArray())
+        {
+            if (!entry.TryGetProperty("Output", out var output) || output.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var name = Str(output, "Name");
+            if (name is null || name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var isDefault = false;
+            var pools = new List<string>();
+
+            if (entry.TryGetProperty("Availability", out var availability)
+                && availability.ValueKind == JsonValueKind.Object)
+            {
+                isDefault = availability.TryGetProperty("Default", out var d)
+                    && d.ValueKind == JsonValueKind.True;
+
+                if (availability.TryGetProperty("RewardPools", out var rewardPools)
+                    && rewardPools.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var pool in rewardPools.EnumerateArray())
+                    {
+                        var key = Str(pool, "Key");
+                        if (key is not null)
+                            pools.Add(PrettyWords(key.Replace("BP_REWARDS_", "")));
+                    }
+                }
+            }
+
+            var craftSeconds = 0;
+            var materials = new List<string>();
+
+            if (entry.TryGetProperty("Tiers", out var tiers)
+                && tiers.ValueKind == JsonValueKind.Array
+                && tiers.GetArrayLength() > 0)
+            {
+                var tier = tiers[0];
+                craftSeconds = (int)(Num(tier, "CraftTimeSeconds") ?? 0);
+
+                if (tier.TryGetProperty("Requirements", out var requirements))
+                    CollectMaterials(requirements, materials);
+            }
+
+            result.Add(new BlueprintInfo(
+                name,
+                Str(output, "UUID"),
+                Str(output, "Type"),
+                int.TryParse(Str(output, "Grade"), out var grade) ? grade : 0,
+                Str(entry, "Kind") ?? "creation",
+                craftSeconds,
+                materials.Distinct().ToList(),
+                isDefault,
+                pools.Distinct().ToList()));
+        }
+
+        return result;
+    }
+
+    /// <summary>Walks a blueprint requirement tree collecting its material leaves.</summary>
+    private static void CollectMaterials(JsonElement node, List<string> materials)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+            return;
+
+        var kind = Str(node, "Kind");
+        var name = Str(node, "Name");
+
+        if (name is not null && !name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+        {
+            if (kind == "resource")
+            {
+                var scu = Num(node, "QuantityScu") ?? 0;
+                materials.Add(scu > 0 ? $"{name} {scu:0.##} SCU" : name);
+            }
+            else if (kind == "item")
+            {
+                var quantity = Num(node, "Quantity") ?? 0;
+                materials.Add(quantity > 1 ? $"{name} ×{quantity:0}" : name);
+            }
+        }
+
+        if (node.TryGetProperty("Children", out var children) && children.ValueKind == JsonValueKind.Array)
+            foreach (var child in children.EnumerateArray())
+                CollectMaterials(child, materials);
+    }
+
+    /// <summary>
+    /// The starmap's own descriptions, name to text - the paragraph the game
+    /// shows about a station or outpost, for the map's detail card.
+    /// </summary>
+    public static Dictionary<string, string> DigestPlaceLore(string starmapJson)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        using var doc = JsonDocument.Parse(starmapJson);
+
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var entry in doc.RootElement.EnumerateArray())
+        {
+            var name = Str(entry, "Name");
+            var description = Str(entry, "Description");
+
+            if (name is null || description is null
+                || name.Contains("UNINITIALIZED") || name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase)
+                || description.Contains("UNINITIALIZED")
+                || description.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase)
+                || description.Trim().Length < 30)
+                continue;
+
+            result.TryAdd(name.Trim(), description.Trim());
+        }
+
+        return result;
+    }
 
     /// <summary>Manufacturer code to full display name, placeholders skipped.</summary>
     public static Dictionary<string, string> DigestManufacturers(string manufacturersJson)

@@ -1415,6 +1415,18 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 .map-tip .goods { color: var(--muted); margin-top: 3px; }
 .map-tip .price { color: var(--green); }
 
+/* The starmap's own paragraph about a place, and long recipe cells. */
+.map-info-lore {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-height: 130px;
+  overflow-y: auto;
+}
+.map-info-lore[hidden] { display: none; }
+
+#crafting-table td.materials { max-width: 420px; white-space: normal; font-size: 11.5px; }
+
 /* The sold-here block on the detail card: a checkbox, then commodity chips
    that each pivot the map into that commodity's search. */
 .map-info-sold-row { margin-top: 9px; font-size: 11px; }

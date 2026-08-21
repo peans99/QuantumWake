@@ -50,6 +50,7 @@
         <button data-view="ships">Ships</button>
         <button data-view="parts">Parts</button>
         <button data-view="mining">Mining</button>
+        <button data-view="crafting">Crafting</button>
       </div>
     </div>
     <div class="tab-group">
@@ -189,6 +190,7 @@
         </div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
+        <div class="map-info-lore muted" id="map-info-lore" hidden></div>
         <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
     </div>
@@ -603,6 +605,42 @@
       </table>
     </div>
     <p class="muted caption" id="mining-count"></p>
+  </section>
+
+  <!-- REFERENCE: crafting blueprints -->
+  <section id="view-crafting" class="view">
+    <div class="section-bar">
+      <h2>Crafting</h2>
+      <div class="controls">
+        <select id="crafting-type" class="select" title="Filter by output type"></select>
+        <select id="crafting-obtained" class="select" title="Filter by how the blueprint is obtained">
+          <option value="">Any availability</option>
+          <option value="default">Known by default</option>
+          <option value="reward">From rewards</option>
+        </select>
+        <input type="search" id="crafting-search" class="search" placeholder="Search blueprints…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Every crafting blueprint in the game data: what it makes, the first-tier
+      craft time and materials, and how the blueprint is obtained. "Buy
+      instead" joins the crafted item's UEX shop price, so a recipe can be
+      weighed against a shopping trip. Needs the community dataset in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="crafting-table">
+        <thead>
+          <tr>
+            <th>Makes</th><th>Type</th><th class="num">Grade</th>
+            <th class="num">Time</th><th>Materials</th>
+            <th>Obtained</th><th class="num">Buy instead</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="crafting-count"></p>
   </section>
 
   <section id="view-loot" class="view">

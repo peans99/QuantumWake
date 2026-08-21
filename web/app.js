@@ -382,6 +382,7 @@ async function loadHistory() {
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
   loadMiningRef().catch((e) => console.error('mining', e));
+  loadCraftingRef().catch((e) => console.error('crafting', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -1274,6 +1275,100 @@ function renderMiningRef() {
 onInput('#mining-search', renderMiningRef);
 $('#mining-kind')?.addEventListener('change', renderMiningRef);
 $('#mining-system')?.addEventListener('change', renderMiningRef);
+
+/* ---------- crafting blueprints ---------- */
+
+let craftingCatalogue = [];
+
+async function loadCraftingRef() {
+  try {
+    craftingCatalogue = await getJson('/api/reference/blueprints');
+  } catch {
+    craftingCatalogue = [];
+  }
+
+  const types = [...new Set(craftingCatalogue.map((b) => b.type).filter(Boolean))].sort();
+  const select = $('#crafting-type');
+  const previous = select.value;
+
+  select.textContent = '';
+  select.append(new Option('All types', ''));
+  for (const type of types) select.append(new Option(prettyType(type), type));
+  if (types.includes(previous)) select.value = previous;
+
+  renderCraftingRef();
+}
+
+const CRAFTING_CAP = 500;
+
+/** "540 s" is nobody's unit; craft times read as minutes and hours. */
+function craftTime(seconds) {
+  if (seconds <= 0) return '—';
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function renderCraftingRef() {
+  const term = ($('#crafting-search').value || '').trim().toLowerCase();
+  const type = $('#crafting-type').value;
+  const obtained = $('#crafting-obtained').value;
+  const body = $('#crafting-table tbody');
+  body.textContent = '';
+
+  const rows = craftingCatalogue.filter((b) =>
+    (!type || b.type === type)
+    && (!obtained
+      || (obtained === 'default' && b.default)
+      || (obtained === 'reward' && !b.default))
+    && (!term
+      || b.output.toLowerCase().includes(term)
+      || b.materials.some((m) => m.toLowerCase().includes(term))));
+
+  const counter = $('#crafting-count');
+  counter.textContent = rows.length > CRAFTING_CAP
+    ? `Showing ${CRAFTING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', craftingCatalogue.length
+      ? 'Nothing matches that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const bp of rows.slice(0, CRAFTING_CAP)) {
+    const tr = el('tr');
+    tr.append(el('td', null, bp.output));
+    tr.append(el('td', 'muted', prettyType(bp.type)));
+    tr.append(el('td', 'num', bp.grade > 0 ? String(bp.grade) : '—'));
+    tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
+    tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.join(', ') : '—'));
+
+    // How you get the blueprint; the pool names ride the tooltip.
+    const how = el('td', 'muted', bp.default
+      ? 'Known by default'
+      : bp.rewardPools.length
+        ? `${bp.rewardPools.length} reward pool${bp.rewardPools.length === 1 ? '' : 's'}`
+        : '—');
+    if (bp.rewardPools.length) how.title = bp.rewardPools.join('\n');
+    tr.append(how);
+
+    tr.append(el('td', bp.shopPrice ? 'num' : 'num muted',
+      bp.shopPrice ? money(bp.shopPrice) : 'not sold'));
+
+    body.append(tr);
+  }
+}
+
+onInput('#crafting-search', renderCraftingRef);
+$('#crafting-type')?.addEventListener('change', renderCraftingRef);
+$('#crafting-obtained')?.addEventListener('change', renderCraftingRef);
 
 /* ---------- logbook ---------- */
 
@@ -3287,8 +3382,30 @@ function showMapInfo(location) {
 
   renderMapInfoSold();
 
+  // The starmap's own paragraph about this place, fetched on first open and
+  // cached; the card must not wait for it.
+  const loreNode = $('#map-info-lore');
+  loreNode.hidden = true;
+
+  if (!loreCache.has(location.name)) {
+    loreCache.set(location.name,
+      getJson(`/api/map/lore?name=${encodeURIComponent(location.name)}`)
+        .then((r) => r.lore)
+        .catch(() => null));
+  }
+
+  loreCache.get(location.name).then((lore) => {
+    if (lore && mapInfoLocation === location) {
+      loreNode.textContent = lore;
+      loreNode.hidden = false;
+    }
+  });
+
   info.hidden = false;
 }
+
+/** Lore paragraphs already asked for, name to promise of text-or-null. */
+const loreCache = new Map();
 
 function drawMap() {
   const map = $('#starmap');

@@ -516,6 +516,28 @@ public static class ServerHost
         // Manufacturer codes to full names, for every page that shows a maker.
         app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);
 
+        // Every crafting blueprint, with the crafted item's shop price joined
+        // by uuid - so crafting can be weighed against just buying one.
+        app.MapGet("/api/reference/blueprints", (LogLibrary lib, UexData uex) =>
+            lib.Community.Blueprints.Select(b => new
+            {
+                b.Output,
+                b.Type,
+                b.Grade,
+                b.Kind,
+                b.CraftSeconds,
+                b.Materials,
+                @default = b.Default,
+                b.RewardPools,
+                shopPrice = uex.ItemPrice(b.OutputUuid)
+            }));
+
+        // The starmap's own paragraph about one place, for the map detail card.
+        app.MapGet("/api/map/lore", (LogLibrary lib, string name) =>
+            lib.Community.PlaceLore(name) is { } lore
+                ? Results.Ok(new { lore })
+                : Results.NotFound());
+
         // The game's own deposit spawn tables, with UEX's best sell joined on
         // resources that are also commodities - what to mine AND what it pays.
         app.MapGet("/api/reference/resources", (LogLibrary lib, UexData uex) =>
