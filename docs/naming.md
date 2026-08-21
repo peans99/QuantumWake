@@ -47,6 +47,7 @@ community and the domain registries before being dropped:
 | Wayfix | Registered domain plus a Minecraft-adjacent GitHub project. |
 | Ephemeris | Clear in the Star Citizen space and the best conceptual fit — a table of positions *computed* rather than observed, which is exactly what this app produces. Rejected only because a dozen astronomy libraries own the word on GitHub, the top one at 868 stars. |
 | Sextant | Also clear in the SC space, also a good metaphor. Rejected for the same reason: seven software projects use it, including a 573-star Rails tool. |
+| SC LogBook | The metaphor is right - a pilot keeps a logbook, and that is what this app produces - but the name puts back the `SC` prefix this rename existed to escape, and lands one word from [SCLogReader](https://github.com/miwidot/SCLogReader), the tool closest to us in features. "Star Citizen Logbook" is already two community sites ([citizen-logbook.com](https://citizen-logbook.com/en/), active since 2019, and [scl.hypertesto.me](https://scl.hypertesto.me/)), and unqualified "logbook" belongs to aviation software - PilotLog, LogTen, FLYLOG.io. **The idea survived as the tagline instead:** *A pilot's logbook for the 'verse.* |
 
 ## Why Verselog
 
