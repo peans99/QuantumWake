@@ -1,0 +1,51 @@
+name: CI
+
+# Windows only, and not by preference: Quantumwake.Overlay targets
+# net10.0-windows for WPF, so the solution cannot restore on a Linux runner.
+# Core, Data, Server and the tests are all plain net10.0 and would build
+# anywhere - if a Linux-hosted server mode ever lands, split the solution and
+# add an ubuntu job for those four.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Quantumwake.slnx
+
+      - name: Build
+        run: dotnet build Quantumwake.slnx -c Release --no-restore
+
+      # The parser is fixture-driven against real log lines, so a green run here
+      # means the formats still parse - not merely that everything compiles.
+      - name: Test
+        run: dotnet test Quantumwake.slnx -c Release --no-build --logger "trx;LogFileName=results.trx" --results-directory artifacts/test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test
+          if-no-files-found: ignore
