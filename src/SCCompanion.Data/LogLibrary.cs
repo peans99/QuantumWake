@@ -841,8 +841,10 @@ public sealed class LogLibrary : IDisposable
         var contracts = sessions.SelectMany(s => s.Contracts).ToList();
         var purchases = sessions.SelectMany(s => s.Purchases).Where(p => p.Confirmed).ToList();
 
+        // Grouped by display name rather than class, so the same weapon bought
+        // in two colourways adds up as one line instead of two mystery ids.
         var items = purchases
-            .GroupBy(p => p.Item, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(p => Names.Item(p.Item), StringComparer.OrdinalIgnoreCase)
             .Select(g => new SpendTotal(g.Key, g.Sum(p => p.Total), g.Sum(p => p.Quantity)))
             .OrderByDescending(i => i.Total)
             .ToList();
@@ -851,9 +853,12 @@ public sealed class LogLibrary : IDisposable
         var income = trades.Where(t => t.IsSell).Sum(t => t.Amount);
         var commoditySpend = trades.Where(t => !t.IsSell).Sum(t => t.Amount);
 
-        var tradeShops = trades
-            .Where(t => t.IsSell)
-            .GroupBy(t => t.Shop, StringComparer.OrdinalIgnoreCase)
+        // Grouped by where the sale happened, not by kiosk. Every commodity
+        // terminal in the game shares one shop id, so grouping on that produced
+        // a single bar labelled "Admin lt base g" holding every sale ever made.
+        var tradeShops = sessions
+            .SelectMany(s => s.Trades.Where(t => t.IsSell).Select(t => (Place: PlaceAt(s, t.At), t.Amount, t.Quantity)))
+            .GroupBy(t => t.Place, StringComparer.OrdinalIgnoreCase)
             .Select(g => new SpendTotal(g.Key, g.Sum(t => t.Amount), g.Sum(t => t.Quantity)))
             .OrderByDescending(s => s.Total)
             .ToList();
@@ -957,7 +962,7 @@ public sealed class LogLibrary : IDisposable
 
             Spend = purchases.Sum(p => p.Total),
             PurchaseCount = purchases.Count,
-            Shops = Facet(purchases.Select(p => p.Shop)),
+            Shops = Facet(purchases.Select(p => ShopLabel(p.Shop))),
             Items = items,
 
             Income = income,

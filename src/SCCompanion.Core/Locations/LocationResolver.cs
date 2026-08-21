@@ -94,6 +94,7 @@ public static partial class LocationResolver
                .Replace("_LOC", string.Empty, StringComparison.OrdinalIgnoreCase);
 
         var resolved = TryNamedPlace(rawId, id)
+            ?? TryNyx(rawId, id)
             ?? TryJumpPointRestStop(rawId, id)
             ?? TryRestStop(rawId, id)
             ?? TryJumpPoint(rawId, id)
@@ -113,6 +114,85 @@ public static partial class LocationResolver
             resolved = resolved with { DisplayName = official, IsResolved = true };
 
         return resolved;
+    }
+
+    /// <summary>
+    /// Nyx, which follows none of Stanton's or Pyro's naming conventions.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The system is entirely absent from the id grammar the other two share -
+    /// no numbered bodies, no <c>RR_</c> rest stops - so without a rule of its
+    /// own the whole system collapsed to a single node, Levski, which is the one
+    /// place the well-known table happened to list. The localisation table
+    /// actually names about forty places there.
+    /// </para>
+    /// <code>
+    /// Nyx_SocialStation_003    -> People's Service Station Theta
+    /// Nyx_RockCracker_007      -> QV Breaker Station BRK-267
+    /// Nyx_OutlawStation_Keeger -> Moraine Base           (Keeger Belt)
+    /// Nyx_Stanton_JPStation    -> Stanton Gateway
+    /// Nyx_AsteroidBelt1        -> Glaciem Ring
+    /// </code>
+    /// <para>
+    /// The names all come from the game itself, so this only has to supply the
+    /// system, body and kind that the id encodes and the name does not.
+    /// </para>
+    /// </remarks>
+    private static ResolvedLocation? TryNyx(string rawId, string id)
+    {
+        if (!id.StartsWith("Nyx", StringComparison.OrdinalIgnoreCase)
+            && !NyxGatewayRegex.IsMatch(id))
+        {
+            return null;
+        }
+
+        // Belts are the bodies here, and several ids name theirs in passing.
+        var body = id.Contains("Glaciem", StringComparison.OrdinalIgnoreCase) ? "Glaciem Ring"
+            : id.Contains("Keeger", StringComparison.OrdinalIgnoreCase) ? "Keeger Belt"
+            : id.Contains("Levski", StringComparison.OrdinalIgnoreCase) ? "Delamar"
+            : null;
+
+        var kind = NyxKind(id);
+        if (kind is null)
+            return null;
+
+        return new ResolvedLocation(rawId, Spaced(id), "Nyx", body, kind.Value, true);
+    }
+
+    /// <summary>What sort of place a Nyx id names, or null if it is not one.</summary>
+    private static LocationKind? NyxKind(string id)
+    {
+        // Ordered most specific first: "Nyx_Pyro_JPStation" is a station, while
+        // "Nyx_JumpPoint_Pyro" is the jump point it guards.
+        if (id.Contains("JPStation", StringComparison.OrdinalIgnoreCase))
+            return LocationKind.Station;
+
+        if (id.Contains("JumpPoint", StringComparison.OrdinalIgnoreCase))
+            return LocationKind.JumpPoint;
+
+        if (id.Contains("RockCracker", StringComparison.OrdinalIgnoreCase))
+            return LocationKind.Mine;
+
+        if (id.Contains("SocialStation", StringComparison.OrdinalIgnoreCase)
+            || id.Contains("OutlawStation", StringComparison.OrdinalIgnoreCase)
+            || id.Contains("Segment_Social", StringComparison.OrdinalIgnoreCase))
+        {
+            return LocationKind.Station;
+        }
+
+        if (id.Contains("AsteroidBelt", StringComparison.OrdinalIgnoreCase)
+            || id.Contains("AsteroidCluster", StringComparison.OrdinalIgnoreCase))
+        {
+            return LocationKind.Asteroid;
+        }
+
+        if (id.Contains("Levski", StringComparison.OrdinalIgnoreCase))
+            return LocationKind.City;
+
+        // Bare bodies, the star, transit points and UI strings all share the
+        // Nyx prefix. None of them is somewhere you fly to.
+        return null;
     }
 
     /// <summary>Places known only by name, with no system prefix in the id.</summary>
@@ -431,6 +511,11 @@ public static partial class LocationResolver
     // System + body appearing anywhere but the start of the id.
     [GeneratedRegex(@"_(?<system>Stanton|Pyro)(?<body>\d[a-z]?)(?=_|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex EmbeddedSystemRegex { get; }
+
+    // The gateway stations on the far side of a jump are named for the system
+    // they lead to, so Nyx's sit under Stanton's and Pyro's prefixes.
+    [GeneratedRegex(@"^(?:Stanton|Pyro)_(?:Nyx_JPStation|JumpPoint_Nyx)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex NyxGatewayRegex { get; }
 
     [GeneratedRegex(@"^NavPoint_\w+_\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex NavPointRegex { get; }

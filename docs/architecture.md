@@ -162,7 +162,7 @@ CIG removes log events patch over patch — quantum travel in 4.0.1, death scope
   empty charts.
 
 This is the direct lesson of SC-Kill-Monitor (one pattern, total failure) versus
-all-slain (many patterns, partial degradation). See [tools/](tools/).
+all-slain (many patterns, partial degradation).
 
 ---
 

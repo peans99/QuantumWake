@@ -548,7 +548,14 @@ td.outward { color: var(--amber); }
     repeating-linear-gradient(0deg, rgba(53,200,240,.045) 0 1px, transparent 1px 44px),
     repeating-linear-gradient(90deg, rgba(53,200,240,.045) 0 1px, transparent 1px 44px);
 }
-#map { width: 100%; height: auto; display: block; position: relative; }
+/*
+ * The map is laid out to fit its contents, so its aspect ratio changes with the
+ * filter. Sizing the frame to the viewport instead of letting the SVG's
+ * intrinsic ratio drive it keeps the page stable while the shape shifts, and
+ * preserveAspectRatio centres whatever fits.
+ */
+.map-wrap { height: min(76vh, 900px); }
+#map { width: 100%; height: 100%; display: block; position: relative; }
 
 .map-node circle { transition: opacity .15s; }
 .map-node:hover circle.hit { opacity: .22; }
@@ -610,18 +617,9 @@ td.outward { color: var(--amber); }
 
 /* Player marker. */
 .map-here { pointer-events: none; }
-.map-here .here-ring {
-  fill: none;
-  stroke: var(--cyan);
-  stroke-width: 1.6;
-  opacity: .9;
-}
-.map-here .here-pulse { fill: none; stroke: var(--cyan); stroke-width: 1; }
-.map-here .here-label {
-  fill: var(--cyan);
-  font-size: 8px;
-  letter-spacing: .22em;
-}
+.map-here .here-ring { fill: none; stroke: var(--cyan); opacity: .9; }
+.map-here .here-pulse { fill: none; stroke: var(--cyan); }
+.map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {
   font-size: 14px;
