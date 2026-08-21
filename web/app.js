@@ -478,35 +478,58 @@ function renderSpending(stats) {
 /* ---------- loadout ---------- */
 
 function renderLoadout(stats) {
-  const grid = $('#loadout-grid');
-  grid.textContent = '';
+  const host = $('#loadout-grid');
+  host.textContent = '';
 
   if (!stats.loadout || !stats.loadout.length) {
-    grid.append(el('p', 'muted', 'No attachment events recorded yet.'));
+    host.append(el('p', 'muted', 'No attachment events recorded yet.'));
     return;
   }
 
+  // The server already orders slots by category; preserve that grouping.
+  const byCategory = new Map();
   for (const slot of stats.loadout) {
-    const card = el('article', 'card');
-    card.append(el('div', 'card-label', prettySlot(slot.port)));
+    if (!byCategory.has(slot.category)) byCategory.set(slot.category, []);
+    byCategory.get(slot.category).push(slot);
+  }
 
-    const list = el('ul', 'slot-list');
-    for (const item of slot.items.slice(0, 6)) {
-      const li = el('li');
-      li.append(el('span', 'slot-item', prettyItem(item.name)));
-      li.append(el('span', 'slot-count', `×${item.count}`));
-      list.append(li);
+  for (const [category, slots] of byCategory) {
+    const total = slots.reduce((sum, s) => sum + s.items.length, 0);
+    host.append(sectionHeading(category, `${slots.length} slots · ${total} items`));
+
+    const grid = el('div', 'card-grid');
+
+    for (const slot of slots) {
+      const card = el('article', 'card');
+      card.append(el('div', 'card-label', slot.label || slot.port));
+
+      const list = el('ul', 'slot-list');
+      for (const item of slot.items.slice(0, 6)) {
+        const li = el('li');
+        li.append(el('span', 'slot-item', prettyItem(item.name)));
+        li.append(el('span', 'slot-count', `×${item.count}`));
+        list.append(li);
+      }
+      card.append(list);
+
+      if (slot.items.length > 6)
+        card.append(el('div', 'note', `and ${slot.items.length - 6} more`));
+
+      grid.append(card);
     }
-    card.append(list);
 
-    if (slot.items.length > 6)
-      card.append(el('div', 'note', `and ${slot.items.length - 6} more`));
-
-    grid.append(card);
+    host.append(grid);
   }
 }
 
-const prettySlot = (port) => port.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+/** A category heading with a count on the right. */
+function sectionHeading(title, meta) {
+  const head = el('div', 'group-head');
+  head.append(el('h3', null, title));
+  if (meta) head.append(el('span', 'group-meta', meta));
+  return head;
+}
+
 const prettyItem = (name) => name.replace(/_/g, ' ');
 
 /* ---------- stash ---------- */
@@ -524,16 +547,23 @@ function renderStash(stats) {
   for (const place of stats.stash) {
     const card = el('article', 'card');
     card.append(el('div', 'card-label', place.name));
-    card.append(el('div', 'sub', `${place.items.length} item types · last seen ${dateOf(place.lastSeen)}`));
+    card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
 
-    const list = el('ul', 'slot-list');
-    for (const item of place.items.slice(0, 14))
-      list.append(el('li', null, prettyItem(item)));
+    for (const group of place.groups) {
+      const head = el('div', 'stash-group');
+      head.append(el('span', 'stash-group-name', group.category));
+      head.append(el('span', 'slot-count', String(group.items.length)));
+      card.append(head);
 
-    card.append(list);
+      const list = el('ul', 'slot-list');
+      for (const item of group.items.slice(0, 8))
+        list.append(el('li', null, prettyItem(item)));
 
-    if (place.items.length > 14)
-      card.append(el('div', 'note', `and ${place.items.length - 14} more`));
+      card.append(list);
+
+      if (group.items.length > 8)
+        card.append(el('div', 'note', `and ${group.items.length - 8} more`));
+    }
 
     grid.append(card);
   }

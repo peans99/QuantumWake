@@ -68,15 +68,226 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 
 public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 
-/// <summary>Items seen in one slot, most recent first.</summary>
-public sealed record LoadoutSlot(string Port, IReadOnlyList<FacetTotal> Items);
+/// <summary>Items seen in one slot, most frequent first.</summary>
+/// <param name="Category">Grouping for display, from <see cref="LoadoutCategories"/>.</param>
+/// <param name="Label">Readable slot name.</param>
+public sealed record LoadoutSlot(
+    string Port,
+    string Category,
+    string Label,
+    IReadOnlyList<FacetTotal> Items);
 
-/// <summary>Items seen stored at one location.</summary>
+/// <summary>
+/// Groups character item ports into something a person would recognise.
+/// </summary>
+/// <remarks>
+/// Ports are engine-side names - <c>wep_stocked_3</c>, <c>helmethook_attach</c>,
+/// <c>Eyedetail_ItemPort</c> - and there are 57 of them on a single character.
+/// Listed flat they are unreadable, so they are bucketed by what the slot is
+/// for. Matching is by prefix and keyword rather than an exhaustive list, so
+/// ports added in future patches still land somewhere sensible.
+/// </remarks>
+public static class LoadoutCategories
+{
+    public const string Armour = "Armour";
+    public const string Weapons = "Weapons";
+    public const string Attachments = "Weapon attachments";
+    public const string Throwables = "Throwables";
+    public const string Medical = "Medical";
+    public const string Utility = "Utility";
+    public const string Carried = "Carried";
+    public const string Appearance = "Appearance";
+    public const string Other = "Other";
+
+    /// <summary>Display order, most useful first. Appearance is cosmetic, so last.</summary>
+    public static readonly IReadOnlyList<string> Order =
+    [
+        Weapons, Attachments, Throwables, Armour, Medical, Utility, Carried, Appearance, Other
+    ];
+
+    /// <summary>Sort key for a category; unknown ones fall to the end.</summary>
+    public static int Rank(string category)
+    {
+        for (var i = 0; i < Order.Count; i++)
+        {
+            if (Order[i].Equals(category, StringComparison.Ordinal))
+                return i;
+        }
+
+        return Order.Count;
+    }
+
+    public static string Of(string port)
+    {
+        if (string.IsNullOrWhiteSpace(port))
+            return Other;
+
+        // Appearance ports are the character model itself, not equipment.
+        if (port.EndsWith("_ItemPort", StringComparison.OrdinalIgnoreCase))
+            return Appearance;
+
+        if (Has(port, "grenade")) return Throwables;
+        if (Has(port, "medpen") || Has(port, "oxypen")) return Medical;
+
+        // Checked before "weapon" so magazines and optics do not land there.
+        if (Has(port, "magazine") || Has(port, "optics") || Has(port, "barrel") || Has(port, "module"))
+            return Attachments;
+
+        if (Has(port, "weapon") || port.StartsWith("wep_", StringComparison.OrdinalIgnoreCase))
+            return Weapons;
+
+        if (Has(port, "armor") || Has(port, "armour") || Has(port, "helmet")
+            || Has(port, "backpack") || Has(port, "necksock")
+            || port.Equals("Core", StringComparison.OrdinalIgnoreCase)
+            || port.Equals("Extra", StringComparison.OrdinalIgnoreCase))
+        {
+            return Armour;
+        }
+
+        if (Has(port, "inventory_pocket") || port.StartsWith("$slot", StringComparison.OrdinalIgnoreCase))
+            return Carried;
+
+        if (Has(port, "utility") || Has(port, "mobiglas") || Has(port, "radar") || Has(port, "lens"))
+            return Utility;
+
+        return Other;
+    }
+
+    /// <summary>Turns a port name into something readable.</summary>
+    public static string Label(string port)
+    {
+        var text = port
+            .Replace("_ItemPort", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("_attach", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .TrimStart('$')
+            .Replace('_', ' ')
+            .Trim();
+
+        if (text.Length == 0)
+            return port;
+
+        return char.ToUpperInvariant(text[0]) + text[1..];
+    }
+
+    private static bool Has(string port, string token) =>
+        port.Contains(token, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>Items of one kind, within a stash or elsewhere.</summary>
+public sealed record ItemGroup(string Category, IReadOnlyList<string> Items);
+
+/// <summary>Items seen stored at one location, grouped by kind.</summary>
 public sealed record StashLocation(
     string LocationId,
     string Name,
     DateTimeOffset LastSeen,
-    IReadOnlyList<string> Items);
+    int ItemCount,
+    IReadOnlyList<ItemGroup> Groups);
+
+/// <summary>
+/// Sorts item class names into recognisable kinds.
+/// </summary>
+/// <remarks>
+/// Item classes are engine names built from a manufacturer prefix and a
+/// descriptor - <c>behr_rifle_ballistic_01_white02</c>,
+/// <c>crlf_consumable_healing_01</c>, <c>arma_barrel_supp_s1</c>. The descriptor
+/// is consistent enough to classify on, which turns a flat wall of forty item
+/// codes into something scannable. Order matters: magazines and barrels are
+/// matched before weapons, or every <c>_mag</c> would read as a rifle.
+/// </remarks>
+public static class ItemCategories
+{
+    public const string Weapons = "Weapons";
+    public const string Attachments = "Attachments";
+    public const string Ammo = "Ammo";
+    public const string Throwables = "Throwables";
+    public const string Armour = "Armour";
+    public const string Medical = "Medical";
+    public const string Consumables = "Food & drink";
+    public const string Tools = "Tools";
+    public const string Containers = "Containers";
+    public const string Other = "Other";
+
+    public static readonly IReadOnlyList<string> Order =
+    [
+        Weapons, Ammo, Attachments, Throwables, Armour, Medical, Tools, Consumables, Containers, Other
+    ];
+
+    /// <summary>Sort key for a category; unknown ones fall to the end.</summary>
+    public static int Rank(string category)
+    {
+        for (var i = 0; i < Order.Count; i++)
+        {
+            if (Order[i].Equals(category, StringComparison.Ordinal))
+                return i;
+        }
+
+        return Order.Count;
+    }
+
+    public static string Of(string itemClass)
+    {
+        if (string.IsNullOrWhiteSpace(itemClass))
+            return Other;
+
+        var c = itemClass;
+
+        if (Has(c, "_mag") || Has(c, "ammobox") || Has(c, "ammo")) return Ammo;
+        if (Has(c, "gren")) return Throwables;
+
+        if (Has(c, "barrel") || Has(c, "optics") || Has(c, "supp") || Has(c, "scope")
+            || Has(c, "iron_sight") || Has(c, "underbarrel") || Has(c, "_stab_"))
+        {
+            return Attachments;
+        }
+
+        if (Has(c, "rifle") || Has(c, "pistol") || Has(c, "smg") || Has(c, "lmg")
+            || Has(c, "sniper") || Has(c, "shotgun") || Has(c, "cannon") || Has(c, "melee"))
+        {
+            return Weapons;
+        }
+
+        if (Has(c, "medgun") || Has(c, "healing") || Has(c, "medpen") || Has(c, "oxypen")
+            || Has(c, "vial") || Has(c, "consumable_"))
+        {
+            return Medical;
+        }
+
+        if (Has(c, "armor") || Has(c, "armour") || Has(c, "undersuit") || Has(c, "helmet")
+            || Has(c, "backpack") || Has(c, "flightsuit") || Has(c, "necksock") || Has(c, "legs")
+            || Has(c, "arms") || Has(c, "torso") || Has(c, "_core_"))
+        {
+            return Armour;
+        }
+
+        if (Has(c, "multitool") || Has(c, "tractor") || Has(c, "utility") || Has(c, "light")
+            || Has(c, "salvage") || Has(c, "mining"))
+        {
+            return Tools;
+        }
+
+        if (Has(c, "drink") || Has(c, "food") || Has(c, "bottle") || Has(c, "_can_")
+            || Has(c, "mug") || Has(c, "snack"))
+        {
+            return Consumables;
+        }
+
+        if (Has(c, "container") || Has(c, "carryable") || Has(c, "scu") || Has(c, "box"))
+            return Containers;
+
+        return Other;
+    }
+
+    private static bool Has(string value, string token) =>
+        value.Contains(token, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Buckets and orders a set of item classes.</summary>
+    public static IReadOnlyList<ItemGroup> Group(IEnumerable<string> items) =>
+        [.. items
+            .GroupBy(Of, StringComparer.Ordinal)
+            .Select(g => new ItemGroup(g.Key, [.. g.Distinct(StringComparer.OrdinalIgnoreCase).Order()]))
+            .OrderBy(g => Rank(g.Category))];
+}
 
 /// <param name="Sorties">Flights - the reliable metric.</param>
 /// <param name="EstimatedTime">Inferred time aboard; see <see cref="ShipUsage"/>.</param>
@@ -255,10 +466,14 @@ public sealed class LogLibrary : IDisposable
             .GroupBy(l => l.Port, StringComparer.Ordinal)
             .Select(g => new LoadoutSlot(
                 g.Key,
+                LoadoutCategories.Of(g.Key),
+                LoadoutCategories.Label(g.Key),
                 [.. g.GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                      .Select(i => new FacetTotal(i.Key, i.Count()))
                      .OrderByDescending(i => i.Count)]))
-            .OrderByDescending(s => s.Items.Sum(i => i.Count))
+            // Category order first, then busiest slot within each category.
+            .OrderBy(s => LoadoutCategories.Rank(s.Category))
+            .ThenByDescending(s => s.Items.Count)
             .ToList();
 
         // Items are only ever added to the log, never removed, so this is the
@@ -266,12 +481,20 @@ public sealed class LogLibrary : IDisposable
         var stash = sessions
             .SelectMany(s => s.Stash)
             .GroupBy(e => e.LocationId, StringComparer.Ordinal)
-            .Select(g => new StashLocation(
-                g.Key,
-                g.First().LocationName,
-                g.Max(e => e.SeenAt),
-                [.. g.Select(e => e.ItemClass).Distinct(StringComparer.OrdinalIgnoreCase).Order()]))
-            .OrderByDescending(l => l.Items.Count)
+            .Select(g =>
+            {
+                var items = g.Select(e => e.ItemClass)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                return new StashLocation(
+                    g.Key,
+                    g.First().LocationName,
+                    g.Max(e => e.SeenAt),
+                    items.Count,
+                    ItemCategories.Group(items));
+            })
+            .OrderByDescending(l => l.ItemCount)
             .ToList();
 
         return new LibraryStats

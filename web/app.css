@@ -565,6 +565,56 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
 }
 .loadout-grid .card, .stash-grid .card { min-height: 0; }
 
+/* Category heading inside a grouped view. */
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 26px 0 11px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--rule);
+}
+.group-head:first-child { margin-top: 0; }
+.group-head h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.group-meta {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-family: var(--mono);
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+.card-grid .card { min-height: 0; }
+
+/* Sub-heading for an item kind inside a stash card. */
+.stash-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 14px 0 2px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(23, 41, 60, .7);
+  font-size: 9.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.stash-group:first-of-type { border-top: 0; padding-top: 4px; }
+.stash-group-name { color: var(--amber); }
+
 .slot-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .slot-list li {
   display: flex;
