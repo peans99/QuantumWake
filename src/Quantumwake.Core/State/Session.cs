@@ -190,6 +190,9 @@ public sealed record SessionSummary
 
     public IReadOnlyList<CommodityTrade> Trades { get; init; } = [];
 
+    /// <summary>Items observed entering the player's inventories.</summary>
+    public IReadOnlyList<ItemPickup> Pickups { get; init; } = [];
+
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
 
@@ -216,3 +219,14 @@ public sealed record SessionSummary
     public string? PrimaryShip => Ships.MaxBy(s => s.Sorties)?.DisplayName;
     public string? LastLocation => Locations.Count > 0 ? Locations[^1].DisplayName : null;
 }
+
+/// <summary>
+/// An item observed entering one of the player's inventories.
+/// </summary>
+/// <remarks>
+/// A signal, not a certainty: the source event fires when the inventory UI
+/// pages in an item it has not shown before, which covers looting but also
+/// buying and receiving, and only while the inventory is open. Views built on
+/// it say so.
+/// </remarks>
+public sealed record ItemPickup(DateTimeOffset At, string ItemClass);

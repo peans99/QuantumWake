@@ -29,6 +29,8 @@
     <button data-view="spending">Spending</button>
     <button data-view="ledger">Ledger</button>
     <button data-view="commodities">Cargo</button>
+    <button data-view="market">Market</button>
+    <button data-view="loot">Loot</button>
     <button data-view="loadout">Loadout</button>
     <button data-view="stash">Stash</button>
     <button data-view="settings">Settings</button>
@@ -264,9 +266,9 @@
       <div>
         <b>Name the cargo?</b>
         The community keeps the id-to-name table as a public file
-        (StarCitizenWiki / scunpacked-data). Enabling this downloads it once —
-        the only network request this app will ever make — and it happens only
-        if you press the button.
+        (StarCitizenWiki / scunpacked-data). Enabling this downloads it once.
+        The app connects to the internet only on your request, here or from the
+        Settings page - never on its own.
       </div>
       <button class="ghost" id="community-enable">Download community data</button>
       <span class="muted" id="community-status"></span>
@@ -360,6 +362,75 @@
     <div id="types-chart" class="bars"></div>
   </section>
 
+  <section id="view-market" class="view">
+    <div class="section-bar">
+      <h2>Commodity market</h2>
+      <div class="controls">
+        <input type="search" id="market-search" class="search" placeholder="Search commodities…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <p class="muted caption">
+      Every commodity the community dataset knows, with your own trading record
+      against each. "Sellable at" counts facilities in the game's economy
+      simulation, and <em>show on map</em> lights the ones the star map can
+      place. Static availability, not live prices.
+    </p>
+
+    <div class="community-offer" id="market-offer" hidden>
+      <div>
+        <b>This page needs the community dataset.</b>
+        Enable it from the Settings page — one file, downloaded once, only on
+        your click.
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="market-table">
+        <thead>
+          <tr>
+            <th>Commodity</th><th>Groups</th>
+            <th class="num">Sellable at</th><th class="num">Stocked at</th>
+            <th class="num">Your SCU sold</th><th class="num">Your revenue</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="view-loot" class="view">
+    <div class="section-bar">
+      <h2>New items</h2>
+      <div class="controls">
+        <input type="search" id="loot-search" class="search" placeholder="Search items…"
+               autocomplete="off" spellcheck="false">
+        <select id="loot-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+
+    <p class="muted caption">
+      When an item was first seen in your inventories — a signal for looting,
+      buying and receiving alike, since the game logs inventory listings rather
+      than pickups. An item counts once, at its first ever appearance.
+    </p>
+
+    <div class="summary-strip" id="loot-summary"></div>
+
+    <div class="table-wrap">
+      <table id="loot-table">
+        <thead>
+          <tr>
+            <th>First seen</th><th>Item</th><th>Where you were</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="view-settings" class="view">
     <h2>Settings</h2>
 
@@ -389,8 +460,8 @@
         Cargo sales log the commodity as an id that nothing in the local install
         can resolve. The community keeps the id-to-name table as a public file
         (StarCitizenWiki / scunpacked-data). Enabling downloads it once into
-        local app data — the only network request this app can make, and only on
-        your click. Disabling deletes the local copy.
+        local app data — the app connects to the internet only when you ask it
+        to, here, and never on its own. Disabling deletes the local copy.
       </p>
       <span class="muted" id="settings-community-status"></span>
     </div>
@@ -425,7 +496,8 @@
           No account, no configuration, no upload. It reads <code>Game.log</code>
           and the backups beside it, resolves the names from your own copy of the
           game, and shows you what is there. Nothing is written to the game
-          directory, and no request leaves your machine.
+          directory, and the app connects to the internet only when you ask it
+          to, from the Settings page — never on its own.
         </p>
 
         <dl class="about-facts">

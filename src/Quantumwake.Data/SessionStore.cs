@@ -83,8 +83,9 @@ public sealed class SessionStore : IDisposable
     /// new field populates without anyone knowing to run -Rescan.
     ///
     /// 2: CommodityTrade.ResourceId.
+    /// 3: SessionSummary.Pickups.
     /// </summary>
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 3;
 
     private void Initialise()
     {
