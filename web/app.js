@@ -222,15 +222,6 @@ function bars(container, rows, format) {
 async function loadHistory() {
   const [stats, sessions] = await Promise.all([getJson('/api/stats'), getJson('/api/sessions')]);
 
-  tiles('#lib-summary', [
-    ['Sessions', stats.sessions],
-    ['In game', duration(toSeconds(stats.inGameTime))],
-    ['In menus', duration(toSeconds(stats.menuTime))],
-    ['Ships flown', stats.ships.length],
-    ['Places visited', stats.locations.length],
-    ['Incapacitations', stats.incapacitations],
-  ]);
-
   allSessions = sessions;
   sessionPage = 0;
   renderSessions();
@@ -294,16 +285,48 @@ const SESSIONS_PER_PAGE = 25;
 let allSessions = [];
 let sessionPage = 0;
 
+/** Applies the period and search filters. */
+function filteredSessions() {
+  const term = ($('#sessions-search').value || '').trim().toLowerCase();
+  const days = Number($('#sessions-period').value) || 0;
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+
+  return allSessions.filter((s) => {
+    if (cutoff && new Date(s.startedAt).getTime() < cutoff) return false;
+
+    if (term) {
+      const haystack = `${s.primaryShip || ''} ${s.lastLocation || ''}`.toLowerCase();
+      if (!haystack.includes(term)) return false;
+    }
+
+    return true;
+  });
+}
+
 /** Paged because a real library runs to well over a hundred sessions. */
 function renderSessions() {
   const body = $('#sessions-table tbody');
   body.textContent = '';
 
-  const pages = Math.max(1, Math.ceil(allSessions.length / SESSIONS_PER_PAGE));
+  const sessions = filteredSessions();
+
+  // Totals reflect the selected period, so the tiles answer "how much did I
+  // play this month" rather than always restating the lifetime figures.
+  summariseSessions(sessions);
+
+  const pages = Math.max(1, Math.ceil(sessions.length / SESSIONS_PER_PAGE));
   sessionPage = Math.min(Math.max(0, sessionPage), pages - 1);
 
   const start = sessionPage * SESSIONS_PER_PAGE;
-  const page = allSessions.slice(start, start + SESSIONS_PER_PAGE);
+  const page = sessions.slice(start, start + SESSIONS_PER_PAGE);
+
+  if (page.length === 0) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No sessions in that range.');
+    td.colSpan = 9;
+    tr.append(td);
+    body.append(tr);
+  }
 
   for (const session of page) {
     const tr = el('tr');
@@ -315,22 +338,34 @@ function renderSessions() {
       session.lastLocation || '—',
     ];
     cells.forEach((text) => tr.append(el('td', null, text)));
-    [session.jumps, session.contracts, session.incapacitations]
+    [session.jumps, session.contracts, session.deaths ?? 0, session.incapacitations]
       .forEach((n) => tr.append(el('td', 'num', String(n))));
     body.append(tr);
   }
 
-  renderPager(pages, start, page.length);
+  renderPager(pages, start, page.length, sessions.length);
 }
 
-function renderPager(pages, start, shown) {
+function summariseSessions(sessions) {
+  const sum = (pick) => sessions.reduce((total, s) => total + (pick(s) || 0), 0);
+
+  tiles('#lib-summary', [
+    ['Sessions', sessions.length],
+    ['In game', duration(sum((s) => s.inGame))],
+    ['In menus', duration(sum((s) => s.menu))],
+    ['Quantum jumps', sum((s) => s.jumps)],
+    ['Contracts', sum((s) => s.contracts)],
+    ['Deaths', sum((s) => s.deaths)],
+  ]);
+}
+
+function renderPager(pages, start, shown, total) {
   const pager = $('#sessions-pager');
   pager.textContent = '';
 
-  if (allSessions.length === 0) return;
+  if (total === 0) return;
 
-  pager.append(el('span', 'pager-info',
-    `${start + 1}–${start + shown} of ${allSessions.length}`));
+  pager.append(el('span', 'pager-info', `${start + 1}–${start + shown} of ${total}`));
 
   const nav = el('div', 'pager-nav');
 
