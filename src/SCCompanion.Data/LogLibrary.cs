@@ -655,6 +655,56 @@ public sealed class LogLibrary : IDisposable
         return best ?? "Unknown";
     }
 
+    /// <summary>
+    /// Every place in the game, with how many times each has been visited.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Visit history alone draws a map of nowhere-else: the places already seen,
+    /// floating with no context. The game's own localisation table names roughly
+    /// 1,300 locations, and running each id back through the resolver puts a
+    /// system, body and kind on it, which is everything the map needs to lay one
+    /// out. Places never visited come back with zero visits so the UI can dim
+    /// them or hide them behind a toggle.
+    /// </para>
+    /// <para>
+    /// Only places the resolver can put a real category on are added. The table
+    /// is mostly interiors - <c>Pyro1_L2_03_Entrance</c> and its 800-odd
+    /// siblings are elevator landings inside one building, and drawing them
+    /// buries the 240 places that are actually somewhere you fly to. A handful
+    /// of keys hold marketing copy rather than a name, so anything with a line
+    /// break or a paragraph's worth of text is skipped as well.
+    /// </para>
+    /// <para>
+    /// Visited places are never dropped, whatever their id looks like. Somewhere
+    /// the player has actually stood earns its dot.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<PlaceTotal> Atlas()
+    {
+        var visited = Stats().Locations.ToDictionary(p => p.RawId, StringComparer.OrdinalIgnoreCase);
+        var atlas = new List<PlaceTotal>(visited.Values);
+
+        foreach (var id in Names.PlaceIds)
+        {
+            if (visited.ContainsKey(id))
+                continue;
+
+            var place = LocationResolver.Resolve(id);
+
+            if (!place.IsResolved || place.System is null || place.Kind == LocationKind.Unknown)
+                continue;
+
+            if (place.DisplayName.Length > 44 || place.DisplayName.Contains('\\'))
+                continue;
+
+            atlas.Add(new PlaceTotal(
+                id, place.DisplayName, place.System, place.Body, place.Kind.ToString(), 0));
+        }
+
+        return atlas;
+    }
+
     /// <summary>The vendor's brand name where the game publishes one.</summary>
     /// <remarks>
     /// Commodity kiosks have no brand - every one of them logs as
@@ -675,10 +725,24 @@ public sealed class LogLibrary : IDisposable
     /// Cargo trades, newest first, with unit price worked out.
     /// </summary>
     /// <remarks>
-    /// The commodity itself is not recoverable: the log names it only by
-    /// <c>resourceGUID</c>, and that mapping lives in the DataCore rather than
-    /// anywhere the logs reach. Volume, price and place are all present, so the
-    /// view reports those and stays quiet about what was in the boxes.
+    /// <para>
+    /// What was in the boxes is not recoverable. The log names a commodity only
+    /// by <c>resourceGUID</c> - <c>b999ef65-35be-45bf-908a-5eac6e06ba12</c> for a
+    /// 320 SCU sale - and never repeats that id anywhere a name is attached.
+    /// </para>
+    /// <para>
+    /// The DataCore was the obvious place to look and it is a dead end. All four
+    /// ids traded across the backups were searched through the whole 330 MB of
+    /// <c>Game2.dcb</c> - as text, and as bytes in both guid orderings - and none
+    /// of them appears. The file does hold the commodity catalogue
+    /// (<c>records/entities/commodities/minerals/dolivine.xml</c> and friends)
+    /// and 24,442 guid strings, so the ids in the log belong to some other
+    /// numbering: most likely the shop inventory tables, which ship encrypted.
+    /// </para>
+    /// <para>
+    /// Volume, price, unit price and place are all present and exact, so the view
+    /// reports those and stays quiet about the cargo itself.
+    /// </para>
     /// </remarks>
     public IReadOnlyList<TradeRecord> Trades(int days = 0)
     {

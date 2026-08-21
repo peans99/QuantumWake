@@ -65,6 +65,16 @@ public sealed class GameNames
         new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Every location id the game publishes a name for.
+    /// </summary>
+    /// <remarks>
+    /// The visited-places list only ever holds somewhere the player has actually
+    /// stood. This is the other half - the whole map, so unvisited places can be
+    /// drawn too.
+    /// </remarks>
+    public IEnumerable<string> PlaceIds => _places.Keys;
+
     public int ItemCount => _items.Count;
     public int VehicleCount => _vehicles.Count;
     public int PlaceCount => _places.Count;

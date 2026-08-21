@@ -213,7 +213,10 @@ app.MapGet("/api/stash", (LogLibrary lib) => lib.Stats().Stash);
 app.MapGet("/api/map", (LogLibrary lib) =>
 {
     var stats = lib.Stats();
-    return Results.Ok(new { nodes = stats.Locations, destinations = stats.Destinations });
+
+    // The atlas carries unvisited places too, so the map can show the whole
+    // system and let the player filter down to where they have actually been.
+    return Results.Ok(new { nodes = lib.Atlas(), destinations = stats.Destinations });
 });
 
 // Warm the cache in the background so first paint is not blocked by a cold
