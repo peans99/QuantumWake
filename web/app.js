@@ -71,12 +71,39 @@ function el(tag, className, text) {
 
 /* ---------- tabs ---------- */
 
+function showView(name) {
+  const buttons = $$('#tabs button');
+  const target = buttons.find((b) => b.dataset.view === name);
+  if (!target) return;
+
+  buttons.forEach((b) => b.classList.toggle('active', b === target));
+  $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
+
+  // Keep the active tab in view when the strip scrolls, as it does in overlay mode.
+  target.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+
 $('#tabs').addEventListener('click', (event) => {
   const button = event.target.closest('button');
-  if (!button) return;
+  if (button) showView(button.dataset.view);
+});
 
-  $$('#tabs button').forEach((b) => b.classList.toggle('active', b === button));
-  $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${button.dataset.view}`));
+/* Driven by the overlay shell's global hotkeys, so views can be changed without
+   unlocking click-through. Also bound to the arrow keys for browser use. */
+window.scCycleView = (delta) => {
+  const views = $$('#tabs button').map((b) => b.dataset.view);
+  const current = $$('#tabs button').findIndex((b) => b.classList.contains('active'));
+  const next = (current + delta + views.length) % views.length;
+  showView(views[next]);
+};
+
+window.scShowView = showView;
+
+document.addEventListener('keydown', (event) => {
+  if (!event.ctrlKey || !event.altKey) return;
+
+  if (event.key === 'ArrowRight') { window.scCycleView(1); event.preventDefault(); }
+  if (event.key === 'ArrowLeft') { window.scCycleView(-1); event.preventDefault(); }
 });
 
 /* ---------- live view ---------- */

@@ -63,8 +63,34 @@ body::before {
 
 body.overlay { background: transparent; font-size: 13px; }
 body.overlay::before { background: repeating-linear-gradient(0deg, rgba(53,200,240,.03) 0 1px, transparent 1px 3px); }
-body.overlay .topbar { display: none; }
-body.overlay main { padding: 10px; max-width: none; }
+body.overlay main { padding: 6px 10px 10px; max-width: none; }
+
+/* The overlay keeps a slim tab strip: without it the widget is stuck on one
+   view. Brand and status are dropped to save the width. */
+body.overlay .topbar {
+  height: auto;
+  padding: 4px 6px;
+  gap: 0;
+  background: linear-gradient(180deg, rgba(10,20,32,.9), rgba(6,11,18,.86));
+  backdrop-filter: blur(8px);
+  border-bottom-color: var(--rule);
+}
+body.overlay .brand,
+body.overlay .status { display: none; }
+
+body.overlay .tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 0;
+}
+body.overlay .tabs::-webkit-scrollbar { display: none; }
+body.overlay .tabs button {
+  padding: 5px 9px;
+  font-size: 10px;
+  letter-spacing: .1em;
+  white-space: nowrap;
+}
+body.overlay .tabs button::after { left: 5px; right: 5px; bottom: 0; }
 
 body.overlay .card {
   background: linear-gradient(160deg, rgba(10, 20, 32, .88), rgba(6, 12, 20, .86));
