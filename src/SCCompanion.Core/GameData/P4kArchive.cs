@@ -15,6 +15,12 @@ namespace SCCompanion.Core.GameData;
 /// and the compressed bytes handed to a managed ZStd decoder.
 /// </para>
 /// <para>
+/// The ZStd-under-method-100 detail is community knowledge, established by the
+/// reverse-engineering behind scdatatools (https://github.com/ventorvar/scdatatools)
+/// and the unp4ck tools before it; the reader below is our own. See
+/// docs/credits.md.
+/// </para>
+/// <para>
 /// No third-party extraction tool is involved, and nothing is unpacked to disk:
 /// one entry is located and decompressed in memory. The file is opened read-only
 /// and shared, so it is safe to do while the game is running.

@@ -653,6 +653,10 @@ public sealed partial class LogEventParser
     private static partial Regex VehicleNameRegex { get; }
 
     // ---- Dormant combat patterns (archived format; not emitted by SC 4.9) ----
+    //
+    // These two shapes are not our discovery: they are reconstructed from
+    // StarLogs' event_parser.py (https://github.com/Ozy311/StarLogs), the
+    // clearest published record of the events CIG removed. See docs/credits.md.
 
     [GeneratedRegex(
         @"CActor::Kill: '(?<victim>[^']+)' \[(?<victimId>\d+)\] in zone '(?<zone>[^']*)' " +
