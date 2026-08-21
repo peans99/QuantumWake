@@ -108,6 +108,30 @@ public static class Universe
             ["P6"] = ("Pyro", "Terminus")
         };
 
+    /// <summary>
+    /// Low-orbit stations, by the body token used in <c>RR_&lt;BODY&gt;_LEO</c> ids.
+    /// </summary>
+    /// <remarks>
+    /// These have real names and are not "rest stops" at all - <c>RR_CRU_LEO</c>
+    /// is Seraphim Station and <c>RR_MIC_LEO</c> is Port Tressler. The
+    /// localisation table has no <c>RR_*_LEO</c> key to resolve them (it files
+    /// them under <c>Stanton2_Transfer_Seraphim</c> and the like), so without
+    /// this table the rules below invent a generic name for the single most
+    /// visited location in a typical log.
+    /// </remarks>
+    public static readonly IReadOnlyDictionary<string, string> LeoStations =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["HUR"] = "Everus Harbor",
+            ["S1"] = "Everus Harbor",
+            ["CRU"] = "Seraphim Station",
+            ["S2"] = "Seraphim Station",
+            ["ARC"] = "Baijini Point",
+            ["S3"] = "Baijini Point",
+            ["MIC"] = "Port Tressler",
+            ["S4"] = "Port Tressler"
+        };
+
     /// <summary>Landing zones keyed by the token that appears in log ids.</summary>
     public static readonly IReadOnlyDictionary<string, string> Cities =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

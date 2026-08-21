@@ -48,10 +48,28 @@ public class LocationResolverTests
         Assert.Equal("Area 061", location.DisplayName);
     }
 
+    /// <summary>
+    /// LEO stations are real places with real names, not generic rest stops.
+    /// The localisation table files them under Stanton4_Transfer and the like,
+    /// so nothing resolves RR_MIC_LEO without an explicit mapping - and it is
+    /// the single most visited location in a typical log.
+    /// </summary>
     [Theory]
-    [InlineData("RR_MIC_LEO", "microTech LEO Rest Stop", "microTech")]
+    [InlineData("RR_MIC_LEO", "Port Tressler", "microTech")]
+    [InlineData("RR_CRU_LEO", "Seraphim Station", "Crusader")]
+    [InlineData("RR_ARC_LEO", "Baijini Point", "ArcCorp")]
+    [InlineData("RR_HUR_LEO", "Everus Harbor", "Hurston")]
+    public void Resolves_low_orbit_stations_by_name(string id, string name, string body)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.Equal(name, location.DisplayName);
+        Assert.Equal(body, location.Body);
+        Assert.Equal(LocationKind.Station, location.Kind);
+    }
+
+    [Theory]
     [InlineData("RR_MIC_L1", "microTech L1 Rest Stop", "microTech")]
-    [InlineData("RR_CRU_LEO", "Crusader LEO Rest Stop", "Crusader")]
     [InlineData("RR_S4_L2", "microTech L2 Rest Stop", "microTech")]
     [InlineData("RR_P5_L2", "Pyro V L2 Rest Stop", "Pyro V")]
     [InlineData("RR_P3_L3", "Bloom L3 Rest Stop", "Bloom")]

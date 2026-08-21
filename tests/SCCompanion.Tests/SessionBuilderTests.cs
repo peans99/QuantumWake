@@ -189,7 +189,7 @@ public class SessionBuilderTests
         ).Build();
 
         Assert.Equal(2, summary.Locations.Count);
-        Assert.Equal("microTech LEO Rest Stop", summary.Locations[0].DisplayName);
+        Assert.Equal("Port Tressler", summary.Locations[0].DisplayName);
         Assert.Equal("New Babbage", summary.Locations[1].DisplayName);
     }
 
@@ -222,8 +222,8 @@ public class SessionBuilderTests
 
         var jump = Assert.Single(summary.Jumps);
         Assert.Equal("RR_MIC_LEO", jump.ToId);
-        Assert.Equal("microTech LEO Rest Stop", jump.ToName);
-        Assert.Contains(summary.Timeline, t => t.Kind == "quantum" && t.Text.Contains("microTech LEO"));
+        Assert.Equal("Port Tressler", jump.ToName);
+        Assert.Contains(summary.Timeline, t => t.Kind == "quantum" && t.Text.Contains("Port Tressler"));
     }
 
     /// <summary>With no arrival signal there is nothing to resolve to; the
@@ -333,7 +333,7 @@ public class LocationStateMachineTests
         machine.Apply(new LocationInventoryEvent(T0, "nekron", "RR_MIC_LEO"));
 
         Assert.Equal(LocationConfidence.High, machine.State.Confidence);
-        Assert.Equal("microTech LEO Rest Stop", machine.State.Current!.DisplayName);
+        Assert.Equal("Port Tressler", machine.State.Current!.DisplayName);
     }
 
     [Fact]
@@ -345,7 +345,7 @@ public class LocationStateMachineTests
 
         Assert.True(machine.State.IsTravelling);
         Assert.Equal("New Babbage", machine.State.TravellingTo!.DisplayName);
-        Assert.Equal("microTech LEO Rest Stop", machine.State.Current!.DisplayName);
+        Assert.Equal("Port Tressler", machine.State.Current!.DisplayName);
     }
 
     [Fact]
