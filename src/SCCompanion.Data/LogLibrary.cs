@@ -83,13 +83,19 @@ public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 /// but it is a record of churn rather than a loadout: a hand slot accumulates
 /// every weapon, tool and drink ever picked up.
 /// </param>
+/// <param name="SlotCount">How many ports in this family, e.g. 9 magazine slots.</param>
+/// <param name="Items">What currently occupies them, with how many hold each.</param>
 public sealed record LoadoutSlot(
     string Port,
     string Category,
     string Label,
-    string? Current,
+    int SlotCount,
+    IReadOnlyList<LoadoutEntry> Items,
     DateTimeOffset? CurrentSeen,
     IReadOnlyList<LoadoutHistoryItem> History);
+
+/// <param name="Count">Number of slots in the family holding this item.</param>
+public sealed record LoadoutEntry(string Name, int Count, DateTimeOffset LastSeen);
 
 /// <param name="Times">How many sessions this item was seen in the slot.</param>
 public sealed record LoadoutHistoryItem(string Name, int Times, DateTimeOffset LastSeen);
@@ -170,6 +176,20 @@ public static class LoadoutCategories
         return Other;
     }
 
+    /// <summary>
+    /// Collapses numbered sibling ports onto one family.
+    /// </summary>
+    /// <remarks>
+    /// <c>magazine_attach</c>, <c>magazine_attach_1</c> … <c>magazine_attach_8</c>
+    /// are nine copies of the same thing. Treating them separately produced nine
+    /// near-identical rows; the family is what a player thinks of as "magazines".
+    /// </remarks>
+    public static string Family(string port) =>
+        string.IsNullOrEmpty(port) ? port : TrailingNumberRegex.Replace(port, string.Empty);
+
+    private static readonly System.Text.RegularExpressions.Regex TrailingNumberRegex =
+        new(@"_\d+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>Turns a port name into something readable.</summary>
     public static string Label(string port)
     {
@@ -188,6 +208,34 @@ public static class LoadoutCategories
 
     private static bool Has(string port, string token) =>
         port.Contains(token, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True for slots a player would call equipment.
+    /// </summary>
+    /// <remarks>
+    /// A character carries 57 attachment ports and most are not gear. Eleven are
+    /// the character model itself - teeth, eyelashes, eyebrows, scalp, head, body
+    /// mesh - and several more are fixtures everyone has and nobody chooses: the
+    /// three mobiGlas ports, the default radar lens, the built-in visor, the
+    /// necksocks. Listing them buries the handful of slots that answer "what am I
+    /// carrying".
+    /// </remarks>
+    public static bool IsEquipment(string port)
+    {
+        if (string.IsNullOrWhiteSpace(port))
+            return false;
+
+        // The character model, not equipment.
+        if (port.EndsWith("_ItemPort", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Fixtures with exactly one possible occupant.
+        return !Has(port, "mobiglas")
+            && !Has(port, "necksock")
+            && !port.Equals("radar", StringComparison.OrdinalIgnoreCase)
+            && !port.Equals("helmet_visor", StringComparison.OrdinalIgnoreCase)
+            && !port.Equals("Lens_ItemPort", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>One item in a stash, with when it was last seen there.</summary>
@@ -546,36 +594,46 @@ public sealed class LogLibrary : IDisposable
             .Select(s => new FleetPoint(s.StartedAt, s.FleetSize!.Value))
             .ToList();
 
-        // The kit is whatever was worn in the most recent session that recorded
-        // any. Taking the newest sighting per slot instead would splice together
-        // a helmet from March with a rifle from August - not a kit anyone wore.
-        var kitSession = sessions
-            .Where(s => s.Loadout.Count > 0)
-            .MaxBy(s => s.StartedAt);
-
-        var kit = kitSession?.Loadout ?? [];
-
-        // Everything from earlier sessions becomes the per-slot history.
-        var earlier = sessions
-            .Where(s => s != kitSession)
+        // Last equipped per slot, across the whole library. Restricting to a
+        // single session looked tidier but lost real gear: the newest session
+        // recorded no arms, legs or core, so those slots vanished entirely.
+        var allWorn = sessions
             .SelectMany(s => s.Loadout)
-            .ToLookup(l => l.Port, StringComparer.Ordinal);
+            .Where(l => LoadoutCategories.IsEquipment(l.Port))
+            .ToList();
 
-        var loadout = kit
-            .GroupBy(l => l.Port, StringComparer.Ordinal)
+        // Merge numbered siblings. A character has nine magazine ports and four
+        // grenade ports; listing each as its own row is what made the page
+        // unreadable. One "Magazines" row saying what is in them is the answer.
+        var loadout = allWorn
+            .GroupBy(l => LoadoutCategories.Family(l.Port), StringComparer.Ordinal)
             .Select(g =>
             {
-                // Within the kit session, the latest sighting is what was worn.
-                var current = g
-                    .OrderByDescending(l => l.LastSeen)
-                    .Select(l => new LoadoutHistoryItem(Names.Item(l.ItemClass), 1, l.LastSeen))
-                    .First();
+                var slotCount = g.Select(l => l.Port).Distinct(StringComparer.Ordinal).Count();
 
-                var history = earlier[g.Key]
+                // Per port, only its latest occupant counts as equipped.
+                var equipped = g
+                    .GroupBy(l => l.Port, StringComparer.Ordinal)
+                    .Select(p => p.MaxBy(l => l.LastSeen)!)
+                    .ToList();
+
+                var items = equipped
+                    .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
+                    .Select(i => new LoadoutEntry(
+                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
+                    .OrderByDescending(i => i.Count)
+                    .ThenByDescending(i => i.LastSeen)
+                    .ToList();
+
+                var equippedNames = items
+                    .Select(i => i.Name)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var history = g
                     .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .Select(i => new LoadoutHistoryItem(
                         Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen)))
-                    .Where(i => !i.Name.Equals(current.Name, StringComparison.OrdinalIgnoreCase))
+                    .Where(i => !equippedNames.Contains(i.Name))
                     .OrderByDescending(i => i.LastSeen)
                     .ToList();
 
@@ -583,8 +641,9 @@ public sealed class LogLibrary : IDisposable
                     g.Key,
                     LoadoutCategories.Of(g.Key),
                     LoadoutCategories.Label(g.Key),
-                    current.Name,
-                    current.LastSeen,
+                    slotCount,
+                    items,
+                    items.Count > 0 ? items.Max(i => i.LastSeen) : null,
                     history);
             })
             // Category order first, then most recently used slot.
@@ -657,7 +716,6 @@ public sealed class LogLibrary : IDisposable
             FleetSize = fleetHistory.Count > 0 ? fleetHistory.Max(f => f.Vehicles) : null,
             FleetHistory = fleetHistory,
             Loadout = loadout,
-            LoadoutAsOf = kitSession?.StartedAt,
             Stash = stash
         };
     }

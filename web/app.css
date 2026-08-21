@@ -834,6 +834,7 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
   padding-top: 8px;
   border-top: 1px solid rgba(23, 41, 60, .7);
 }
+.slot-multi { color: var(--cyan); font-family: var(--mono); font-size: 12px; }
 body.overlay .slot-current { font-size: 12.5px; }
 body.overlay .slot-history-label { display: none; }
 
