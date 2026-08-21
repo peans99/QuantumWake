@@ -75,37 +75,6 @@ body::before {
 .railmark { display: none; }
 
 @media (min-width: 1400px) {
-  /* The emblem itself, glowing out of the bottom-right corner.
-
-     It was drawn geometry at six per cent in the right margin before, which is
-     invisible on anything narrower than an ultrawide - on a 1920 screen the
-     margin is 58px and the mark fell off the edge entirely. Anchored to the
-     viewport corner it is always on screen, and it grows into the margin when
-     there is one.
-
-     mix-blend-mode: screen is what makes the artwork usable here: the JPEG has
-     a dark navy ground and no transparency, and screen drops anything darker
-     than the page, leaving only the glow. */
-  body::after {
-    content: "";
-    position: fixed;
-    right: clamp(-150px, calc((100vw - var(--page)) / 2 - 280px), 30px);
-    bottom: -80px;
-    width: min(30vw, 540px);
-    aspect-ratio: 1;
-    background: url("assets/emblem.jpg") center / contain no-repeat;
-    mix-blend-mode: screen;
-    opacity: .34;
-
-    /* The artwork is square and its ground sits a shade lighter than the page,
-       so screen blending drew a visible rectangle around it. Fading past the
-       emblem's own rim leaves only the disc. */
-    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
-    mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
-
-    pointer-events: none;
-    z-index: 0;
-  }
 
   /* A vertical wordmark down the left margin, the way a HUD labels a panel. */
   .railmark {
@@ -134,28 +103,38 @@ body::before {
   }
 }
 
-/* A second emblem in the left margin, for displays with a margin worth filling.
-   A 4K screen or a 3440 ultrawide leaves some 900px either side of the content
-   column, and one corner lit with the other empty reads as lopsided rather than
-   restrained. Below 2200px there is no room, and this stays hidden. */
+/* The mark in both margins, drawn rather than photographic.
+
+   The emblem was tried here and pulled back out. It is a raster with a dark
+   ground, so it needed screen blending and a circular mask to sit on the page
+   at all, and it still had to bleed off the corners to be big enough to read.
+   The drawn geometry has real transparency, holds a thin line at any size, and
+   asks nothing of the compositor. The emblem keeps the places where it is the
+   subject: the About page and the footer.
+
+   Each mark fills its whole margin and centres inside it, so the two are
+   symmetric, vertically aligned, and never cut off by an edge. That is also why
+   this needs 2400px: below it the margins are too narrow to hold a mark without
+   it either overlapping the content or being clipped. */
 .brandmark { display: none; }
 
-@media (min-width: 2200px) {
-  .brandmark {
+@media (min-width: 2400px) {
+  .brandmark,
+  body::after {
+    content: "";
     display: block;
     position: fixed;
-    left: clamp(-150px, calc((100vw - var(--page)) / 2 - 300px), 30px);
-    top: 7%;
-    width: min(26vw, 500px);
-    aspect-ratio: 1;
-    background: url("assets/emblem.jpg") center / contain no-repeat;
-    mix-blend-mode: screen;
-    opacity: .3;
-    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
-    mask-image: radial-gradient(circle at 50% 50%, #000 45%, transparent 58%);
+    top: 0;
+    bottom: 0;
+    width: calc((100vw - var(--page)) / 2);
+    background: url("assets/watermark.svg") center center / min(64%, 460px) auto no-repeat;
+    opacity: .09;
     pointer-events: none;
     z-index: 0;
   }
+
+  .brandmark { left: 0; }
+  body::after { right: 0; }
 }
 
 body.overlay::after { display: none; }
