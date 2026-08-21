@@ -189,11 +189,15 @@ public static class ServerHost
         {
             current = layout.Current,
             tabs = OverlayLayout.SelectableTabs,
-            cards = OverlayLayout.SelectableCards
+            cards = OverlayLayout.SelectableCards,
+            reloadToken = layout.ReloadToken
         });
 
         app.MapPost("/api/overlay/layout", (OverlayLayoutStore store, OverlayLayout body) =>
             Results.Ok(store.Save(body)));
+
+        app.MapPost("/api/overlay/reload", (OverlayLayoutStore store) =>
+            Results.Ok(new { reloadToken = store.RequestReload() }));
 
         // Display names come out of the game's own localisation table, so they go stale
         // when Star Citizen patches. The cache is stamped with Data.p4k's write time and

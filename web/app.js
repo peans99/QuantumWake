@@ -1562,6 +1562,20 @@ async function renderOverlayLayout() {
   $('#overlay-layout-status').textContent = '';
 }
 
+$('#overlay-reload')?.addEventListener('click', async (e) => {
+  const status = $('#overlay-layout-status');
+  e.currentTarget.disabled = true;
+
+  try {
+    await fetch('/api/overlay/reload', { method: 'POST' });
+    status.textContent = 'the widget will reload within a few seconds';
+  } catch {
+    status.textContent = 'could not reach the server';
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
+
 async function saveOverlayLayout() {
   const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
   const density = $$('#overlay-density input').find((r) => r.checked)?.value || 'normal';
@@ -1586,13 +1600,25 @@ async function saveOverlayLayout() {
  * appear, and the type scale. Polled rather than pushed, because the overlay
  * is a separate browser and a few seconds of lag costs nothing.
  */
+let lastReloadToken = null;
+
 async function applyOverlayLayout() {
-  let layout;
+  let data;
   try {
-    layout = (await getJson('/api/overlay/layout')).current;
+    data = await getJson('/api/overlay/layout');
   } catch {
     return;
   }
+
+  // A reload asked for from the dashboard: anything a fresh page load would
+  // pick up, without hunting for the widget's window.
+  if (lastReloadToken !== null && data.reloadToken !== lastReloadToken) {
+    location.reload();
+    return;
+  }
+  lastReloadToken = data.reloadToken;
+
+  const layout = data.current;
 
   const expanded = document.body.classList.contains('expanded');
 

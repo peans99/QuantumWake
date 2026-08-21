@@ -66,6 +66,21 @@ public sealed class OverlayLayoutStore
     }
 
     /// <summary>
+    /// Bumped when someone asks a running widget to reload itself. The overlay
+    /// polls this alongside the layout, so anything a page load would pick up -
+    /// a newly enabled dataset, a fresh build - can be pushed without hunting
+    /// for the window. In memory only: a server restart is itself a change
+    /// worth reloading for.
+    /// </summary>
+    public long ReloadToken { get; private set; }
+
+    public long RequestReload()
+    {
+        lock (_gate)
+            return ++ReloadToken;
+    }
+
+    /// <summary>
     /// Saves a layout, keeping only names the app knows and never leaving the
     /// widget with no tabs at all - an overlay you cannot navigate is worse
     /// than one showing too much.

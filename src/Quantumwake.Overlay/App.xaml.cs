@@ -33,6 +33,9 @@ public partial class App : System.Windows.Application
     private MainWindow? _overlay;
     private Settings _settings = new();
 
+    /// <summary>Set while shutting down, so a closing overlay is not mistaken for the user turning it off.</summary>
+    private bool _quitting;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -48,10 +51,43 @@ public partial class App : System.Windows.Application
 
         await StartServerAsync(e.Args);
 
-        _overlay = new MainWindow();
+        _overlay = CreateOverlay();
 
         if (_settings.ShowOverlay)
             _overlay.Show();
+    }
+
+    /// <summary>
+    /// Builds the overlay window and watches for it closing.
+    /// </summary>
+    /// <remarks>
+    /// A closed WPF window cannot be shown again, so the reference has to be
+    /// dropped when the user closes the widget from its own ✕ - otherwise
+    /// turning the overlay back on from the dashboard or the tray would throw
+    /// on a corpse. Closing is also a way of turning the overlay off, so every
+    /// surface that reports its state is told.
+    /// </remarks>
+    private MainWindow CreateOverlay()
+    {
+        var window = new MainWindow();
+
+        window.Closed += (_, _) =>
+        {
+            _overlay = null;
+
+            // On the way out of the process nothing needs telling, and the
+            // remembered choice must survive to the next launch.
+            if (_quitting)
+                return;
+
+            _tray?.SetOverlayVisible(false);
+            _server?.Services.GetRequiredService<OverlayBridge>().Report(false);
+
+            _settings = _settings with { ShowOverlay = false };
+            _settings.Save();
+        };
+
+        return window;
     }
 
     private async Task StartServerAsync(string[] args)
@@ -99,7 +135,7 @@ public partial class App : System.Windows.Application
     private void SetOverlayVisible(bool visible)
     {
         if (visible)
-            (_overlay ??= new MainWindow()).Show();
+            (_overlay ??= CreateOverlay()).Show();
         else
             _overlay?.Hide();
 
@@ -112,6 +148,7 @@ public partial class App : System.Windows.Application
 
     private async void Quit()
     {
+        _quitting = true;
         _tray?.Dispose();
 
         // Close the window before stopping the server: closing is what saves the
