@@ -19,7 +19,7 @@ internal sealed record Settings
     /// Whether the transparent in-game overlay is shown. Off by default, at
     /// nekron's call: a first run should put an icon in the tray and a
     /// dashboard in the browser, not an unexpected window over the game. The
-    /// overlay is switched on from the Options page or the tray menu, and the
+    /// overlay is switched on from the Settings page or the tray menu, and the
     /// choice sticks.
     /// </summary>
     public bool ShowOverlay { get; init; } = false;

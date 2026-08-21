@@ -31,7 +31,7 @@
     <button data-view="commodities">Cargo</button>
     <button data-view="loadout">Loadout</button>
     <button data-view="stash">Stash</button>
-    <button data-view="options">Options</button>
+    <button data-view="settings">Settings</button>
     <button data-view="about">About</button>
   </nav>
 
@@ -360,8 +360,8 @@
     <div id="types-chart" class="bars"></div>
   </section>
 
-  <section id="view-options" class="view">
-    <h2>Options</h2>
+  <section id="view-settings" class="view">
+    <h2>Settings</h2>
 
     <div class="option-block" id="option-overlay">
       <div class="option-head">
@@ -382,29 +382,29 @@
     <div class="option-block">
       <div class="option-head">
         <h3>Community commodity names</h3>
-        <button class="ghost" id="options-community-enable" hidden>Download</button>
-        <button class="ghost" id="options-community-disable" hidden>Disable and delete</button>
+        <button class="ghost" id="settings-community-enable" hidden>Download</button>
+        <button class="ghost" id="settings-community-disable" hidden>Disable and delete</button>
       </div>
-      <p class="muted" id="options-community-copy">
+      <p class="muted" id="settings-community-copy">
         Cargo sales log the commodity as an id that nothing in the local install
         can resolve. The community keeps the id-to-name table as a public file
         (StarCitizenWiki / scunpacked-data). Enabling downloads it once into
         local app data — the only network request this app can make, and only on
         your click. Disabling deletes the local copy.
       </p>
-      <span class="muted" id="options-community-status"></span>
+      <span class="muted" id="settings-community-status"></span>
     </div>
 
     <div class="option-block">
       <div class="option-head">
         <h3>Log cache</h3>
-        <button class="ghost" id="options-rescan">Re-read every log</button>
+        <button class="ghost" id="settings-rescan">Re-read every log</button>
       </div>
       <p class="muted">
         Sessions are cached and only changed logs are re-read. Force a full
         re-parse if something looks stale.
       </p>
-      <span class="muted" id="options-rescan-status"></span>
+      <span class="muted" id="settings-rescan-status"></span>
     </div>
   </section>
 

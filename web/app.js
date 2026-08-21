@@ -125,8 +125,8 @@ function showView(name) {
   const target = buttons.find((b) => b.dataset.view === name);
   if (!target) return;
 
-  // Options reflects live state (the tray can change it), so re-read on entry.
-  if (name === 'options') renderOptions().catch(() => {});
+  // Settings reflects live state (the tray can change it), so re-read on entry.
+  if (name === 'settings') renderSettings().catch(() => {});
 
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
@@ -623,7 +623,7 @@ async function setCommunity(enabled, statusNode, button) {
     statusNode.textContent = '';
     await loadCommodities();
     await loadHistory();       // the ledger names its cargo rows too
-    await renderOptions();
+    await renderSettings();
   } catch (e) {
     statusNode.textContent = `failed: ${e.message}`;
   } finally {
@@ -634,14 +634,14 @@ async function setCommunity(enabled, statusNode, button) {
 $('#community-enable').addEventListener('click', (e) =>
   setCommunity(true, $('#community-status'), e.currentTarget));
 
-/* ---------- options ---------- */
+/* ---------- settings ---------- */
 
 /**
- * The Options page: the overlay switch, the community dataset, the cache.
+ * The Settings page: the overlay switch, the community dataset, the cache.
  * Everything here re-reads its state from the server on every render, so the
  * page cannot disagree with the tray menu or another browser tab for long.
  */
-async function renderOptions() {
+async function renderSettings() {
   // Overlay - only offered when the server is hosted inside QuantumWake.exe.
   try {
     const overlay = await getJson('/api/overlay');
@@ -662,10 +662,10 @@ async function renderOptions() {
   try {
     const community = await getJson('/api/community');
 
-    $('#options-community-enable').hidden = community.enabled;
-    $('#options-community-disable').hidden = !community.enabled;
+    $('#settings-community-enable').hidden = community.enabled;
+    $('#settings-community-disable').hidden = !community.enabled;
 
-    $('#options-community-status').textContent = community.enabled
+    $('#settings-community-status').textContent = community.enabled
       ? `${community.commodities} commodities, fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`
       : 'not downloaded';
   } catch { /* as above */ }
@@ -677,19 +677,19 @@ $('#overlay-toggle').addEventListener('click', async (e) => {
   try {
     await fetch(`/api/overlay?visible=${next}`, { method: 'POST' });
   } finally {
-    renderOptions();
+    renderSettings();
   }
 });
 
-$('#options-community-enable').addEventListener('click', (e) =>
-  setCommunity(true, $('#options-community-status'), e.currentTarget));
+$('#settings-community-enable').addEventListener('click', (e) =>
+  setCommunity(true, $('#settings-community-status'), e.currentTarget));
 
-$('#options-community-disable').addEventListener('click', (e) =>
-  setCommunity(false, $('#options-community-status'), e.currentTarget));
+$('#settings-community-disable').addEventListener('click', (e) =>
+  setCommunity(false, $('#settings-community-status'), e.currentTarget));
 
-$('#options-rescan').addEventListener('click', async (e) => {
+$('#settings-rescan').addEventListener('click', async (e) => {
   const button = e.currentTarget;
-  const status = $('#options-rescan-status');
+  const status = $('#settings-rescan-status');
 
   button.disabled = true;
   status.textContent = 'rescanning…';

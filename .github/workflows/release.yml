@@ -122,7 +122,7 @@ jobs:
 
           Quantum Wake then sits in the notification area. Right-click it to open the
           dashboard or quit. The in-game overlay is off by default - switch it on from
-          the dashboard's Options page or the tray menu, and the choice is remembered.
+          the dashboard's Settings page or the tray menu, and the choice is remembered.
           ``Ctrl+Alt+O`` toggles overlay click-through.
 
           Windows will warn that the publisher is unknown - the executable is not code
