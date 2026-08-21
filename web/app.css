@@ -1343,3 +1343,13 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 .uex-report { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .uex-terminal { font-size: 9.5px; }
+
+/* Build version, far right of the footer. */
+.foot-version {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--dim);
+  align-self: flex-end;
+}

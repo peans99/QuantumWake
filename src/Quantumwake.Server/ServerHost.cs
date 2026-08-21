@@ -183,11 +183,22 @@ public static class ServerHost
             });
         });
 
-        // Shown on the About page. Reflection rather than a constant so it can
-        // never disagree with the assembly that is actually running.
-        app.MapGet("/api/version", () => new
+        // Shown on the About page and in the footer. Reflection rather than a
+        // constant so it can never disagree with the assembly actually running.
+        // The build string is the informational version, which a CI build stamps
+        // with the commit ("0.2.0+abc1234") and a source build leaves plain.
+        app.MapGet("/api/version", () =>
         {
-            version = typeof(ServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"
+            var assembly = typeof(ServerHost).Assembly;
+
+            return new
+            {
+                version = assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                build = assembly
+                    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                    .FirstOrDefault()?.InformationalVersion
+            };
         });
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());

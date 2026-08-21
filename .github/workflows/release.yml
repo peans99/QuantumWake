@@ -66,10 +66,13 @@ jobs:
       - name: Publish the application
         shell: pwsh
         run: |
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+
           dotnet publish src/Quantumwake.Overlay -c Release -r win-x64 `
             --self-contained true -p:PublishSingleFile=true `
             -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:Version=${{ steps.version.outputs.version }} -o dist/app
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:InformationalVersion="${{ steps.version.outputs.version }}+$shortSha" -o dist/app
           if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
 
           # A referenced executable project leaves its runtimeconfig behind. The
