@@ -172,3 +172,36 @@ What was deliberately not built: an installer, because a single exe does not nee
 one; and a code-signing certificate, because it costs a few hundred a year and a
 free fan tool cannot justify it. The SmartScreen prompt is documented in the
 release notes instead, which is what every tool in this niche does.
+
+## 0.2.0 - the data the logs cannot carry
+
+The release after the repository went public, and the point where the app
+stopped being log-only. Everything below is opt-in and off by default; the
+Settings page is where all of it lives, and the app still makes no request
+anyone did not click for.
+
+**The community dataset** (StarCitizenWiki/scunpacked-data, built with octfx's
+ScDataDumper) closed the oldest open question in these docs: cargo sales are
+now named. The resourceGUID that resolves against nothing in the local install
+- verified through the whole DataCore in seven byte orders - resolves against
+the community's table on the first try. The same download supplies where each
+commodity trades, the ship reference (role, crew, insurance claim cost and
+wait) and the item reference (size, grade, maker). Five files, ~110 MB,
+digested to ~2.5 MB.
+
+**UEX** joined as a second, separately-consented integration: crowd-sourced
+best prices on the Market page, and - with the user's own UEX keys - the
+option to report the sale prices the logs already recorded, previewed before a
+byte is sent. A log reader turns out to be a natural datarunner: every kiosk
+sale line is an exact price at a known terminal at a known time.
+
+Around the data came the pages: Market, Loot (honest about being a first-seen
+signal, not a pickup event), Settings, and the map grew commodity highlighting,
+follow mode, per-place detail cards and keyboard zoom. The overlay stopped
+starting by default, shrank its tab strip to the six glanceable views, and
+became controllable from the dashboard through an in-process bridge. Tables
+sort by their headers everywhere.
+
+The pre-1.0 notice went into the README and the release notes in the same
+breath: until 1.0 the ground will keep moving, and the cache schema version
+plus the rebuild-from-logs design are what make that safe to say.
