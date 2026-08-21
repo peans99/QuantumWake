@@ -55,15 +55,39 @@ if (webRoot is not null)
 
 app.MapHub<LiveHub>("/hub/live");
 
-app.MapGet("/api/install", () => install is null
+app.MapGet("/api/install", (LogLibrary lib) => install is null
     ? Results.NotFound(new { message = "No Star Citizen install found." })
     : Results.Ok(new
     {
         channel = install.Channel,
         root = install.RootPath,
         hasGameLog = install.HasGameLog,
-        backups = install.BackupLogs().Count
+        backups = install.BackupLogs().Count,
+        names = new
+        {
+            loaded = lib.Names.IsLoaded,
+            items = lib.Names.ItemCount,
+            vehicles = lib.Names.VehicleCount
+        }
     }));
+
+// Display names come out of the game's own localisation table, so they go stale
+// when Star Citizen patches. The cache is stamped with Data.p4k's write time and
+// rebuilds itself, but this forces it.
+app.MapPost("/api/names/refresh", (LogLibrary lib) =>
+{
+    if (install is null)
+        return Results.NotFound(new { message = "No install." });
+
+    lib.LoadNames(install.RootPath);
+
+    return Results.Ok(new
+    {
+        loaded = lib.Names.IsLoaded,
+        items = lib.Names.ItemCount,
+        vehicles = lib.Names.VehicleCount
+    });
+});
 
 app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
@@ -179,6 +203,11 @@ if (install is not null)
     {
         try
         {
+            // Names first: cheap when cached, and every view reads better with them.
+            library.LoadNames(install.RootPath);
+            app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
+                library.Names.ItemCount, library.Names.VehicleCount);
+
             var parsed = library.Scan(install);
             app.Logger.LogInformation("Library ready: {Parsed} newly parsed, {Total} sessions.",
                 parsed, library.Store.Count());
