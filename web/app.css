@@ -1864,7 +1864,45 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 .cargo-line.sell .rate { color: var(--green); }
 .cargo-line.buy .rate { color: var(--amber); }
 
+/*
+ * Choosing where to buy, inside the list being planned. A common good sells in
+ * fifty places, so the cheapest is offered as the default rather than imposed
+ * as the answer.
+ */
+.trip-chooser {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(0, 0, 0, .25);
+  clip-path: var(--chamfer);
+}
+.chooser-head {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.chooser-rows { display: flex; flex-direction: column; gap: 5px; }
+.chooser-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+  align-items: center;
+}
+.chooser-row .select { width: 100%; min-width: 0; font-size: 11.5px; padding: 4px 7px; }
+.chooser-what .name { font-size: 12.5px; }
+.chooser-what .sub { font-size: 10.5px; color: var(--dim); font-family: var(--mono); }
+.chooser-none { font-size: 11px; color: var(--dim); font-style: italic; }
+.chooser-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.chooser-foot .spacer { flex: 1; }
+
+@media (max-width: 700px) {
+  .chooser-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+}
+
 /* ---------- flight plans ---------- */
+
 
 /*
  * A stop reads as a numbered line: the number is the button, because crossing

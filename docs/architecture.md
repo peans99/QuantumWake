@@ -192,7 +192,16 @@ still works, in both directions.
 A stop can come from anywhere that knows a place: the map's detail card, the
 station panel, a trade route (two stops, buy then sell, carrying the SCU and the
 prices as notes), or a shopping list (one stop per terminal, carrying what to
-buy there — a list knows where its missing things sell). Terminal names are not
+buy there — a list knows where its missing things sell).
+
+A list asks before it plans. The cheapest seller UEX knows is a fine default and
+a poor answer: for a common good it is routinely three jumps out of the way, and
+only the player knows what else the run has to fit around. So the button opens a
+chooser — one row per missing thing, its sellers cheapest first with price and
+stock, each row skippable — and the stop count updates as the choices change.
+Anything with no known seller is shown as such rather than quietly dropped.
+
+Terminal names are not
 atlas names, so a stop keeps the terminal's own name for reading and the atlas
 id, where one matches, for the map. A stop the map cannot place is still on the
 plan and still in the list; it simply has no dot.
