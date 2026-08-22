@@ -2298,7 +2298,7 @@ async function loadJobList() {
     shop.addEventListener('click', () => planShoppingTrip(job, card));
     head.append(shop);
 
-    const remove = el('button', 'ghost', 'Delete');
+    const remove = el('button', 'ghost danger', 'Delete');
     remove.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
       loadJobList();
@@ -5025,7 +5025,7 @@ function renderTripPanel() {
   track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
   actions.append(track);
 
-  const scrap = el('button', 'ghost', 'Delete plan');
+  const scrap = el('button', 'ghost danger', 'Delete plan');
   scrap.addEventListener('click', async () => {
     await tripCall(`/api/trips/${trip.id}`, 'DELETE');
     cargo.trip = false;
