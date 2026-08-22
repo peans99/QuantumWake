@@ -653,16 +653,15 @@ h2.spaced { margin-top: 32px; }
 /* ---------- buttons ---------- */
 
 /*
- * This style lived inside `.map-tools`, so the map had HUD buttons and the
- * other twenty-nine - New list, Save, Delete, Refresh, Plan trip - were
- * whatever Windows draws by default: grey, rounded, and from another
- * application. The rule is the same one, unscoped, and everything that was
- * already writing `class="ghost"` picks it up.
+ * The look belongs to the element, not to a class somebody has to remember.
  *
- * Chamfered like the panels, because the corner cut is the one shape this
- * interface repeats everywhere.
+ * It started scoped to `.map-tools`, then moved to `.ghost` - and a button that
+ * forgot the class still came out as Windows chrome in the middle of a HUD.
+ * There is no version of "remember the class on all forty of them, and on every
+ * one added later" that stays true, so the default is now correct and the
+ * exceptions say they are exceptions.
  */
-button.ghost {
+button {
   background: linear-gradient(160deg, rgba(23, 41, 60, .5), rgba(7, 12, 20, .5));
   border: 1px solid var(--rule);
   color: var(--muted);
@@ -676,35 +675,81 @@ button.ghost {
   transition: border-color .14s, color .14s, background .14s;
 }
 
-button.ghost:hover:not(:disabled) {
+button:hover:not(:disabled) {
   border-color: var(--cyan-deep);
   background: linear-gradient(160deg, rgba(53, 200, 240, .16), rgba(13, 92, 120, .1));
   color: var(--cyan-hot);
 }
 
 /* Pressed reads as pressed: the lift goes away rather than deepening. */
-button.ghost:active:not(:disabled) {
+button:active:not(:disabled) {
   background: rgba(53, 200, 240, .05);
   color: var(--cyan);
 }
 
-/* Keyboard focus has to be visible even though the corner is clipped, so the
-   ring is drawn inside the button with a shadow rather than an outline. */
-button.ghost:focus-visible,
-button.primary:focus-visible {
+/* Keyboard focus has to survive the clipped corner, which crops an outline. */
+button:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--cyan);
   color: var(--cyan-hot);
 }
 
-button.ghost:disabled { opacity: .35; cursor: default; }
+button:disabled { opacity: .35; cursor: default; }
+
+/*
+ * Buttons that are really text: a place name, a search result, a tab, an ✕.
+ * Each already declares its own background and border, but not the type - and a
+ * PLACE NAME SHOUTED IN CAPS is what a base rule gets wrong if nothing says
+ * otherwise. Listed together so the exceptions are countable.
+ */
+.tabs button,
+.place-link,
+.map-result,
+.more-toggle,
+.sold-chip,
+.group-btn,
+.map-info-close,
+.market-close,
+.trip-place,
+.trip-number,
+.seg button,
+.pager-btn {
+  text-transform: none;
+  letter-spacing: normal;
+  clip-path: none;
+}
+
+/* Those that mean to shout, keeping the tracking that goes with it. */
+.tabs button,
+.seg button,
+.pager-btn,
+.group-btn {
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
 
 /* A destructive action should not look like the three beside it. */
+button.danger:hover:not(:disabled),
 button.ghost.danger:hover:not(:disabled) {
   border-color: var(--red);
   background: rgba(255, 90, 77, .12);
   color: var(--red);
 }
+
+
+
+/*
+ * This style lived inside `.map-tools`, so the map had HUD buttons and the
+ * other twenty-nine - New list, Save, Delete, Refresh, Plan trip - were
+ * whatever Windows draws by default: grey, rounded, and from another
+ * application. The rule is the same one, unscoped, and everything that was
+ * already writing `class="ghost"` picks it up.
+ *
+ * Chamfered like the panels, because the corner cut is the one shape this
+ * interface repeats everywhere.
+ */
+/* `.ghost` now means "the ordinary button", which is the default; it stays as a
+   name because forty places write it and its modifiers hang off it. */
 
 /* The one action a screen is actually for. */
 button.primary {
