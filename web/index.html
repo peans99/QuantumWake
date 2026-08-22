@@ -25,7 +25,14 @@
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
-    <button data-view="jobs">Jobs</button>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="jobs">Shopping</button>
+        <button data-view="blueprints">Blueprints</button>
+        <button data-view="routes">Routes</button>
+      </div>
+    </div>
     <div class="tab-group">
       <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
       <div class="group-menu">
@@ -44,7 +51,6 @@
         <button data-view="ledger">Ledger</button>
         <button data-view="commodities">Cargo</button>
         <button data-view="market">Market</button>
-        <button data-view="routes">Routes</button>
       </div>
     </div>
     <div class="tab-group">
@@ -300,28 +306,21 @@
 
   <!-- JOBS -->
   <section id="view-jobs" class="view">
-    <h2>Jobs</h2>
-    <p class="muted caption">
-      What you are working towards. Contracts come from the logs by themselves;
-      crafting jobs and shopping lists are yours to write, and check themselves
-      against what your stashes hold — so a job knows what is still missing and
-      where the rest is sold.
-    </p>
-
-    <h2 class="spaced">Contracts in progress</h2>
-    <div id="jobs-contracts"></div>
-
-    <div class="section-bar spaced">
-      <h2>Crafting &amp; shopping</h2>
+    <div class="section-bar">
+      <h2>Shopping</h2>
       <div class="controls">
-        <select id="jobs-blueprint" class="select" title="Blueprints you have been given"></select>
-        <button class="ghost" id="jobs-plan">Set as goal</button>
         <button class="ghost" id="jobs-new">New list</button>
       </div>
     </div>
+    <p class="muted caption">
+      Lists of things to gather, checked against what your stashes hold — so a
+      list knows what is still missing, where the rest of it is, and what the
+      missing part costs. The <em>+ list</em> button on Market, Parts and
+      Mining adds to whichever list you are filling.
+    </p>
 
     <form class="job-form" id="job-form" hidden>
-      <input type="text" id="job-title" placeholder="What is this for? e.g. Omnisky IX build" autocomplete="off">
+      <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
       <textarea id="job-items" rows="5"
                 placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
       <div class="job-form-actions">
@@ -331,6 +330,32 @@
     </form>
 
     <div id="jobs-list"></div>
+
+    <h2 class="spaced">Contracts in progress</h2>
+    <p class="muted caption">
+      Taken from the running session only — contracts are dropped when you
+      leave the game, so a closed game has none.
+    </p>
+    <div id="jobs-contracts"></div>
+  </section>
+
+  <!-- BLUEPRINTS -->
+  <section id="view-blueprints" class="view">
+    <div class="section-bar">
+      <h2>Blueprints</h2>
+      <div class="controls">
+        <select id="jobs-blueprint" class="select" title="Blueprints you have been given"></select>
+        <button class="ghost" id="jobs-plan">Set as goal</button>
+      </div>
+    </div>
+    <p class="muted caption">
+      What you can craft, and what it still needs. Pick a blueprint — yours are
+      listed first, since the game tells the logs which ones you have been
+      given — and it becomes a tracked build with its materials checked against
+      your stashes. The full catalogue lives under Reference → Crafting.
+    </p>
+
+    <div id="blueprint-jobs"></div>
   </section>
 
   <!-- LOGBOOK -->
@@ -639,6 +664,7 @@
     <div class="section-bar">
       <h2>Commodity market</h2>
       <div class="controls">
+        <span class="muted" id="market-count"></span>
         <span class="muted" id="market-age" title="When the UEX snapshot was fetched"></span>
         <button class="ghost" id="market-refresh" hidden
                 title="Fetch the latest prices from UEX now">Refresh prices</button>
@@ -663,21 +689,6 @@
       </div>
     </div>
 
-    <div id="fuel-block" hidden>
-      <h2 class="spaced">Fuel</h2>
-      <p class="muted caption">
-        What a refill costs, per terminal — cheapest first. Needs the fuel feed
-        in Settings.
-      </p>
-      <div class="table-wrap">
-        <table id="fuel-table">
-          <thead><tr><th>Fuel</th><th>Terminal</th><th class="num">Price</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <h2 class="spaced">Commodities</h2>
-    </div>
-
     <div class="table-wrap">
       <table id="market-table">
         <thead>
@@ -691,6 +702,21 @@
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+
+    <div id="fuel-block" hidden>
+      <h2 class="spaced">Fuel</h2>
+      <p class="muted caption">
+        The cheapest refills per fuel, from the fuel feed in Settings. The
+        filters above apply to commodities, not to this.
+      </p>
+      <div class="table-wrap">
+        <table id="fuel-table">
+          <thead><tr><th>Fuel</th><th>Terminal</th><th class="num">Price</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted caption" id="fuel-count"></p>
     </div>
   </section>
 

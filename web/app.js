@@ -132,7 +132,7 @@ function showView(name) {
   if (name === 'settings') renderSettings().catch(() => {});
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
-  if (name === 'jobs') loadJobs().catch(() => {});
+  if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
@@ -866,13 +866,31 @@ async function loadMarket() {
     const fuelBody = $('#fuel-table tbody');
     fuelBody.textContent = '';
 
-    for (const row of [...fuel].sort((a, b) => a.fuel.localeCompare(b.fuel) || a.price - b.price)) {
-      const tr = el('tr');
-      tr.append(el('td', null, row.fuel));
-      tr.append(tdPlace(row.terminal, 'muted'));
-      tr.append(el('td', 'num', money(row.price)));
-      fuelBody.append(tr);
+    // Only the cheapest few of each fuel. Every terminal that sells hydrogen
+    // is two hundred rows nobody reads, and it buried the commodities this
+    // page is actually about.
+    const perFuel = 8;
+    const byFuel = new Map();
+
+    for (const row of [...fuel].sort((a, b) => a.price - b.price)) {
+      if (!byFuel.has(row.fuel)) byFuel.set(row.fuel, []);
+      byFuel.get(row.fuel).push(row);
     }
+
+    for (const [name, rows] of [...byFuel].sort((a, b) => a[0].localeCompare(b[0]))) {
+      for (const row of rows.slice(0, perFuel)) {
+        const tr = el('tr');
+        tr.append(el('td', null, name));
+        tr.append(tdPlace(row.terminal, 'muted'));
+        tr.append(el('td', 'num', money(row.price)));
+        fuelBody.append(tr);
+      }
+    }
+
+    const hidden = fuel.length - [...byFuel.values()].reduce((n, r) => n + Math.min(perFuel, r.length), 0);
+    $('#fuel-count').textContent = hidden > 0
+      ? `Cheapest ${perFuel} per fuel shown; ${hidden.toLocaleString()} dearer terminals not listed.`
+      : '';
   } catch { $('#fuel-block').hidden = true; }
 
   // The snapshot's own age and the shortcut to renew it, next to the search -
@@ -917,6 +935,15 @@ function renderMarket() {
     && (!term
       || e.name.toLowerCase().includes(term)
       || e.groups.some((g) => g.toLowerCase().includes(term))));
+
+  // Say how many matched, so picking a group visibly does something without
+  // scrolling to the table to find out.
+  const counter = $('#market-count');
+  if (counter) {
+    counter.textContent = marketEntries.length && (group || term)
+      ? `${rows.length} of ${marketEntries.length}`
+      : '';
+  }
 
   if (!rows.length) {
     const tr = el('tr');
@@ -2010,15 +2037,33 @@ async function loadJobContracts() {
   const host = $('#jobs-contracts');
   host.textContent = '';
 
+  // Contracts do not survive a game restart, so an "in progress" contract
+  // from a session that has ended is a ghost. Only the running session's
+  // contracts are real - with the game closed, there are none.
+  let live = null;
+  try {
+    live = await getJson('/api/now');
+  } catch { /* server not answering; treat as not playing */ }
+
+  if (!live?.inGame) {
+    host.append(el('p', 'muted',
+      'Nothing active — the game is not running. Contracts are dropped when you leave, '
+      + 'so only a live session can have any.'));
+    return;
+  }
+
   let rows = [];
   try {
-    rows = await getJson('/api/contracts?days=30');
+    rows = await getJson('/api/contracts?days=2');
   } catch { /* nothing to show */ }
 
-  const open = rows.filter((c) => c.outcome === 'InProgress');
+  // This session only: anything taken before it started belongs to the past.
+  const since = live.sessionStarted ? new Date(live.sessionStarted).getTime() : 0;
+  const open = rows.filter((c) =>
+    c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
   if (!open.length) {
-    host.append(el('p', 'muted', 'No contract left open in the last 30 days.'));
+    host.append(el('p', 'muted', 'No contract open in this session.'));
     return;
   }
 
@@ -2089,7 +2134,9 @@ function jobProgress(done, total, label) {
 
 async function loadJobList() {
   const host = $('#jobs-list');
+  const craftHost = $('#blueprint-jobs');
   host.textContent = '';
+  if (craftHost) craftHost.textContent = '';
 
   let jobs = [];
   try {
@@ -2098,10 +2145,19 @@ async function loadJobList() {
 
   renderPinnedJob(jobs);
 
-  if (!jobs.length) {
+  // Shopping and crafting are different work, so they live on different
+  // pages; the cards themselves are identical.
+  const lists = jobs.filter((j) => j.kind !== 'craft');
+  const builds = jobs.filter((j) => j.kind === 'craft');
+
+  if (!lists.length) {
     host.append(el('p', 'muted',
-      'No lists yet. Start one here, or plan a blueprint from Reference → Crafting.'));
-    return;
+      'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
+  }
+
+  if (craftHost && !builds.length) {
+    craftHost.append(el('p', 'muted',
+      'No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.'));
   }
 
   for (const job of jobs) {
@@ -2187,7 +2243,7 @@ async function loadJobList() {
 
     table.append(body);
     card.append(table);
-    host.append(card);
+    (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
   }
 }
 
@@ -2759,11 +2815,59 @@ const MANUFACTURERS = {
 /** The codes with a local logo image; the merged map must not grow this set. */
 const MANUFACTURER_LOGOS = new Set(Object.keys(MANUFACTURERS));
 
+/**
+ * Every way a ship name can announce its maker, to the code that names its
+ * logo file.
+ *
+ * Ship names used to arrive as log ids - "DRAK Corsair" - so the first word
+ * was the code and the logo lookup was a dictionary hit. Once the community
+ * dataset started resolving real names, the same ship reads "Drake Corsair"
+ * and that lookup quietly missed for every maker whose code is not also its
+ * name, which is most of them: RSI and MISC kept their badges and nobody else
+ * did. So codes AND names, longest match first, because "Consolidated Outland"
+ * must beat "Consolidated".
+ */
+let makerAliases = new Map();
+
+function buildMakerAliases() {
+  makerAliases = new Map();
+
+  for (const [code, name] of Object.entries(MANUFACTURERS)) {
+    makerAliases.set(code.toLowerCase(), code);
+    makerAliases.set(name.toLowerCase(), code);
+    makerAliases.set(name.split(' ')[0].toLowerCase(), code);
+  }
+}
+
+buildMakerAliases();
+
+/** Splits a ship name into its maker and the model that follows. */
+function makerOf(shipName) {
+  const words = String(shipName).trim().split(/\s+/);
+
+  for (let take = Math.min(3, words.length); take >= 1; take--) {
+    const code = makerAliases.get(words.slice(0, take).join(' ').toLowerCase());
+
+    if (code) {
+      return {
+        code,
+        name: MANUFACTURERS[code] || code,
+        model: words.slice(take).join(' ') || shipName,
+      };
+    }
+  }
+
+  return { code: null, name: words[0], model: words.slice(1).join(' ') || shipName };
+}
+
 async function loadManufacturers() {
   try {
     const table = await getJson('/api/manufacturers');
     for (const [code, name] of Object.entries(table))
       if (!MANUFACTURERS[code]) MANUFACTURERS[code] = name;
+
+    // The new names are new ways for a ship to announce its maker.
+    buildMakerAliases();
   } catch { /* community data off; the fallback covers the common fleet */ }
 }
 
@@ -2845,8 +2949,7 @@ function renderFleetShips() {
     const grounded = ship.reference && !ship.reference.isSpaceship;
     const off = excludedShips.has(ship.name);
 
-    // "DRAK Clipper" -> prefix + model.
-    const [prefix, ...rest] = ship.name.split(' ');
+    const maker = makerOf(ship.name);
     const card = el('article', off ? 'ship-card excluded' : 'ship-card');
 
     // The Owned tick: untick a rental or a ship since sold and it leaves
@@ -2871,20 +2974,20 @@ function renderFleetShips() {
     card.append(tick);
 
     const badge = el('div', 'ship-logo');
-    if (MANUFACTURER_LOGOS.has(prefix)) {
+    if (maker.code && MANUFACTURER_LOGOS.has(maker.code)) {
       const img = document.createElement('img');
-      img.src = `assets/manufacturers/${prefix}.png`;
-      img.alt = MANUFACTURERS[prefix];
+      img.src = `assets/manufacturers/${maker.code}.png`;
+      img.alt = maker.name;
       img.loading = 'lazy';
       badge.append(img);
     } else {
-      badge.append(el('span', 'ship-logo-text', prefix));
+      badge.append(el('span', 'ship-logo-text', maker.code || maker.name));
     }
     card.append(badge);
 
     const body = el('div', 'ship-body');
-    body.append(el('div', 'ship-name', rest.join(' ') || ship.name));
-    body.append(el('div', 'ship-maker', MANUFACTURERS[prefix] || prefix));
+    body.append(el('div', 'ship-name', maker.model));
+    body.append(el('div', 'ship-maker', maker.name));
 
     const stat = el('div', 'ship-stats');
     stat.append(el('b', null, String(ship.sorties)));
