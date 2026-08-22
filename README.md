@@ -136,7 +136,6 @@ fleet and the places you have been carry on. The date defaults to Alpha 4.8 on
 
 ## Two things it deliberately does not do
 
-
 **It is not a killboard.** Star Citizen 4.9 does not write kill or
 vehicle-destruction events to `Game.log`. This was verified, not assumed: a
 line-by-line scan of 403 MB across 144 log backups found **zero** `<Actor Death>`
@@ -275,7 +274,6 @@ rather than eyeballed.
 
 ## Documentation
 
-
 - [docs/findings.md](docs/findings.md) — the missing-combat-events evidence
 - [docs/log-format-reference.md](docs/log-format-reference.md) — verified line formats and quirks
 - [docs/architecture.md](docs/architecture.md) — decisions and why
@@ -344,16 +342,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.1
-
-- **An update no longer arrives half-applied.** The dashboard's stylesheet and
-  script were served without a caching rule, so the browser guessed how long
-  they stayed fresh: the version number came from the app and read new, while
-  the page around it was the previous release. Only Ctrl+F5 fixed it, which is
-  not something anyone should have to know. They are now revalidated on every
-  load — still a 304 and still instant, but always the build you are running.
-
-### 0.6.0
+### 0.6.2
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
@@ -364,6 +353,11 @@ buttons stop looking borrowed.
   reminder rather than something to memorise. And planets are finally on the
   map: they were labels with nothing drawn, which is why a station looked bigger
   than the world it orbits. Each body is a quiet disc with its places on it.
+  The marks are single bold silhouettes rather than little drawings: they are
+  read at six pixels, where a headframe and an orbit turn to mush. Sizes are
+  levelled too — visits still nudge a mark, but gently, because a four-fold
+  range made the map read as a jumble of sizes rather than a set of places.
+
 - **A crowded cluster opens up when you zoom in.** microTech piled its sites on
   top of each other however far you zoomed; the cluster now spreads once the
   view is close enough to be naming everything, and stays compact at system
@@ -408,6 +402,12 @@ buttons stop looking borrowed.
   the map's toolbar, so the map had chamfered cyan buttons and the other
   twenty-nine were whatever Windows draws by default. Delete now reads as
   destructive, an on state reads as on, and keyboard focus is visible.
+- **An update no longer arrives half-applied.** The dashboard's stylesheet and
+  script were served with no caching rule, so the browser guessed how long they
+  stayed fresh: the version number came from the app and read new while the page
+  around it was the previous release. Only Ctrl+F5 fixed that, which is not
+  something anyone should have to know. Both are revalidated on every load now —
+  still a 304, still instant, but always the build you are running.
 - **This update re-reads your logs once.** A summary parsed by an older build
   knows nothing of fields added since — medical beds would have been invisible
   to everyone already running the app — so the cache retires itself and the
