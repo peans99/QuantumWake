@@ -8,10 +8,19 @@ namespace Quantumwake.Data;
 /// carries, and how tightly it draws them.
 /// </summary>
 /// <param name="Density">"normal", "compact" or "tiny" - a type scale.</param>
+/// <param name="Known">
+/// The cards the app offered when this layout was saved. Without it a card
+/// added in a later version is simply absent from <paramref name="Cards"/>,
+/// which reads as "the user switched it off" - so anyone who had ever touched
+/// these settings would silently never see a new card, with no reason to go
+/// looking for a switch they did not know existed. Null on layouts written
+/// before this was recorded.
+/// </param>
 public sealed record OverlayLayout(
     IReadOnlyList<string> Tabs,
     IReadOnlyList<string> Cards,
-    string Density)
+    string Density,
+    IReadOnlyList<string>? Known = null)
 {
     /// <summary>The views worth having over a game, and the order they sit in.</summary>
     public static readonly IReadOnlyList<string> SelectableTabs =
@@ -19,12 +28,13 @@ public sealed record OverlayLayout(
 
     /// <summary>The Now page's cards, by their data-card name.</summary>
     public static readonly IReadOnlyList<string> SelectableCards =
-        ["location", "ship", "session", "handle", "feed", "stats", "respawn", "job", "trade"];
+        ["location", "ship", "session", "handle", "feed", "stats", "respawn", "job", "trip", "trade"];
 
     public static OverlayLayout Default => new(
         ["now", "map", "commodities", "market", "loadout", "stash"],
         [.. SelectableCards],
-        "normal");
+        "normal",
+        [.. SelectableCards]);
 }
 
 /// <summary>
@@ -37,8 +47,17 @@ public sealed record OverlayLayout(
 /// </remarks>
 public sealed class OverlayLayoutStore
 {
+    /// <summary>
+    /// The cards the app offered before it began recording the offer. A layout
+    /// file with no <see cref="OverlayLayout.Known"/> list was written by a
+    /// build showing exactly these, so anything outside them is genuinely new.
+    /// </summary>
+    private static readonly IReadOnlyList<string> CardsBeforeKnownWasRecorded =
+        ["location", "ship", "session", "handle", "feed", "stats", "respawn", "job", "trade"];
+
     private readonly string _path;
     private readonly Lock _gate = new();
+
     private OverlayLayout _layout = OverlayLayout.Default;
 
     public OverlayLayoutStore(string? directory = null)
@@ -50,8 +69,9 @@ public sealed class OverlayLayoutStore
         try
         {
             if (File.Exists(_path))
-                _layout = JsonSerializer.Deserialize<OverlayLayout>(File.ReadAllText(_path))
-                    ?? OverlayLayout.Default;
+                _layout = WithNewCards(
+                    JsonSerializer.Deserialize<OverlayLayout>(File.ReadAllText(_path))
+                        ?? OverlayLayout.Default);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -62,6 +82,34 @@ public sealed class OverlayLayoutStore
     public OverlayLayout Current
     {
         get { lock (_gate) return _layout; }
+    }
+
+    /// <summary>
+    /// Switches on cards that did not exist when this layout was saved.
+    /// </summary>
+    /// <remarks>
+    /// Only cards the saved layout never had the chance to refuse are added,
+    /// so switching one off still sticks - which is why a file with no
+    /// <see cref="OverlayLayout.Known"/> list falls back to
+    /// <see cref="CardsBeforeKnownWasRecorded"/> rather than to its own
+    /// selection. Reading the selection as the offer would switch back on
+    /// every card the user had ever turned off.
+    /// </remarks>
+    private static OverlayLayout WithNewCards(OverlayLayout saved)
+    {
+        var offered = (saved.Known ?? CardsBeforeKnownWasRecorded).ToHashSet(StringComparer.Ordinal);
+        var added = OverlayLayout.SelectableCards.Where(c => !offered.Contains(c)).ToList();
+
+        if (added.Count == 0)
+            return saved;
+
+        var wanted = saved.Cards.Concat(added).ToHashSet(StringComparer.Ordinal);
+
+        return saved with
+        {
+            Cards = [.. OverlayLayout.SelectableCards.Where(wanted.Contains)],
+            Known = [.. OverlayLayout.SelectableCards],
+        };
     }
 
     /// <summary>
@@ -100,7 +148,7 @@ public sealed class OverlayLayoutStore
             .ToList();
 
         var density = layout.Density is "compact" or "tiny" ? layout.Density : "normal";
-        var cleaned = new OverlayLayout(tabs, cards, density);
+        var cleaned = new OverlayLayout(tabs, cards, density, [.. OverlayLayout.SelectableCards]);
 
         lock (_gate)
         {
