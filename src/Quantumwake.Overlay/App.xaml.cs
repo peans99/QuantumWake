@@ -43,6 +43,10 @@ public partial class App : System.Windows.Application
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        // Before Settings.Load, so --data moves the whole app - overlay
+        // preferences and WebView2 profile included - and not just the server.
+        Core.AppPaths.UseFromArguments(e.Args);
+
         _settings = Settings.Load();
 
         _tray = new TrayPresence(_settings.ShowOverlay);

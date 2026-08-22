@@ -11,10 +11,7 @@ namespace Quantumwake.Core.Logging;
 /// </remarks>
 public static class InstallPathStore
 {
-    private static string Path0 => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Quantumwake",
-        "install-path.txt");
+    private static string Path0 => Path.Combine(AppPaths.Root, "install-path.txt");
 
     /// <summary>The remembered folder, or null when none was ever set.</summary>
     public static string? Load()

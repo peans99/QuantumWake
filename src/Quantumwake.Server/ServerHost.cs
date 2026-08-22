@@ -30,6 +30,11 @@ public static class ServerHost
         // WebView2 control inside the overlay shell, and (later) remote clients in
         // server mode. REST answers historical queries; SignalR pushes the live view.
 
+        // Before anything reads a path: --data moves every cache, digest, job
+        // and setting somewhere else, which is what makes a genuinely fresh
+        // first run testable without disturbing the real one.
+        Core.AppPaths.UseFromArguments(args);
+
         var builder = WebApplication.CreateBuilder(args);
 
         var install = ResolveInstall(args, builder.Configuration);
@@ -154,9 +159,7 @@ public static class ServerHost
         // First-run marker: the dashboard shows its setup screen until this
         // file exists. A file rather than a database row so wiping the cache
         // to rescan does not resurrect the wizard.
-        var setupPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake", "setup-done");
+        var setupPath = Core.AppPaths.In("setup-done");
 
         app.MapGet("/api/setup", () => new { done = File.Exists(setupPath) });
 

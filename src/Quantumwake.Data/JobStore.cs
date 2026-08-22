@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -43,9 +44,7 @@ public sealed class JobStore
 
     public JobStore(string? directory = null)
     {
-        var folder = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake");
+        var folder = directory ?? AppPaths.Root;
 
         _path = Path.Combine(folder, "jobs.json");
         Load();

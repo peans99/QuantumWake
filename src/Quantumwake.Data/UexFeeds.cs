@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -90,9 +91,7 @@ public sealed class UexFeeds
     private readonly Dictionary<string, object> _loaded = new(StringComparer.OrdinalIgnoreCase);
 
     public UexFeeds(string? directory = null) =>
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake", "uex", "feeds");
+        _directory = directory ?? AppPaths.In("uex", "feeds");
 
     private string PathFor(string key) => Path.Combine(_directory, $"{key}.json");
 

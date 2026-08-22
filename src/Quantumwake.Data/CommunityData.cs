@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -154,9 +155,7 @@ public sealed class CommunityData
 
     public CommunityData(string? directory = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake", "community");
+        _directory = directory ?? AppPaths.In("community");
 
         TryLoad();
     }

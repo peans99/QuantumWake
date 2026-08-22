@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -42,9 +43,7 @@ public sealed class OverlayLayoutStore
 
     public OverlayLayoutStore(string? directory = null)
     {
-        var folder = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake");
+        var folder = directory ?? AppPaths.Root;
 
         _path = Path.Combine(folder, "overlay-layout.json");
 

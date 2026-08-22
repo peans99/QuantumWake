@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -119,9 +120,7 @@ public sealed class UexData
 
     public UexData(string? directory = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake", "uex");
+        _directory = directory ?? AppPaths.In("uex");
 
         TryLoad();
     }
