@@ -174,7 +174,46 @@ public class WipeFilterTests : IDisposable
         Assert.Equal(2, _library.SessionsBeforeWipe());
     }
 
+    /// <summary>
+    /// The accessor exists so a question added later cannot forget the rule -
+    /// which only holds if every question actually goes through it. Medical
+    /// beds arrived reading the store directly and had to be brought back.
+    /// </summary>
+    [Fact]
+    public void Beds_from_before_the_wipe_are_not_a_hint_about_this_account()
+    {
+        _store.Save(
+            new SessionSummary
+            {
+                Id = "bed-before",
+                SourceFile = "bed-before.log",
+                StartedAt = Wiped.AddDays(-3),
+                EndedAt = Wiped.AddDays(-3).AddHours(1),
+                MedicalBeds = [new MedicalBedVisit(Wiped.AddDays(-3), "Everus Harbor")],
+            },
+            "fingerprint:bed-before");
+
+        _store.Save(
+            new SessionSummary
+            {
+                Id = "bed-after",
+                SourceFile = "bed-after.log",
+                StartedAt = Wiped.AddDays(3),
+                EndedAt = Wiped.AddDays(3).AddHours(1),
+                MedicalBeds = [new MedicalBedVisit(Wiped.AddDays(3), "Port Tressler")],
+            },
+            "fingerprint:bed-after");
+
+        _library.Wipe = new Wipe(Wiped, "Alpha 4.8");
+
+        var beds = _library.MedicalBeds();
+
+        Assert.Single(beds);
+        Assert.Equal("Port Tressler", beds[0].Place);
+    }
+
     public void Dispose()
+
     {
         GC.SuppressFinalize(this);
         _store.Dispose();

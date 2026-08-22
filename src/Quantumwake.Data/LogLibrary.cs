@@ -1118,9 +1118,11 @@ public sealed class LogLibrary : IDisposable
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
 
+        // Through the same door as every other question: a bed used on an
+        // account that has since been wiped is not a hint about this one.
         return
         [
-            .. _store.All()
+            .. Counted(WipeScope.History)
                 .SelectMany(s => s.MedicalBeds)
                 .Where(b => b.At >= cutoff)
                 .OrderByDescending(b => b.At)
