@@ -798,9 +798,17 @@ public static class ServerHost
         app.MapGet("/api/respawn", (LogLibrary lib) =>
         {
             var respawns = lib.Respawns();
+            var beds = lib.MedicalBeds();
+
+            // Two different signals, shown side by side rather than ranked:
+            // a bed is where regen gets set but is also just where someone
+            // healed, and waking somewhere is proof of nothing but the past.
+            var bed = beds.Count > 0
+                ? new { beds[0].Place, beds[0].At, times = beds.Count }
+                : null;
 
             if (respawns.Count == 0)
-                return Results.Ok(new { known = false });
+                return Results.Ok(new { known = bed is not null, bed });
 
             var latest = respawns[0];
 
@@ -819,7 +827,8 @@ public static class ServerHost
                 latest.Cause,
                 agreeing,
                 of = recent.Count,
-                settled = agreeing >= 2
+                settled = agreeing >= 2,
+                bed
             });
         });
 
@@ -884,12 +893,25 @@ public static class ServerHost
                 .Take(10)
                 .ToList();
 
+            // The other signal: beds are where regen is set, when it is set.
+            var beds = lib.MedicalBeds(days ?? 0);
+
+            var bedsUsed = beds
+                .GroupBy(b => b.Place, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new { place = g.Key, times = g.Count(), last = g.Max(b => b.At) })
+                .OrderByDescending(x => x.last)
+                .Take(10)
+                .ToList();
+
             return new
             {
                 deaths,
                 lastWokeAt = respawns.Count > 0 ? respawns[0].Place : null,
                 lastWokeWhen = respawns.Count > 0 ? respawns[0].At : (DateTimeOffset?)null,
+                lastBedAt = beds.Count > 0 ? beds[0].Place : null,
+                lastBedWhen = beds.Count > 0 ? beds[0].At : (DateTimeOffset?)null,
                 wokeAt,
+                bedsUsed,
                 incapacitations = sessions.Sum(s => s.Incapacitations),
                 sessionsWithDeaths = sessions.Count(s => s.Deaths > 0),
                 averageFee = fees.Count > 0 ? fees.Average(f => f.fee) : 0,
