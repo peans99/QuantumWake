@@ -170,6 +170,33 @@ places can share. The arithmetic runs in the browser: a few hundred receipts is
 nothing to loop over, and commodity, side and window change often enough that a
 round trip per twiddle would be the slow part.
 
+### Flight plans: the second thing the player authors
+
+Everything else on the page is observed or downloaded, and can be rebuilt by a
+rescan. A plan is the player's own work — where they mean to go, in the order
+they mean to go — so it follows the shopping list's rules: its own file
+(`trips.json`), never touched by a rescan, surviving every cache wipe.
+
+One plan is *tracked* at a time. The Now card and the map both answer "where
+next", and two plans have no single next. A stop carries the place's engine id
+as well as its name, which is what lets the map draw it on a node it already has
+and lets the live feed recognise an arrival.
+
+**Arriving crosses a stop off.** The app knows where the player is standing, so
+asking them to tick a box for it would be asking for data it already holds. The
+live tail fires on the change rather than on every event, only the tracked plan
+is touched, and only the *next* unfinished stop for that place — a run that
+calls at Lorville twice is two stops, and one landing is one stop. Hand ticking
+still works, in both directions.
+
+A stop can come from anywhere that knows a place: the map's detail card, the
+station panel, a trade route (two stops, buy then sell, carrying the SCU and the
+prices as notes), or a shopping list (one stop per terminal, carrying what to
+buy there — a list knows where its missing things sell). Terminal names are not
+atlas names, so a stop keeps the terminal's own name for reading and the atlas
+id, where one matches, for the map. A stop the map cannot place is still on the
+plan and still in the list; it simply has no dot.
+
 ### Where a transaction happened
 
 Kiosks name a vendor, not a place, and every commodity terminal in the game logs

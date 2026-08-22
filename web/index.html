@@ -177,6 +177,16 @@
         <ul class="now-job-items" id="now-job-items"></ul>
       </article>
 
+      <article class="card span2" id="now-trip-card" data-card="trip" hidden>
+        <div class="card-label">Flight plan</div>
+        <div class="now-trip-head">
+          <div class="now-trip-title" id="now-trip-title"></div>
+          <div id="now-trip-progress"></div>
+        </div>
+        <div class="now-trip-next" id="now-trip-next"></div>
+        <div class="now-trip-stops" id="now-trip-stops"></div>
+      </article>
+
       <article class="card span2" id="trade-advice-card" data-card="trade" hidden>
         <div class="card-label">Trade from here</div>
         <div class="muted" id="trade-advice-sub"></div>
@@ -222,6 +232,7 @@
               title="How far back your own receipts count"></select>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
+      <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
       <button class="ghost" id="map-here">Centre on me</button>
       <button class="ghost" id="map-reset">Reset view</button>
@@ -249,6 +260,7 @@
         </div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
+        <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
         <div class="map-info-lore muted" id="map-info-lore" hidden></div>
         <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
@@ -283,7 +295,7 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th>
+            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>

@@ -1864,7 +1864,94 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 .cargo-line.sell .rate { color: var(--green); }
 .cargo-line.buy .rate { color: var(--amber); }
 
+/* ---------- flight plans ---------- */
+
+/*
+ * A stop reads as a numbered line: the number is the button, because crossing
+ * one off is the thing done most and it should be the easiest thing to hit.
+ */
+.trip-stop {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 6px;
+  border-left: 2px solid transparent;
+}
+.trip-stop.next { border-left-color: var(--cyan); background: rgba(53, 200, 240, .06); }
+.trip-stop.done { opacity: .55; }
+.trip-stop.done .trip-place { text-decoration: line-through; }
+
+.trip-number {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(0, 0, 0, .3);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color .14s, color .14s;
+}
+.trip-number:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+.trip-stop.next .trip-number { border-color: var(--cyan); color: var(--cyan-hot); }
+.trip-stop.done .trip-number { color: var(--green); border-color: #1f5c3d; }
+
+.trip-stop-main { min-width: 0; }
+.trip-place {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.trip-place:hover { color: var(--cyan-hot); }
+.trip-note { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
+
+.trip-tools { display: flex; gap: 3px; }
+.trip-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+
+button.ghost.tiny {
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  min-width: 0;
+}
+button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
+
+/* The Now card: where to jump next, then the rest of the run. */
+.now-trip-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.now-trip-title { font-size: 15px; color: var(--cyan-hot); }
+.now-trip-next {
+  margin: 9px 0;
+  padding: 9px 11px;
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  background: rgba(53, 200, 240, .05);
+}
+.now-trip-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+.now-trip-where { font-size: 19px; color: var(--text); margin-top: 3px; }
+.now-trip-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.now-trip-stops { display: flex; flex-direction: column; gap: 2px; }
+
+/* The plan drawn over the map. */
+.trip-layer { pointer-events: none; }
+.trip-leg { stroke: var(--cyan); stroke-opacity: .45; fill: none; }
+.trip-leg.done { stroke: var(--green); stroke-opacity: .3; }
+
+.trip-mark { pointer-events: auto; cursor: pointer; }
+.trip-mark circle { fill: rgba(6, 12, 20, .92); stroke: var(--cyan); }
+.trip-mark text { fill: var(--cyan-hot); font-family: var(--mono); }
+.trip-mark.next circle { stroke: var(--cyan-hot); filter: url(#glow); }
+.trip-mark.done circle { stroke: #1f5c3d; }
+.trip-mark.done text { fill: var(--green); }
+
 /* Sell / buy, as a two-state switch rather than a hidden search prefix. */
+
 .map-tools .seg { display: inline-flex; border: 1px solid var(--rule); }
 .map-tools .seg[hidden] { display: none; }
 .map-tools .seg button {
