@@ -342,11 +342,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.7
+### 0.6.8
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
 
+- **The kill counter is gone.** It could only ever read zero: 4.9 writes no
+  kill or vehicle-destruction line at all, so a counter pinned at zero read as a
+  broken feature rather than a missing one. The About page says where it went
+  and what would bring it back.
 - **The map was not clickable at all with a real mouse.** It captured the
   pointer the moment you pressed, and a captured pointer delivers the click to
   the element holding the capture - so every click meant for a place went to the

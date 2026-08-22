@@ -286,15 +286,15 @@ function renderNow(state) {
   $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
-  $('#now-kills').textContent = state.kills ?? 0;
 
-  // Be explicit about what each number is and is not. Deaths are inferred, and
-  // zero kills is the game not reporting them rather than a bug.
-  $('#combat-note').textContent = (state.kills ?? 0) === 0
-    ? 'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
-      + '<Actor Death>, and an Incapacitated notification is not always raised. '
-      + 'Kills cannot be counted at all: no surviving event names a killer.'
-    : '';
+  // Be explicit about what each number is and is not. Deaths are inferred, so
+  // the note is permanent rather than conditional: there is no state of the
+  // game in which it stops being true. Kills are not shown at all - 4.9 logs
+  // nothing that names a killer, and a counter stuck at zero reads as broken
+  // rather than absent. The About page says where they went.
+  $('#combat-note').textContent =
+    'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
+    + '<Actor Death>, and an Incapacitated notification is not always raised.';
 
   sessionStarted = state.sessionStarted || null;
 

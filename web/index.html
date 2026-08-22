@@ -190,7 +190,6 @@
         <div class="card-label">This session</div>
         <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
         <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
-        <div class="statline"><span>Kills</span><b id="now-kills">0</b></div>
         <div class="note" id="combat-note"></div>
       </article>
 
@@ -1269,13 +1268,19 @@
           </details>
 
           <details>
-            <summary>Why are there no kills or deaths by another player?</summary>
+            <summary>Where did the kill counter go?</summary>
             <p>
-              Star Citizen 4.9 does not write kill or vehicle-destruction lines to
-              <code>Game.log</code> at all. This was checked line by line across
-              every backup on this machine: zero. The parser for those events is
-              written and tested against the old format, sitting dormant — if CIG
-              restores them, the counters fill in with no update needed.
+              Removed, because it could only ever read zero. Star Citizen 4.9
+              does not write kill or vehicle-destruction lines to
+              <code>Game.log</code> at all — checked line by line across every
+              backup on this machine: not one. A counter pinned at zero reads as
+              a broken feature rather than a missing one, so the honest thing is
+              to say so here instead of showing it.
+            </p>
+            <p>
+              The parser for those events is written and tested against the old
+              format, sitting dormant. If CIG starts logging them again the
+              counter comes back with it.
             </p>
           </details>
 
