@@ -364,14 +364,21 @@ function bars(container, rows, format) {
  * loop swallowed the error, so the page just sat empty with no clue why.
  */
 function safeRender(name, render) {
-  try {
-    render();
-  } catch (error) {
+  const report = (error) => {
     console.error(`${name} failed to render`, error);
 
     const banner = $('#render-errors');
     banner.hidden = false;
     banner.append(el('div', null, `${name}: ${error && error.message ? error.message : error}`));
+  };
+
+  try {
+    // Some renders became async once they had to fetch their own view; a
+    // rejected promise would otherwise escape this net entirely.
+    const result = render();
+    if (result && typeof result.catch === 'function') result.catch(report);
+  } catch (error) {
+    report(error);
   }
 }
 
@@ -3395,11 +3402,31 @@ const prettyItem = (name) => name.replace(/_/g, ' ');
 
 /* ---------- stash ---------- */
 
-function renderStash(stats) {
+/**
+ * "Everything ever seen" unions every listing instead of trusting the newest.
+ * It matters because a listing is only a page: glancing at one tab of an
+ * inventory replaces a full browse, and the place looks emptied. Fetched
+ * separately, since the server decides which view to build.
+ */
+let stashEverSeen = null;
+
+async function renderStash(stats) {
   libraryStats = stats;
 
   const grid = $('#stash-grid');
   grid.textContent = '';
+
+  if ($('#stash-ever')?.checked) {
+    if (!stashEverSeen) {
+      try {
+        stashEverSeen = await getJson('/api/stash?everSeen=true');
+      } catch {
+        stashEverSeen = [];
+      }
+    }
+
+    stats = { ...stats, stash: stashEverSeen };
+  }
 
   if (!stats.stash || !stats.stash.length) {
     grid.append(el('p', 'muted',
@@ -5044,6 +5071,7 @@ onInput('#loadout-search', () => libraryStats && renderLoadout(libraryStats));
 onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-period', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-latest', () => libraryStats && renderStash(libraryStats));
+$('#stash-ever')?.addEventListener('change', () => libraryStats && renderStash(libraryStats));
 
 /* ---------- scan progress ---------- */
 

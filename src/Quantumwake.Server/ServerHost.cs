@@ -1116,7 +1116,7 @@ public static class ServerHost
         app.MapGet("/api/loadout", (LogLibrary lib) => lib.Stats().Loadout);
         app.MapGet("/api/loadout/asof", (LogLibrary lib) => new { asOf = lib.Stats().LoadoutAsOf });
 
-        app.MapGet("/api/stash", (LogLibrary lib) => lib.Stats().Stash);
+        app.MapGet("/api/stash", (LogLibrary lib, bool? everSeen) => lib.Stash(everSeen ?? false));
 
         app.MapGet("/api/map", (LogLibrary lib) =>
         {
