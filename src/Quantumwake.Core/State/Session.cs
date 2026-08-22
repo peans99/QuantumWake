@@ -58,6 +58,23 @@ public enum ContractOutcome
 /// </summary>
 public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
 
+/// <summary>
+/// Where the player turned up after dying.
+/// </summary>
+/// <remarks>
+/// Star Citizen never logs the respawn point a player sets - there is no
+/// regen event of any kind, and the one spawn event that existed
+/// (<c>EASpawn PerformRespawn</c>) stopped being emitted in 4.9. So this is an
+/// observation rather than a reading: someone died, and the next place the
+/// logs named is where they woke. Being revived where you fell is excluded,
+/// since the place did not change.
+/// </remarks>
+public sealed record RespawnRecord(
+    DateTimeOffset At,
+    string Place,
+    DateTimeOffset DiedAt,
+    string? DiedPlace);
+
 /// <summary>A contract seen during a session.</summary>
 public sealed record ContractRecord(
     DateTimeOffset FirstSeen,
@@ -212,6 +229,9 @@ public sealed record SessionSummary
 
     /// <summary>Crafting blueprints the game said were received this session.</summary>
     public IReadOnlyList<BlueprintReceipt> Blueprints { get; init; } = [];
+
+    /// <summary>Where the player woke after dying - inferred, never stated.</summary>
+    public IReadOnlyList<RespawnRecord> Respawns { get; init; } = [];
 
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);

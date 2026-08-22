@@ -776,9 +776,25 @@ public static class ServerHost
 
             var deaths = sessions.Sum(s => s.Deaths);
 
+            // Where the player woke after dying: the closest thing to a
+            // respawn point the logs allow, and an inference rather than a
+            // reading - the UI says so.
+            var respawns = lib.Respawns(days ?? 0);
+
+            var wokeAt = respawns
+                .GroupBy(r => r.Place, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new { place = g.Key, times = g.Count(), last = g.Max(r => r.At) })
+                .OrderByDescending(x => x.times)
+                .ThenByDescending(x => x.last)
+                .Take(10)
+                .ToList();
+
             return new
             {
                 deaths,
+                lastWokeAt = respawns.Count > 0 ? respawns[0].Place : null,
+                lastWokeWhen = respawns.Count > 0 ? respawns[0].At : (DateTimeOffset?)null,
+                wokeAt,
                 incapacitations = sessions.Sum(s => s.Incapacitations),
                 sessionsWithDeaths = sessions.Count(s => s.Deaths > 0),
                 averageFee = fees.Count > 0 ? fees.Average(f => f.fee) : 0,

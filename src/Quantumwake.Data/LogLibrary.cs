@@ -898,6 +898,23 @@ public sealed class LogLibrary : IDisposable
         ];
     }
 
+    /// <summary>
+    /// Where the player has woken after dying, newest first. Inferred from the
+    /// first place seen after each death, since the game logs no respawn point.
+    /// </summary>
+    public IReadOnlyList<RespawnRecord> Respawns(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+
+        return
+        [
+            .. _store.All()
+                .SelectMany(s => s.Respawns)
+                .Where(r => r.At >= cutoff)
+                .OrderByDescending(r => r.At)
+        ];
+    }
+
     public IReadOnlyList<PickupRecord> Pickups(int days = 0)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
