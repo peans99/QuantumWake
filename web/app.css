@@ -231,6 +231,18 @@ body.overlay .tab-group,
 body.overlay .group-menu { display: contents; }
 body.overlay .group-btn { display: none; }
 
+/*
+ * And they stay dissolved while hovered. `.tab-group:hover .group-menu` is a
+ * class, a pseudo-class and a class - it outranks `body.overlay .group-menu`,
+ * so in the widget a hover turned the dissolved group back into a floating
+ * box: the strip reflowed, everything shifted left, the pointer was no longer
+ * over the group, the hover dropped, and it flipped back. Reported as the
+ * overlay flickering and sliding left on the menu, which is exactly what a
+ * layout that fights the cursor looks like.
+ */
+body.overlay .tab-group:hover .group-menu,
+body.overlay .tab-group:focus-within .group-menu { display: contents; }
+
 /* The widget is ~330px wide and the full strip is twenty tabs; at that size
    most of them scrolled out of reach. Which few it carries is the user's
    choice now, made on Settings > Overlay and applied by applyOverlayLayout;
