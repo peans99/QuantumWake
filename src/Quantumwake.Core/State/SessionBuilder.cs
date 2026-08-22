@@ -51,9 +51,25 @@ public sealed class SessionBuilder
 
     private readonly List<RespawnRecord> _respawns = [];
 
-    /// <summary>Set by a death, cleared by the location that answers it.</summary>
+    /// <summary>Set by a death or incapacitation, cleared by the location that answers it.</summary>
     private DateTimeOffset? _awaitingRespawn;
     private string? _diedAt;
+    private string _respawnCause = "death";
+
+    /// <summary>
+    /// How long after going down an arrival still counts as waking up there.
+    /// Long enough for a loading screen and the walk out of a medical bay,
+    /// short enough that the next place flown to is not mistaken for a regen.
+    /// </summary>
+    private static readonly TimeSpan RespawnWindow = TimeSpan.FromMinutes(10);
+
+    /// <summary>Notes that the player went down, for the next place to answer.</summary>
+    private void ArmRespawn(DateTimeOffset at, string cause)
+    {
+        _awaitingRespawn = at;
+        _respawnCause = cause;
+        _diedAt = _locationState.State.Current?.DisplayName;
+    }
 
     /// <summary>Mission id to its journal-visible objectives and their states.</summary>
     private readonly Dictionary<string, Dictionary<string, ObjectiveState>> _objectiveSteps =
@@ -437,17 +453,25 @@ public sealed class SessionBuilder
         // inventory scope query that follows needs it to bind its key.
         _lastLocationId = location.RawId;
 
-        // The first place seen after a death: where the player woke up.
+        // The first place seen after going down: where the player woke up.
         // Somewhere else entirely means they respawned there; the same place
         // means they were revived where they fell, which is not a respawn and
-        // must not be recorded as one.
-        if (_awaitingRespawn is { } diedWhen)
+        // must not be recorded as one. Beyond the window the arrival has
+        // nothing to do with it, and answering anyway would invent a regen
+        // point out of wherever they happened to fly next.
+        if (_awaitingRespawn is { } wentDownAt)
         {
-            _awaitingRespawn = null;
-
-            if (!string.Equals(location.DisplayName, _diedAt, StringComparison.OrdinalIgnoreCase))
+            if (at - wentDownAt > RespawnWindow)
             {
-                _respawns.Add(new RespawnRecord(at, location.DisplayName, diedWhen, _diedAt));
+                _awaitingRespawn = null;
+            }
+            else if (!string.Equals(location.DisplayName, _diedAt, StringComparison.OrdinalIgnoreCase))
+            {
+                _awaitingRespawn = null;
+
+                _respawns.Add(new RespawnRecord(
+                    at, location.DisplayName, wentDownAt, _diedAt, _respawnCause));
+
                 Timeline(at, "respawn", "Woke up", location.DisplayName);
             }
         }
@@ -526,6 +550,12 @@ public sealed class SessionBuilder
         if (notification.IsIncapacitation)
         {
             _incapacitations++;
+
+            // Being incapacitated and waking somewhere else is a respawn, and
+            // the commoner kind: a corpse-recovery burst only follows a full
+            // death, so arming on death alone missed most of them.
+            ArmRespawn(notification.Timestamp, "incapacitated");
+
             Timeline(notification.Timestamp, "incapacitated", "Incapacitated", null);
             return;
         }
@@ -789,10 +819,8 @@ public sealed class SessionBuilder
 
         // Where the player wakes is the closest the logs come to naming their
         // respawn point: the game never records the choice, so the next place
-        // seen after dying is the answer by observation. Armed here, answered
-        // by the next location event.
-        _awaitingRespawn = corpse.Timestamp;
-        _diedAt = _locationState.State.Current?.DisplayName;
+        // seen after dying is the answer by observation.
+        ArmRespawn(corpse.Timestamp, "death");
 
         Timeline(corpse.Timestamp, "death", "Died", _locationState.State.Current?.DisplayName);
     }

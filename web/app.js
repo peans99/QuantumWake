@@ -1846,9 +1846,11 @@ async function loadRespawn() {
 
   $('#now-respawn').textContent = data.place;
 
+  // "Deaths" would be wrong for the commoner case: most wake-ups follow an
+  // incapacitation rather than a corpse recovery, so both read as "times down".
   $('#now-respawn-sub').textContent = data.settled
-    ? `inferred · ${data.agreeing} of your last ${data.of} deaths`
-    : `inferred · last death only, ${relative(data.at)}`;
+    ? `inferred · ${data.agreeing} of your last ${data.of} times down`
+    : `inferred · last one only, ${relative(data.at)}`;
 
   card.hidden = false;
 }

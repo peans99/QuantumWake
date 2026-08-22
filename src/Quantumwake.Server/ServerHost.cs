@@ -752,6 +752,7 @@ public static class ServerHost
                 known = true,
                 latest.Place,
                 latest.At,
+                latest.Cause,
                 agreeing,
                 of = recent.Count,
                 settled = agreeing >= 2

@@ -69,11 +69,13 @@ public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
 /// logs named is where they woke. Being revived where you fell is excluded,
 /// since the place did not change.
 /// </remarks>
+/// <param name="Cause">"death" or "incapacitated" - both end up somewhere new.</param>
 public sealed record RespawnRecord(
     DateTimeOffset At,
     string Place,
     DateTimeOffset DiedAt,
-    string? DiedPlace);
+    string? DiedPlace,
+    string Cause = "death");
 
 /// <summary>A contract seen during a session.</summary>
 public sealed record ContractRecord(
