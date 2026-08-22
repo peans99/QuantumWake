@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
@@ -59,9 +60,7 @@ public sealed class SessionStore : IDisposable
     /// </remarks>
     public static string DatabasePathFor(string? installRoot)
     {
-        var directory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake");
+        var directory = AppPaths.Root;
 
         if (string.IsNullOrWhiteSpace(installRoot))
             return Path.Combine(directory, "sessions.db");

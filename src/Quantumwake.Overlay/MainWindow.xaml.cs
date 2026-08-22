@@ -123,10 +123,7 @@ public partial class MainWindow : Window
     private async Task ShowDashboardAsync()
     {
         // Keep the WebView2 user-data folder out of Program Files.
-        var userData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake",
-            "WebView2");
+        var userData = Quantumwake.Core.AppPaths.In("WebView2");
 
         Directory.CreateDirectory(userData);
 

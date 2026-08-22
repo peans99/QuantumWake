@@ -24,10 +24,8 @@ internal sealed record Settings
     /// </summary>
     public bool ShowOverlay { get; init; } = false;
 
-    private static string Path_ => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Quantumwake",
-        "settings.json");
+    private static string Path_ =>
+        System.IO.Path.Combine(Quantumwake.Core.AppPaths.Root, "settings.json");
 
     public static Settings Load()
     {

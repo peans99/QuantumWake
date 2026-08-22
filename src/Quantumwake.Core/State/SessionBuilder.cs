@@ -46,6 +46,13 @@ public sealed class SessionBuilder
     private readonly Dictionary<string, string> _contractsByMission = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ObjectiveState> _objectiveStates = new(StringComparer.Ordinal);
 
+    private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<BlueprintReceipt> _blueprintReceipts = [];
+
+    /// <summary>Mission id to its journal-visible objectives and their states.</summary>
+    private readonly Dictionary<string, Dictionary<string, ObjectiveState>> _objectiveSteps =
+        new(StringComparer.Ordinal);
+
     /// <summary>
     /// Latest inventory listing per scope key. Replaced wholesale on each query,
     /// so it always holds current contents rather than an accumulation.
@@ -506,6 +513,22 @@ public sealed class SessionBuilder
         {
             var title = notification.Text["Contract Accepted:".Length..].Trim(' ', ':');
             Timeline(notification.Timestamp, "contract", "Contract accepted", title);
+            return;
+        }
+
+        // Blueprints arrive only as this notification - nothing else in the log
+        // says which recipes a player holds, so the toast IS the record.
+        const string blueprintPrefix = "Received Blueprint:";
+
+        if (notification.Text.StartsWith(blueprintPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var name = notification.Text[blueprintPrefix.Length..].Trim(' ', ':');
+
+            if (name.Length > 0 && _blueprints.Add(name))
+            {
+                _blueprintReceipts.Add(new BlueprintReceipt(notification.Timestamp, name));
+                Timeline(notification.Timestamp, "blueprint", "Blueprint received", name);
+            }
         }
     }
 
@@ -569,6 +592,17 @@ public sealed class SessionBuilder
     {
         _objectiveStates[objective.MissionId] = objective.State;
 
+        // Journal-visible steps only, kept per objective id because each one is
+        // upserted repeatedly as its state changes.
+        if (objective.ShownInLog)
+        {
+            if (!_objectiveSteps.TryGetValue(objective.MissionId, out var steps))
+                _objectiveSteps[objective.MissionId] =
+                    steps = new Dictionary<string, ObjectiveState>(StringComparer.Ordinal);
+
+            steps[objective.ObjectiveId] = objective.State;
+        }
+
         var key = _contractsByMission.GetValueOrDefault(objective.MissionId);
         if (key is null || !_contracts.TryGetValue(key, out var contract))
             return;
@@ -582,11 +616,22 @@ public sealed class SessionBuilder
             _ => ContractOutcome.Unknown
         };
 
+        // Step counts are recorded whatever the outcome: a contract abandoned
+        // four steps in is a different story from one dropped at the first.
+        var progressed = contract with
+        {
+            Steps = StepCount(objective.MissionId),
+            StepsDone = StepsDoneCount(objective.MissionId)
+        };
+
         // Completion is terminal: a later in-progress objective must not undo it.
         if (contract.Outcome == ContractOutcome.Completed && outcome != ContractOutcome.Completed)
+        {
+            _contracts[key] = progressed;
             return;
+        }
 
-        _contracts[key] = contract with
+        _contracts[key] = progressed with
         {
             Outcome = outcome,
             CompletedAt = outcome == ContractOutcome.Completed ? objective.Timestamp : contract.CompletedAt
@@ -595,6 +640,14 @@ public sealed class SessionBuilder
         if (outcome == ContractOutcome.Completed)
             Timeline(objective.Timestamp, "contract-done", "Contract completed", contract.DisplayName);
     }
+
+    private int StepCount(string missionId) =>
+        _objectiveSteps.TryGetValue(missionId, out var steps) ? steps.Count : 0;
+
+    private int StepsDoneCount(string missionId) =>
+        _objectiveSteps.TryGetValue(missionId, out var steps)
+            ? steps.Values.Count(s => s == ObjectiveState.Completed)
+            : 0;
 
     /// <summary>
     /// Attributes an item to the location whose inventory was being browsed.
@@ -779,6 +832,7 @@ public sealed class SessionBuilder
             Purchases = _purchases,
             Trades = _trades,
             Pickups = _pickups,
+            Blueprints = _blueprintReceipts,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,
@@ -823,7 +877,9 @@ public sealed class SessionBuilder
                 ObjectiveState.Withdrawn or ObjectiveState.Failed => ContractOutcome.Abandoned,
                 ObjectiveState.InProgress => ContractOutcome.InProgress,
                 _ => ContractOutcome.Unknown
-            }
+            },
+            Steps = StepCount(contract.MissionId),
+            StepsDone = StepsDoneCount(contract.MissionId)
         };
 
         _contractsByMission[contract.MissionId] = contract.Contract;

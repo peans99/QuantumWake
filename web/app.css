@@ -224,24 +224,46 @@ body.overlay .tabs {
 }
 body.overlay .tabs::-webkit-scrollbar { display: none; }
 
-/* The widget is ~330px wide and the full strip is fifteen tabs; at that size
-   most of them scrolled out of reach and the strip only worked fullscreen.
-   The overlay keeps the glanceable views - the ones worth having over the
-   game - and Ctrl+Alt+arrows cycles the same set. Everything else is one
-   browser tab away. */
-body.overlay .tabs button { display: none; }
-body.overlay .tabs button[data-view="now"],
-body.overlay .tabs button[data-view="map"],
-body.overlay .tabs button[data-view="commodities"],
-body.overlay .tabs button[data-view="market"],
-body.overlay .tabs button[data-view="loadout"],
-body.overlay .tabs button[data-view="stash"] {
+/* The overlay wants the flat strip back: dissolve the dashboard's dropdown
+   groups so the whitelisted tabs line up as siblings again. */
+body.overlay .tab-group,
+body.overlay .group-menu { display: contents; }
+body.overlay .group-btn { display: none; }
+
+/* The widget is ~330px wide and the full strip is twenty tabs; at that size
+   most of them scrolled out of reach. Which few it carries is the user's
+   choice now, made on Settings > Overlay and applied by applyOverlayLayout;
+   the styling here only makes whatever survives fit. */
+body.overlay .tabs button[data-view] {
   display: inline-block;
   padding: 4px 7px;
   font-size: 9.5px;
   letter-spacing: .07em;
   white-space: nowrap;
 }
+body.overlay .tabs button[hidden] { display: none; }
+
+/* Cards the layout leaves out. Not [hidden], which the pages set themselves
+   for their own reasons - the two must not fight over one attribute. */
+body.overlay .card.layout-off { display: none; }
+
+/* Density: the whole widget scales from one number. */
+body.overlay.density-compact { font-size: 12px; }
+body.overlay.density-tiny { font-size: 10.5px; }
+body.overlay.density-compact .card { padding: 6px 8px; }
+body.overlay.density-tiny .card { padding: 5px 7px; }
+body.overlay.density-tiny .tabs button[data-view] { padding: 3px 5px; font-size: 8.5px; }
+
+/* The layout editor's tick grids. */
+.layout-group { margin-top: 12px; }
+.layout-label {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.layout-boxes { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; }
 body.overlay .tabs button::after { left: 4px; right: 4px; bottom: 0; }
 
 /* Fullscreen widget: every view fits at full size, so the whole strip comes
@@ -326,19 +348,41 @@ body.overlay .feed .d { display: none; }
   border-left: 1px solid var(--rule-hot);
 }
 
-/* Sixteen tabs outgrow a 1600px window; the strip scrolls itself rather than
-   widening the document, which would put a horizontal scrollbar on every page
-   and let tab-centring drag the whole page sideways. */
+/* Grouped since sixteen flat tabs got crowded: seven top-level items, three
+   of them dropdowns. No overflow scrolling here - a scrollable strip would
+   clip the dropdowns; the overlay keeps its own scrolling flat strip. */
 .tabs {
   display: flex;
   gap: 4px;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.tabs::-webkit-scrollbar { display: none; }
-.tabs button { flex-shrink: 0; }
+
+.tab-group { position: relative; }
+
+.group-btn .caret {
+  font-size: 8px;
+  margin-left: 5px;
+  color: var(--dim);
+}
+
+.group-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 148px;
+  display: none;
+  flex-direction: column;
+  background: rgba(7, 14, 23, .97);
+  border: 1px solid var(--rule-hot);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+  z-index: 40;
+}
+
+.tab-group:hover .group-menu,
+.tab-group:focus-within .group-menu { display: flex; }
+
+.group-menu button { text-align: left; }
 
 .tabs button {
   position: relative;
@@ -506,7 +550,15 @@ h2.spaced { margin-top: 32px; }
 
 /* ---------- live feed ---------- */
 
-.feed { list-style: none; margin: 0; padding: 0; max-height: 268px; overflow-y: auto; }
+/* On a tall screen the live feed takes the room the viewport offers instead
+   of always stopping at ten lines. The overlay's own cap still wins. */
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: clamp(268px, 100vh - 640px, 760px);
+  overflow-y: auto;
+}
 .feed::-webkit-scrollbar { width: 6px; }
 .feed::-webkit-scrollbar-track { background: rgba(0,0,0,.3); }
 .feed::-webkit-scrollbar-thumb { background: var(--rule-hot); }
@@ -543,6 +595,22 @@ h2.spaced { margin-top: 32px; }
 .feed .k.contract { color: var(--amber); border-color: #6d4715; }
 .feed .d { color: var(--dim); font-size: 11.5px; }
 .feed .empty { color: var(--dim); border-left: 0; letter-spacing: .1em; text-transform: uppercase; font-size: 11px; }
+
+/* ---------- logbook page ---------- */
+
+/* The full-page timeline: same anatomy as the live feed, sized for reading
+   rather than glancing, and never capped - the page scrolls. */
+.feed.logbook { max-height: none; overflow: visible; }
+.feed.logbook li { padding: 8px 4px 8px 10px; gap: 12px; align-items: baseline; }
+.feed.logbook .t { font-size: 11px; flex: 0 0 178px; white-space: nowrap; }
+.feed.logbook .what { color: var(--text); font-size: 12.5px; }
+.feed.logbook .detail { font-size: 11px; }
+.feed.logbook .amt { margin-left: auto; font-family: var(--mono); font-size: 12px; flex: 0 0 auto; }
+
+.feed .k.session { color: var(--cyan); border-color: var(--cyan-deep); }
+.feed .k.sold { color: var(--green); border-color: #1f5c3d; }
+.feed .k.bought { color: var(--amber); border-color: #6d4715; }
+.feed .k.loot { color: var(--violet); border-color: #4a3670; }
 
 /* ---------- bars ---------- */
 
@@ -763,7 +831,9 @@ td.outward { color: var(--amber); }
 
 /* ---------- fleet ---------- */
 
-.fleet-chart-wrap { margin-bottom: 6px; }
+/* Height override: this borrows .map-wrap for the frame styling, but the
+   chart is 220px of content and must not inherit the map's 76vh box. */
+.fleet-chart-wrap { margin-bottom: 6px; height: auto; }
 #fleet-chart { width: 100%; height: 220px; display: block; }
 
 .ship-grid {
@@ -1358,12 +1428,339 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 }
 .map-tip[hidden] { display: none; }
 .map-tip strong { color: var(--cyan-hot, #7fe4ff); font-weight: 600; font-size: 12px; }
+.map-tip .goods { color: var(--muted); margin-top: 3px; }
+.map-tip .price { color: var(--green); }
 
-/* ---------- assets: fleet exclusions ---------- */
+/* The starmap's own paragraph about a place, and long recipe cells. */
+.map-info-lore {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-height: 130px;
+  overflow-y: auto;
+}
+.map-info-lore[hidden] { display: none; }
 
-#assets-fleet th.tick, #assets-fleet td.tick { width: 52px; text-align: center; }
-#assets-fleet td.tick input { accent-color: var(--cyan); cursor: pointer; }
-#assets-fleet tr.excluded td:not(.tick) { opacity: .35; text-decoration: line-through; }
+#crafting-table td.materials { max-width: 420px; white-space: normal; font-size: 11.5px; }
+
+/* The sold-here block on the detail card: a checkbox, then commodity chips
+   that each pivot the map into that commodity's search. */
+.map-info-sold-row { margin-top: 9px; font-size: 11px; }
+
+.map-info-sold {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.map-info-sold[hidden] { display: none; }
+
+.sold-chip {
+  background: rgba(53, 200, 240, .07);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.sold-chip:hover { border-color: var(--cyan); color: var(--cyan-hot, #7fe4ff); }
+
+/* Market's map links and track button sit in one cell without wrapping oddly. */
+td.map-links { white-space: nowrap; }
+td.map-links .ghost + .ghost { margin-left: 5px; }
+
+/* "+ list" on every catalogue row: quiet until wanted, green once used. */
+.ghost.track { font-size: 10.5px; padding: 2px 7px; }
+.ghost.track:disabled { color: var(--green); border-color: var(--green); opacity: 1; }
+
+/* Where the button shares a cell with the name, it hides until the row is
+   hovered - eleven columns is enough to read without a button in every line. */
+td.with-track { display: flex; align-items: center; gap: 9px; }
+td.with-track .track { opacity: 0; transition: opacity .12s; }
+tr:hover td.with-track .track,
+td.with-track .track:disabled,
+td.with-track .track:focus-visible { opacity: 1; }
+
+/* ---------- market: price ages ---------- */
+
+.price-age { color: var(--dim); font-size: 10px; letter-spacing: .05em; }
+.price-age.old { color: var(--amber); }
+.price-age.stale { color: var(--red); }
+
+.uex-age-row { display: flex; margin-top: 9px; font-size: 12px; }
+
+/* ---------- place links: any location jumps to the map ---------- */
+
+.place-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.place-link:hover { color: var(--cyan-hot, #7fe4ff); text-decoration: underline; }
+
+.now-jump { cursor: pointer; }
+.now-jump:hover { color: var(--cyan-hot, #7fe4ff); }
+
+/* The "where is your game" prompt: the app cannot do anything without it, so
+   it sits above everything rather than in a settings page nobody opens. */
+.no-install {
+  border: 1px solid var(--amber, #d08a24);
+  border-left: 3px solid var(--amber, #d08a24);
+  background: rgba(60, 40, 10, .25);
+  padding: 14px 17px;
+  margin-bottom: var(--gap);
+}
+.no-install[hidden] { display: none; }
+.no-install b { color: var(--amber, #d08a24); }
+.no-install p { margin: 6px 0 10px; font-size: 12.5px; line-height: 1.5; }
+
+.no-install-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.no-install-row input {
+  flex: 1 1 340px;
+  background: rgba(8, 18, 30, .9);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+.no-install-row input:focus { border-color: var(--cyan); }
+
+/* ---------- jobs ---------- */
+
+/* The pinned job on Now, and so in the overlay: title, bar, what is missing. */
+.now-job-title { font-size: 15px; color: var(--cyan-hot, #7fe4ff); margin-bottom: 2px; }
+
+.now-job-items { list-style: none; margin: 7px 0 0; padding: 0; }
+.now-job-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(53, 200, 240, .06);
+}
+.now-job-items li:last-child { border-bottom: 0; }
+.now-job-items .n { color: var(--text); }
+
+body.overlay .now-job-title { font-size: 12px; }
+body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
+
+.ghost.on { color: var(--green); border-color: var(--green); }
+
+.job-card {
+  display: block;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cyan-deep, #1e4763);
+  background: linear-gradient(160deg, rgba(10, 20, 32, .5), rgba(6, 12, 20, .35));
+  padding: 12px 15px;
+  margin-bottom: 10px;
+}
+.job-card.done { opacity: .5; border-left-color: var(--green); }
+
+.job-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+.job-head b { font-size: 14px; color: var(--cyan-hot, #7fe4ff); }
+.job-head .spacer { flex: 1; }
+
+.job-kind.owned { color: var(--green); border-color: var(--green); margin-left: 9px; }
+
+.job-kind {
+  color: var(--dim);
+  font-size: 9.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+}
+
+.job-progress { display: flex; align-items: center; gap: 11px; margin: 9px 0 4px; font-size: 11.5px; }
+.job-track { flex: 1; height: 6px; background: rgba(0, 0, 0, .45); border: 1px solid var(--rule); }
+.job-fill { height: 100%; background: var(--cyan); transition: width .3s ease-out; }
+.job-fill.full { background: var(--green); }
+
+.job-items { width: 100%; border-collapse: collapse; margin-top: 7px; font-size: 12px; }
+.job-items td { padding: 4px 8px; border-bottom: 1px solid rgba(53, 200, 240, .06); }
+.job-items tr:last-child td { border-bottom: 0; }
+.job-items tr.have td { color: var(--text); }
+.job-items tr:not(.have) td { color: var(--muted); }
+.job-items .job-mark { width: 20px; text-align: center; color: var(--dim); }
+.job-items tr.have .job-mark { color: var(--green); }
+
+.job-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--rule-hot);
+  padding: 13px 15px;
+  margin-bottom: 12px;
+}
+.job-form[hidden] { display: none; }
+.job-form input, .job-form textarea {
+  background: rgba(8, 18, 30, .9);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+  resize: vertical;
+}
+.job-form input:focus, .job-form textarea:focus { border-color: var(--cyan); }
+.job-form-actions { display: flex; gap: 8px; }
+
+/* ---------- optional UEX feeds ---------- */
+
+.uex-feeds { margin-top: 14px; border-top: 1px solid var(--rule); padding-top: 12px; }
+
+.uex-feed {
+  border: 1px solid var(--rule);
+  padding: 9px 12px;
+  margin-bottom: 7px;
+}
+.uex-feed-head { display: flex; align-items: baseline; gap: 10px; }
+.uex-feed-head b { font-size: 13px; }
+.uex-feed-head .cost {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.uex-feed .feed-copy { font-size: 12px; margin: 3px 0 8px; line-height: 1.45; }
+.uex-feed-actions { display: flex; align-items: center; gap: 9px; font-size: 11.5px; }
+
+/* The same feeds offered in the first-flight wizard, tighter. */
+.setup-feeds {
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cyan-deep, #1e4763);
+  padding: 10px 13px;
+  margin: -4px 0 9px 26px;
+}
+.setup-feeds[hidden] { display: none; }
+.setup-feeds-head {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.setup-feed { display: flex; gap: 10px; align-items: flex-start; padding: 4px 0; cursor: pointer; }
+.setup-feed input { margin-top: 3px; accent-color: var(--cyan); }
+.setup-feed b { font-size: 12px; }
+.setup-feed .cost { color: var(--dim); font-size: 10px; letter-spacing: .08em; }
+.setup-feed span { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+
+.ship-rental { margin-top: 3px; font-size: 11px; }
+
+/* ---------- first-flight setup ---------- */
+
+.setup {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 7, 12, .93);
+  backdrop-filter: blur(6px);
+}
+.setup[hidden] { display: none; }
+
+.setup-card {
+  width: min(580px, 94vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .98), rgba(6, 12, 20, .98));
+  border: 1px solid var(--rule-hot);
+  border-top: 2px solid var(--cyan);
+  padding: 26px 30px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .65);
+}
+
+.setup-brand { display: flex; gap: 13px; align-items: center; margin-bottom: 13px; }
+.setup-brand b {
+  display: block;
+  color: var(--cyan-hot, #7fe4ff);
+  font-size: 17px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.setup-brand span {
+  color: var(--dim);
+  font-size: 10.5px;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+}
+
+.setup-progress { margin: 17px 0 19px; }
+
+.setup-opt {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--rule);
+  padding: 11px 14px;
+  margin-bottom: 9px;
+  cursor: pointer;
+}
+.setup-opt:hover { border-color: var(--cyan); }
+.setup-opt[hidden] { display: none; }
+.setup-opt input { margin-top: 3px; accent-color: var(--cyan); }
+.setup-opt b { display: block; font-size: 13px; margin-bottom: 2px; }
+.setup-opt em {
+  color: var(--dim);
+  font-style: normal;
+  font-weight: 400;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-left: 7px;
+}
+.setup-opt span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+.setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
+
+.setup .primary {
+  background: var(--cyan);
+  border: 0;
+  color: #041018;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 9px 20px;
+  cursor: pointer;
+}
+.setup .primary:hover { background: var(--cyan-hot, #7fe4ff); }
+.setup .primary:disabled { opacity: .55; cursor: default; }
+
+/* ---------- fleet: ownership ticks and blended prices ---------- */
+
+.ship-card { position: relative; }
+
+.ship-card .own-tick {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  cursor: pointer;
+}
+.ship-card .own-tick input { accent-color: var(--cyan); cursor: pointer; }
+
+/* Not owned: present so it can be re-ticked, but visibly struck from the
+   books. The tick itself stays at full strength. */
+.ship-card.excluded > :not(.own-tick) { opacity: .32; }
+.ship-card.excluded .ship-name { text-decoration: line-through; }
+
+.ship-price { margin-top: 5px; font-size: 11.5px; color: var(--green); }
+.ship-price.muted { color: var(--dim); }
 
 #map-follow.active {
   color: var(--green);

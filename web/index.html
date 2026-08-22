@@ -19,22 +19,64 @@
     <span class="by">by nekron</span>
   </div>
 
+  <!-- Sixteen flat tabs got crowded; the strip is grouped instead. The
+       overlay flattens the groups back out with display:contents and keeps
+       its own six-tab whitelist. -->
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
-    <button data-view="sessions">Sessions</button>
-    <button data-view="fleet">Fleet</button>
-    <button data-view="places">Places</button>
-    <button data-view="contracts">Contracts</button>
-    <button data-view="spending">Spending</button>
-    <button data-view="ledger">Ledger</button>
-    <button data-view="commodities">Cargo</button>
-    <button data-view="market">Market</button>
-    <button data-view="loot">Loot</button>
-    <button data-view="assets">Assets</button>
-    <button data-view="loadout">Loadout</button>
-    <button data-view="stash">Stash</button>
-    <button data-view="settings">Settings</button>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="jobs">Shopping</button>
+        <button data-view="blueprints">Blueprints</button>
+        <button data-view="routes">Routes</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="logbook">Logbook</button>
+        <button data-view="sessions">Sessions</button>
+        <button data-view="fleet">Fleet</button>
+        <button data-view="places">Places</button>
+        <button data-view="contracts">Contracts</button>
+        <button data-view="casualties">Casualties</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Economy<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="spending">Spending</button>
+        <button data-view="ledger">Ledger</button>
+        <button data-view="commodities">Cargo</button>
+        <button data-view="market">Market</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Reference<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="ships">Ships</button>
+        <button data-view="parts">Parts</button>
+        <button data-view="mining">Mining</button>
+        <button data-view="crafting">Crafting</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Gear<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="loadout">Loadout</button>
+        <button data-view="stash">Stash</button>
+        <button data-view="loot">Loot</button>
+      </div>
+    </div>
+    <div class="tab-group">
+      <button type="button" class="group-btn">Settings<span class="caret">▾</span></button>
+      <div class="group-menu">
+        <button data-view="settings">General</button>
+        <button data-view="overlay">Overlay</button>
+      </div>
+    </div>
     <button data-view="about">About</button>
   </nav>
 
@@ -45,6 +87,23 @@
 </header>
 
 <main>
+
+  <!-- Shown only when no Star Citizen install could be found: without one
+       there is nothing to read, so this asks rather than sitting empty. -->
+  <div class="no-install" id="no-install" hidden>
+    <b>No Star Citizen logs found on this machine.</b>
+    <p class="muted">
+      Every drive was searched, along with the RSI launcher's own record of
+      where it installed the game. If it lives somewhere unusual, point us at
+      it: the folder holding <code>Game.log</code>, or its parent — usually
+      something ending in <code>StarCitizen\LIVE</code>.
+    </p>
+    <div class="no-install-row">
+      <input type="text" id="install-path" placeholder="D:\Games\StarCitizen\LIVE" spellcheck="false">
+      <button class="ghost" id="install-path-save">Use this folder</button>
+      <span class="muted" id="install-path-status"></span>
+    </div>
+  </div>
 
   <div class="render-errors" id="render-errors" hidden></div>
 
@@ -62,7 +121,7 @@
   <section id="view-now" class="view active">
     <div class="now-grid">
 
-      <article class="card hero">
+      <article class="card hero" data-card="location">
         <div class="card-label">Location</div>
         <div class="hero-value" id="now-location">—</div>
         <div class="hero-sub" id="now-location-sub"></div>
@@ -73,31 +132,31 @@
         </div>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
         <div class="value" id="now-ship">—</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="session">
         <div class="card-label">Session</div>
         <div class="value" id="now-clock">—</div>
         <div class="sub" id="now-mode"></div>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="handle">
         <div class="card-label">Handle</div>
         <div class="value" id="now-handle">—</div>
         <div class="sub" id="now-version"></div>
       </article>
 
-      <article class="card span2">
+      <article class="card span2" data-card="feed">
         <div class="card-label">Live feed</div>
         <ul class="feed" id="now-feed">
           <li class="empty">Waiting for the game…</li>
         </ul>
       </article>
 
-      <article class="card">
+      <article class="card" data-card="stats">
         <div class="card-label">This session</div>
         <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
         <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
@@ -105,7 +164,14 @@
         <div class="note" id="combat-note"></div>
       </article>
 
-      <article class="card span2" id="trade-advice-card" hidden>
+      <article class="card span2" id="now-job-card" data-card="job" hidden>
+        <div class="card-label">Job in hand</div>
+        <div class="now-job-title" id="now-job-title"></div>
+        <div id="now-job-progress"></div>
+        <ul class="now-job-items" id="now-job-items"></ul>
+      </article>
+
+      <article class="card span2" id="trade-advice-card" data-card="trade" hidden>
         <div class="card-label">Trade from here</div>
         <div class="muted" id="trade-advice-sub"></div>
         <ul class="advice" id="trade-advice"></ul>
@@ -129,10 +195,18 @@
         <input type="checkbox" id="map-visited-only">
         <span>Visited only</span>
       </label>
+      <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
+        <input type="checkbox" id="map-goods">
+        <span>Goods on hover</span>
+      </label>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
       </span>
+      <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
+        <option value="price">Shade by price</option>
+        <option value="scu">Shade by capacity</option>
+      </select>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
@@ -155,9 +229,151 @@
         </div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
+        <div class="map-info-lore muted" id="map-info-lore" hidden></div>
+        <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
     </div>
     <div class="legend" id="map-legend"></div>
+  </section>
+
+  <!-- ROUTES -->
+  <section id="view-routes" class="view">
+    <div class="section-bar">
+      <h2>Trade routes</h2>
+      <div class="controls">
+        <select id="routes-ship" class="select" title="Whose hold to fill"></select>
+        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <label class="toggle" title="Only routes starting where you are now">
+          <input type="checkbox" id="routes-here">
+          <span>From here</span>
+        </label>
+      </div>
+    </div>
+    <p class="muted caption">
+      The best hauls UEX knows, sized to a real hold and a real wallet — pick
+      one of your ships and the money you can spend, and the ranking becomes
+      what <em>this</em> run earns rather than a margin in the abstract. Each
+      row says what capped it: your hold, your capital, or the shop's own
+      stock. Needs UEX prices, and ship capacities from the community dataset.
+    </p>
+    <div class="table-wrap">
+      <table id="routes-table">
+        <thead>
+          <tr>
+            <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
+            <th>Sell at</th><th class="num">Sell</th>
+            <th class="num">Margin</th><th class="num">SCU</th>
+            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CASUALTIES -->
+  <section id="view-casualties" class="view">
+    <div class="section-bar">
+      <h2>Casualties</h2>
+      <div class="controls">
+        <select id="casualties-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      What dying has cost you. Star Citizen 4.9 logs no death event, so these
+      are counted from the corpse item-recovery bursts the game still writes,
+      and a session's last known place is the closest the logs come to naming
+      where it happened. Claim fees are the real expedite costs of the ships
+      you fly.
+    </p>
+
+    <div class="summary-strip" id="casualties-summary"></div>
+
+    <h2 class="spaced">Where it happens</h2>
+    <div id="casualties-places" class="bars"></div>
+
+    <h2 class="spaced">What you were flying</h2>
+    <div id="casualties-ships" class="bars"></div>
+
+    <h2 class="spaced">Claim fees, by ship</h2>
+    <div class="table-wrap">
+      <table id="casualties-fees">
+        <thead><tr><th>Ship</th><th class="num">Expedite fee</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- JOBS -->
+  <section id="view-jobs" class="view">
+    <div class="section-bar">
+      <h2>Shopping</h2>
+      <div class="controls">
+        <button class="ghost" id="jobs-new">New list</button>
+      </div>
+    </div>
+    <p class="muted caption">
+      Lists of things to gather, checked against what your stashes hold — so a
+      list knows what is still missing, where the rest of it is, and what the
+      missing part costs. The <em>+ list</em> button on Market, Parts and
+      Mining adds to whichever list you are filling.
+    </p>
+
+    <form class="job-form" id="job-form" hidden>
+      <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
+      <textarea id="job-items" rows="5"
+                placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
+      <div class="job-form-actions">
+        <button type="submit" class="ghost">Save list</button>
+        <button type="button" class="ghost" id="job-cancel">Cancel</button>
+      </div>
+    </form>
+
+    <div id="jobs-list"></div>
+
+    <h2 class="spaced">Contracts in progress</h2>
+    <p class="muted caption">
+      Taken from the running session only — contracts are dropped when you
+      leave the game, so a closed game has none.
+    </p>
+    <div id="jobs-contracts"></div>
+  </section>
+
+  <!-- BLUEPRINTS -->
+  <section id="view-blueprints" class="view">
+    <div class="section-bar">
+      <h2>Blueprints</h2>
+      <div class="controls">
+        <select id="jobs-blueprint" class="select" title="Blueprints you have been given"></select>
+        <button class="ghost" id="jobs-plan">Set as goal</button>
+      </div>
+    </div>
+    <p class="muted caption">
+      What you can craft, and what it still needs. Pick a blueprint — yours are
+      listed first, since the game tells the logs which ones you have been
+      given — and it becomes a tracked build with its materials checked against
+      your stashes. The full catalogue lives under Reference → Crafting.
+    </p>
+
+    <div id="blueprint-jobs"></div>
+  </section>
+
+  <!-- LOGBOOK -->
+  <section id="view-logbook" class="view">
+    <div class="section-bar">
+      <h2>Logbook</h2>
+      <div class="controls">
+        <select id="logbook-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      The record itself: the latest things you did in the verse — sessions
+      flown, cargo and gear traded, items first seen — one timeline, newest
+      first. Places fly to the map.
+    </p>
+    <ul class="feed logbook" id="logbook-feed">
+      <li class="empty">Nothing yet.</li>
+    </ul>
   </section>
 
   <!-- SESSIONS -->
@@ -194,16 +410,16 @@
 
     <h2>Fleet size over time</h2>
     <p class="muted caption">
-      Owned-vehicle count reported by the entitlement query each session. Ship
-      <em>names</em> are not logged — only the total — so the roster below is what
-      you have actually flown.
+      Owned-vehicle count reported by the game's entitlement query each
+      session — ships <em>and</em> ground vehicles together, which is why it can
+      sit above the ticked roster below. Names are not logged, only the total.
     </p>
     <div class="map-wrap fleet-chart-wrap">
       <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
     </div>
 
     <div class="section-bar">
-      <h2 class="spaced">Ships flown</h2>
+      <h2 class="spaced">Ships</h2>
       <div class="controls">
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
@@ -211,11 +427,31 @@
       </div>
     </div>
     <p class="muted caption">
-      Counted from control-token releases. Star Citizen 4.9 logs no boarding
-      event, so flight counts are exact while times aboard (~) are estimated from
-      the last known stop.
+      Counted from control-token releases — flight counts are exact, times
+      aboard (~) estimated from the last known stop. The roster comes from the
+      logs, so rentals and ships since sold appear too: untick them and they
+      leave every total. Prices are UEX in-game purchase prices, when enabled.
     </p>
     <div id="fleet-ships" class="ship-grid"></div>
+
+    <h2 class="spaced" id="fleet-vehicles-title" hidden>Ground vehicles</h2>
+    <div id="fleet-vehicles" class="ship-grid"></div>
+
+    <h2 class="spaced">Other assets</h2>
+    <p class="muted caption">
+      Worn kit, stashes and claim exposure, priced the same way. Every number
+      is an estimate covering only what the price tables recognise. Needs the
+      community dataset and UEX enabled in Settings.
+    </p>
+    <div class="summary-strip" id="assets-summary"></div>
+
+    <h2 class="spaced">Stashes, by value</h2>
+    <div class="table-wrap">
+      <table id="assets-stash">
+        <thead><tr><th>Location</th><th class="num">Items</th><th class="num">Priced</th><th class="num">Value</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- SPENDING -->
@@ -332,6 +568,24 @@
       fixtures, and the hands, which hold things transiently rather than equip them.
     </p>
     <div id="loadout-grid" class="loadout-grid"></div>
+
+    <div id="outfitting" hidden>
+      <h2 class="spaced">Buying this kit back</h2>
+      <p class="muted caption">
+        After a bad death, the question is which shop carries the most of what
+        you were wearing. Ranked by coverage first, then by what the trip
+        costs. Needs UEX prices and the item-stock feed in Settings.
+      </p>
+      <div class="summary-strip" id="outfitting-summary"></div>
+      <div class="table-wrap">
+        <table id="outfitting-table">
+          <thead>
+            <tr><th>Shop</th><th class="num">Carries</th><th class="num">Cost there</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- STASH -->
@@ -385,12 +639,35 @@
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
     <div id="types-chart" class="bars"></div>
+
+    <h2 class="spaced">Every contract</h2>
+    <p class="muted caption">
+      Newest first. Steps counts the objectives the game showed in your journal
+      and how many finished — the game never names them, so the count is the
+      story: abandoned four steps in reads differently from dropped at the first.
+    </p>
+    <div class="table-wrap">
+      <table id="contracts-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
+            <th>System</th><th>Outcome</th>
+            <th class="num">Steps</th><th class="num">Took</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <section id="view-market" class="view">
     <div class="section-bar">
       <h2>Commodity market</h2>
       <div class="controls">
+        <span class="muted" id="market-count"></span>
+        <span class="muted" id="market-age" title="When the UEX snapshot was fetched"></span>
+        <button class="ghost" id="market-refresh" hidden
+                title="Fetch the latest prices from UEX now">Refresh prices</button>
         <select id="market-group" class="select" title="Filter by commodity group"></select>
         <input type="search" id="market-search" class="search" placeholder="Search commodities…"
                autocomplete="off" spellcheck="false">
@@ -426,6 +703,162 @@
         <tbody></tbody>
       </table>
     </div>
+
+    <div id="fuel-block" hidden>
+      <h2 class="spaced">Fuel</h2>
+      <p class="muted caption">
+        The cheapest refills per fuel, from the fuel feed in Settings. The
+        filters above apply to commodities, not to this.
+      </p>
+      <div class="table-wrap">
+        <table id="fuel-table">
+          <thead><tr><th>Fuel</th><th>Terminal</th><th class="num">Price</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted caption" id="fuel-count"></p>
+    </div>
+  </section>
+
+  <!-- REFERENCE: ships -->
+  <section id="view-ships" class="view">
+    <div class="section-bar">
+      <h2>Ship catalogue</h2>
+      <div class="controls">
+        <select id="ships-career" class="select" title="Filter by career"></select>
+        <input type="search" id="ships-search" class="search" placeholder="Search ships…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Every flyable the community dataset describes — career, crew and what an
+      insurance claim costs — priced at UEX in-game purchase prices where a
+      shop sells one. Pure reference: your own hangar lives on the Fleet page.
+      Needs the community dataset (and UEX for prices) in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="ships-table">
+        <thead>
+          <tr>
+            <th>Ship</th><th>Career</th><th>Role</th>
+            <th class="num">Crew</th>
+            <th class="num">Cargo</th>
+            <th class="num" title="SCM / boost-off top speed, m/s">Speed</th>
+            <th class="num">Shields</th>
+            <th class="num">Hull</th>
+            <th class="num">Expedite fee</th><th class="num">Claim wait</th>
+            <th class="num">Buy price</th><th>Cheapest at</th>
+            <th class="num">Rent</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- REFERENCE: parts and gear -->
+  <section id="view-parts" class="view">
+    <div class="section-bar">
+      <h2>Parts &amp; gear catalogue</h2>
+      <div class="controls">
+        <select id="parts-type" class="select" title="Filter by type"></select>
+        <input type="search" id="parts-search" class="search" placeholder="Search parts and gear…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Every ship component and piece of personal gear in the community digest —
+      type, size, grade, maker — with UEX in-game prices joined by entity uuid
+      where a shop stocks one. Needs the community dataset (and UEX for prices)
+      in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="parts-table">
+        <thead>
+          <tr>
+            <th>Item</th><th>Type</th><th>Sub-type</th>
+            <th class="num">Size</th><th class="num">Grade</th>
+            <th>Maker</th><th class="num">Price</th>
+            <th class="num">Stocked at</th><th>Cheapest at</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="parts-count"></p>
+  </section>
+
+  <!-- REFERENCE: mining and salvage spawns -->
+  <section id="view-mining" class="view">
+    <div class="section-bar">
+      <h2>Mining &amp; salvage</h2>
+      <div class="controls">
+        <select id="mining-kind" class="select" title="Filter by resource kind"></select>
+        <select id="mining-system" class="select" title="Filter by system"></select>
+        <input type="search" id="mining-search" class="search" placeholder="Search resources and places…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      The game's own deposit tables: what spawns where, from asteroid ores to
+      cave harvestables and salvageable hulls. Chance is the spawn group's
+      probability; share is the deposit's slice within that group. Best sell
+      joins UEX prices for resources that are also commodities. Places fly to
+      the map. Needs the community dataset in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="mining-table">
+        <thead>
+          <tr>
+            <th>Resource</th><th>Deposit</th><th>Kind</th>
+            <th>Where</th><th>System</th><th>Spawn group</th>
+            <th class="num">Chance</th><th class="num">Share</th>
+            <th class="num">Best sell</th>
+            <th class="num" title="What the unrefined rock fetches">Raw</th>
+            <th class="num" title="Best refinery yield for this ore">Yield</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-count"></p>
+  </section>
+
+  <!-- REFERENCE: crafting blueprints -->
+  <section id="view-crafting" class="view">
+    <div class="section-bar">
+      <h2>Crafting</h2>
+      <div class="controls">
+        <select id="crafting-type" class="select" title="Filter by output type"></select>
+        <select id="crafting-obtained" class="select" title="Filter by how the blueprint is obtained">
+          <option value="">Any availability</option>
+          <option value="default">Known by default</option>
+          <option value="reward">From rewards</option>
+          <option value="owned">In your library</option>
+        </select>
+        <input type="search" id="crafting-search" class="search" placeholder="Search blueprints…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <p class="muted caption">
+      Every crafting blueprint in the game data: what it makes, the first-tier
+      craft time and materials, and how the blueprint is obtained. "Buy
+      instead" joins the crafted item's UEX shop price, so a recipe can be
+      weighed against a shopping trip. Needs the community dataset in Settings.
+    </p>
+    <div class="table-wrap">
+      <table id="crafting-table">
+        <thead>
+          <tr>
+            <th>Makes</th><th>Type</th><th class="num">Grade</th>
+            <th class="num">Time</th><th>Materials</th>
+            <th>Obtained</th><th class="num">Buy instead</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="crafting-count"></p>
   </section>
 
   <section id="view-loot" class="view">
@@ -458,41 +891,10 @@
     </div>
   </section>
 
-  <section id="view-assets" class="view">
-    <h2>Assets</h2>
-    <p class="muted caption">
-      What you own, priced from UEX community data - in-game purchase prices,
-      not pledge value. Every number is an estimate: only items and ships the
-      price tables recognise are counted, and the coverage is shown beside each
-      total. Needs both the community dataset and UEX enabled in Settings.
-    </p>
 
-    <div class="summary-strip" id="assets-summary"></div>
-
-    <h2 class="spaced">Fleet, at in-game prices</h2>
-    <p class="muted caption">
-      The fleet comes from the logs, so rentals and ships you have since sold
-      appear too — untick them and they leave the totals. The choice is
-      remembered in this browser.
-    </p>
-    <div class="table-wrap">
-      <table id="assets-fleet">
-        <thead><tr><th class="tick">Owned</th><th>Ship</th><th class="num">Buy price</th><th>Cheapest at</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-
-    <h2 class="spaced">Stashes, by value</h2>
-    <div class="table-wrap">
-      <table id="assets-stash">
-        <thead><tr><th>Location</th><th class="num">Items</th><th class="num">Priced</th><th class="num">Value</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section id="view-settings" class="view">
-    <h2>Settings</h2>
+  <!-- OVERLAY -->
+  <section id="view-overlay" class="view">
+    <h2>Overlay</h2>
 
     <div class="option-block" id="option-overlay">
       <div class="option-head">
@@ -501,14 +903,53 @@
       </div>
       <p class="muted" id="overlay-copy">
         Off by default. Turning it on shows a transparent panel over the game —
-        Star Citizen must run in Borderless Windowed for it to be visible, and
-        <code>Ctrl+Alt+O</code> toggles click-through. The choice is remembered.
+        Star Citizen must run in Borderless Windowed for it to be visible.
+        <code>Ctrl+Alt+O</code> toggles click-through, <code>Ctrl+Alt+←/→</code>
+        changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
+        remembered.
       </p>
       <p class="muted" id="overlay-unavailable" hidden>
         Not available here: this dashboard is served by the bare server, which
         has no overlay window. Run <code>QuantumWake.exe</code> to get one.
       </p>
     </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>What the widget shows</h3>
+        <button class="ghost" id="overlay-reload" title="Make a running widget reload its page">Reload widget</button>
+        <span class="muted" id="overlay-layout-status"></span>
+      </div>
+      <p class="muted">
+        The widget is small and the dashboard is not, so it should carry a
+        chosen few rather than everything. Changes reach a running overlay
+        within a few seconds — no restart. Fullscreen ignores this and shows
+        the lot.
+      </p>
+
+      <div class="layout-group">
+        <div class="layout-label">Pages</div>
+        <div class="layout-boxes" id="overlay-tabs"></div>
+      </div>
+
+      <div class="layout-group">
+        <div class="layout-label">Cards on the Now page</div>
+        <div class="layout-boxes" id="overlay-cards"></div>
+      </div>
+
+      <div class="layout-group">
+        <div class="layout-label">Density</div>
+        <div class="layout-boxes" id="overlay-density">
+          <label class="toggle"><input type="radio" name="ov-density" value="normal"><span>Normal</span></label>
+          <label class="toggle"><input type="radio" name="ov-density" value="compact"><span>Compact</span></label>
+          <label class="toggle"><input type="radio" name="ov-density" value="tiny"><span>Tiny</span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-settings" class="view">
+    <h2>Settings</h2>
 
     <div class="option-block">
       <div class="option-head">
@@ -541,6 +982,20 @@
         here: only on your click, never on a timer.
       </p>
       <span class="muted" id="uex-status"></span>
+
+      <label class="toggle uex-age-row">
+        <input type="checkbox" id="uex-age-toggle" checked>
+        <span>Show how old each price is on the Market page</span>
+      </label>
+
+      <div class="uex-feeds" id="uex-feeds">
+        <p class="muted">
+          <b>Extra feeds.</b> Narrower tables that each serve one page — take
+          only what you need. Every one is a separate download on your click,
+          and can be dropped again without touching the rest.
+        </p>
+        <div id="uex-feed-list"></div>
+      </div>
 
       <div class="uex-push" id="uex-push-block">
         <p class="muted">
@@ -649,6 +1104,72 @@
   <span class="foot-version" id="foot-version" title="Build version"></span>
 </footer>
 
+  <!-- First flight: shown once, over everything, until /api/setup says done.
+       The initial backfill runs while the user picks the main options. -->
+  <div class="setup" id="setup" hidden>
+    <div class="setup-card">
+      <div class="setup-brand">
+        <img src="assets/mark.svg" width="30" height="30" alt="">
+        <div>
+          <b>Quantum Wake</b>
+          <span>first flight setup</span>
+        </div>
+      </div>
+
+      <p class="muted">
+        Reading your Star Citizen logs for the first time — your whole history
+        is being rebuilt from the log backups on this machine. While that runs,
+        pick how the app should behave. Everything here can be changed later in
+        Settings, and nothing talks to the internet unless you turn it on.
+      </p>
+
+      <div class="setup-progress">
+        <div class="scan-head">
+          <span id="setup-scan-label">Checking logs…</span>
+          <span class="scan-count" id="setup-scan-count"></span>
+        </div>
+        <div class="scan-track"><div class="scan-fill" id="setup-scan-fill"></div></div>
+      </div>
+
+      <label class="setup-opt" id="setup-overlay-row">
+        <input type="checkbox" id="setup-overlay">
+        <div>
+          <b>In-game overlay widget</b>
+          <span>A compact always-on-top readout over the game. Ctrl+Alt+O unlocks
+          it, Ctrl+Alt+←/→ change page, Ctrl+Alt+F goes fullscreen.</span>
+        </div>
+      </label>
+
+      <label class="setup-opt">
+        <input type="checkbox" id="setup-community">
+        <div>
+          <b>Community dataset <em>one download, ~110 MB</em></b>
+          <span>Names the commodities in your cargo history and adds ship and
+          item reference plus real star-map positions. From StarCitizenWiki's
+          scunpacked-data.</span>
+        </div>
+      </label>
+
+      <label class="setup-opt">
+        <input type="checkbox" id="setup-uex">
+        <div>
+          <b>UEX market prices <em>online</em></b>
+          <span>Crowd-sourced prices: best places to sell, trade advice from
+          where you are, and what your fleet and stash are worth.</span>
+        </div>
+      </label>
+
+      <div class="setup-feeds" id="setup-feeds" hidden>
+        <div class="setup-feeds-head">Extra UEX feeds — take only what you need</div>
+        <div id="setup-feed-list"></div>
+      </div>
+
+      <div class="setup-actions">
+        <button id="setup-start" class="primary">Start flying</button>
+        <span class="muted" id="setup-status"></span>
+      </div>
+    </div>
+  </div>
 <script src="app.js"></script>
 </body>
 </html>

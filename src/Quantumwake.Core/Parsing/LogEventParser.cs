@@ -244,7 +244,9 @@ public sealed partial class LogEventParser
                     line.Timestamp,
                     m.Groups["mission"].Value,
                     m.Groups["objective"].Value,
-                    ParseObjectiveState(m.Groups["state"].Value))),
+                    ParseObjectiveState(m.Groups["state"].Value),
+                    m.Groups["flags"].Success
+                        && m.Groups["flags"].Value.Contains("ShowInLog", StringComparison.Ordinal))),
 
             "CEntityComponentShipListProvider::SetVehicleSpawnedInformations" =>
                 Match(VehicleSpawnRegex, line, m =>
@@ -610,9 +612,13 @@ public sealed partial class LogEventParser
         RegexOptions.Compiled)]
     private static partial Regex CommodityRegex { get; }
 
+    // The flags matter as much as the state: the game marks with ShowInLog the
+    // objectives it actually shows the player, and the rest are internal
+    // bookkeeping that would triple every step count.
     [GeneratedRegex(
         @"mission_id (?<mission>[0-9a-fA-F-]+) - objective_id (?<objective>\S+) - " +
-        @"state (?<state>MISSION_OBJECTIVE_STATE_\w+)",
+        @"state (?<state>MISSION_OBJECTIVE_STATE_\w+)" +
+        @"(?:.*?flags=(?<flags>[^\s\[]*))?",
         RegexOptions.Compiled)]
     private static partial Regex ObjectiveRegex { get; }
 

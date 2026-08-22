@@ -12,10 +12,8 @@ namespace Quantumwake.Overlay;
 /// </remarks>
 internal sealed record OverlayGeometry(double Left, double Top, double Width, double Height)
 {
-    private static string Path_ => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Quantumwake",
-        "overlay.json");
+    private static string Path_ =>
+        System.IO.Path.Combine(Quantumwake.Core.AppPaths.Root, "overlay.json");
 
     public static OverlayGeometry? Load()
     {

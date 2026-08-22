@@ -1,3 +1,4 @@
+using Quantumwake.Core;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -13,13 +14,42 @@ public sealed record UexPrice(
 {
     /// <summary>15-day average sell across terminals, for trend context.</summary>
     public decimal AvgSell { get; init; }
+
+    /// <summary>
+    /// When UEX last saw the best-sell price reported - the age a trader
+    /// judges the number by. Null on caches digested before the field existed.
+    /// </summary>
+    public DateTimeOffset? SeenAt { get; init; }
 }
 
 /// <summary>One commodity's price at one terminal.</summary>
-public sealed record UexMarketRow(int TerminalId, string Terminal, decimal Buy, decimal Sell);
+/// <param name="BuyScu">Stock available to buy, SCU. 0 on caches digested before the field existed.</param>
+/// <param name="SellScu">Demand the terminal accepts when selling to it, SCU. Same caveat.</param>
+/// <param name="Seen">Unix seconds of UEX's date_modified for this row. 0 on older caches.</param>
+public sealed record UexMarketRow(
+    int TerminalId, string Terminal, decimal Buy, decimal Sell, decimal BuyScu = 0, decimal SellScu = 0,
+    long Seen = 0);
 
 /// <summary>Cheapest in-game purchase of a vehicle.</summary>
 public sealed record UexVehiclePrice(decimal Price, string Terminal);
+
+/// <summary>One item's buy price at one terminal - where a part is stocked.</summary>
+public sealed record UexItemRow(string Terminal, decimal Buy);
+
+/// <summary>One haul worth flying, sized to a real hold and a real wallet.</summary>
+/// <param name="Units">SCU this run can actually carry, after every cap.</param>
+/// <param name="LimitedBy">"hold", "capital" or "stock" - what caps this run.</param>
+public sealed record UexRoute(
+    string Commodity,
+    string BuyAt,
+    decimal BuyPrice,
+    string SellAt,
+    decimal SellPrice,
+    decimal MarginPerScu,
+    decimal Units,
+    decimal Profit,
+    decimal Outlay,
+    string LimitedBy);
 
 /// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
 public sealed record UexOpportunity(
@@ -85,11 +115,12 @@ public sealed class UexData
     /// <summary>Cheapest buy per item uuid, for kit and stash value.</summary>
     private Dictionary<string, decimal> _itemPrices = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Every terminal stocking each item uuid - where to actually buy a part.</summary>
+    private Dictionary<string, List<UexItemRow>> _itemMarket = new(StringComparer.OrdinalIgnoreCase);
+
     public UexData(string? directory = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Quantumwake", "uex");
+        _directory = directory ?? AppPaths.In("uex");
 
         TryLoad();
     }
@@ -102,6 +133,7 @@ public sealed class UexData
     private string MatrixPath => Path.Combine(_directory, "matrix.json");
     private string VehiclesPath => Path.Combine(_directory, "vehicles.json");
     private string ItemPricesPath => Path.Combine(_directory, "item-prices.json");
+    private string ItemMarketPath => Path.Combine(_directory, "item-market.json");
 
     public bool IsEnabled => _prices.Count > 0;
     public int Count => _prices.Count;
@@ -137,6 +169,10 @@ public sealed class UexData
     /// <summary>Cheapest known buy price for an item, by the game's entity uuid.</summary>
     public decimal? ItemPrice(string? uuid) =>
         uuid is not null && _itemPrices.TryGetValue(uuid, out var price) ? price : null;
+
+    /// <summary>Every terminal stocking an item, by uuid. Empty when unknown.</summary>
+    public IReadOnlyList<UexItemRow> ItemMarket(string? uuid) =>
+        uuid is not null && _itemMarket.TryGetValue(uuid, out var rows) ? rows : [];
 
     /// <summary>
     /// Trading opportunities from one place: what its terminal sells, and where
@@ -177,6 +213,91 @@ public sealed class UexData
     public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
 
     /// <summary>
+    /// The best hauls in the price table: for each commodity, the cheapest
+    /// place to buy against the dearest place to sell.
+    /// </summary>
+    /// <remarks>
+    /// What UEX does well already - except for the two things it cannot know.
+    /// The hold is a real ship out of the player's own fleet, and the capital
+    /// is what they actually have, so the ranking is by what THIS run would
+    /// earn rather than by margin per SCU in the abstract. A run capped by
+    /// money rather than by space says so, which is the difference between a
+    /// route and a daydream.
+    /// </remarks>
+    public List<UexRoute> Routes(double scu, decimal capital, string? from = null, int limit = 25)
+    {
+        var origin = from is { Length: > 0 } ? MatchTerminal(from) : null;
+        var routes = new List<UexRoute>();
+
+        foreach (var (commodity, rows) in _matrix)
+        {
+            var buy = rows
+                .Where(r => r.Buy > 0 && (origin is null || r.TerminalId == origin.Value.Id))
+                .OrderBy(r => r.Buy)
+                .FirstOrDefault();
+
+            if (buy is null)
+                continue;
+
+            var sell = rows
+                .Where(r => r.Sell > 0 && r.TerminalId != buy.TerminalId)
+                .OrderByDescending(r => r.Sell)
+                .FirstOrDefault();
+
+            if (sell is null || sell.Sell <= buy.Buy)
+                continue;
+
+            var margin = sell.Sell - buy.Buy;
+
+            // The hold, the wallet and the shop's own stock all cap a run;
+            // whichever bites first is the one worth naming. With no ship
+            // named, everything is priced per SCU rather than shown as
+            // nothing - the page has to say something before it is configured.
+            var byHold = scu > 0 ? (decimal)scu : 1;
+            var byWallet = buy.Buy > 0 ? Math.Floor(capital / buy.Buy) : 0;
+            var byStock = buy.BuyScu > 0 ? buy.BuyScu : decimal.MaxValue;
+
+            var units = byHold;
+            var limiter = scu > 0 ? "hold" : "per SCU";
+
+            if (capital > 0 && byWallet < units)
+            {
+                units = byWallet;
+                limiter = "capital";
+            }
+
+            if (byStock < units)
+            {
+                units = byStock;
+                limiter = "stock";
+            }
+
+            if (units <= 0)
+                continue;
+
+            routes.Add(new UexRoute(
+                commodity,
+                buy.Terminal, buy.Buy,
+                sell.Terminal, sell.Sell,
+                margin,
+                units,
+                margin * units,
+                buy.Buy * units,
+                limiter));
+        }
+
+        return [.. routes.OrderByDescending(r => r.Profit).Take(limit)];
+    }
+
+    /// <summary>
+    /// Every terminal row for one commodity - the map's price shading reads
+    /// this to grade sellers by price or capacity. Empty when UEX is off or
+    /// the commodity is unknown to it.
+    /// </summary>
+    public IReadOnlyList<UexMarketRow> Market(string commodity) =>
+        _matrix.TryGetValue(commodity, out var rows) ? rows : [];
+
+    /// <summary>
     /// Fetches current prices, the terminal list, vehicle purchase prices and
     /// item prices. Anonymous endpoints, on the user's click only.
     /// </summary>
@@ -193,7 +314,7 @@ public sealed class UexData
 
         var terminals = DigestTerminals(terminalDoc);
         var vehicles = DigestVehicles(vehicleDoc);
-        var itemPrices = DigestItemPrices(itemDoc);
+        var (itemPrices, itemMarket) = DigestItemPrices(itemDoc);
 
         Directory.CreateDirectory(_directory);
         File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
@@ -202,6 +323,7 @@ public sealed class UexData
         File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
         File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
         File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
+        File.WriteAllText(ItemMarketPath, JsonSerializer.Serialize(itemMarket));
         File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
 
         _prices = prices;
@@ -210,6 +332,7 @@ public sealed class UexData
         _matrix = matrix;
         _vehicles = vehicles;
         _itemPrices = itemPrices;
+        _itemMarket = itemMarket;
         FetchedAt = DateTimeOffset.UtcNow;
         return _prices.Count;
     }
@@ -217,7 +340,11 @@ public sealed class UexData
     /// <summary>Deletes the price cache. Credentials are removed separately.</summary>
     public void Disable()
     {
-        foreach (var path in new[] { PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath, ItemPricesPath })
+        foreach (var path in new[]
+        {
+            PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath,
+            ItemPricesPath, ItemMarketPath,
+        })
             if (File.Exists(path))
                 File.Delete(path);
 
@@ -227,6 +354,7 @@ public sealed class UexData
         _matrix = new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
         _vehicles = new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
         _itemPrices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        _itemMarket = new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
     }
 
@@ -383,11 +511,14 @@ public sealed class UexData
             var sell = (decimal)(Num(row, "price_sell") ?? 0);
             var buy = (decimal)(Num(row, "price_buy") ?? 0);
             var sellAvg = (decimal)(Num(row, "price_sell_avg") ?? 0);
+            var buyScu = (decimal)(Num(row, "scu_buy") ?? 0);
+            var sellScu = (decimal)(Num(row, "scu_sell_stock") ?? 0);
+            var seen = (long)(Num(row, "date_modified") ?? 0);
 
             if (!matrix.TryGetValue(name, out var list))
                 matrix[name] = list = [];
 
-            list.Add(new UexMarketRow(terminalId, terminal, buy, sell));
+            list.Add(new UexMarketRow(terminalId, terminal, buy, sell, buyScu, sellScu, seen));
 
             if (sellAvg > 0)
             {
@@ -409,7 +540,10 @@ public sealed class UexData
             {
                 AvgSell = avgSells.TryGetValue(name, out var avgs) && avgs.Count > 0
                     ? Math.Round(avgs.Max(), 0)
-                    : 0
+                    : 0,
+                SeenAt = bestSell?.Seen > 0
+                    ? DateTimeOffset.FromUnixTimeSeconds(bestSell.Seen)
+                    : null
             };
         }
 
@@ -441,26 +575,36 @@ public sealed class UexData
         return vehicles;
     }
 
-    private static Dictionary<string, decimal> DigestItemPrices(JsonElement root)
+    private static (Dictionary<string, decimal>, Dictionary<string, List<UexItemRow>>)
+        DigestItemPrices(JsonElement root)
     {
         var items = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var market = new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
 
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-            return items;
+            return (items, market);
 
         foreach (var row in data.EnumerateArray())
         {
             var uuid = Str(row, "item_uuid");
             var price = (decimal)(Num(row, "price_buy") ?? 0);
+            var terminal = Str(row, "terminal_name");
 
             if (uuid is null || price <= 0)
                 continue;
 
             if (!items.TryGetValue(uuid, out var existing) || price < existing)
                 items[uuid] = price;
+
+            if (terminal is not null)
+            {
+                if (!market.TryGetValue(uuid, out var rows))
+                    market[uuid] = rows = [];
+                rows.Add(new UexItemRow(terminal, price));
+            }
         }
 
-        return items;
+        return (items, market);
     }
 
     private static List<(int Id, string Name)> DigestTerminals(JsonElement root)
@@ -514,6 +658,11 @@ public sealed class UexData
                 _itemPrices = JsonSerializer.Deserialize<Dictionary<string, decimal>>(File.ReadAllText(ItemPricesPath))
                     is { } ip ? new Dictionary<string, decimal>(ip, StringComparer.OrdinalIgnoreCase)
                               : new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+            if (File.Exists(ItemMarketPath))
+                _itemMarket = JsonSerializer.Deserialize<Dictionary<string, List<UexItemRow>>>(File.ReadAllText(ItemMarketPath))
+                    is { } im ? new Dictionary<string, List<UexItemRow>>(im, StringComparer.OrdinalIgnoreCase)
+                              : new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
                 FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;
