@@ -84,6 +84,10 @@ internal static class EmbeddedWeb
 
             context.Response.ContentLength = stream.Length;
 
+            // Same reasoning as the file-backed path: ask before reusing, or an
+            // update leaves the page it shipped with still on screen.
+            context.Response.Headers.CacheControl = "no-cache";
+
             if (HttpMethods.IsHead(context.Request.Method))
                 return;
 

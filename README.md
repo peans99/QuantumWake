@@ -344,6 +344,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.6.1
+
+- **An update no longer arrives half-applied.** The dashboard's stylesheet and
+  script were served without a caching rule, so the browser guessed how long
+  they stayed fresh: the version number came from the app and read new, while
+  the page around it was the previous release. Only Ctrl+F5 fixed it, which is
+  not something anyone should have to know. They are now revalidated on every
+  load — still a 304 and still instant, but always the build you are running.
+
 ### 0.6.0
 
 The map learns what things are, the app learns what it cannot count, and the
