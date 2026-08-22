@@ -1872,3 +1872,9 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 .advice b { color: var(--cyan-hot); }
 
 body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
+
+/* Tooltip hint pointing at the click that shows every good, the commodity
+   rows in the search suggestions, and the count above the chips. */
+.map-tip .goods.hint { color: var(--cyan); font-size: 10px; letter-spacing: .06em; margin-top: 2px; }
+.map-result .name.good { color: var(--green); }
+.sold-count { width: 100%; font-size: 10.5px; margin-bottom: 5px; }
