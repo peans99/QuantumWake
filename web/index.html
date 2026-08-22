@@ -118,6 +118,14 @@
     </div>
   </div>
 
+  <div class="notice" id="update" hidden>
+    <div class="notice-body">
+      <b id="update-title">Look for a newer version?</b>
+      <span class="muted" id="update-detail"></span>
+    </div>
+    <div class="notice-actions" id="update-actions"></div>
+  </div>
+
   <div class="notice" id="patch" hidden>
     <div class="notice-body">
       <b id="patch-title">A new patch arrived</b>
@@ -1029,6 +1037,24 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>New versions</h3>
+        <button class="ghost" id="update-check">Check now</button>
+      </div>
+      <p class="muted">
+        Asks GitHub which release is newest and says so if it is ahead of this
+        one. One request, carrying nothing but the request — no identifier, no
+        version, no count of anything. Downloading and installing stays yours to
+        do: the button opens the release page in your browser.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="update-auto">
+        <span>Check when the app starts</span>
+      </label>
+      <span class="muted" id="update-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Last wipe</h3>
         <button class="ghost" id="wipe-save">Save</button>
         <button class="ghost" id="wipe-clear">Count everything</button>
@@ -1178,7 +1204,8 @@
           and the backups beside it, resolves the names from your own copy of the
           game, and shows you what is there. Nothing is written to the game
           directory, and the app connects to the internet only when you ask it
-          to, from the Settings page — never on its own.
+          to — the optional datasets from the Settings page, and the version
+          check if you turn that on. Never otherwise, and never on a timer.
         </p>
 
         <dl class="about-facts">
@@ -1269,6 +1296,19 @@
               nothing is written to the game directory, no memory is read and
               nothing is injected. It connects to the internet only when you ask
               it to from the Settings page, never on its own.
+            </p>
+          </details>
+
+          <details>
+            <summary>Does it phone home, or check for updates?</summary>
+            <p>
+              It sends nothing about you, ever — no identifier, no usage, no
+              statistics. It can look up whether a newer release exists, and only
+              if you say yes: you are asked once, and Settings → <b>New versions</b>
+              carries the switch and a <b>Check now</b> button. That look is one
+              request to GitHub's public release feed, which carries nothing but
+              the request. Nothing is downloaded or installed for you — you get a
+              link to the release page.
             </p>
           </details>
 

@@ -151,6 +151,7 @@ body.overlay::before { background: repeating-linear-gradient(0deg, rgba(53,200,2
 body.overlay main { padding: 4px 7px 7px; max-width: none; }
 
 /* Prose and filter controls are page-only. */
+body.overlay .notice,
 body.overlay .caption,
 body.overlay .map-head p,
 body.overlay .controls,

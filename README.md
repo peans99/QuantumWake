@@ -348,6 +348,25 @@ release workflow lifts it from here, so it is written once.
 
 Not cut yet. What is waiting on the next build:
 
+- **The overlay arrives usable.** It used to start click-through: a pane that
+  could not be moved, resized or closed, with a hotkey nothing mentioned as the
+  only way out. Now it starts ready to grab, and a **📌 pin** button in its header
+  puts it out of the way. The tray icon brings it back — a pinned window passes
+  every click to the game, so it cannot carry its own way out — and `Ctrl+Alt+O`
+  still works.
+- **It can tell you a new version is out**, if you let it. You are asked once at
+  startup; Settings → *New versions* holds the switch and a Check now button.
+  One request to GitHub's public release feed, carrying nothing about you, and
+  nothing is downloaded or installed — you get the release page.
+- **It notices patches.** Nothing in the logs says an account was wiped, but they
+  date every version, so the app brings the date and asks the one question it
+  cannot answer: did that patch wipe? Asked once per patch. The first-run wizard
+  asks the same thing before anything is counted.
+- **A FAQ on the About page**, including why pledged ships and armour are missing
+  until you touch them — nothing that arrives in an account is written to the
+  log — and where to report anything wrong: **nekhron** on Discord, or the
+  GitHub issues page.
+
 - **The map prices cargo.** Pick a commodity and every place it trades is graded
   by what it is worth there: the best terminals now, from UEX, beside your own
   receipts over the last day, three days, seven or longer. Selling and buying
