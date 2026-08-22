@@ -52,6 +52,7 @@ public partial class App : System.Windows.Application
         _tray = new TrayPresence(_settings.ShowOverlay);
         _tray.OpenDashboardRequested += OpenDashboard;
         _tray.OverlayToggled += SetOverlayVisible;
+        _tray.OverlayPinned += pinned => _overlay?.SetPinned(pinned);
         _tray.SetInstallFolderRequested += PickInstallFolder;
         _tray.QuitRequested += Quit;
 
@@ -76,6 +77,11 @@ public partial class App : System.Windows.Application
     private MainWindow CreateOverlay()
     {
         var window = new MainWindow();
+
+        // However it was pinned - the header button, the hotkey, the tray - the
+        // menu has to end up saying the same thing, because it is the only
+        // control that still works once clicks pass through.
+        window.PinnedChanged += pinned => _tray?.SetOverlayPinned(pinned);
 
         window.Closed += (_, _) =>
         {
@@ -180,11 +186,20 @@ public partial class App : System.Windows.Application
     private void SetOverlayVisible(bool visible)
     {
         if (visible)
-            (_overlay ??= CreateOverlay()).Show();
+        {
+            var window = _overlay ??= CreateOverlay();
+            window.Show();
+        }
         else
             _overlay?.Hide();
 
         _tray?.SetOverlayVisible(visible);
+
+        // An overlay that is not shown cannot be pinned, and one just shown
+        // arrives unpinned - so the menu says both, rather than offering a tick
+        // that would do nothing.
+        _tray?.SetPinAvailable(visible);
+        _tray?.SetOverlayPinned(visible && (_overlay?.IsPinned ?? false));
         _server?.Services.GetRequiredService<OverlayBridge>().Report(visible);
 
         _settings = _settings with { ShowOverlay = visible };

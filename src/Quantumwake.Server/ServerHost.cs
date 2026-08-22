@@ -1250,6 +1250,13 @@ static object Describe(Wipe wipe, LogLibrary lib) => new
 {
     at = wipe.At == DateTimeOffset.MinValue ? (DateTimeOffset?)null : wipe.At,
     wipe.Patch,
+
+    // A patch that landed after the line currently drawn. The page offers it
+    // and the player decides: the logs can date a patch, but nothing in them
+    // says whether it wiped.
+    suggested = lib.PatchSinceWipe() is { } found
+        ? new { patch = $"Alpha {found.Patch}", at = found.At }
+        : null,
     covers = Enum.GetValues<WipeScope>()
         .Where(v => v is not (WipeScope.None or WipeScope.Everything) && wipe.Scope.HasFlag(v))
         .Select(v => v.ToString().ToLowerInvariant())

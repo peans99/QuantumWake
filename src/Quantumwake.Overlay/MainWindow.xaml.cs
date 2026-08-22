@@ -40,7 +40,18 @@ public partial class MainWindow : Window
     private static readonly Uri ServerRoot = new("http://127.0.0.1:31337/");
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(2) };
-    private bool _clickThrough = true;
+    /// <summary>
+    /// Whether clicks pass straight through to the game - "pinned".
+    /// </summary>
+    /// <remarks>
+    /// Starts off. It used to start on, which meant the overlay arrived as a
+    /// pane that could not be moved, resized or closed, and the only way out
+    /// was a hotkey nothing on screen mentioned. Players reported exactly that.
+    /// An overlay you can grab is the sane first impression; pinning it out of
+    /// the way is the deliberate act, and it has a button.
+    /// </remarks>
+    private bool _clickThrough;
+
 
     /// <summary>The widget-sized bounds to return to when fullscreen ends.</summary>
     private Rect _restoreBounds;
@@ -87,16 +98,19 @@ public partial class MainWindow : Window
 
         const uint ctrlAlt = NativeWindowStyles.Modifiers.Control | NativeWindowStyles.Modifiers.Alt;
 
+        // Ctrl+Alt+O still pins and unpins, for anyone who wants it, but it is
+        // no longer the only way back: the pin button does it while unpinned,
+        // and the tray menu does it while pinned.
         if (!NativeWindowStyles.RegisterGlobalHotKey(
                 this, ToggleHotkeyId, ctrlAlt | NativeWindowStyles.Modifiers.NoRepeat, VkO))
         {
             SplashText.Text = "Ctrl+Alt+O is already in use by another app; " +
-                              "click-through cannot be toggled.";
+                              "pin and unpin from the header or the tray icon.";
         }
 
-        // View switching works even while click-through is on, so the widget can
-        // be paged through mid-flight without unlocking it. Fullscreen too: a
-        // locked overlay blown up to full size is a HUD over the whole game.
+        // View switching works even while pinned, so the widget can be paged
+        // through mid-flight without unpinning. Fullscreen too: a pinned
+        // overlay blown up to full size is a HUD over the whole game.
         NativeWindowStyles.RegisterGlobalHotKey(this, PrevViewHotkeyId, ctrlAlt, VkLeft);
         NativeWindowStyles.RegisterGlobalHotKey(this, NextViewHotkeyId, ctrlAlt, VkRight);
         NativeWindowStyles.RegisterGlobalHotKey(
@@ -351,12 +365,33 @@ public partial class MainWindow : Window
     /// Switches between "informational" (clicks reach the game) and
     /// "interactive" (the overlay can be moved and clicked).
     /// </summary>
-    private void ToggleClickThrough()
+    private void ToggleClickThrough() => SetPinned(!_clickThrough);
+
+    /// <summary>
+    /// Pins the overlay out of the way, or takes it back.
+    /// </summary>
+    /// <remarks>
+    /// A pinned window cannot be clicked at all - that is what pinning means -
+    /// so the way back can never be a button on it. The tray menu carries it,
+    /// and is told each time so its tick matches what the screen is doing.
+    /// </remarks>
+    public void SetPinned(bool pinned)
     {
-        _clickThrough = !_clickThrough;
+        if (_clickThrough == pinned)
+            return;
+
+        _clickThrough = pinned;
         NativeWindowStyles.SetClickThrough(this, _clickThrough);
         ApplyInteractionMode();
+        PinnedChanged?.Invoke(pinned);
     }
+
+    /// <summary>Raised when the overlay is pinned or unpinned, however it happened.</summary>
+    public event Action<bool>? PinnedChanged;
+
+    public bool IsPinned => _clickThrough;
+
+    private void PinButton_Click(object sender, RoutedEventArgs e) => SetPinned(true);
 
     /// <summary>
     /// Makes the current mode unmistakable. In pass-through the overlay is a

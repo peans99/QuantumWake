@@ -70,7 +70,30 @@ function clock(fromIso) {
 const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
 
+/**
+ * A calendar day as it was written, not as the reader's clock re-reads it.
+ *
+ * A wipe is a day rather than a moment: it is stored at midnight UTC and typed
+ * into a date field that means UTC. Formatting that in local time shows the day
+ * before to everyone west of Greenwich - the Settings field said the 15th while
+ * the notice beside it said the 14th, which is exactly how a date stops being
+ * believed.
+ */
+const UTC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Assembled from the UTC parts rather than asked of Intl: a timeZone option is
+// not honoured everywhere this page runs, and a date that quietly falls back to
+// local time is the bug this exists to prevent.
+const dayUtc = (iso) => {
+  const at = new Date(iso);
+
+  return `${UTC_MONTHS[at.getUTCMonth()]} ${String(at.getUTCDate()).padStart(2, '0')}, `
+    + `${at.getUTCFullYear()}`;
+};
+
 /* Day and month only, for dense rows where a year wraps the line. */
+
 const dayOf = (iso) => new Date(iso).toLocaleDateString([], { month: 'short', day: '2-digit' });
 
 async function getJson(url) {
@@ -6346,10 +6369,87 @@ function initWipe() {
   }
 }
 
-/* Wired at load, like the other page-level controls: neither belongs to a
+/**
+ * Offers to move the wipe line when a new patch has landed since it.
+ *
+ * Nothing in the logs says an account was reset - there is no such line. What
+ * they do say is when a patch arrived, and wipes arrive with patches, so the
+ * app brings the date and the player answers the one question it cannot: did
+ * that one wipe? Answering either way is remembered for that patch, so it is
+ * asked once rather than every launch.
+ */
+const PATCH_ANSWERED = 'qw-patch-answered';
+
+function patchAnswered(patch) {
+  try {
+    return (localStorage.getItem(PATCH_ANSWERED) || '').split(',').includes(patch);
+  } catch {
+    return false;
+  }
+}
+
+function rememberPatchAnswer(patch) {
+  try {
+    const seen = (localStorage.getItem(PATCH_ANSWERED) || '').split(',').filter(Boolean);
+    if (!seen.includes(patch)) seen.push(patch);
+    localStorage.setItem(PATCH_ANSWERED, seen.join(','));
+  } catch { /* private browsing: it asks again next time, which is not harmful */ }
+}
+
+/** The patch offered right now, so the buttons know what they are answering. */
+let offeredPatch = null;
+
+async function checkForWipe() {
+  const notice = $('#patch');
+  if (!notice) return;
+
+  let wipe;
+  try {
+    wipe = await getJson('/api/wipe');
+  } catch {
+    return;
+  }
+
+  const found = wipe.suggested;
+  if (!found || patchAnswered(found.patch)) return;
+
+  offeredPatch = found;
+
+  $('#patch-title').textContent = `${found.patch} arrived on ${dayUtc(found.at)}`;
+  $('#patch-detail').textContent = wipe.at
+    ? `Your history is counted from ${dayUtc(wipe.at)}. If that patch wiped, the line belongs there instead.`
+    : 'Nothing is being held back at the moment. If that patch wiped, your totals are counting an account you no longer have.';
+
+  notice.hidden = false;
+}
+
+function initWipePrompt() {
+  const notice = $('#patch');
+  if (!notice) return;
+
+  $('#patch-wiped').addEventListener('click', async () => {
+    if (!offeredPatch) return;
+
+    rememberPatchAnswer(offeredPatch.patch);
+    notice.hidden = true;
+
+    // Straight to the full depth: a patch wipe is the ordinary kind, and the
+    // Settings page is where a partial one gets its detail.
+    await saveWipe(offeredPatch.at, offeredPatch.patch);
+  });
+
+  $('#patch-kept').addEventListener('click', () => {
+    if (offeredPatch) rememberPatchAnswer(offeredPatch.patch);
+    notice.hidden = true;
+  });
+}
+
+/* Wired at load, like the other page-level controls
+: neither belongs to a
    view, and both must work before anything has been rendered. */
 initStaleNotice();
 initWipe();
+initWipePrompt();
 
 /* ---------- scan progress ---------- */
 
@@ -6457,6 +6557,21 @@ async function maybeShowSetup() {
       list.append(row);
     }
 
+    // The wipe, offered before anything has been counted. The date defaults to
+    // the newest patch this install has logs from, because a first run on an
+    // old machine is exactly when "why is my total so big" starts.
+    try {
+      const wipe = await getJson('/api/wipe');
+      const suggested = wipe.suggested;
+
+      $('#setup-wipe').value = new Date(suggested ? suggested.at : wipe.at || Date.now())
+        .toISOString().slice(0, 10);
+
+      $('#setup-wipe-note').textContent = suggested
+        ? `${suggested.patch} arrived then — change it if your last wipe was another one.`
+        : `${wipe.patch} — change it if your last wipe was another one.`;
+    } catch { /* the field keeps whatever the markup had */ }
+
     const uexBox = $('#setup-uex');
     const syncFeeds = () => { $('#setup-feeds').hidden = !uexBox.checked; };
     uexBox.addEventListener('change', syncFeeds);
@@ -6507,6 +6622,17 @@ async function maybeShowSetup() {
           await fetch(`/api/uex/feeds/${box.dataset.feed}/enable`, { method: 'POST' })
             .catch(() => {});
         }
+      }
+
+      const chosenWipe = $('#setup-wipe').value;
+
+      if (chosenWipe) {
+        status.textContent = 'Setting where your history starts…';
+        await fetch('/api/wipe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ at: `${chosenWipe}T00:00:00Z`, patch: 'set at first run' }),
+        }).catch(() => { /* Settings can set it later */ });
       }
 
       await fetch('/api/setup/done', { method: 'POST' });
@@ -6583,6 +6709,7 @@ async function boot() {
     // Once per load, never on a timer: the offer to renew a price table that
     // has gone a day old, and the line the wipe draws under the history.
     checkPriceAge().catch(() => { /* prices are usable whatever their age */ });
+    checkForWipe().catch(() => { /* the Settings page still carries the line */ });
   }
 
   loadWipe().catch(() => { /* Settings shows it on its next visit */ });

@@ -489,7 +489,11 @@ public sealed record ShipTotal(
     DateTimeOffset FirstFlown,
     DateTimeOffset LastFlown,
     ShipInfo? Reference = null);
+/// <summary>When a game version was first seen in this install's logs.</summary>
+public sealed record PatchArrival(string Patch, DateTimeOffset At);
+
 public sealed record PlaceTotal(
+
     string RawId,
     string Name,
     string? System,
@@ -601,6 +605,63 @@ public sealed class LogLibrary : IDisposable
         WipedAt is { } since && Wipe!.Scope.HasFlag(counting)
             ? [.. sessions.Where(s => s.StartedAt >= since)]
             : sessions;
+
+    /// <summary>
+    /// When each game version first appears in the logs, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A wipe cannot be read out of the logs - nothing says "your account was
+    /// reset". What can be read is when a patch arrived, and wipes arrive with
+    /// patches, so the app offers the date and lets the player say whether it
+    /// wiped. That is the honest shape of this: evidence for the question, not
+    /// an answer invented to look clever.
+    /// </para>
+    /// <para>
+    /// Grouped by major.minor, because 4.9.188 and 4.9.190 are the same patch to
+    /// a player and only the first of them is a date worth offering. Reads every
+    /// stored session rather than the counted ones: the whole point is to notice
+    /// a patch that arrived after the line currently drawn.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<PatchArrival> PatchArrivals() =>
+    [
+        .. _store.All()
+            .Where(s => !string.IsNullOrWhiteSpace(s.GameVersion))
+            .Select(s => (Patch: MajorMinor(s.GameVersion!), s.StartedAt))
+            .Where(x => x.Patch is not null)
+            .GroupBy(x => x.Patch!, StringComparer.Ordinal)
+            .Select(g => new PatchArrival(g.Key, g.Min(x => x.StartedAt)))
+            .OrderBy(a => a.At)
+    ];
+
+    /// <summary>"4.9.188.23497" to "4.9", or null when it is not a version.</summary>
+    private static string? MajorMinor(string version)
+    {
+        var parts = version.Split('.');
+
+        return parts.Length >= 2 && int.TryParse(parts[0], out _) && int.TryParse(parts[1], out _)
+            ? $"{parts[0]}.{parts[1]}"
+            : null;
+    }
+
+    /// <summary>
+    /// The newest patch that arrived after the line currently drawn, if any.
+    /// </summary>
+    /// <remarks>
+    /// Offered, never applied: only the player knows whether that patch wiped.
+    /// A patch on the same day as the current wipe is the wipe already recorded,
+    /// so it is not offered back.
+    /// </remarks>
+    public PatchArrival? PatchSinceWipe()
+    {
+        var since = WipedAt ?? DateTimeOffset.MinValue;
+
+        return PatchArrivals()
+            .Where(a => a.At > since.AddHours(12))
+            .OrderByDescending(a => a.At)
+            .FirstOrDefault();
+    }
 
     /// <summary>How many stored sessions started before the wipe.</summary>
     public int SessionsBeforeWipe() =>

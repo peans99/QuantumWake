@@ -33,9 +33,10 @@ itself, across every fixed drive.
 
 It then sits in the notification area. Right-click to open the dashboard, show
 or hide the overlay, or quit. The in-game overlay is off until you turn it on -
-from the Settings page or the tray - and the choice is remembered. `Ctrl+Alt+O`
-toggles overlay click-through, and the dashboard is on
-<http://127.0.0.1:31337>.
+from the Settings page or the tray - and the choice is remembered. The overlay
+arrives ready to move; its **📌 pin** button puts it out of the way so clicks
+reach the game, and the tray icon (or `Ctrl+Alt+O`) brings it back. The
+dashboard is on <http://127.0.0.1:31337>.
 
 Windows will warn that the publisher is unknown — the binary is not code signed,
 which costs money a free fan tool does not have. **More info → Run anyway**.

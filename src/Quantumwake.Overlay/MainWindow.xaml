@@ -93,7 +93,7 @@
                                    FontSize="10"
                                    VerticalAlignment="Center"
                                    Margin="9,0,0,0" />
-                        <TextBlock Text="DRAG TO MOVE · CTRL+ALT+O TO LOCK"
+                        <TextBlock Text="DRAG TO MOVE · PIN TO CLICK THROUGH IT"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
@@ -103,6 +103,14 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <!-- Pinning is the deliberate act, so it gets a button
+                             rather than a hotkey nobody was told about. Getting
+                             back is the tray menu: a pinned window cannot be
+                             clicked, so it cannot carry its own way out. -->
+                        <Button x:Name="PinButton" Content="📌"
+                                Style="{StaticResource HeaderButton}"
+                                Click="PinButton_Click" FontSize="11"
+                                ToolTip="Pin it out of the way — clicks reach the game (Ctrl+Alt+O, or the tray icon, brings it back)" />
                         <Button x:Name="PrevButton" Content="◀"
                                 Style="{StaticResource HeaderButton}"
                                 Click="PrevButton_Click" FontSize="9"

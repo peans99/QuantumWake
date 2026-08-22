@@ -1932,7 +1932,51 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 .wipe-scope .toggle { font-size: 12px; }
 
 
+/* The wizard's wipe step: prose above the field, like the options around it. */
+.setup-wipe {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--rule);
+  background: rgba(0, 0, 0, .18);
+}
+.setup-wipe b { font-size: 13px; }
+.setup-wipe span { font-size: 11.5px; line-height: 1.55; }
+.setup-wipe .wipe-row { margin-top: 6px; }
+
+/* Questions on the About page
+: shut by default, because a wall of answers to
+   questions you do not have is not help. */
+.faq { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; }
+.faq details {
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-hot);
+  background: rgba(0, 0, 0, .2);
+  padding: 8px 12px;
+}
+.faq details[open] { border-left-color: var(--cyan); }
+.faq summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  list-style: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: "+ "; color: var(--cyan); font-family: var(--mono); }
+.faq details[open] summary::before { content: "− "; }
+.faq summary:hover { color: var(--cyan-hot); }
+.faq p {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+  max-width: 74ch;
+}
+.faq a { color: var(--cyan); }
+
 /* ---------- flight plans ---------- */
+
 
 
 
