@@ -82,6 +82,23 @@
 
 <main>
 
+  <!-- Shown only when no Star Citizen install could be found: without one
+       there is nothing to read, so this asks rather than sitting empty. -->
+  <div class="no-install" id="no-install" hidden>
+    <b>No Star Citizen logs found on this machine.</b>
+    <p class="muted">
+      Every drive was searched, along with the RSI launcher's own record of
+      where it installed the game. If it lives somewhere unusual, point us at
+      it: the folder holding <code>Game.log</code>, or its parent — usually
+      something ending in <code>StarCitizen\LIVE</code>.
+    </p>
+    <div class="no-install-row">
+      <input type="text" id="install-path" placeholder="D:\Games\StarCitizen\LIVE" spellcheck="false">
+      <button class="ghost" id="install-path-save">Use this folder</button>
+      <span class="muted" id="install-path-status"></span>
+    </div>
+  </div>
+
   <div class="render-errors" id="render-errors" hidden></div>
 
   <div class="scan" id="scan" hidden>

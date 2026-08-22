@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Quantumwake.Core.Logging;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -47,6 +48,7 @@ public partial class App : System.Windows.Application
         _tray = new TrayPresence(_settings.ShowOverlay);
         _tray.OpenDashboardRequested += OpenDashboard;
         _tray.OverlayToggled += SetOverlayVisible;
+        _tray.SetInstallFolderRequested += PickInstallFolder;
         _tray.QuitRequested += Quit;
 
         await StartServerAsync(e.Args);
@@ -112,6 +114,45 @@ public partial class App : System.Windows.Application
             _server = null;
             _tray?.Notify($"The dashboard could not start: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The last resort when detection fails: a folder dialog, because someone
+    /// whose game is in an unusual place should not have to type a path or
+    /// find a config file.
+    /// </summary>
+    private void PickInstallFolder()
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Pick your Star Citizen folder - the one holding Game.log, "
+                + @"or its parent (usually ...\StarCitizen\LIVE).",
+            UseDescriptionForTitle = true,
+            SelectedPath = InstallPathStore.Load() ?? ""
+        };
+
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+            return;
+
+        var install = InstallPathStore.Save(dialog.SelectedPath);
+
+        _tray?.Notify(install is null
+            ? "No Star Citizen logs in that folder. Look for the one holding Game.log."
+            : $"Found {install.Channel}. Restarting Quantum Wake to read it…");
+
+        // The install is resolved once at startup and held by everything
+        // downstream, so the honest way to apply it is to start again.
+        if (install is not null)
+            Restart();
+    }
+
+    private void Restart()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe is not null)
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+
+        Quit();
     }
 
     private void OpenDashboard()

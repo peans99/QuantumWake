@@ -1508,6 +1508,32 @@ td.with-track .track:focus-visible { opacity: 1; }
 .now-jump { cursor: pointer; }
 .now-jump:hover { color: var(--cyan-hot, #7fe4ff); }
 
+/* The "where is your game" prompt: the app cannot do anything without it, so
+   it sits above everything rather than in a settings page nobody opens. */
+.no-install {
+  border: 1px solid var(--amber, #d08a24);
+  border-left: 3px solid var(--amber, #d08a24);
+  background: rgba(60, 40, 10, .25);
+  padding: 14px 17px;
+  margin-bottom: var(--gap);
+}
+.no-install[hidden] { display: none; }
+.no-install b { color: var(--amber, #d08a24); }
+.no-install p { margin: 6px 0 10px; font-size: 12.5px; line-height: 1.5; }
+
+.no-install-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.no-install-row input {
+  flex: 1 1 340px;
+  background: rgba(8, 18, 30, .9);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+.no-install-row input:focus { border-color: var(--cyan); }
+
 /* ---------- jobs ---------- */
 
 /* The pinned job on Now, and so in the overlay: title, bar, what is missing. */

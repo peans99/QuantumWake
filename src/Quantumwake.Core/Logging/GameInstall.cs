@@ -32,14 +32,23 @@ public sealed record GameInstall(string Channel, string RootPath)
 /// players routinely install to a second drive. Detection scans the usual roots
 /// across every fixed drive and always allows an explicit override.
 /// </remarks>
-public static class GameInstallLocator
+public static partial class GameInstallLocator
 {
     private static readonly string[] RelativeRoots =
     [
         @"Roberts Space Industries\StarCitizen",
         @"Program Files\Roberts Space Industries\StarCitizen",
         @"Games\Roberts Space Industries\StarCitizen",
-        @"Program Files (x86)\Roberts Space Industries\StarCitizen"
+        @"Program Files (x86)\Roberts Space Industries\StarCitizen",
+
+        // The launcher lets a player name any library folder, and these are
+        // the shapes people actually choose.
+        @"StarCitizen",
+        @"Games\StarCitizen",
+        @"Games\Roberts Space Industries",
+        @"RSI\StarCitizen",
+        @"SC\Roberts Space Industries\StarCitizen",
+        @"Program Files\StarCitizen",
     ];
 
     /// <summary>
@@ -53,7 +62,9 @@ public static class GameInstallLocator
 
         foreach (var drive in DriveInfo.GetDrives())
         {
-            if (drive.DriveType != DriveType.Fixed || !drive.IsReady)
+            // Removable included: an external SSD is a normal place to keep a
+            // 100 GB game, and Windows reports those as Removable.
+            if (drive.DriveType is not (DriveType.Fixed or DriveType.Removable) || !drive.IsReady)
                 continue;
 
             foreach (var relative in RelativeRoots)
@@ -105,10 +116,68 @@ public static class GameInstallLocator
     {
         installs ??= Discover();
 
+        // Nothing in the usual places: ask the launcher where it put the game.
+        if (installs.Count == 0)
+            installs = FromLauncherLog();
+
         return installs.FirstOrDefault(i => i.Channel.Equals("LIVE", StringComparison.OrdinalIgnoreCase))
             ?? installs.FirstOrDefault(i => i.HasGameLog)
             ?? installs.FirstOrDefault();
     }
+
+    /// <summary>
+    /// Installs named by the RSI launcher's own log.
+    /// </summary>
+    /// <remarks>
+    /// The launcher writes lines carrying the full path of the build it is
+    /// starting, whatever folder the player chose, so its log answers the
+    /// question that scanning drives can only guess at. Read newest-first and
+    /// treated as a hint: every path is still checked on disk.
+    /// </remarks>
+    public static IReadOnlyList<GameInstall> FromLauncherLog()
+    {
+        var log = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "rsilauncher", "logs", "log.log");
+
+        if (!File.Exists(log))
+            return [];
+
+        var found = new List<GameInstall>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            // The file runs to megabytes; the recent tail is the useful part.
+            var lines = File.ReadLines(log).TakeLast(4000).Reverse();
+
+            foreach (var line in lines)
+            {
+                foreach (System.Text.RegularExpressions.Match match in LauncherPathRegex().Matches(line))
+                {
+                    var path = match.Groups["path"].Value.Replace(@"\\", @"\");
+
+                    if (!seen.Add(path) || !Directory.Exists(path))
+                        continue;
+
+                    var install = new GameInstall(Path.GetFileName(path), path);
+                    if (install.HasGameLog || Directory.Exists(install.LogBackupsPath))
+                        found.Add(install);
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return found;
+        }
+
+        return found;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"(?<path>[A-Za-z]:\\{1,2}(?:[^""\\]+\\{1,2})*StarCitizen\\{1,2}(?:LIVE|PTU|EPTU|TECH-PREVIEW|HOTFIX))",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex LauncherPathRegex();
 
     private static IEnumerable<string> SafeEnumerateDirectories(string path)
     {

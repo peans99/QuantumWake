@@ -1593,6 +1593,39 @@ async function renderOverlayLayout() {
   $('#overlay-layout-status').textContent = '';
 }
 
+$('#install-path-save')?.addEventListener('click', async (e) => {
+  const status = $('#install-path-status');
+  const path = $('#install-path').value.trim();
+
+  if (!path) {
+    status.textContent = 'Type the folder first.';
+    return;
+  }
+
+  e.currentTarget.disabled = true;
+  status.textContent = 'checking…';
+
+  try {
+    const response = await fetch('/api/install/path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+
+    const result = await response.json();
+
+    status.textContent = response.ok
+      ? `Found ${result.channel}. Restart Quantum Wake to read it.`
+      : result.message || 'That folder does not hold Star Citizen logs.';
+
+    if (response.ok) status.classList.add('inward');
+  } catch {
+    status.textContent = 'Could not reach the server.';
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
+
 $('#overlay-reload')?.addEventListener('click', async (e) => {
   const status = $('#overlay-layout-status');
   e.currentTarget.disabled = true;
@@ -5069,6 +5102,10 @@ async function boot() {
   } catch {
     $('#install').textContent = 'no install found';
     $('#about-install').textContent = 'none found';
+
+    // Nothing to read: ask where the game lives rather than showing an
+    // app full of empty pages.
+    if (!isOverlay) $('#no-install').hidden = false;
   }
 
   try {

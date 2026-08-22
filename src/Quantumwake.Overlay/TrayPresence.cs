@@ -30,6 +30,9 @@ internal sealed class TrayPresence : IDisposable
     public event Action<bool>? OverlayToggled;
     public event Action? QuitRequested;
 
+    /// <summary>The tray's answer to "it cannot find my game".</summary>
+    public event Action? SetInstallFolderRequested;
+
     public TrayPresence(bool overlayVisible)
     {
         _overlayItem = new ToolStripMenuItem("Show overlay")
@@ -44,6 +47,9 @@ internal sealed class TrayPresence : IDisposable
         menu.Items.Add(new ToolStripMenuItem("Open dashboard", null,
             (_, _) => OpenDashboardRequested?.Invoke()));
         menu.Items.Add(_overlayItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Set Star Citizen folder…", null,
+            (_, _) => SetInstallFolderRequested?.Invoke()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke()));
 

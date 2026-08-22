@@ -42,7 +42,13 @@ public static class ServerHost
         var library = new LogLibrary(database);
 
         builder.Services.AddSingleton(library);
-        builder.Services.AddSingleton(install!);
+
+        // Only when there is one. Registering a null instance throws
+        // "Value cannot be null. (Parameter 'implementationInstance')" out of
+        // the container - which is how a missing install used to take the
+        // whole dashboard down instead of showing the page that explains it.
+        if (install is not null)
+            builder.Services.AddSingleton(install);
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<ScanStatus>();
         builder.Services.AddSingleton<LiveSessionService>();
@@ -115,6 +121,35 @@ public static class ServerHost
                     places = lib.Names.PlaceCount
                 }
             }));
+
+        // Pointing the app at a folder by hand, for when no amount of
+        // scanning finds one. Takes effect on the next start, because the
+        // install is resolved once and everything downstream holds it.
+        app.MapGet("/api/install/path", () => new
+        {
+            saved = InstallPathStore.Load(),
+            detected = GameInstallLocator.Discover().Select(i => new { i.Channel, i.RootPath }),
+            fromLauncher = GameInstallLocator.FromLauncherLog().Select(i => new { i.Channel, i.RootPath })
+        });
+
+        app.MapPost("/api/install/path", (InstallPathRequest body) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Path))
+            {
+                InstallPathStore.Save(null);
+                return Results.Ok(new { cleared = true });
+            }
+
+            var resolved = InstallPathStore.Save(body.Path);
+
+            return resolved is null
+                ? Results.BadRequest(new
+                {
+                    message = "No Star Citizen logs there. Pick the folder holding Game.log "
+                        + @"or its parent - usually ...\StarCitizen\LIVE."
+                })
+                : Results.Ok(new { resolved.Channel, resolved.RootPath, restartNeeded = true });
+        });
 
         // First-run marker: the dashboard shows its setup screen until this
         // file exists. A file rather than a database row so wiping the cache
@@ -1079,6 +1114,11 @@ public static class ServerHost
         if (!string.IsNullOrWhiteSpace(configured))
             return GameInstallLocator.FromPath(configured);
 
+        // A folder the user pointed us at once beats any amount of guessing.
+        if (InstallPathStore.Load() is { } remembered
+            && GameInstallLocator.FromPath(remembered) is { } saved)
+            return saved;
+
         return GameInstallLocator.Preferred();
     }
 
@@ -1098,6 +1138,9 @@ public static class ServerHost
 
 /// <summary>Body of POST /api/uex/credentials. Empty values clear the store.</summary>
 public sealed record UexCredentialsRequest(string? Token, string? Secret);
+
+/// <summary>Body of POST /api/install/path. Empty clears the override.</summary>
+public sealed record InstallPathRequest(string? Path);
 
 /// <summary>Body of POST /api/jobs.</summary>
 public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
