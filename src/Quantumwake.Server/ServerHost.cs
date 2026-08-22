@@ -1196,20 +1196,89 @@ public static class ServerHost
 
         // Every terminal price for one commodity: the map grades its sellers
         // and buyers by these, by price or by SCU capacity.
-        app.MapGet("/api/uex/market", (LogLibrary lib, UexData uex, string commodity) =>
-            uex.Market(commodity).Select(r => new
+        /*
+         * Where to buy one named thing - whatever kind of thing it is.
+         *
+         * A shopping list is written by hand, so a line on it can be a
+         * commodity ("Agricium"), a ship part ("Atlas Quantum Drive"), or a
+         * typo. The trade market and the item shops are two different feeds
+         * with two different join keys, and the list should not have to know
+         * which one its line belongs to - so both are tried here and the
+         * answer says which one replied.
+         */
+        app.MapGet("/api/shopping/sellers", (LogLibrary lib, UexData uex, string name) =>
+        {
+            object Row(string kind, string terminal, decimal price, decimal scu, DateTimeOffset? seen)
             {
-                terminal = r.Terminal,
+                var place = lib.Terminals.Resolve(terminal);
 
-                // The map's own id for the place this counter stands in, empty
-                // when the two naming schemes cannot be reconciled. The page
-                // shades and plans by this rather than matching names itself.
-                placeId = lib.Terminals.IdFor(r.Terminal),
-                buy = r.Buy,
-                sell = r.Sell,
-                buyScu = r.BuyScu,
-                sellScu = r.SellScu,
-                seenAt = r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : (DateTimeOffset?)null
+                return new
+                {
+                    kind,
+                    terminal,
+                    placeId = place?.RawId ?? string.Empty,
+                    place = place?.Name,
+                    system = place?.System,
+                    security = TerminalPlaces.SecurityOfSystem(place?.System),
+                    price,
+                    scu,
+                    seenAt = seen
+                };
+            }
+
+            var traded = uex.Market(name)
+                .Where(r => r.Buy > 0)
+                .OrderBy(r => r.Buy)
+                .Select(r => Row("commodity", r.Terminal, r.Buy, r.BuyScu,
+                    r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : null))
+                .ToList();
+
+            if (traded.Count > 0)
+                return new { name, kind = "commodity", sellers = (IReadOnlyList<object>)traded };
+
+            // Items join on the game's entity uuid, which only the reference
+            // data knows, so the written name has to find the item first.
+            var item = MatchItem(lib, name);
+
+            if (item is null)
+                return new { name, kind = "unknown", sellers = (IReadOnlyList<object>)Array.Empty<object>() };
+
+            var stocked = uex.ItemMarket(item.Uuid)
+                .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.MinBy(r => r.Buy)!)
+                .OrderBy(r => r.Buy)
+                .Select(r => Row("item", r.Terminal, r.Buy, 0, null))
+                .ToList();
+
+            return new { name = item.Name ?? name, kind = "item", sellers = (IReadOnlyList<object>)stocked };
+        });
+
+        // Every counter that trades one commodity, with where it is and how
+        // rough the neighbourhood is - so the page can offer a choice rather
+        // than one number, and say what taking the best price would cost.
+        app.MapGet("/api/uex/market", (LogLibrary lib, UexData uex, string commodity) =>
+            uex.Market(commodity).Select(r =>
+            {
+                var place = lib.Terminals.Resolve(r.Terminal);
+
+                return new
+                {
+                    terminal = r.Terminal,
+
+                    // The map's own id for the place this counter stands in,
+                    // empty when the two naming schemes cannot be reconciled.
+                    // The page shades and plans by this rather than matching
+                    // names itself.
+                    placeId = place?.RawId ?? string.Empty,
+                    place = place?.Name,
+                    system = place?.System,
+                    security = TerminalPlaces.SecurityOfSystem(place?.System),
+                    buy = r.Buy,
+                    sell = r.Sell,
+                    buyScu = r.BuyScu,
+                    sellScu = r.SellScu,
+                    seenAt = r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : (DateTimeOffset?)null
+                };
             }));
 
         app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>
@@ -1365,7 +1434,54 @@ static WipeScope ScopeOf(List<string>? covers)
     return scope == WipeScope.None ? WipeScope.Everything : scope;
 }
 
+/// <summary>
+/// The reference item a written line means, or null.
+/// </summary>
+/// <remarks>
+/// Hand-written names are close, not exact: "Atlas quantum drive" for "Atlas",
+/// a manufacturer word in front, a plural on the end. An exact name wins; then
+/// a whole-word containment either way, longest first, so "Bulwark" does not
+/// beat "Bulwark Mk2" for a line naming the Mk2. A guess this loose is only
+/// safe because the answer is shown with its price and shop: the player sees
+/// what was matched before flying anywhere.
+/// </remarks>
+static ItemInfo? MatchItem(LogLibrary lib, string written)
+{
+    var wanted = Compact(written);
+    if (wanted.Length < 3)
+        return null;
+
+    ItemInfo? best = null;
+    var bestLength = 0;
+
+    foreach (var item in lib.Community.Items.Values)
+    {
+        if (item.Name is not { Length: > 0 } name || item.Uuid is null)
+            continue;
+
+        var compact = Compact(name);
+        if (compact.Length == 0)
+            continue;
+
+        if (compact == wanted)
+            return item;
+
+        if (compact.Length > bestLength
+            && (compact.Contains(wanted, StringComparison.Ordinal) || wanted.Contains(compact, StringComparison.Ordinal)))
+        {
+            best = item;
+            bestLength = compact.Length;
+        }
+    }
+
+    return best;
+
+    static string Compact(string value) =>
+        new([.. value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
+}
+
 /// <summary>Bridges the library's progress callback to the shared status.</summary>
+
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 

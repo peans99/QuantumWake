@@ -959,6 +959,186 @@ async function loadMarket() {
   if (($('#map-search')?.value || '').trim() && atlas.length) drawMap();
 }
 
+/* ---------- where a commodity actually trades ---------- */
+
+/**
+ * Every terminal for one commodity, fetched once and kept.
+ *
+ * The table's UEX column answers "what is the best price anywhere", which is
+ * one number and often a bad plan: the best price can be four jumps into
+ * lawless space, or be a counter that wants nine SCU. The choice belongs to the
+ * player, so the rows behind that number are shown and ranked, with what it
+ * would cost to take each one.
+ */
+const terminalCache = new Map();
+
+async function terminalsFor(commodity) {
+  if (!terminalCache.has(commodity)) {
+    terminalCache.set(commodity,
+      getJson(`/api/uex/market?commodity=${encodeURIComponent(commodity)}`).catch(() => []));
+  }
+
+  return terminalCache.get(commodity);
+}
+
+/** What the open detail is showing, so the controls can redraw it. */
+const detailView = { commodity: null, buying: false, monitoredOnly: false };
+
+/**
+ * Demand small enough that the trip is the wrong shape.
+ *
+ * Not a hard rule - a hauler carrying two SCU is fine - but a counter wanting
+ * 12 SCU is not where a full hold goes, and the number alone does not say so
+ * at a glance.
+ */
+const THIN_SCU = 64;
+
+function toggleMarketDetail(entry, row) {
+  const open = row.nextElementSibling?.classList.contains('market-detail');
+
+  // One at a time: two open tables in one page is a page nobody reads.
+  $$('#market-table tr.market-detail').forEach((n) => n.remove());
+  $$('#market-table tr.expanded').forEach((n) => n.classList.remove('expanded'));
+
+  if (open) {
+    detailView.commodity = null;
+    return;
+  }
+
+  detailView.commodity = entry.name;
+  row.classList.add('expanded');
+
+  const holder = el('tr', 'market-detail');
+  const cell = el('td');
+  cell.colSpan = 8;
+  holder.append(cell);
+  row.after(holder);
+
+  renderMarketDetail(entry, cell);
+}
+
+async function renderMarketDetail(entry, cell) {
+  cell.textContent = '';
+
+  const head = el('div', 'detail-head');
+  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+
+  const side = el('div', 'seg');
+  for (const [value, label] of [['sell', 'Where to sell'], ['buy', 'Where to buy']]) {
+    const button = el('button', (value === 'buy') === detailView.buying ? 'active' : null, label);
+    button.addEventListener('click', () => {
+      detailView.buying = value === 'buy';
+      renderMarketDetail(entry, cell);
+    });
+    head.append(button);
+    side.append(button);
+  }
+
+  head.textContent = '';
+  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+  head.append(side);
+
+  const safe = el('label', 'toggle');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = detailView.monitoredOnly;
+  box.addEventListener('change', () => {
+    detailView.monitoredOnly = box.checked;
+    renderMarketDetail(entry, cell);
+  });
+
+  safe.append(box);
+  safe.append(el('span', null, 'Monitored space only'));
+  head.append(safe);
+  cell.append(head);
+
+  const all = await terminalsFor(entry.name);
+  const priceOf = (r) => (detailView.buying ? r.buy : r.sell);
+  const scuOf = (r) => (detailView.buying ? r.buyScu : r.sellScu);
+
+  const rows = all
+    .filter((r) => priceOf(r) > 0)
+    .filter((r) => !detailView.monitoredOnly || r.security === 'monitored')
+    .sort((a, b) => (detailView.buying ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a)));
+
+  if (!rows.length) {
+    cell.append(el('div', 'muted detail-empty', all.length
+      ? 'Nothing left after that filter — every counter for this is outside monitored space.'
+      : 'No prices for this commodity. UEX may be off, or nobody has reported one.'));
+    return;
+  }
+
+  const best = priceOf(rows[0]);
+
+  const table = el('table', 'detail-table');
+  const header = el('tr');
+  for (const [label, cls] of [['Terminal', null], ['Where', null], ['Space', null],
+    [detailView.buying ? 'Buy' : 'Sell', 'num'], ['vs best', 'num'],
+    [detailView.buying ? 'In stock' : 'Wanted', 'num'], ['Seen', 'num']]) {
+    header.append(el('th', cls, label));
+  }
+  table.append(header);
+
+  for (const row of rows.slice(0, 40)) {
+    const tr = el('tr');
+    const price = priceOf(row);
+    const scu = Math.round(scuOf(row));
+
+    const name = el('td');
+    const jump = el('button', 'place-link', row.terminal);
+    jump.title = row.placeId ? 'Show it on the map' : 'The map cannot place this terminal';
+    jump.disabled = !row.placeId;
+    jump.addEventListener('click', () => {
+      showView('map');
+      centreOnTerminal(row.terminal, row.placeId);
+    });
+    name.append(jump);
+    tr.append(name);
+
+    tr.append(el('td', 'muted', row.place || '—'));
+
+    const space = el('td');
+    space.append(el('span', `sec sec-${row.security}`, row.security));
+    if (row.system) space.append(el('span', 'muted sec-system', ` ${row.system}`));
+    tr.append(space);
+
+    tr.append(el('td', 'num', money(price)));
+
+    // What choosing this one costs against the best on offer, which is the
+    // number the single "best price" column never showed.
+    const gap = detailView.buying ? (price - best) / best : (best - price) / best;
+    tr.append(el('td', gap > 0.001 ? 'num outward' : 'num muted',
+      gap > 0.001 ? `−${(gap * 100).toFixed(0)}%` : 'best'));
+
+    const stock = el('td', 'num');
+    if (scu > 0) {
+      stock.append(el('span', scu < THIN_SCU ? 'outward' : null, `${scu.toLocaleString()} SCU`));
+      if (scu < THIN_SCU) {
+        stock.title = detailView.buying
+          ? 'Thin stock — a full hold will not be filled here'
+          : 'Small demand — this counter will not take a full hold';
+      }
+    } else {
+      stock.append(el('span', 'muted', '—'));
+    }
+    tr.append(stock);
+
+    tr.append(el('td', 'num muted', row.seenAt ? ago(row.seenAt) : '—'));
+    table.append(tr);
+  }
+
+  cell.append(table);
+
+  const shown = Math.min(rows.length, 40);
+  const note = detailView.monitoredOnly
+    ? `${shown} of ${all.length} counters — lawless space hidden.`
+    : `${shown} of ${all.length} counters.`;
+
+  cell.append(el('div', 'muted detail-note',
+    `${note} Security is by system: Stanton is policed, Pyro and Nyx are not. `
+    + 'Nothing in the game logs threat, so this is where a place is, not what happened there.'));
+}
+
 function renderMarket() {
   $('#market-offer').hidden = marketEntries.length > 0;
 
@@ -999,7 +1179,15 @@ function renderMarket() {
 
   for (const entry of rows) {
     const tr = el('tr');
-    tr.append(el('td', null, entry.name));
+
+    // The name is the way in: one best price is an answer, and the rows behind
+    // it are the choice.
+    const nameCell = el('td');
+    const opener = el('button', 'place-link commodity-open', entry.name);
+    opener.title = 'Every counter that trades this, and what each one costs you';
+    opener.addEventListener('click', () => toggleMarketDetail(entry, tr));
+    nameCell.append(opener);
+    tr.append(nameCell);
     tr.append(el('td', 'muted', entry.groups.join(', ')));
     tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
     tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
@@ -4340,6 +4528,17 @@ const nodeShade = new Map();
 
 const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
 
+/*
+ * The colour of a place that has nothing to do with the chosen commodity.
+ *
+ * Slate rather than its own kind colour: with a commodity picked the map stops
+ * being a map of kinds and becomes a map of one price, and a station left
+ * cyan among a scale running green to gold reads as a value on that scale when
+ * it is not one. Every mark takes the grade or takes this.
+ */
+const NO_TRADE = '#42525f';
+
+
 /** Interpolates the poor-to-best ramp; 1 is the gold end. */
 function shadeColour(t) {
   const seg = t < 0.5 ? [SHADE_STOPS[0], SHADE_STOPS[1]] : [SHADE_STOPS[1], SHADE_STOPS[2]];
@@ -5250,12 +5449,16 @@ const placeIdForTerminal = (terminal) =>
   atlas.find((l) => terminalMatchesPlace(terminal, l.name))?.rawId || '';
 
 /**
- * Terminals that sell a commodity, cheapest first, cached for the session.
+ * Where a line on a list can be bought, cheapest first, cached for the session.
  *
  * The list's own `buyAt` is only ever the cheapest one UEX knows. That is a
  * fine default and a poor answer: the cheapest seller of a common good is
  * routinely three jumps out of the way, and the player is the only one who
  * knows what else the run has to fit around.
+ *
+ * A line is whatever the player wrote, so the server is asked rather than the
+ * commodity market alone: "Agricium" is a trade good, "Bulwark" is a shield
+ * bought from a shop counter, and a shopping list is allowed to hold both.
  */
 const sellerCache = new Map();
 
@@ -5266,19 +5469,20 @@ async function sellersOf(item) {
     ? [{ terminal: item.buyAt, placeId: placeIdForTerminal(item.buyAt), price: item.buyPrice || 0, scu: 0 }]
     : [];
 
-  const rows = await getJson(`/api/uex/market?commodity=${encodeURIComponent(item.name)}`)
-    .catch(() => []);
+  const found = await getJson(`/api/shopping/sellers?name=${encodeURIComponent(item.name)}`)
+    .catch(() => null);
 
-  // Buying from a terminal is its `buy` price; `sell` is what it pays you.
-  const sellers = rows
-    .filter((r) => r.buy > 0)
-    .sort((a, b) => a.buy - b.buy)
-    .slice(0, 10)
+  const sellers = (found?.sellers ?? [])
+    .slice(0, 12)
     .map((r) => ({
       terminal: r.terminal,
-      placeId: r.placeId || '',
-      price: r.buy,
-      scu: r.buyScu || 0,
+      placeId: r.placeId || placeIdForTerminal(r.terminal),
+      place: r.place || '',
+      system: r.system || '',
+      security: r.security || 'unknown',
+      price: r.price,
+      scu: r.scu || 0,
+      kind: r.kind,
     }));
 
   const answer = sellers.length ? sellers : fallback;
@@ -5361,9 +5565,14 @@ async function planShoppingTrip(job, card) {
         ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${short(seller) ? ' — short' : ''}`
         : '';
 
+      // Where it is and whether the law reaches it: the cheapest counter is
+      // routinely the one in Pyro, and that is a decision, not a detail.
+      const where = seller.system ? ` · ${seller.system}` : '';
+      const risk = seller.security === 'lawless' ? ' — lawless' : '';
+
       option.textContent = seller.price > 0
-        ? `${seller.terminal} · ${money(seller.price)}${stock}`
-        : `${seller.terminal}${stock}`;
+        ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
+        : `${seller.terminal}${stock}${where}${risk}`;
 
       select.append(option);
     }
@@ -5965,17 +6174,26 @@ function drawMap() {
       // rather than a cluster and stacks the labels on top of each other;
       // phyllotaxis fills the disc evenly at any count, and microTech alone has
       // over a hundred.
-      sites.forEach((site, siteIndex) => {
+      // Every position first, then each node is told how much room it has.
+      // A cluster is drawn tighter than the pad that makes a lone dot easy to
+      // click, so without this the last site drawn owns every point it covers
+      // and its neighbours cannot be clicked at all.
+      const spots = sites.map((site, siteIndex) => {
         const spin = siteIndex * 2.39996;
         const distance = clusterRadius(siteIndex + 1);
 
-        drawNode(
-          map,
-          bx + Math.cos(spin) * distance,
-          by + Math.sin(spin) * distance,
-          site,
-          radiusFor(site.visits),
-          { x: bx, y: by });
+        return { x: bx + Math.cos(spin) * distance, y: by + Math.sin(spin) * distance };
+      });
+
+      sites.forEach((site, siteIndex) => {
+        const spot = spots[siteIndex];
+
+        let nearest = Infinity;
+        spots.forEach((other, j) => {
+          if (j !== siteIndex) nearest = Math.min(nearest, Math.hypot(other.x - spot.x, other.y - spot.y));
+        });
+
+        drawNode(map, spot.x, spot.y, site, radiusFor(site.visits), { x: bx, y: by }, nearest / 2);
       });
     });
   }
@@ -6129,7 +6347,25 @@ function drawBodyDisc(layer, x, y, reach, system) {
  * @param anchor The body this site belongs to, if any. Labels are pushed away
  *   from it so a cluster fans its names outwards instead of stacking them.
  */
-function drawNode(map, x, y, location, radius, anchor = null) {
+/**
+ * How far a mark's invisible click target reaches.
+ *
+ * A small mark needs a pad around it to be clickable at all, but the pad must
+ * stop inside the neighbour's half of the gap: SVG gives a shared point to
+ * whatever was drawn last, so an overlapping pad does not make a click
+ * ambiguous - it makes the covered node unclickable. In a cluster that was
+ * most of them, which is why clicking a station, opening its trade panel and
+ * adding it to a plan all failed on the same places. Never below the mark
+ * itself, which is always its own target.
+ */
+const hitPad = (radius, room) => Math.max(radius + 1, Math.min(radius + 8, room));
+
+/**
+ * @param room Half the distance to the nearest neighbour, when there is one.
+ *   The click pad stops there rather than reaching across it.
+ */
+function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
+
   const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
   const been = location.visits > 0;
 
@@ -6146,7 +6382,10 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   // The dot itself claims its square so no neighbour's label sits on it.
   claimedBoxes.push({ x0: x - radius - 1, y0: y - radius - 1, x1: x + radius + 1, y1: y + radius + 1 });
 
-  group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
+  group.append(svgEl('circle', {
+    cx: x, cy: y, r: hitPad(radius, room), fill: colour, opacity: '0', class: 'hit',
+  }));
+
 
   // In shaded commodity mode the ring and dot carry the price grade; a lit
   // place UEX has no price for keeps the plain green ring.
@@ -6161,8 +6400,12 @@ function drawNode(map, x, y, location, radius, anchor = null) {
 
   // Somewhere never visited is drawn as an outline, so the places that carry
   // history read as solid against the rest of the map. A price shade
-  // overrides the kind colour - in that mode the colour IS the price.
-  const dotColour = shade?.colour ?? colour;
+  // overrides the kind colour - in that mode the colour IS the price, and
+  // that has to hold for the whole map: a place with no price for the chosen
+  // commodity goes slate, including one the catalogue lit but nobody has
+  // priced. Otherwise the kind colours sit in the same picture as the scale
+  // and the eye has two colour languages to read at once.
+  const dotColour = shade?.colour ?? (shadeScale ? NO_TRADE : colour);
 
   // A price shade means the colour IS the price, so the mark keeps its shape
   // and takes the graded colour: a mine is still a mine at 1,872 aUEC.
@@ -6316,7 +6559,7 @@ function drawLegend(locations) {
 
     const plain = el('div', 'item');
     const swatch = el('span', 'swatch');
-    swatch.style.background = '#4fd48a';
+    swatch.style.background = NO_TRADE;
     plain.append(swatch);
     plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
     legend.append(plain);

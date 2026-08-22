@@ -342,10 +342,29 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.2
+### 0.6.4
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
+
+- **Half the map was unclickable.** Every mark carries an invisible pad so a
+  small one is easy to hit, and in a crowded cluster those pads covered their
+  neighbours — the topmost won every click, so most places would not open their
+  card, would not open their trade panel on a double-click, and could not be
+  added to a plan. The pad now stops at the halfway line to the nearest
+  neighbour. 151 of 290 places were unreachable; now none are.
+- **A commodity now colours the whole map.** Pick one and every mark takes the
+  price grade or goes slate — a station left cyan among a scale running green to
+  gold read as a value on that scale when it was not one.
+- **Click a commodity on the Market page** for every counter UEX knows, not just
+  the best one: what each pays, what that costs you against the best, how much
+  it will actually take or sell you, and whether it sits in policed or lawless
+  space — with a filter for monitored space only, and a click to find any of
+  them on the map.
+- **A shopping list can hold ship parts.** A line is whatever you wrote, so
+  "Bulwark" now finds the shield and its shop counters the same way "Agricium"
+  finds the trade good, and each seller says which system it is in and whether
+  the law reaches it.
 
 - **The map draws what a place is.** Every kind has its own mark — a skyline for
   a city, a headframe for a mine, an orbit for a research station, a crate for a
