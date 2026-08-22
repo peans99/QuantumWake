@@ -244,6 +244,7 @@ function renderNow(state) {
 
   // The map follows the live feed, so the marker moves as the player does.
   setHere(state.locationId);
+  tripArrived(state.locationId);
 
   // The trade card follows too, refreshing only when the place changes.
   refreshTradeAdvice(state.location).catch(() => {});
@@ -417,6 +418,7 @@ async function loadHistory() {
   loadOutfitting().catch((e) => console.error('outfitting', e));
   loadRoutes().catch((e) => console.error('routes', e));
   loadCargoReceipts().catch((e) => console.error('cargo receipts', e));
+  loadTrips().catch((e) => console.error('trips', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -1792,7 +1794,7 @@ async function loadRoutes() {
     const td = el('td', 'muted', from
       ? 'No route starts from where you are - or UEX has no terminal here.'
       : 'Nothing to show. Enable UEX prices on the Settings page.');
-    td.colSpan = 10;
+    td.colSpan = 11;
     tr.append(td);
     body.append(tr);
     return;
@@ -1810,6 +1812,24 @@ async function loadRoutes() {
     tr.append(el('td', 'num outward', money(route.outlay)));
     tr.append(el('td', 'num inward', money(route.profit)));
 
+    // One click turns a haul into a plan: buy there, sell there, in order.
+    const plan = el('td');
+    const button = el('button', 'ghost tiny', 'Plan');
+    button.title = 'Start a flight plan for this run';
+    button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
+      {
+        placeId: placeIdForTerminal(route.buyAt),
+        place: route.buyAt,
+        note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
+      },
+      {
+        placeId: placeIdForTerminal(route.sellAt),
+        place: route.sellAt,
+        note: `Sell at ${money(route.sellPrice)} · +${money(route.profit)}`,
+      },
+    ]));
+    plan.append(button);
+
     const capped = el('td', 'muted', route.limitedBy);
     capped.title = route.limitedBy === 'capital'
       ? 'Your capital runs out before the hold does'
@@ -1817,6 +1837,7 @@ async function loadRoutes() {
         ? 'The shop does not stock enough to fill the hold'
         : 'The hold is the limit - the good case';
     tr.append(capped);
+    tr.append(plan);
 
     body.append(tr);
   }
@@ -2246,6 +2267,13 @@ async function loadJobList() {
       loadJobList();
     });
     head.append(toggle);
+
+    // A list knows where its missing things are sold, which is a shopping trip
+    // waiting to be flown. One stop per terminal, carrying what to get there.
+    const shop = el('button', 'ghost', 'Plan trip');
+    shop.title = 'Turn what is still missing into a flight plan';
+    shop.addEventListener('click', () => planShoppingTrip(job));
+    head.append(shop);
 
     const remove = el('button', 'ghost', 'Delete');
     remove.addEventListener('click', async () => {
@@ -4426,6 +4454,13 @@ function syncCargoPanel(term, sites) {
   $('#map-window').hidden = !entry && !cargo.place;
   syncCargoControls();
 
+  // A flight plan holds the panel until it is closed: it is the thing being
+  // worked on, and a redraw must not pull it out from under the player.
+  if (cargo.trip) {
+    renderTripPanel();
+    return;
+  }
+
   if (cargo.place) {
     renderStationPanel();
     return;
@@ -4535,6 +4570,11 @@ function renderStationPanel() {
   const body = cargoPanelHead('Station', place.name);
 
   const at = receiptsInWindow().filter((t) => (t.placeId || t.place) === key);
+
+  const add = el('button', 'ghost tiny wide', 'Add as a stop');
+  add.title = 'Put this place on the flight plan';
+  add.addEventListener('click', () => addStop(place.id, place.name, null));
+  body.append(add);
 
   cargoSection(body, 'Accepts · you sold here', at.filter((t) => t.isSell), false);
   cargoSection(body, 'Offers · you bought here', at.filter((t) => !t.isSell), true);
@@ -4648,6 +4688,7 @@ function cargoHistory(body, trades, describe) {
 function showStation(rawId, name) {
   const location = atlas.find((l) => l.rawId === rawId);
 
+  cargo.trip = false;
   cargo.place = { id: rawId, name: name || location?.name || rawId, location };
   $('#map-window').hidden = false;
   $('#map-info').hidden = true;
@@ -4656,6 +4697,7 @@ function showStation(rawId, name) {
 
 /** Puts a commodity in the search box, which is what drives the whole map. */
 function searchCommodity(name, buying) {
+  cargo.trip = false;
   cargo.place = null;
   $('#map-search').value = buying ? `buy:${name}` : name;
   $('#map-results').hidden = true;
@@ -4693,13 +4735,24 @@ function initCargoPanel() {
     drawMap();
   });
 
+  $('#map-plan').addEventListener('click', () => {
+    showTripPanel();
+    drawMap();
+  });
+
+  // The detail card can put the place it is describing on the plan.
+  $('#map-info-stop').addEventListener('click', () => {
+    if (mapInfoLocation) addStop(mapInfoLocation.rawId, mapInfoLocation.name, null);
+  });
+
   $('#cargo-close').addEventListener('click', () => {
-    if (cargo.place && cargo.name) {
+    if (!cargo.trip && cargo.place && cargo.name) {
       cargo.place = null;
       drawMap();
       return;
     }
 
+    cargo.trip = false;
     cargo.place = null;
     $('#cargo-panel').hidden = true;
     $('#map-window').hidden = true;
@@ -4741,6 +4794,402 @@ function shadeFromReceipts(name, buying) {
       : `your sell price, ${windowWord()}, best is gold`,
     plain: 'no receipt of yours here',
   };
+}
+
+/* ---------- flight plans ---------- */
+
+/**
+ * The player's own routes: where they mean to go, in order.
+ *
+ * Everything else on this page is observed or downloaded. A plan is authored,
+ * so it lives on the server rather than in the browser - the overlay is a
+ * second window onto the same session, and a plan that existed in only one of
+ * them would be worse than none.
+ */
+let trips = [];
+
+/** The plan the Now card and the map are following. */
+const tracked = () => trips.find((t) => t.tracked) || null;
+
+/** Where to go now: the first stop not yet crossed off. */
+const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
+
+async function loadTrips() {
+  trips = await getJson('/api/trips');
+  renderTripCard();
+  if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
+  drawTripPath();
+}
+
+/** POST/DELETE against the trip API, then re-read: plans are small. */
+async function tripCall(url, method = 'POST') {
+  await fetch(url, { method });
+  await loadTrips();
+}
+
+/**
+ * Adds a stop to whatever plan the player is filling, and says where it went.
+ *
+ * The map, the routes table and a shopping list all funnel through here, so a
+ * stop means the same thing wherever it came from.
+ */
+async function addStop(placeId, place, note) {
+  await fetch('/api/trips/stops', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ placeId: placeId || '', place, note: note || null }),
+  });
+
+  await loadTrips();
+  showTripPanel();
+}
+
+/** Starts a plan from a list of stops - a trade run, or a shopping trip. */
+async function planTrip(title, stops) {
+  await fetch('/api/trips', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, stops }),
+  });
+
+  await loadTrips();
+  showView('map');
+  showTripPanel();
+  drawMap();
+}
+
+/* ---------- the Now card ---------- */
+
+/**
+ * The tracked plan on the Now page, and so in the overlay: where to go next,
+ * then the rest of the run.
+ */
+function renderTripCard() {
+  const card = $('#now-trip-card');
+  if (!card) return;
+
+  const trip = tracked();
+
+  if (!trip || !trip.stops.length) {
+    card.hidden = true;
+    return;
+  }
+
+  const done = trip.stops.filter((s) => s.done).length;
+  const next = nextStop(trip);
+
+  $('#now-trip-title').textContent = trip.title;
+
+  const progress = $('#now-trip-progress');
+  progress.textContent = '';
+  progress.append(jobProgress(done, trip.stops.length,
+    `${done} of ${trip.stops.length} stops`));
+
+  const jump = $('#now-trip-next');
+  jump.textContent = '';
+
+  if (next) {
+    jump.append(el('div', 'now-trip-label', 'Jump next'));
+    jump.append(el('div', 'now-trip-where', next.place));
+    if (next.note) jump.append(el('div', 'now-trip-note', next.note));
+  } else {
+    jump.append(el('div', 'inward', 'Every stop is crossed off. Good run.'));
+  }
+
+  // The whole path, in order, ticked as it goes - the flight plan proper.
+  const list = $('#now-trip-stops');
+  list.textContent = '';
+
+  trip.stops.forEach((stop, index) => {
+    list.append(tripStopRow(trip, stop, index, stop === next));
+  });
+
+  card.hidden = false;
+}
+
+/**
+ * One stop, wherever it is shown. Clicking the number crosses it off; clicking
+ * the name flies the map to it.
+ */
+function tripStopRow(trip, stop, index, isNext) {
+  const row = el('div', `trip-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
+
+  const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
+  number.title = stop.done ? 'Not done after all' : 'Cross this stop off';
+  number.addEventListener('click',
+    () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/toggle`));
+  row.append(number);
+
+  const main = el('div', 'trip-stop-main');
+  const name = el('button', 'trip-place', stop.place);
+  name.title = 'Show it on the map';
+  name.addEventListener('click', () => {
+    showView('map');
+    if (stop.placeId) centreOn(stop.placeId);
+    showTripPanel();
+  });
+
+  main.append(name);
+  if (stop.note) main.append(el('div', 'trip-note', stop.note));
+  row.append(main);
+
+  return row;
+}
+
+/* ---------- the map's trip panel ---------- */
+
+/** Opens the side panel on the tracked plan. */
+function showTripPanel() {
+  cargo.place = null;
+  cargo.trip = true;
+  renderTripPanel();
+}
+
+function renderTripPanel() {
+  const trip = tracked();
+  const body = cargoPanelHead('Flight plan', trip ? trip.title : 'No plan yet');
+
+  if (!trip || !trip.stops.length) {
+    body.append(el('div', 'cargo-empty',
+      'Double-click a place, or use Add stop on its card, to start a plan. '
+      + 'A trade route or a shopping list can start one for you.'));
+    return;
+  }
+
+  const done = trip.stops.filter((s) => s.done).length;
+  body.append(jobProgress(done, trip.stops.length, `${done} of ${trip.stops.length} stops`));
+
+  const next = nextStop(trip);
+
+  trip.stops.forEach((stop, index) => {
+    const row = tripStopRow(trip, stop, index, stop === next);
+
+    // The panel is where a plan is edited; the Now card only reads it.
+    const tools = el('div', 'trip-tools');
+
+    const up = el('button', 'ghost tiny', '↑');
+    up.title = 'Earlier in the run';
+    up.disabled = index === 0;
+    up.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=-1`));
+
+    const down = el('button', 'ghost tiny', '↓');
+    down.title = 'Later in the run';
+    down.disabled = index === trip.stops.length - 1;
+    down.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=1`));
+
+    const drop = el('button', 'ghost tiny', '×');
+    drop.title = 'Drop this stop';
+    drop.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+
+    tools.append(up, down, drop);
+    row.append(tools);
+    body.append(row);
+  });
+
+  const actions = el('div', 'trip-actions');
+
+  const track = el('button', 'ghost', trip.tracked ? 'Stop tracking' : 'Track');
+  track.title = 'Show this plan on the Now page';
+  track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
+  actions.append(track);
+
+  const scrap = el('button', 'ghost', 'Delete plan');
+  scrap.addEventListener('click', async () => {
+    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+    cargo.trip = false;
+    $('#cargo-panel').hidden = true;
+    drawMap();
+  });
+  actions.append(scrap);
+
+  body.append(actions);
+
+  // Other plans, so one can be picked up again without a management screen.
+  const others = trips.filter((t) => t !== trip);
+
+  if (others.length) {
+    body.append(el('div', 'cargo-h', 'Other plans'));
+
+    for (const other of others) {
+      const row = el('div', 'cargo-row');
+      row.append(el('span', 'swatch'));
+
+      const main = el('div', 'cargo-row-main');
+      main.append(el('div', 'name', other.title));
+      main.append(el('div', 'sub',
+        `${other.stops.filter((s) => s.done).length} of ${other.stops.length} stops`));
+      row.append(main);
+
+      row.tabIndex = 0;
+      row.addEventListener('click', () => tripCall(`/api/trips/${other.id}/track`));
+      body.append(row);
+    }
+  }
+}
+
+/* ---------- the plan on the map ---------- */
+
+/**
+ * Draws the tracked plan over the map: numbered stops in running order, joined
+ * by the path between them.
+ *
+ * Numbers rather than colour, because the question is "where next", not "how
+ * good": a plan has an order and the map has to show it. Stops the map cannot
+ * place - somewhere with no engine id - are still listed in the panel, so a
+ * plan is never silently short of a stop.
+ */
+function drawTripPath() {
+  const map = $('#starmap');
+  if (!map) return;
+
+  map.querySelectorAll('.trip-layer').forEach((n) => n.remove());
+
+  const trip = tracked();
+  if (!trip) return;
+
+  const points = trip.stops
+    .map((stop, index) => ({ stop, index, at: nodeAt.get(stop.placeId) }))
+    .filter((p) => p.at);
+
+  if (!points.length) return;
+
+  const layer = svgEl('g', { class: 'trip-layer' });
+  const zoom = view.w / HOME_VIEW.w;
+  const next = nextStop(trip);
+
+  // The path first, so the numbers sit on top of it.
+  for (let i = 1; i < points.length; i++) {
+    const from = points[i - 1];
+    const to = points[i];
+
+    layer.append(svgEl('line', {
+      x1: from.at.x, y1: from.at.y, x2: to.at.x, y2: to.at.y,
+      class: `trip-leg${to.stop.done ? ' done' : ''}`,
+      'stroke-width': 1.6 * zoom,
+      'stroke-dasharray': `${6 * zoom} ${5 * zoom}`,
+    }));
+  }
+
+  for (const point of points) {
+    const badge = svgEl('g', {
+      class: `trip-mark${point.stop.done ? ' done' : ''}${point.stop === next ? ' next' : ''}`,
+    });
+
+    badge.append(svgEl('circle', {
+      cx: point.at.x, cy: point.at.y - 15 * zoom, r: 8 * zoom, 'stroke-width': 1.4 * zoom,
+    }));
+
+    const number = svgEl('text', {
+      x: point.at.x, y: point.at.y - 15 * zoom, 'text-anchor': 'middle',
+      'dominant-baseline': 'central', style: `font-size:${9 * zoom}px`,
+    });
+
+    number.textContent = point.stop.done ? '✓' : String(point.index + 1);
+    badge.append(number);
+
+    const title = svgEl('title');
+    title.textContent = `Stop ${point.index + 1}: ${point.stop.place}`
+      + (point.stop.note ? ` — ${point.stop.note}` : '');
+    badge.append(title);
+
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showTripPanel();
+    });
+
+    layer.append(badge);
+  }
+
+  map.append(layer);
+}
+
+/**
+ * Opens the plan when the player lands on one of its stops.
+ *
+ * Arriving is the moment the stop's note matters - what was I here to buy? -
+ * and the server has already crossed it off by the time this runs.
+ */
+let tripHere = null;
+
+function tripArrived(locationId) {
+  if (!locationId || locationId === tripHere) return;
+  tripHere = locationId;
+
+  const trip = tracked();
+  if (!trip || !trip.stops.some((s) => s.placeId === locationId)) return;
+
+  loadTrips().then(() => {
+    cargo.trip = true;
+    cargo.place = null;
+    renderTripPanel();
+  });
+}
+
+/**
+ * The atlas place a UEX terminal name belongs to, or empty.
+ *
+ * Terminal names are not atlas names - "TDD, Area 18" against "Area18" - so a
+ * stop keeps the terminal's own name for reading and the atlas id, when there
+ * is one, for the map. A stop the map cannot place still belongs on the plan.
+ */
+const placeIdForTerminal = (terminal) =>
+  atlas.find((l) => terminalMatchesPlace(terminal, l.name))?.rawId || '';
+
+/**
+ * Turns what a shopping list is still missing into a run.
+ *
+ * One stop per terminal rather than per item, because a trip is a sequence of
+ * places: three things sold at Area18 is one landing. Items UEX has no seller
+ * for are left out of the stops and said out loud, rather than quietly dropped.
+ */
+async function planShoppingTrip(job) {
+  const missing = job.items.filter((i) => !i.have);
+  const byPlace = new Map();
+  const unknown = [];
+
+  for (const item of missing) {
+    if (!item.buyAt) {
+      unknown.push(item.name);
+      continue;
+    }
+
+    const need = item.needed > 0
+      ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+      : item.name;
+
+    byPlace.set(item.buyAt, [...(byPlace.get(item.buyAt) || []), need]);
+  }
+
+  if (!byPlace.size) {
+    alertLine($('#jobs-list'), missing.length
+      ? 'Nothing on this list has a known seller. UEX prices would give it one.'
+      : 'Everything on this list is already in hand.');
+    return;
+  }
+
+  const stops = [...byPlace.entries()].map(([place, items]) => ({
+    placeId: placeIdForTerminal(place),
+    place,
+    note: items.join(', '),
+  }));
+
+  await planTrip(`${job.title} run`, stops);
+
+  if (unknown.length) {
+    console.info(`No seller known for ${unknown.join(', ')}; left off the plan.`);
+  }
+}
+
+/** A one-line notice under a section, for when a button cannot do its job. */
+function alertLine(host, text) {
+  host.querySelectorAll('.trip-alert').forEach((n) => n.remove());
+
+  const line = el('p', 'muted trip-alert', text);
+  host.prepend(line);
+  setTimeout(() => line.remove(), 6000);
 }
 
 /** What the hover tip currently shows, so pointermove does not rebuild it. */
@@ -5255,6 +5704,7 @@ function drawMap() {
   drawLegend(locations);
   applyView();
   drawHere();
+  drawTripPath();
   fitToHighlights(term || null);
 }
 

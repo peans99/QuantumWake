@@ -59,6 +59,7 @@ events, not a radar.*
 
 | View | Contents |
 |---|---|
+| **Flight plan** | Where to go next and the rest of the run, on the Now page and drawn over the map as numbered stops. Built from a trade route, a shopping list, or by hand — and stops cross themselves off as you land |
 | **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
 | **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells. Picking one opens its cargo panel: best terminals now, your own prices over the last day, three days or seven, and a selling/buying toggle. Double-click a place for what it takes and offers |
 | **Sessions** | Every session you have played, in-game time separated from menu time |

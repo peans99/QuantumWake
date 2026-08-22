@@ -83,6 +83,7 @@ public static class ServerHost
         builder.Services.AddSingleton<UexData>();
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
+        builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<OverlayLayoutStore>();
 
         builder.Services.ConfigureHttpJsonOptions(options =>
@@ -991,6 +992,36 @@ public static class ServerHost
         app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
             jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
+        // ---- flight plans: where to go next, in order ----
+
+        app.MapGet("/api/trips", (TripStore trips) => trips.All());
+
+        app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
+            Results.Ok(trips.Add(body.Title, body.Stops)));
+
+        // One stop added from the map, a route or a list, into whichever plan
+        // the player is filling.
+        app.MapPost("/api/trips/stops", (TripStore trips, TripStop body) =>
+        {
+            var trip = trips.AddStop(body);
+            return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
+        });
+
+        app.MapPost("/api/trips/{id}/track", (string id, TripStore trips) =>
+            trips.Track(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/toggle", (string id, string stopId, TripStore trips) =>
+            trips.ToggleStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/move", (string id, string stopId, int delta, TripStore trips) =>
+            trips.MoveStop(id, stopId, delta) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/trips/{id}/stops/{stopId}", (string id, string stopId, TripStore trips) =>
+            trips.RemoveStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/trips/{id}", (string id, TripStore trips) =>
+            trips.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
         // ---- optional UEX feeds, each switched on by itself ----
 
         app.MapGet("/api/uex/feeds", (UexFeeds feeds) =>
@@ -1227,6 +1258,9 @@ public sealed record InstallPathRequest(string? Path);
 
 /// <summary>Body of POST /api/jobs.</summary>
 public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
+
+/// <summary>Body of POST /api/trips.</summary>
+public sealed record TripRequest(string? Title, List<TripStop>? Stops);
 
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(
