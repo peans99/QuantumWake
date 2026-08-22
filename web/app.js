@@ -4769,6 +4769,14 @@ function drawMap() {
     map.append(jumpLabel);
   }
 
+  // Every body's hover disc goes in one layer, added before any node is
+  // drawn. Appending them as each body was built put a later body's disc on
+  // top of an earlier body's dots - and in SVG the thing on top takes the
+  // pointer, so clicking those dots did nothing at all. Widening the clusters
+  // made the discs bigger and the dead zones with them.
+  const hoverLayer = svgEl('g');
+  map.append(hoverLayer);
+
   // Bodies and their locations.
   for (const [system, bodies] of Object.entries(grouped)) {
     if (system === 'other') continue;
@@ -4847,7 +4855,7 @@ function drawMap() {
           moveMapTip(e);
         });
         bodyHover.addEventListener('pointerleave', hideMapTip);
-        map.append(bodyHover);
+        hoverLayer.append(bodyHover);
       }
 
       // Sites are spread by golden angle rather than in rings. Rings of a fixed
