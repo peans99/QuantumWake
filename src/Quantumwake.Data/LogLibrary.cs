@@ -77,6 +77,10 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 /// Where the sale happened, back-tracked from the last arrival before it. Cargo
 /// terminals all share a single kiosk id, so their own name says nothing.
 /// </param>
+/// <param name="PlaceId">
+/// The same place as an engine id, so the map can put a receipt on the node it
+/// already draws instead of matching on a display name two places can share.
+/// </param>
 /// <param name="Commodity">
 /// What was in the boxes — resolved from the opt-in community dataset, null
 /// when it is disabled or the id is unknown to it.
@@ -85,6 +89,7 @@ public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
     string Place,
+    string PlaceId,
     int Scu,
     decimal Amount,
     decimal UnitPrice,
@@ -693,9 +698,21 @@ public sealed class LogLibrary : IDisposable
     /// at the first hit.
     /// </para>
     /// </remarks>
-    private static string PlaceAt(SessionSummary session, DateTimeOffset at)
+    private static string PlaceAt(SessionSummary session, DateTimeOffset at) =>
+        PlaceRefAt(session, at).Name;
+
+    /// <summary>
+    /// The same back-track as <see cref="PlaceAt"/>, keeping the engine id.
+    /// </summary>
+    /// <remarks>
+    /// The map draws its nodes from engine ids, so a receipt carrying only a
+    /// display name cannot be placed on one exactly. Carrying the id through
+    /// costs nothing and makes the join certain.
+    /// </remarks>
+    private static (string Id, string Name) PlaceRefAt(SessionSummary session, DateTimeOffset at)
     {
         DateTimeOffset? bestAt = null;
+        string? bestId = null;
         string? best = null;
 
         for (var i = session.Locations.Count - 1; i >= 0; i--)
@@ -703,6 +720,7 @@ public sealed class LogLibrary : IDisposable
             if (session.Locations[i].At <= at)
             {
                 bestAt = session.Locations[i].At;
+                bestId = session.Locations[i].RawId;
                 best = session.Locations[i].DisplayName;
                 break;
             }
@@ -716,13 +734,14 @@ public sealed class LogLibrary : IDisposable
 
             if (bestAt is null || jump.At > bestAt)
             {
+                bestId = jump.ToId;
                 best = jump.ToName;
             }
 
             break;
         }
 
-        return best ?? "Unknown";
+        return (bestId ?? string.Empty, best ?? "Unknown");
     }
 
     /// <summary>
@@ -825,15 +844,21 @@ public sealed class LogLibrary : IDisposable
         }
 
         return [.. sessions
-            .SelectMany(s => s.Trades.Select(t => new TradeRecord(
-                t.At,
-                t.IsSell,
-                PlaceAt(s, t.At),
-                t.Quantity,
-                t.Amount,
-                t.Quantity > 0 ? t.Amount / t.Quantity : 0,
-                t.Mode,
-                Community.Commodity(t.ResourceId))))
+            .SelectMany(s => s.Trades.Select(t =>
+            {
+                var place = PlaceRefAt(s, t.At);
+
+                return new TradeRecord(
+                    t.At,
+                    t.IsSell,
+                    place.Name,
+                    place.Id,
+                    t.Quantity,
+                    t.Amount,
+                    t.Quantity > 0 ? t.Amount / t.Quantity : 0,
+                    t.Mode,
+                    Community.Commodity(t.ResourceId));
+            }))
             .OrderByDescending(t => t.At)];
     }
 

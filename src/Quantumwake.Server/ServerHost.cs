@@ -464,6 +464,7 @@ public static class ServerHost
                 t.At,
                 t.IsSell,
                 t.Place,
+                t.PlaceId,
                 t.Scu,
                 t.Amount,
                 t.UnitPrice,

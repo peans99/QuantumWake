@@ -1783,6 +1783,110 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 }
 .map-info[hidden] { display: none; }
 
+/*
+ * The cargo panel sits opposite the detail card, so a place can be identified
+ * and its trade read at the same time. It scrolls inside the map frame rather
+ * than growing it: the map's height is the page's anchor.
+ */
+.cargo-panel {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 306px;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  padding: 13px 15px 15px;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .96), rgba(6, 12, 20, .94));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12px;
+  z-index: 5;
+}
+.cargo-panel[hidden] { display: none; }
+.cargo-panel::-webkit-scrollbar { width: 6px; }
+.cargo-panel::-webkit-scrollbar-track { background: rgba(0, 0, 0, .3); }
+.cargo-panel::-webkit-scrollbar-thumb { background: var(--rule-hot); }
+
+.cargo-kicker { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+.cargo-title {
+  font-size: 15px;
+  color: var(--cyan-hot);
+  margin: 3px 24px 10px 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.cargo-body { display: flex; flex-direction: column; gap: 3px; }
+.cargo-h {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px;
+  margin-top: 9px;
+}
+.cargo-empty { color: var(--dim); font-size: 11px; line-height: 1.5; padding: 3px 0; }
+.cargo-goods { color: var(--muted); font-size: 11px; line-height: 1.5; padding: 3px 0; }
+
+.cargo-row {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  background: rgba(0, 0, 0, .2);
+}
+.cargo-row:hover { background: rgba(53, 200, 240, .06); border-left-color: var(--cyan-deep); }
+.cargo-row .swatch { width: 8px; height: 8px; transform: rotate(45deg); }
+.cargo-row-main { min-width: 0; }
+.cargo-row .name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cargo-row .sub { font-size: 10px; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+.cargo-row .price { font-family: var(--mono); font-size: 12px; text-align: right; }
+.cargo-row .price .u { display: block; font-size: 8.5px; color: var(--dim); letter-spacing: .08em; }
+
+/* One receipt in the history list - reading matter, not a button. */
+.cargo-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 6px;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(23, 41, 60, .5);
+}
+.cargo-line:last-child { border-bottom: 0; }
+.cargo-line .when { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.cargo-line .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.cargo-line .rate { font-family: var(--mono); font-size: 10.5px; }
+.cargo-line.sell .rate { color: var(--green); }
+.cargo-line.buy .rate { color: var(--amber); }
+
+/* Sell / buy, as a two-state switch rather than a hidden search prefix. */
+.map-tools .seg { display: inline-flex; border: 1px solid var(--rule); }
+.map-tools .seg[hidden] { display: none; }
+.map-tools .seg button {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background .14s, color .14s;
+}
+.map-tools .seg button:hover { color: var(--text); }
+.map-tools .seg button.active { background: rgba(53, 200, 240, .13); color: var(--cyan-hot); }
+
+/* The toolbar is already long; these two ride in the space that is left. */
+#map-window { min-width: 116px; padding: 5px 8px; }
+.map-tools .seg button { padding: 5px 9px; }
+
+
 .map-info-close {
   position: absolute;
   top: 4px;
