@@ -1818,12 +1818,12 @@ async function loadRoutes() {
     button.title = 'Start a flight plan for this run';
     button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
       {
-        placeId: placeIdForTerminal(route.buyAt),
+        placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
         place: route.buyAt,
         note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
       },
       {
-        placeId: placeIdForTerminal(route.sellAt),
+        placeId: route.sellAtId || placeIdForTerminal(route.sellAt),
         place: route.sellAt,
         note: `Sell at ${money(route.sellPrice)} · +${money(route.profit)}`,
       },
@@ -4314,8 +4314,11 @@ function prepareShading(term, sites) {
     const place = atlas.find((l) => l.rawId === id);
     if (!place) continue;
 
-    const matched = shadeRows.rows.filter(
-      (r) => metricOf(r) > 0 && terminalMatchesPlace(r.terminal, place.name));
+    // The server resolves each terminal to a place; the name match is only for
+    // rows it could not place, which would otherwise shade nothing at all.
+    const matched = shadeRows.rows.filter((r) => metricOf(r) > 0
+      && (r.placeId ? r.placeId === id : terminalMatchesPlace(r.terminal, place.name)));
+
     if (!matched.length) continue;
 
     const value = invert
@@ -4514,7 +4517,7 @@ function renderCommodityPanel(entry) {
         name: row.terminal,
         sub: `${Math.round(scuOf(row)).toLocaleString()} SCU ${cargo.buying ? 'in stock' : 'of demand'}`,
         value: priceOf(row),
-        onClick: () => centreOnTerminal(row.terminal),
+        onClick: () => centreOnTerminal(row.terminal, row.placeId),
       }));
     }
   } else {
@@ -4711,8 +4714,11 @@ function searchCommodity(name, buying) {
  * this uses the same loose match the shading joins on, and simply does nothing
  * when the map cannot name the place.
  */
-function centreOnTerminal(terminal) {
-  const match = atlas.find((l) => terminalMatchesPlace(terminal, l.name));
+function centreOnTerminal(terminal, placeId) {
+  const match = placeId
+    ? atlas.find((l) => l.rawId === placeId)
+    : atlas.find((l) => terminalMatchesPlace(terminal, l.name));
+
   if (!match) return;
 
   centreOn(match.rawId);
@@ -5131,9 +5137,11 @@ function tripArrived(locationId) {
 /**
  * The atlas place a UEX terminal name belongs to, or empty.
  *
- * Terminal names are not atlas names - "TDD, Area 18" against "Area18" - so a
- * stop keeps the terminal's own name for reading and the atlas id, when there
- * is one, for the map. A stop the map cannot place still belongs on the plan.
+ * Terminal names are not atlas names - "TDD, Area 18" against "Area18" - and
+ * the server does that join once, from the atlas, so every page agrees on the
+ * answer. Rows that carry a `placeId` are believed; this is only the fallback
+ * for a terminal name arriving from somewhere that has not been given one.
+ * A stop the map cannot place still belongs on the plan.
  */
 const placeIdForTerminal = (terminal) =>
   atlas.find((l) => terminalMatchesPlace(terminal, l.name))?.rawId || '';
@@ -5152,7 +5160,7 @@ async function sellersOf(item) {
   if (sellerCache.has(item.name)) return sellerCache.get(item.name);
 
   const fallback = item.buyAt
-    ? [{ terminal: item.buyAt, price: item.buyPrice || 0, scu: 0 }]
+    ? [{ terminal: item.buyAt, placeId: placeIdForTerminal(item.buyAt), price: item.buyPrice || 0, scu: 0 }]
     : [];
 
   const rows = await getJson(`/api/uex/market?commodity=${encodeURIComponent(item.name)}`)
@@ -5163,7 +5171,12 @@ async function sellersOf(item) {
     .filter((r) => r.buy > 0)
     .sort((a, b) => a.buy - b.buy)
     .slice(0, 10)
-    .map((r) => ({ terminal: r.terminal, price: r.buy, scu: r.buyScu || 0 }));
+    .map((r) => ({
+      terminal: r.terminal,
+      placeId: r.placeId || '',
+      price: r.buy,
+      scu: r.buyScu || 0,
+    }));
 
   const answer = sellers.length ? sellers : fallback;
   sellerCache.set(item.name, answer);
@@ -5232,12 +5245,23 @@ async function planShoppingTrip(job, card) {
 
     const select = el('select', 'select');
 
+    // Stock is per terminal and the list says how much is wanted, so the two
+    // can be compared: flying to the cheapest seller of 10 SCU to find 3 is a
+    // wasted landing, and the page knew before you left.
+    const short = (seller) => item.needed > 0 && seller.scu > 0 && seller.scu < item.needed;
+
     for (const seller of sellers) {
       const option = document.createElement('option');
       option.value = seller.terminal;
+
+      const stock = seller.scu
+        ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${short(seller) ? ' — short' : ''}`
+        : '';
+
       option.textContent = seller.price > 0
-        ? `${seller.terminal} · ${money(seller.price)}${seller.scu ? ` · ${Math.round(seller.scu).toLocaleString()} SCU` : ''}`
-        : seller.terminal;
+        ? `${seller.terminal} · ${money(seller.price)}${stock}`
+        : `${seller.terminal}${stock}`;
+
       select.append(option);
     }
 
@@ -5246,7 +5270,12 @@ async function planShoppingTrip(job, card) {
     skip.textContent = 'Leave this one off';
     select.append(skip);
 
-    chosen.set(item.name, sellers[0].terminal);
+    // Cheapest that can actually fill the order, else cheapest: a seller too
+    // small to serve you is a worse default than a dearer one that can.
+    const enough = sellers.find((seller) => !short(seller));
+    select.value = (enough ?? sellers[0]).terminal;
+
+    chosen.set(item.name, select.value);
     select.addEventListener('change', () => {
       chosen.set(item.name, select.value);
       retally();
@@ -5271,7 +5300,9 @@ async function planShoppingTrip(job, card) {
         ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
         : item.name;
 
-      const line = byPlace.get(terminal) || { items: [], cost: 0, priced: true };
+      const line = byPlace.get(terminal)
+        || { items: [], cost: 0, priced: true, placeId: seller?.placeId || '' };
+
       line.items.push(need);
 
       if (seller?.price > 0 && item.needed > 0) line.cost += seller.price * item.needed;
@@ -5286,7 +5317,7 @@ async function planShoppingTrip(job, card) {
     }
 
     const stops = [...byPlace.entries()].map(([place, line]) => ({
-      placeId: placeIdForTerminal(place),
+      placeId: line.placeId || placeIdForTerminal(place),
       place,
 
       // The estimate is only shown when every item at the stop has a price;
