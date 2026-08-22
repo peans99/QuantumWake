@@ -5862,6 +5862,13 @@ function drawMap() {
   // pointer, so clicking those dots did nothing at all. Widening the clusters
   // made the discs bigger and the dead zones with them.
   const hoverLayer = svgEl('g');
+
+  // The bodies go in a layer of their own, under everything, for the same
+  // reason: drawn as each cluster was built, a later planet's disc painted over
+  // an earlier one's marks. It cannot steal a click - the disc is
+  // pointer-events: none - but it could still hide the places on a neighbour.
+  const bodyLayer = svgEl('g');
+  map.append(bodyLayer);
   map.append(hoverLayer);
 
   // Bodies and their locations.
@@ -5908,7 +5915,7 @@ function drawMap() {
       const reach = clusterRadius(sites.length);
 
       // Before the sites, so their marks sit on the world rather than behind it.
-      if (bodyName !== '—') drawBodyDisc(map, bx, by, reach, system);
+      if (bodyName !== '—') drawBodyDisc(bodyLayer, bx, by, reach, system);
 
       // Body names sit outside the cluster they head, so the sites below have
       // clear air to put their own labels in. They are placed first and claim
@@ -6100,14 +6107,14 @@ function kindMark(kind, x, y, radius, colour, solid) {
  * hierarchy back: the big quiet circle is the world, the marks on it are the
  * places you can actually go.
  */
-function drawBodyDisc(map, x, y, reach, system) {
+function drawBodyDisc(layer, x, y, reach, system) {
   const disc = svgEl('circle', {
     cx: x, cy: y, r: reach + 7,
     class: 'map-body',
     fill: SYSTEM_COLOURS[system] || '#9fb8ff',
   });
 
-  map.append(disc);
+  layer.append(disc);
 }
 
 /**

@@ -344,9 +344,26 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### Unreleased
+### 0.6.0
 
-Not cut yet. What is waiting on the next build:
+The map learns what things are, the app learns what it cannot count, and the
+buttons stop looking borrowed.
+
+- **The map draws what a place is.** Every kind has its own mark — a skyline for
+  a city, a headframe for a mine, an orbit for a research station, a crate for a
+  distribution centre — in the same colour it always had, so the legend is a
+  reminder rather than something to memorise. And planets are finally on the
+  map: they were labels with nothing drawn, which is why a station looked bigger
+  than the world it orbits. Each body is a quiet disc with its places on it.
+- **A crowded cluster opens up when you zoom in.** microTech piled its sites on
+  top of each other however far you zoomed; the cluster now spreads once the
+  view is close enough to be naming everything, and stays compact at system
+  scale where it should read as one place. Clicks near a cluster work again too
+  — an invisible hover disc had been landing on its neighbour's dots.
+- **Commodity search answers to part of a name.** "medical" finds Medical
+  Supplies; before, only the exact full name matched, and nothing ever showed
+  you what that name was. Shortest match wins, a place name still finds the
+  place, and the suggestion list offers commodities beside places.
 
 - **The map draws what a place is.** Every kind has its own mark now — a skyline
   for a city, a headframe for a mine, an orbit for a research station, a crate
@@ -373,6 +390,15 @@ Not cut yet. What is waiting on the next build:
   until you touch them — nothing that arrives in an account is written to the
   log — and where to report anything wrong: **nekhron** on Discord, or the
   GitHub issues page.
+- **Medical beds are tracked.** The game does log something about regen after
+  all: using a bed says so. A bed at a known place is a more direct hint at
+  where you will wake than waiting for the next death, so it is shown beside the
+  wake-up inference rather than instead of it — 191 bed visits against 22
+  wake-ups here, so most bed use is just healing.
+- **Every button looks like the app.** The HUD button style was written inside
+  the map's toolbar, so the map had chamfered cyan buttons and the other
+  twenty-nine were whatever Windows draws by default. Delete now reads as
+  destructive, an on state reads as on, and keyboard focus is visible.
 
 - **The map prices cargo.** Pick a commodity and every place it trades is graded
   by what it is worth there: the best terminals now, from UEX, beside your own
