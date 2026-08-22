@@ -6369,8 +6369,156 @@ function initWipe() {
   }
 }
 
+/* ---------- new versions ---------- */
+
+/**
+ * Asks, once, whether this copy may look for a newer one.
+ *
+ * The app's standing promise is that it connects only when asked, and a version
+ * check is a connection. So the first start puts the question on screen with
+ * three answers - every start, just this once, or never - and never asks again
+ * whichever way it goes. The check itself is a plain GET of a public release
+ * feed: it sends nothing, and what it learns is what anyone can read.
+ */
+async function checkForUpdate() {
+  const notice = $('#update');
+  if (!notice || isOverlay) return;
+
+  let state;
+  try {
+    state = await getJson('/api/updates');
+  } catch {
+    return;
+  }
+
+  if (!state.asked) {
+    askAboutUpdates(state);
+    return;
+  }
+
+  if (state.automatic) await runUpdateCheck({ quiet: true });
+}
+
+/** The question, with its three answers. */
+function askAboutUpdates(state) {
+  const notice = $('#update');
+
+  $('#update-title').textContent = 'Look for a newer version?';
+  $('#update-detail').textContent =
+    'One request to GitHub, sending nothing about you or this machine. '
+    + 'Nothing is downloaded or installed — you would get a link.';
+
+  const actions = $('#update-actions');
+  actions.textContent = '';
+
+  const answer = async (automatic, thenCheck) => {
+    await fetch(`/api/updates/answer?automatic=${automatic}`, { method: 'POST' });
+    notice.hidden = true;
+    renderUpdateSettings().catch(() => { /* Settings redraws on its next visit */ });
+    if (thenCheck) await runUpdateCheck({ quiet: false });
+  };
+
+  const every = el('button', 'ghost', 'Yes, every start');
+  every.addEventListener('click', () => answer(true, true));
+
+  const once = el('button', 'ghost', 'Just this once');
+  once.addEventListener('click', () => answer(false, true));
+
+  const never = el('button', 'ghost', 'No thanks');
+  never.addEventListener('click', () => answer(false, false));
+
+  actions.append(every, once, never);
+  notice.hidden = false;
+}
+
+/**
+ * Runs a check and says what it found.
+ *
+ * @param quiet Say nothing when this copy is current - true for a startup
+ *   check, which nobody asked a question of, and false for a click, which is a
+ *   question and deserves an answer either way.
+ */
+async function runUpdateCheck({ quiet }) {
+  const notice = $('#update');
+
+  let result;
+  try {
+    const response = await fetch('/api/updates/check', { method: 'POST' });
+    result = await response.json();
+  } catch {
+    if (!quiet) $('#update-status').textContent = 'could not reach GitHub just now';
+    return;
+  }
+
+  renderUpdateSettings().catch(() => { /* the toggle is still right */ });
+
+  if (!result.newer) {
+    if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
+    notice.hidden = true;
+    return;
+  }
+
+  $('#update-title').textContent = `Quantum Wake ${result.latest} is out`;
+  $('#update-detail').textContent = `You are running ${result.current}.`
+    + (result.publishedAt ? ` Published ${dayUtc(result.publishedAt)}.` : '');
+
+  const actions = $('#update-actions');
+  actions.textContent = '';
+
+  const open = el('button', 'ghost', 'Open the release page');
+  open.addEventListener('click', () => {
+    window.open(result.url, '_blank', 'noreferrer');
+    notice.hidden = true;
+  });
+
+  const later = el('button', 'ghost', 'Later');
+  later.addEventListener('click', () => { notice.hidden = true; });
+
+  actions.append(open, later);
+  notice.hidden = false;
+}
+
+/** The Settings block: the toggle, and what the last look found. */
+async function renderUpdateSettings() {
+  const toggle = $('#update-auto');
+  if (!toggle) return;
+
+  const state = await getJson('/api/updates');
+  toggle.checked = !!state.automatic;
+
+  const status = $('#update-status');
+  if (!status) return;
+
+  status.textContent = state.lastCheckedAt
+    ? `last checked ${ago(state.lastCheckedAt)}`
+    : 'never checked';
+}
+
+function initUpdates() {
+  const toggle = $('#update-auto');
+  if (!toggle) return;
+
+  toggle.addEventListener('change', async () => {
+    await fetch(`/api/updates/answer?automatic=${toggle.checked}`, { method: 'POST' });
+    renderUpdateSettings().catch(() => { /* the box already shows the choice */ });
+  });
+
+  $('#update-check').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    $('#update-status').textContent = 'looking…';
+
+    try {
+      await runUpdateCheck({ quiet: false });
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 /**
  * Offers to move the wipe line when a new patch has landed since it.
+
  *
  * Nothing in the logs says an account was reset - there is no such line. What
  * they do say is when a patch arrived, and wipes arrive with patches, so the
@@ -6450,6 +6598,7 @@ function initWipePrompt() {
 initStaleNotice();
 initWipe();
 initWipePrompt();
+initUpdates();
 
 /* ---------- scan progress ---------- */
 
@@ -6710,7 +6859,10 @@ async function boot() {
     // has gone a day old, and the line the wipe draws under the history.
     checkPriceAge().catch(() => { /* prices are usable whatever their age */ });
     checkForWipe().catch(() => { /* the Settings page still carries the line */ });
+    checkForUpdate().catch(() => { /* an unanswered question is not a failure */ });
   }
+
+  renderUpdateSettings().catch(() => { /* Settings fills in on its next visit */ });
 
   loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 

@@ -91,6 +91,9 @@ public static class ServerHost
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
         builder.Services.AddSingleton<TripStore>();
+        builder.Services.AddSingleton<UpdateStore>();
+        builder.Services.AddSingleton<UpdateCheck>();
+
 
         builder.Services.AddSingleton<OverlayLayoutStore>();
 
@@ -313,6 +316,40 @@ public static class ServerHost
                     .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
                     .FirstOrDefault()?.InformationalVersion
             };
+        });
+
+        // ---- update checks: asked for once, never on a timer ----
+
+        // Local state only. Answering this question costs no network, so the
+        // page can decide whether to ask without connecting to anything.
+        app.MapGet("/api/updates", (UpdateStore updates) =>
+        {
+            var preference = updates.Current;
+
+            return new
+            {
+                preference.Asked,
+                preference.Automatic,
+                preference.LastCheckedAt,
+                preference.LastSeenVersion,
+                releases = UpdateCheck.ReleasesPage
+            };
+        });
+
+        app.MapPost("/api/updates/answer", (bool automatic, UpdateStore updates) =>
+            Results.Ok(updates.Answer(automatic)));
+
+        // The one call that reaches the internet, and only from a click or from
+        // a startup the player has already agreed to.
+        app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check) =>
+        {
+            var assembly = typeof(ServerHost).Assembly;
+            var current = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+            var result = await check.LookAsync(current);
+            updates.Checked(result.Latest);
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
