@@ -460,10 +460,20 @@ public static class ServerHost
 
             foreach (var l in lib.Ledger(days ?? 0))
             {
+                // The kiosk logs one line per order, and the order can be for
+                // several: "quantity[2] client_price[168000]" is two drives at
+                // 84,000, not one at 168,000. Without the count on the line,
+                // buying two of something twice reads as two purchases of one,
+                // and the price looks doubled rather than the order being.
+                // Cargo already carries its SCU in the text.
+                var what = l.Kind == "Item bought" && l.Quantity > 1
+                    ? $"{l.What} ×{l.Quantity}"
+                    : l.What;
+
                 entries.Add(new LogbookLine(
                     l.At,
                     l.Amount > 0 ? "sold" : "bought",
-                    l.What, l.Where, l.Shop, l.Amount));
+                    what, l.Where, l.Shop, l.Amount));
             }
 
             foreach (var p in lib.Pickups(days ?? 0))

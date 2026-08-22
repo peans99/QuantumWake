@@ -342,7 +342,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.5
+### 0.6.6
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
@@ -378,6 +378,9 @@ buttons stop looking borrowed.
   earlier ones missed, and *Fewest stops* covers the whole list in as few
   landings as it can. Buying each thing where it is cheapest is one landing per
   thing, which is rarely the run you want.
+- **The logbook says how many.** A kiosk logs one line per order, so buying
+  two of something wrote one line reading the price of both: two orders of two
+  read as two purchases of one at twice the price. The count is on the line now.
 - **Shops at rest stops are on the map now.** "Platinum CRU-L4" and its like are
   named for the station code alone, which matched nothing in the atlas, so every
   item shop out there was a stop with no dot and no route.
