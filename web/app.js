@@ -5806,6 +5806,9 @@ function drawMap() {
       const sites = bodies.get(bodyName);
       const reach = clusterRadius(sites.length);
 
+      // Before the sites, so their marks sit on the world rather than behind it.
+      if (bodyName !== '—') drawBodyDisc(map, bx, by, reach, system);
+
       // Body names sit outside the cluster they head, so the sites below have
       // clear air to put their own labels in. They are placed first and claim
       // their box, so site labels flow around them.
@@ -5887,6 +5890,125 @@ function drawMap() {
   fitToHighlights(term || null);
 }
 
+/* ---------- what a place looks like ---------- */
+
+/**
+ * A mark per kind, drawn in a box from -1 to 1 so size stays the caller's
+ * business.
+ *
+ * Colour alone was carrying the whole taxonomy: nine kinds, nine dots, and a
+ * legend to memorise. A shape can be read without the legend - a headframe is a
+ * mine whether or not you remember that mines are brown - and the colour stays
+ * exactly as it was, so anyone who had learnt it loses nothing.
+ *
+ * Deliberately blunt geometry. These are drawn between four and seventeen
+ * pixels across, where a detailed glyph turns to mush; a silhouette that
+ * survives being tiny beats one that looks good in a design tool.
+ */
+const KIND_SHAPES = {
+  // A skyline: the one shape nobody needs told.
+  City: [{ tag: 'path', attrs: { d: 'M-1 .85 L-1 -.1 L-.42 -.1 L-.42 -.7 L.06 -.7 L.06 -.25 L.5 -.25 L.5 -1 L1 -1 L1 .85 Z' } }],
+
+  // A ring with a core: a station is a thing you dock inside.
+  Station: [
+    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .38 } },
+    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .92 }, line: true },
+  ],
+
+  // A ring with an arm out to a pad - a place you pull in at.
+  RestStop: [
+    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .5 } },
+    { tag: 'line', attrs: { x1: -1, y1: 0, x2: 1, y2: 0 }, line: true },
+  ],
+
+  // A dome on the ground.
+  Outpost: [
+    { tag: 'path', attrs: { d: 'M-.85 .6 A .85 .85 0 0 1 .85 .6 Z' } },
+    { tag: 'line', attrs: { x1: -1, y1: .6, x2: 1, y2: .6 }, line: true },
+  ],
+
+  // A headframe over a rock: the mine, not the mineral.
+  Mine: [
+    { tag: 'polygon', attrs: { points: '-.95,.85 -.35,.15 .3,.2 .95,.8' } },
+    { tag: 'path', attrs: { d: 'M0 -.95 L-.6 .2 M0 -.95 L.6 .2 M-.35 -.3 L.35 -.3' }, line: true },
+  ],
+
+  // The rock on its own.
+  Asteroid: [{ tag: 'polygon', attrs: { points: '-.9,-.15 -.4,-.8 .35,-.85 .9,-.2 .6,.7 -.3,.85 -.85,.4' } }],
+
+  // An orbit around a nucleus.
+  Research: [
+    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .3 } },
+    { tag: 'ellipse', attrs: { cx: 0, cy: 0, rx: 1, ry: .42, transform: 'rotate(-28)' }, line: true },
+  ],
+
+  // A crate with a band round it.
+  DistributionCentre: [
+    { tag: 'rect', attrs: { x: -.9, y: -.75, width: 1.8, height: 1.5 } },
+    { tag: 'line', attrs: { x1: -.9, y1: -.1, x2: .9, y2: -.1 }, line: true, over: true },
+  ],
+
+  // The same diamond the jump lanes wear.
+  JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
+
+  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,-1 .9,.8 -.9,.8' } }],
+};
+
+/** Anything without a mark of its own keeps the dot it always had. */
+const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
+
+/**
+ * Draws a place's mark at a size.
+ *
+ * @param solid Somewhere with history is filled; somewhere never visited is an
+ *   outline, exactly as when every kind was a circle.
+ */
+function kindMark(kind, x, y, radius, colour, solid) {
+  const group = svgEl('g', {
+    class: 'map-mark',
+    transform: `translate(${x} ${y}) scale(${radius})`,
+  });
+
+  for (const part of KIND_SHAPES[kind] ?? PLAIN_MARK) {
+    group.append(svgEl(part.tag, {
+      ...part.attrs,
+
+      // Line parts are strokes whatever the history: a filled orbit or shaft is
+      // a blob. Everything else fills once the place has been visited.
+      fill: part.line || !solid ? 'none' : colour,
+
+      // A line drawn inside a filled shape is invisible in the fill's own
+      // colour, so it is cut out of it instead - the crate's band, not a crate.
+      stroke: part.over && solid ? '#070c14' : colour,
+      'stroke-width': part.line ? 0.16 : 0.14,
+      'stroke-linejoin': 'round',
+      'stroke-linecap': 'round',
+      opacity: solid ? 0.9 : 0.45,
+    }));
+  }
+
+  return group;
+}
+
+/**
+ * The body a cluster belongs to, drawn as the disc its places sit on.
+ *
+ * Planets and moons are not in the atlas at all - the game names locations, not
+ * the rocks they are on - so a body was a label and nothing else, and a station
+ * ended up looking larger than the planet holding it. Drawing the disc puts the
+ * hierarchy back: the big quiet circle is the world, the marks on it are the
+ * places you can actually go.
+ */
+function drawBodyDisc(map, x, y, reach, system) {
+  const disc = svgEl('circle', {
+    cx: x, cy: y, r: reach + 7,
+    class: 'map-body',
+    fill: SYSTEM_COLOURS[system] || '#9fb8ff',
+  });
+
+  map.append(disc);
+}
+
 /**
  * @param anchor The body this site belongs to, if any. Labels are pushed away
  *   from it so a cluster fans its names outwards instead of stacking them.
@@ -5926,12 +6048,9 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   // overrides the kind colour - in that mode the colour IS the price.
   const dotColour = shade?.colour ?? colour;
 
-  group.append(been || shade
-    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: dotColour, opacity: '.85' })
-    : svgEl('circle', {
-        cx: x, cy: y, r: radius, fill: 'none',
-        stroke: dotColour, 'stroke-width': '1.1', opacity: '.42',
-      }));
+  // A price shade means the colour IS the price, so the mark keeps its shape
+  // and takes the graded colour: a mine is still a mine at 1,872 aUEC.
+  group.append(kindMark(location.kind, x, y, radius, dotColour, been || !!shade));
 
   // A styled tooltip that appears instantly - the native <title> takes a
   // second to show and cannot be read against the game-HUD styling.
@@ -6092,8 +6211,13 @@ function drawLegend(locations) {
 
   for (const kind of kinds) {
     const item = el('div', 'item');
-    const swatch = el('span', 'swatch');
-    swatch.style.background = KIND_COLOURS[kind] || KIND_COLOURS.Unknown;
+
+    // The legend draws the mark itself rather than a square of its colour -
+    // there is no point naming a shape the key does not show.
+    const swatch = document.createElementNS(SVG_NS, 'svg');
+    swatch.setAttribute('viewBox', '-1.35 -1.35 2.7 2.7');
+    swatch.setAttribute('class', 'swatch-mark');
+    swatch.append(kindMark(kind, 0, 0, 1, KIND_COLOURS[kind] || KIND_COLOURS.Unknown, true));
     item.append(swatch);
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);

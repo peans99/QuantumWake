@@ -829,6 +829,23 @@ td.outward { color: var(--amber); }
 }
 .legend .item { display: flex; align-items: center; gap: 8px; }
 .legend .swatch { width: 7px; height: 7px; transform: rotate(45deg); }
+.legend .swatch-mark { width: 13px; height: 13px; overflow: visible; }
+
+/*
+ * The body under a cluster. Barely there on purpose: it is the ground its
+ * places stand on, and a bright planet would compete with the marks that are
+ * the actual answer to "where can I go".
+ */
+.map-body {
+  fill-opacity: .055;
+  stroke: rgba(53, 200, 240, .18);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Marks scale with the node, so hover has to grow the whole group. */
+.map-mark { transition: opacity .15s; }
+
 
 /* ---------- fleet ---------- */
 

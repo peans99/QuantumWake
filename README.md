@@ -348,7 +348,14 @@ release workflow lifts it from here, so it is written once.
 
 Not cut yet. What is waiting on the next build:
 
-- **The overlay arrives usable.** It used to start click-through: a pane that
+- **The map draws what a place is.** Every kind has its own mark now — a skyline
+  for a city, a headframe for a mine, an orbit for a research station, a crate
+  for a distribution centre — in the same colour it always had, so the legend is
+  a reminder rather than something to memorise. And planets are finally on the
+  map: they were labels with nothing drawn, which is why a station looked bigger
+  than the world it orbits. Each body is a quiet disc with its places on it.
+- **The overlay arrives usable.**
+ It used to start click-through: a pane that
   could not be moved, resized or closed, with a hotkey nothing mentioned as the
   only way out. Now it starts ready to grab, and a **📌 pin** button in its header
   puts it out of the way. The tray icon brings it back — a pinned window passes
