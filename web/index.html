@@ -297,6 +297,8 @@
     <div class="section-bar spaced">
       <h2>Crafting &amp; shopping</h2>
       <div class="controls">
+        <select id="jobs-blueprint" class="select" title="Blueprints you have been given"></select>
+        <button class="ghost" id="jobs-plan">Set as goal</button>
         <button class="ghost" id="jobs-new">New list</button>
       </div>
     </div>
@@ -789,6 +791,7 @@
           <option value="">Any availability</option>
           <option value="default">Known by default</option>
           <option value="reward">From rewards</option>
+          <option value="owned">In your library</option>
         </select>
         <input type="search" id="crafting-search" class="search" placeholder="Search blueprints…"
                autocomplete="off" spellcheck="false">

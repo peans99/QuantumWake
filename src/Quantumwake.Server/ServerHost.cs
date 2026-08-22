@@ -544,18 +544,38 @@ public static class ServerHost
         // Every crafting blueprint, with the crafted item's shop price joined
         // by uuid - so crafting can be weighed against just buying one.
         app.MapGet("/api/reference/blueprints", (LogLibrary lib, UexData uex) =>
-            lib.Community.Blueprints.Select(b => new
+        {
+            // The toast names a blueprint loosely ("Defiant"), the catalogue
+            // names its output fully ("Defiant Ballistic Repeater"), so the
+            // join is a contains either way round rather than an equality.
+            var received = lib.Blueprints();
+
+            return lib.Community.Blueprints.Select(b =>
             {
-                b.Output,
-                b.Type,
-                b.Grade,
-                b.Kind,
-                b.CraftSeconds,
-                b.Materials,
-                @default = b.Default,
-                b.RewardPools,
-                shopPrice = uex.ItemPrice(b.OutputUuid)
-            }));
+                var mine = received.FirstOrDefault(r =>
+                    b.Output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
+                    || r.Name.Contains(b.Output, StringComparison.OrdinalIgnoreCase));
+
+                return new
+                {
+                    b.Output,
+                    b.Type,
+                    b.Grade,
+                    b.Kind,
+                    b.CraftSeconds,
+                    b.Materials,
+                    @default = b.Default,
+                    b.RewardPools,
+                    shopPrice = uex.ItemPrice(b.OutputUuid),
+                    owned = mine is not null,
+                    receivedAt = mine?.At
+                };
+            });
+        });
+
+        // What the logs say you were given, whether or not the catalogue
+        // recognises the name.
+        app.MapGet("/api/blueprints/owned", (LogLibrary lib) => lib.Blueprints());
 
         // The starmap's own paragraph about one place, for the map detail card.
         app.MapGet("/api/map/lore", (LogLibrary lib, string name) =>

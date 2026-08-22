@@ -1452,6 +1452,7 @@ function renderCraftingRef() {
   const rows = craftingCatalogue.filter((b) =>
     (!type || b.type === type)
     && (!obtained
+      || (obtained === 'owned' && b.owned)
       || (obtained === 'default' && b.default)
       || (obtained === 'reward' && !b.default))
     && (!term
@@ -1474,9 +1475,21 @@ function renderCraftingRef() {
     return;
   }
 
+  // Yours first: a blueprint you hold is one you can actually start.
+  rows.sort((a, b) => Number(Boolean(b.owned)) - Number(Boolean(a.owned)));
+
   for (const bp of rows.slice(0, CRAFTING_CAP)) {
     const tr = el('tr');
-    tr.append(el('td', null, bp.output));
+
+    const makes = el('td');
+    makes.append(el('span', null, bp.output));
+
+    if (bp.owned) {
+      const badge = el('span', 'job-kind owned', 'yours');
+      badge.title = `Received ${relative(bp.receivedAt)}`;
+      makes.append(badge);
+    }
+    tr.append(makes);
     tr.append(el('td', 'muted', prettyType(bp.type)));
     tr.append(el('td', 'num', bp.grade > 0 ? String(bp.grade) : '—'));
     tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
@@ -1854,8 +1867,64 @@ async function loadOutfitting() {
  * because knowing what is still missing is the whole point of a list.
  */
 async function loadJobs() {
-  await Promise.all([loadJobContracts(), loadJobList()]);
+  await Promise.all([loadJobContracts(), loadJobList(), fillBlueprintGoals()]);
 }
+
+/**
+ * The goal picker: blueprints the game has actually given you, so a craft can
+ * be started from the page where progress is tracked rather than by hunting
+ * the catalogue. Everything else in the catalogue stays available below it,
+ * because a blueprint you have not been given is still worth planning for.
+ */
+async function fillBlueprintGoals() {
+  const select = $('#jobs-blueprint');
+  if (!select || !craftingCatalogue.length) return;
+
+  const previous = select.value;
+  const owned = craftingCatalogue.filter((b) => b.owned);
+  const rest = craftingCatalogue.filter((b) => !b.owned && b.materials.length);
+
+  select.textContent = '';
+
+  if (owned.length) {
+    const group = document.createElement('optgroup');
+    group.label = `Yours (${owned.length})`;
+    for (const bp of owned) group.append(new Option(bp.output, bp.output));
+    select.append(group);
+  }
+
+  const others = document.createElement('optgroup');
+  others.label = owned.length ? 'Everything else' : 'Blueprints';
+  for (const bp of rest.slice(0, 400)) others.append(new Option(bp.output, bp.output));
+  select.append(others);
+
+  if (previous) select.value = previous;
+}
+
+$('#jobs-plan')?.addEventListener('click', async (e) => {
+  const output = $('#jobs-blueprint').value;
+  const bp = craftingCatalogue.find((b) => b.output === output);
+  if (!bp) return;
+
+  e.currentTarget.disabled = true;
+
+  try {
+    await fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `Craft ${bp.output}`,
+        kind: 'craft',
+        source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`
+          + (bp.owned ? ' · in your library' : ''),
+        items: parseJobItems(bp.materials.join('\n')),
+      }),
+    });
+    await loadJobList();
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
 
 /**
  * The pinned job on the Now page - and so in the overlay, where what is still

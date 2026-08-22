@@ -46,6 +46,9 @@ public sealed class SessionBuilder
     private readonly Dictionary<string, string> _contractsByMission = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ObjectiveState> _objectiveStates = new(StringComparer.Ordinal);
 
+    private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<BlueprintReceipt> _blueprintReceipts = [];
+
     /// <summary>Mission id to its journal-visible objectives and their states.</summary>
     private readonly Dictionary<string, Dictionary<string, ObjectiveState>> _objectiveSteps =
         new(StringComparer.Ordinal);
@@ -510,6 +513,22 @@ public sealed class SessionBuilder
         {
             var title = notification.Text["Contract Accepted:".Length..].Trim(' ', ':');
             Timeline(notification.Timestamp, "contract", "Contract accepted", title);
+            return;
+        }
+
+        // Blueprints arrive only as this notification - nothing else in the log
+        // says which recipes a player holds, so the toast IS the record.
+        const string blueprintPrefix = "Received Blueprint:";
+
+        if (notification.Text.StartsWith(blueprintPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var name = notification.Text[blueprintPrefix.Length..].Trim(' ', ':');
+
+            if (name.Length > 0 && _blueprints.Add(name))
+            {
+                _blueprintReceipts.Add(new BlueprintReceipt(notification.Timestamp, name));
+                Timeline(notification.Timestamp, "blueprint", "Blueprint received", name);
+            }
         }
     }
 
@@ -813,6 +832,7 @@ public sealed class SessionBuilder
             Purchases = _purchases,
             Trades = _trades,
             Pickups = _pickups,
+            Blueprints = _blueprintReceipts,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,

@@ -1544,6 +1544,8 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 .job-head b { font-size: 14px; color: var(--cyan-hot, #7fe4ff); }
 .job-head .spacer { flex: 1; }
 
+.job-kind.owned { color: var(--green); border-color: var(--green); margin-left: 9px; }
+
 .job-kind {
   color: var(--dim);
   font-size: 9.5px;

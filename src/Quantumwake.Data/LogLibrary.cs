@@ -881,6 +881,23 @@ public sealed class LogLibrary : IDisposable
         ];
     }
 
+    /// <summary>
+    /// Blueprints the player has been given, earliest sighting first. The game
+    /// announces them once and never mentions them again, so this is the whole
+    /// record of what can be crafted.
+    /// </summary>
+    public IReadOnlyList<BlueprintReceipt> Blueprints()
+    {
+        return
+        [
+            .. _store.All()
+                .SelectMany(s => s.Blueprints)
+                .GroupBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new BlueprintReceipt(g.Min(b => b.At), g.Key))
+                .OrderBy(b => b.At)
+        ];
+    }
+
     public IReadOnlyList<PickupRecord> Pickups(int days = 0)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
