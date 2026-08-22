@@ -114,8 +114,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # What changed comes out of the README's release notes, so it is
+          # written once and cannot drift from what the repository claims. A
+          # version with no section still releases - the standing copy below is
+          # what most of a release page is - but it says so in the log, because
+          # a release that does not say what changed is worth noticing.
+          $version = '${{ steps.version.outputs.version }}'
+          $readme = Get-Content README.md -Raw
+
+          # Single-quoted and concatenated: in a double-quoted string PowerShell
+          # would read the regex's own $(...) groups as subexpressions to run.
+          $pattern = '(?ms)^### ' + [regex]::Escape($version) + '\s*$(.*?)(?=^### |\z)'
+          $section = [regex]::Match($readme, $pattern)
+
+          if ($section.Success) {
+            $changed = "### What changed`n" + $section.Groups[1].Value.Trim() + "`n`n"
+          } else {
+            Write-Host "::warning::No '### $version' section in README.md; releasing without a changelog."
+            $changed = ''
+          }
+
           $notes = @"
           **Quantum Wake ${{ steps.version.outputs.version }}** - a pilot's logbook for Star Citizen.
+
+          $changed
 
           **Pre-1.0:** until version 1.0 this product will keep changing significantly
           between releases - pages move, data formats shift, an update may re-read your
