@@ -50,6 +50,7 @@ public sealed class SessionBuilder
     private readonly List<BlueprintReceipt> _blueprintReceipts = [];
 
     private readonly List<RespawnRecord> _respawns = [];
+    private readonly List<MedicalBedVisit> _medicalBeds = [];
 
     /// <summary>Set by a death or incapacitation, cleared by the location that answers it.</summary>
     private DateTimeOffset? _awaitingRespawn;
@@ -567,6 +568,29 @@ public sealed class SessionBuilder
             return;
         }
 
+        // A medical bed is where regen gets set, so using one at a known place
+        // is the strongest hint the logs offer about where a player will wake -
+        // stronger than waiting for the next death, though still only a hint,
+        // since a bed also just heals. Repeat toasts at the same place inside
+        // an hour are one visit.
+        if (notification.IsMedicalBed)
+        {
+            var place = _locationState.State.Current?.DisplayName;
+
+            var repeat = place is not null
+                && _medicalBeds.Count > 0
+                && string.Equals(_medicalBeds[^1].Place, place, StringComparison.OrdinalIgnoreCase)
+                && notification.Timestamp - _medicalBeds[^1].At < TimeSpan.FromHours(1);
+
+            if (place is not null && !repeat)
+            {
+                _medicalBeds.Add(new MedicalBedVisit(notification.Timestamp, place));
+                Timeline(notification.Timestamp, "medbed", "Used a medical bed", place);
+            }
+
+            return;
+        }
+
         // Blueprints arrive only as this notification - nothing else in the log
         // says which recipes a player holds, so the toast IS the record.
         const string blueprintPrefix = "Received Blueprint:";
@@ -890,6 +914,7 @@ public sealed class SessionBuilder
             Pickups = _pickups,
             Blueprints = _blueprintReceipts,
             Respawns = _respawns,
+            MedicalBeds = _medicalBeds,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,

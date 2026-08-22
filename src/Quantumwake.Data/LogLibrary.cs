@@ -948,6 +948,20 @@ public sealed class LogLibrary : IDisposable
     /// Where the player has woken after dying, newest first. Inferred from the
     /// first place seen after each death, since the game logs no respawn point.
     /// </summary>
+    /// <summary>Medical beds used, newest first - where regen is set, if it was.</summary>
+    public IReadOnlyList<MedicalBedVisit> MedicalBeds(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+
+        return
+        [
+            .. _store.All()
+                .SelectMany(s => s.MedicalBeds)
+                .Where(b => b.At >= cutoff)
+                .OrderByDescending(b => b.At)
+        ];
+    }
+
     public IReadOnlyList<RespawnRecord> Respawns(int days = 0)
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
