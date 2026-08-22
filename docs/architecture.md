@@ -138,6 +138,38 @@ that are somewhere you actually fly to. The atlas therefore keeps only ids the
 resolver can give a real category to — plus every visited place regardless, since
 somewhere the player has stood earns its dot whatever its id looks like.
 
+### The cargo panel: two answers to one question
+
+Picking a commodity already lit the places that trade it and graded them by UEX
+price. The panel beside the map answers the rest of it, in two sections that are
+deliberately not merged:
+
+- **Terminals**, from UEX, ranked by price for the side being shown. What the
+  commodity is worth today, everywhere, whether or not the player has been.
+- **Your receipts**, from this install's own kiosk lines, over a window of 24
+  hours, 3 days, 7 days or longer. What the player was actually paid, and where.
+
+Merging them would be a lie of averages: one is a live market, the other is a
+logbook, and a run that paid well last week against a terminal that pays badly
+today is exactly the discrepancy worth seeing. Selling and buying are a toggle
+rather than the old `buy:` search prefix, which was undiscoverable; the toggle
+still writes the prefix, so the search box stays the one thing driving the map.
+
+**Shade by my own prices** grades the map from receipts instead of UEX. It needs
+no network, works with the integration off, and lights places the catalogue has
+never heard of — if the player sold there, it is an answer.
+
+Double-clicking a place turns the panel round to that station: what it has taken,
+what it has offered, and what the catalogue says it sells. The detail card
+answers *what is this place*; a station with a dozen commodities on each side of
+the counter needs more room than a card has.
+
+Receipts carry the place's engine id (`TradeRecord.PlaceId`), so a sale lands on
+the node the map already draws rather than being matched on a display name two
+places can share. The arithmetic runs in the browser: a few hundred receipts is
+nothing to loop over, and commodity, side and window change often enough that a
+round trip per twiddle would be the slow part.
+
 ### Where a transaction happened
 
 Kiosks name a vendor, not a place, and every commodity terminal in the game logs

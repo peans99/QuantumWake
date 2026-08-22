@@ -212,7 +212,14 @@
       <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
         <option value="price">Shade by price</option>
         <option value="scu">Shade by capacity</option>
+        <option value="mine">Shade by my own prices</option>
       </select>
+      <div class="seg" id="map-side" hidden title="Which side of the counter the map is showing">
+        <button type="button" data-side="sell" class="active">Selling</button>
+        <button type="button" data-side="buy">Buying</button>
+      </div>
+      <select id="map-window" class="select period" data-all="All time" hidden
+              title="How far back your own receipts count"></select>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
@@ -223,7 +230,14 @@
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="map-tip" id="map-tip" hidden></div>
-      <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details</div>
+      <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details · double-click for its trade</div>
+
+      <aside class="cargo-panel" id="cargo-panel" hidden>
+        <button class="map-info-close" id="cargo-close" aria-label="Close">×</button>
+        <div class="cargo-kicker" id="cargo-kicker"></div>
+        <div class="cargo-title" id="cargo-title"></div>
+        <div class="cargo-body" id="cargo-body"></div>
+      </aside>
 
       <aside class="map-info" id="map-info" hidden>
         <button class="map-info-close" id="map-info-close" aria-label="Close">×</button>

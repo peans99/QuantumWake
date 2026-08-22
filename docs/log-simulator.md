@@ -59,6 +59,12 @@ hard case in this parser is a quirk. So the simulator deliberately writes:
   which carry no `[Notice]` severity at all.
 - **Realistic noise.** Terrain invalidation, loading platform chatter, physics
   errors — real logs are over 95% noise.
+- **Cargo trades with no name and no place.** Kiosk lines carry the commodity
+  only as `resourceGUID` and always report the same shop id, exactly as the game
+  does, so both the catalogue lookup and the place back-track are exercised. The
+  ids are real ones from the community digest, and prices are rolled from the
+  place and the cargo together, so one terminal genuinely is the best place to
+  sell a given commodity — otherwise the map's shading has nothing to show.
 
 ## Verified
 

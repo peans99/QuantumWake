@@ -70,6 +70,9 @@ function clock(fromIso) {
 const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
 
+/* Day and month only, for dense rows where a year wraps the line. */
+const dayOf = (iso) => new Date(iso).toLocaleDateString([], { month: 'short', day: '2-digit' });
+
 async function getJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} -> ${response.status}`);
@@ -413,6 +416,7 @@ async function loadHistory() {
   loadRespawn().catch((e) => console.error('respawn', e));
   loadOutfitting().catch((e) => console.error('outfitting', e));
   loadRoutes().catch((e) => console.error('routes', e));
+  loadCargoReceipts().catch((e) => console.error('cargo receipts', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -4040,6 +4044,7 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
+  initCargoPanel();
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
   // Escape clears the search and glides home; clicking anywhere else just
@@ -4242,6 +4247,14 @@ function prepareShading(term, sites) {
   const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
   if (!entry) return;
 
+  // Shading by your own receipts needs no fetch and works with UEX off: the
+  // question it answers is "where did I do best with this", not "what is it
+  // worth today". Both are useful; only the player knows which they meant.
+  if (shadeSelect.value === 'mine') {
+    shadeFromReceipts(entry.name, buying);
+    return;
+  }
+
   if (shadeRows.name !== entry.name) {
     shadeRows = { name: entry.name, rows: null };
 
@@ -4303,6 +4316,430 @@ function prepareShading(term, sites) {
     label: buying
       ? (byScu ? 'stock on offer' : 'buy price, cheapest is gold')
       : (byScu ? 'sell capacity' : 'sell price, best is gold'),
+  };
+}
+
+/* ---------- cargo panel ---------- */
+
+/**
+ * Every cargo receipt this install holds, fetched once.
+ *
+ * The catalogue and UEX say what a commodity is worth *now*; these say what the
+ * player was actually paid, and where. Both belong in the same panel, because
+ * the question - is this still the run it was last week? - needs the two side
+ * by side. A few hundred receipts is nothing to loop over, and the panel
+ * changes commodity, side and window often enough that a round trip per twiddle
+ * would be the slow part.
+ */
+let cargoReceipts = [];
+
+/** What the panel is showing. */
+const cargo = {
+  name: null,
+  buying: false,
+  days: 0,
+
+  /** Set when the panel is showing one station rather than one commodity. */
+  place: null,
+};
+
+async function loadCargoReceipts() {
+  cargoReceipts = (await getJson('/api/commodities?days=0'))
+    .filter((t) => t.commodity && t.unitPrice > 0);
+
+  if (!$('#cargo-panel').hidden) drawMap();
+}
+
+/** Receipts inside the panel's window. */
+function receiptsInWindow() {
+  const cutoff = cargo.days ? Date.now() - cargo.days * 86400000 : null;
+  return cutoff ? cargoReceipts.filter((t) => new Date(t.at).getTime() >= cutoff) : cargoReceipts;
+}
+
+/** The catalogue entry a search term names, or null when it names a place. */
+function commodityEntry(term) {
+  const name = (term.startsWith('buy:') ? term.slice(4) : term).trim();
+  return marketEntries.find((e) => e.name.toLowerCase() === name) || null;
+}
+
+/**
+ * One row per place for a commodity on one side of the counter.
+ *
+ * Best is side-aware - the most you were paid selling, the least you paid
+ * buying - and the average is weighted by volume rather than by receipt, so one
+ * 320 SCU run does not count the same as one 2 SCU top-up.
+ */
+function receiptsFor(name, buying) {
+  const byPlace = new Map();
+
+  for (const trade of receiptsInWindow()) {
+    if (trade.commodity !== name || trade.isSell === buying) continue;
+
+    const key = trade.placeId || trade.place;
+    let row = byPlace.get(key);
+
+    if (!row) {
+      row = {
+        id: trade.placeId, name: trade.place,
+        trades: 0, scu: 0, amount: 0, best: 0, average: 0, latest: 0, latestAt: null,
+      };
+      byPlace.set(key, row);
+    }
+
+    row.trades += 1;
+    row.scu += trade.scu;
+    row.amount += Number(trade.amount);
+
+    row.best = row.trades === 1
+      ? trade.unitPrice
+      : (buying ? Math.min(row.best, trade.unitPrice) : Math.max(row.best, trade.unitPrice));
+
+    if (!row.latestAt || new Date(trade.at) > new Date(row.latestAt)) {
+      row.latestAt = trade.at;
+      row.latest = trade.unitPrice;
+    }
+  }
+
+  for (const row of byPlace.values()) row.average = row.scu ? row.amount / row.scu : 0;
+
+  return [...byPlace.values()].sort((a, b) => (buying ? a.best - b.best : b.best - a.best));
+}
+
+/** Keeps the toolbar's controls in step with the search term driving them. */
+function syncCargoControls() {
+  for (const button of $$('#map-side button')) {
+    button.classList.toggle('active', (button.dataset.side === 'buy') === cargo.buying);
+  }
+}
+
+/**
+ * Shows, hides or refills the panel for whatever the map is currently showing.
+ * Called from drawMap, so the panel can never disagree with the shading.
+ */
+function syncCargoPanel(term, sites) {
+  const entry = sites ? commodityEntry(term) : null;
+
+  cargo.name = entry ? entry.name : null;
+  cargo.buying = term.startsWith('buy:');
+
+  $('#map-side').hidden = !entry;
+  $('#map-window').hidden = !entry && !cargo.place;
+  syncCargoControls();
+
+  if (cargo.place) {
+    renderStationPanel();
+    return;
+  }
+
+  if (!entry) {
+    $('#cargo-panel').hidden = true;
+    return;
+  }
+
+  renderCommodityPanel(entry);
+}
+
+function cargoPanelHead(kicker, title) {
+  $('#cargo-kicker').textContent = kicker;
+  $('#cargo-title').textContent = title;
+  $('#cargo-panel').hidden = false;
+
+  const body = $('#cargo-body');
+  body.textContent = '';
+  return body;
+}
+
+const windowWord = () =>
+  (PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
+
+function renderCommodityPanel(entry) {
+  const body = cargoPanelHead(cargo.buying ? 'Commodity · buying' : 'Commodity · selling', entry.name);
+
+  // What the market says today, from the rows the shading already fetched.
+  body.append(el('div', 'cargo-h', cargo.buying ? 'Cheapest terminals' : 'Best terminals'));
+
+  if (shadeRows.name === entry.name && shadeRows.rows?.length) {
+    const priceOf = (row) => (cargo.buying ? row.buy : row.sell);
+    const scuOf = (row) => (cargo.buying ? row.buyScu : row.sellScu);
+
+    const rows = shadeRows.rows
+      .filter((r) => priceOf(r) > 0)
+      .sort((a, b) => (cargo.buying ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a)))
+      .slice(0, 10);
+
+    const values = rows.map(priceOf);
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+
+    for (const row of rows) {
+      const t = hi === lo ? 1 : (priceOf(row) - lo) / (hi - lo);
+
+      body.append(cargoRow({
+        colour: shadeColour(cargo.buying ? 1 - t : t),
+        name: row.terminal,
+        sub: `${Math.round(scuOf(row)).toLocaleString()} SCU ${cargo.buying ? 'in stock' : 'of demand'}`,
+        value: priceOf(row),
+        onClick: () => centreOnTerminal(row.terminal),
+      }));
+    }
+  } else {
+    body.append(el('div', 'cargo-empty', shadeRows.name === entry.name
+      ? 'No live prices for this commodity. UEX may be off — see Settings.'
+      : 'Fetching live prices…'));
+  }
+
+  // What the player was actually paid, which the market cannot tell them.
+  const mine = receiptsFor(entry.name, cargo.buying);
+  body.append(el('div', 'cargo-h', `Your receipts · ${windowWord()}`));
+
+  if (!mine.length) {
+    body.append(el('div', 'cargo-empty',
+      `You have never ${cargo.buying ? 'bought' : 'sold'} this in that window.`));
+  }
+
+  const best = mine.length ? mine[0].best : 0;
+  const worst = mine.length ? mine[mine.length - 1].best : 0;
+
+  for (const row of mine) {
+    const span = Math.abs(best - worst);
+    const t = span === 0 ? 1 : Math.abs(row.best - worst) / span;
+
+    body.append(cargoRow({
+      colour: shadeColour(cargo.buying ? 1 - t : t),
+      name: row.name,
+      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+        + ` · avg ${Math.round(row.average).toLocaleString()} · ${dayOf(row.latestAt)}`,
+      value: row.best,
+      onClick: () => {
+        if (row.id) centreOn(row.id);
+        showStation(row.id, row.name);
+      },
+    }));
+  }
+
+  const history = receiptsInWindow().filter((t) => t.commodity === entry.name);
+  body.append(el('div', 'cargo-h', `Trade history · ${history.length}`));
+  cargoHistory(body, history, (t) => t.place);
+}
+
+/**
+ * One station's trade, opened by double-clicking it.
+ *
+ * The detail card answers "what is this place"; this answers "what moves
+ * through it" - which the card has no room for once a station has a dozen
+ * commodities on each side of the counter.
+ */
+function renderStationPanel() {
+  const place = cargo.place;
+  const key = place.id || place.name;
+  const body = cargoPanelHead('Station', place.name);
+
+  const at = receiptsInWindow().filter((t) => (t.placeId || t.place) === key);
+
+  cargoSection(body, 'Accepts · you sold here', at.filter((t) => t.isSell), false);
+  cargoSection(body, 'Offers · you bought here', at.filter((t) => !t.isSell), true);
+
+  // The catalogue's own answer, which covers commodities never traded here.
+  const catalogue = place.location ? commoditiesSoldAt(place.location) : [];
+
+  if (catalogue.length) {
+    body.append(el('div', 'cargo-h', `Catalogue says it sells · ${catalogue.length}`));
+
+    const list = el('div', 'cargo-goods');
+    list.textContent = catalogue.slice(0, 24).join(', ')
+      + (catalogue.length > 24 ? `, +${catalogue.length - 24} more` : '');
+    body.append(list);
+  }
+
+  body.append(el('div', 'cargo-h', `Trade history · ${at.length}`));
+  cargoHistory(body, at, (t) => t.commodity);
+}
+
+/** One side of a station's counter, grouped by commodity. */
+function cargoSection(body, title, trades, buying) {
+  body.append(el('div', 'cargo-h', title));
+
+  if (!trades.length) {
+    body.append(el('div', 'cargo-empty', 'Nothing on record in that window.'));
+    return;
+  }
+
+  const byName = new Map();
+
+  for (const trade of trades) {
+    const row = byName.get(trade.commodity)
+      || { name: trade.commodity, trades: 0, scu: 0, amount: 0, latestAt: null };
+
+    row.trades += 1;
+    row.scu += trade.scu;
+    row.amount += Number(trade.amount);
+    if (!row.latestAt || new Date(trade.at) > new Date(row.latestAt)) row.latestAt = trade.at;
+
+    byName.set(trade.commodity, row);
+  }
+
+  for (const row of [...byName.values()].sort((a, b) => b.scu - a.scu)) {
+    body.append(cargoRow({
+      colour: buying ? '#ffab3d' : '#4fd48a',
+      name: row.name,
+      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+        + ` · ${dayOf(row.latestAt)}`,
+      value: row.amount / (row.scu || 1),
+
+      // Drilling into a commodity from a station shades the whole map for it,
+      // so the next question - where else does this go - is already answered.
+      onClick: () => searchCommodity(row.name, buying),
+    }));
+  }
+}
+
+function cargoRow({ colour, name, sub, value, onClick }) {
+  const row = el('div', 'cargo-row');
+
+  const swatch = el('span', 'swatch');
+  swatch.style.background = colour;
+  row.append(swatch);
+
+  const middle = el('div', 'cargo-row-main');
+  middle.append(el('div', 'name', name));
+  middle.append(el('div', 'sub', sub));
+  row.append(middle);
+
+  const price = el('div', 'price', Math.round(Number(value) || 0).toLocaleString());
+  price.append(el('span', 'u', 'aUEC / SCU'));
+  row.append(price);
+
+  if (onClick) {
+    row.tabIndex = 0;
+    row.addEventListener('click', onClick);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    });
+  }
+
+  return row;
+}
+
+/** The receipt list: newest first, capped so a long history stays scrollable. */
+function cargoHistory(body, trades, describe) {
+  if (!trades.length) {
+    body.append(el('div', 'cargo-empty', 'No trades in that window.'));
+    return;
+  }
+
+  for (const trade of trades.slice(0, 30)) {
+    const line = el('div', `cargo-line ${trade.isSell ? 'sell' : 'buy'}`);
+    line.append(el('span', 'when', dayOf(trade.at)));
+    line.append(el('span', 'what',
+      `${trade.isSell ? 'Sold' : 'Bought'} ${trade.scu} SCU · ${describe(trade)}`));
+    line.append(el('span', 'rate', Math.round(trade.unitPrice).toLocaleString()));
+    body.append(line);
+  }
+
+  if (trades.length > 30) {
+    body.append(el('div', 'cargo-empty', `+ ${trades.length - 30} older, on the Cargo page.`));
+  }
+}
+
+/** Opens the panel on one station. */
+function showStation(rawId, name) {
+  const location = atlas.find((l) => l.rawId === rawId);
+
+  cargo.place = { id: rawId, name: name || location?.name || rawId, location };
+  $('#map-window').hidden = false;
+  $('#map-info').hidden = true;
+  renderStationPanel();
+}
+
+/** Puts a commodity in the search box, which is what drives the whole map. */
+function searchCommodity(name, buying) {
+  cargo.place = null;
+  $('#map-search').value = buying ? `buy:${name}` : name;
+  $('#map-results').hidden = true;
+  drawMap();
+}
+
+/**
+ * Centres on the atlas place a UEX terminal name belongs to.
+ *
+ * Terminal names are not atlas names - "TDD, Area 18" against "Area18" - so
+ * this uses the same loose match the shading joins on, and simply does nothing
+ * when the map cannot name the place.
+ */
+function centreOnTerminal(terminal) {
+  const match = atlas.find((l) => terminalMatchesPlace(terminal, l.name));
+  if (!match) return;
+
+  centreOn(match.rawId);
+  showStation(match.rawId, match.name);
+}
+
+/** The panel's own controls. Wired once, from initMap. */
+function initCargoPanel() {
+  $('#map-side').addEventListener('click', (e) => {
+    const button = e.target.closest('button');
+    if (!button || !cargo.name) return;
+
+    // The search box is the single source of truth for which side the map is
+    // showing, so the toggle rewrites the term rather than keeping its own flag.
+    searchCommodity(cargo.name, button.dataset.side === 'buy');
+  });
+
+  $('#map-window').addEventListener('change', (e) => {
+    cargo.days = Number(e.target.value) || 0;
+    drawMap();
+  });
+
+  $('#cargo-close').addEventListener('click', () => {
+    if (cargo.place && cargo.name) {
+      cargo.place = null;
+      drawMap();
+      return;
+    }
+
+    cargo.place = null;
+    $('#cargo-panel').hidden = true;
+    $('#map-window').hidden = true;
+  });
+}
+
+/**
+ * Grades the lit places by what the player was paid at them, as the offline
+ * alternative to UEX's view of today.
+ */
+function shadeFromReceipts(name, buying) {
+  const rows = receiptsFor(name, buying).filter((r) => r.id);
+  if (!rows.length) return;
+
+  // A place you have traded at is an answer even when the catalogue has never
+  // heard of it, so receipts light their own nodes rather than only grading
+  // the ones the catalogue lit.
+  for (const row of rows) {
+    highlightIds.add(row.id);
+    nodeShade.set(row.id, { value: row.best });
+  }
+
+  const values = rows.map((r) => r.best);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  for (const shade of nodeShade.values()) {
+    const t = max === min ? 1 : (shade.value - min) / (max - min);
+    shade.colour = shadeColour(buying ? 1 - t : t);
+  }
+
+  shadeScale = {
+    min,
+    max,
+    invert: buying,
+    unit: 'aUEC/SCU',
+    label: buying
+      ? `your buy price, ${windowWord()}, cheapest is gold`
+      : `your sell price, ${windowWord()}, best is gold`,
+    plain: 'no receipt of yours here',
   };
 }
 
@@ -4560,6 +4997,7 @@ function drawMap() {
   if (highlightIds && highlightIds.size === 0) highlightIds = null;
 
   prepareShading(term, sites);
+  syncCargoPanel(term, sites);
 
   const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
 
@@ -4879,6 +5317,14 @@ function drawNode(map, x, y, location, radius, anchor = null) {
     showMapInfo(location);
   });
 
+  // Double-click for the fuller story: what this station takes and offers. The
+  // card has no room for a dozen commodities on each side of the counter.
+  group.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    showStation(location.rawId, location.name);
+  });
+
   // Labelling everything is unreadable at this density, so only places with
   // history get one until the view is zoomed in far enough to have room.
   // Search matches are the exception - a lit dot the user cannot name is not
@@ -5008,7 +5454,7 @@ function drawLegend(locations) {
     const swatch = el('span', 'swatch');
     swatch.style.background = '#4fd48a';
     plain.append(swatch);
-    plain.append(el('span', null, 'no UEX price for it here'));
+    plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
     legend.append(plain);
     return;
   }
