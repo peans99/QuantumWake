@@ -402,6 +402,10 @@ buttons stop looking borrowed.
   the map's toolbar, so the map had chamfered cyan buttons and the other
   twenty-nine were whatever Windows draws by default. Delete now reads as
   destructive, an on state reads as on, and keyboard focus is visible.
+- **The overlay stops flickering on its tab strip.** Hovering the strip made the
+  widget's dissolved menu groups spring back into floating boxes, which reflowed
+  the strip, slid it left, took the pointer off the group, dropped the hover and
+  flipped it straight back — a layout fighting the cursor.
 - **An update no longer arrives half-applied.** The dashboard's stylesheet and
   script were served with no caching rule, so the browser guessed how long they
   stayed fresh: the version number came from the app and read new while the page
