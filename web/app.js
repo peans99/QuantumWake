@@ -3559,8 +3559,18 @@ const JUMP_LANES = [
   ['Stanton', 'Nyx'],
 ];
 
-/** How far a body's sites reach, given how many it has. */
-const clusterRadius = (count) => (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1));
+/**
+ * How far a body's sites reach, given how many it has.
+ *
+ * The phyllotaxis spacing that fits at system scale is far too tight once the
+ * dots are big enough to read: a well-visited site is 17 units across on its
+ * own while neighbours sit 5.2 apart, so microTech's twenty-two piled into
+ * each other however far you zoomed in. Zoomed in the whole cluster opens up,
+ * which is exactly when there is room for it - the same trade the bodies
+ * themselves make.
+ */
+const clusterRadius = (count) =>
+  (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1)) * (isDetailed() ? 2.1 : 1);
 
 /**
  * Works out where each star sits and how far its bodies orbit, from what the
