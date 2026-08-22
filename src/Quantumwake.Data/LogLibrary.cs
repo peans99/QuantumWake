@@ -794,6 +794,36 @@ public sealed class LogLibrary : IDisposable
         return atlas;
     }
 
+    private TerminalPlaces? _terminalPlaces;
+
+    /// <summary>
+    /// Terminal-name to map-place lookup, built from the atlas on first use.
+    /// </summary>
+    /// <remarks>
+    /// Held here because the atlas is here: every caller that needs the join -
+    /// the price shading, the flight plan, the trade advisor - then agrees with
+    /// every other one, which is the whole point of doing it in a single place.
+    /// Rebuilt when the atlas grows, since a place first visited today is a
+    /// place a terminal can now be matched to.
+    /// </remarks>
+    public TerminalPlaces Terminals
+    {
+        get
+        {
+            var atlas = Atlas();
+
+            if (_terminalPlaces is null || _terminalCount != atlas.Count)
+            {
+                _terminalPlaces = new TerminalPlaces(atlas);
+                _terminalCount = atlas.Count;
+            }
+
+            return _terminalPlaces;
+        }
+    }
+
+    private int _terminalCount = -1;
+
     /// <summary>The vendor's brand name where the game publishes one.</summary>
     /// <remarks>
     /// Commodity kiosks have no brand - every one of them logs as

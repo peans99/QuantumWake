@@ -150,7 +150,7 @@ public sealed class LiveSessionService : BackgroundService
             if (Current.LocationId is { Length: > 0 } here && here != _lastPlace)
             {
                 _lastPlace = here;
-                _trips?.Arrived(here);
+                _trips?.Arrived(here, Current.Location);
             }
         }
     }

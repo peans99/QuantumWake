@@ -232,10 +232,18 @@ public sealed class TripStore
     /// is standing at would be undone on the next arrival, but not before -
     /// arrivals fire on entering a place, not continuously.
     /// </para>
+    /// <para>
+    /// The id is the reliable half of this and the name is the fallback: a stop
+    /// added from a UEX terminal carries no engine id when the two naming
+    /// schemes could not be reconciled, and those stops would otherwise be the
+    /// only ones that never cross themselves off - which is precisely backwards,
+    /// since they are the ones the map cannot draw either. A name is only
+    /// consulted for a stop with no id, so an id never loses to one.
+    /// </para>
     /// </remarks>
-    public bool Arrived(string? placeId)
+    public bool Arrived(string? placeId, string? placeName = null)
     {
-        if (string.IsNullOrWhiteSpace(placeId))
+        if (string.IsNullOrWhiteSpace(placeId) && string.IsNullOrWhiteSpace(placeName))
             return false;
 
         lock (_gate)
@@ -245,8 +253,12 @@ public sealed class TripStore
                 return false;
 
             var stops = _trips[index].Stops.ToList();
-            var at = stops.FindIndex(s =>
-                !s.Done && string.Equals(s.PlaceId, placeId, StringComparison.OrdinalIgnoreCase));
+
+            var at = stops.FindIndex(s => !s.Done && Same(s.PlaceId, placeId));
+
+            if (at < 0)
+                at = stops.FindIndex(s =>
+                    !s.Done && string.IsNullOrWhiteSpace(s.PlaceId) && Same(s.Place, placeName));
 
             if (at < 0)
                 return false;
@@ -257,6 +269,22 @@ public sealed class TripStore
             return true;
         }
     }
+
+    /// <summary>Two names for one place, ignoring case, spacing and punctuation.</summary>
+    /// <remarks>
+    /// "Port Tressler" against "Port-Tressler" is the same landing, and a stop
+    /// that fails to cross itself off over a hyphen is worse than no automation.
+    /// </remarks>
+    private static bool Same(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+            return false;
+
+        return string.Equals(Compact(left), Compact(right), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string Compact(string value) =>
+        new([.. value.Where(char.IsLetterOrDigit)]);
 
     private static string NewId() => Guid.NewGuid().ToString("N")[..8];
 

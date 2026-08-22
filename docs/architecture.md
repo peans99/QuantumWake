@@ -201,10 +201,21 @@ chooser — one row per missing thing, its sellers cheapest first with price and
 stock, each row skippable — and the stop count updates as the choices change.
 Anything with no known seller is shown as such rather than quietly dropped.
 
-Terminal names are not
-atlas names, so a stop keeps the terminal's own name for reading and the atlas
-id, where one matches, for the map. A stop the map cannot place is still on the
-plan and still in the list; it simply has no dot.
+**The two naming schemes are reconciled once, on the server.** UEX names the
+counter ("Admin - Port Tressler", "Seraphim"), the game names the place ("Port
+Tressler", "Seraphim Station"), and every feature that puts a price on the map
+or a terminal on a plan needs the join. `TerminalPlaces` does it from the atlas
+and hands the id out with the data - on `/api/uex/market` rows and on both ends
+of a trade route - so the shading, the panel and the plan cannot disagree. The
+rule is narrow on purpose: exact name, then the place named inside the terminal
+(longest wins), then the terminal named inside a place, and an ambiguous or
+short match resolves to nothing. A stop on the wrong dot sends someone to the
+wrong moon; a stop with no dot is still a stop, with its name and notes intact.
+
+That is also why arrival matches on the name when a stop has no id: those stops
+are the ones the map cannot draw, and they must not also be the only ones that
+never cross themselves off. An id is always tried first, so a name never wins
+over one.
 
 ### Where a transaction happened
 

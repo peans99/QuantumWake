@@ -117,6 +117,47 @@ public class TripStoreTests : IDisposable
         Assert.False(store.All().Single(t => t.Id == idle.Id).Stops[0].Done);
     }
 
+    /// <summary>
+    /// A stop from a UEX terminal often has no engine id, and those are exactly
+    /// the stops the map cannot draw either - they must not also be the only
+    /// ones that never cross themselves off.
+    /// </summary>
+    [Fact]
+    public void Arriving_crosses_off_a_stop_that_has_only_a_name()
+    {
+        var store = NewStore();
+        var trip = store.Add("Run", [Stop(string.Empty, "Port Tressler")]);
+
+        Assert.True(store.Arrived("Port_Tressler_Engine_Id", "Port-Tressler"));
+        Assert.True(store.All().Single(t => t.Id == trip.Id).Stops[0].Done);
+    }
+
+    [Fact]
+    public void A_name_never_wins_over_an_id()
+    {
+        var store = NewStore();
+        var trip = store.Add("Run", [
+            Stop(string.Empty, "Lorville"),
+            Stop("Stanton1_Lorville", "Lorville")
+        ]);
+
+        store.Arrived("Stanton1_Lorville", "Lorville");
+        var after = store.All().Single(t => t.Id == trip.Id);
+
+        Assert.False(after.Stops[0].Done);
+        Assert.True(after.Stops[1].Done);
+    }
+
+    [Fact]
+    public void A_stop_with_an_id_is_not_crossed_off_by_a_name_alone()
+    {
+        var store = NewStore();
+        var trip = store.Add("Run", [Stop("RR_MIC_L1", "microTech L1")]);
+
+        Assert.False(store.Arrived("Somewhere_Else", "microTech L1"));
+        Assert.False(store.All().Single(t => t.Id == trip.Id).Stops[0].Done);
+    }
+
     [Fact]
     public void Arriving_nowhere_known_changes_nothing()
     {

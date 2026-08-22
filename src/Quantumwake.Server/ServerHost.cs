@@ -727,8 +727,25 @@ public static class ServerHost
                 .OrderBy(i => i.className));
 
         // Hauls worth flying, sized to a hold and a wallet the caller names.
-        app.MapGet("/api/routes", (UexData uex, double? scu, decimal? capital, string? from) =>
-            uex.Routes(scu ?? 0, capital ?? 0, from, 30));
+        // Each end of a haul carries the map's own id for it where the terminal
+        // could be matched, so planning a run puts real dots on the map instead
+        // of the page guessing at the names a second time.
+        app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
+            uex.Routes(scu ?? 0, capital ?? 0, from, 30).Select(r => new
+            {
+                r.Commodity,
+                r.BuyAt,
+                buyAtId = lib.Terminals.IdFor(r.BuyAt),
+                r.BuyPrice,
+                r.SellAt,
+                sellAtId = lib.Terminals.IdFor(r.SellAt),
+                r.SellPrice,
+                r.MarginPerScu,
+                r.Units,
+                r.Profit,
+                r.Outlay,
+                r.LimitedBy
+            }));
 
         // Where the player last woke, for the Now card. Its own endpoint
         // because the casualties page recomputes every statistic to answer,
@@ -1082,10 +1099,15 @@ public static class ServerHost
 
         // Every terminal price for one commodity: the map grades its sellers
         // and buyers by these, by price or by SCU capacity.
-        app.MapGet("/api/uex/market", (UexData uex, string commodity) =>
+        app.MapGet("/api/uex/market", (LogLibrary lib, UexData uex, string commodity) =>
             uex.Market(commodity).Select(r => new
             {
                 terminal = r.Terminal,
+
+                // The map's own id for the place this counter stands in, empty
+                // when the two naming schemes cannot be reconciled. The page
+                // shades and plans by this rather than matching names itself.
+                placeId = lib.Terminals.IdFor(r.Terminal),
                 buy = r.Buy,
                 sell = r.Sell,
                 buyScu = r.BuyScu,
