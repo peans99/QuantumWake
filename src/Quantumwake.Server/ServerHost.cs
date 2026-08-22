@@ -35,6 +35,14 @@ public static class ServerHost
         // first run testable without disturbing the real one.
         Core.AppPaths.UseFromArguments(args);
 
+        // Whether this data folder was in use before this process touched it,
+        // decided here because everything below starts writing to it - the
+        // database appears within seconds of the first scan, so asking later
+        // would call every install established, new ones included.
+        var establishedInstall =
+            Directory.Exists(Core.AppPaths.Root)
+            && Directory.EnumerateFileSystemEntries(Core.AppPaths.Root).Any();
+
         var builder = WebApplication.CreateBuilder(args);
 
         var install = ResolveInstall(args, builder.Configuration);
@@ -161,7 +169,31 @@ public static class ServerHost
         // to rescan does not resurrect the wizard.
         var setupPath = Core.AppPaths.In("setup-done");
 
-        app.MapGet("/api/setup", () => new { done = File.Exists(setupPath) });
+        app.MapGet("/api/setup", () =>
+        {
+            if (File.Exists(setupPath))
+                return new { done = true };
+
+            // A folder that was already in use is not a first flight. The
+            // marker arrived with the wizard, so without this every existing
+            // user is greeted by "reading your logs for the first time" over a
+            // dashboard full of their own history. Writing the marker settles
+            // it rather than re-deciding on every start.
+            if (!establishedInstall)
+                return new { done = false };
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(setupPath)!);
+                File.WriteAllText(setupPath, DateTimeOffset.UtcNow.ToString("O"));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Failing to write it only costs one more check next time.
+            }
+
+            return new { done = true };
+        });
 
         app.MapPost("/api/setup/done", () =>
         {
