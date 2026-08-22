@@ -1869,13 +1869,28 @@ async function loadRespawn() {
     return;
   }
 
-  $('#now-respawn').textContent = data.place;
+  // Two signals, neither promoted over the other: a bed is where a regen
+  // location gets set, but the same toast fires when one is used only to
+  // heal; waking somewhere proves only where you woke. Both are shown and
+  // labelled, and the headline is whichever happened last.
+  const bedIsNewer = data.bed && (!data.at || new Date(data.bed.at) > new Date(data.at));
+
+  $('#now-respawn').textContent = bedIsNewer ? data.bed.place : (data.place ?? data.bed?.place ?? '—');
+
+  // Each line names its own place. The headline is only the more recent of
+  // the two, and saying "woke there" under a different place read as though
+  // both signals agreed when they do not.
+  $('#now-respawn-sub').textContent = data.bed
+    ? `last medical bed · ${data.bed.place}, ${relative(data.bed.at)}`
+    : '';
 
   // "Deaths" would be wrong for the commoner case: most wake-ups follow an
   // incapacitation rather than a corpse recovery, so both read as "times down".
-  $('#now-respawn-sub').textContent = data.settled
-    ? `inferred · ${data.agreeing} of your last ${data.of} times down`
-    : `inferred · last one only, ${relative(data.at)}`;
+  $('#now-respawn-bed').textContent = data.place
+    ? (data.settled
+      ? `last woke · ${data.place}, ${data.agreeing} of your last ${data.of} times down`
+      : `last woke · ${data.place}, ${relative(data.at)}`)
+    : '';
 
   card.hidden = false;
 }
@@ -1912,6 +1927,12 @@ async function loadCasualties() {
   bars('#casualties-woke',
     (data.wokeAt || []).map((w) => ({
       label: w.place, value: w.times, onClick: () => jumpToPlace(w.place),
+    })),
+    (v) => `${v}`);
+
+  bars('#casualties-beds',
+    (data.bedsUsed || []).map((b) => ({
+      label: b.place, value: b.times, onClick: () => jumpToPlace(b.place),
     })),
     (v) => `${v}`);
 
