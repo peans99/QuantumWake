@@ -262,3 +262,46 @@ Around it: Market grew a commodity-group dropdown, and the Assets fleet
 gained an Owned tick per ship - the fleet is inferred from logs, so rentals
 and ships since sold appear in it, and only the player knows which; untick
 them and the totals recompute, remembered per-browser.
+
+## 0.5.0 - jobs, catalogues, and a map that answers
+
+The release where the app stopped only reporting and started helping.
+
+**Jobs** is the first thing here authored rather than observed. A shopping
+list or a blueprint build is written by the player, and then checks itself
+against what the logs say they hold: each line shows which stash has it, or
+what the missing part costs and where. That join is the whole point - UEX
+knows every price and only these logs know your lockers. Contracts share the
+page, taken from the running session alone, because contracts do not survive
+leaving the game. Routes ranks the hauls UEX knows by what *this* run earns,
+sized to a ship from the player's own fleet and the capital they name, and
+says which cap bit first: hold, capital, or the shop's own stock.
+
+**The map** learned to answer rather than decorate. A search stopped filtering
+and started highlighting - dimming the rest, framing the matches, and naming
+them, which meant labels finally had to stop overlapping. They now go through
+a collision pass: five candidate positions each, most-visited placed first, a
+label that fits nowhere dropped rather than piled on its neighbour. Zoomed in,
+whole systems spread apart to give their names room. Commodity searches can
+shade by price or by SCU capacity, and every place name in the app - ledger,
+cargo, loot, stashes, charts - became a link to it.
+
+**Three waves through scunpacked-data** turned files we already downloaded into
+four reference catalogues: ship spec sheets, real item names and where each
+part is stocked, the game's own resource deposit tables with spawn odds, and
+1,597 crafting recipes weighed against simply buying the thing. The best find
+was smallest: the game announces a received blueprint in a toast the parser
+was already reading and throwing away, so the app knows which recipes a player
+actually holds.
+
+Two failures worth recording. A missing Star Citizen install crashed the whole
+dashboard - `AddSingleton(install!)`, where the null-forgiving operator was
+simply wrong - so a machine with the game in an unusual folder got a container
+exception instead of the page explaining itself. Detection now knows more
+layouts, removable drives and the launcher's own log, and asks for the folder
+when all of that fails. And the first-flight wizard greeted established
+installs, because its "done" marker arrived with the wizard itself and nobody
+who came before had one.
+
+`--data` moves every cache and setting elsewhere, so the next first run can be
+rehearsed without destroying the real one to see it.
