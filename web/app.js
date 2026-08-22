@@ -3381,9 +3381,175 @@ function renderFleetShips() {
       body.append(hint);
     }
 
+    // Ground vehicles have no ports anyone sells parts for, so the offer is
+    // made only where it can be kept.
+    if (!grounded) {
+      const upgrade = el('button', 'ghost ship-upgrade', 'Upgrades');
+      upgrade.title = `What fits ${ship.name}, and where to buy it`;
+      upgrade.addEventListener('click', () => showUpgrades(ship.name, card));
+      body.append(upgrade);
+    }
+
     card.append(body);
     (grounded ? vehicleGrid : grid).append(card);
   }
+}
+
+/* ---------- what fits a ship, and where it is sold ---------- */
+
+/**
+ * The upgrade panel for one ship, fetched once per ship.
+ *
+ * The game's own data says what each port accepts, so this is not a guess: a
+ * size 2 shield port takes a size 2 shield, and the shops that stock one are
+ * known. What the panel is for is the trip - every option carries where it can
+ * be bought, and every line can go straight onto a shopping list.
+ */
+const upgradeCache = new Map();
+
+async function upgradesFor(ship) {
+  if (!upgradeCache.has(ship)) {
+    upgradeCache.set(ship,
+      getJson(`/api/fleet/upgrades?ship=${encodeURIComponent(ship)}`).catch(() => null));
+  }
+
+  return upgradeCache.get(ship);
+}
+
+/** Ports are named for the game's files; this is what a pilot calls them. */
+const PORT_WORDS = {
+  QuantumDrive: 'Quantum drive',
+  Shield: 'Shield',
+  PowerPlant: 'Power plant',
+  Cooler: 'Cooler',
+  WeaponGun: 'Gun',
+  Turret: 'Gun mount',
+  MissileLauncher: 'Missile rack',
+  Missile: 'Missile',
+  Radar: 'Radar',
+  EMP: 'EMP',
+  QuantumInterdictionGenerator: 'Quantum interdiction',
+  MiningArm: 'Mining arm',
+};
+
+async function showUpgrades(ship, card) {
+  const open = card.querySelector('.upgrade-panel');
+
+  if (open) {
+    open.remove();
+    card.classList.remove('opened');
+    return;
+  }
+
+  // One at a time: the cards are a grid, and two of them spanning the row
+  // pushes everything else off the screen.
+  $$('.ship-card.opened').forEach((other) => {
+    other.classList.remove('opened');
+    other.querySelector('.upgrade-panel')?.remove();
+  });
+
+  card.classList.add('opened');
+
+  const panel = el('div', 'upgrade-panel');
+  panel.append(el('div', 'muted', 'Reading the ship…'));
+  card.append(panel);
+
+  const answer = await upgradesFor(ship);
+  panel.textContent = '';
+
+  if (!answer?.known) {
+    panel.append(el('div', 'muted',
+      'The reference data on this machine predates ship ports. Refresh the '
+      + 'community dataset on the Settings page and this fills in.'));
+    return;
+  }
+
+  if (!answer.groups?.length) {
+    panel.append(el('div', 'muted',
+      'Nothing on this one is sold in game — every port it has is fixed, or '
+      + 'nobody stocks a part for it.'));
+    return;
+  }
+
+  const head = el('div', 'upgrade-head');
+  head.append(el('b', null, `What fits ${ship}`));
+  head.append(el('span', 'muted', 'the game’s own port list · prices from UEX'));
+  panel.append(head);
+
+  for (const group of answer.groups) {
+    const row = el('div', 'upgrade-group');
+
+    const title = el('button', 'upgrade-toggle');
+    title.append(el('span', 'upgrade-kind', `${PORT_WORDS[group.kind] || group.kind} S${group.size}`));
+    title.append(el('span', 'muted', `${group.ports} port${group.ports === 1 ? '' : 's'}`));
+
+    // What it flies with now is the only thing a candidate can be judged
+    // against, so it sits on the closed row rather than inside.
+    if (group.fitted?.length)
+      title.append(el('span', 'upgrade-fitted', `now: ${group.fitted.join(' · ')}`));
+
+    title.append(el('span', 'muted upgrade-count', `${group.options.length} sold`));
+
+    const body = el('div', 'upgrade-options');
+    body.hidden = true;
+
+    title.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      title.classList.toggle('open', !body.hidden);
+      if (!body.hidden && !body.dataset.filled) fillUpgradeOptions(body, group);
+    });
+
+    row.append(title);
+    row.append(body);
+    panel.append(row);
+  }
+}
+
+function fillUpgradeOptions(body, group) {
+  body.dataset.filled = '1';
+  body.textContent = '';
+
+  const table = el('table', 'upgrade-table');
+  const header = el('tr');
+  for (const [label, cls] of [['Part', null], ['Maker', null], ['Grade', 'num'],
+    ['Price', 'num'], ['Cheapest at', null], ['', 'num']]) {
+    header.append(el('th', cls, label));
+  }
+  table.append(header);
+
+  for (const option of group.options) {
+    const tr = el('tr');
+    tr.append(el('td', null, option.name));
+    tr.append(el('td', 'muted', option.manufacturer || '—'));
+    tr.append(el('td', 'num muted', option.grade ? `G${option.grade}` : '—'));
+    tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
+
+    // One shop on the row and the rest in the tooltip: the choice of counter
+    // belongs to the trip, and the trip is planned from the list.
+    const shop = option.shops[0];
+    const where = el('td');
+    const jump = el('button', 'place-link', shop.terminal);
+    jump.disabled = !shop.placeId;
+    jump.title = option.shops.map((s) => `${s.terminal} — ${money(s.price)}`).join('\n');
+    jump.addEventListener('click', () => {
+      showView('map');
+      centreOnTerminal(shop.terminal, shop.placeId);
+    });
+    where.append(jump);
+
+    if (shop.security === 'lawless')
+      where.append(el('span', 'sec sec-lawless', 'lawless'));
+
+    tr.append(where);
+
+    const add = el('td', 'num');
+    add.append(trackButton(option.name, 1, ''));
+    tr.append(add);
+
+    table.append(tr);
+  }
+
+  body.append(table);
 }
 
 /** "3 days ago", "2 months ago" - easier to scan than a date. */
@@ -5491,6 +5657,33 @@ async function sellersOf(item) {
 }
 
 /**
+ * Stock is per terminal and the list says how much is wanted, so the two can
+ * be compared: flying to the cheapest seller of 10 SCU to find 3 is a wasted
+ * landing, and the page knew before you left.
+ */
+const shortStock = (seller, item) =>
+  item.needed > 0 && seller.scu > 0 && seller.scu < item.needed;
+
+/** Cheapest that can actually fill the order, else cheapest. */
+const defaultSeller = (sellers, item) =>
+  sellers.find((seller) => !shortStock(seller, item)) ?? sellers[0];
+
+function sellerLabel(seller, item) {
+  const stock = seller.scu
+    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ' — short' : ''}`
+    : '';
+
+  // Where it is and whether the law reaches it: the cheapest counter is
+  // routinely the one in Pyro, and that is a decision, not a detail.
+  const where = seller.system ? ` · ${seller.system}` : '';
+  const risk = seller.security === 'lawless' ? ' — lawless' : '';
+
+  return seller.price > 0
+    ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
+    : `${seller.terminal}${stock}${where}${risk}`;
+}
+
+/**
  * Turns what a list is still missing into a run, asking where to buy each thing.
  *
  * One stop per terminal rather than per item, because a trip is a sequence of
@@ -5508,7 +5701,10 @@ async function planShoppingTrip(job, card) {
   }
 
   const chooser = el('div', 'trip-chooser');
-  chooser.append(el('div', 'chooser-head', 'Where to buy — one stop per terminal'));
+
+  const head = el('div', 'chooser-head');
+  head.append(el('span', null, 'Where to buy — one stop per terminal'));
+  chooser.append(head);
 
   const rows = el('div', 'chooser-rows');
   rows.append(el('div', 'muted', 'Looking up sellers…'));
@@ -5534,69 +5730,233 @@ async function planShoppingTrip(job, card) {
       : 'nothing chosen';
   };
 
-  for (const { item, sellers } of options) {
-    const row = el('div', 'chooser-row');
+  /*
+   * The same decision, seen from either end.
+   *
+   * By item is "where do I get this", which is how a list is written. By
+   * location is "what is this landing worth", which is how a run is flown -
+   * the point of a shopping list is to rotate around the map picking things
+   * up, and that question cannot be answered one dropdown at a time. Both
+   * write into `chosen`, so switching view never loses a choice, and the plan
+   * is built from the one answer either of them wrote.
+   */
+  const stops = [];
 
-    const what = el('div', 'chooser-what');
-    what.append(el('div', 'name', item.name));
-    what.append(el('div', 'sub', item.needed > 0
-      ? `${item.needed}${item.unit ? ` ${item.unit}` : ''} needed`
-      : 'any amount'));
-    row.append(what);
+  const renderItems = () => {
+    rows.textContent = '';
 
-    if (!sellers.length) {
-      row.append(el('div', 'chooser-none', 'no known seller — left off'));
-      rows.append(row);
-      continue;
-    }
+    for (const { item, sellers } of options) {
+      const row = el('div', 'chooser-row');
 
-    const select = el('select', 'select');
+      const what = el('div', 'chooser-what');
+      what.append(el('div', 'name', item.name));
+      what.append(el('div', 'sub', item.needed > 0
+        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''} needed`
+        : 'any amount'));
+      row.append(what);
 
-    // Stock is per terminal and the list says how much is wanted, so the two
-    // can be compared: flying to the cheapest seller of 10 SCU to find 3 is a
-    // wasted landing, and the page knew before you left.
-    const short = (seller) => item.needed > 0 && seller.scu > 0 && seller.scu < item.needed;
+      if (!sellers.length) {
+        row.append(el('div', 'chooser-none', 'no known seller — left off'));
+        rows.append(row);
+        continue;
+      }
 
-    for (const seller of sellers) {
-      const option = document.createElement('option');
-      option.value = seller.terminal;
+      const select = el('select', 'select');
 
-      const stock = seller.scu
-        ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${short(seller) ? ' — short' : ''}`
-        : '';
+      for (const seller of sellers) {
+        const option = document.createElement('option');
+        option.value = seller.terminal;
+        option.textContent = sellerLabel(seller, item);
+        select.append(option);
+      }
 
-      // Where it is and whether the law reaches it: the cheapest counter is
-      // routinely the one in Pyro, and that is a decision, not a detail.
-      const where = seller.system ? ` · ${seller.system}` : '';
-      const risk = seller.security === 'lawless' ? ' — lawless' : '';
+      const skip = document.createElement('option');
+      skip.value = '';
+      skip.textContent = 'Leave this one off';
+      select.append(skip);
 
-      option.textContent = seller.price > 0
-        ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
-        : `${seller.terminal}${stock}${where}${risk}`;
-
-      select.append(option);
-    }
-
-    const skip = document.createElement('option');
-    skip.value = '';
-    skip.textContent = 'Leave this one off';
-    select.append(skip);
-
-    // Cheapest that can actually fill the order, else cheapest: a seller too
-    // small to serve you is a worse default than a dearer one that can.
-    const enough = sellers.find((seller) => !short(seller));
-    select.value = (enough ?? sellers[0]).terminal;
-
-    chosen.set(item.name, select.value);
-    select.addEventListener('change', () => {
+      select.value = chosen.get(item.name) ?? defaultSeller(sellers, item).terminal;
       chosen.set(item.name, select.value);
+
+      select.addEventListener('change', () => {
+        chosen.set(item.name, select.value);
+
+        // A choice made here is the player's, so a ticked stop must not
+        // silently overwrite it later.
+        stops.length = 0;
+        retally();
+      });
+
+      row.append(select);
+      rows.append(row);
+    }
+  };
+
+  const renderLocations = () => {
+    rows.textContent = '';
+
+    // Every terminal any of the list can be bought at, and what it would
+    // supply. Ranked by how much of the list one landing covers, then by what
+    // that landing costs.
+    const counters = new Map();
+
+    for (const { item, sellers } of options)
+      for (const seller of sellers) {
+        const counter = counters.get(seller.terminal) || { seller, supplies: [] };
+
+        counter.supplies.push({ item, seller });
+        counters.set(seller.terminal, counter);
+      }
+
+    const ranked = [...counters.values()]
+      .map((counter) => ({
+        ...counter,
+        cost: counter.supplies.reduce((sum, s) =>
+          sum + (s.seller.price > 0 ? s.seller.price * Math.max(1, s.item.needed) : 0), 0),
+      }))
+      .sort((a, b) => b.supplies.length - a.supplies.length || a.cost - b.cost)
+      .slice(0, 20);
+
+    if (!ranked.length) {
+      rows.append(el('div', 'muted', 'Nothing on this list has a known seller.'));
+      return;
+    }
+
+    // The default plan buys each thing wherever it is cheapest, which is one
+    // landing per thing. Fuel and time cost more than the difference, so the
+    // panel offers the other answer outright.
+    const fewest = el('div', 'chooser-actions');
+    const pack = el('button', 'ghost', 'Fewest stops');
+    pack.title = 'Cover the list with as few landings as possible';
+
+    pack.addEventListener('click', () => {
+      stops.length = 0;
+
+      const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
+
+      while (left.size) {
+        // Most of what is still missing, and the cheapest of those.
+        const best = ranked
+          .map((counter) => ({
+            counter,
+            covers: counter.supplies.filter((s) => left.has(s.item.name)),
+          }))
+          .filter((c) => c.covers.length)
+          .sort((a, b) => b.covers.length - a.covers.length
+            || a.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0)
+             - b.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0))[0];
+
+        if (!best) break;
+
+        stops.push(best.counter.seller.terminal);
+        best.covers.forEach((s) => left.delete(s.item.name));
+      }
+
+      assignFromStops();
+      renderLocations();
       retally();
     });
 
-    row.append(select);
-    rows.append(row);
+    fewest.append(pack);
+    rows.append(fewest);
+
+    for (const counter of ranked) {
+      const row = el('div', 'chooser-stop');
+
+      const tick = el('label', 'stop-tick');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = stops.includes(counter.seller.terminal);
+
+      box.addEventListener('change', () => {
+        const already = stops.indexOf(counter.seller.terminal);
+
+        if (box.checked && already < 0) stops.push(counter.seller.terminal);
+        else if (!box.checked && already >= 0) stops.splice(already, 1);
+
+        assignFromStops();
+        renderLocations();
+        retally();
+      });
+
+      tick.append(box);
+      row.append(tick);
+
+      const what = el('div', 'stop-what');
+      const name = el('div', 'name');
+      name.append(el('span', null, counter.seller.terminal));
+
+      if (counter.seller.security === 'lawless')
+        name.append(el('span', 'sec sec-lawless', 'lawless'));
+
+      what.append(name);
+
+      // What this landing is actually for: the things it can supply, greyed
+      // where a stop ticked earlier already has them.
+      const supplies = el('div', 'stop-items');
+
+      for (const { item } of counter.supplies) {
+        const taken = chosen.get(item.name);
+        const mine = taken === counter.seller.terminal;
+
+        supplies.append(el('span',
+          mine ? 'stop-item mine' : taken ? 'stop-item taken' : 'stop-item',
+          item.name));
+      }
+
+      what.append(supplies);
+      row.append(what);
+
+      const sum = el('div', 'stop-sum');
+      sum.append(el('div', null, `${counter.supplies.length} of ${options.length}`));
+      if (counter.cost > 0) sum.append(el('div', 'muted', money(counter.cost)));
+      if (counter.seller.system) sum.append(el('div', 'muted', counter.seller.system));
+      row.append(sum);
+
+      rows.append(row);
+    }
+  };
+
+  /** Ticked stops fill the list in the order they were ticked, first come. */
+  const assignFromStops = () => {
+    for (const { item } of options) chosen.set(item.name, '');
+
+    for (const terminal of stops)
+      for (const { item, sellers } of options)
+        if (!chosen.get(item.name) && sellers.some((s) => s.terminal === terminal))
+          chosen.set(item.name, terminal);
+  };
+
+  const views = el('div', 'seg chooser-views');
+
+  for (const [key, label] of [['item', 'By item'], ['location', 'By location']]) {
+    const button = el('button', key === 'item' ? 'active' : null, label);
+
+    button.addEventListener('click', () => {
+      views.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+
+      if (key === 'item') {
+        renderItems();
+        return;
+      }
+
+      // The plan arrives here already made - by item, or by the defaults -
+      // so the ticks show it rather than starting blank and quietly
+      // disagreeing with the count at the bottom of the panel.
+      if (!stops.length)
+        for (const terminal of chosen.values())
+          if (terminal && !stops.includes(terminal)) stops.push(terminal);
+
+      renderLocations();
+    });
+
+    views.append(button);
   }
 
+  head.append(views);
+
+  renderItems();
   retally();
 
   const create = el('button', 'ghost', 'Create plan');

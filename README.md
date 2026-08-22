@@ -342,7 +342,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.4
+### 0.6.5
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
@@ -365,6 +365,22 @@ buttons stop looking borrowed.
   "Bulwark" now finds the shield and its shop counters the same way "Agricium"
   finds the trade good, and each seller says which system it is in and whether
   the law reaches it.
+- **What fits your ship, and where to buy it.** Every ship on the Fleet page has
+  an *Upgrades* button: the game's own port list — quantum drive, shields,
+  coolers, power plants, guns, racks — each with what it flies with now, what is
+  sold that fits, the maker and grade, the price and the cheapest counter. Any
+  of it goes onto a shopping list in one click. This needs the community
+  dataset; refresh it on the Settings page if the panel says so.
+- **A shopping list, by location.** The chooser has a second view: every counter
+  that carries any of your list, ranked by how much of it one landing covers,
+  with what that landing costs and whether it is lawless. Tick the stops you
+  mean to fly and the plan is built from them — later stops only pick up what
+  earlier ones missed, and *Fewest stops* covers the whole list in as few
+  landings as it can. Buying each thing where it is cheapest is one landing per
+  thing, which is rarely the run you want.
+- **Shops at rest stops are on the map now.** "Platinum CRU-L4" and its like are
+  named for the station code alone, which matched nothing in the atlas, so every
+  item shop out there was a stop with no dot and no route.
 
 - **The map draws what a place is.** Every kind has its own mark — a skyline for
   a city, a headframe for a mine, an orbit for a research station, a crate for a
