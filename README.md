@@ -399,6 +399,11 @@ buttons stop looking borrowed.
   the map's toolbar, so the map had chamfered cyan buttons and the other
   twenty-nine were whatever Windows draws by default. Delete now reads as
   destructive, an on state reads as on, and keyboard focus is visible.
+- **This update re-reads your logs once.** A summary parsed by an older build
+  knows nothing of fields added since — medical beds would have been invisible
+  to everyone already running the app — so the cache retires itself and the
+  first start after updating rebuilds it. Two seconds here for 149 backups.
+  Nothing is lost: it all comes from the logs.
 
 - **The map prices cargo.** Pick a commodity and every place it trades is graded
   by what it is worth there: the best terminals now, from UEX, beside your own
