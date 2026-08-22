@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
@@ -119,7 +120,12 @@ public static class ServerHost
         {
             var files = new PhysicalFileProvider(webRoot);
             app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
-            app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
+
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = files,
+                OnPrepareResponse = MustRevalidate,
+            });
         }
         else if (EmbeddedWeb.HasFiles)
         {
@@ -129,6 +135,18 @@ public static class ServerHost
         }
 
         app.MapHub<LiveHub>("/hub/live");
+
+        // Without this the browser applies its own guess at how long a file
+        // stays fresh, and an update arrives half-applied: the version number
+        // comes from the API and reads new, while the page around it is the old
+        // stylesheet and the old script. Reported as "I updated and the map has
+        // not changed", and the only cure was knowing to press Ctrl+F5.
+        //
+        // no-cache does not mean "do not cache" - it means "ask first". The tag
+        // is still sent, the answer is still 304, and the whole conversation is
+        // a loopback round trip. Correctness is worth a millisecond.
+        static void MustRevalidate(StaticFileResponseContext context) =>
+            context.Context.Response.Headers.CacheControl = "no-cache";
 
         app.MapGet("/api/install", (LogLibrary lib) => install is null
             ? Results.NotFound(new { message = "No Star Citizen install found." })
