@@ -728,6 +728,36 @@ public static class ServerHost
         app.MapGet("/api/routes", (UexData uex, double? scu, decimal? capital, string? from) =>
             uex.Routes(scu ?? 0, capital ?? 0, from, 30));
 
+        // Where the player last woke, for the Now card. Its own endpoint
+        // because the casualties page recomputes every statistic to answer,
+        // and the dashboard's first paint should not pay for that.
+        app.MapGet("/api/respawn", (LogLibrary lib) =>
+        {
+            var respawns = lib.Respawns();
+
+            if (respawns.Count == 0)
+                return Results.Ok(new { known = false });
+
+            var latest = respawns[0];
+
+            // How settled the answer is: the same place for the last few
+            // deaths reads as a regen point, a different one every time reads
+            // as coincidence, and the card says which.
+            var recent = respawns.Take(4).ToList();
+            var agreeing = recent.Count(r =>
+                string.Equals(r.Place, latest.Place, StringComparison.OrdinalIgnoreCase));
+
+            return Results.Ok(new
+            {
+                known = true,
+                latest.Place,
+                latest.At,
+                agreeing,
+                of = recent.Count,
+                settled = agreeing >= 2
+            });
+        });
+
         // What dying has cost: deaths and incapacitations over time, where they
         // happened, and the claim fees the fleet implies.
         app.MapGet("/api/casualties", (LogLibrary lib, int? days) =>

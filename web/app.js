@@ -403,6 +403,7 @@ async function loadHistory() {
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
   loadCasualties().catch((e) => console.error('casualties', e));
+  loadRespawn().catch((e) => console.error('respawn', e));
   loadOutfitting().catch((e) => console.error('outfitting', e));
   loadRoutes().catch((e) => console.error('routes', e));
   loadCommodities().catch((e) => console.error('cargo', e));
@@ -1813,6 +1814,37 @@ async function loadRoutes() {
 onInput('#routes-capital', loadRoutes);
 $('#routes-ship')?.addEventListener('change', loadRoutes);
 $('#routes-here')?.addEventListener('change', loadRoutes);
+
+/**
+ * "Wake up at" on the dashboard: where the last death put you, which is as
+ * close as the logs get to naming your regen point. Hidden until there is an
+ * answer, and honest about how sure it is.
+ */
+async function loadRespawn() {
+  const card = $('#now-respawn-card');
+  if (!card) return;
+
+  let data;
+  try {
+    data = await getJson('/api/respawn');
+  } catch {
+    card.hidden = true;
+    return;
+  }
+
+  if (!data.known) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#now-respawn').textContent = data.place;
+
+  $('#now-respawn-sub').textContent = data.settled
+    ? `inferred · ${data.agreeing} of your last ${data.of} deaths`
+    : `inferred · last death only, ${relative(data.at)}`;
+
+  card.hidden = false;
+}
 
 /* ---------- casualties ---------- */
 
