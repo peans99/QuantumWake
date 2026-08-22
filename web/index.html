@@ -118,6 +118,17 @@
     </div>
   </div>
 
+  <div class="notice" id="patch" hidden>
+    <div class="notice-body">
+      <b id="patch-title">A new patch arrived</b>
+      <span class="muted" id="patch-detail"></span>
+    </div>
+    <div class="notice-actions">
+      <button class="ghost" id="patch-wiped">It wiped — start there</button>
+      <button class="ghost" id="patch-kept">It did not wipe</button>
+    </div>
+  </div>
+
   <div class="scan" id="scan" hidden>
     <div class="scan-head">
       <span id="scan-label">Reading logs…</span>
@@ -662,6 +673,14 @@
       at. Removals are never logged, so this is what has been <em>seen</em> stored
       somewhere, not a live stock level.
     </p>
+    <p class="muted caption">
+      <b>Pledged items will not be here</b> until you touch them. Nothing arrives
+      in your account through <code>Game.log</code> — a ship, a suit or a weapon
+      you bought on the site, or that came with a pack, is simply there the first
+      time you look. It shows up here once you pick it up, move it, or open the
+      inventory at the place it is stored, because that is the first moment the
+      game writes anything about it down.
+    </p>
     <div id="stash-grid" class="stash-grid"></div>
   </section>
 
@@ -959,7 +978,9 @@
       <p class="muted" id="overlay-copy">
         Off by default. Turning it on shows a transparent panel over the game —
         Star Citizen must run in Borderless Windowed for it to be visible.
-        <code>Ctrl+Alt+O</code> toggles click-through, <code>Ctrl+Alt+←/→</code>
+        It arrives ready to move and resize; the <b>📌 pin</b> button in its header
+        puts it out of the way, so clicks reach the game instead. Unpin it from
+        the tray icon, or with <code>Ctrl+Alt+O</code>. <code>Ctrl+Alt+←/→</code>
         changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
         remembered.
       </p>
@@ -1183,6 +1204,86 @@
           in <code>docs/credits.md</code>.
         </p>
 
+        <h2 class="spaced">Questions</h2>
+
+        <div class="faq">
+          <details>
+            <summary>Why is my pledged ship, armour or gun missing?</summary>
+            <p>
+              Nothing that arrives in your account is written to
+              <code>Game.log</code>. A pledge, a pack, a rental or anything bought
+              on the website is simply <em>there</em> the next time you look, and
+              the game says nothing about it. It appears here the first time you
+              actually use it — fly the ship, wear the armour, move the item —
+              because that is the first moment there is a line to read.
+            </p>
+          </details>
+
+          <details>
+            <summary>Why are my totals lower than I expected?</summary>
+            <p>
+              Sessions from before the last wipe are kept but not counted, because
+              a wipe ends one account and starts another. Settings → <b>Last wipe</b>
+              says how many sessions that is, lets you move the date, and lets you
+              say what the wipe actually took — some reset aUEC and leave your
+              hangar alone. Nothing is deleted: move the date back and it all
+              returns.
+            </p>
+          </details>
+
+          <details>
+            <summary>Why are there no kills or deaths by another player?</summary>
+            <p>
+              Star Citizen 4.9 does not write kill or vehicle-destruction lines to
+              <code>Game.log</code> at all. This was checked line by line across
+              every backup on this machine: zero. The parser for those events is
+              written and tested against the old format, sitting dormant — if CIG
+              restores them, the counters fill in with no update needed.
+            </p>
+          </details>
+
+          <details>
+            <summary>Why does the map not show where I am, exactly?</summary>
+            <p>
+              No player position is logged. Location is inferred from discrete
+              signals — inventory requests, quantum routes, spawns — so the map is
+              a topology, not a radar, and every estimate carries a confidence
+              rather than pretending to a precision it does not have.
+            </p>
+          </details>
+
+          <details>
+            <summary>The overlay will not let me click the game.</summary>
+            <p>
+              Press its <b>📌 pin</b> button and clicks pass straight through. To get
+              it back, right-click the tray icon and untick <b>Pin overlay</b>, or
+              press <code>Ctrl+Alt+O</code>. It arrives unpinned, so it can be
+              dragged where you want it first.
+            </p>
+          </details>
+
+          <details>
+            <summary>Does it touch the game, or my account?</summary>
+            <p>
+              No. It reads <code>Game.log</code> and the backups beside it, and
+              nothing is written to the game directory, no memory is read and
+              nothing is injected. It connects to the internet only when you ask
+              it to from the Settings page, never on its own.
+            </p>
+          </details>
+
+          <details>
+            <summary>Something is wrong, or missing. Where do I say so?</summary>
+            <p>
+              Please do. Message <b>nekhron</b> on Discord, or raise an issue at
+              <a href="https://github.com/peans99/QuantumWake/issues" target="_blank"
+                 rel="noreferrer">github.com/peans99/QuantumWake/issues</a>. A log
+              line that was parsed wrongly, with the line itself, is the most
+              useful thing you can send.
+            </p>
+          </details>
+        </div>
+
         <p class="about-legal">
           Star Citizen®, Roberts Space Industries® and Cloud Imperium® are
           registered trademarks of Cloud Imperium Rights LLC. An unofficial fan
@@ -1243,8 +1344,9 @@
         <input type="checkbox" id="setup-overlay">
         <div>
           <b>In-game overlay widget</b>
-          <span>A compact always-on-top readout over the game. Ctrl+Alt+O unlocks
-          it, Ctrl+Alt+←/→ change page, Ctrl+Alt+F goes fullscreen.</span>
+          <span>A compact always-on-top readout over the game. Drag it where you
+          want it, then pin it to let clicks through. Ctrl+Alt+←/→ change page,
+          Ctrl+Alt+F goes fullscreen.</span>
         </div>
       </label>
 
@@ -1266,6 +1368,19 @@
           where you are, and what your fleet and stash are worth.</span>
         </div>
       </label>
+
+      <div class="setup-wipe" id="setup-wipe-row">
+        <b>Your last wipe</b>
+        <span class="muted">
+          A wipe ends one account and starts another, so totals that reach past
+          one are about an account you no longer have. Sessions before this date
+          stay on disk and stop being counted — move it any time in Settings.
+        </span>
+        <div class="wipe-row">
+          <input type="date" id="setup-wipe" class="search" title="The day the last wipe landed">
+          <span class="muted" id="setup-wipe-note"></span>
+        </div>
+      </div>
 
       <div class="setup-feeds" id="setup-feeds" hidden>
         <div class="setup-feeds-head">Extra UEX feeds — take only what you need</div>
