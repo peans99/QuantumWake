@@ -164,6 +164,12 @@
         <div class="note" id="combat-note"></div>
       </article>
 
+      <article class="card" id="now-respawn-card" data-card="respawn" hidden>
+        <div class="card-label">Wake up at</div>
+        <div class="value" id="now-respawn">—</div>
+        <div class="sub" id="now-respawn-sub"></div>
+      </article>
+
       <article class="card span2" id="now-job-card" data-card="job" hidden>
         <div class="card-label">Job in hand</div>
         <div class="now-job-title" id="now-job-title"></div>
@@ -607,6 +613,10 @@
         <label class="toggle" title="Show each item only where it was seen most recently">
           <input type="checkbox" id="stash-latest">
           <span>Latest place only</span>
+        </label>
+        <label class="toggle" title="Union every listing ever seen, instead of only the most recent one">
+          <input type="checkbox" id="stash-ever">
+          <span>Everything ever seen</span>
         </label>
       </div>
     </div>

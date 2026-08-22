@@ -899,6 +899,52 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>
+    /// What is stored where.
+    /// </summary>
+    /// <param name="everSeen">
+    /// False keeps only the newest listing per place, which is the honest
+    /// answer to "what is there now" - removals are never logged, so older
+    /// listings would show things taken away long ago. True unions every
+    /// listing instead, which is the honest answer to "what have I left
+    /// lying around", and matters because a listing is only ever a page: a
+    /// glance at one tab of an inventory replaces a full browse and the place
+    /// appears to have emptied.
+    /// </param>
+    public IReadOnlyList<StashLocation> Stash(bool everSeen = false) =>
+        StashView(_store.All(), everSeen);
+
+    private List<StashLocation> StashView(IReadOnlyList<SessionSummary> sessions, bool everSeen) =>
+    [
+        .. sessions
+            .SelectMany(s => s.Stash)
+            .GroupBy(e => e.LocationId, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var latest = g.Max(e => e.SeenAt);
+
+                var items = g
+                    .Where(e => everSeen || e.SeenAt == latest)
+                    .Select(e => (e.ItemClass, e.SeenAt))
+
+                    // Newest sighting wins, so an item's date is when it was
+                    // last actually seen rather than whichever row sorted first.
+                    .GroupBy(e => e.ItemClass, StringComparer.OrdinalIgnoreCase)
+                    .Select(i => i.MaxBy(e => e.SeenAt))
+                    .ToList();
+
+                var groups = ItemCategories.Group(items, Names.Item);
+
+                return new StashLocation(
+                    g.Key,
+                    g.First().LocationName,
+                    latest,
+                    groups.Sum(x => x.Items.Count),
+                    groups);
+            })
+            .OrderByDescending(l => l.ItemCount)
+    ];
+
+    /// <summary>
     /// Where the player has woken after dying, newest first. Inferred from the
     /// first place seen after each death, since the game logs no respawn point.
     /// </summary>
@@ -1139,33 +1185,7 @@ public sealed class LogLibrary : IDisposable
 
         // Items are only ever added to the log, never removed, so this is the
         // union of everything seen at each place rather than current contents.
-        var stash = sessions
-            .SelectMany(s => s.Stash)
-            .GroupBy(e => e.LocationId, StringComparer.Ordinal)
-            .Select(g =>
-            {
-                // Only the newest listing describes what is there now. Item
-                // removals are never logged, so merging older listings would
-                // show things taken away long ago.
-                var latest = g.Max(e => e.SeenAt);
-
-                var items = g
-                    .Where(e => e.SeenAt == latest)
-                    .Select(e => (e.ItemClass, e.SeenAt))
-                    .DistinctBy(e => e.ItemClass, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                var groups = ItemCategories.Group(items, Names.Item);
-
-                return new StashLocation(
-                    g.Key,
-                    g.First().LocationName,
-                    latest,
-                    groups.Sum(x => x.Items.Count),
-                    groups);
-            })
-            .OrderByDescending(l => l.ItemCount)
-            .ToList();
+        var stash = StashView(sessions, everSeen: false);
 
         return new LibraryStats
         {
