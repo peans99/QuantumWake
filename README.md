@@ -342,11 +342,30 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.6
+### 0.6.7
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
 
+- **The map was not clickable at all with a real mouse.** It captured the
+  pointer the moment you pressed, and a captured pointer delivers the click to
+  the element holding the capture - so every click meant for a place went to the
+  map instead. Nothing opened: not the card, not the trade panel on a
+  double-click, not a stop onto a plan. The capture now waits until you have
+  actually moved four pixels, so a press is a click and a drag is still a drag.
+  It had been that way since the map was written; it passed its own tests
+  because a synthetic click aimed straight at a node bypasses pointer capture,
+  which is the one thing a real mouse cannot do.
+- **Your position pulses again.** The marker was drawn all along, but the live
+  feed repeats your location every second and each repeat rebuilt the marker,
+  restarting a 2.2-second animation a fifth of the way in. It is redrawn only
+  when you actually move now.
+- **A ship part on a list says where to buy it.** The card priced shields and
+  coolers but left "where" blank, which is the half you can act on.
+- **Upgrades works for every ship, not just some.** The panel asked by display
+  name - "Drake Corsair" - while the ship data is keyed by class - DRAK_Corsair.
+  Anything whose maker word is not its code (Drake, Anvil, Aegis) or that spells
+  a variant differently (Mk II against Mk2) came back empty.
 - **Half the map was unclickable.** Every mark carries an invisible pad so a
   small one is easy to hit, and in a crowded cluster those pads covered their
   neighbours — the topmost won every click, so most places would not open their
