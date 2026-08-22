@@ -21,6 +21,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
 | [naming.md](naming.md) | Why the project is called Quantum Wake, and what the name had to survive. |
 | [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
+| [org-network.md](org-network.md) | Plan, unbuilt: pooling blueprints, stashes and prices across an org. |
 | [releasing.md](releasing.md) | Bump, tag, and what the pipeline does with it. |
 
 The seven per-tool write-ups that used to sit in `docs/tools/` have been
