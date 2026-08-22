@@ -103,6 +103,20 @@ public sealed record PickupRecord(
     string ItemClass,
     string Place);
 
+/// <summary>One contract as the logbook can tell it, newest first.</summary>
+/// <param name="Steps">Journal-visible objectives, and how many finished.</param>
+public sealed record ContractLine(
+    DateTimeOffset At,
+    string Name,
+    string Issuer,
+    string? Type,
+    string? System,
+    string? Difficulty,
+    string Outcome,
+    int Steps,
+    int StepsDone,
+    double? Minutes);
+
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
 /// <param name="Bought">Facility keys where kiosks stock it.</param>
@@ -838,6 +852,52 @@ public sealed class LogLibrary : IDisposable
     /// roughly when the item entered the player's life, whether looted, bought
     /// or received — and the view says so.
     /// </remarks>
+    /// <summary>
+    /// Every contract seen, newest first, with the objective progress the game
+    /// pushed for it. Contracts are keyed per session, so the same repeatable
+    /// mission taken twice is two lines - which is what a logbook wants.
+    /// </summary>
+    public IReadOnlyList<ContractLine> Contracts(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+
+        return
+        [
+            .. _store.All()
+                .SelectMany(s => s.Contracts)
+                .Where(c => c.FirstSeen >= cutoff)
+                .OrderByDescending(c => c.FirstSeen)
+                .Select(c => new ContractLine(
+                    c.FirstSeen,
+                    c.DisplayName,
+                    c.Issuer,
+                    c.Type,
+                    c.System,
+                    c.Difficulty,
+                    c.Outcome.ToString(),
+                    c.Steps,
+                    c.StepsDone,
+                    c.TimeToComplete?.TotalMinutes))
+        ];
+    }
+
+    /// <summary>
+    /// Blueprints the player has been given, earliest sighting first. The game
+    /// announces them once and never mentions them again, so this is the whole
+    /// record of what can be crafted.
+    /// </summary>
+    public IReadOnlyList<BlueprintReceipt> Blueprints()
+    {
+        return
+        [
+            .. _store.All()
+                .SelectMany(s => s.Blueprints)
+                .GroupBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new BlueprintReceipt(g.Min(b => b.At), g.Key))
+                .OrderBy(b => b.At)
+        ];
+    }
+
     public IReadOnlyList<PickupRecord> Pickups(int days = 0)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -954,6 +1014,11 @@ public sealed class LogLibrary : IDisposable
                 g.Select(x => Community.Ship($"{x.Ship.Manufacturer}_{x.Ship.Model}"))
                     .FirstOrDefault(r => r is not null)
                  ?? Community.Ship(g.Key)))
+
+            // "Unmanned" variants (Cutlass Black Unmanned Salvage and kin) are
+            // mission derelicts the player boarded, not ships they own; they
+            // must not count as fleet anywhere.
+            .Where(s => !s.Name.Contains("Unmanned", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(s => s.Sorties)
             .ThenByDescending(s => s.EstimatedTime)
             .ToList();

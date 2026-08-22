@@ -123,11 +123,17 @@ public enum ObjectiveState
 /// completion or abandonment.
 /// </para>
 /// </remarks>
+/// <param name="ShownInLog">
+/// True when the game flags this objective ShowInLog - the steps a player
+/// actually sees in their journal. The rest are internal bookkeeping and would
+/// triple every step count.
+/// </param>
 public sealed record MissionObjectiveEvent(
     DateTimeOffset Timestamp,
     string MissionId,
     string ObjectiveId,
-    ObjectiveState State) : GameEvent(Timestamp)
+    ObjectiveState State,
+    bool ShownInLog = false) : GameEvent(Timestamp)
 {
     public override string Kind => "mission.objective";
 }

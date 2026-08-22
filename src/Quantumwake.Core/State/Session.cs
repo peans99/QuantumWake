@@ -51,6 +51,13 @@ public enum ContractOutcome
     Abandoned
 }
 
+/// <summary>
+/// A crafting blueprint the player was given. The notification toast is the
+/// only place the log mentions blueprints at all, and it carries a short name
+/// rather than the class - so the catalogue is matched by name, loosely.
+/// </summary>
+public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
+
 /// <summary>A contract seen during a session.</summary>
 public sealed record ContractRecord(
     DateTimeOffset FirstSeen,
@@ -68,6 +75,16 @@ public sealed record ContractRecord(
     public ContractOutcome Outcome { get; init; } = ContractOutcome.Unknown;
 
     public DateTimeOffset? CompletedAt { get; init; }
+
+    /// <summary>
+    /// Objective steps the game showed in the player's journal, and how many
+    /// finished. The objective ids are opaque uuids, so the steps cannot be
+    /// named - but "4 of 5 done" is the difference between a near miss and a
+    /// walk-away, and neither was visible before.
+    /// </summary>
+    public int Steps { get; init; }
+
+    public int StepsDone { get; init; }
 
     /// <summary>Wall-clock time from first sighting to completion.</summary>
     public TimeSpan? TimeToComplete => CompletedAt is null ? null : CompletedAt - FirstSeen;
@@ -192,6 +209,9 @@ public sealed record SessionSummary
 
     /// <summary>Items observed entering the player's inventories.</summary>
     public IReadOnlyList<ItemPickup> Pickups { get; init; } = [];
+
+    /// <summary>Crafting blueprints the game said were received this session.</summary>
+    public IReadOnlyList<BlueprintReceipt> Blueprints { get; init; } = [];
 
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);

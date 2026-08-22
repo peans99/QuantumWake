@@ -121,6 +121,9 @@ buildPeriodSelects();
 /* ---------- tabs ---------- */
 
 function showView(name) {
+  // Assets merged into Fleet; old #assets links and habits still land somewhere.
+  if (name === 'assets') name = 'fleet';
+
   const buttons = $$('#tabs button');
   const target = buttons.find((b) => b.dataset.view === name);
   if (!target) return;
@@ -128,8 +131,28 @@ function showView(name) {
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
 
+  // Jobs change from the Crafting page and from play, so re-read on entry too.
+  if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
+
+  // These read live state or want the freshest prices, so they re-run on entry.
+  if (name === 'routes') loadRoutes().catch(() => {});
+  if (name === 'casualties') loadCasualties().catch(() => {});
+
+  // The overlay page shows live state from both halves of the app.
+  if (name === 'overlay') {
+    renderSettings().catch(() => {});
+    renderOverlayLayout().catch(() => {});
+  }
+
   buttons.forEach((b) => b.classList.toggle('active', b === target));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
+
+  // A group lights up when the active view lives inside it, so the strip
+  // still shows where you are even with the menu closed.
+  $$('#tabs .tab-group').forEach((g) => {
+    g.querySelector('.group-btn')?.classList
+      .toggle('active', Boolean(g.querySelector('button.active[data-view]')));
+  });
 
   // Switching view shows the top of it.
   //
@@ -162,16 +185,24 @@ window.addEventListener('hashchange', () => {
 
 $('#tabs').addEventListener('click', (event) => {
   const button = event.target.closest('button');
-  if (button) showView(button.dataset.view);
+  if (!button || !button.dataset.view) return;
+
+  showView(button.dataset.view);
+
+  // Dropping focus lets a group menu close once a view is picked; otherwise
+  // :focus-within pins it open over the page.
+  button.blur();
 });
 
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
    unlocking click-through. Also bound to the arrow keys for browser use. */
 window.scCycleView = (delta) => {
-  // Only the tabs actually on show: the overlay hides most of the strip, and
-  // cycling into an invisible view would strand the widget somewhere its own
-  // tab bar cannot reach.
-  const buttons = $$('#tabs button').filter((b) => b.offsetParent !== null);
+  // In the overlay, only the tabs actually on show: it hides most of the
+  // strip, and cycling into an invisible view would strand the widget
+  // somewhere its own tab bar cannot reach. The dashboard cycles everything -
+  // its group menus hide buttons without retiring the views behind them.
+  const buttons = $$('#tabs button').filter((b) => b.dataset.view
+    && (isOverlay ? b.offsetParent !== null : true));
   if (!buttons.length) return;
 
   const current = buttons.findIndex((b) => b.classList.contains('active'));
@@ -183,7 +214,12 @@ window.scShowView = showView;
 
 /* Driven by the overlay shell's fullscreen toggle: at full size the widget can
    afford the whole tab strip, so the six-tab whitelist lifts while expanded. */
-window.scOverlayExpanded = (on) => document.body.classList.toggle('expanded', Boolean(on));
+window.scOverlayExpanded = (on) => {
+  document.body.classList.toggle('expanded', Boolean(on));
+
+  // Fullscreen shows everything; going back re-applies the chosen few.
+  if (isOverlay) applyOverlayLayout().catch(() => {});
+};
 
 document.addEventListener('keydown', (event) => {
   if (!event.ctrlKey || !event.altKey) return;
@@ -287,7 +323,19 @@ function bars(container, rows, format) {
 
   for (const row of rows) {
     const wrapper = el('div', 'bar-row');
-    wrapper.append(el('div', 'label', row.label));
+
+    // Rows can carry a click-through - the places charts fly to the map.
+    if (row.onClick) {
+      const label = el('div', 'label');
+      const link = el('button', 'place-link', row.label);
+      link.type = 'button';
+      link.title = 'Show on the map';
+      link.addEventListener('click', row.onClick);
+      label.append(link);
+      wrapper.append(label);
+    } else {
+      wrapper.append(el('div', 'label', row.label));
+    }
 
     const track = el('div', 'bar-track');
     const fill = el('div', 'bar-fill');
@@ -347,6 +395,16 @@ async function loadHistory() {
 
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
+  loadLogbook().catch((e) => console.error('logbook', e));
+  await loadManufacturers();
+  loadShipsRef().catch((e) => console.error('ships', e));
+  loadPartsRef().catch((e) => console.error('parts', e));
+  loadMiningRef().catch((e) => console.error('mining', e));
+  loadCraftingRef().catch((e) => console.error('crafting', e));
+  loadJobs().catch((e) => console.error('jobs', e));
+  loadCasualties().catch((e) => console.error('casualties', e));
+  loadOutfitting().catch((e) => console.error('outfitting', e));
+  loadRoutes().catch((e) => console.error('routes', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -370,6 +428,69 @@ function renderContracts(stats) {
   bars('#types-chart',
     stats.contractTypes.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
     (v) => `${v}`);
+
+  loadContractList().catch((e) => console.error('contracts', e));
+}
+
+/**
+ * The contract list, with the objective progress the game pushes but never
+ * showed anywhere: how many journal steps a contract had and how many closed.
+ */
+async function loadContractList() {
+  const days = Number($('#contracts-period').value) || 0;
+  const rows = await getJson(`/api/contracts?days=${days}`);
+  const body = $('#contracts-table tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No contracts in that range.');
+    td.colSpan = 8;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  const OUTCOMES = {
+    Completed: ['done', 'completed'],
+    Abandoned: ['outward', 'abandoned'],
+    InProgress: ['muted', 'in progress'],
+    Unknown: ['muted', '—'],
+  };
+
+  for (const row of rows.slice(0, 400)) {
+    const tr = el('tr');
+    tr.append(el('td', null, dateOf(row.at)));
+
+    // The composed name repeats issuer, type and difficulty, so the columns
+    // carry those and the full name rides the row's tooltip.
+    tr.append(el('td', null, row.issuer || '—'));
+    tr.append(el('td', 'muted', row.type || '—'));
+    tr.append(el('td', 'muted', row.difficulty || '—'));
+    tr.append(el('td', 'muted', row.system || '—'));
+    tr.title = row.name;
+
+    const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
+    tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+
+    // Steps only exist for missions whose objectives were pushed while the
+    // log was being written; older contracts honestly show nothing.
+    const steps = el('td', 'num');
+    if (row.steps > 0) {
+      steps.textContent = `${row.stepsDone} / ${row.steps}`;
+      if (row.stepsDone < row.steps) steps.classList.add('muted');
+    } else {
+      steps.textContent = '—';
+      steps.classList.add('muted');
+    }
+    tr.append(steps);
+
+    tr.append(el('td', 'num muted', row.minutes
+      ? (row.minutes < 60 ? `${Math.round(row.minutes)}m` : `${(row.minutes / 60).toFixed(1)}h`)
+      : '—'));
+
+    body.append(tr);
+  }
 }
 
 function renderPlaces(stats) {
@@ -380,13 +501,16 @@ function renderPlaces(stats) {
 
   bars('#places-chart',
     stats.locations.filter((l) => match(l.name)).slice(0, 25).map((l) => ({
-      label: l.name, value: l.visits, colour: KIND_COLOURS[l.kind],
+      label: l.name,
+      value: l.visits,
+      colour: KIND_COLOURS[l.kind],
+      onClick: () => jumpToPlace(l.name),
     })),
     (v) => `${v}`);
 
   bars('#dests-chart',
     stats.destinations.filter((d) => match(d.name)).slice(0, 25)
-      .map((d) => ({ label: d.name, value: d.visits })),
+      .map((d) => ({ label: d.name, value: d.visits, onClick: () => jumpToPlace(d.name) })),
     (v) => `${v}`);
 }
 
@@ -563,7 +687,7 @@ function renderLedger() {
     tr.append(el('td', null, dateOf(entry.at)));
     tr.append(el('td', null, entry.kind));
     tr.append(el('td', null, prettyItem(entry.what)));
-    tr.append(el('td', null, entry.where));
+    tr.append(tdPlace(entry.where));
     tr.append(el('td', 'muted', entry.shop));
 
     // Unconfirmed amounts are marked rather than silently presented as settled.
@@ -702,12 +826,82 @@ async function refreshTradeAdvice(place) {
 /** The community catalogue, cached for the map's commodity search too. */
 let marketEntries = [];
 
+/**
+ * Whether Market rows show each price's age. On by default - a trader judges
+ * a number by how old it is - and switchable from Settings for anyone who
+ * finds the extra line noise.
+ */
+let showPriceAge = true;
+try { showPriceAge = localStorage.getItem('qw-uex-age') !== '0'; } catch { /* fine */ }
+
+/** Fine-grained "how long ago" for prices, where days are too coarse. */
+function ago(iso) {
+  if (!iso) return 'unknown';
+
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 60) return `${days}d ago`;
+
+  return `${Math.round(days / 30)}mo ago`;
+}
+
 async function loadMarket() {
   try {
     marketEntries = await getJson('/api/market');
   } catch {
     marketEntries = [];
   }
+
+  // Fuel, when that feed is on: cheapest refill per terminal.
+  try {
+    const fuel = await getJson('/api/uex/fuel');
+    $('#fuel-block').hidden = fuel.length === 0;
+
+    const fuelBody = $('#fuel-table tbody');
+    fuelBody.textContent = '';
+
+    // Only the cheapest few of each fuel. Every terminal that sells hydrogen
+    // is two hundred rows nobody reads, and it buried the commodities this
+    // page is actually about.
+    const perFuel = 8;
+    const byFuel = new Map();
+
+    for (const row of [...fuel].sort((a, b) => a.price - b.price)) {
+      if (!byFuel.has(row.fuel)) byFuel.set(row.fuel, []);
+      byFuel.get(row.fuel).push(row);
+    }
+
+    for (const [name, rows] of [...byFuel].sort((a, b) => a[0].localeCompare(b[0]))) {
+      for (const row of rows.slice(0, perFuel)) {
+        const tr = el('tr');
+        tr.append(el('td', null, name));
+        tr.append(tdPlace(row.terminal, 'muted'));
+        tr.append(el('td', 'num', money(row.price)));
+        fuelBody.append(tr);
+      }
+    }
+
+    const hidden = fuel.length - [...byFuel.values()].reduce((n, r) => n + Math.min(perFuel, r.length), 0);
+    $('#fuel-count').textContent = hidden > 0
+      ? `Cheapest ${perFuel} per fuel shown; ${hidden.toLocaleString()} dearer terminals not listed.`
+      : '';
+  } catch { $('#fuel-block').hidden = true; }
+
+  // The snapshot's own age and the shortcut to renew it, next to the search -
+  // the Settings page should not be the only road to a fresh number.
+  try {
+    const uex = await getJson('/api/uex');
+    $('#market-refresh').hidden = !uex.enabled;
+    $('#market-age').textContent = uex.enabled && uex.fetchedAt
+      ? `prices fetched ${ago(uex.fetchedAt)}`
+      : '';
+  } catch { /* leave the header as it is */ }
 
   // The group dropdown offers every group the catalogue actually uses,
   // rebuilt on load and keeping the user's pick when it still exists.
@@ -741,6 +935,15 @@ function renderMarket() {
     && (!term
       || e.name.toLowerCase().includes(term)
       || e.groups.some((g) => g.toLowerCase().includes(term))));
+
+  // Say how many matched, so picking a group visibly does something without
+  // scrolling to the table to find out.
+  const counter = $('#market-count');
+  if (counter) {
+    counter.textContent = marketEntries.length && (group || term)
+      ? `${rows.length} of ${marketEntries.length}`
+      : '';
+  }
 
   if (!rows.length) {
     const tr = el('tr');
@@ -784,22 +987,43 @@ function renderMarket() {
 
         if (entry.uex.bestSellTerminal)
           cell.append(el('div', 'muted uex-terminal', entry.uex.bestSellTerminal));
+
+        // How old the number is - the difference between a price and a rumour.
+        // Ambers past three days, reds past two weeks.
+        if (showPriceAge && entry.uex.seenAt) {
+          const age = Date.now() - new Date(entry.uex.seenAt).getTime();
+          const cls = age > 14 * 86400000 ? 'price-age stale'
+            : age > 3 * 86400000 ? 'price-age old'
+            : 'price-age';
+          cell.append(el('div', cls, `seen ${ago(entry.uex.seenAt)}`));
+        }
       } else {
         cell.textContent = '—';
       }
       tr.append(cell);
     }
 
-    const actions = el('td', 'num');
-    if (entry.sold.length) {
-      const show = el('button', 'ghost', 'show on map');
+    // Two map links, because "where is it" has two answers: where you can
+    // sell what you hold, and where the shops stock it for buying.
+    const actions = el('td', 'num map-links');
+
+    const link = (label, query, title) => {
+      const show = el('button', 'ghost', label);
+      show.title = title;
       show.addEventListener('click', () => {
-        $('#map-search').value = entry.name;
+        $('#map-search').value = query;
         showView('map');
         drawMap();
       });
       actions.append(show);
-    }
+    };
+
+    if (entry.sold.length)
+      link('sell on map', entry.name, 'Light every place that buys this from you');
+    if (entry.bought.length)
+      link('buy on map', `buy:${entry.name}`, 'Light every place that stocks this for sale');
+
+    actions.append(trackButton(entry.name, 1, 'SCU'));
     tr.append(actions);
 
     body.append(tr);
@@ -808,6 +1032,21 @@ function renderMarket() {
 
 onInput('#market-search', renderMarket);
 $('#market-group')?.addEventListener('change', renderMarket);
+
+// The shortcut: re-fetch the whole UEX snapshot from right here.
+$('#market-refresh')?.addEventListener('click', (e) =>
+  uexAction('/api/uex/enable', $('#market-age'), e.currentTarget));
+
+// The Settings switch for price ages, live on both pages at once.
+const uexAgeToggle = $('#uex-age-toggle');
+if (uexAgeToggle) {
+  uexAgeToggle.checked = showPriceAge;
+  uexAgeToggle.addEventListener('change', () => {
+    showPriceAge = uexAgeToggle.checked;
+    try { localStorage.setItem('qw-uex-age', showPriceAge ? '1' : '0'); } catch { /* fine */ }
+    renderMarket();
+  });
+}
 
 /**
  * Facility keys to search tokens the atlas can meet. The class name
@@ -840,12 +1079,20 @@ function facilityTokens(keys) {
  * If the map search term names a commodity, the nodes to light are the ones
  * whose name matches a facility token for that commodity. Null when the term
  * is not a commodity, in which case the search means places, as it always did.
+ *
+ * A "buy:" prefix flips the question - where the commodity is stocked for
+ * buying, rather than where it can be sold. The Market page's two map links
+ * write both forms into the search box, so they survive as shareable ?q= urls.
  */
 function commoditySites(term) {
-  const entry = marketEntries.find((e) => e.name.toLowerCase() === term);
-  if (!entry || !entry.sold.length) return null;
+  const buying = term.startsWith('buy:');
+  const name = (buying ? term.slice(4) : term).trim();
 
-  return facilityTokens(entry.sold);
+  const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
+  if (!entry) return null;
+
+  const keys = buying ? entry.bought : entry.sold;
+  return keys.length ? facilityTokens(keys) : null;
 }
 
 /* ---------- loot ---------- */
@@ -883,7 +1130,7 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
-    tr.append(el('td', 'muted', pickup.place));
+    tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
 
@@ -894,6 +1141,1211 @@ let lastLootRows = [];
 
 onInput('#loot-search', () => renderLoot(lastLootRows));
 onInput('#loot-period', loadLoot);
+
+/* ---------- reference catalogues: ships, parts ---------- */
+
+let shipCatalogue = [];
+let partCatalogue = [];
+
+async function loadShipsRef() {
+  try {
+    shipCatalogue = await getJson('/api/reference/ships');
+  } catch {
+    shipCatalogue = [];
+  }
+
+  const careers = [...new Set(shipCatalogue.map((s) => s.career).filter(Boolean))].sort();
+  const select = $('#ships-career');
+  const previous = select.value;
+
+  select.textContent = '';
+  select.append(new Option('All careers', ''));
+  for (const career of careers) select.append(new Option(career, career));
+  if (careers.includes(previous)) select.value = previous;
+
+  renderShipsRef();
+}
+
+function renderShipsRef() {
+  const term = ($('#ships-search').value || '').trim().toLowerCase();
+  const career = $('#ships-career').value;
+  const body = $('#ships-table tbody');
+  body.textContent = '';
+
+  const rows = shipCatalogue.filter((s) =>
+    (!career || s.career === career)
+    && (!term || s.name.toLowerCase().includes(term)
+      || (s.role || '').toLowerCase().includes(term)));
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', shipCatalogue.length
+      ? 'No ships match that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 13;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const ship of rows) {
+    const tr = el('tr');
+    const name = el('td', null, ship.name);
+    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ' · ground'));
+    tr.append(name);
+
+    tr.append(el('td', 'muted', ship.career ?? '—'));
+    tr.append(el('td', 'muted', ship.role ?? '—'));
+    tr.append(el('td', 'num', ship.crew > 0 ? String(ship.crew) : '—'));
+
+    // The spec sheet: zeros mean a cache digested before the fields existed,
+    // shown as dashes rather than lies.
+    tr.append(el('td', 'num', ship.cargoScu > 0 ? `${ship.cargoScu} SCU` : '—'));
+    tr.append(el('td', 'num muted', ship.scmSpeed > 0
+      ? `${Math.round(ship.scmSpeed)} / ${Math.round(ship.maxSpeed)}`
+      : '—'));
+    tr.append(el('td', 'num muted', ship.shieldHp > 0 ? ship.shieldHp.toLocaleString() : '—'));
+    tr.append(el('td', 'num muted', ship.health > 0 ? ship.health.toLocaleString() : '—'));
+
+    tr.append(el('td', 'num muted', ship.expeditedCost > 0 ? money(ship.expeditedCost) : '—'));
+    tr.append(el('td', 'num muted', ship.standardClaimTime > 0 ? `~${Math.round(ship.standardClaimTime)}m` : '—'));
+    tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold'));
+    tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
+
+    // Rentals only exist when that feed is on; otherwise the column is dashes.
+    const rent = el('td', ship.rental ? 'num' : 'num muted',
+      ship.rental ? money(ship.rental.price) : '—');
+    if (ship.rental) rent.title = `at ${ship.rental.terminal}`;
+    tr.append(rent);
+
+    body.append(tr);
+  }
+}
+
+async function loadPartsRef() {
+  try {
+    partCatalogue = await getJson('/api/reference/items');
+  } catch {
+    partCatalogue = [];
+  }
+
+  const types = [...new Set(partCatalogue.map((p) => p.type).filter(Boolean))].sort();
+  const select = $('#parts-type');
+  const previous = select.value;
+
+  select.textContent = '';
+  select.append(new Option('All types', ''));
+  for (const type of types) select.append(new Option(prettyType(type), type));
+  if (types.includes(previous)) select.value = previous;
+
+  renderPartsRef();
+}
+
+/** "Char_Clothing_Hat" -> "Clothing Hat": the digest's type keys, made legible. */
+const prettyType = (type) => (type ? type.replace(/^Char_/, '').replace(/_/g, ' ') : '—');
+
+/** The digest holds thousands of items; rendering caps so the page stays quick. */
+const PARTS_CAP = 500;
+
+function renderPartsRef() {
+  const term = ($('#parts-search').value || '').trim().toLowerCase();
+  const type = $('#parts-type').value;
+  const body = $('#parts-table tbody');
+  body.textContent = '';
+
+  const rows = partCatalogue.filter((p) =>
+    (!type || p.type === type)
+    && (!term
+      || p.className.toLowerCase().includes(term)
+      || (p.name || '').toLowerCase().includes(term)
+      || prettyItem(p.className).toLowerCase().includes(term)
+      || (p.manufacturer || '').toLowerCase().includes(term)))
+
+    // Priced items first: the ones a shop actually stocks are the ones worth
+    // reading about; header sorting still reorders freely.
+    .sort((a, b) => Number(Boolean(b.price)) - Number(Boolean(a.price))
+      || a.className.localeCompare(b.className));
+
+  const counter = $('#parts-count');
+  counter.textContent = rows.length > PARTS_CAP
+    ? `Showing ${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or pick a type.`
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', partCatalogue.length
+      ? 'Nothing matches that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 9;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const part of rows.slice(0, PARTS_CAP)) {
+    const tr = el('tr');
+
+    // The localised name when the data carries one; my class-name
+    // prettification is the fallback, not the headline. The track button
+    // shares the cell rather than claiming a tenth column.
+    const shown = part.name || prettyItem(part.className);
+    const label = el('td', 'with-track');
+    label.append(el('span', null, shown));
+    label.append(trackButton(shown));
+    if (part.name) label.title = part.className;
+    tr.append(label);
+    tr.append(el('td', 'muted', prettyType(part.type)));
+    tr.append(el('td', 'muted', part.subType ?? '—'));
+    tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
+    tr.append(el('td', 'num', part.grade > 0 ? String(part.grade) : '—'));
+    tr.append(el('td', 'muted', part.manufacturer ?? '—'));
+    tr.append(el('td', part.price ? 'num' : 'num muted', part.price ? money(part.price) : '—'));
+
+    // Where a part is actually stocked; the full shop list rides the tooltip.
+    const stocked = el('td', 'num muted', part.stockedAt > 0 ? String(part.stockedAt) : '—');
+    if (part.terminals?.length) stocked.title = part.terminals.join('\n');
+    tr.append(stocked);
+    tr.append(el('td', 'muted', part.cheapestAt ?? '—'));
+
+    body.append(tr);
+  }
+}
+
+onInput('#ships-search', renderShipsRef);
+$('#ships-career')?.addEventListener('change', renderShipsRef);
+onInput('#parts-search', renderPartsRef);
+$('#parts-type')?.addEventListener('change', renderPartsRef);
+
+/* ---------- mining and salvage spawns ---------- */
+
+let miningCatalogue = [];
+
+const KIND_LABELS = {
+  mineable: 'Mineable',
+  cave_harvestable: 'Cave harvestable',
+  harvestable: 'Harvestable',
+  salvageable: 'Salvageable',
+};
+
+async function loadMiningRef() {
+  try {
+    miningCatalogue = await getJson('/api/reference/resources');
+  } catch {
+    miningCatalogue = [];
+  }
+
+  const fill = (selector, values, allLabel, labelOf = (v) => v) => {
+    const select = $(selector);
+    const previous = select.value;
+    select.textContent = '';
+    select.append(new Option(allLabel, ''));
+    for (const value of values) select.append(new Option(labelOf(value), value));
+    if (values.includes(previous)) select.value = previous;
+  };
+
+  fill('#mining-kind',
+    [...new Set(miningCatalogue.map((s) => s.kind))].sort(),
+    'All kinds', (k) => KIND_LABELS[k] || k);
+
+  fill('#mining-system',
+    [...new Set(miningCatalogue.map((s) => s.system).filter(Boolean))].sort(),
+    'All systems');
+
+  renderMiningRef();
+}
+
+const MINING_CAP = 500;
+
+function renderMiningRef() {
+  const term = ($('#mining-search').value || '').trim().toLowerCase();
+  const kind = $('#mining-kind').value;
+  const system = $('#mining-system').value;
+  const body = $('#mining-table tbody');
+  body.textContent = '';
+
+  const rows = miningCatalogue.filter((s) =>
+    (!kind || s.kind === kind)
+    && (!system || s.system === system)
+    && (!term
+      || s.resource.toLowerCase().includes(term)
+      || s.location.toLowerCase().includes(term)
+      || (s.deposit || '').toLowerCase().includes(term)))
+
+    // Payers first, then the likeliest finds - the order a miner plans in.
+    .sort((a, b) => (b.bestSell ?? 0) - (a.bestSell ?? 0)
+      || (b.groupChance * b.share) - (a.groupChance * a.share));
+
+  const counter = $('#mining-count');
+  counter.textContent = rows.length > MINING_CAP
+    ? `Showing ${MINING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', miningCatalogue.length
+      ? 'Nothing matches that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 11;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  const percent = (v) => `${(v * 100).toFixed(v * 100 >= 10 ? 0 : 1)}%`;
+
+  for (const spawn of rows.slice(0, MINING_CAP)) {
+    const tr = el('tr');
+
+    // The track button rides in the name cell here: the table already carries
+    // eleven columns and a twelfth falls off the screen.
+    const name = el('td', 'with-track');
+    name.append(el('span', null, spawn.resource));
+    name.append(trackButton(spawn.resource, 1, spawn.kind === 'mineable' ? 'SCU' : ''));
+    tr.append(name);
+    tr.append(el('td', 'muted', spawn.deposit ?? '—'));
+    tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
+    tr.append(tdPlace(spawn.location));
+    tr.append(el('td', 'muted', spawn.system ?? '—'));
+    tr.append(el('td', 'muted', spawn.group));
+    tr.append(el('td', 'num', percent(spawn.groupChance)));
+    tr.append(el('td', 'num muted', percent(spawn.share)));
+
+    const sell = el('td', spawn.bestSell ? 'num inward' : 'num muted',
+      spawn.bestSell ? money(spawn.bestSell) : '—');
+    if (spawn.bestSellTerminal) sell.title = `at ${spawn.bestSellTerminal}`;
+    tr.append(sell);
+
+    // Raw ore price and refinery yield: both from optional feeds, so both are
+    // dashes until those are switched on.
+    const raw = el('td', spawn.rawSell ? 'num' : 'num muted',
+      spawn.rawSell ? money(spawn.rawSell) : '—');
+    if (spawn.rawTerminal) raw.title = `at ${spawn.rawTerminal}`;
+    tr.append(raw);
+
+    const yieldCell = el('td', spawn.refineryYield ? 'num' : 'num muted',
+      spawn.refineryYield ? `${spawn.refineryYield.toFixed(0)}%` : '—');
+    if (spawn.refineryTerminal) yieldCell.title = `best at ${spawn.refineryTerminal}`;
+    tr.append(yieldCell);
+
+    body.append(tr);
+  }
+}
+
+onInput('#mining-search', renderMiningRef);
+$('#mining-kind')?.addEventListener('change', renderMiningRef);
+$('#mining-system')?.addEventListener('change', renderMiningRef);
+
+/* ---------- crafting blueprints ---------- */
+
+let craftingCatalogue = [];
+
+async function loadCraftingRef() {
+  try {
+    craftingCatalogue = await getJson('/api/reference/blueprints');
+  } catch {
+    craftingCatalogue = [];
+  }
+
+  const types = [...new Set(craftingCatalogue.map((b) => b.type).filter(Boolean))].sort();
+  const select = $('#crafting-type');
+  const previous = select.value;
+
+  select.textContent = '';
+  select.append(new Option('All types', ''));
+  for (const type of types) select.append(new Option(prettyType(type), type));
+  if (types.includes(previous)) select.value = previous;
+
+  renderCraftingRef();
+}
+
+const CRAFTING_CAP = 500;
+
+/** "540 s" is nobody's unit; craft times read as minutes and hours. */
+function craftTime(seconds) {
+  if (seconds <= 0) return '—';
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function renderCraftingRef() {
+  const term = ($('#crafting-search').value || '').trim().toLowerCase();
+  const type = $('#crafting-type').value;
+  const obtained = $('#crafting-obtained').value;
+  const body = $('#crafting-table tbody');
+  body.textContent = '';
+
+  const rows = craftingCatalogue.filter((b) =>
+    (!type || b.type === type)
+    && (!obtained
+      || (obtained === 'owned' && b.owned)
+      || (obtained === 'default' && b.default)
+      || (obtained === 'reward' && !b.default))
+    && (!term
+      || b.output.toLowerCase().includes(term)
+      || b.materials.some((m) => m.toLowerCase().includes(term))));
+
+  const counter = $('#crafting-count');
+  counter.textContent = rows.length > CRAFTING_CAP
+    ? `Showing ${CRAFTING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', craftingCatalogue.length
+      ? 'Nothing matches that filter.'
+      : 'Enable the community dataset on the Settings page to fill this in.');
+    td.colSpan = 8;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  // Yours first: a blueprint you hold is one you can actually start.
+  rows.sort((a, b) => Number(Boolean(b.owned)) - Number(Boolean(a.owned)));
+
+  for (const bp of rows.slice(0, CRAFTING_CAP)) {
+    const tr = el('tr');
+
+    const makes = el('td');
+    makes.append(el('span', null, bp.output));
+
+    if (bp.owned) {
+      const badge = el('span', 'job-kind owned', 'yours');
+      badge.title = `Received ${relative(bp.receivedAt)}`;
+      makes.append(badge);
+    }
+    tr.append(makes);
+    tr.append(el('td', 'muted', prettyType(bp.type)));
+    tr.append(el('td', 'num', bp.grade > 0 ? String(bp.grade) : '—'));
+    tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
+    tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.join(', ') : '—'));
+
+    // How you get the blueprint; the pool names ride the tooltip.
+    const how = el('td', 'muted', bp.default
+      ? 'Known by default'
+      : bp.rewardPools.length
+        ? `${bp.rewardPools.length} reward pool${bp.rewardPools.length === 1 ? '' : 's'}`
+        : '—');
+    if (bp.rewardPools.length) how.title = bp.rewardPools.join('\n');
+    tr.append(how);
+
+    tr.append(el('td', bp.shopPrice ? 'num' : 'num muted',
+      bp.shopPrice ? money(bp.shopPrice) : 'not sold'));
+
+    // Turning a recipe into a job is the whole point of having both pages.
+    const plan = el('td', 'num');
+    if (bp.materials.length) {
+      const button = el('button', 'ghost', 'Plan');
+      button.title = 'Track this build on the Jobs page';
+
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'planned';
+
+        await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Craft ${bp.output}`,
+            kind: 'craft',
+            source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`,
+            items: parseJobItems(bp.materials.join('\n')),
+          }),
+        }).catch(() => { button.textContent = 'failed'; });
+      });
+
+      plan.append(button);
+    }
+    tr.append(plan);
+
+    body.append(tr);
+  }
+}
+
+onInput('#crafting-search', renderCraftingRef);
+$('#crafting-type')?.addEventListener('change', renderCraftingRef);
+$('#crafting-obtained')?.addEventListener('change', renderCraftingRef);
+
+/* ---------- overlay layout ---------- */
+
+/** Pretty names for the views and cards the layout page offers. */
+const OVERLAY_LABELS = {
+  now: 'Now', jobs: 'Jobs', map: 'Map', commodities: 'Cargo', market: 'Market',
+  loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
+  location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
+  feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
+};
+
+/**
+ * The overlay layout editor, on its own page under Settings. Saving is
+ * immediate - there is no Save button because there is nothing to lose by a
+ * tick going straight through, and the widget picks it up on its next poll.
+ */
+async function renderOverlayLayout() {
+  let data;
+  try {
+    data = await getJson('/api/overlay/layout');
+  } catch {
+    return;
+  }
+
+  const draw = (host, names, chosen) => {
+    const node = $(host);
+    node.textContent = '';
+
+    for (const name of names) {
+      const label = el('label', 'toggle');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = name;
+      box.checked = chosen.includes(name);
+      box.addEventListener('change', saveOverlayLayout);
+
+      label.append(box);
+      label.append(el('span', null, OVERLAY_LABELS[name] || name));
+      node.append(label);
+    }
+  };
+
+  draw('#overlay-tabs', data.tabs, data.current.tabs);
+  draw('#overlay-cards', data.cards, data.current.cards);
+
+  for (const radio of $$('#overlay-density input')) {
+    radio.checked = radio.value === data.current.density;
+    radio.onchange = saveOverlayLayout;
+  }
+
+  $('#overlay-layout-status').textContent = '';
+}
+
+$('#install-path-save')?.addEventListener('click', async (e) => {
+  const status = $('#install-path-status');
+  const path = $('#install-path').value.trim();
+
+  if (!path) {
+    status.textContent = 'Type the folder first.';
+    return;
+  }
+
+  e.currentTarget.disabled = true;
+  status.textContent = 'checking…';
+
+  try {
+    const response = await fetch('/api/install/path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+
+    const result = await response.json();
+
+    status.textContent = response.ok
+      ? `Found ${result.channel}. Restart Quantum Wake to read it.`
+      : result.message || 'That folder does not hold Star Citizen logs.';
+
+    if (response.ok) status.classList.add('inward');
+  } catch {
+    status.textContent = 'Could not reach the server.';
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
+
+$('#overlay-reload')?.addEventListener('click', async (e) => {
+  const status = $('#overlay-layout-status');
+  e.currentTarget.disabled = true;
+
+  try {
+    await fetch('/api/overlay/reload', { method: 'POST' });
+    status.textContent = 'the widget will reload within a few seconds';
+  } catch {
+    status.textContent = 'could not reach the server';
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
+
+async function saveOverlayLayout() {
+  const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
+  const density = $$('#overlay-density input').find((r) => r.checked)?.value || 'normal';
+
+  const status = $('#overlay-layout-status');
+  status.textContent = 'saving…';
+
+  try {
+    await fetch('/api/overlay/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tabs: pick('#overlay-tabs'), cards: pick('#overlay-cards'), density }),
+    });
+    status.textContent = 'saved';
+  } catch {
+    status.textContent = 'could not save';
+  }
+}
+
+/**
+ * In the widget, applies the chosen layout: which tabs appear, which Now cards
+ * appear, and the type scale. Polled rather than pushed, because the overlay
+ * is a separate browser and a few seconds of lag costs nothing.
+ */
+let lastReloadToken = null;
+
+async function applyOverlayLayout() {
+  let data;
+  try {
+    data = await getJson('/api/overlay/layout');
+  } catch {
+    return;
+  }
+
+  // A reload asked for from the dashboard: anything a fresh page load would
+  // pick up, without hunting for the widget's window.
+  if (lastReloadToken !== null && data.reloadToken !== lastReloadToken) {
+    location.reload();
+    return;
+  }
+  lastReloadToken = data.reloadToken;
+
+  const layout = data.current;
+
+  const expanded = document.body.classList.contains('expanded');
+
+  for (const button of $$('#tabs button[data-view]'))
+    button.hidden = !expanded && !layout.tabs.includes(button.dataset.view);
+
+  for (const card of $$('#view-now [data-card]')) {
+    const wanted = expanded || layout.cards.includes(card.dataset.card);
+    card.classList.toggle('layout-off', !wanted);
+  }
+
+  document.body.classList.remove('density-compact', 'density-tiny');
+  if (layout.density !== 'normal') document.body.classList.add(`density-${layout.density}`);
+
+  // The active view may have just been hidden; fall back to the first shown.
+  const active = $('#tabs button.active[data-view]');
+  if (active?.hidden) {
+    const first = $$('#tabs button[data-view]').find((b) => !b.hidden);
+    if (first) showView(first.dataset.view);
+  }
+}
+
+/* ---------- trade routes ---------- */
+
+/**
+ * The route planner. UEX ranks margins; this ranks runs - the difference is
+ * a hold and a wallet, which are the two things only your own logs know.
+ */
+async function loadRoutes() {
+  const select = $('#routes-ship');
+  if (!select) return;
+
+  // The ship list is the owned, ticked fleet with a known cargo grid.
+  if (libraryStats && !select.dataset.filled) {
+    const ships = libraryStats.ships
+      .filter((s) => !excludedShips.has(s.name) && s.reference?.cargoScu > 0)
+      .sort((a, b) => b.reference.cargoScu - a.reference.cargoScu);
+
+    select.textContent = '';
+    select.append(new Option('On foot / no hold', '0'));
+
+    for (const ship of ships)
+      select.append(new Option(`${ship.name} · ${ship.reference.cargoScu} SCU`, ship.reference.cargoScu));
+
+    if (ships.length) select.selectedIndex = 1;
+    select.dataset.filled = '1';
+  }
+
+  const scu = Number(select.value) || 0;
+  const capital = Number($('#routes-capital').value) || 0;
+  // "From here" reads the live location the Now page is already showing.
+  const here = $('#now-location').textContent.trim();
+  const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
+    ? here
+    : '';
+
+  const body = $('#routes-table tbody');
+  body.textContent = '';
+
+  let rows = [];
+  try {
+    rows = await getJson(
+      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`);
+  } catch { /* UEX off */ }
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', from
+      ? 'No route starts from where you are - or UEX has no terminal here.'
+      : 'Nothing to show. Enable UEX prices on the Settings page.');
+    td.colSpan = 10;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const route of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, route.commodity));
+    tr.append(tdPlace(route.buyAt, 'muted'));
+    tr.append(el('td', 'num muted', money(route.buyPrice)));
+    tr.append(tdPlace(route.sellAt, 'muted'));
+    tr.append(el('td', 'num muted', money(route.sellPrice)));
+    tr.append(el('td', 'num', `+${money(route.marginPerScu)}`));
+    tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
+    tr.append(el('td', 'num outward', money(route.outlay)));
+    tr.append(el('td', 'num inward', money(route.profit)));
+
+    const capped = el('td', 'muted', route.limitedBy);
+    capped.title = route.limitedBy === 'capital'
+      ? 'Your capital runs out before the hold does'
+      : route.limitedBy === 'stock'
+        ? 'The shop does not stock enough to fill the hold'
+        : 'The hold is the limit - the good case';
+    tr.append(capped);
+
+    body.append(tr);
+  }
+}
+
+onInput('#routes-capital', loadRoutes);
+$('#routes-ship')?.addEventListener('change', loadRoutes);
+$('#routes-here')?.addEventListener('change', loadRoutes);
+
+/* ---------- casualties ---------- */
+
+async function loadCasualties() {
+  const days = Number($('#casualties-period').value) || 0;
+
+  let data;
+  try {
+    data = await getJson(`/api/casualties?days=${days}`);
+  } catch {
+    return;
+  }
+
+  tiles('#casualties-summary', [
+    ['Deaths', data.deaths],
+    ['Incapacitations', data.incapacitations],
+    ['Sessions with a death', data.sessionsWithDeaths],
+    ['Claim fees*', data.estimatedFees > 0 ? money(data.estimatedFees) : '—'],
+  ]);
+
+  bars('#casualties-places',
+    data.byPlace.map((p) => ({
+      label: p.place, value: p.deaths, onClick: () => jumpToPlace(p.place),
+    })),
+    (v) => `${v}`);
+
+  bars('#casualties-ships',
+    data.byShip.map((s) => ({ label: s.ship, value: s.deaths })),
+    (v) => `${v}`);
+
+  const body = $('#casualties-fees tbody');
+  body.textContent = '';
+
+  for (const fee of data.fees) {
+    const tr = el('tr');
+    tr.append(el('td', null, fee.name));
+    tr.append(el('td', 'num outward', money(fee.fee)));
+    body.append(tr);
+  }
+}
+
+onInput('#casualties-period', loadCasualties);
+
+/* ---------- outfitting ---------- */
+
+/** Which shop carries the most of the kit you were wearing when you died. */
+async function loadOutfitting() {
+  const block = $('#outfitting');
+  if (!block) return;
+
+  let data;
+  try {
+    data = await getJson('/api/outfitting');
+  } catch {
+    block.hidden = true;
+    return;
+  }
+
+  if (!data.shops.length) {
+    block.hidden = true;
+    return;
+  }
+
+  tiles('#outfitting-summary', [
+    ['Kit worn', `${data.priced} of ${data.kitSize} priced`],
+    ['Cheapest anywhere', money(data.cheapest)],
+    ['Best single shop', `${data.shops[0].covers} of ${data.kitSize} items`],
+  ]);
+
+  const body = $('#outfitting-table tbody');
+  body.textContent = '';
+
+  for (const shop of data.shops) {
+    const tr = el('tr');
+    tr.append(tdPlace(shop.terminal));
+    tr.append(el('td', 'num', `${shop.covers} of ${data.kitSize}`));
+
+    const cost = el('td', 'num outward', money(shop.total));
+    cost.title = shop.items.map((i) => `${i.item} — ${Math.round(i.price).toLocaleString()} aUEC`).join('\n');
+    tr.append(cost);
+
+    // The whole point of knowing: put the trip on a list.
+    const action = el('td', 'num');
+    const add = el('button', 'ghost track', '+ list');
+    add.title = `Add everything ${shop.terminal} carries to your shopping list`;
+
+    add.addEventListener('click', async () => {
+      add.disabled = true;
+      for (const item of shop.items)
+        await fetch('/api/jobs/collect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: item.item, needed: 1, unit: '' }),
+        }).catch(() => {});
+
+      add.textContent = '✓ added';
+    });
+
+    action.append(add);
+    tr.append(action);
+    body.append(tr);
+  }
+
+  block.hidden = false;
+}
+
+/* ---------- jobs ---------- */
+
+/**
+ * The jobs page: contracts the logs already know about, plus the player's own
+ * crafting jobs and shopping lists - which check themselves against the stash,
+ * because knowing what is still missing is the whole point of a list.
+ */
+async function loadJobs() {
+  await Promise.all([loadJobContracts(), loadJobList(), fillBlueprintGoals()]);
+}
+
+/**
+ * The goal picker: blueprints the game has actually given you, so a craft can
+ * be started from the page where progress is tracked rather than by hunting
+ * the catalogue. Everything else in the catalogue stays available below it,
+ * because a blueprint you have not been given is still worth planning for.
+ */
+async function fillBlueprintGoals() {
+  const select = $('#jobs-blueprint');
+  if (!select || !craftingCatalogue.length) return;
+
+  const previous = select.value;
+  const owned = craftingCatalogue.filter((b) => b.owned);
+  const rest = craftingCatalogue.filter((b) => !b.owned && b.materials.length);
+
+  select.textContent = '';
+
+  if (owned.length) {
+    const group = document.createElement('optgroup');
+    group.label = `Yours (${owned.length})`;
+    for (const bp of owned) group.append(new Option(bp.output, bp.output));
+    select.append(group);
+  }
+
+  const others = document.createElement('optgroup');
+  others.label = owned.length ? 'Everything else' : 'Blueprints';
+  for (const bp of rest.slice(0, 400)) others.append(new Option(bp.output, bp.output));
+  select.append(others);
+
+  if (previous) select.value = previous;
+}
+
+$('#jobs-plan')?.addEventListener('click', async (e) => {
+  const output = $('#jobs-blueprint').value;
+  const bp = craftingCatalogue.find((b) => b.output === output);
+  if (!bp) return;
+
+  e.currentTarget.disabled = true;
+
+  try {
+    await fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `Craft ${bp.output}`,
+        kind: 'craft',
+        source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`
+          + (bp.owned ? ' · in your library' : ''),
+        items: parseJobItems(bp.materials.join('\n')),
+      }),
+    });
+    await loadJobList();
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
+
+/**
+ * The pinned job on the Now page - and so in the overlay, where what is still
+ * missing is worth having in the corner of the screen while flying.
+ */
+async function renderPinnedJob(jobs) {
+  const card = $('#now-job-card');
+  if (!card) return;
+
+  const job = (jobs ?? await getJson('/api/jobs').catch(() => [])).find((j) => j.pinned && !j.done);
+
+  if (!job) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#now-job-title').textContent = job.title;
+
+  const progress = $('#now-job-progress');
+  progress.textContent = '';
+  progress.append(jobProgress(job.haveCount, job.totalCount,
+    `${job.haveCount} of ${job.totalCount} in hand`));
+
+  // What is still missing, which is the only part worth reading mid-flight.
+  const list = $('#now-job-items');
+  list.textContent = '';
+
+  const missing = job.items.filter((i) => !i.have);
+
+  if (!missing.length) {
+    list.append(el('li', 'inward', 'Everything on this list is in hand.'));
+  } else {
+    for (const item of missing.slice(0, 6)) {
+      const li = el('li');
+      li.append(el('span', 'n', item.name
+        + (item.needed > 0 ? ` ${item.needed}${item.unit ? ` ${item.unit}` : ''}` : '')));
+
+      if (item.buyAt) li.append(el('span', 'muted', `buy at ${item.buyAt}`));
+      list.append(li);
+    }
+
+    if (missing.length > 6)
+      list.append(el('li', 'muted', `+${missing.length - 6} more`));
+  }
+
+  card.hidden = false;
+}
+
+async function loadJobContracts() {
+  const host = $('#jobs-contracts');
+  host.textContent = '';
+
+  // Contracts do not survive a game restart, so an "in progress" contract
+  // from a session that has ended is a ghost. Only the running session's
+  // contracts are real - with the game closed, there are none.
+  let live = null;
+  try {
+    live = await getJson('/api/now');
+  } catch { /* server not answering; treat as not playing */ }
+
+  if (!live?.inGame) {
+    host.append(el('p', 'muted',
+      'Nothing active — the game is not running. Contracts are dropped when you leave, '
+      + 'so only a live session can have any.'));
+    return;
+  }
+
+  let rows = [];
+  try {
+    rows = await getJson('/api/contracts?days=2');
+  } catch { /* nothing to show */ }
+
+  // This session only: anything taken before it started belongs to the past.
+  const since = live.sessionStarted ? new Date(live.sessionStarted).getTime() : 0;
+  const open = rows.filter((c) =>
+    c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
+
+  if (!open.length) {
+    host.append(el('p', 'muted', 'No contract open in this session.'));
+    return;
+  }
+
+  for (const contract of open) {
+    const card = el('article', 'job-card');
+
+    const head = el('div', 'job-head');
+    head.append(el('b', null, `${contract.issuer} · ${contract.type}`));
+    if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
+    card.append(head);
+
+    const sub = [contract.system, `taken ${relative(contract.at)}`].filter(Boolean).join(' · ');
+    card.append(el('div', 'muted', sub));
+
+    if (contract.steps > 0) {
+      card.append(jobProgress(contract.stepsDone, contract.steps,
+        `${contract.stepsDone} of ${contract.steps} objectives done`));
+    }
+
+    host.append(card);
+  }
+}
+
+/**
+ * A "track this" button for any catalogue row: one click puts the thing on
+ * the list the player is filling - the pinned job, else the newest open list,
+ * else a new one - and says where it went.
+ */
+function trackButton(name, needed = 1, unit = '') {
+  const button = el('button', 'ghost track', '+ list');
+  button.title = `Add ${name} to your shopping list`;
+
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+
+    try {
+      const result = await fetch('/api/jobs/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, needed, unit }),
+      }).then((r) => r.json());
+
+      button.textContent = '✓ added';
+      button.title = `On "${result.title}"`;
+    } catch {
+      button.textContent = 'failed';
+      button.disabled = false;
+    }
+  });
+
+  return button;
+}
+
+/** The shared progress bar: done over total, with its own wording. */
+function jobProgress(done, total, label) {
+  const wrap = el('div', 'job-progress');
+  const track = el('div', 'job-track');
+  const fill = el('div', 'job-fill');
+
+  fill.style.width = `${total > 0 ? Math.round((done / total) * 100) : 0}%`;
+  if (done >= total && total > 0) fill.classList.add('full');
+
+  track.append(fill);
+  wrap.append(track);
+  wrap.append(el('span', 'muted', label));
+  return wrap;
+}
+
+async function loadJobList() {
+  const host = $('#jobs-list');
+  const craftHost = $('#blueprint-jobs');
+  host.textContent = '';
+  if (craftHost) craftHost.textContent = '';
+
+  let jobs = [];
+  try {
+    jobs = await getJson('/api/jobs');
+  } catch { /* server down; the page still shows contracts */ }
+
+  renderPinnedJob(jobs);
+
+  // Shopping and crafting are different work, so they live on different
+  // pages; the cards themselves are identical.
+  const lists = jobs.filter((j) => j.kind !== 'craft');
+  const builds = jobs.filter((j) => j.kind === 'craft');
+
+  if (!lists.length) {
+    host.append(el('p', 'muted',
+      'No lists yet. Start one here, or add anything from Market, Parts or Mining with "+ list".'));
+  }
+
+  if (craftHost && !builds.length) {
+    craftHost.append(el('p', 'muted',
+      'No builds planned. Pick a blueprint above, or hit Plan on Reference → Crafting.'));
+  }
+
+  for (const job of jobs) {
+    const card = el('article', job.done ? 'job-card done' : 'job-card');
+
+    const head = el('div', 'job-head');
+    head.append(el('b', null, job.title));
+    head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
+
+    const spacer = el('span', 'spacer');
+    head.append(spacer);
+
+    // Pinning puts the job on Now, which is also what the overlay shows.
+    const pin = el('button', job.pinned ? 'ghost on' : 'ghost', job.pinned ? 'On Now' : 'Pin to Now');
+    pin.title = job.pinned
+      ? 'Showing on the Now page and in the overlay'
+      : 'Show this job on the Now page and in the overlay';
+
+    pin.addEventListener('click', async () => {
+      await fetch(`/api/jobs/${job.id}/pin`, { method: 'POST' });
+      loadJobList();
+    });
+    head.append(pin);
+
+    const toggle = el('button', 'ghost', job.done ? 'Reopen' : 'Mark done');
+    toggle.addEventListener('click', async () => {
+      await fetch(`/api/jobs/${job.id}/toggle`, { method: 'POST' });
+      loadJobList();
+    });
+    head.append(toggle);
+
+    const remove = el('button', 'ghost', 'Delete');
+    remove.addEventListener('click', async () => {
+      await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      loadJobList();
+    });
+    head.append(remove);
+    card.append(head);
+
+    if (job.source) card.append(el('div', 'muted', `from ${job.source}`));
+
+    card.append(jobProgress(job.haveCount, job.totalCount,
+      `${job.haveCount} of ${job.totalCount} in hand`));
+
+    const table = el('table', 'job-items');
+    const body = el('tbody');
+
+    for (const item of job.items) {
+      const tr = el('tr', item.have ? 'have' : null);
+
+      const need = item.needed > 0
+        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+        : '';
+      tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
+      tr.append(el('td', null, item.name));
+      tr.append(el('td', 'num muted', need));
+
+      // Where it is, or where to buy what is missing.
+      const whereCell = el('td', 'muted');
+
+      if (item.wornNow) {
+        whereCell.textContent = 'worn now';
+      } else if (item.where.length) {
+        whereCell.append(placeLink(item.where[0]));
+        if (item.where.length > 1) {
+          const more = el('span', 'note-inline', ` +${item.where.length - 1}`);
+          more.title = item.where.slice(1).join('\n');
+          whereCell.append(more);
+        }
+      } else if (item.buyAt) {
+        whereCell.append(el('span', 'note-inline', 'buy at '));
+        whereCell.append(placeLink(item.buyAt));
+      } else {
+        whereCell.textContent = '—';
+      }
+      tr.append(whereCell);
+
+      tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
+        item.buyPrice ? money(item.buyPrice) : '—'));
+
+      body.append(tr);
+    }
+
+    table.append(body);
+    card.append(table);
+    (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
+  }
+}
+
+/**
+ * Parses a written list into job items: "Hadanite 23", "Agricium 1.16 SCU",
+ * or a bare name. Quantities are optional - a list of names is still a list.
+ */
+function parseJobItems(text) {
+  return text.split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(.*?)[\s·x×]*?([\d.]+)\s*(SCU|scu)?$/);
+
+      if (match && match[1].trim()) {
+        return {
+          name: match[1].replace(/[\s×x·]+$/, '').trim(),
+          needed: Number(match[2]) || 0,
+          unit: match[3] ? 'SCU' : '',
+        };
+      }
+
+      return { name: line, needed: 0, unit: '' };
+    });
+}
+
+$('#jobs-new')?.addEventListener('click', () => {
+  const form = $('#job-form');
+  form.hidden = !form.hidden;
+  if (!form.hidden) $('#job-title').focus();
+});
+
+$('#job-cancel')?.addEventListener('click', () => { $('#job-form').hidden = true; });
+
+$('#job-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const items = parseJobItems($('#job-items').value);
+  if (!items.length) return;
+
+  await fetch('/api/jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: $('#job-title').value, kind: 'list', items }),
+  });
+
+  $('#job-title').value = '';
+  $('#job-items').value = '';
+  $('#job-form').hidden = true;
+  loadJobList();
+});
+
+/* ---------- logbook ---------- */
+
+/**
+ * The logbook page: one merged timeline of what the pilot actually did -
+ * sessions, trades, purchases, first-seen loot - straight from /api/logbook.
+ */
+async function loadLogbook() {
+  const days = Number($('#logbook-period').value) || 0;
+  const rows = await getJson(`/api/logbook?days=${days}`);
+
+  const feed = $('#logbook-feed');
+  feed.textContent = '';
+
+  if (!rows.length) {
+    feed.append(el('li', 'empty', 'Nothing in that range.'));
+    return;
+  }
+
+  for (const row of rows) {
+    const li = el('li');
+
+    const when = new Date(row.at);
+    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    li.append(el('span', 't', stamp));
+
+    li.append(el('span', `k ${row.kind}`, row.kind));
+
+    // Item-ish lines pretty their class names; a session line is prose.
+    const text = row.kind === 'session' ? row.what : prettyItem(row.what);
+    li.append(el('span', 'd what', text));
+
+    if (row.place) {
+      const place = el('span', 'd');
+      place.append(placeLink(row.place));
+      li.append(place);
+    }
+
+    if (row.detail) li.append(el('span', 'd detail', row.detail));
+
+    if (row.amount != null && row.amount !== 0) {
+      const inward = Number(row.amount) > 0;
+      li.append(el('span', `amt ${inward ? 'inward' : 'outward'}`,
+        `${inward ? '+' : '−'}${money(Math.abs(row.amount))}`));
+    }
+
+    feed.append(li);
+  }
+}
+
+onInput('#logbook-period', loadLogbook);
 
 /* ---------- assets ---------- */
 
@@ -912,69 +2364,41 @@ try {
 async function loadAssets() {
   assetsData = await getJson('/api/assets');
   renderAssets();
+
+  // Prices arrive after the roster first renders; redraw it with them in.
+  if (libraryStats) renderFleet(libraryStats);
 }
 
+/**
+ * The asset side of the blended Fleet page: the "other assets" strip and the
+ * stash table. The roster and fleet value live in renderFleet/renderFleetShips.
+ */
 function renderAssets() {
   const assets = assetsData;
   if (!assets) return;
 
-  // Fleet totals are recomputed here rather than trusted from the server,
-  // because exclusion is a client-side choice.
+  // Totals are recomputed here rather than trusted from the server, because
+  // exclusion is a client-side choice.
   const counted = assets.fleet.filter((s) => !excludedShips.has(s.name));
   const fleetValue = counted.reduce((sum, s) => sum + (s.price ? Number(s.price.price) : 0), 0);
-  const fleetPriced = counted.filter((s) => s.price).length;
-  const excluded = assets.fleet.length - counted.length;
 
   const total = fleetValue + Number(assets.loadoutValue) + Number(assets.stashValue);
 
   tiles('#assets-summary', assets.priced
     ? [
         ['Estimated worth*', money(total)],
-        ['Fleet', `${money(fleetValue)} (${fleetPriced} priced${excluded ? `, ${excluded} unticked` : ''})`],
         ['Kit worn', `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
         ['Stashed', money(assets.stashValue)],
         ['Claim exposure*', money(assets.claimExposure)],
       ]
     : [['Estimated worth', 'needs Settings → community dataset + UEX']]);
 
-  const fleetBody = $('#assets-fleet tbody');
-  fleetBody.textContent = '';
-
-  for (const ship of assets.fleet) {
-    const off = excludedShips.has(ship.name);
-    const tr = el('tr');
-    if (off) tr.className = 'excluded';
-
-    const tick = el('td', 'tick');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = !off;
-    box.title = off ? 'Not counted - tick to include' : 'Counted - untick if rented or sold';
-
-    box.addEventListener('change', () => {
-      if (box.checked) excludedShips.delete(ship.name);
-      else excludedShips.add(ship.name);
-      try {
-        localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
-      } catch { /* fine */ }
-      renderAssets();
-    });
-
-    tick.append(box);
-    tr.append(tick);
-
-    tr.append(el('td', null, ship.name));
-    tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold in game'));
-    tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
-    fleetBody.append(tr);
-  }
-
   const stashBody = $('#assets-stash tbody');
   stashBody.textContent = '';
 
   for (const s of [...assets.stash].sort((a, b) => b.value - a.value)) {
     const tr = el('tr');
-    tr.append(el('td', null, s.location));
+    tr.append(tdPlace(s.location));
     tr.append(el('td', 'num', String(s.items)));
     tr.append(el('td', 'num muted', String(s.priced)));
     tr.append(el('td', 'num inward', s.value > 0 ? money(s.value) : '—'));
@@ -1033,6 +2457,61 @@ async function renderSettings() {
     $('#uex-preview').hidden = !(uex.enabled && uex.hasCredentials);
     $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
   } catch { /* as above */ }
+
+  await renderUexFeeds();
+}
+
+/**
+ * The optional UEX feeds, each with its own switch: they serve different
+ * pages, so a trader and a miner should not have to take each other's bytes.
+ */
+async function renderUexFeeds() {
+  const list = $('#uex-feed-list');
+  if (!list) return;
+
+  let feeds;
+  try {
+    feeds = await getJson('/api/uex/feeds');
+  } catch {
+    return;
+  }
+
+  list.textContent = '';
+
+  for (const feed of feeds) {
+    const row = el('div', 'uex-feed');
+
+    const head = el('div', 'uex-feed-head');
+    head.append(el('b', null, feed.title));
+    head.append(el('span', 'cost', feed.cost));
+    row.append(head);
+
+    row.append(el('div', 'muted feed-copy', feed.description));
+
+    const actions = el('div', 'uex-feed-actions');
+    const button = el('button', 'ghost', feed.enabled ? 'Refresh' : 'Fetch');
+    const status = el('span', 'muted');
+
+    status.textContent = feed.enabled
+      ? `on · fetched ${feed.fetchedAt ? ago(feed.fetchedAt) : '—'}`
+      : 'off';
+
+    button.addEventListener('click', () =>
+      uexAction(`/api/uex/feeds/${feed.key}/enable`, status, button));
+
+    actions.append(button);
+
+    if (feed.enabled) {
+      const drop = el('button', 'ghost', 'Drop');
+      drop.addEventListener('click', () =>
+        uexAction(`/api/uex/feeds/${feed.key}/disable`, status, drop));
+      actions.append(drop);
+    }
+
+    actions.append(status);
+    row.append(actions);
+    list.append(row);
+  }
 }
 
 async function uexAction(path, statusNode, button) {
@@ -1227,7 +2706,7 @@ function renderCommodities(trades) {
     tr.append(el('td', null, dateOf(trade.at)));
     tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
     tr.append(el('td', trade.commodity ? null : 'muted', trade.commodity ?? '—'));
-    tr.append(el('td', null, trade.place));
+    tr.append(tdPlace(trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
     tr.append(el('td', 'num muted', money(trade.unitPrice)));
@@ -1320,6 +2799,11 @@ function tiles(container, entries) {
 }
 
 /* Manufacturer prefixes as they appear in vehicle ids. */
+/**
+ * Manufacturer codes to names. The hand-typed entries are the fallback and
+ * the source of logo files; the community dataset's full table is merged over
+ * them at boot when it is enabled, so every code the game knows resolves.
+ */
 const MANUFACTURERS = {
   DRAK: 'Drake Interplanetary', ANVL: 'Anvil Aerospace', RSI: 'Roberts Space Industries',
   MISC: 'MISC', ORIG: 'Origin Jumpworks', AEGS: 'Aegis Dynamics',
@@ -1327,6 +2811,65 @@ const MANUFACTURERS = {
   ESPR: 'Esperia', BANU: 'Banu', KRIG: 'Kruger Intergalactic',
   ARGO: 'ARGO Astronautics', AOPO: 'Aopoa', GATS: 'Gatac', MRAI: 'Mirai',
 };
+
+/** The codes with a local logo image; the merged map must not grow this set. */
+const MANUFACTURER_LOGOS = new Set(Object.keys(MANUFACTURERS));
+
+/**
+ * Every way a ship name can announce its maker, to the code that names its
+ * logo file.
+ *
+ * Ship names used to arrive as log ids - "DRAK Corsair" - so the first word
+ * was the code and the logo lookup was a dictionary hit. Once the community
+ * dataset started resolving real names, the same ship reads "Drake Corsair"
+ * and that lookup quietly missed for every maker whose code is not also its
+ * name, which is most of them: RSI and MISC kept their badges and nobody else
+ * did. So codes AND names, longest match first, because "Consolidated Outland"
+ * must beat "Consolidated".
+ */
+let makerAliases = new Map();
+
+function buildMakerAliases() {
+  makerAliases = new Map();
+
+  for (const [code, name] of Object.entries(MANUFACTURERS)) {
+    makerAliases.set(code.toLowerCase(), code);
+    makerAliases.set(name.toLowerCase(), code);
+    makerAliases.set(name.split(' ')[0].toLowerCase(), code);
+  }
+}
+
+buildMakerAliases();
+
+/** Splits a ship name into its maker and the model that follows. */
+function makerOf(shipName) {
+  const words = String(shipName).trim().split(/\s+/);
+
+  for (let take = Math.min(3, words.length); take >= 1; take--) {
+    const code = makerAliases.get(words.slice(0, take).join(' ').toLowerCase());
+
+    if (code) {
+      return {
+        code,
+        name: MANUFACTURERS[code] || code,
+        model: words.slice(take).join(' ') || shipName,
+      };
+    }
+  }
+
+  return { code: null, name: words[0], model: words.slice(1).join(' ') || shipName };
+}
+
+async function loadManufacturers() {
+  try {
+    const table = await getJson('/api/manufacturers');
+    for (const [code, name] of Object.entries(table))
+      if (!MANUFACTURERS[code]) MANUFACTURERS[code] = name;
+
+    // The new names are new ways for a ship to announce its maker.
+    buildMakerAliases();
+  } catch { /* community data off; the fallback covers the common fleet */ }
+}
 
 const money = (n) => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 
@@ -1338,21 +2881,43 @@ let libraryStats = null;
 function renderFleet(stats) {
   libraryStats = stats;
 
-  tiles('#fleet-summary', [
-    ['Ships owned', stats.fleetSize ?? '—'],
-    ['Models flown', stats.ships.length],
-    ['Total flights', stats.ships.reduce((sum, s) => sum + s.sorties, 0)],
-    ['Time aboard', `~${duration(stats.ships.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
-  ]);
+  // Unticked ships are not owned - a rental, or since sold - so every total
+  // ignores them. Flight time and sorties still count: those happened.
+  const owned = stats.ships.filter((s) => !excludedShips.has(s.name));
+
+  // The game's entitlement count bundles ships and ground vehicles into one
+  // number and never names them, so it is labelled as its own thing rather
+  // than pretending to agree with the ticked roster.
+  const fleetTiles = [
+    ['Owned per game*', stats.fleetSize ?? '—'],
+    ['Roster ticked', `${owned.length} of ${stats.ships.length}`],
+    ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
+    ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
+  ];
+
+  if (assetsData?.priced) {
+    const value = owned.reduce((sum, s) => sum + shipPriceOf(s.name), 0);
+    fleetTiles.push(['Fleet value*', money(value)]);
+  }
+
+  tiles('#fleet-summary', fleetTiles);
 
   drawFleetChart(stats.fleetHistory || []);
   renderFleetShips();
 }
 
+/** UEX price for one roster ship, 0 when unpriced or assets are off. */
+function shipPriceOf(name) {
+  const row = assetsData?.fleet?.find((f) => f.name === name);
+  return row?.price ? Number(row.price.price) : 0;
+}
+
 /** Applies the search box and the last-flown period filter. */
 function renderFleetShips() {
   const grid = $('#fleet-ships');
+  const vehicleGrid = $('#fleet-vehicles');
   grid.textContent = '';
+  vehicleGrid.textContent = '';
 
   if (!libraryStats) return;
 
@@ -1360,11 +2925,19 @@ function renderFleetShips() {
   const days = Number($('#fleet-period').value) || 0;
   const cutoff = days ? Date.now() - days * 86400000 : null;
 
+  // Unticked ships stay on the page, struck through - this is where the tick
+  // lives, so hiding them would make the choice irreversible. They sort to
+  // the back and count for nothing.
   const ships = libraryStats.ships.filter((s) => {
     if (term && !s.name.toLowerCase().includes(term)) return false;
     if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
     return true;
-  });
+  }).sort((a, b) => Number(excludedShips.has(a.name)) - Number(excludedShips.has(b.name)));
+
+  // Ships and ground vehicles part ways on the community reference; anything
+  // unmatched is assumed to fly.
+  const vehicles = ships.filter((s) => s.reference && !s.reference.isSpaceship);
+  $('#fleet-vehicles-title').hidden = vehicles.length === 0;
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
@@ -1373,25 +2946,48 @@ function renderFleetShips() {
   }
 
   for (const ship of ships) {
-    // "DRAK Clipper" -> prefix + model.
-    const [prefix, ...rest] = ship.name.split(' ');
-    const card = el('article', 'ship-card');
+    const grounded = ship.reference && !ship.reference.isSpaceship;
+    const off = excludedShips.has(ship.name);
+
+    const maker = makerOf(ship.name);
+    const card = el('article', off ? 'ship-card excluded' : 'ship-card');
+
+    // The Owned tick: untick a rental or a ship since sold and it leaves
+    // every total on this page. Remembered per browser.
+    const tick = el('label', 'own-tick');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = !off;
+    box.title = off ? 'Not owned - tick to count it again' : 'Owned - untick if rented or sold';
+
+    box.addEventListener('change', () => {
+      if (box.checked) excludedShips.delete(ship.name);
+      else excludedShips.add(ship.name);
+      try {
+        localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
+      } catch { /* fine */ }
+      renderFleet(libraryStats);
+      renderAssets();
+    });
+
+    tick.append(box);
+    card.append(tick);
 
     const badge = el('div', 'ship-logo');
-    if (MANUFACTURERS[prefix]) {
+    if (maker.code && MANUFACTURER_LOGOS.has(maker.code)) {
       const img = document.createElement('img');
-      img.src = `assets/manufacturers/${prefix}.png`;
-      img.alt = MANUFACTURERS[prefix];
+      img.src = `assets/manufacturers/${maker.code}.png`;
+      img.alt = maker.name;
       img.loading = 'lazy';
       badge.append(img);
     } else {
-      badge.append(el('span', 'ship-logo-text', prefix));
+      badge.append(el('span', 'ship-logo-text', maker.code || maker.name));
     }
     card.append(badge);
 
     const body = el('div', 'ship-body');
-    body.append(el('div', 'ship-name', rest.join(' ') || ship.name));
-    body.append(el('div', 'ship-maker', MANUFACTURERS[prefix] || prefix));
+    body.append(el('div', 'ship-name', maker.model));
+    body.append(el('div', 'ship-maker', maker.name));
 
     const stat = el('div', 'ship-stats');
     stat.append(el('b', null, String(ship.sorties)));
@@ -1423,8 +3019,27 @@ function renderFleetShips() {
       }
     }
 
+    // The blended-in asset side: what buying one costs in game, when the
+    // price tables know it.
+    const assetRow = assetsData?.fleet?.find((f) => f.name === ship.name);
+
+    if (assetsData?.priced) {
+      body.append(assetRow?.price
+        ? el('div', 'ship-price', `${money(assetRow.price.price)} · ${assetRow.price.terminal}`)
+        : el('div', 'ship-price muted', 'not sold in game'));
+    }
+
+    // A rentable model might be a rental rather than yours; the card says so
+    // and leaves the tick to the only person who knows.
+    if (assetRow?.rental) {
+      const hint = el('div', 'ship-rental muted',
+        `rentable ${money(assetRow.rental.price)} at ${assetRow.rental.terminal}`);
+      hint.title = 'If this one was rented, untick it above';
+      body.append(hint);
+    }
+
     card.append(body);
-    grid.append(card);
+    (grounded ? vehicleGrid : grid).append(card);
   }
 }
 
@@ -1801,7 +3416,7 @@ function renderStash(stats) {
 
   for (const place of places) {
     const card = el('article', 'card');
-    card.append(el('div', 'card-label', place.name));
+    { const label = el('div', 'card-label'); label.append(placeLink(place.name)); card.append(label); }
     card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
 
     for (const group of place.groups) {
@@ -1979,12 +3594,18 @@ function bodyLayout(system, present, centre, sizeOf) {
     return key && (real[key].x || real[key].y) ? real[key] : null;
   };
 
+  // Zoomed in, the bodies move apart: every site carries a label at that
+  // range and the names need the room. applyView anchors the view across the
+  // redraw so the spread happens around what the eye is on.
+  const spread = isDetailed() ? 1.6 : 1;
+  const orbit = centre.orbit * spread;
+
   if (!present.some((name) => lookup(name))) {
     present.forEach((bodyName, index) => {
       const angle = (index / Math.max(1, present.length)) * Math.PI * 2 - Math.PI / 2;
       placements.set(bodyName, {
-        x: centre.x + Math.cos(angle) * centre.orbit,
-        y: centre.y + Math.sin(angle) * centre.orbit,
+        x: centre.x + Math.cos(angle) * orbit,
+        y: centre.y + Math.sin(angle) * orbit,
         angle,
         from: { x: centre.x, y: centre.y },
       });
@@ -2018,7 +3639,7 @@ function bodyLayout(system, present, centre, sizeOf) {
 
     if (group.pos) {
       angle = Math.atan2(group.pos.y, group.pos.x);
-      const radius = centre.orbit
+      const radius = orbit
         * (0.3 + 0.7 * Math.sqrt(Math.hypot(group.pos.x, group.pos.y) / maxR));
       gx = centre.x + Math.cos(angle) * radius;
       gy = centre.y + Math.sin(angle) * radius;
@@ -2026,8 +3647,8 @@ function bodyLayout(system, present, centre, sizeOf) {
       // No coordinates for this body — park it on the outer ring, stepping
       // around so uncharted bodies do not stack on one another.
       angle = Math.PI / 3 + (orphanIndex++) * (Math.PI / 2.5);
-      gx = centre.x + Math.cos(angle) * centre.orbit * 1.1;
-      gy = centre.y + Math.sin(angle) * centre.orbit * 1.1;
+      gx = centre.x + Math.cos(angle) * orbit * 1.1;
+      gy = centre.y + Math.sin(angle) * orbit * 1.1;
     }
 
     group.members.forEach((bodyName, index) => {
@@ -2041,7 +3662,7 @@ function bodyLayout(system, present, centre, sizeOf) {
       // Moons fan across the outward-facing half so they stay clear of the
       // star and of the planet's own label, spaced past both clusters.
       const arc = angle + (index - (group.members.length) / 2) * (Math.PI / 3.2);
-      const gap = sizeOf(group.members[0]) + sizeOf(bodyName) + 34;
+      const gap = (sizeOf(group.members[0]) + sizeOf(bodyName) + 34) * (spread > 1 ? 1.25 : 1);
 
       placements.set(bodyName, {
         x: gx + Math.cos(arc) * gap,
@@ -2073,7 +3694,48 @@ function applyView() {
 
   // Labels appear on zoom-in, so crossing the threshold means redrawing. The
   // redraw calls back into applyView, but the flag now matches, so it stops.
-  if (detailed !== wasDetailed && atlas.length) drawMap();
+  // The detailed layout also spreads bodies apart to give the names room, so
+  // the node nearest mid-view is re-found afterwards and the view shifted to
+  // keep it exactly where the eye left it.
+  if (detailed !== wasDetailed && atlas.length) {
+    // Anchor on where the eye is headed: the glide's destination when one is
+    // in flight, the current centre otherwise.
+    const goal = viewAnimTarget ?? view;
+    const cx = goal.x + goal.w / 2;
+    const cy = goal.y + goal.h / 2;
+    let anchor = null;
+    let nearest = Infinity;
+
+    for (const [id, p] of nodeAt) {
+      const d = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+      if (d < nearest) {
+        nearest = d;
+        anchor = { id, x: p.x, y: p.y };
+      }
+    }
+
+    drawMap();
+
+    const moved = anchor && nodeAt.get(anchor.id);
+    if (moved && (moved.x !== anchor.x || moved.y !== anchor.y)) {
+      const dx = moved.x - anchor.x;
+      const dy = moved.y - anchor.y;
+
+      view.x += dx;
+      view.y += dy;
+
+      // A glide in progress must move with the world, or it lands where its
+      // destination used to be.
+      if (viewAnimFrom) {
+        viewAnimFrom.x += dx;
+        viewAnimFrom.y += dy;
+        viewAnimTarget.x += dx;
+        viewAnimTarget.y += dy;
+      }
+
+      map.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+    }
+  }
 }
 
 /**
@@ -2083,25 +3745,35 @@ function applyView() {
  */
 let viewAnimation = null;
 
+// Endpoints live outside the closure so a mid-flight layout change (the
+// detailed zoom spreads bodies apart) can shift them with the world instead
+// of letting the glide land on stale coordinates.
+let viewAnimFrom = null;
+let viewAnimTarget = null;
+
 function animateViewTo(target, ms = 420) {
   cancelAnimationFrame(viewAnimation);
 
-  const from = { ...view };
+  viewAnimFrom = { ...view };
+  viewAnimTarget = { ...target };
   const start = performance.now();
   const ease = (t) => 1 - Math.pow(1 - t, 3);
 
   const step = (now) => {
     const k = ease(Math.min(1, (now - start) / ms));
+    const from = viewAnimFrom;
+    const to = viewAnimTarget;
 
     view = {
-      x: from.x + (target.x - from.x) * k,
-      y: from.y + (target.y - from.y) * k,
-      w: from.w + (target.w - from.w) * k,
-      h: from.h + (target.h - from.h) * k,
+      x: from.x + (to.x - from.x) * k,
+      y: from.y + (to.y - from.y) * k,
+      w: from.w + (to.w - from.w) * k,
+      h: from.h + (to.h - from.h) * k,
     };
     applyView();
 
     if (k < 1) viewAnimation = requestAnimationFrame(step);
+    else viewAnimFrom = viewAnimTarget = null;
   };
 
   viewAnimation = requestAnimationFrame(step);
@@ -2293,6 +3965,7 @@ function initMap() {
 
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
+  $('#map-shade').addEventListener('change', () => drawMap());
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
   // Escape clears the search and glides home; clicking anywhere else just
@@ -2324,6 +3997,16 @@ function initMap() {
   map.addEventListener('click', () => $('#map-info').hidden = true);
   $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
 
+  // The Goods checkbox: one switch for goods on hover tips and on the detail
+  // card, remembered per browser.
+  const goodsToggle = $('#map-goods');
+  try { goodsToggle.checked = localStorage.getItem('qw-map-sold') === '1'; } catch { /* fine */ }
+
+  goodsToggle.addEventListener('change', () => {
+    try { localStorage.setItem('qw-map-sold', goodsToggle.checked ? '1' : '0'); } catch { /* fine */ }
+    renderMapInfoSold();
+  });
+
   // Keyboard zoom for anyone without a wheel: +/- around the view centre.
   document.addEventListener('keydown', (e) => {
     if (!$('#view-map').classList.contains('active')) return;
@@ -2341,6 +4024,49 @@ function initMap() {
       e.preventDefault();
     }
   });
+}
+
+/**
+ * Flies to a named place: the map view, centred, detail card open. Falls back
+ * to a highlight search when the name is not an exact atlas match - a quantum
+ * destination or a shop name still lights whatever answers to it.
+ */
+function jumpToPlace(name) {
+  const wanted = String(name).trim();
+  const entry = atlas.find((l) => l.name.toLowerCase() === wanted.toLowerCase());
+
+  $('#map-search').value = entry ? '' : wanted;
+  $('#map-results').hidden = true;
+  showView('map');
+  drawMap();
+
+  if (entry) {
+    centreOn(entry.rawId);
+    showMapInfo(entry);
+  }
+}
+
+/**
+ * A place name that flies to the map when clicked. Used everywhere a location
+ * appears in a table or card, so "where is that?" is always one click.
+ */
+function placeLink(name) {
+  const link = el('button', 'place-link', name);
+  link.type = 'button';
+  link.title = 'Show on the map';
+  link.addEventListener('click', (e) => {
+    e.stopPropagation();
+    jumpToPlace(name);
+  });
+  return link;
+}
+
+/** A table cell holding a place link, or a plain dash when there is nothing. */
+function tdPlace(name, cls = null) {
+  const td = el('td', cls);
+  if (name && name !== '—' && name !== '?') td.append(placeLink(name));
+  else td.textContent = name || '—';
+  return td;
 }
 
 /**
@@ -2390,10 +4116,139 @@ function renderSearchResults() {
   box.hidden = false;
 }
 
+/* ---------- commodity shading ---------- */
+
+/**
+ * In commodity mode the highlight can carry a second dimension: UEX terminal
+ * prices grade each lit place by how good it is - best sell price (or, when
+ * asked, how much SCU it takes), and for a buy: search the cheapest price or
+ * deepest stock. The legend swaps to the gradient while this is on.
+ */
+let shadeRows = { name: null, rows: null };
+let shadeScale = null;
+const nodeShade = new Map();
+
+const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
+
+/** Interpolates the poor-to-best ramp; 1 is the gold end. */
+function shadeColour(t) {
+  const seg = t < 0.5 ? [SHADE_STOPS[0], SHADE_STOPS[1]] : [SHADE_STOPS[1], SHADE_STOPS[2]];
+  const k = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+
+  const mix = (i) => {
+    const a = parseInt(seg[0].slice(1 + i * 2, 3 + i * 2), 16);
+    const b = parseInt(seg[1].slice(1 + i * 2, 3 + i * 2), 16);
+    return Math.round(a + (b - a) * k);
+  };
+
+  return `rgb(${mix(0)},${mix(1)},${mix(2)})`;
+}
+
+function terminalMatchesPlace(terminal, place) {
+  const t = terminal.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const p = place.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (t.length < 4 || p.length < 4) return false;
+  return t.includes(p) || p.includes(t);
+}
+
+/**
+ * Builds the per-node metric for the current search, fetching the commodity's
+ * terminal rows on first sight and redrawing once they land.
+ */
+function prepareShading(term, sites) {
+  nodeShade.clear();
+  shadeScale = null;
+
+  const shadeSelect = $('#map-shade');
+  shadeSelect.hidden = !sites;
+  if (!sites || !highlightIds) return;
+
+  const buying = term.startsWith('buy:');
+  const name = (buying ? term.slice(4) : term).trim();
+  const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
+  if (!entry) return;
+
+  if (shadeRows.name !== entry.name) {
+    shadeRows = { name: entry.name, rows: null };
+
+    getJson(`/api/uex/market?commodity=${encodeURIComponent(entry.name)}`)
+      .then((rows) => {
+        if (shadeRows.name === entry.name) {
+          shadeRows.rows = rows;
+          drawMap();
+        }
+      })
+      .catch(() => { /* UEX off or unreachable; highlight stays ungraded */ });
+
+    return;
+  }
+
+  if (!shadeRows.rows?.length) return;
+
+  const byScu = shadeSelect.value === 'scu';
+
+  const metricOf = (row) => {
+    if (buying) return byScu ? row.buyScu : row.buy;
+    return byScu ? row.sellScu : row.sell;
+  };
+
+  // Lower is better only for a buy price; capacity and sell price want big.
+  const invert = buying && !byScu;
+
+  for (const id of highlightIds) {
+    const place = atlas.find((l) => l.rawId === id);
+    if (!place) continue;
+
+    const matched = shadeRows.rows.filter(
+      (r) => metricOf(r) > 0 && terminalMatchesPlace(r.terminal, place.name));
+    if (!matched.length) continue;
+
+    const value = invert
+      ? Math.min(...matched.map(metricOf))
+      : Math.max(...matched.map(metricOf));
+
+    nodeShade.set(id, { value });
+  }
+
+  if (nodeShade.size === 0) return;
+
+  const values = [...nodeShade.values()].map((s) => s.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  for (const shade of nodeShade.values()) {
+    const t = max === min ? 1 : (shade.value - min) / (max - min);
+    shade.colour = shadeColour(invert ? 1 - t : t);
+  }
+
+  shadeScale = {
+    min,
+    max,
+    invert,
+    unit: byScu ? 'SCU' : 'aUEC/SCU',
+    label: buying
+      ? (byScu ? 'stock on offer' : 'buy price, cheapest is gold')
+      : (byScu ? 'sell capacity' : 'sell price, best is gold'),
+  };
+}
+
+/** What the hover tip currently shows, so pointermove does not rebuild it. */
+let tipKey = null;
+
+/** Appends a capped goods line to the tip when the Goods checkbox is on. */
+function appendTipGoods(tip, names) {
+  if (!names.length) return;
+
+  const shown = names.slice(0, 6).join(', ');
+  const more = names.length > 6 ? ` +${names.length - 6} more` : '';
+  tip.append(el('span', 'goods', `Sells ${shown}${more}`));
+}
+
 /** The hover tooltip: name, kind and history at the cursor, instantly. */
 function showMapTip(location) {
   const tip = $('#map-tip');
   if (!tip) return;
+  tipKey = `site:${location.rawId}`;
 
   tip.textContent = '';
   tip.append(el('strong', null, location.name));
@@ -2401,6 +4256,57 @@ function showMapTip(location) {
   tip.append(el('span', null, location.visits > 0
     ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
     : 'never visited'));
+
+  // In shaded commodity mode, the number behind this node's colour.
+  const shade = nodeShade.get(location.rawId);
+  if (shade && shadeScale) {
+    tip.append(el('span', 'price',
+      `${shadeScale.invert ? 'buy at' : shadeScale.unit === 'SCU' ? 'capacity' : 'sells at'} ` +
+      `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`));
+  }
+
+  if ($('#map-goods').checked) appendTipGoods(tip, commoditiesSoldAt(location));
+
+  tip.hidden = false;
+}
+
+/**
+ * The body-level tooltip, for hovering the space a planet's cluster occupies
+ * rather than one of its dots: the rollup a pilot actually wants at a glance.
+ * Goods are the union across the body's sites, cached per draw - the answer
+ * does not change until the map does.
+ */
+const bodyGoodsCache = new Map();
+
+function showBodyTip(bodyName, system, sites) {
+  const tip = $('#map-tip');
+  if (!tip) return;
+  tipKey = `body:${system}/${bodyName}`;
+
+  const visited = sites.filter((s) => s.visits > 0);
+  const visits = sites.reduce((sum, s) => sum + s.visits, 0);
+  const last = sites.reduce((max, s) =>
+    (s.lastVisit && (!max || s.lastVisit > max) ? s.lastVisit : max), null);
+
+  tip.textContent = '';
+  tip.append(el('strong', null, bodyName));
+  tip.append(el('span', 'muted', system));
+  tip.append(el('span', null, `${sites.length} place${sites.length === 1 ? '' : 's'} · ${visited.length} visited`));
+
+  if (visits > 0)
+    tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
+
+  if ($('#map-goods').checked) {
+    if (!bodyGoodsCache.has(tipKey)) {
+      const union = new Set();
+      for (const site of sites)
+        for (const name of commoditiesSoldAt(site)) union.add(name);
+      bodyGoodsCache.set(tipKey, [...union].sort());
+    }
+
+    appendTipGoods(tip, bodyGoodsCache.get(tipKey));
+  }
+
   tip.hidden = false;
 }
 
@@ -2423,10 +4329,69 @@ function moveMapTip(e) {
 function hideMapTip() {
   const tip = $('#map-tip');
   if (tip) tip.hidden = true;
+  tipKey = null;
+}
+
+/**
+ * Every commodity the catalogue says this place sells, via the same facility
+ * tokens the map search uses - so the card and the search never disagree.
+ * Token sets are cached per entry; the catalogue does not change under us.
+ */
+function commoditiesSoldAt(location) {
+  const compact = `${location.name} ${location.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  return marketEntries
+    .filter((e) => {
+      if (!e.sold.length) return false;
+      e.soldTokens ??= facilityTokens(e.sold);
+      return [...e.soldTokens].some((token) => compact.includes(token));
+    })
+    .map((e) => e.name)
+    .sort();
+}
+
+/** The place the detail card currently shows, for re-rendering on toggle. */
+let mapInfoLocation = null;
+
+/** Fills the card's sold-here list, honouring the toolbar's Goods checkbox. */
+function renderMapInfoSold() {
+  const list = $('#map-info-sold');
+  const wanted = $('#map-goods').checked;
+
+  if (!wanted || !mapInfoLocation) {
+    list.hidden = true;
+    return;
+  }
+
+  list.textContent = '';
+
+  if (!marketEntries.length) {
+    list.append(el('span', 'muted', 'Needs the community dataset (Settings).'));
+  } else {
+    const names = commoditiesSoldAt(mapInfoLocation);
+
+    if (!names.length) {
+      list.append(el('span', 'muted', 'Nothing known to sell here.'));
+    } else {
+      for (const name of names) {
+        const chip = el('button', 'sold-chip', name);
+        chip.type = 'button';
+        chip.title = 'Light every place that sells this';
+        chip.addEventListener('click', () => {
+          $('#map-search').value = name;
+          drawMap();
+        });
+        list.append(chip);
+      }
+    }
+  }
+
+  list.hidden = false;
 }
 
 /** The card that opens when a node is clicked. */
 function showMapInfo(location) {
+  mapInfoLocation = location;
   const info = $('#map-info');
 
   $('#map-info-name').textContent = location.name;
@@ -2453,14 +4418,41 @@ function showMapInfo(location) {
     trade.hidden = true;
   }
 
+  renderMapInfoSold();
+
+  // The starmap's own paragraph about this place, fetched on first open and
+  // cached; the card must not wait for it.
+  const loreNode = $('#map-info-lore');
+  loreNode.hidden = true;
+
+  if (!loreCache.has(location.name)) {
+    loreCache.set(location.name,
+      getJson(`/api/map/lore?name=${encodeURIComponent(location.name)}`)
+        .then((r) => r.lore)
+        .catch(() => null));
+  }
+
+  loreCache.get(location.name).then((lore) => {
+    if (lore && mapInfoLocation === location) {
+      loreNode.textContent = lore;
+      loreNode.hidden = false;
+    }
+  });
+
   info.hidden = false;
 }
+
+/** Lore paragraphs already asked for, name to promise of text-or-null. */
+const loreCache = new Map();
 
 function drawMap() {
   const map = $('#starmap');
   map.textContent = '';
   nodeAt.clear();
   hideMapTip();
+  pendingLabels.length = 0;
+  claimedBoxes.length = 0;
+  bodyGoodsCache.clear();
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
@@ -2493,13 +4485,19 @@ function drawMap() {
   // in the counter and leaving the map lit is kinder.
   if (highlightIds && highlightIds.size === 0) highlightIds = null;
 
+  prepareShading(term, sites);
+
   const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
 
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
     if (term && !highlightIds) count.textContent = 'no match';
-    else if (sites) count.textContent = `sells at ${highlightIds.size} places the map can name`;
+    else if (sites) {
+      count.textContent = term.startsWith('buy:')
+        ? `stocked at ${highlightIds.size} places the map can name`
+        : `sells at ${highlightIds.size} places the map can name`;
+    }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
@@ -2669,14 +4667,42 @@ function drawMap() {
       const reach = clusterRadius(sites.length);
 
       // Body names sit outside the cluster they head, so the sites below have
-      // clear air to put their own labels in.
+      // clear air to put their own labels in. They are placed first and claim
+      // their box, so site labels flow around them.
+      const bodyLabelX = bx + Math.cos(angle) * (reach + 16);
+      const bodyLabelY = by + Math.sin(angle) * (reach + 16);
+      const bodyLabelSize = labelSize(1.15);
+
       const bodyLabel = svgEl('text', {
-        x: bx + Math.cos(angle) * (reach + 16), y: by + Math.sin(angle) * (reach + 16),
+        x: bodyLabelX, y: bodyLabelY,
         'text-anchor': 'middle', class: 'map-label',
-        style: `fill:#7796b0;font-size:${labelSize(1.15)}px;letter-spacing:.14em;text-transform:uppercase`,
+        style: `fill:#7796b0;font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
       });
       bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
       map.append(bodyLabel);
+
+      if (bodyLabel.textContent) {
+        claimedBoxes.push(labelBox(
+          bodyLabelX, bodyLabelY - bodyLabelSize * 0.4, 'middle', bodyLabelSize * 1.25, bodyLabel.textContent));
+      }
+
+      // An invisible disc under the cluster: hovering the space a planet
+      // occupies - rather than one of its dots, which sit on top and win the
+      // pointer - shows the body's rollup tip.
+      if (bodyName !== '—') {
+        const bodyKey = `body:${system}/${bodyName}`;
+        const bodyHover = svgEl('circle', {
+          cx: bx, cy: by, r: reach + 12,
+          fill: '#000', 'fill-opacity': '0', 'pointer-events': 'fill',
+        });
+
+        bodyHover.addEventListener('pointermove', (e) => {
+          if (tipKey !== bodyKey) showBodyTip(bodyName, system, sites);
+          moveMapTip(e);
+        });
+        bodyHover.addEventListener('pointerleave', hideMapTip);
+        map.append(bodyHover);
+      }
 
       // Sites are spread by golden angle rather than in rings. Rings of a fixed
       // size put every twelfth node on the same spoke, which reads as spokes
@@ -2713,6 +4739,7 @@ function drawMap() {
     if (wasHome) view.h = HOME_VIEW.h;
   }
 
+  placeLabels(map);
   drawLegend(locations);
   applyView();
   drawHere();
@@ -2737,22 +4764,32 @@ function drawNode(map, x, y, location, radius, anchor = null) {
 
   nodeAt.set(location.rawId, { x, y });
 
+  // The dot itself claims its square so no neighbour's label sits on it.
+  claimedBoxes.push({ x0: x - radius - 1, y0: y - radius - 1, x1: x + radius + 1, y1: y + radius + 1 });
+
   group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
+
+  // In shaded commodity mode the ring and dot carry the price grade; a lit
+  // place UEX has no price for keeps the plain green ring.
+  const shade = highlighted ? nodeShade.get(location.rawId) : null;
 
   if (highlighted) {
     group.append(svgEl('circle', {
       cx: x, cy: y, r: radius + 5, fill: 'none',
-      stroke: '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
+      stroke: shade?.colour ?? '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
     }));
   }
 
   // Somewhere never visited is drawn as an outline, so the places that carry
-  // history read as solid against the rest of the map.
-  group.append(been
-    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: colour, opacity: '.85' })
+  // history read as solid against the rest of the map. A price shade
+  // overrides the kind colour - in that mode the colour IS the price.
+  const dotColour = shade?.colour ?? colour;
+
+  group.append(been || shade
+    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: dotColour, opacity: '.85' })
     : svgEl('circle', {
         cx: x, cy: y, r: radius, fill: 'none',
-        stroke: colour, 'stroke-width': '1.1', opacity: '.42',
+        stroke: dotColour, 'stroke-width': '1.1', opacity: '.42',
       }));
 
   // A styled tooltip that appears instantly - the native <title> takes a
@@ -2776,38 +4813,133 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   const nameable = highlighted && (highlightIds.size <= 40 || isDetailed());
 
   if ((been && radius > 7) || isDetailed() || nameable) {
-    const size = labelSize();
-    const label = svgEl('text', { class: 'map-label', style: `font-size:${size}px` });
-
-    // Radially outwards from the body when there is one, so a dense cluster
-    // spreads its names like spokes rather than piling them all underneath.
-    const dx = anchor ? x - anchor.x : 0;
-    const dy = anchor ? y - anchor.y : 0;
-    const length = Math.hypot(dx, dy);
-
-    if (length > 0.5) {
-      const gap = radius + size * 0.5 + 2;
-      label.setAttribute('x', x + (dx / length) * gap);
-      label.setAttribute('y', y + (dy / length) * gap);
-      label.setAttribute('text-anchor', dx >= 0 ? 'start' : 'end');
-      label.setAttribute('dominant-baseline', 'middle');
-    } else {
-      label.setAttribute('x', x);
-      label.setAttribute('y', y + radius + size + 1);
-      label.setAttribute('text-anchor', 'middle');
-    }
-
-    label.textContent = location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name;
-    group.append(label);
+    // Not drawn here: every wanted label goes through placeLabels at the end
+    // of the draw, which resolves collisions instead of stacking neighbours.
+    pendingLabels.push({
+      group,
+      x,
+      y,
+      radius,
+      anchor,
+      text: location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name,
+      priority: (highlighted ? 1_000_000 : 0) + location.visits,
+    });
   }
 
   map.append(group);
 }
 
+/* ---------- label placement ---------- */
+
+/**
+ * Labels wanted by this draw, and rectangles already spoken for (body names,
+ * placed labels, the nodes themselves). Both reset per draw.
+ */
+const pendingLabels = [];
+const claimedBoxes = [];
+
+/** Approximate bounding box of a text laid out at x,y with the given anchor. */
+function labelBox(x, y, anchorMode, size, text) {
+  const width = text.length * size * 0.62;
+  const height = size * 1.3;
+  const x0 = anchorMode === 'start' ? x : anchorMode === 'end' ? x - width : x - width / 2;
+  return { x0, y0: y - height / 2, x1: x0 + width, y1: y + height / 2 };
+}
+
+function boxesCollide(a, b) {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+
+/**
+ * Greedy label placement with collision avoidance. Names used to be placed
+ * blind - radially out from the planet - which stacked neighbours on top of
+ * each other the moment two sites shared a bearing. Now every label tries a
+ * handful of positions around its dot, most-visited first, and a label that
+ * fits nowhere is dropped: an unreadable pile names nothing, while a bare dot
+ * still answers on hover and click.
+ */
+function placeLabels(map) {
+  const size = labelSize();
+
+  pendingLabels.sort((a, b) => b.priority - a.priority);
+
+  for (const want of pendingLabels) {
+    const { x, y, radius, anchor } = want;
+
+    const dx = anchor ? x - anchor.x : 0;
+    const dy = anchor ? y - anchor.y : 0;
+    const length = Math.hypot(dx, dy);
+    const gap = radius + size * 0.5 + 2;
+
+    const candidates = [];
+
+    // The radial spot first - it is the one that fans a cluster outwards.
+    if (length > 0.5) {
+      candidates.push({
+        x: x + (dx / length) * gap,
+        y: y + (dy / length) * gap,
+        anchorMode: dx >= 0 ? 'start' : 'end',
+      });
+    }
+
+    candidates.push(
+      { x: x + radius + 3, y, anchorMode: 'start' },
+      { x: x - radius - 3, y, anchorMode: 'end' },
+      { x, y: y + radius + size * 0.85, anchorMode: 'middle' },
+      { x, y: y - radius - size * 0.85, anchorMode: 'middle' },
+    );
+
+    for (const spot of candidates) {
+      const box = labelBox(spot.x, spot.y, spot.anchorMode, size, want.text);
+      if (claimedBoxes.some((other) => boxesCollide(box, other))) continue;
+
+      const label = svgEl('text', {
+        x: spot.x,
+        y: spot.y,
+        'text-anchor': spot.anchorMode,
+        'dominant-baseline': 'middle',
+        class: 'map-label',
+        style: `font-size:${size}px`,
+      });
+      label.textContent = want.text;
+      want.group.append(label);
+
+      claimedBoxes.push(box);
+      break;
+    }
+  }
+}
+
 function drawLegend(locations) {
-  const kinds = [...new Set(locations.map((l) => l.kind))].sort();
   const legend = $('#map-legend');
   legend.textContent = '';
+
+  // Shaded commodity mode swaps the kind legend for the price gradient: in
+  // that mode colour means price, so the legend must say so.
+  if (shadeScale) {
+    const item = el('div', 'item');
+
+    for (let i = 0; i <= 4; i++) {
+      const swatch = el('span', 'swatch');
+      swatch.style.background = shadeColour(i / 4);
+      item.append(swatch);
+    }
+
+    const lo = Math.round(shadeScale.invert ? shadeScale.max : shadeScale.min).toLocaleString();
+    const hi = Math.round(shadeScale.invert ? shadeScale.min : shadeScale.max).toLocaleString();
+    item.append(el('span', null, `${shadeScale.label} · ${lo} → ${hi} ${shadeScale.unit}`));
+    legend.append(item);
+
+    const plain = el('div', 'item');
+    const swatch = el('span', 'swatch');
+    swatch.style.background = '#4fd48a';
+    plain.append(swatch);
+    plain.append(el('span', null, 'no UEX price for it here'));
+    legend.append(plain);
+    return;
+  }
+
+  const kinds = [...new Set(locations.map((l) => l.kind))].sort();
 
   for (const kind of kinds) {
     const item = el('div', 'item');
@@ -2926,8 +5058,127 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* ---------- boot ---------- */
 
+/**
+ * The first-flight wizard: shown once, over everything, while the initial
+ * backfill runs. It fronts the three choices that matter on day one - the
+ * overlay, the community dataset, UEX prices - because they are opt-in and
+ * would otherwise hide in Settings while the app looked half-empty. Applying
+ * them reloads the page so every view boots with the datasets in.
+ */
+async function maybeShowSetup() {
+  if (isOverlay) return;
+
+  // ?setup=1 forces the wizard - a preview that skips nothing permanent.
+  if (!params.has('setup')) {
+    if (isSnapshot) return;
+    if ((await getJson('/api/setup')).done) return;
+  }
+
+  const panel = $('#setup');
+  panel.hidden = false;
+
+  // The overlay choice only exists when this server lives inside the app.
+  try {
+    const overlay = await getJson('/api/overlay');
+    $('#setup-overlay-row').hidden = !overlay.available;
+  } catch { $('#setup-overlay-row').hidden = true; }
+
+  // The extra UEX feeds, offered here too - but only once UEX itself is
+  // ticked, since they are useless without the core price tables.
+  try {
+    const feeds = await getJson('/api/uex/feeds');
+    const list = $('#setup-feed-list');
+    list.textContent = '';
+
+    for (const feed of feeds) {
+      const row = el('label', 'setup-feed');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.dataset.feed = feed.key;
+
+      const text = el('div');
+      text.append(el('b', null, feed.title));
+      text.append(el('span', 'cost', ` ${feed.cost}`));
+      text.append(el('span', null, feed.description));
+
+      row.append(box);
+      row.append(text);
+      list.append(row);
+    }
+
+    const uexBox = $('#setup-uex');
+    const syncFeeds = () => { $('#setup-feeds').hidden = !uexBox.checked; };
+    uexBox.addEventListener('change', syncFeeds);
+    syncFeeds();
+  } catch { /* no feed list; the wizard still works */ }
+
+  // The wizard has its own copy of the scan bar - the page's one sits
+  // underneath it where nobody can see it.
+  const poll = setInterval(async () => {
+    try {
+      const status = await getJson('/api/scan/status');
+
+      if (status.running) {
+        $('#setup-scan-fill').style.width = `${status.percent}%`;
+        $('#setup-scan-label').textContent = status.parsed > 0
+          ? `Reading logs — ${status.parsed} events so far`
+          : 'Checking logs…';
+        $('#setup-scan-count').textContent = `${status.done} / ${status.total} files`;
+      } else {
+        $('#setup-scan-fill').style.width = '100%';
+        $('#setup-scan-label').textContent = 'Logs read — history ready';
+        $('#setup-scan-count').textContent = '';
+      }
+    } catch { /* server between restarts; the next tick answers */ }
+  }, 700);
+
+  $('#setup-start').addEventListener('click', async () => {
+    const button = $('#setup-start');
+    const status = $('#setup-status');
+    button.disabled = true;
+
+    try {
+      if (!$('#setup-overlay-row').hidden && $('#setup-overlay').checked)
+        await fetch('/api/overlay?visible=true', { method: 'POST' }).catch(() => {});
+
+      if ($('#setup-community').checked) {
+        status.textContent = 'Fetching the community dataset — a minute or two…';
+        await fetch('/api/community/enable', { method: 'POST' });
+      }
+
+      if ($('#setup-uex').checked) {
+        status.textContent = 'Fetching UEX prices…';
+        await fetch('/api/uex/enable', { method: 'POST' });
+
+        // Extra feeds one at a time, so one failing does not take the rest.
+        for (const box of $$('#setup-feed-list input:checked')) {
+          status.textContent = `Fetching the ${box.dataset.feed} feed…`;
+          await fetch(`/api/uex/feeds/${box.dataset.feed}/enable`, { method: 'POST' })
+            .catch(() => {});
+        }
+      }
+
+      await fetch('/api/setup/done', { method: 'POST' });
+      clearInterval(poll);
+
+      // A clean reboot with everything enabled beats patching each view.
+      location.reload();
+    } catch {
+      status.textContent = 'Something did not fetch — you can finish any of this in Settings.';
+      button.disabled = false;
+    }
+  });
+}
+
 async function boot() {
-  if (isOverlay) document.body.classList.add('overlay');
+  if (isOverlay) {
+    document.body.classList.add('overlay');
+
+    // The widget's layout is chosen in the dashboard, a different browser, so
+    // it is polled rather than pushed.
+    applyOverlayLayout().catch(() => {});
+    setInterval(() => applyOverlayLayout().catch(() => {}), 5000);
+  }
 
   const requested = viewFromHash();
   if (requested) showView(requested);
@@ -2939,6 +5190,14 @@ async function boot() {
 
   initMap();
 
+  // The current location on Now flies to the map like every other place name.
+  $('#now-location').classList.add('now-jump');
+  $('#now-location').title = 'Show on the map';
+  $('#now-location').addEventListener('click', () => {
+    const name = $('#now-location').textContent.trim();
+    if (name && name !== '—') jumpToPlace(name);
+  });
+
   try {
     const install = await getJson('/api/install');
     $('#install').textContent = `${install.channel} · ${install.backups} logs`;
@@ -2946,6 +5205,10 @@ async function boot() {
   } catch {
     $('#install').textContent = 'no install found';
     $('#about-install').textContent = 'none found';
+
+    // Nothing to read: ask where the game lives rather than showing an
+    // app full of empty pages.
+    if (!isOverlay) $('#no-install').hidden = false;
   }
 
   try {
@@ -2966,6 +5229,8 @@ async function boot() {
     connectStream();
     watchScan();
   }
+
+  maybeShowSetup().catch(() => { /* wizard is a nicety, never a blocker */ });
 
   // The first scan may still be running; retry until sessions appear.
   for (let attempt = 0; attempt < 30; attempt++) {

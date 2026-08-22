@@ -64,11 +64,16 @@ public sealed class LiveSessionService : BackgroundService
     private string? _currentShip;
     private readonly List<TimelineEntry> _recent = [];
 
+    /// <param name="install">
+    /// Defaulted so the container can still build this service on a machine
+    /// where no install was found: the live tail has nothing to follow, and
+    /// the rest of the app runs regardless.
+    /// </param>
     public LiveSessionService(
         IHubContext<LiveHub> hub,
         LogLibrary library,
-        GameInstall? install,
-        ILogger<LiveSessionService> logger)
+        ILogger<LiveSessionService> logger,
+        GameInstall? install = null)
     {
         _hub = hub;
         _library = library;

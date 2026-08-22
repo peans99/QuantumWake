@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Quantumwake.Core.Logging;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -33,25 +34,66 @@ public partial class App : System.Windows.Application
     private MainWindow? _overlay;
     private Settings _settings = new();
 
+    /// <summary>Set while shutting down, so a closing overlay is not mistaken for the user turning it off.</summary>
+    private bool _quitting;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        // Before Settings.Load, so --data moves the whole app - overlay
+        // preferences and WebView2 profile included - and not just the server.
+        Core.AppPaths.UseFromArguments(e.Args);
+
         _settings = Settings.Load();
 
         _tray = new TrayPresence(_settings.ShowOverlay);
         _tray.OpenDashboardRequested += OpenDashboard;
         _tray.OverlayToggled += SetOverlayVisible;
+        _tray.SetInstallFolderRequested += PickInstallFolder;
         _tray.QuitRequested += Quit;
 
         await StartServerAsync(e.Args);
 
-        _overlay = new MainWindow();
+        _overlay = CreateOverlay();
 
         if (_settings.ShowOverlay)
             _overlay.Show();
+    }
+
+    /// <summary>
+    /// Builds the overlay window and watches for it closing.
+    /// </summary>
+    /// <remarks>
+    /// A closed WPF window cannot be shown again, so the reference has to be
+    /// dropped when the user closes the widget from its own ✕ - otherwise
+    /// turning the overlay back on from the dashboard or the tray would throw
+    /// on a corpse. Closing is also a way of turning the overlay off, so every
+    /// surface that reports its state is told.
+    /// </remarks>
+    private MainWindow CreateOverlay()
+    {
+        var window = new MainWindow();
+
+        window.Closed += (_, _) =>
+        {
+            _overlay = null;
+
+            // On the way out of the process nothing needs telling, and the
+            // remembered choice must survive to the next launch.
+            if (_quitting)
+                return;
+
+            _tray?.SetOverlayVisible(false);
+            _server?.Services.GetRequiredService<OverlayBridge>().Report(false);
+
+            _settings = _settings with { ShowOverlay = false };
+            _settings.Save();
+        };
+
+        return window;
     }
 
     private async Task StartServerAsync(string[] args)
@@ -78,6 +120,45 @@ public partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>
+    /// The last resort when detection fails: a folder dialog, because someone
+    /// whose game is in an unusual place should not have to type a path or
+    /// find a config file.
+    /// </summary>
+    private void PickInstallFolder()
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Pick your Star Citizen folder - the one holding Game.log, "
+                + @"or its parent (usually ...\StarCitizen\LIVE).",
+            UseDescriptionForTitle = true,
+            SelectedPath = InstallPathStore.Load() ?? ""
+        };
+
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+            return;
+
+        var install = InstallPathStore.Save(dialog.SelectedPath);
+
+        _tray?.Notify(install is null
+            ? "No Star Citizen logs in that folder. Look for the one holding Game.log."
+            : $"Found {install.Channel}. Restarting Quantum Wake to read it…");
+
+        // The install is resolved once at startup and held by everything
+        // downstream, so the honest way to apply it is to start again.
+        if (install is not null)
+            Restart();
+    }
+
+    private void Restart()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe is not null)
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+
+        Quit();
+    }
+
     private void OpenDashboard()
     {
         try
@@ -99,7 +180,7 @@ public partial class App : System.Windows.Application
     private void SetOverlayVisible(bool visible)
     {
         if (visible)
-            (_overlay ??= new MainWindow()).Show();
+            (_overlay ??= CreateOverlay()).Show();
         else
             _overlay?.Hide();
 
@@ -112,6 +193,7 @@ public partial class App : System.Windows.Application
 
     private async void Quit()
     {
+        _quitting = true;
         _tray?.Dispose();
 
         // Close the window before stopping the server: closing is what saves the
