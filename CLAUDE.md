@@ -88,6 +88,28 @@ Two traps. The server serves `bin\Release\net10.0\web`, **not** the repo's
 is locked. And stub `window.EventSource` in any throwaway page you drive, or it
 never settles.
 
+### Driving it against real data without touching Nicolas's
+
+The most useful screenshots come from the real install, and the real install is
+his: the app is usually running on 31337 against
+`%LOCALAPPDATA%\Quantumwake`, and anything written there is his data, not a
+fixture. So copy it and point a second server at the copy:
+
+```powershell
+Copy-Item "$env:LOCALAPPDATA\Quantumwake\*" "$env:TEMP\claude\qw-data" -Recurse
+$env:QUANTUMWAKE_DATA = "$env:TEMP\claude\qw-data"
+.\src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe --Port=31395
+```
+
+Everything then behaves as it does for him — 148 logs, a real fleet, real
+receipts — while jobs, trips and re-downloaded reference data land in the copy.
+Re-digesting the community dataset (`POST /api/community/enable`) is a ~50 MB
+download and the only way to regenerate a digest after changing one.
+
+When a page has to be driven rather than merely loaded, stub `window.fetch` for
+non-GET calls in the throwaway page and collect what it was asked to post: the
+click path gets tested without writing anything anywhere.
+
 ## House style
 
 - Comments say **why**, not what. The interesting comment is the one explaining
