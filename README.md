@@ -335,3 +335,43 @@ version:
 Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
 trademarks of Cloud Imperium Rights LLC. This is an unofficial fan tool, not
 affiliated with or endorsed by Cloud Imperium Games.
+
+---
+
+## Release notes
+
+Newest first. Each version's section is what the GitHub release says too — the
+release workflow lifts it from here, so it is written once.
+
+### Unreleased
+
+Not cut yet. What is waiting on the next build:
+
+- **The map prices cargo.** Pick a commodity and every place it trades is graded
+  by what it is worth there: the best terminals now, from UEX, beside your own
+  receipts over the last day, three days, seven or longer. Selling and buying
+  are a toggle rather than a search prefix nothing mentioned, and a third
+  shading — *my own prices* — grades the map from your receipts alone, so it
+  works with the price feed switched off.
+- **Double-click a place** for what it takes and offers: what you have sold
+  there, what you have bought, what the catalogue says it stocks, and the
+  receipts behind all of it.
+- **Flight plans.** A list of places in the order you mean to fly them, on the
+  Now page as *jump next* and drawn over the map as numbered stops. Build one by
+  hand, from a trade route in one click, or from a shopping list — which now
+  asks which seller you meant, marks the ones too small to fill your order, and
+  defaults to the cheapest that can. **Stops cross themselves off when you land**,
+  because the app already knows where you are.
+- **Totals describe the account you are playing.** Sessions from before the last
+  wipe are kept and still parsed, but no longer counted. Wipes come at different
+  depths, so you say what this one took — money, ships, inventory, play history —
+  and anything it did not take keeps its whole history. Defaults to Alpha 4.8 on
+  15 May 2026 and lives on the Settings page.
+- **Stale prices offer to renew themselves.** The price feed is still fetched
+  only on your click, but if the snapshot has turned a day old the app says so
+  at startup and offers the one click that fixes it. "Not now" lasts the day.
+- **The overlay can show the flight plan**, and a card added in a later version
+  no longer arrives switched off for anyone who had touched those settings.
+- Under the hood: UEX terminal names are matched to map places once, on the
+  server, so the shading, the panel and the plan cannot disagree; and the
+  dashboard's own JavaScript has tests for the first time.
