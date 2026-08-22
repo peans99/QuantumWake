@@ -134,6 +134,10 @@ function showView(name) {
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs') loadJobs().catch(() => {});
 
+  // These read live state or want the freshest prices, so they re-run on entry.
+  if (name === 'routes') loadRoutes().catch(() => {});
+  if (name === 'casualties') loadCasualties().catch(() => {});
+
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
     renderSettings().catch(() => {});
@@ -398,6 +402,9 @@ async function loadHistory() {
   loadMiningRef().catch((e) => console.error('mining', e));
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
+  loadCasualties().catch((e) => console.error('casualties', e));
+  loadOutfitting().catch((e) => console.error('outfitting', e));
+  loadRoutes().catch((e) => console.error('routes', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -1650,6 +1657,193 @@ async function applyOverlayLayout() {
     const first = $$('#tabs button[data-view]').find((b) => !b.hidden);
     if (first) showView(first.dataset.view);
   }
+}
+
+/* ---------- trade routes ---------- */
+
+/**
+ * The route planner. UEX ranks margins; this ranks runs - the difference is
+ * a hold and a wallet, which are the two things only your own logs know.
+ */
+async function loadRoutes() {
+  const select = $('#routes-ship');
+  if (!select) return;
+
+  // The ship list is the owned, ticked fleet with a known cargo grid.
+  if (libraryStats && !select.dataset.filled) {
+    const ships = libraryStats.ships
+      .filter((s) => !excludedShips.has(s.name) && s.reference?.cargoScu > 0)
+      .sort((a, b) => b.reference.cargoScu - a.reference.cargoScu);
+
+    select.textContent = '';
+    select.append(new Option('On foot / no hold', '0'));
+
+    for (const ship of ships)
+      select.append(new Option(`${ship.name} · ${ship.reference.cargoScu} SCU`, ship.reference.cargoScu));
+
+    if (ships.length) select.selectedIndex = 1;
+    select.dataset.filled = '1';
+  }
+
+  const scu = Number(select.value) || 0;
+  const capital = Number($('#routes-capital').value) || 0;
+  // "From here" reads the live location the Now page is already showing.
+  const here = $('#now-location').textContent.trim();
+  const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
+    ? here
+    : '';
+
+  const body = $('#routes-table tbody');
+  body.textContent = '';
+
+  let rows = [];
+  try {
+    rows = await getJson(
+      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`);
+  } catch { /* UEX off */ }
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', from
+      ? 'No route starts from where you are - or UEX has no terminal here.'
+      : 'Nothing to show. Enable UEX prices on the Settings page.');
+    td.colSpan = 10;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const route of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, route.commodity));
+    tr.append(tdPlace(route.buyAt, 'muted'));
+    tr.append(el('td', 'num muted', money(route.buyPrice)));
+    tr.append(tdPlace(route.sellAt, 'muted'));
+    tr.append(el('td', 'num muted', money(route.sellPrice)));
+    tr.append(el('td', 'num', `+${money(route.marginPerScu)}`));
+    tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
+    tr.append(el('td', 'num outward', money(route.outlay)));
+    tr.append(el('td', 'num inward', money(route.profit)));
+
+    const capped = el('td', 'muted', route.limitedBy);
+    capped.title = route.limitedBy === 'capital'
+      ? 'Your capital runs out before the hold does'
+      : route.limitedBy === 'stock'
+        ? 'The shop does not stock enough to fill the hold'
+        : 'The hold is the limit - the good case';
+    tr.append(capped);
+
+    body.append(tr);
+  }
+}
+
+onInput('#routes-capital', loadRoutes);
+$('#routes-ship')?.addEventListener('change', loadRoutes);
+$('#routes-here')?.addEventListener('change', loadRoutes);
+
+/* ---------- casualties ---------- */
+
+async function loadCasualties() {
+  const days = Number($('#casualties-period').value) || 0;
+
+  let data;
+  try {
+    data = await getJson(`/api/casualties?days=${days}`);
+  } catch {
+    return;
+  }
+
+  tiles('#casualties-summary', [
+    ['Deaths', data.deaths],
+    ['Incapacitations', data.incapacitations],
+    ['Sessions with a death', data.sessionsWithDeaths],
+    ['Claim fees*', data.estimatedFees > 0 ? money(data.estimatedFees) : '—'],
+  ]);
+
+  bars('#casualties-places',
+    data.byPlace.map((p) => ({
+      label: p.place, value: p.deaths, onClick: () => jumpToPlace(p.place),
+    })),
+    (v) => `${v}`);
+
+  bars('#casualties-ships',
+    data.byShip.map((s) => ({ label: s.ship, value: s.deaths })),
+    (v) => `${v}`);
+
+  const body = $('#casualties-fees tbody');
+  body.textContent = '';
+
+  for (const fee of data.fees) {
+    const tr = el('tr');
+    tr.append(el('td', null, fee.name));
+    tr.append(el('td', 'num outward', money(fee.fee)));
+    body.append(tr);
+  }
+}
+
+onInput('#casualties-period', loadCasualties);
+
+/* ---------- outfitting ---------- */
+
+/** Which shop carries the most of the kit you were wearing when you died. */
+async function loadOutfitting() {
+  const block = $('#outfitting');
+  if (!block) return;
+
+  let data;
+  try {
+    data = await getJson('/api/outfitting');
+  } catch {
+    block.hidden = true;
+    return;
+  }
+
+  if (!data.shops.length) {
+    block.hidden = true;
+    return;
+  }
+
+  tiles('#outfitting-summary', [
+    ['Kit worn', `${data.priced} of ${data.kitSize} priced`],
+    ['Cheapest anywhere', money(data.cheapest)],
+    ['Best single shop', `${data.shops[0].covers} of ${data.kitSize} items`],
+  ]);
+
+  const body = $('#outfitting-table tbody');
+  body.textContent = '';
+
+  for (const shop of data.shops) {
+    const tr = el('tr');
+    tr.append(tdPlace(shop.terminal));
+    tr.append(el('td', 'num', `${shop.covers} of ${data.kitSize}`));
+
+    const cost = el('td', 'num outward', money(shop.total));
+    cost.title = shop.items.map((i) => `${i.item} — ${Math.round(i.price).toLocaleString()} aUEC`).join('\n');
+    tr.append(cost);
+
+    // The whole point of knowing: put the trip on a list.
+    const action = el('td', 'num');
+    const add = el('button', 'ghost track', '+ list');
+    add.title = `Add everything ${shop.terminal} carries to your shopping list`;
+
+    add.addEventListener('click', async () => {
+      add.disabled = true;
+      for (const item of shop.items)
+        await fetch('/api/jobs/collect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: item.item, needed: 1, unit: '' }),
+        }).catch(() => {});
+
+      add.textContent = '✓ added';
+    });
+
+    action.append(add);
+    tr.append(action);
+    body.append(tr);
+  }
+
+  block.hidden = false;
 }
 
 /* ---------- jobs ---------- */

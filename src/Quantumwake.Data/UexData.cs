@@ -35,6 +35,21 @@ public sealed record UexVehiclePrice(decimal Price, string Terminal);
 /// <summary>One item's buy price at one terminal - where a part is stocked.</summary>
 public sealed record UexItemRow(string Terminal, decimal Buy);
 
+/// <summary>One haul worth flying, sized to a real hold and a real wallet.</summary>
+/// <param name="Units">SCU this run can actually carry, after every cap.</param>
+/// <param name="LimitedBy">"hold", "capital" or "stock" - what caps this run.</param>
+public sealed record UexRoute(
+    string Commodity,
+    string BuyAt,
+    decimal BuyPrice,
+    string SellAt,
+    decimal SellPrice,
+    decimal MarginPerScu,
+    decimal Units,
+    decimal Profit,
+    decimal Outlay,
+    string LimitedBy);
+
 /// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
 public sealed record UexOpportunity(
     string Commodity,
@@ -197,6 +212,83 @@ public sealed class UexData
 
     /// <summary>The matched UEX terminal name for a place, for the UI to show.</summary>
     public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
+
+    /// <summary>
+    /// The best hauls in the price table: for each commodity, the cheapest
+    /// place to buy against the dearest place to sell.
+    /// </summary>
+    /// <remarks>
+    /// What UEX does well already - except for the two things it cannot know.
+    /// The hold is a real ship out of the player's own fleet, and the capital
+    /// is what they actually have, so the ranking is by what THIS run would
+    /// earn rather than by margin per SCU in the abstract. A run capped by
+    /// money rather than by space says so, which is the difference between a
+    /// route and a daydream.
+    /// </remarks>
+    public List<UexRoute> Routes(double scu, decimal capital, string? from = null, int limit = 25)
+    {
+        var origin = from is { Length: > 0 } ? MatchTerminal(from) : null;
+        var routes = new List<UexRoute>();
+
+        foreach (var (commodity, rows) in _matrix)
+        {
+            var buy = rows
+                .Where(r => r.Buy > 0 && (origin is null || r.TerminalId == origin.Value.Id))
+                .OrderBy(r => r.Buy)
+                .FirstOrDefault();
+
+            if (buy is null)
+                continue;
+
+            var sell = rows
+                .Where(r => r.Sell > 0 && r.TerminalId != buy.TerminalId)
+                .OrderByDescending(r => r.Sell)
+                .FirstOrDefault();
+
+            if (sell is null || sell.Sell <= buy.Buy)
+                continue;
+
+            var margin = sell.Sell - buy.Buy;
+
+            // The hold, the wallet and the shop's own stock all cap a run;
+            // whichever bites first is the one worth naming. With no ship
+            // named, everything is priced per SCU rather than shown as
+            // nothing - the page has to say something before it is configured.
+            var byHold = scu > 0 ? (decimal)scu : 1;
+            var byWallet = buy.Buy > 0 ? Math.Floor(capital / buy.Buy) : 0;
+            var byStock = buy.BuyScu > 0 ? buy.BuyScu : decimal.MaxValue;
+
+            var units = byHold;
+            var limiter = scu > 0 ? "hold" : "per SCU";
+
+            if (capital > 0 && byWallet < units)
+            {
+                units = byWallet;
+                limiter = "capital";
+            }
+
+            if (byStock < units)
+            {
+                units = byStock;
+                limiter = "stock";
+            }
+
+            if (units <= 0)
+                continue;
+
+            routes.Add(new UexRoute(
+                commodity,
+                buy.Terminal, buy.Buy,
+                sell.Terminal, sell.Sell,
+                margin,
+                units,
+                margin * units,
+                buy.Buy * units,
+                limiter));
+        }
+
+        return [.. routes.OrderByDescending(r => r.Profit).Take(limit)];
+    }
 
     /// <summary>
     /// Every terminal row for one commodity - the map's price shading reads

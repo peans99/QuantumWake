@@ -34,6 +34,7 @@
         <button data-view="fleet">Fleet</button>
         <button data-view="places">Places</button>
         <button data-view="contracts">Contracts</button>
+        <button data-view="casualties">Casualties</button>
       </div>
     </div>
     <div class="tab-group">
@@ -43,6 +44,7 @@
         <button data-view="ledger">Ledger</button>
         <button data-view="commodities">Cargo</button>
         <button data-view="market">Market</button>
+        <button data-view="routes">Routes</button>
       </div>
     </div>
     <div class="tab-group">
@@ -209,6 +211,74 @@
       </aside>
     </div>
     <div class="legend" id="map-legend"></div>
+  </section>
+
+  <!-- ROUTES -->
+  <section id="view-routes" class="view">
+    <div class="section-bar">
+      <h2>Trade routes</h2>
+      <div class="controls">
+        <select id="routes-ship" class="select" title="Whose hold to fill"></select>
+        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <label class="toggle" title="Only routes starting where you are now">
+          <input type="checkbox" id="routes-here">
+          <span>From here</span>
+        </label>
+      </div>
+    </div>
+    <p class="muted caption">
+      The best hauls UEX knows, sized to a real hold and a real wallet — pick
+      one of your ships and the money you can spend, and the ranking becomes
+      what <em>this</em> run earns rather than a margin in the abstract. Each
+      row says what capped it: your hold, your capital, or the shop's own
+      stock. Needs UEX prices, and ship capacities from the community dataset.
+    </p>
+    <div class="table-wrap">
+      <table id="routes-table">
+        <thead>
+          <tr>
+            <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
+            <th>Sell at</th><th class="num">Sell</th>
+            <th class="num">Margin</th><th class="num">SCU</th>
+            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CASUALTIES -->
+  <section id="view-casualties" class="view">
+    <div class="section-bar">
+      <h2>Casualties</h2>
+      <div class="controls">
+        <select id="casualties-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      What dying has cost you. Star Citizen 4.9 logs no death event, so these
+      are counted from the corpse item-recovery bursts the game still writes,
+      and a session's last known place is the closest the logs come to naming
+      where it happened. Claim fees are the real expedite costs of the ships
+      you fly.
+    </p>
+
+    <div class="summary-strip" id="casualties-summary"></div>
+
+    <h2 class="spaced">Where it happens</h2>
+    <div id="casualties-places" class="bars"></div>
+
+    <h2 class="spaced">What you were flying</h2>
+    <div id="casualties-ships" class="bars"></div>
+
+    <h2 class="spaced">Claim fees, by ship</h2>
+    <div class="table-wrap">
+      <table id="casualties-fees">
+        <thead><tr><th>Ship</th><th class="num">Expedite fee</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- JOBS -->
@@ -454,6 +524,24 @@
       fixtures, and the hands, which hold things transiently rather than equip them.
     </p>
     <div id="loadout-grid" class="loadout-grid"></div>
+
+    <div id="outfitting" hidden>
+      <h2 class="spaced">Buying this kit back</h2>
+      <p class="muted caption">
+        After a bad death, the question is which shop carries the most of what
+        you were wearing. Ranked by coverage first, then by what the trip
+        costs. Needs UEX prices and the item-stock feed in Settings.
+      </p>
+      <div class="summary-strip" id="outfitting-summary"></div>
+      <div class="table-wrap">
+        <table id="outfitting-table">
+          <thead>
+            <tr><th>Shop</th><th class="num">Carries</th><th class="num">Cost there</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- STASH -->

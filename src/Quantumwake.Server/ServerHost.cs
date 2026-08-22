@@ -634,6 +634,117 @@ public static class ServerHost
                 })
                 .OrderBy(i => i.className));
 
+        // Hauls worth flying, sized to a hold and a wallet the caller names.
+        app.MapGet("/api/routes", (UexData uex, double? scu, decimal? capital, string? from) =>
+            uex.Routes(scu ?? 0, capital ?? 0, from, 30));
+
+        // What dying has cost: deaths and incapacitations over time, where they
+        // happened, and the claim fees the fleet implies.
+        app.MapGet("/api/casualties", (LogLibrary lib, int? days) =>
+        {
+            var stats = lib.Stats(days ?? 0);
+            var sessions = lib.Sessions()
+                .Where(s => (days ?? 0) == 0 || s.StartedAt >= DateTimeOffset.UtcNow.AddDays(-days!.Value))
+                .ToList();
+
+            // The place a session ended is the closest the logs come to naming
+            // where things went wrong; a session with no death names nowhere.
+            var byPlace = sessions
+                .Where(s => s.Deaths > 0 && s.LastLocation is { Length: > 0 })
+                .GroupBy(s => s.LastLocation!, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new { place = g.Key, deaths = g.Sum(s => s.Deaths) })
+                .OrderByDescending(x => x.deaths)
+                .Take(15);
+
+            var byShip = sessions
+                .Where(s => s.Deaths > 0 && s.PrimaryShip is { Length: > 0 })
+                .GroupBy(s => s.PrimaryShip!, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new { ship = g.Key, deaths = g.Sum(s => s.Deaths) })
+                .OrderByDescending(x => x.deaths)
+                .Take(15);
+
+            var timeline = sessions
+                .Where(s => s.Deaths > 0 || s.Incapacitations > 0)
+                .OrderByDescending(s => s.StartedAt)
+                .Take(60)
+                .Select(s => new
+                {
+                    at = s.StartedAt,
+                    s.Deaths,
+                    s.Incapacitations,
+                    place = s.LastLocation,
+                    ship = s.PrimaryShip
+                });
+
+            // What a claim costs is a property of the ship, so the exposure is
+            // the fleet's own expedite fees rather than one blanket number.
+            var fees = stats.Ships
+                .Select(s => new { s.Name, fee = s.Reference?.ExpeditedCost ?? 0 })
+                .Where(s => s.fee > 0)
+                .OrderByDescending(s => s.fee)
+                .ToList();
+
+            var deaths = sessions.Sum(s => s.Deaths);
+
+            return new
+            {
+                deaths,
+                incapacitations = sessions.Sum(s => s.Incapacitations),
+                sessionsWithDeaths = sessions.Count(s => s.Deaths > 0),
+                averageFee = fees.Count > 0 ? fees.Average(f => f.fee) : 0,
+                estimatedFees = fees.Count > 0 ? deaths * fees.Average(f => f.fee) : 0,
+                byPlace,
+                byShip,
+                timeline,
+                fees
+            };
+        });
+
+        // Replacing a kit: which shop carries the most of what you were
+        // wearing, and what the trip costs.
+        app.MapGet("/api/outfitting", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
+        {
+            var worn = lib.Stats().Loadout
+                .SelectMany(slot => slot.Items)
+                .Select(i => new { i.Name, uuid = i.Reference?.Uuid })
+                .Where(i => i.uuid is not null)
+                .DistinctBy(i => i.uuid)
+                .ToList();
+
+            // Terminal to what it stocks of this kit, and for how much.
+            var shops = new Dictionary<string, List<(string Item, decimal Price)>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in worn)
+                foreach (var row in uex.ItemMarket(item.uuid))
+                {
+                    if (!shops.TryGetValue(row.Terminal, out var carried))
+                        shops[row.Terminal] = carried = [];
+
+                    if (!carried.Any(c => c.Item == item.Name))
+                        carried.Add((item.Name, row.Buy));
+                }
+
+            var ranked = shops
+                .Select(s => new
+                {
+                    terminal = s.Key,
+                    covers = s.Value.Count,
+                    total = s.Value.Sum(i => i.Price),
+                    items = s.Value.OrderByDescending(i => i.Price).Select(i => new { i.Item, i.Price })
+                })
+                .OrderByDescending(s => s.covers)
+                .ThenBy(s => s.total)
+                .Take(10);
+
+            return new
+            {
+                kitSize = worn.Count,
+                priced = worn.Count(w => uex.ItemPrice(w.uuid) is > 0),
+                cheapest = worn.Sum(w => uex.ItemPrice(w.uuid) ?? 0),
+                shops = ranked
+            };
+        });
+
         // ---- jobs: the player's own plans, checked against what they hold ----
 
         app.MapGet("/api/jobs", (JobStore jobs, LogLibrary lib, UexData uex) =>
