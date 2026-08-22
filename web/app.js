@@ -2269,10 +2269,10 @@ async function loadJobList() {
     head.append(toggle);
 
     // A list knows where its missing things are sold, which is a shopping trip
-    // waiting to be flown. One stop per terminal, carrying what to get there.
+    // waiting to be flown - once the player has said which seller they meant.
     const shop = el('button', 'ghost', 'Plan trip');
     shop.title = 'Turn what is still missing into a flight plan';
-    shop.addEventListener('click', () => planShoppingTrip(job));
+    shop.addEventListener('click', () => planShoppingTrip(job, card));
     head.append(shop);
 
     const remove = el('button', 'ghost', 'Delete');
@@ -5139,48 +5139,173 @@ const placeIdForTerminal = (terminal) =>
   atlas.find((l) => terminalMatchesPlace(terminal, l.name))?.rawId || '';
 
 /**
- * Turns what a shopping list is still missing into a run.
+ * Terminals that sell a commodity, cheapest first, cached for the session.
+ *
+ * The list's own `buyAt` is only ever the cheapest one UEX knows. That is a
+ * fine default and a poor answer: the cheapest seller of a common good is
+ * routinely three jumps out of the way, and the player is the only one who
+ * knows what else the run has to fit around.
+ */
+const sellerCache = new Map();
+
+async function sellersOf(item) {
+  if (sellerCache.has(item.name)) return sellerCache.get(item.name);
+
+  const fallback = item.buyAt
+    ? [{ terminal: item.buyAt, price: item.buyPrice || 0, scu: 0 }]
+    : [];
+
+  const rows = await getJson(`/api/uex/market?commodity=${encodeURIComponent(item.name)}`)
+    .catch(() => []);
+
+  // Buying from a terminal is its `buy` price; `sell` is what it pays you.
+  const sellers = rows
+    .filter((r) => r.buy > 0)
+    .sort((a, b) => a.buy - b.buy)
+    .slice(0, 10)
+    .map((r) => ({ terminal: r.terminal, price: r.buy, scu: r.buyScu || 0 }));
+
+  const answer = sellers.length ? sellers : fallback;
+  sellerCache.set(item.name, answer);
+  return answer;
+}
+
+/**
+ * Turns what a list is still missing into a run, asking where to buy each thing.
  *
  * One stop per terminal rather than per item, because a trip is a sequence of
- * places: three things sold at Area18 is one landing. Items UEX has no seller
- * for are left out of the stops and said out loud, rather than quietly dropped.
+ * places: three things bought at Area18 is one landing. Anything with no known
+ * seller is shown and left off rather than quietly dropped.
  */
-async function planShoppingTrip(job) {
+async function planShoppingTrip(job, card) {
+  card.querySelectorAll('.trip-chooser').forEach((n) => n.remove());
+
   const missing = job.items.filter((i) => !i.have);
-  const byPlace = new Map();
-  const unknown = [];
 
-  for (const item of missing) {
-    if (!item.buyAt) {
-      unknown.push(item.name);
-      continue;
-    }
-
-    const need = item.needed > 0
-      ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
-      : item.name;
-
-    byPlace.set(item.buyAt, [...(byPlace.get(item.buyAt) || []), need]);
-  }
-
-  if (!byPlace.size) {
-    alertLine($('#jobs-list'), missing.length
-      ? 'Nothing on this list has a known seller. UEX prices would give it one.'
-      : 'Everything on this list is already in hand.');
+  if (!missing.length) {
+    alertLine($('#jobs-list'), 'Everything on this list is already in hand.');
     return;
   }
 
-  const stops = [...byPlace.entries()].map(([place, items]) => ({
-    placeId: placeIdForTerminal(place),
-    place,
-    note: items.join(', '),
-  }));
+  const chooser = el('div', 'trip-chooser');
+  chooser.append(el('div', 'chooser-head', 'Where to buy — one stop per terminal'));
 
-  await planTrip(`${job.title} run`, stops);
+  const rows = el('div', 'chooser-rows');
+  rows.append(el('div', 'muted', 'Looking up sellers…'));
+  chooser.append(rows);
+  card.append(chooser);
 
-  if (unknown.length) {
-    console.info(`No seller known for ${unknown.join(', ')}; left off the plan.`);
+  const options = await Promise.all(missing.map(async (item) => ({
+    item,
+    sellers: await sellersOf(item),
+  })));
+
+  rows.textContent = '';
+
+  // What the player picked, item name to terminal. Empty means "leave it off".
+  const chosen = new Map();
+  const foot = el('div', 'chooser-foot');
+  const count = el('span', 'muted');
+
+  const retally = () => {
+    const stops = new Set([...chosen.values()].filter(Boolean));
+    count.textContent = stops.size
+      ? `${stops.size} stop${stops.size === 1 ? '' : 's'}`
+      : 'nothing chosen';
+  };
+
+  for (const { item, sellers } of options) {
+    const row = el('div', 'chooser-row');
+
+    const what = el('div', 'chooser-what');
+    what.append(el('div', 'name', item.name));
+    what.append(el('div', 'sub', item.needed > 0
+      ? `${item.needed}${item.unit ? ` ${item.unit}` : ''} needed`
+      : 'any amount'));
+    row.append(what);
+
+    if (!sellers.length) {
+      row.append(el('div', 'chooser-none', 'no known seller — left off'));
+      rows.append(row);
+      continue;
+    }
+
+    const select = el('select', 'select');
+
+    for (const seller of sellers) {
+      const option = document.createElement('option');
+      option.value = seller.terminal;
+      option.textContent = seller.price > 0
+        ? `${seller.terminal} · ${money(seller.price)}${seller.scu ? ` · ${Math.round(seller.scu).toLocaleString()} SCU` : ''}`
+        : seller.terminal;
+      select.append(option);
+    }
+
+    const skip = document.createElement('option');
+    skip.value = '';
+    skip.textContent = 'Leave this one off';
+    select.append(skip);
+
+    chosen.set(item.name, sellers[0].terminal);
+    select.addEventListener('change', () => {
+      chosen.set(item.name, select.value);
+      retally();
+    });
+
+    row.append(select);
+    rows.append(row);
   }
+
+  retally();
+
+  const create = el('button', 'ghost', 'Create plan');
+  create.addEventListener('click', async () => {
+    const byPlace = new Map();
+
+    for (const { item, sellers } of options) {
+      const terminal = chosen.get(item.name);
+      if (!terminal) continue;
+
+      const seller = sellers.find((s) => s.terminal === terminal);
+      const need = item.needed > 0
+        ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+        : item.name;
+
+      const line = byPlace.get(terminal) || { items: [], cost: 0, priced: true };
+      line.items.push(need);
+
+      if (seller?.price > 0 && item.needed > 0) line.cost += seller.price * item.needed;
+      else line.priced = false;
+
+      byPlace.set(terminal, line);
+    }
+
+    if (!byPlace.size) {
+      alertLine($('#jobs-list'), 'Nothing is chosen, so there is no run to fly.');
+      return;
+    }
+
+    const stops = [...byPlace.entries()].map(([place, line]) => ({
+      placeId: placeIdForTerminal(place),
+      place,
+
+      // The estimate is only shown when every item at the stop has a price;
+      // a partial total reads as the cost of the landing and is not.
+      note: line.items.join(', ') + (line.priced && line.cost > 0 ? ` · ~${money(line.cost)}` : ''),
+    }));
+
+    chooser.remove();
+    await planTrip(`${job.title} run`, stops);
+  });
+
+  const cancel = el('button', 'ghost', 'Cancel');
+  cancel.addEventListener('click', () => chooser.remove());
+
+  foot.append(count);
+  foot.append(el('span', 'spacer'));
+  foot.append(create);
+  foot.append(cancel);
+  chooser.append(foot);
 }
 
 /** A one-line notice under a section, for when a button cannot do its job. */
