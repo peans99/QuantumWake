@@ -102,6 +102,50 @@ session cache stores JSON blobs rather than a normalised schema.
 Nothing here needs SQL joins. Every read is "give me this org's X", which is a
 single-partition query by design.
 
+### Self-hosting is a first-class option, not a fallback
+
+Azure is one deployment of the service, not the service. The same code must run
+as a plain ASP.NET Core web server that anyone can start on a spare box, a NAS,
+or their own machine — and the client must let them point at it.
+
+Three reasons this is worth the constraint rather than a nice-to-have:
+
+1. **Not everyone will trust a hosted instance**, and they are right not to
+   have to. An org that would rather keep its inventory on its own hardware
+   should be able to, and the ones that do not care get the hosted one.
+2. **Testing.** A local instance means the whole network feature can be
+   developed and demonstrated with no cloud account, no keys, and no bill —
+   the same reason `--data` exists for rehearsing a first run. `fresh-run.ps1`
+   should get a sibling that starts a throwaway server and points a throwaway
+   client at it.
+3. **It keeps the design honest.** Anything that only works because Azure
+   provides it — a proprietary trigger, a managed identity, a Cosmos-only
+   query — is a dependency the self-hosted build would have to fake. Forcing
+   both to work keeps the surface small.
+
+What that means concretely:
+
+- **The API is plain HTTP over a handful of endpoints**, defined once and
+  hosted twice: an Azure Function app for the hosted deployment, and a
+  `Quantumwake.OrgServer` project for the self-hosted one. Same handlers, two
+  hosts — the same split that already lets the dashboard run inside
+  `QuantumWake.exe` or as a bare server.
+- **Storage sits behind one interface.** Cosmos for the hosted build; SQLite
+  for the self-hosted one, which the app already depends on and which needs no
+  service to run. Both store documents, and neither is asked to do anything
+  clever.
+- **The client gets a server address**, defaulting to the hosted instance but
+  editable, sitting beside the org join code in Settings. An org handing out
+  an invite hands out an address with it.
+- **Ship it runnable.** A single self-contained executable, the same as the
+  app itself, plus a compose file for anyone who would rather. Configuration
+  is a folder for the database and a port.
+
+The one thing self-hosting cannot solve is reachability: a server on a home
+network needs a tunnel or a forwarded port to be useful to an org spread across
+the internet. Say so plainly in the docs rather than letting someone discover
+it after setting one up.
+
 ---
 
 ## Identity and trust
@@ -210,10 +254,13 @@ answer better.
 
 Each phase is useful alone and shippable alone.
 
-**Phase A — the pipe.** Function app, Cosmos, join/leave, member keys, one data
-class (`blueprints`, the smallest and least sensitive), the Settings block, the
-share preview, and an Org page that lists members and who holds what. Proves
-identity, consent and deletion end to end on the least dangerous data.
+**Phase A — the pipe.** The shared handlers, both hosts (Function app over
+Cosmos, `Quantumwake.OrgServer` over SQLite), join/leave, member keys, one data
+class (`blueprints`, the smallest and least sensitive), the Settings block with
+its server address, the share preview, and an Org page that lists members and
+who holds what. Proves identity, consent and deletion end to end on the least
+dangerous data — and building the self-hosted host first means none of it needs
+a cloud account to develop against.
 
 **Phase B — inventory and prices.** `stash` and `prices`, with TTLs and the
 staleness wording. This is where the pooled search becomes genuinely useful,
@@ -255,9 +302,10 @@ is not a reason to.
 
 ## Open questions
 
-1. Who hosts the shared instance, and who pays — one person, or does each org
-   deploy their own? This decides whether the function needs multi-tenancy
-   hardening or merely org partitioning.
+1. Who hosts the shared instance, and who pays? Self-hosting answers this for
+   any org that wants it, but a hosted default still needs an owner — and
+   whether that default is multi-org or one-org-per-deployment decides how
+   much tenancy hardening the function needs.
 2. Is unverified handle ownership acceptable for the first release? (Probably
    yes inside invite-only spaces; certainly not beyond them.)
 3. Should the org share pooled data with the *user's own* pages by default once
