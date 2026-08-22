@@ -1927,6 +1927,10 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
 .wipe-row .search { font-size: 12px; }
+.wipe-caption { margin: 10px 0 6px; padding-left: 0; }
+.wipe-scope { display: flex; flex-direction: column; gap: 6px; }
+.wipe-scope .toggle { font-size: 12px; }
+
 
 /* ---------- flight plans ---------- */
 

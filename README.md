@@ -125,8 +125,13 @@ not in the others:
 A data wipe ends one account and starts another, so totals that reach past one
 are answering about an account you no longer have. Sessions from before the last
 wipe are kept and still parsed — they are simply not counted, and the Settings
-page says how many that is. The date defaults to Alpha 4.8 and is yours to move,
-or to switch off entirely if you want the lot.
+page says how many that is.
+
+Wipes come at different depths, so you say what this one took: money, ships,
+inventory, play history. Tick only what it actually reset and the rest keeps its
+whole history — after an aUEC-only wipe your ledger starts again while your
+fleet and the places you have been carry on. The date defaults to Alpha 4.8 on
+15 May 2026 and is yours to move, or to switch off entirely if you want the lot.
 
 ## Two things it deliberately does not do
 

@@ -3,14 +3,53 @@ using Quantumwake.Core;
 
 namespace Quantumwake.Data;
 
-/// <summary>When the game last wiped, and what patch did it.</summary>
+/// <summary>
+/// What a wipe took, which is not always everything.
+/// </summary>
+/// <remarks>
+/// CIG wipes to different depths. A patch may reset money and leave hangars
+/// alone, clear inventories without touching balances, or take the lot. Filing
+/// every one of them as "a wipe" and hiding all history is wrong in the common
+/// case: after a money-only wipe your ships and the places you have been are
+/// still yours, and blanking them costs the player real history for nothing.
+/// </remarks>
+[Flags]
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+public enum WipeScope
+{
+    None = 0,
+
+    /// <summary>aUEC: spending, income, the ledger and cargo takings.</summary>
+    Money = 1,
+
+    /// <summary>The hangar: what you own, and the fleet count over time.</summary>
+    Ships = 2,
+
+    /// <summary>Stashes, the kit you are wearing, and what you have picked up.</summary>
+    Inventory = 4,
+
+    /// <summary>
+    /// Where you have been and what you have flown - not account state at all,
+    /// so this is only ticked for a wipe the player wants drawn as a clean
+    /// start rather than as a reset of what they hold.
+    /// </summary>
+    History = 8,
+
+    Everything = Money | Ships | Inventory | History,
+}
+
+/// <summary>When the game last wiped, what patch did it, and how deep it went.</summary>
 /// <param name="At">
 /// Sessions that started before this are still stored and still parsed - they
 /// are simply not counted. Nothing about a wipe destroys the logs, only what
 /// they add up to.
 /// </param>
 /// <param name="Patch">The patch the wipe came with, for the page to name.</param>
-public sealed record Wipe(DateTimeOffset At, string Patch);
+/// <param name="Scope">
+/// Which totals begin again here. Anything outside it reaches back through the
+/// wipe as if it had not happened, because for that number it did not.
+/// </param>
+public sealed record Wipe(DateTimeOffset At, string Patch, WipeScope Scope = WipeScope.Everything);
 
 /// <summary>
 /// The line a wipe draws under the player's history.
@@ -42,8 +81,10 @@ public sealed class WipeStore
     /// A default derived from evidence rather than a remembered date, and one
     /// the player can correct on the Settings page.
     /// </remarks>
-    public static readonly Wipe Default =
-        new(new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero), "Alpha 4.8");
+    public static readonly Wipe Default = new(
+        new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero),
+        "Alpha 4.8",
+        WipeScope.Everything);
 
     private readonly string _path;
     private readonly Lock _gate = new();
@@ -67,13 +108,21 @@ public sealed class WipeStore
     /// A future date would hide everything and leave a dashboard of zeroes with
     /// no explanation, so it is refused; the caller is told what was kept.
     /// </remarks>
-    public Wipe Set(DateTimeOffset? at, string? patch)
+    /// <param name="scope">
+    /// What the wipe took. <see cref="WipeScope.None"/> would be a wipe that
+    /// changed nothing, which is a date with no meaning, so it is read as a
+    /// full one - the same answer as leaving it unsaid.
+    /// </param>
+    public Wipe Set(DateTimeOffset? at, string? patch, WipeScope? scope = null)
     {
+        var depth = scope is null or WipeScope.None ? WipeScope.Everything : scope.Value;
+
         var wanted = at is null
-            ? new Wipe(DateTimeOffset.MinValue, "no wipe")
+            ? new Wipe(DateTimeOffset.MinValue, "no wipe", depth)
             : new Wipe(
                 at.Value > DateTimeOffset.UtcNow ? _wipe.At : at.Value,
-                string.IsNullOrWhiteSpace(patch) ? "set by hand" : patch.Trim());
+                string.IsNullOrWhiteSpace(patch) ? "set by hand" : patch.Trim(),
+                depth);
 
         lock (_gate)
         {

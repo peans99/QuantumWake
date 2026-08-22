@@ -60,7 +60,7 @@ public static class ServerHost
         // page can render pre-wipe totals in the moment before it is applied.
         var wipes = new WipeStore();
         builder.Services.AddSingleton(wipes);
-        library.CountFrom = wipes.Current.At == DateTimeOffset.MinValue ? null : wipes.Current.At;
+        library.Wipe = wipes.Current;
 
 
         // Only when there is one. Registering a null instance throws
@@ -1021,26 +1021,14 @@ public static class ServerHost
 
         // ---- the wipe: where the player's countable history begins ----
 
-        app.MapGet("/api/wipe", (WipeStore wipes, LogLibrary lib) =>
-        {
-            var wipe = wipes.Current;
-
-            return new
-            {
-                at = wipe.At == DateTimeOffset.MinValue ? (DateTimeOffset?)null : wipe.At,
-                wipe.Patch,
-                hidden = lib.SessionsBeforeWipe(),
-                stored = lib.Store.Count(),
-                @default = WipeStore.Default.At
-            };
-        });
+        app.MapGet("/api/wipe", (WipeStore wipes, LogLibrary lib) => Describe(wipes.Current, lib));
 
         app.MapPost("/api/wipe", (WipeRequest body, WipeStore wipes, LogLibrary lib) =>
         {
-            var wipe = wipes.Set(body.At, body.Patch);
-            lib.CountFrom = wipe.At == DateTimeOffset.MinValue ? null : wipe.At;
+            var wipe = wipes.Set(body.At, body.Patch, ScopeOf(body.Covers));
+            lib.Wipe = wipe;
 
-            return Results.Ok(new { at = wipe.At, wipe.Patch, hidden = lib.SessionsBeforeWipe() });
+            return Results.Ok(Describe(wipe, lib));
         });
 
         app.MapGet("/api/trips", (TripStore trips) => trips.All());
@@ -1254,7 +1242,46 @@ public static class ServerHost
         return app;
     }
 
-    /// <summary>Bridges the library's progress callback to the shared status.</summary>
+    /// <summary>
+/// The wipe as the page reads it: names rather than a flags number, and the
+/// count of what it is holding back, which is the honest part.
+/// </summary>
+static object Describe(Wipe wipe, LogLibrary lib) => new
+{
+    at = wipe.At == DateTimeOffset.MinValue ? (DateTimeOffset?)null : wipe.At,
+    wipe.Patch,
+    covers = Enum.GetValues<WipeScope>()
+        .Where(v => v is not (WipeScope.None or WipeScope.Everything) && wipe.Scope.HasFlag(v))
+        .Select(v => v.ToString().ToLowerInvariant())
+        .ToArray(),
+    hidden = lib.SessionsBeforeWipe(),
+    stored = lib.Store.Count(),
+    @default = WipeStore.Default.At
+};
+
+/// <summary>
+/// What the page said the wipe took.
+/// </summary>
+/// <remarks>
+/// Unknown names are ignored rather than refused: a scope this build does not
+/// have is a page from a newer one, and the sensible reading of "money and
+/// something I have never heard of" is money.
+/// </remarks>
+static WipeScope ScopeOf(List<string>? covers)
+{
+    if (covers is null || covers.Count == 0)
+        return WipeScope.Everything;
+
+    var scope = WipeScope.None;
+
+    foreach (var name in covers)
+        if (Enum.TryParse<WipeScope>(name, ignoreCase: true, out var one))
+            scope |= one;
+
+    return scope == WipeScope.None ? WipeScope.Everything : scope;
+}
+
+/// <summary>Bridges the library's progress callback to the shared status.</summary>
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
@@ -1313,8 +1340,12 @@ public sealed record InstallPathRequest(string? Path);
 /// <summary>Body of POST /api/jobs.</summary>
 public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
 
-/// <summary>Body of POST /api/wipe. A null date counts everything again.</summary>
-public sealed record WipeRequest(DateTimeOffset? At, string? Patch);
+/// <summary>
+/// Body of POST /api/wipe. A null date counts everything again, and
+/// <paramref name="Covers"/> names what the wipe took - "money", "ships",
+/// "inventory", "history" - with an empty list read as all of it.
+/// </summary>
+public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>? Covers);
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
