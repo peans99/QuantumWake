@@ -305,3 +305,18 @@ who came before had one.
 
 `--data` moves every cache and setting elsewhere, so the next first run can be
 rehearsed without destroying the real one to see it.
+
+### 0.5.1
+
+A patch. Stashes looked like they were losing things, and they were: only
+the newest inventory listing counted, but a listing is only ever a page, so
+glancing at one tab of a locker overwrote a full browse of it and the place
+appeared emptied - two items where seventeen had been recorded. Both readings
+are now offered, since each answers a different question honestly: the
+default still says what is there now, and "Everything ever seen" unions every
+listing for what has been left lying around.
+
+Also here: the inferred respawn point, which the game never states and which
+this works out from where the player turns up after dying, and a Now card
+showing it - because where you will reappear is worth knowing before the
+fight rather than after it.
