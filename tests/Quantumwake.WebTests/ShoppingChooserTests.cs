@@ -8,22 +8,24 @@ public class ShoppingChooserTests
 {
     /// <summary>Three sellers of one good, cheapest short of what is wanted.</summary>
     private const string LaraniteSellers = """
-        [
-          {"terminal":"ArcCorp 056","placeId":"","buy":7047,"sell":0,"buyScu":330,"sellScu":0},
-          {"terminal":"ArcCorp 045","placeId":"Stanton3_Area18","buy":7400,"sell":0,"buyScu":1050,"sellScu":0},
-          {"terminal":"Rustville","placeId":"","buy":9000,"sell":0,"buyScu":4000,"sellScu":0}
-        ]
+        {"name":"Laranite","kind":"commodity","sellers":[
+          {"kind":"commodity","terminal":"ArcCorp 056","placeId":"","security":"unknown","price":7047,"scu":330},
+          {"kind":"commodity","terminal":"ArcCorp 045","placeId":"Stanton3_Area18","place":"Area18","system":"Stanton","security":"monitored","price":7400,"scu":1050},
+          {"kind":"commodity","terminal":"Rustville","placeId":"","security":"lawless","system":"Pyro","price":9000,"scu":4000}
+        ]}
         """;
 
     private const string AgriciumSellers = """
-        [{"terminal":"Endgame","placeId":"","buy":6840,"sell":0,"buyScu":67,"sellScu":0}]
+        {"name":"Agricium","kind":"commodity","sellers":[
+          {"kind":"commodity","terminal":"Endgame","placeId":"","security":"lawless","system":"Pyro","price":6840,"scu":67}
+        ]}
         """;
 
     private static Page WithSellers()
     {
         var page = new Page();
-        page.Serve("/api/uex/market?commodity=Laranite", LaraniteSellers);
-        page.Serve("/api/uex/market?commodity=Agricium", AgriciumSellers);
+        page.Serve("/api/shopping/sellers?name=Laranite", LaraniteSellers);
+        page.Serve("/api/shopping/sellers?name=Agricium", AgriciumSellers);
         page.Serve("/api/trips", "[]");
         page.Do("atlas = []; await loadTrips();");
         return page;
@@ -155,8 +157,10 @@ public class ShoppingChooserTests
     public void One_stop_per_terminal_carrying_what_to_buy_there()
     {
         var page = WithSellers();
-        page.Serve("/api/uex/market?commodity=Agricium", """
-            [{"terminal":"ArcCorp 056","placeId":"","buy":6840,"sell":0,"buyScu":900,"sellScu":0}]
+        page.Serve("/api/shopping/sellers?name=Agricium", """
+            {"name":"Agricium","kind":"commodity","sellers":[
+              {"kind":"commodity","terminal":"ArcCorp 056","placeId":"","security":"unknown","price":6840,"scu":900}
+            ]}
             """);
 
         OpenChooser(page, includeUnknown: false);

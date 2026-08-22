@@ -108,11 +108,37 @@ public class TerminalPlacesTests
     }
 
     [Fact]
-    public void The_matched_place_comes_back_with_its_name()
+    public void The_matched_place_comes_back_whole()
     {
         var match = Atlas.Resolve("TDD, Area 18");
 
         Assert.NotNull(match);
-        Assert.Equal("Area18", match.Value.Name);
+        Assert.Equal("Area18", match.Name);
+        Assert.Equal("Stanton", match.System);
+    }
+
+    /// <summary>
+    /// Nothing in the logs or the price feed describes danger; which system a
+    /// place is in is what can be known, and it decides whether UEE law reaches
+    /// it at all.
+    /// </summary>
+    [Theory]
+    [InlineData("Stanton", "monitored")]
+    [InlineData("Pyro", "lawless")]
+    [InlineData("Nyx", "lawless")]
+    public void Security_is_read_from_the_system(string system, string expected)
+    {
+        Assert.Equal(expected, TerminalPlaces.SecurityOfSystem(system));
+    }
+
+    /// <summary>
+    /// Being told somewhere is safe when nobody checked is the one answer worth
+    /// refusing, so an unplaced terminal says it does not know.
+    /// </summary>
+    [Fact]
+    public void A_place_we_cannot_name_is_not_called_safe()
+    {
+        Assert.Equal("unknown", TerminalPlaces.SecurityOfSystem(null));
+        Assert.Equal("unknown", Atlas.SecurityOf("Ashland"));
     }
 }

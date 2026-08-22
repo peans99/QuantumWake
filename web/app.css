@@ -662,7 +662,62 @@ h2.spaced { margin-top: 32px; }
 .note-inline { color: var(--dim); }
 .caption { font-size: 11.5px; margin: -6px 0 16px; max-width: 76ch; line-height: 1.6; padding-left: 11px; }
 
+/* ---------- a commodity's counters ---------- */
+
+.commodity-open { color: var(--cyan); }
+.commodity-open:hover { color: var(--cyan-hot); }
+
+#market-table tr.expanded > td { border-bottom: 0; }
+#market-table tr.market-detail > td {
+  padding: 0 15px 14px;
+  background: rgba(0, 0, 0, .25);
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 0 9px;
+}
+.detail-head b { font-size: 12.5px; color: var(--cyan-hot); }
+.detail-head .seg button { font-size: 10px; padding: 4px 9px; }
+
+.detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.detail-table th {
+  text-align: left;
+  padding: 5px 9px;
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+}
+.detail-table th.num, .detail-table td.num { text-align: right; }
+.detail-table td { padding: 5px 9px; border-bottom: 1px solid rgba(23, 41, 60, .5); }
+.detail-table tr:hover td { background: rgba(53, 200, 240, .05); }
+
+/*
+ * Security is a word, not a colour alone: "lawless" has to survive being read
+ * by someone who cannot tell the amber from the green.
+ */
+.sec {
+  font-size: 9.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+}
+.sec-monitored { color: var(--green); border-color: #1f5c3d; }
+.sec-lawless { color: var(--red); border-color: #6b2820; }
+.sec-unknown { color: var(--dim); }
+.sec-system { font-size: 10.5px; }
+
+.detail-note { font-size: 10.5px; line-height: 1.55; margin-top: 9px; max-width: 92ch; }
+.detail-empty { font-size: 12px; padding: 10px 0; }
+
 /* ---------- buttons ---------- */
+
 
 /*
  * The look belongs to the element, not to a class somebody has to remember.
@@ -1480,7 +1535,13 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 
 /* Search mode: matches glow, the rest recede but stay for context. The dim is
    deep - at .16 the crowd still competed with the answer. */
-.map-node.dim { opacity: .07; }
+/*
+ * Recessive, not erased. At .07 the rest of the map was a rumour, which made
+ * the lit places float with nothing to be near; slate at .18 keeps the shape
+ * of the system under the answer.
+ */
+.map-node.dim { opacity: .18; }
+
 .map-node.hl .hl-ring { animation: hl-breathe 2.4s ease-in-out infinite; }
 .map-node.hl .map-label { fill: #a9f5c9; }
 

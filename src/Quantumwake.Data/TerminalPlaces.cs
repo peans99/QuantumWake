@@ -24,14 +24,14 @@ public sealed class TerminalPlaces
     /// <summary>Shorter than this and a name matches half the system.</summary>
     private const int MinimumMatch = 5;
 
-    private readonly List<(string Compact, string RawId, string Name)> _places;
-    private readonly Dictionary<string, (string RawId, string Name)?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(string Compact, PlaceTotal Place)> _places;
+    private readonly Dictionary<string, PlaceTotal?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
 
     public TerminalPlaces(IEnumerable<PlaceTotal> atlas)
     {
         _places = [.. atlas
-            .Select(p => (Compact: Compact(p.Name), p.RawId, p.Name))
+            .Select(p => (Compact: Compact(p.Name), Place: p))
             .Where(p => p.Compact.Length >= MinimumMatch)
 
             // Longest first, so "Area 061" wins over "Area 06" for a terminal
@@ -40,7 +40,7 @@ public sealed class TerminalPlaces
     }
 
     /// <summary>The place a terminal sits at, or null when nothing fits.</summary>
-    public (string RawId, string Name)? Resolve(string? terminal)
+    public PlaceTotal? Resolve(string? terminal)
     {
         if (string.IsNullOrWhiteSpace(terminal))
             return null;
@@ -59,6 +59,27 @@ public sealed class TerminalPlaces
     /// <summary>The place id alone, empty when nothing fits.</summary>
     public string IdFor(string? terminal) => Resolve(terminal)?.RawId ?? string.Empty;
 
+    /// <summary>
+    /// How dangerous the space around a terminal is.
+    /// </summary>
+    /// <remarks>
+    /// By system, because that is what can be known: nothing in the logs and
+    /// nothing in the price feed describes threat, but which system a place is
+    /// in decides whether UEE law reaches it at all. Stanton is policed and its
+    /// stations carry armistice zones; Pyro and Nyx are not. A place the atlas
+    /// cannot name gets "unknown" rather than a reassuring guess - being told
+    /// somewhere is safe when nobody checked is the one answer worth refusing.
+    /// </remarks>
+    public string SecurityOf(string? terminal) => SecurityOfSystem(Resolve(terminal)?.System);
+
+    public static string SecurityOfSystem(string? system) => system switch
+    {
+        null or "" => "unknown",
+        "Stanton" => "monitored",
+        _ => "lawless",
+    };
+
+
     /// <remarks>
     /// Three passes, in falling order of confidence. Containment runs both ways
     /// because the naming goes both ways: "Admin - Port Tressler" carries the
@@ -66,7 +87,7 @@ public sealed class TerminalPlaces
     /// "Seraphim Station" left off. Each pass insists on a single answer, so an
     /// ambiguous name resolves to nothing rather than to a guess.
     /// </remarks>
-    private (string RawId, string Name)? Match(string terminal)
+    private PlaceTotal? Match(string terminal)
     {
         var haystack = Compact(terminal);
         if (haystack.Length < MinimumMatch)
@@ -77,7 +98,7 @@ public sealed class TerminalPlaces
             .ToList();
 
         if (exact.Count == 1)
-            return (exact[0].RawId, exact[0].Name);
+            return exact[0].Place;
 
         // The place named inside the terminal: longest wins, so a terminal
         // holding both "Area 06" and "Area 061" resolves to the longer.
@@ -91,7 +112,7 @@ public sealed class TerminalPlaces
             var best = named.Where(p => p.Compact.Length == longest).ToList();
 
             if (best.Count == 1)
-                return (best[0].RawId, best[0].Name);
+                return best[0].Place;
 
             return null;
         }
@@ -102,7 +123,7 @@ public sealed class TerminalPlaces
             .Where(p => p.Compact.Contains(haystack, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        return abbreviated.Count == 1 ? (abbreviated[0].RawId, abbreviated[0].Name) : null;
+        return abbreviated.Count == 1 ? abbreviated[0].Place : null;
     }
 
     private static string Compact(string value) =>
