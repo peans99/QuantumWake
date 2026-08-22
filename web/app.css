@@ -716,7 +716,141 @@ h2.spaced { margin-top: 32px; }
 .detail-note { font-size: 10.5px; line-height: 1.55; margin-top: 9px; max-width: 92ch; }
 .detail-empty { font-size: 12px; padding: 10px 0; }
 
+/* ---------- a shopping list seen by location ---------- */
+
+.chooser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.chooser-views button { font-size: 10px; padding: 4px 9px; }
+
+.chooser-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 8px;
+}
+.chooser-actions button { font-size: 10px; padding: 5px 10px; }
+
+.chooser-stop {
+
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(23, 41, 60, .55);
+}
+.chooser-stop:hover { background: rgba(53, 200, 240, .04); }
+
+.stop-tick { padding-top: 2px; cursor: pointer; }
+.stop-tick input { accent-color: var(--cyan); cursor: pointer; }
+
+.stop-what .name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.stop-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+/*
+ * Three states, because the question is not only "what is sold here" but
+ * "what would this landing still be for": mine is what this stop supplies,
+ * taken is what an earlier stop already covers, plain is unclaimed.
+ */
+.stop-item {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  color: var(--dim);
+}
+.stop-item.mine { color: var(--cyan-hot); border-color: #1d4d63; }
+.stop-item.taken { opacity: .4; text-decoration: line-through; }
+
+.stop-sum {
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* ---------- what fits a ship ---------- */
+
+
+.ship-upgrade { margin-top: 10px; font-size: 10px; padding: 5px 10px; }
+
+/*
+ * A table of parts cannot live in a third of a row, so the card takes the
+ * whole row while its panel is open and lays itself out downwards.
+ */
+.ship-card.opened {
+  grid-column: 1 / -1;
+  display: block;
+}
+.ship-card.opened .ship-logo { display: none; }
+
+.upgrade-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.upgrade-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.upgrade-head b { font-size: 12px; color: var(--cyan-hot); }
+.upgrade-head span { font-size: 10px; }
+
+.upgrade-group { border-bottom: 1px solid rgba(23, 41, 60, .6); }
+
+.upgrade-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 4px;
+  text-align: left;
+  flex-wrap: wrap;
+}
+.upgrade-toggle:hover { background: rgba(53, 200, 240, .05); }
+.upgrade-toggle.open .upgrade-kind { color: var(--cyan-hot); }
+.upgrade-kind { font-size: 11.5px; color: var(--cyan); min-width: 15ch; }
+.upgrade-fitted { font-size: 10.5px; color: var(--dim); flex: 1; }
+.upgrade-count { font-size: 10px; }
+
+.upgrade-options { padding: 2px 4px 12px; overflow-x: auto; }
+
+.upgrade-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.upgrade-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+}
+.upgrade-table th.num, .upgrade-table td.num { text-align: right; }
+.upgrade-table td { padding: 4px 8px; border-bottom: 1px solid rgba(23, 41, 60, .45); }
+.upgrade-table tr:hover td { background: rgba(53, 200, 240, .04); }
+.upgrade-table .sec { margin-left: 7px; }
+
 /* ---------- buttons ---------- */
+
 
 
 /*
@@ -780,7 +914,8 @@ button:disabled { opacity: .35; cursor: default; }
 .trip-place,
 .trip-number,
 .seg button,
-.pager-btn {
+.pager-btn,
+.upgrade-toggle {
   text-transform: none;
   letter-spacing: normal;
   clip-path: none;

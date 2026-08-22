@@ -17,10 +17,36 @@ public class TerminalPlacesTests
         Place("Stanton3_Area18", "Area18"),
         Place("Stanton3b_ArcCorp_Area061", "Area 061"),
         Place("RR_MIC_L1", "microTech L1 Rest Stop"),
+        Place("RR_HUR_L5", "HUR-L5 High Course Station"),
+        Place("RR_CRU_L4", "CRU-L4 Shallow Fields Station"),
         Place("Port_Tressler", "Port Tressler"),
         Place("GrimHEX", "GrimHEX"),
         Place("Stanton1_Lorville", "Lorville")
     ]);
+
+    /// <summary>
+    /// The shop chains name a counter after the station code alone, which
+    /// neither contains nor is contained by the atlas name - so every item
+    /// shop on a rest stop used to resolve to nothing.
+    /// </summary>
+    [Theory]
+    [InlineData("Platinum HUR-L5", "RR_HUR_L5")]
+    [InlineData("Dumper's CRU-L4", "RR_CRU_L4")]
+    [InlineData("Platinum CRU-L4", "RR_CRU_L4")]
+    public void A_shop_named_for_a_station_code_finds_that_station(string terminal, string expected)
+    {
+        Assert.Equal(expected, Atlas.IdFor(terminal));
+    }
+
+    /// <summary>
+    /// A code has to be a code: matching on a leading word would let "Port
+    /// Tressler" claim every counter with "port" in its name.
+    /// </summary>
+    [Fact]
+    public void A_leading_word_without_a_number_is_not_a_code()
+    {
+        Assert.Equal(string.Empty, Atlas.IdFor("Portside Deli"));
+    }
 
     [Theory]
     [InlineData("Admin - Port Tressler", "Port_Tressler")]

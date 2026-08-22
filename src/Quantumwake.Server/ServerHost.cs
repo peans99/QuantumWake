@@ -1197,6 +1197,101 @@ public static class ServerHost
         // Every terminal price for one commodity: the map grades its sellers
         // and buyers by these, by price or by SCU capacity.
         /*
+         * What can be bolted onto one of your ships, and where it is sold.
+         *
+         * The ship data carries every port with the rule for what may replace
+         * what is in it, so this is the game's own answer rather than a guess:
+         * a size 2 shield port takes a size 2 shield, and the shops that stock
+         * one are known. Ports nobody sells parts for come back empty and are
+         * dropped, so the page shows what can actually be shopped for today.
+         */
+        app.MapGet("/api/fleet/upgrades", (LogLibrary lib, UexData uex, string ship) =>
+        {
+            var slots = lib.Community.Slots(ship);
+
+            if (slots.Count == 0)
+                return Results.Ok(new
+                {
+                    ship,
+
+                    // Told apart on purpose: an install whose reference data
+                    // predates ports needs a refresh, which is a different
+                    // sentence from "this ship has nothing to change".
+                    known = lib.Community.HasSlots,
+                    groups = Array.Empty<object>()
+                });
+
+            // Everything sold, by what it is and how big: one pass over the
+            // catalogue rather than one per port.
+            var catalogue = lib.Community.Items.Values
+                .Where(i => i.Uuid is not null && i.Type is { Length: > 0 })
+                .GroupBy(i => (i.Type!, i.Size))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var groups = slots
+                .GroupBy(s => (s.Kind, s.Size))
+                .Select(group =>
+                {
+                    var fitted = group
+                        .Select(s => s.Fitted)
+                        .Where(f => f is { Length: > 0 })
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    var options = (catalogue.TryGetValue(group.Key, out var candidates) ? candidates : [])
+                        .Select(item => new
+                        {
+                            item.Name,
+                            item.Manufacturer,
+                            item.Grade,
+                            price = uex.ItemPrice(item.Uuid),
+                            shops = uex.ItemMarket(item.Uuid)
+                                .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                                .Select(g => g.MinBy(r => r.Buy)!)
+                                .OrderBy(r => r.Buy)
+                                .Take(4)
+                                .Select(r =>
+                                {
+                                    var place = lib.Terminals.Resolve(r.Terminal);
+
+                                    return new
+                                    {
+                                        terminal = r.Terminal,
+                                        placeId = place?.RawId ?? string.Empty,
+                                        place = place?.Name,
+                                        system = place?.System,
+                                        security = TerminalPlaces.SecurityOfSystem(place?.System),
+                                        price = r.Buy
+                                    };
+                                })
+                                .ToList()
+                        })
+
+                        // Nothing to buy is not an upgrade: an item with no
+                        // shop behind it would send the player nowhere.
+                        .Where(o => o.Name is { Length: > 0 } && o.shops.Count > 0)
+                        .OrderBy(o => o.price ?? decimal.MaxValue)
+                        .Take(12)
+                        .ToList();
+
+                    return new
+                    {
+                        kind = group.Key.Kind,
+                        size = group.Key.Size,
+                        ports = Holes(group),
+                        fitted,
+                        options
+                    };
+                })
+                .Where(g => g.options.Count > 0)
+                .OrderBy(g => g.kind)
+                .ThenBy(g => g.size)
+                .ToList();
+
+            return Results.Ok(new { ship, known = true, groups });
+        });
+
+        /*
          * Where to buy one named thing - whatever kind of thing it is.
          *
          * A shopping list is written by hand, so a line on it can be a
@@ -1480,7 +1575,27 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         new([.. value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
 }
 
+/// <summary>
+/// How many holes of one kind and size a ship really has.
+/// </summary>
+/// <remarks>
+/// Two things stop this being a count of rows. A port that accepts sizes 1 to
+/// 3 is three rows and one hole. And a gimbal mount accepts a gun directly or
+/// a gimbal that then holds the gun, so the mount and the gun inside it are
+/// the same hole offered twice - which is why a Corsair looked like it had
+/// twelve size 2 gun ports instead of six. A port whose id extends another
+/// port's id is inside it, so only the outermost of each chain is counted.
+/// </remarks>
+static int Holes(IEnumerable<ShipSlot> slots)
+{
+    var ports = slots.Select(s => s.Port).Distinct(StringComparer.Ordinal).ToList();
+
+    return ports.Count(port =>
+        !ports.Any(other => other != port && port.StartsWith(other + ".", StringComparison.Ordinal)));
+}
+
 /// <summary>Bridges the library's progress callback to the shared status.</summary>
+
 
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));

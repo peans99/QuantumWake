@@ -25,6 +25,20 @@ public sealed class TerminalPlaces
     private const int MinimumMatch = 5;
 
     private readonly List<(string Compact, PlaceTotal Place)> _places;
+
+    /// <summary>
+    /// Places whose name opens with a station code, by that code.
+    /// </summary>
+    /// <remarks>
+    /// The shop chains name their counters after the code alone - "Platinum
+    /// HUR-L5", "Dumper's CRU-L4" - while the atlas carries the full name,
+    /// "HUR-L5 High Course Station". Neither name contains the other, so
+    /// every item shop on a rest stop resolved to nothing and could not be put
+    /// on the map or into a plan. A code is safe to match on because it is
+    /// never a word: only a leading token carrying a digit counts, which keeps
+    /// "Port Tressler" from claiming every terminal with "port" in its name.
+    /// </remarks>
+    private readonly Dictionary<string, PlaceTotal?> _codes;
     private readonly Dictionary<string, PlaceTotal?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
 
@@ -37,6 +51,26 @@ public sealed class TerminalPlaces
             // Longest first, so "Area 061" wins over "Area 06" for a terminal
             // whose name contains both.
             .OrderByDescending(p => p.Compact.Length)];
+
+        // A code shared by two places is no use, so it is kept as null rather
+        // than dropped - a lookup that finds it knows to stop.
+        _codes = new Dictionary<string, PlaceTotal?>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var place in atlas)
+        {
+            if (LeadingCode(place.Name) is not { } code)
+                continue;
+
+            _codes[code] = _codes.ContainsKey(code) ? null : place;
+        }
+    }
+
+    /// <summary>The station code a place name opens with, or null.</summary>
+    private static string? LeadingCode(string name)
+    {
+        var first = Compact(name.Split(' ')[0]);
+
+        return first.Length >= 4 && first.Any(char.IsDigit) ? first : null;
     }
 
     /// <summary>The place a terminal sits at, or null when nothing fits.</summary>
@@ -123,7 +157,16 @@ public sealed class TerminalPlaces
             .Where(p => p.Compact.Contains(haystack, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        return abbreviated.Count == 1 ? abbreviated[0].Place : null;
+        if (abbreviated.Count == 1)
+            return abbreviated[0].Place;
+
+        // Last, the station code the shop counters use: "Platinum HUR-L5" is
+        // at "HUR-L5 High Course Station".
+        foreach (var (code, place) in _codes)
+            if (place is not null && haystack.Contains(code, StringComparison.OrdinalIgnoreCase))
+                return place;
+
+        return null;
     }
 
     private static string Compact(string value) =>
