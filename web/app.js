@@ -3386,7 +3386,7 @@ function renderFleetShips() {
     if (!grounded) {
       const upgrade = el('button', 'ghost ship-upgrade', 'Upgrades');
       upgrade.title = `What fits ${ship.name}, and where to buy it`;
-      upgrade.addEventListener('click', () => showUpgrades(ship.name, card));
+      upgrade.addEventListener('click', () => showUpgrades(ship.name, ship.className, card));
       body.append(upgrade);
     }
 
@@ -3432,7 +3432,12 @@ const PORT_WORDS = {
   MiningArm: 'Mining arm',
 };
 
-async function showUpgrades(ship, card) {
+/**
+ * @param ship The name to show.
+ * @param key The game's class name, which is what the reference data is keyed
+ *   by. "Drake Corsair" answers nothing; DRAK_Corsair answers everything.
+ */
+async function showUpgrades(ship, key, card) {
   const open = card.querySelector('.upgrade-panel');
 
   if (open) {
@@ -3454,7 +3459,7 @@ async function showUpgrades(ship, card) {
   panel.append(el('div', 'muted', 'Reading the ship…'));
   card.append(panel);
 
-  const answer = await upgradesFor(ship);
+  const answer = await upgradesFor(key || ship);
   panel.textContent = '';
 
   if (!answer?.known) {
@@ -4399,7 +4404,19 @@ function fitToHighlights(term) {
 function setHere(rawId) {
   const changed = (rawId || null) !== hereId;
   hereId = rawId || null;
-  drawHere();
+
+  /*
+   * Only when it actually moves.
+   *
+   * The live feed repeats the same place every second, and this used to redraw
+   * on every one of them. The marker's pulse is an SVG animation of a growing
+   * ring over 2.2 seconds, and rebuilding the element restarts it - so it got
+   * a fifth of the way out, was replaced, and started again. The marker was
+   * there the whole time and never appeared to pulse, which is worse than not
+   * being drawn: it looks like a dead dot rather than a missing feature.
+   */
+  if (changed || !$('#starmap').querySelector('.map-here'))
+    drawHere();
 
   // Follow mode: the map pans itself as the player moves, so a second monitor
   // shows the journey without being touched.
@@ -4474,15 +4491,39 @@ function initMap() {
 
   let drag = null;
 
+  /*
+   * Pressing is not yet dragging.
+   *
+   * The map captures the pointer so a drag that leaves the window still pans,
+   * and capturing on pointerdown looked like the place to do it. It is not:
+   * while an element holds the capture, the browser delivers the click to that
+   * element rather than to whatever is under the cursor - so every click meant
+   * for a place was delivered to the map, and no place ever opened its card,
+   * its trade panel, or went onto a plan. The map has been unclickable with a
+   * real mouse since it was written; only a synthetic click dispatched
+   * straight at a node ever worked, which is how it passed its own tests.
+   *
+   * So the capture waits for movement. Below the slop a press is a click and
+   * is left entirely alone; past it the drag begins and takes the pointer.
+   */
+  const DRAG_SLOP = 4;
+
   map.addEventListener('pointerdown', (e) => {
     cancelAnimationFrame(viewAnimation);
-    drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
-    map.setPointerCapture(e.pointerId);
-    map.classList.add('dragging');
+    drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moving: false };
   });
 
   map.addEventListener('pointermove', (e) => {
     if (!drag) return;
+
+    if (!drag.moving) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < DRAG_SLOP)
+        return;
+
+      drag.moving = true;
+      map.setPointerCapture?.(e.pointerId);
+      map.classList.add('dragging');
+    }
 
     const box = map.getBoundingClientRect();
     view.x = drag.vx - ((e.clientX - drag.x) / box.width) * view.w;
@@ -4492,9 +4533,13 @@ function initMap() {
 
   const endDrag = (e) => {
     if (!drag) return;
+
+    if (drag.moving) {
+      map.releasePointerCapture?.(e.pointerId);
+      map.classList.remove('dragging');
+    }
+
     drag = null;
-    map.releasePointerCapture?.(e.pointerId);
-    map.classList.remove('dragging');
   };
 
   map.addEventListener('pointerup', endDrag);

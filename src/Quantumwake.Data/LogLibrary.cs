@@ -481,6 +481,14 @@ public static class ItemCategories
 /// <param name="FirstFlown">Start of the earliest session this ship appears in.</param>
 /// <param name="LastFlown">Start of the most recent session this ship appears in.</param>
 /// <param name="Reference">Community ship data - role, crew, claim costs - when the dataset is enabled and the name matched.</param>
+/// <param name="ClassName">
+/// The game's own name for this ship (<c>DRAK_Corsair</c>), which is what the
+/// reference data is keyed by. <see cref="Name"/> is for reading - "Drake
+/// Corsair" - and cannot be turned back into the key, because the display
+/// manufacturer is a word and the class carries a code: Drake is DRAK, Anvil
+/// is ANVL, and "Mk II" is Mk2. Anything asking the reference data a question
+/// about this ship has to carry this along.
+/// </param>
 public sealed record ShipTotal(
     string Name,
     TimeSpan EstimatedTime,
@@ -488,7 +496,8 @@ public sealed record ShipTotal(
     int Sessions,
     DateTimeOffset FirstFlown,
     DateTimeOffset LastFlown,
-    ShipInfo? Reference = null);
+    ShipInfo? Reference = null,
+    string ClassName = "");
 /// <summary>When a game version was first seen in this install's logs.</summary>
 public sealed record PatchArrival(string Patch, DateTimeOffset At);
 
@@ -1265,7 +1274,13 @@ public sealed class LogLibrary : IDisposable
                 // named the class after it.
                 g.Select(x => Community.Ship($"{x.Ship.Manufacturer}_{x.Ship.Model}"))
                     .FirstOrDefault(r => r is not null)
-                 ?? Community.Ship(g.Key)))
+                 ?? Community.Ship(g.Key),
+
+                // Kept so later questions - what fits this ship, what does it
+                // cost to claim - can be asked of the reference data at all.
+                g.Select(x => $"{x.Ship.Manufacturer}_{x.Ship.Model}")
+                    .FirstOrDefault(name => Community.Ship(name) is not null)
+                 ?? $"{g.First().Ship.Manufacturer}_{g.First().Ship.Model}"))
 
             // "Unmanned" variants (Cutlass Black Unmanned Salvage and kin) are
             // mission derelicts the player boarded, not ships they own; they

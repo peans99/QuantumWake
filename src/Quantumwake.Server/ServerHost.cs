@@ -1042,13 +1042,16 @@ public static class ServerHost
                     var buyPrice = commodity?.BestBuy > 0 ? commodity.BestBuy : (decimal?)null;
                     var buyAt = commodity?.BestBuy > 0 ? commodity.BestBuyTerminal : null;
 
-                    if (buyPrice is null)
+                    if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } uuid })
                     {
-                        var reference = lib.Community.Items
-                            .FirstOrDefault(kv => string.Equals(kv.Value.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+                        buyPrice = uex.ItemPrice(uuid);
 
-                        if (reference.Value?.Uuid is { } uuid)
-                            buyPrice = uex.ItemPrice(uuid);
+                        // A price with no counter behind it is half an answer:
+                        // the card said what a shield costs and left "where"
+                        // blank, which is the only part you can act on. The
+                        // same loose match the shopping lookup uses, so a line
+                        // reading "Hydro Jet" still finds the HydroJet.
+                        buyAt = uex.ItemMarket(uuid).MinBy(r => r.Buy)?.Terminal;
                     }
 
                     return new
