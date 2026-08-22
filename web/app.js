@@ -5789,7 +5789,12 @@ function drawMap() {
   if (wasHome) view = { ...home };
 
   const maxVisits = Math.max(1, ...locations.map((l) => l.visits));
-  const radiusFor = (visits) => 4 + Math.sqrt(visits / maxVisits) * 13;
+  // Visits still nudge the size, but gently. At four times the range a busy
+  // outpost dwarfed a station and the map read as a jumble of sizes rather
+  // than a set of places; the count lives in the tip and on the Places page,
+  // where a number can be a number.
+  const radiusFor = (visits) => 7 + Math.sqrt(visits / maxVisits) * 4;
+
 
   // Stars, orbit rings and system labels.
   for (const [system, centre] of Object.entries(SYSTEM_LAYOUT)) {
@@ -6014,52 +6019,35 @@ function drawMap() {
  * survives being tiny beats one that looks good in a design tool.
  */
 const KIND_SHAPES = {
-  // A skyline: the one shape nobody needs told.
-  City: [{ tag: 'path', attrs: { d: 'M-1 .85 L-1 -.1 L-.42 -.1 L-.42 -.7 L.06 -.7 L.06 -.25 L.5 -.25 L.5 -1 L1 -1 L1 .85 Z' } }],
+  // A skyline. Two steps rather than three: at eight pixels a third is a smudge.
+  City: [{ tag: 'path', attrs: { d: 'M-1 .9 L-1 -.15 L-.05 -.15 L-.05 -1 L1 -1 L1 .9 Z' } }],
 
-  // A ring with a core: a station is a thing you dock inside.
-  Station: [
-    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .38 } },
-    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .92 }, line: true },
-  ],
+  // A ring - the one shape that reads as "you dock inside it".
+  Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
 
-  // A ring with an arm out to a pad - a place you pull in at.
-  RestStop: [
-    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .5 } },
-    { tag: 'line', attrs: { x1: -1, y1: 0, x2: 1, y2: 0 }, line: true },
-  ],
+  // A plain disc: the commonest stop, and the quietest mark.
+  RestStop: [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: .92 } }],
 
   // A dome on the ground.
-  Outpost: [
-    { tag: 'path', attrs: { d: 'M-.85 .6 A .85 .85 0 0 1 .85 .6 Z' } },
-    { tag: 'line', attrs: { x1: -1, y1: .6, x2: 1, y2: .6 }, line: true },
-  ],
+  Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
 
-  // A headframe over a rock: the mine, not the mineral.
-  Mine: [
-    { tag: 'polygon', attrs: { points: '-.95,.85 -.35,.15 .3,.2 .95,.8' } },
-    { tag: 'path', attrs: { d: 'M0 -.95 L-.6 .2 M0 -.95 L.6 .2 M-.35 -.3 L.35 -.3' }, line: true },
-  ],
+  // A spoil heap. Nothing on top of it - the headframe it used to carry turned
+  // to mush at map size, which is the size it is always drawn at.
+  Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
 
-  // The rock on its own.
-  Asteroid: [{ tag: 'polygon', attrs: { points: '-.9,-.15 -.4,-.8 .35,-.85 .9,-.2 .6,.7 -.3,.85 -.85,.4' } }],
+  // An angular rock.
+  Asteroid: [{ tag: 'polygon', attrs: { points: '-.55,-.85 .55,-.85 1,0 .55,.85 -.55,.85 -1,0' } }],
 
-  // An orbit around a nucleus.
-  Research: [
-    { tag: 'circle', attrs: { cx: 0, cy: 0, r: .3 } },
-    { tag: 'ellipse', attrs: { cx: 0, cy: 0, rx: 1, ry: .42, transform: 'rotate(-28)' }, line: true },
-  ],
+  // A cross: legible at any size, and nothing else on the map is one.
+  Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
 
-  // A crate with a band round it.
-  DistributionCentre: [
-    { tag: 'rect', attrs: { x: -.9, y: -.75, width: 1.8, height: 1.5 } },
-    { tag: 'line', attrs: { x1: -.9, y1: -.1, x2: .9, y2: -.1 }, line: true, over: true },
-  ],
+  // Cargo moving: an arrow, not a crate with a band nobody could see.
+  DistributionCentre: [{ tag: 'polygon', attrs: { points: '-1,-.85 .95,0 -1,.85 -1,.3 -.15,0 -1,-.3' } }],
 
   // The same diamond the jump lanes wear.
   JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
 
-  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,-1 .9,.8 -.9,.8' } }],
+  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,1 -1,-.85 0,-.3 1,-.85' } }],
 };
 
 /** Anything without a mark of its own keeps the dot it always had. */
@@ -6071,10 +6059,30 @@ const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
  * @param solid Somewhere with history is filled; somewhere never visited is an
  *   outline, exactly as when every kind was a circle.
  */
+/**
+ * Equal radius is not equal weight: a triangle inside a circle covers under
+ * half of it, so the same number drew a mine that looked half the size of a
+ * rest stop beside it. Each shape is nudged until they read as one set.
+ */
+const SHAPE_WEIGHT = {
+  City: 0.92,
+  Station: 1,
+  RestStop: 0.95,
+  Outpost: 1.05,
+  Mine: 1.18,
+  Asteroid: 1,
+  Research: 1.06,
+  DistributionCentre: 1.12,
+  JumpPoint: 1.15,
+  MissionBeacon: 1.15,
+};
+
 function kindMark(kind, x, y, radius, colour, solid) {
+  const size = radius * (SHAPE_WEIGHT[kind] ?? 1);
+
   const group = svgEl('g', {
     class: 'map-mark',
-    transform: `translate(${x} ${y}) scale(${radius})`,
+    transform: `translate(${x} ${y}) scale(${size})`,
   });
 
   for (const part of KIND_SHAPES[kind] ?? PLAIN_MARK) {
@@ -6083,15 +6091,15 @@ function kindMark(kind, x, y, radius, colour, solid) {
 
       // Line parts are strokes whatever the history: a filled orbit or shaft is
       // a blob. Everything else fills once the place has been visited.
-      fill: part.line || !solid ? 'none' : colour,
+      fill: solid ? colour : 'none',
+      stroke: colour,
 
-      // A line drawn inside a filled shape is invisible in the fill's own
-      // colour, so it is cut out of it instead - the crate's band, not a crate.
-      stroke: part.over && solid ? '#070c14' : colour,
-      'stroke-width': part.line ? 0.16 : 0.14,
+      // Heavy enough to survive being drawn six pixels across, which is the
+      // size these are actually used at; an outline at .14 disappeared.
+      'stroke-width': 0.22,
       'stroke-linejoin': 'round',
-      'stroke-linecap': 'round',
-      opacity: solid ? 0.9 : 0.45,
+      'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
+      opacity: solid ? 0.92 : 0.6,
     }));
   }
 
