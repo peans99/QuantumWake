@@ -99,9 +99,14 @@ runtime with no external lookup service involved.
 
 ## Why another one
 
-There are a dozen `Game.log` tools, and [docs/landscape.md](docs/landscape.md)
-surveys them honestly, including the one that overlaps this heavily. Three
-things here are not in the others:
+It exists because I went looking for it and it was not there: good `Game.log`
+tools, but none of them a whole product built around an org and the things I
+wanted to keep track of. So this is the one I had been looking for, and it is
+free for the community to use, and meant to stay that way.
+
+[docs/landscape.md](docs/landscape.md) surveys the dozen that came before it
+honestly, including the one that overlaps this heavily. Three things here are
+not in the others:
 
 - **The whole map, not just your trail.** Others plot where you went. This draws
   every place it can resolve — 292 of them, against the 72 this install has
