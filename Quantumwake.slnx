@@ -9,5 +9,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quantumwake.Tests/Quantumwake.Tests.csproj" />
+    <Project Path="tests/Quantumwake.WebTests/Quantumwake.WebTests.csproj" />
   </Folder>
 </Solution>

@@ -231,7 +231,33 @@ game's `shop_name_*` table where it publishes a brand.
 
 ---
 
+## Testing the page, not just the server
+
+The dashboard is a single script against the browser's globals - no framework,
+no build step - which is why it stayed untestable while the C# grew two hundred
+tests. It is not a thin layer: what a commodity fetched where, which stop comes
+next, which seller can actually fill the order, what colour a price is. All of
+it shipped on the strength of a screenshot.
+
+`Quantumwake.WebTests` runs `web/app.js` in-process under Jint against `dom.js`,
+a stub with enough of a document to satisfy the page. Three rules keep it
+honest:
+
+- **The stub answers every selector with an element**, because the assertions
+  are about what the code puts into the page - rows, classes, numbers, colours -
+  not about how `index.html` nests its markup.
+- **The script is loaded without its last line.** `boot()` starts the dashboard
+  and polls until the server answers, which a browser paces with timers; with
+  the stub's timers inert that is an unbounded loop. Tests drive the page
+  explicitly instead, and the harness fails loudly if that call is ever renamed.
+- **Network is a routing table**, so a test says what UEX or the trip API
+  returned, and can then read back exactly what the page sent.
+
+What it does not cover is layout, CSS, and anything the browser itself decides.
+For that there is still no substitute for looking.
+
 ## Resilience: fail soft, and say so
+
 
 CIG removes log events patch over patch — quantum travel in 4.0.1, death scope in
 4.0.2, inter-system jumps in 4.1.0, combat entirely by 4.9. Assume more will go.
