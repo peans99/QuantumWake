@@ -49,6 +49,12 @@ public sealed class SessionBuilder
     private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<BlueprintReceipt> _blueprintReceipts = [];
 
+    private readonly List<RespawnRecord> _respawns = [];
+
+    /// <summary>Set by a death, cleared by the location that answers it.</summary>
+    private DateTimeOffset? _awaitingRespawn;
+    private string? _diedAt;
+
     /// <summary>Mission id to its journal-visible objectives and their states.</summary>
     private readonly Dictionary<string, Dictionary<string, ObjectiveState>> _objectiveSteps =
         new(StringComparer.Ordinal);
@@ -431,6 +437,21 @@ public sealed class SessionBuilder
         // inventory scope query that follows needs it to bind its key.
         _lastLocationId = location.RawId;
 
+        // The first place seen after a death: where the player woke up.
+        // Somewhere else entirely means they respawned there; the same place
+        // means they were revived where they fell, which is not a respawn and
+        // must not be recorded as one.
+        if (_awaitingRespawn is { } diedWhen)
+        {
+            _awaitingRespawn = null;
+
+            if (!string.Equals(location.DisplayName, _diedAt, StringComparison.OrdinalIgnoreCase))
+            {
+                _respawns.Add(new RespawnRecord(at, location.DisplayName, diedWhen, _diedAt));
+                Timeline(at, "respawn", "Woke up", location.DisplayName);
+            }
+        }
+
         ResolveGenericJump(location);
 
         // Collapse consecutive repeats: inventory is opened many times per stop.
@@ -766,6 +787,13 @@ public sealed class SessionBuilder
         _lastCorpseAt = corpse.Timestamp;
         _deaths++;
 
+        // Where the player wakes is the closest the logs come to naming their
+        // respawn point: the game never records the choice, so the next place
+        // seen after dying is the answer by observation. Armed here, answered
+        // by the next location event.
+        _awaitingRespawn = corpse.Timestamp;
+        _diedAt = _locationState.State.Current?.DisplayName;
+
         Timeline(corpse.Timestamp, "death", "Died", _locationState.State.Current?.DisplayName);
     }
 
@@ -833,6 +861,7 @@ public sealed class SessionBuilder
             Trades = _trades,
             Pickups = _pickups,
             Blueprints = _blueprintReceipts,
+            Respawns = _respawns,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,

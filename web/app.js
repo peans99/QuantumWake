@@ -1843,6 +1843,19 @@ async function loadCasualties() {
     data.byShip.map((s) => ({ label: s.ship, value: s.deaths })),
     (v) => `${v}`);
 
+  bars('#casualties-woke',
+    (data.wokeAt || []).map((w) => ({
+      label: w.place, value: w.times, onClick: () => jumpToPlace(w.place),
+    })),
+    (v) => `${v}`);
+
+  $('#casualties-woke-note').textContent = data.lastWokeAt
+    ? `Last woke at ${data.lastWokeAt}, ${relative(data.lastWokeWhen)}. Inferred, `
+      + 'not read: the game logs no respawn point, so this is the first place '
+      + 'named after each death.'
+    : 'Nothing to infer yet. This reads the first place named after a death, '
+      + 'because the game logs no respawn point of its own.';
+
   const body = $('#casualties-fees tbody');
   body.textContent = '';
 
