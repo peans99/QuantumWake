@@ -198,6 +198,7 @@
         <div class="card-label">Wake up at</div>
         <div class="value" id="now-respawn">—</div>
         <div class="sub" id="now-respawn-sub"></div>
+        <div class="sub" id="now-respawn-bed"></div>
       </article>
 
       <article class="card span2" id="now-job-card" data-card="job" hidden>
@@ -364,6 +365,15 @@
       effectively your regen; a one-off may just be where you were carried.
     </p>
     <div id="casualties-woke" class="bars"></div>
+
+    <h2 class="spaced">Medical beds used</h2>
+    <p class="muted caption">
+      A regen location is set at a medical bed or an insurance office, so this
+      is the most direct hint the logs give — but the same notification fires
+      when a bed is only used to heal, and the game never states where regen
+      actually is. Most recent first.
+    </p>
+    <div id="casualties-beds" class="bars"></div>
 
     <h2 class="spaced">Claim fees, by ship</h2>
     <div class="table-wrap">
