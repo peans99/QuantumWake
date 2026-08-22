@@ -256,6 +256,19 @@ Three things keep it honest:
   default is Alpha 4.8 on 15 May 2026, dated from this install's own logs: the
   last 4.7 session was the 11th, the first 4.8 one the 15th. Evidence beats a
   remembered date, and the player can correct it or switch it off entirely.
+- **So is the depth.** Wipes come at different depths: a patch may reset aUEC
+  and leave the hangar, clear inventories without touching balances, or take
+  the lot. Filing every one as "a wipe" and hiding all history is wrong in the
+  common case, so the player ticks what this one actually took — money, ships,
+  inventory, play history — and anything left unticked reaches back through the
+  wipe as if it had not happened, because for that number it did not.
+
+`Counted(WipeScope)` is the accessor, and every caller names what it is
+counting: the ledger asks for money, the stash asks for inventory, the session
+list asks for history. `Stats()` answers for all four at once, so it narrows one
+list per kind — after a money-only wipe its spending starts again while its
+fleet, stashes and places keep everything. Naming the wrong category is the one
+way to get this wrong, which is why the parameter is not optional.
 
 ## Prices only get stale when nobody is looking
 

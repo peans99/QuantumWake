@@ -558,38 +558,53 @@ public sealed class LogLibrary : IDisposable
     public SessionStore Store => _store;
 
     /// <summary>
-    /// The line a wipe draws: sessions before this are not counted.
+    /// The line a wipe draws, and how deep it goes.
     /// </summary>
     /// <remarks>
     /// Null means count everything. Set from <see cref="WipeStore"/> at startup
-    /// and whenever the player moves the date, so one assignment changes every
-    /// total on every page.
+    /// and whenever the player changes it, so one assignment moves every total
+    /// the wipe actually touched - and leaves the rest alone.
     /// </remarks>
-    public DateTimeOffset? CountFrom { get; set; }
+    public Wipe? Wipe { get; set; }
+
+    /// <summary>The date, when there is one to apply.</summary>
+    private DateTimeOffset? WipedAt =>
+        Wipe is { At: var at } && at > DateTimeOffset.MinValue ? at : null;
 
     /// <summary>
-    /// Every session that still counts, newest first.
+    /// Every session that counts towards one kind of total, newest first.
     /// </summary>
     /// <remarks>
-    /// The single door onto the store, because a wipe resets money, ships and
-    /// inventory: a total that reaches past one is answering about an account
-    /// the player no longer has. One filter here rather than at each question
-    /// means a view added later cannot forget it. Nothing is deleted - the
-    /// sessions are still stored, still parsed, and come back the moment the
-    /// date moves.
+    /// <para>
+    /// The single door onto the store, because a total that reaches past a wipe
+    /// is answering about an account the player no longer has. One filter here
+    /// rather than at each question means a view added later cannot forget it.
+    /// </para>
+    /// <para>
+    /// Which totals it applies to is the player's own answer, because wipes
+    /// come at different depths: a patch that resets aUEC and leaves the hangar
+    /// alone should not blank the fleet, and one that clears inventories should
+    /// not blank the ledger. Asking for the wrong category is the one way to
+    /// get this wrong, so every caller names what it is counting.
+    /// </para>
+    /// <para>
+    /// Nothing is deleted either way - the sessions are still stored, still
+    /// parsed, and come back the moment the date moves.
+    /// </para>
     /// </remarks>
-    private IReadOnlyList<SessionSummary> Counted()
-    {
-        var all = _store.All();
+    private IReadOnlyList<SessionSummary> Counted(WipeScope counting) =>
+        Narrow(_store.All(), counting);
 
-        return CountFrom is { } since
-            ? [.. all.Where(s => s.StartedAt >= since)]
-            : all;
-    }
+    /// <summary>The same rule applied to a list already in hand.</summary>
+    private IReadOnlyList<SessionSummary> Narrow(
+        IReadOnlyList<SessionSummary> sessions, WipeScope counting) =>
+        WipedAt is { } since && Wipe!.Scope.HasFlag(counting)
+            ? [.. sessions.Where(s => s.StartedAt >= since)]
+            : sessions;
 
-    /// <summary>How many stored sessions the wipe date is holding back.</summary>
+    /// <summary>How many stored sessions started before the wipe.</summary>
     public int SessionsBeforeWipe() =>
-        CountFrom is { } since ? _store.All().Count(s => s.StartedAt < since) : 0;
+        WipedAt is { } since ? _store.All().Count(s => s.StartedAt < since) : 0;
 
     /// <summary>
     /// Ingests every log file for an install, skipping unchanged ones.
@@ -657,7 +672,7 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<LedgerEntry> Ledger(int days = 0)
     {
-        var sessions = Counted();
+        var sessions = Counted(WipeScope.Money);
 
         if (days > 0)
         {
@@ -899,7 +914,7 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<TradeRecord> Trades(int days = 0)
     {
-        var sessions = Counted();
+        var sessions = Counted(WipeScope.Money);
 
         if (days > 0)
         {
@@ -926,7 +941,7 @@ public sealed class LogLibrary : IDisposable
             .OrderByDescending(t => t.At)];
     }
 
-    public IReadOnlyList<SessionSummary> Sessions() => Counted();
+    public IReadOnlyList<SessionSummary> Sessions() => Counted(WipeScope.History);
 
     public SessionSummary? Session(string id) => _store.Get(id);
 
@@ -952,7 +967,7 @@ public sealed class LogLibrary : IDisposable
 
         return
         [
-            .. Counted()
+            .. Counted(WipeScope.History)
                 .SelectMany(s => s.Contracts)
                 .Where(c => c.FirstSeen >= cutoff)
                 .OrderByDescending(c => c.FirstSeen)
@@ -979,7 +994,7 @@ public sealed class LogLibrary : IDisposable
     {
         return
         [
-            .. Counted()
+            .. Counted(WipeScope.Inventory)
                 .SelectMany(s => s.Blueprints)
                 .GroupBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(g => new BlueprintReceipt(g.Min(b => b.At), g.Key))
@@ -1000,7 +1015,7 @@ public sealed class LogLibrary : IDisposable
     /// appears to have emptied.
     /// </param>
     public IReadOnlyList<StashLocation> Stash(bool everSeen = false) =>
-        StashView(Counted(), everSeen);
+        StashView(Counted(WipeScope.Inventory), everSeen);
 
     private List<StashLocation> StashView(IReadOnlyList<SessionSummary> sessions, bool everSeen) =>
     [
@@ -1043,7 +1058,7 @@ public sealed class LogLibrary : IDisposable
 
         return
         [
-            .. Counted()
+            .. Counted(WipeScope.History)
                 .SelectMany(s => s.Respawns)
                 .Where(r => r.At >= cutoff)
                 .OrderByDescending(r => r.At)
@@ -1056,7 +1071,7 @@ public sealed class LogLibrary : IDisposable
         var firsts = new List<PickupRecord>();
 
         // Oldest first, so the first sighting wins and later ones are noise.
-        foreach (var session in Counted().OrderBy(s => s.StartedAt))
+        foreach (var session in Counted(WipeScope.Inventory).OrderBy(s => s.StartedAt))
         {
             foreach (var pickup in session.Pickups.OrderBy(p => p.At))
             {
@@ -1090,7 +1105,7 @@ public sealed class LogLibrary : IDisposable
         if (!Community.IsEnabled)
             return [];
 
-        var trades = Counted()
+        var trades = Counted(WipeScope.Money)
             .SelectMany(s => s.Trades)
             .Where(t => t.ResourceId is not null)
             .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
@@ -1125,13 +1140,21 @@ public sealed class LogLibrary : IDisposable
     /// </param>
     public LibraryStats Stats(int days = 0)
     {
-        var sessions = Counted();
+        var sessions = Counted(WipeScope.History);
 
         if (days > 0)
         {
             var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
             sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
         }
+
+        // This one method answers for four different kinds of total, and a
+        // wipe need not have taken all four. Each aggregate below counts from
+        // its own list: after a money-only wipe the ledger starts again while
+        // the fleet, the stashes and the places keep their whole history.
+        var spending = Narrow(sessions, WipeScope.Money);
+        var hangar = Narrow(sessions, WipeScope.Ships);
+        var holdings = Narrow(sessions, WipeScope.Inventory);
 
         if (sessions.Count == 0)
         {
@@ -1149,7 +1172,7 @@ public sealed class LogLibrary : IDisposable
             };
         }
 
-        var ships = sessions
+        var ships = hangar
             .SelectMany(s => s.Ships.Select(ship => (Session: s.Id, s.StartedAt, Ship: ship)))
             .GroupBy(x => ShipName(x.Ship), StringComparer.Ordinal)
             .Select(g => new ShipTotal(
@@ -1197,7 +1220,7 @@ public sealed class LogLibrary : IDisposable
             .ToList();
 
         var contracts = sessions.SelectMany(s => s.Contracts).ToList();
-        var purchases = sessions.SelectMany(s => s.Purchases).Where(p => p.Confirmed).ToList();
+        var purchases = spending.SelectMany(s => s.Purchases).Where(p => p.Confirmed).ToList();
 
         // Grouped by display name rather than class, so the same weapon bought
         // in two colourways adds up as one line instead of two mystery ids.
@@ -1207,21 +1230,21 @@ public sealed class LogLibrary : IDisposable
             .OrderByDescending(i => i.Total)
             .ToList();
 
-        var trades = sessions.SelectMany(s => s.Trades).ToList();
+        var trades = spending.SelectMany(s => s.Trades).ToList();
         var income = trades.Where(t => t.IsSell).Sum(t => t.Amount);
         var commoditySpend = trades.Where(t => !t.IsSell).Sum(t => t.Amount);
 
         // Grouped by where the sale happened, not by kiosk. Every commodity
         // terminal in the game shares one shop id, so grouping on that produced
         // a single bar labelled "Admin lt base g" holding every sale ever made.
-        var tradeShops = sessions
+        var tradeShops = spending
             .SelectMany(s => s.Trades.Where(t => t.IsSell).Select(t => (Place: PlaceAt(s, t.At), t.Amount, t.Quantity)))
             .GroupBy(t => t.Place, StringComparer.OrdinalIgnoreCase)
             .Select(g => new SpendTotal(g.Key, g.Sum(t => t.Amount), g.Sum(t => t.Quantity)))
             .OrderByDescending(s => s.Total)
             .ToList();
 
-        var fleetHistory = sessions
+        var fleetHistory = hangar
             .Where(s => s.FleetSize is > 0)
             .OrderBy(s => s.StartedAt)
             .Select(s => new FleetPoint(s.StartedAt, s.FleetSize!.Value))
@@ -1230,7 +1253,7 @@ public sealed class LogLibrary : IDisposable
         // Last equipped per slot, across the whole library. Restricting to a
         // single session looked tidier but lost real gear: the newest session
         // recorded no arms, legs or core, so those slots vanished entirely.
-        var allWorn = sessions
+        var allWorn = holdings
             .SelectMany(s => s.Loadout)
             .Where(l => LoadoutCategories.IsEquipment(l.Port))
             .ToList();
@@ -1274,7 +1297,7 @@ public sealed class LogLibrary : IDisposable
 
         // Items are only ever added to the log, never removed, so this is the
         // union of everything seen at each place rather than current contents.
-        var stash = StashView(sessions, everSeen: false);
+        var stash = StashView(holdings, everSeen: false);
 
         return new LibraryStats
         {

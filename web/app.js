@@ -6256,8 +6256,24 @@ async function loadWipe() {
 
   field.value = wipe.at ? new Date(wipe.at).toISOString().slice(0, 10) : '';
   $('#wipe-patch').value = wipe.patch === 'no wipe' ? '' : wipe.patch;
+
+  for (const [name, box] of Object.entries(WIPE_SCOPES)) {
+    $(box).checked = (wipe.covers || []).includes(name);
+  }
+
   showWipeStatus(wipe);
 }
+
+/** What a wipe can take, and the box that says whether this one did. */
+const WIPE_SCOPES = {
+  money: '#wipe-money',
+  ships: '#wipe-ships',
+  inventory: '#wipe-inventory',
+  history: '#wipe-history',
+};
+
+const chosenScopes = () =>
+  Object.entries(WIPE_SCOPES).filter(([, box]) => $(box).checked).map(([name]) => name);
 
 function showWipeStatus(wipe) {
   const status = $('#wipe-status');
@@ -6268,9 +6284,19 @@ function showWipeStatus(wipe) {
     return;
   }
 
-  status.textContent = wipe.hidden > 0
-    ? `${wipe.hidden.toLocaleString()} session${wipe.hidden === 1 ? '' : 's'} before this are kept but not counted`
-    : 'nothing on record from before this';
+  if (wipe.hidden === 0) {
+    status.textContent = 'nothing on record from before this';
+    return;
+  }
+
+  const covers = wipe.covers || [];
+  const sessions = `${wipe.hidden.toLocaleString()} session${wipe.hidden === 1 ? '' : 's'} before this`;
+
+  // A partial wipe hides nothing outright, so saying "not counted" flat would
+  // be a lie: those sessions still count towards everything it did not take.
+  status.textContent = covers.length === Object.keys(WIPE_SCOPES).length
+    ? `${sessions} are kept but not counted`
+    : `${sessions} still count, except for ${covers.join(', ')}`;
 }
 
 async function saveWipe(at, patch) {
@@ -6280,7 +6306,7 @@ async function saveWipe(at, patch) {
     const response = await fetch('/api/wipe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ at, patch }),
+      body: JSON.stringify({ at, patch, covers: chosenScopes() }),
     });
 
     if (!response.ok) throw new Error(response.statusText);
@@ -6310,6 +6336,14 @@ function initWipe() {
   });
 
   $('#wipe-clear').addEventListener('click', () => saveWipe(null, null));
+
+  // A depth changed without a date is still a change worth keeping, and there
+  // is no second Save button to reach for.
+  for (const box of Object.values(WIPE_SCOPES)) {
+    $(box).addEventListener('change', () => {
+      if (field.value) saveWipe(`${field.value}T00:00:00Z`, $('#wipe-patch').value.trim());
+    });
+  }
 }
 
 /* Wired at load, like the other page-level controls: neither belongs to a

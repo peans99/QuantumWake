@@ -1013,7 +1013,7 @@
         <button class="ghost" id="wipe-clear">Count everything</button>
       </div>
       <p class="muted">
-        A data wipe resets money, ships and inventory, so logs from before one
+        A data wipe resets what your account holds, so logs from before one
         describe an account you no longer have — adding those sales to this
         account's income makes a wrong number, not a bigger one. Sessions before
         this date are kept and still parsed, they are simply not counted.
@@ -1023,6 +1023,30 @@
         <input type="date" id="wipe-at" class="search" title="The day the wipe landed">
         <input type="text" id="wipe-patch" class="search" maxlength="24" placeholder="Patch, e.g. Alpha 4.8">
         <span class="muted" id="wipe-status"></span>
+      </div>
+
+      <p class="muted caption wipe-caption">
+        Wipes come at different depths — some take aUEC and leave the hangar,
+        some clear inventories and leave balances. Tick only what this one
+        actually took; everything left unticked keeps its whole history.
+      </p>
+      <div class="wipe-scope">
+        <label class="toggle">
+          <input type="checkbox" id="wipe-money" checked>
+          <span>Money — spending, income, ledger, cargo</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="wipe-ships" checked>
+          <span>Ships — what you own, and your fleet count</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="wipe-inventory" checked>
+          <span>Inventory — stashes, worn kit, pickups</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="wipe-history" checked>
+          <span>Play history — sessions, places, contracts</span>
+        </label>
       </div>
     </div>
 
