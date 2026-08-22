@@ -1121,11 +1121,36 @@ function facilityTokens(keys) {
  * buying, rather than where it can be sold. The Market page's two map links
  * write both forms into the search box, so they survive as shareable ?q= urls.
  */
+/**
+ * The commodity a typed term means.
+ *
+ * Exact names only was too strict to use: "medical" found nothing because the
+ * commodity is "Medical Supplies", and nothing on the map offered the full
+ * name, so the search looked broken. A prefix or a contained word now counts,
+ * shortest name first so "gold" means Gold rather than Golden Medmon - but
+ * only when no place answers to the same term, since a typed place name
+ * should still find the place.
+ */
+function matchCommodity(name) {
+  const lower = name.trim().toLowerCase();
+  if (!lower) return null;
+
+  const exact = marketEntries.find((e) => e.name.toLowerCase() === lower);
+  if (exact) return exact;
+
+  if (atlas.some((l) => l.name.toLowerCase().includes(lower)))
+    return null;
+
+  const byLength = (a, b) => a.name.length - b.name.length;
+
+  return marketEntries.filter((e) => e.name.toLowerCase().startsWith(lower)).sort(byLength)[0]
+    ?? marketEntries.filter((e) => e.name.toLowerCase().includes(lower)).sort(byLength)[0]
+    ?? null;
+}
+
 function commoditySites(term) {
   const buying = term.startsWith('buy:');
-  const name = (buying ? term.slice(4) : term).trim();
-
-  const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
+  const entry = matchCommodity(buying ? term.slice(4) : term);
   if (!entry) return null;
 
   const keys = buying ? entry.bought : entry.sold;
@@ -3614,8 +3639,18 @@ const JUMP_LANES = [
   ['Stanton', 'Nyx'],
 ];
 
-/** How far a body's sites reach, given how many it has. */
-const clusterRadius = (count) => (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1));
+/**
+ * How far a body's sites reach, given how many it has.
+ *
+ * The phyllotaxis spacing that fits at system scale is far too tight once the
+ * dots are big enough to read: a well-visited site is 17 units across on its
+ * own while neighbours sit 5.2 apart, so microTech's twenty-two piled into
+ * each other however far you zoomed in. Zoomed in the whole cluster opens up,
+ * which is exactly when there is room for it - the same trade the bodies
+ * themselves make.
+ */
+const clusterRadius = (count) =>
+  (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1)) * (isDetailed() ? 2.1 : 1);
 
 /**
  * Works out where each star sits and how far its bodies orbit, from what the
@@ -4218,11 +4253,19 @@ function renderSearchResults() {
   const matches = atlas
     .filter((l) => l.name.toLowerCase().includes(term))
     .sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name))
-    .slice(0, 8);
+    .slice(0, 6);
+
+  // Commodities belong here too: without them there was no way to learn that
+  // the thing you wanted is spelled "Medical Supplies", and the search looked
+  // broken when it was only being literal.
+  const goods = marketEntries
+    .filter((e) => e.name.toLowerCase().includes(term) && (e.sold.length || e.bought.length))
+    .sort((a, b) => a.name.length - b.name.length)
+    .slice(0, 6);
 
   box.textContent = '';
 
-  if (matches.length === 0) {
+  if (matches.length === 0 && goods.length === 0) {
     box.hidden = true;
     return;
   }
@@ -4238,6 +4281,22 @@ function renderSearchResults() {
       box.hidden = true;
       centreOn(match.rawId);
       showMapInfo(match);
+    });
+
+    box.append(row);
+  }
+
+  for (const good of goods) {
+    const row = el('button', 'map-result');
+    row.type = 'button';
+    row.append(el('span', 'name good', good.name));
+    row.append(el('span', 'where',
+      `commodity · ${good.sold.length} sellers`));
+
+    row.addEventListener('click', () => {
+      box.hidden = true;
+      $('#map-search').value = good.name;
+      drawMap();
     });
 
     box.append(row);
@@ -5379,8 +5438,12 @@ function appendTipGoods(tip, names) {
   if (!names.length) return;
 
   const shown = names.slice(0, 6).join(', ');
-  const more = names.length > 6 ? ` +${names.length - 6} more` : '';
-  tip.append(el('span', 'goods', `Sells ${shown}${more}`));
+  tip.append(el('span', 'goods', `Sells ${shown}${names.length > 6 ? '…' : ''}`));
+
+  // A tooltip cannot hold a hundred names, so it says where they are rather
+  // than trailing off into "+109 more" with no way to see them.
+  if (names.length > 6)
+    tip.append(el('span', 'goods hint', `click for all ${names.length}`));
 }
 
 /** The hover tooltip: name, kind and history at the cursor, instantly. */
@@ -5512,6 +5575,10 @@ function renderMapInfoSold() {
     if (!names.length) {
       list.append(el('span', 'muted', 'Nothing known to sell here.'));
     } else {
+      // The count matters when there are a hundred: the tooltip promised them
+      // all, and this is where they are.
+      list.append(el('div', 'sold-count muted', `${names.length} sold here · click one to light its sellers`));
+
       for (const name of names) {
         const chip = el('button', 'sold-chip', name);
         chip.type = 'button';
@@ -5634,9 +5701,14 @@ function drawMap() {
     const seen = atlas.filter((l) => l.visits > 0).length;
     if (term && !highlightIds) count.textContent = 'no match';
     else if (sites) {
+      // Name what was matched: the term may have been a fragment, and the
+      // user should see which commodity the map decided they meant.
+      const matched = matchCommodity(term.startsWith('buy:') ? term.slice(4) : term);
+      const what = matched ? matched.name : term;
+
       count.textContent = term.startsWith('buy:')
-        ? `stocked at ${highlightIds.size} places the map can name`
-        : `sells at ${highlightIds.size} places the map can name`;
+        ? `${what} — stocked at ${highlightIds.size} places the map can name`
+        : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
@@ -5763,6 +5835,14 @@ function drawMap() {
     map.append(jumpLabel);
   }
 
+  // Every body's hover disc goes in one layer, added before any node is
+  // drawn. Appending them as each body was built put a later body's disc on
+  // top of an earlier body's dots - and in SVG the thing on top takes the
+  // pointer, so clicking those dots did nothing at all. Widening the clusters
+  // made the discs bigger and the dead zones with them.
+  const hoverLayer = svgEl('g');
+  map.append(hoverLayer);
+
   // Bodies and their locations.
   for (const [system, bodies] of Object.entries(grouped)) {
     if (system === 'other') continue;
@@ -5844,7 +5924,7 @@ function drawMap() {
           moveMapTip(e);
         });
         bodyHover.addEventListener('pointerleave', hideMapTip);
-        map.append(bodyHover);
+        hoverLayer.append(bodyHover);
       }
 
       // Sites are spread by golden angle rather than in rings. Rings of a fixed
