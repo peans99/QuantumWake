@@ -246,7 +246,20 @@ format quirks were caught that grepping had hidden, including multi-line entries
 whose continuations carry their own timestamp (15% of notifications were being
 silently dropped).
 
+## Tests
+
+```powershell
+dotnet test Quantumwake.slnx -c Release
+```
+
+Two suites. `Quantumwake.Tests` covers the parser, the session builder, the
+resolvers and the stores, against fixtures copied from real log lines.
+`Quantumwake.WebTests` runs `web/app.js` itself under a JavaScript engine with a
+stub document, so the dashboard's own logic - prices, plans, panels - is tested
+rather than eyeballed.
+
 ## Documentation
+
 
 - [docs/findings.md](docs/findings.md) — the missing-combat-events evidence
 - [docs/log-format-reference.md](docs/log-format-reference.md) — verified line formats and quirks
