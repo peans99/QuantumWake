@@ -26,6 +26,7 @@
   -->
   <ItemGroup>
     <None Include="..\..\web\app.js" Link="web\app.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\index.html" Link="web\index.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="dom.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

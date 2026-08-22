@@ -107,6 +107,17 @@
 
   <div class="render-errors" id="render-errors" hidden></div>
 
+  <div class="notice" id="stale" hidden>
+    <div class="notice-body">
+      <b>Prices are getting old</b>
+      <span class="muted" id="stale-detail"></span>
+    </div>
+    <div class="notice-actions">
+      <button class="ghost" id="stale-refresh">Refresh now</button>
+      <button class="ghost" id="stale-dismiss">Not now</button>
+    </div>
+  </div>
+
   <div class="scan" id="scan" hidden>
     <div class="scan-head">
       <span id="scan-label">Reading logs…</span>
@@ -994,6 +1005,26 @@
 
   <section id="view-settings" class="view">
     <h2>Settings</h2>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Last wipe</h3>
+        <button class="ghost" id="wipe-save">Save</button>
+        <button class="ghost" id="wipe-clear">Count everything</button>
+      </div>
+      <p class="muted">
+        A data wipe resets money, ships and inventory, so logs from before one
+        describe an account you no longer have — adding those sales to this
+        account's income makes a wrong number, not a bigger one. Sessions before
+        this date are kept and still parsed, they are simply not counted.
+        Moving the date back brings every one of them straight back.
+      </p>
+      <div class="wipe-row">
+        <input type="date" id="wipe-at" class="search" title="The day the wipe landed">
+        <input type="text" id="wipe-patch" class="search" maxlength="24" placeholder="Patch, e.g. Alpha 4.8">
+        <span class="muted" id="wipe-status"></span>
+      </div>
+    </div>
 
     <div class="option-block">
       <div class="option-head">

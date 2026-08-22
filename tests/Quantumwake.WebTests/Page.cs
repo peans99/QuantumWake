@@ -38,7 +38,38 @@ public sealed class Page
         _engine.SetValue("host_log", new Action<string>(line => Log.Add(line)));
 
         Run(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "dom.js")), "dom.js");
+        HideWhatTheMarkupHides();
         Run(WithoutAutoStart(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js"))), "app.js");
+    }
+
+    /// <summary>
+    /// Starts the panels, banners and cards that <c>index.html</c> marks
+    /// <c>hidden</c> in the state the browser would start them in.
+    /// </summary>
+    /// <remarks>
+    /// The stub does not parse the document - the assertions are about what the
+    /// page writes, not how the markup nests - but "is this still hidden?" is a
+    /// real question about half the features here, and a stub where everything
+    /// starts visible answers it wrongly every time. So the one attribute that
+    /// carries initial state is read from the markup itself, rather than each
+    /// test remembering to set it.
+    /// </remarks>
+    private void HideWhatTheMarkupHides()
+    {
+        var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html"));
+
+        foreach (System.Text.RegularExpressions.Match tag in
+                 System.Text.RegularExpressions.Regex.Matches(markup, "<[a-zA-Z][^>]*>"))
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(tag.Value, @"\shidden(\s|>|=)"))
+                continue;
+
+            var id = System.Text.RegularExpressions.Regex.Match(tag.Value, @"id=""([^""]+)""");
+            if (!id.Success)
+                continue;
+
+            _engine.Execute($"__dom.node({Quote($"#{id.Groups[1].Value}")}).hidden = true;");
+        }
     }
 
     /// <summary>
