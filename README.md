@@ -120,7 +120,16 @@ not in the others:
   confidence level, estimates are labelled and capped, and an event CIG removed
   produces an explanation rather than a bare zero.
 
+## Totals describe the account you are playing
+
+A data wipe ends one account and starts another, so totals that reach past one
+are answering about an account you no longer have. Sessions from before the last
+wipe are kept and still parsed — they are simply not counted, and the Settings
+page says how many that is. The date defaults to Alpha 4.8 and is yours to move,
+or to switch off entirely if you want the lot.
+
 ## Two things it deliberately does not do
+
 
 **It is not a killboard.** Star Citizen 4.9 does not write kill or
 vehicle-destruction events to `Game.log`. This was verified, not assumed: a

@@ -231,7 +231,46 @@ game's `shop_name_*` table where it publishes a brand.
 
 ---
 
+## The wipe: where a countable history begins
+
+A data wipe resets money, ships and inventory. Every total here - what you own,
+what you have earned, what your stashes hold - is answering a question about the
+account being played now, and a wipe means the logs before it describe a
+different one. Adding pre-wipe sales to post-wipe income does not make a bigger
+number, it makes a wrong one.
+
+So the library counts only sessions from the wipe onwards. One accessor does it,
+`Counted()`, and every question goes through that accessor rather than the store
+- which is the point: a view added next year cannot forget the rule. A session
+is judged by when it *started*, since one that ran into the wipe belongs to the
+account that ended.
+
+Three things keep it honest:
+
+- **Nothing is deleted.** Pre-wipe sessions are still parsed and still stored.
+  Moving the date back brings the whole history straight back.
+- **The page says what it is holding.** The Settings row reports how many
+  sessions are kept but not counted, so a number that looks low has a visible
+  cause rather than a mysterious one.
+- **The date is a setting, not a constant.** CIG decides when wipes land. The
+  default is Alpha 4.8 on 15 May 2026, dated from this install's own logs: the
+  last 4.7 session was the 11th, the first 4.8 one the 15th. Evidence beats a
+  remembered date, and the player can correct it or switch it off entirely.
+
+## Prices only get stale when nobody is looking
+
+UEX is fetched on a click and never on a timer. That is the right default and it
+has one cost: a table pulled a fortnight ago looks exactly like one pulled this
+morning, while every margin computed from it is quietly wrong.
+
+So the app looks once at startup, and if the snapshot has turned a day old it
+says so and offers the single click that fixes it - prices and any enabled feeds
+together, since renewing half of it leaves the same problem. It is an offer, not
+an alert: nothing is blocked, "not now" lasts until tomorrow rather than for
+ever, and the check still never runs on a schedule.
+
 ## Testing the page, not just the server
+
 
 The dashboard is a single script against the browser's globals - no framework,
 no build step - which is why it stayed untestable while the C# grew two hundred

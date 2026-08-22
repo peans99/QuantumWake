@@ -1901,7 +1901,35 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
   .chooser-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
 }
 
+/*
+ * A standing offer, not an alert: it appears under the header, states what is
+ * old and how old, and both of its answers are one click. Nothing about it
+ * blocks the page - stale prices are still prices.
+ */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule-hot);
+  border-left: 2px solid var(--amber);
+  background: linear-gradient(90deg, rgba(255, 171, 61, .07), transparent 60%);
+  clip-path: var(--chamfer);
+}
+.notice[hidden] { display: none; }
+.notice-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.notice-body b { color: var(--amber); font-size: 13px; font-weight: 600; }
+.notice-body .muted { font-size: 11.5px; }
+.notice-actions { display: flex; gap: 7px; }
+
+.wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
+.wipe-row .search { font-size: 12px; }
+
 /* ---------- flight plans ---------- */
+
 
 
 /*

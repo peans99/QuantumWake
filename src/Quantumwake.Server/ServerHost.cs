@@ -56,6 +56,13 @@ public static class ServerHost
 
         builder.Services.AddSingleton(library);
 
+        // The wipe is read before anything asks the library a question, so no
+        // page can render pre-wipe totals in the moment before it is applied.
+        var wipes = new WipeStore();
+        builder.Services.AddSingleton(wipes);
+        library.CountFrom = wipes.Current.At == DateTimeOffset.MinValue ? null : wipes.Current.At;
+
+
         // Only when there is one. Registering a null instance throws
         // "Value cannot be null. (Parameter 'implementationInstance')" out of
         // the container - which is how a missing install used to take the
@@ -84,6 +91,7 @@ public static class ServerHost
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
         builder.Services.AddSingleton<TripStore>();
+
         builder.Services.AddSingleton<OverlayLayoutStore>();
 
         builder.Services.ConfigureHttpJsonOptions(options =>
@@ -1011,6 +1019,30 @@ public static class ServerHost
 
         // ---- flight plans: where to go next, in order ----
 
+        // ---- the wipe: where the player's countable history begins ----
+
+        app.MapGet("/api/wipe", (WipeStore wipes, LogLibrary lib) =>
+        {
+            var wipe = wipes.Current;
+
+            return new
+            {
+                at = wipe.At == DateTimeOffset.MinValue ? (DateTimeOffset?)null : wipe.At,
+                wipe.Patch,
+                hidden = lib.SessionsBeforeWipe(),
+                stored = lib.Store.Count(),
+                @default = WipeStore.Default.At
+            };
+        });
+
+        app.MapPost("/api/wipe", (WipeRequest body, WipeStore wipes, LogLibrary lib) =>
+        {
+            var wipe = wipes.Set(body.At, body.Patch);
+            lib.CountFrom = wipe.At == DateTimeOffset.MinValue ? null : wipe.At;
+
+            return Results.Ok(new { at = wipe.At, wipe.Patch, hidden = lib.SessionsBeforeWipe() });
+        });
+
         app.MapGet("/api/trips", (TripStore trips) => trips.All());
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
@@ -1280,6 +1312,9 @@ public sealed record InstallPathRequest(string? Path);
 
 /// <summary>Body of POST /api/jobs.</summary>
 public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
+
+/// <summary>Body of POST /api/wipe. A null date counts everything again.</summary>
+public sealed record WipeRequest(DateTimeOffset? At, string? Patch);
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);

@@ -6127,6 +6127,196 @@ onInput('#stash-period', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-latest', () => libraryStats && renderStash(libraryStats));
 $('#stash-ever')?.addEventListener('change', () => libraryStats && renderStash(libraryStats));
 
+/* ---------- stale prices ---------- */
+
+/**
+ * Offers to renew the price table when it has gone stale.
+ *
+ * UEX is fetched on a click and never on a timer, which is the right default
+ * and has one cost: a table pulled a fortnight ago looks exactly like one
+ * pulled this morning, and every margin on the page is quietly wrong. So the
+ * app looks once at startup, and if the snapshot has turned a day old it says
+ * so and offers the one click that fixes it.
+ *
+ * An offer, not an alert: nothing is blocked, dismissing it lasts the day, and
+ * the check runs once per load rather than on any schedule.
+ */
+const STALE_AFTER_HOURS = 24;
+const STALE_DISMISSED = 'qw-uex-stale-dismissed';
+
+/** Feeds enabled alongside the price table, which age at the same rate. */
+let staleFeeds = [];
+
+function dismissedToday() {
+  try {
+    const until = Number(localStorage.getItem(STALE_DISMISSED) || 0);
+    return until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+const hoursSince = (iso) => (Date.now() - new Date(iso).getTime()) / 3600000;
+
+async function checkPriceAge() {
+  const notice = $('#stale');
+  if (!notice || dismissedToday()) return;
+
+  let uex;
+  try {
+    uex = await getJson('/api/uex');
+  } catch {
+    return;
+  }
+
+  // Nothing to renew when the integration is off or has never been fetched:
+  // the Settings page already offers to turn it on, and being nagged about a
+  // feature you have not enabled is noise.
+  if (!uex.enabled || !uex.fetchedAt) return;
+
+  const age = hoursSince(uex.fetchedAt);
+
+  staleFeeds = await getJson('/api/uex/feeds')
+    .then((feeds) => feeds.filter((f) => f.enabled && (!f.fetchedAt || hoursSince(f.fetchedAt) >= STALE_AFTER_HOURS)))
+    .catch(() => []);
+
+  if (age < STALE_AFTER_HOURS && !staleFeeds.length) return;
+
+  const parts = [`Prices last fetched ${ago(uex.fetchedAt)}`];
+
+  if (staleFeeds.length) {
+    parts.push(`${staleFeeds.length} other feed${staleFeeds.length === 1 ? '' : 's'} as old`);
+  }
+
+  parts.push('margins and best-price rankings are only as fresh as this');
+
+  $('#stale-detail').textContent = `${parts.join(' · ')}.`;
+  notice.hidden = false;
+}
+
+function initStaleNotice() {
+  const notice = $('#stale');
+  if (!notice) return;
+
+  $('#stale-refresh').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Fetching…';
+
+    try {
+      // The prices first, then whatever else had gone stale with them: a
+      // refresh that renewed half of it would leave the same problem behind.
+      await fetch('/api/uex/enable', { method: 'POST' });
+
+      for (const feed of staleFeeds) {
+        await fetch(`/api/uex/feeds/${encodeURIComponent(feed.key)}/enable`, { method: 'POST' });
+      }
+
+      notice.hidden = true;
+      loadMarket().catch(() => { /* the page keeps the numbers it has */ });
+      renderSettings().catch(() => { /* Settings redraws on its next visit */ });
+    } catch {
+      button.textContent = 'Could not fetch';
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $('#stale-dismiss').addEventListener('click', () => {
+    notice.hidden = true;
+
+    // Until tomorrow rather than forever: the answer to "not now" is "ask me
+    // again when it matters", and by then the prices are a day older still.
+    try {
+      localStorage.setItem(STALE_DISMISSED, String(Date.now() + 86400000));
+    } catch { /* private browsing: the offer returns on the next load */ }
+  });
+}
+
+/* ---------- the wipe ---------- */
+
+/**
+ * The line under the player's history, on the Settings page.
+ *
+ * Every total the app reports describes the account being played now, and a
+ * data wipe ends one account and starts another. The date is a setting because
+ * CIG decides when wipes land, and because someone looking back at an older
+ * patch should be able to wind it back and see the lot.
+ */
+async function loadWipe() {
+  const field = $('#wipe-at');
+  if (!field) return;
+
+  let wipe;
+  try {
+    wipe = await getJson('/api/wipe');
+  } catch {
+    return;
+  }
+
+  field.value = wipe.at ? new Date(wipe.at).toISOString().slice(0, 10) : '';
+  $('#wipe-patch').value = wipe.patch === 'no wipe' ? '' : wipe.patch;
+  showWipeStatus(wipe);
+}
+
+function showWipeStatus(wipe) {
+  const status = $('#wipe-status');
+  if (!status) return;
+
+  if (!wipe.at) {
+    status.textContent = `counting all ${(wipe.stored ?? 0).toLocaleString()} sessions`;
+    return;
+  }
+
+  status.textContent = wipe.hidden > 0
+    ? `${wipe.hidden.toLocaleString()} session${wipe.hidden === 1 ? '' : 's'} before this are kept but not counted`
+    : 'nothing on record from before this';
+}
+
+async function saveWipe(at, patch) {
+  const status = $('#wipe-status');
+
+  try {
+    const response = await fetch('/api/wipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ at, patch }),
+    });
+
+    if (!response.ok) throw new Error(response.statusText);
+
+    // Every page's numbers just changed, so they are all re-read rather than
+    // left to be discovered stale on the next visit.
+    await loadHistory();
+    await loadWipe();
+
+    if (status) status.textContent = `${status.textContent} · saved`;
+  } catch (e) {
+    if (status) status.textContent = `could not save: ${e.message}`;
+  }
+}
+
+function initWipe() {
+  const field = $('#wipe-at');
+  if (!field) return;
+
+  $('#wipe-save').addEventListener('click', () => {
+    if (!field.value) {
+      $('#wipe-status').textContent = 'pick a date, or use "count everything"';
+      return;
+    }
+
+    saveWipe(`${field.value}T00:00:00Z`, $('#wipe-patch').value.trim());
+  });
+
+  $('#wipe-clear').addEventListener('click', () => saveWipe(null, null));
+}
+
+/* Wired at load, like the other page-level controls: neither belongs to a
+   view, and both must work before anything has been rendered. */
+initStaleNotice();
+initWipe();
+
 /* ---------- scan progress ---------- */
 
 /**
@@ -6355,7 +6545,13 @@ async function boot() {
   if (!isSnapshot) {
     connectStream();
     watchScan();
+
+    // Once per load, never on a timer: the offer to renew a price table that
+    // has gone a day old, and the line the wipe draws under the history.
+    checkPriceAge().catch(() => { /* prices are usable whatever their age */ });
   }
+
+  loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 
   maybeShowSetup().catch(() => { /* wizard is a nicety, never a blocker */ });
 

@@ -558,6 +558,40 @@ public sealed class LogLibrary : IDisposable
     public SessionStore Store => _store;
 
     /// <summary>
+    /// The line a wipe draws: sessions before this are not counted.
+    /// </summary>
+    /// <remarks>
+    /// Null means count everything. Set from <see cref="WipeStore"/> at startup
+    /// and whenever the player moves the date, so one assignment changes every
+    /// total on every page.
+    /// </remarks>
+    public DateTimeOffset? CountFrom { get; set; }
+
+    /// <summary>
+    /// Every session that still counts, newest first.
+    /// </summary>
+    /// <remarks>
+    /// The single door onto the store, because a wipe resets money, ships and
+    /// inventory: a total that reaches past one is answering about an account
+    /// the player no longer has. One filter here rather than at each question
+    /// means a view added later cannot forget it. Nothing is deleted - the
+    /// sessions are still stored, still parsed, and come back the moment the
+    /// date moves.
+    /// </remarks>
+    private IReadOnlyList<SessionSummary> Counted()
+    {
+        var all = _store.All();
+
+        return CountFrom is { } since
+            ? [.. all.Where(s => s.StartedAt >= since)]
+            : all;
+    }
+
+    /// <summary>How many stored sessions the wipe date is holding back.</summary>
+    public int SessionsBeforeWipe() =>
+        CountFrom is { } since ? _store.All().Count(s => s.StartedAt < since) : 0;
+
+    /// <summary>
     /// Ingests every log file for an install, skipping unchanged ones.
     /// </summary>
     /// <returns>How many files were parsed (as opposed to served from cache).</returns>
@@ -623,7 +657,7 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<LedgerEntry> Ledger(int days = 0)
     {
-        var sessions = _store.All();
+        var sessions = Counted();
 
         if (days > 0)
         {
@@ -865,7 +899,7 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<TradeRecord> Trades(int days = 0)
     {
-        var sessions = _store.All();
+        var sessions = Counted();
 
         if (days > 0)
         {
@@ -892,7 +926,7 @@ public sealed class LogLibrary : IDisposable
             .OrderByDescending(t => t.At)];
     }
 
-    public IReadOnlyList<SessionSummary> Sessions() => _store.All();
+    public IReadOnlyList<SessionSummary> Sessions() => Counted();
 
     public SessionSummary? Session(string id) => _store.Get(id);
 
@@ -918,7 +952,7 @@ public sealed class LogLibrary : IDisposable
 
         return
         [
-            .. _store.All()
+            .. Counted()
                 .SelectMany(s => s.Contracts)
                 .Where(c => c.FirstSeen >= cutoff)
                 .OrderByDescending(c => c.FirstSeen)
@@ -945,7 +979,7 @@ public sealed class LogLibrary : IDisposable
     {
         return
         [
-            .. _store.All()
+            .. Counted()
                 .SelectMany(s => s.Blueprints)
                 .GroupBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(g => new BlueprintReceipt(g.Min(b => b.At), g.Key))
@@ -966,7 +1000,7 @@ public sealed class LogLibrary : IDisposable
     /// appears to have emptied.
     /// </param>
     public IReadOnlyList<StashLocation> Stash(bool everSeen = false) =>
-        StashView(_store.All(), everSeen);
+        StashView(Counted(), everSeen);
 
     private List<StashLocation> StashView(IReadOnlyList<SessionSummary> sessions, bool everSeen) =>
     [
@@ -1009,7 +1043,7 @@ public sealed class LogLibrary : IDisposable
 
         return
         [
-            .. _store.All()
+            .. Counted()
                 .SelectMany(s => s.Respawns)
                 .Where(r => r.At >= cutoff)
                 .OrderByDescending(r => r.At)
@@ -1022,7 +1056,7 @@ public sealed class LogLibrary : IDisposable
         var firsts = new List<PickupRecord>();
 
         // Oldest first, so the first sighting wins and later ones are noise.
-        foreach (var session in _store.All().OrderBy(s => s.StartedAt))
+        foreach (var session in Counted().OrderBy(s => s.StartedAt))
         {
             foreach (var pickup in session.Pickups.OrderBy(p => p.At))
             {
@@ -1056,7 +1090,7 @@ public sealed class LogLibrary : IDisposable
         if (!Community.IsEnabled)
             return [];
 
-        var trades = _store.All()
+        var trades = Counted()
             .SelectMany(s => s.Trades)
             .Where(t => t.ResourceId is not null)
             .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
@@ -1091,7 +1125,7 @@ public sealed class LogLibrary : IDisposable
     /// </param>
     public LibraryStats Stats(int days = 0)
     {
-        var sessions = _store.All();
+        var sessions = Counted();
 
         if (days > 0)
         {
