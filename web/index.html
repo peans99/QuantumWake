@@ -29,6 +29,7 @@
       <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="jobs">Shopping</button>
+        <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="routes">Routes</button>
       </div>
@@ -245,6 +246,16 @@
         <ul class="now-job-items" id="now-job-items"></ul>
       </article>
 
+      <article class="card span2" id="now-checklist-card" data-card="checklist" hidden>
+        <div class="card-label">Checklist</div>
+        <div class="now-checklist-head">
+          <div class="now-job-title" id="now-checklist-title"></div>
+          <button class="ghost tiny" id="now-checklist-open">Open</button>
+        </div>
+        <div id="now-checklist-progress"></div>
+        <ul class="now-checklist-items" id="now-checklist-items"></ul>
+      </article>
+
       <article class="card span2" id="now-trip-card" data-card="trip" hidden>
         <div class="card-label">Flight plan</div>
         <div class="now-trip-head">
@@ -376,6 +387,23 @@
         <tbody></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- CHECKLISTS -->
+  <section id="view-checklists" class="view">
+    <div class="section-bar">
+      <h2>Checklists</h2>
+    </div>
+    <p class="muted caption">
+      Your own preparation notes, not game telemetry. Pin one list to Now and
+      the overlay; locations, items and links stay as references you can open.
+    </p>
+    <div class="checklist-new">
+      <input type="text" id="checklist-title" class="search" placeholder="New checklist, e.g. Pyro departure" autocomplete="off">
+      <button class="ghost" id="checklist-create">Create checklist</button>
+    </div>
+    <datalist id="checklist-catalogue"></datalist>
+    <div id="checklists-list"></div>
   </section>
 
   <!-- CASUALTIES -->

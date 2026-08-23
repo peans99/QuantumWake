@@ -164,6 +164,7 @@ function showView(name) {
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
+  if (name === 'checklists') loadChecklists().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
@@ -690,6 +691,7 @@ async function loadHistory() {
   loadMiningRef().catch((e) => console.error('mining', e));
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
+  loadChecklists().catch((e) => console.error('checklists', e));
   loadCasualties().catch((e) => console.error('casualties', e));
   loadCrew().catch((e) => console.error('crew', e));
   loadRespawn().catch((e) => console.error('respawn', e));
@@ -2194,6 +2196,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
+  checklist: 'Checklist',
 };
 
 /**
@@ -3651,6 +3654,254 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   $('#job-place').value = '';
   $('#job-form').hidden = true;
   loadJobList();
+});
+
+/* ---------- checklists ---------- */
+
+// These are authored preparation, deliberately separate from a shopping list:
+// "set a med bed" is useful on Now even though no shop, inventory event or log
+// parser can prove it has happened.
+let checklists = [];
+
+const checklistDue = (dueAt) => dueAt
+  ? new Date(dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  : '';
+
+async function checklistCall(url, method = 'POST', body = null) {
+  await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  await loadChecklists();
+}
+
+function showChecklistAttachment(attachment) {
+  if (attachment.kind === 'location') {
+    const button = el('button', 'checklist-attachment place-link', `⌖ ${attachment.label}`);
+    button.title = 'Show this place on the map';
+    button.addEventListener('click', () => briefingMap(attachment.placeId, attachment.target || attachment.label));
+    return button;
+  }
+
+  if (attachment.kind === 'commodity') {
+    const button = el('button', 'checklist-attachment', `◇ ${attachment.label}`);
+    button.title = 'Open this commodity';
+    button.addEventListener('click', () => openCommodity(attachment.target || attachment.label));
+    return button;
+  }
+
+  if (attachment.kind === 'item') {
+    const button = el('button', 'checklist-attachment', `▦ ${attachment.label}`);
+    button.title = 'Find this item in Parts';
+    button.addEventListener('click', () => {
+      showView('parts');
+      $('#parts-search').value = attachment.target || attachment.label;
+      renderPartsRef();
+    });
+    return button;
+  }
+
+  if (attachment.kind === 'url' && /^https?:\/\//i.test(attachment.target || '')) {
+    const link = el('a', 'checklist-attachment', `↗ ${attachment.label}`);
+    link.href = attachment.target;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    return link;
+  }
+
+  return el('span', 'checklist-attachment', `• ${attachment.label}`);
+}
+
+function checklistItemRow(list, item, compact = false) {
+  const row = el('li', `checklist-item${item.done ? ' done' : ''}`);
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = item.done;
+  check.title = item.done ? 'Reopen task' : 'Mark task done';
+  check.addEventListener('change', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}/toggle`));
+  row.append(check);
+
+  const main = el('div', 'checklist-item-main');
+  main.append(el('div', 'checklist-item-text', item.text));
+  if (!compact && item.note) main.append(el('div', 'muted checklist-note', item.note));
+  if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
+
+  const attachments = item.attachments || [];
+  if (attachments.length) {
+    const links = el('div', 'checklist-attachments');
+    for (const attachment of attachments) links.append(showChecklistAttachment(attachment));
+    main.append(links);
+  }
+  row.append(main);
+
+  if (!compact) {
+    const remove = el('button', 'ghost tiny', '×');
+    remove.title = 'Remove task';
+    remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}`, 'DELETE'));
+    row.append(remove);
+  }
+  return row;
+}
+
+function renderPinnedChecklist(lists = checklists) {
+  const card = $('#now-checklist-card');
+  const list = lists.find((entry) => entry.pinned);
+  if (!card) return;
+
+  if (!list) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#now-checklist-title').textContent = list.title;
+  const done = list.items.filter((item) => item.done).length;
+  const progress = $('#now-checklist-progress');
+  progress.textContent = '';
+  progress.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+
+  const host = $('#now-checklist-items');
+  host.textContent = '';
+  const open = list.items.filter((item) => !item.done);
+  for (const item of open.slice(0, 5)) host.append(checklistItemRow(list, item, true));
+  if (open.length > 5) host.append(el('li', 'muted', `+${open.length - 5} more`));
+  if (!open.length) host.append(el('li', 'inward', 'Everything is checked off.'));
+
+  $('#now-checklist-open').onclick = () => showView('checklists');
+  card.hidden = false;
+}
+
+function checklistComposer(list) {
+  const form = el('form', 'checklist-composer');
+  const task = document.createElement('input');
+  task.type = 'text';
+  task.placeholder = 'Add a task, e.g. bring tractor beam';
+  task.required = true;
+  form.append(task);
+
+  const fields = el('div', 'checklist-fields');
+  const place = document.createElement('select');
+  place.className = 'select';
+  place.title = 'Optional map location';
+  fillPlaceOptions(place, '');
+  fields.append(place);
+
+  const item = document.createElement('input');
+  item.type = 'search';
+  item.className = 'search';
+  item.setAttribute('list', 'checklist-catalogue');
+  item.placeholder = 'Optional commodity, part or gear';
+  item.title = 'Optional commodity, part or gear reference';
+  fields.append(item);
+  fillChecklistReferenceOptions();
+
+  const due = document.createElement('input');
+  due.type = 'datetime-local';
+  due.className = 'search';
+  due.title = 'Optional date and time';
+  fields.append(due);
+  form.append(fields);
+
+  const detail = el('div', 'checklist-fields');
+  const note = document.createElement('input');
+  note.type = 'text';
+  note.className = 'search';
+  note.placeholder = 'Optional note';
+  detail.append(note);
+  const url = document.createElement('input');
+  url.type = 'url';
+  url.className = 'search';
+  url.placeholder = 'Optional https:// link';
+  detail.append(url);
+  form.append(detail);
+
+  const add = el('button', 'ghost', 'Add task');
+  form.append(add);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const where = pickedPlace(place);
+    const attachments = [];
+    if (where.name) attachments.push({ kind: 'location', label: where.name, target: where.name, placeId: where.id });
+    if (item.value.trim()) {
+      const commodity = catalogue?.commodities?.some((name) => name === item.value);
+      attachments.push({ kind: commodity ? 'commodity' : 'item', label: item.value, target: item.value });
+    }
+    if (url.value.trim()) attachments.push({ kind: 'url', label: url.value.trim(), target: url.value.trim() });
+
+    add.disabled = true;
+    await checklistCall(`/api/checklists/${list.id}/items`, 'POST', {
+      text: task.value,
+      dueAt: due.value ? new Date(due.value).toISOString() : null,
+      note: note.value,
+      attachments,
+    });
+  });
+  return form;
+}
+
+/** One shared searchable catalogue: duplicating thousands of options per list makes adding a task sluggish. */
+async function fillChecklistReferenceOptions() {
+  const list = $('#checklist-catalogue');
+  if (!list || list.childElementCount) return;
+
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+  for (const name of [...(catalogue.commodities || []), ...(catalogue.items || [])]) {
+    const option = document.createElement('option');
+    option.value = name;
+    list.append(option);
+  }
+}
+
+function renderChecklists(lists) {
+  const host = $('#checklists-list');
+  if (!host) return;
+  host.textContent = '';
+
+  if (!lists.length) {
+    host.append(el('p', 'muted', 'No checklists yet. Make one for a departure, an operation, or anything you do not want to forget.'));
+    return;
+  }
+
+  for (const list of lists) {
+    const card = el('article', 'checklist-card');
+    const head = el('div', 'job-head');
+    head.append(el('b', null, list.title));
+    if (list.pinned) head.append(el('span', 'job-kind owned', 'on Now'));
+    head.append(el('span', 'spacer'));
+
+    const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? 'On Now' : 'Pin to Now');
+    pin.title = 'Only one checklist is shown on Now and in the overlay';
+    pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
+    head.append(pin);
+    const remove = el('button', 'ghost danger', 'Delete');
+    remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}`, 'DELETE'));
+    head.append(remove);
+    card.append(head);
+
+    const done = list.items.filter((item) => item.done).length;
+    card.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+    const items = el('ul', 'checklist-items');
+    for (const entry of list.items) items.append(checklistItemRow(list, entry));
+    if (!list.items.length) items.append(el('li', 'muted', 'No tasks yet — add the first thing you want to remember.'));
+    card.append(items, checklistComposer(list));
+    host.append(card);
+  }
+}
+
+async function loadChecklists() {
+  checklists = await getJson('/api/checklists').catch(() => []);
+  renderChecklists(checklists);
+  renderPinnedChecklist(checklists);
+}
+
+$('#checklist-create')?.addEventListener('click', async () => {
+  const title = $('#checklist-title');
+  if (!title.value.trim()) {
+    title.focus();
+    return;
+  }
+  await checklistCall('/api/checklists', 'POST', { title: title.value });
+  title.value = '';
 });
 
 /* ---------- StarStrings ---------- */

@@ -94,6 +94,7 @@ public static class ServerHost
         builder.Services.AddSingleton<UexData>();
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
+        builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
@@ -1288,6 +1289,31 @@ public static class ServerHost
         app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
             jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
+        // ---- checklists: authored preparation, never guessed from the log ----
+
+        app.MapGet("/api/checklists", (ChecklistStore checklists) => checklists.All());
+
+        app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
+            Results.Ok(checklists.Add(body.Title)));
+
+        app.MapPost("/api/checklists/{id}/items", (string id, ChecklistStore checklists, ChecklistItemRequest body) =>
+        {
+            var list = checklists.AddItem(id, body.Text, body.DueAt, body.Note, body.Attachments);
+            return list is null ? Results.NotFound() : Results.Ok(list);
+        });
+
+        app.MapPost("/api/checklists/{id}/items/{itemId}/toggle", (string id, string itemId, ChecklistStore checklists) =>
+            checklists.ToggleItem(id, itemId) ? Results.Ok(new { id, itemId }) : Results.NotFound());
+
+        app.MapPost("/api/checklists/{id}/pin", (string id, ChecklistStore checklists) =>
+            checklists.TogglePin(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/checklists/{id}/items/{itemId}", (string id, string itemId, ChecklistStore checklists) =>
+            checklists.RemoveItem(id, itemId) ? Results.Ok(new { id, itemId }) : Results.NotFound());
+
+        app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists) =>
+            checklists.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
         // ---- flight plans: where to go next, in order ----
 
         // ---- the wipe: where the player's countable history begins ----
@@ -2136,6 +2162,16 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+
+/// <summary>Body of POST /api/checklists.</summary>
+public sealed record ChecklistRequest(string? Title);
+
+/// <summary>Body of POST /api/checklists/{id}/items.</summary>
+public sealed record ChecklistItemRequest(
+    string? Text,
+    DateTimeOffset? DueAt,
+    string? Note,
+    List<ChecklistAttachment>? Attachments);
 
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(

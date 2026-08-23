@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![462 tests](https://img.shields.io/badge/tests-462%20passing-4fd48a)
+![468 tests](https://img.shields.io/badge/tests-468%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -351,7 +351,13 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.3
+### 0.7.4
+
+- **A checklist that travels with you.** Make ordinary preparation lists for
+  departures and operations, then pin one to Now and, if wanted, the overlay.
+  Tick tasks off there or on the new Checklists page. A task can keep a map
+  location, commodity or part reference, date, note and HTTPS link attached;
+  those are your own reminders, never claims inferred from Game.log.
 
 - **Services lead somewhere.** The map can now filter to UEX-listed shops,
   refuel counters or clinics, with compact icons on the filter, a place card
