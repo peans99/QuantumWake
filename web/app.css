@@ -867,6 +867,19 @@ h2.spaced { margin-top: 32px; }
 .upgrade-table tr:hover td { background: rgba(53, 200, 240, .04); }
 .upgrade-table .sec { margin-left: 7px; }
 
+/*
+ * The one paragraph on the settings page that describes writing to somebody
+ * else's folder. Amber rather than red: this is a thing to read before
+ * choosing, not a failure.
+ */
+.muted.warn {
+  color: var(--amber, #ffb454);
+  border-left: 2px solid var(--amber, #ffb454);
+  padding-left: 11px;
+  opacity: .92;
+}
+.muted.warn code { color: inherit; }
+
 /* ---------- buttons ---------- */
 
 

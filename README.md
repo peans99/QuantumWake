@@ -347,6 +347,18 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.6.13
+
+- **StarStrings, installed from Settings if you want it.** A community text mod
+  by **MrKraken** that rewrites the game's English text to read more usefully:
+  contracts that award blueprints tagged `[BP]`, shorter item names, the
+  reputation a contract pays shown on it, and the mining guide sorted by rarity.
+  The app fetches their release, checks whether a newer build is out, and can
+  take it back out again. It is the only thing here that writes into your game
+  folder: two files, anything else in the download refused outright, whatever
+  was there copied aside first and put back on removal. Entirely MrKraken's
+  work - nothing of theirs is bundled or altered here.
+
 ### 0.6.12
 
 The map learns what things are, the app learns what it cannot count, and the

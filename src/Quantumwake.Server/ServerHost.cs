@@ -75,8 +75,10 @@ public static class ServerHost
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
-        // Solely for the opt-in community-dataset download; nothing else in the
-        // application makes an outbound request.
+        // Every outbound request in the application shares this client: the
+        // opt-in community-dataset download, the update check, and the
+        // StarStrings release check and download. All of them happen on a
+        // click, none of them carry an identifier.
         builder.Services.AddHttpClient("community", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -94,6 +96,12 @@ public static class ServerHost
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
+
+        // MrKraken's StarStrings, installed on request. The only thing in the
+        // app that writes outside its own data folder.
+        builder.Services.AddSingleton<StarStringsStore>();
+        builder.Services.AddSingleton<StarStrings>();
+
 
 
         builder.Services.AddSingleton<OverlayLayoutStore>();
@@ -359,7 +367,59 @@ public static class ServerHost
 
         // The one call that reaches the internet, and only from a click or from
         // a startup the player has already agreed to.
+        /*
+         * StarStrings: what is installed, what is available, and the two
+         * buttons that change it.
+         *
+         * Read is free and offline; the release check costs one request and is
+         * only made when asked, in keeping with everything else here.
+         */
+        app.MapGet("/api/starstrings", async (StarStringsStore store, StarStrings mod, bool? check) =>
+        {
+            var installed = store.Current;
+            var present = store.StillPresent();
+            var latest = check == true ? await mod.LatestAsync() : null;
+
+            return new
+            {
+                repository = StarStrings.Repository,
+                gameRoot = install?.RootPath,
+
+                // "Installed" means the files are still there. A game patch can
+                // put the original localisation back without telling anyone.
+                installed = present,
+                displaced = installed is not null && !present,
+                release = installed?.Release,
+                installedAt = installed?.InstalledAt,
+                publishedAt = installed?.PublishedAt,
+                files = installed?.Files.Select(f => f.Path) ?? [],
+                latest = latest is null ? null : new
+                {
+                    latest.Name,
+                    latest.PublishedAt,
+                    latest.Url
+                },
+                newer = StarStrings.IsNewer(installed, latest)
+            };
+        });
+
+        app.MapPost("/api/starstrings/install", async (StarStrings mod) =>
+        {
+            if (install is not { } game)
+                return Results.BadRequest(new { problem = "No Star Citizen install was found to write into." });
+
+            var (done, problem) = await mod.InstallAsync(game);
+
+            return problem is null
+                ? Results.Ok(new { done!.Release, done.InstalledAt, files = done.Files.Count })
+                : Results.BadRequest(new { problem });
+        });
+
+        app.MapPost("/api/starstrings/remove", (StarStrings mod) =>
+            Results.Ok(new { removed = mod.Remove() }));
+
         app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check) =>
+
         {
             var assembly = typeof(ServerHost).Assembly;
             var current = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
