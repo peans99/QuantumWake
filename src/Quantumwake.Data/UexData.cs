@@ -267,6 +267,23 @@ public sealed class UexData
     public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
 
     /// <summary>
+    /// Every counter named by the enabled price tables.
+    /// </summary>
+    /// <remarks>
+    /// The map needs locations rather than prices when answering "where can I
+    /// shop?". Exposing only the terminal names keeps that answer honest: it
+    /// says a UEX-listed counter is present, not that any particular item is
+    /// currently in stock.
+    /// </remarks>
+    public IReadOnlyList<string> KnownTerminals() =>
+    [
+        .. _terminals.Select(t => t.Name)
+            .Concat(_matrix.Values.SelectMany(rows => rows.Select(row => row.Terminal)))
+            .Concat(_itemMarket.Values.SelectMany(rows => rows.Select(row => row.Terminal)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+    ];
+
+    /// <summary>
     /// The best hauls in the price table: for each commodity, the cheapest
     /// place to buy against the dearest place to sell.
     /// </summary>

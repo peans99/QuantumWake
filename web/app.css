@@ -1158,6 +1158,24 @@ td.outward { color: var(--amber); }
 .map-tools .toggle input { accent-color: var(--cyan); cursor: pointer; }
 .map-tools .toggle:hover { color: var(--fg); }
 
+/* Services are a filter rather than a separate map mode: small labelled glyphs
+   keep the toolbar readable while their titles still explain the evidence. */
+.map-service-filter { display: inline-flex; border: 1px solid var(--rule); }
+.map-service-filter button {
+  border: 0;
+  border-right: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.map-service-filter button:last-child { border-right: 0; }
+.map-service-filter button:hover { color: var(--text); }
+.map-service-filter button.active { color: var(--cyan-hot); background: rgba(53, 200, 240, .13); }
+
 /* The map's buttons are the app's buttons; see the button section below. */
 
 #starmap { cursor: grab; touch-action: none; }
@@ -2566,10 +2584,27 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .briefing-detail { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 1px; }
 .briefing-caveat { color: var(--dim); font-size: 9.5px; line-height: 1.4; margin-top: 4px; }
 .briefing-services { display: flex; flex-wrap: wrap; gap: 5px; }
-.briefing-service { border: 1px solid var(--rule); color: var(--dim); font-size: 9.5px; padding: 3px 5px; }
+.briefing-service { border: 1px solid var(--rule); color: var(--dim); font: inherit; font-size: 9.5px; padding: 3px 5px; }
+button.briefing-service { background: transparent; cursor: pointer; }
+button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot); }
 .briefing-service.known { border-color: #1f5c3d; color: var(--green); }
 .briefing-service.not-listed { color: var(--muted); }
 .briefing-service.not-reported { border-style: dashed; }
+.service-icon { display: inline-block; min-width: 1.25em; color: var(--cyan-hot); font-weight: 600; }
+.service-text { vertical-align: middle; }
+.service-tip { color: var(--cyan-hot); font-size: 10px; }
+
+.map-info-services { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0 3px; }
+.map-service-chip {
+  border: 1px solid var(--rule);
+  background: rgba(53, 200, 240, .06);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  padding: 3px 6px;
+}
+.map-service-chip:hover { border-color: var(--cyan); color: var(--cyan-hot); }
 
 body.overlay .now-collapse { display: none; }
 body.overlay .briefing-head { margin-bottom: 6px; }
@@ -2580,6 +2615,7 @@ body.overlay .briefing-section { padding: 5px 6px; }
 body.overlay .briefing-actions { padding-right: 0; }
 body.overlay .briefing-services { gap: 3px; }
 body.overlay .briefing-service { font-size: 8px; padding: 2px 4px; }
+body.overlay .map-service-filter { display: none; }
 
 /* The plan drawn over the map. */
 .trip-layer { pointer-events: none; }

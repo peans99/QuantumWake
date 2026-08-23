@@ -536,9 +536,19 @@ function renderPilotBriefing(briefing) {
   const services = $('#briefing-services');
   services.textContent = '';
   for (const service of briefing.services || []) {
-    const chip = el('span', `briefing-service ${service.status.replaceAll(' ', '-')}`,
-      `${service.name}: ${service.status}`);
-    chip.title = service.dataEnabled ? 'From enabled community data' : 'No installed data reports this service';
+    const key = serviceKey(service.name);
+    const canMap = key && key !== 'repair' && service.dataEnabled;
+    const chip = el(canMap ? 'button' : 'span',
+      `briefing-service ${service.status.replaceAll(' ', '-')}`);
+    if (canMap) {
+      chip.type = 'button';
+      chip.addEventListener('click', () => selectMapService(key, true));
+    }
+    chip.append(el('span', 'service-icon', SERVICE_META[key]?.icon || '•'));
+    chip.append(el('span', 'service-text', `${service.name}: ${service.status}`));
+    chip.title = canMap
+      ? `Show ${SERVICE_META[key].label.toLowerCase()} on the map`
+      : service.dataEnabled ? 'No map location is known for this service' : 'No installed data reports this service';
     services.append(chip);
   }
   $('#briefing-services-section').hidden = !(briefing.services || []).length;
@@ -5194,6 +5204,38 @@ const svgEl = (tag, attrs = {}) => {
 let atlas = [];
 const nodeAt = new Map();
 
+// Service data is intentionally a set of place ids, not a claim about every
+// facility at a location. UEX can identify counters, fuel prices and clinics;
+// it cannot identify repair pads, so repair never becomes a reassuringly empty
+// map filter.
+const SERVICE_META = {
+  shop: { icon: '▦', label: 'Shops' },
+  refuel: { icon: '⛽', label: 'Refuel' },
+  clinic: { icon: '✚', label: 'Clinic' },
+  repair: { icon: '⚙', label: 'Repair' },
+};
+const mapServicesByPlace = new Map();
+let mapServiceFilter = '';
+
+const serviceKey = (name) => ({
+  Shops: 'shop',
+  'Trade counter': 'shop',
+  Refuel: 'refuel',
+  Clinic: 'clinic',
+  Repair: 'repair',
+}[name] || '');
+
+const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
+
+function selectMapService(service, openMap = false) {
+  mapServiceFilter = service || '';
+  for (const button of $$('#map-service-filter button'))
+    button.classList.toggle('active', button.dataset.service === mapServiceFilter);
+
+  if (openMap) showView('map');
+  drawMap();
+}
+
 /** Non-null while a commodity search is active: the rawIds to light up. */
 let highlightIds = null;
 
@@ -5303,10 +5345,20 @@ let view = { ...HOME_VIEW };
 const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
-  const data = await getJson('/api/map');
+  const [data, servicePlaces] = await Promise.all([
+    getJson('/api/map'),
+    getJson('/api/map/services').catch(() => []),
+  ]);
   atlas = data.nodes || [];
   bodyPositions = data.positions || {};
+  mapServicesByPlace.clear();
+  for (const place of servicePlaces)
+    mapServicesByPlace.set(place.placeId, place.services || []);
   drawMap();
+
+  // A detail card can stay open while the history refreshes. Its facts should
+  // catch up when the supporting service map does.
+  if (mapInfoLocation) renderMapInfoServices(mapInfoLocation);
 }
 
 /** Real body coordinates per system, when the community dataset supplies them. */
@@ -5826,6 +5878,8 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
+  for (const button of $$('#map-service-filter button'))
+    button.addEventListener('click', () => selectMapService(button.dataset.service));
   initCargoPanel();
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
@@ -7418,6 +7472,12 @@ function showMapTip(location) {
 
   if ($('#map-goods').checked) appendTipGoods(tip, commoditiesSoldAt(location));
 
+  const services = servicesAt(location);
+  if (services.length)
+    tip.append(el('span', 'service-tip', services
+      .map((service) => `${SERVICE_META[service]?.icon || '•'} ${SERVICE_META[service]?.label || service}`)
+      .join(' · ')));
+
   tip.hidden = false;
 }
 
@@ -7562,6 +7622,8 @@ function showMapInfo(location) {
     ? `last there ${relative(location.lastVisit)}`
     : '';
 
+  renderMapInfoServices(location);
+
   // In commodity mode, say which side of the search this place is on.
   const trade = $('#map-info-trade');
   if (highlightIds) {
@@ -7597,6 +7659,27 @@ function showMapInfo(location) {
   info.hidden = false;
 }
 
+/** Service facts on a place card use the same map-id join as the filter. */
+function renderMapInfoServices(location) {
+  const host = $('#map-info-services');
+  const services = servicesAt(location);
+  host.textContent = '';
+
+  for (const service of services) {
+    const meta = SERVICE_META[service];
+    if (!meta) continue;
+    const chip = el('button', 'map-service-chip');
+    chip.type = 'button';
+    chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
+    chip.append(el('span', 'service-icon', meta.icon));
+    chip.append(el('span', 'service-text', meta.label));
+    chip.addEventListener('click', () => selectMapService(service));
+    host.append(chip);
+  }
+
+  host.hidden = host.children.length === 0;
+}
+
 /** Lore paragraphs already asked for, name to promise of text-or-null. */
 const loreCache = new Map();
 
@@ -7611,6 +7694,10 @@ function drawMap() {
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
+  const serviceIds = mapServiceFilter
+    ? new Set(atlas.filter((location) => servicesAt(location).includes(mapServiceFilter))
+      .map((location) => location.rawId))
+    : null;
 
   // Any search HIGHLIGHTS rather than filters. Filtering removed the context:
   // the remaining nodes re-clustered into what looked like the whole map with
@@ -7643,12 +7730,15 @@ function drawMap() {
   prepareShading(term, sites);
   syncCargoPanel(term, sites);
 
-  const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
+  const locations = atlas.filter((l) =>
+    (!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0));
 
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
-    if (term && !highlightIds) count.textContent = 'no match';
+    if (mapServiceFilter && serviceIds?.size === 0)
+      count.textContent = `no ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} locations known`;
+    else if (term && !highlightIds) count.textContent = 'no match';
     else if (sites) {
       // Name what was matched: the term may have been a fragment, and the
       // user should see which commodity the map decided they meant.
@@ -7660,6 +7750,8 @@ function drawMap() {
         : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else if (mapServiceFilter)
+      count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
