@@ -503,6 +503,25 @@ h2.spaced { margin-top: 32px; }
   margin-bottom: 11px;
 }
 
+/* Now is often a glance-only dashboard. Keeping the label and a small
+   explicit control visible gives every card a stable, reversible summary. */
+.now-collapse {
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.now-collapse:hover { color: var(--cyan-hot); }
+.card.collapsed { min-height: 0; padding-top: 10px; padding-bottom: 10px; }
+.card.collapsed > :not(.card-label):not(.now-collapse) { display: none !important; }
+
 .value { font-size: 21px; font-weight: 500; color: var(--text); }
 .sub { color: var(--muted); font-size: 12px; margin-top: 5px; }
 .note { color: var(--dim); font-size: 10.5px; margin-top: 11px; line-height: 1.55; }
@@ -2527,6 +2546,40 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .now-trip-where { font-size: 19px; color: var(--text); margin-top: 3px; }
 .now-trip-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 .now-trip-stops { display: flex; flex-direction: column; gap: 2px; }
+
+/* The live-place briefing is a compact launch checklist, not a second version
+   of every source page. Its links take the player to the detailed view. */
+.briefing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.briefing-title { color: var(--cyan-hot); font-size: 17px; font-weight: 600; }
+.briefing-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.briefing-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; padding-right: 58px; }
+.briefing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
+.briefing-section { min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
+.briefing-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
+.briefing-list { display: flex; flex-direction: column; gap: 3px; }
+.briefing-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(83, 128, 151, .28); padding-top: 5px; min-width: 0; }
+.briefing-row:first-child { border-top: 0; padding-top: 0; }
+.briefing-main { min-width: 0; overflow-wrap: anywhere; }
+.briefing-main b { color: var(--text); font-size: 11.5px; }
+.briefing-link { border: 0; background: transparent; color: var(--cyan-hot); cursor: pointer; font: inherit; font-size: 12px; padding: 0; text-align: left; }
+.briefing-link:hover { text-decoration: underline; }
+.briefing-detail { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 1px; }
+.briefing-caveat { color: var(--dim); font-size: 9.5px; line-height: 1.4; margin-top: 4px; }
+.briefing-services { display: flex; flex-wrap: wrap; gap: 5px; }
+.briefing-service { border: 1px solid var(--rule); color: var(--dim); font-size: 9.5px; padding: 3px 5px; }
+.briefing-service.known { border-color: #1f5c3d; color: var(--green); }
+.briefing-service.not-listed { color: var(--muted); }
+.briefing-service.not-reported { border-style: dashed; }
+
+body.overlay .now-collapse { display: none; }
+body.overlay .briefing-head { margin-bottom: 6px; }
+body.overlay .briefing-title { font-size: 13px; }
+body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
+body.overlay .briefing-grid { grid-template-columns: 1fr 1fr; gap: 5px; }
+body.overlay .briefing-section { padding: 5px 6px; }
+body.overlay .briefing-actions { padding-right: 0; }
+body.overlay .briefing-services { gap: 3px; }
+body.overlay .briefing-service { font-size: 8px; padding: 2px 4px; }
 
 /* The plan drawn over the map. */
 .trip-layer { pointer-events: none; }

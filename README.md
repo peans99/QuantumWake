@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![428 tests](https://img.shields.io/badge/tests-428%20passing-4fd48a)
+![461 tests](https://img.shields.io/badge/tests-461%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -351,7 +351,14 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.1
+### 0.7.2
+
+- **Now is a launch checklist.** At a live location it joins the active flight
+  plan, the next three stops, shopping-list items sold there, local stash,
+  available services and up to three buy-here/sell-there trade leads. Its map,
+  stop and overlay controls act directly from the card; it never invents a
+  cargo manifest the game did not log. Every Now card can also be collapsed,
+  and that choice is remembered in the browser.
 
 - **Read-only over the network.** `-Lan` puts the dashboard on a tablet, and put
   the API there with it - including the endpoints that store UEX keys, write into

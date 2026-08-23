@@ -269,6 +269,45 @@ window.scOverlayExpanded = (on) => {
   if (isOverlay) applyOverlayLayout().catch(() => {});
 };
 
+/* ---------- Now card collapse ---------- */
+
+const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
+let collapsedNowCards = new Set();
+
+try {
+  const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
+  if (Array.isArray(saved)) collapsedNowCards = new Set(saved);
+} catch { /* a bad preference must not hide the dashboard */ }
+
+function saveCollapsedNowCards() {
+  try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
+}
+
+function initNowCardCollapsers() {
+  for (const card of $$('#view-now .card[data-card]')) {
+    const name = card.dataset.card;
+    if (!name || card.querySelector('.now-collapse')) continue;
+
+    const button = el('button', 'now-collapse');
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      const collapsed = !card.classList.contains('collapsed');
+      card.classList.toggle('collapsed', collapsed);
+      button.textContent = collapsed ? 'Expand' : 'Collapse';
+      button.setAttribute('aria-expanded', String(!collapsed));
+      if (collapsed) collapsedNowCards.add(name);
+      else collapsedNowCards.delete(name);
+      saveCollapsedNowCards();
+    });
+
+    const collapsed = collapsedNowCards.has(name);
+    card.classList.toggle('collapsed', collapsed);
+    button.textContent = collapsed ? 'Expand' : 'Collapse';
+    button.setAttribute('aria-expanded', String(!collapsed));
+    card.append(button);
+  }
+}
+
 document.addEventListener('keydown', (event) => {
   if (!event.ctrlKey || !event.altKey) return;
 
@@ -279,8 +318,11 @@ document.addEventListener('keydown', (event) => {
 /* ---------- live view ---------- */
 
 let sessionStarted = null;
+let nowState = null;
+let briefingFor = null;
 
 function renderNow(state) {
+  nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
   $('#link').title = state.connected ? 'live' : 'disconnected';
 
@@ -295,6 +337,7 @@ function renderNow(state) {
 
   // The trade card follows too, refreshing only when the place changes.
   refreshTradeAdvice(state.location).catch(() => {});
+  refreshPilotBriefing(state).catch(() => {});
 
   const confidence = $('#now-confidence');
   confidence.textContent = state.location ? `${state.confidence.toLowerCase()} confidence` : '';
@@ -340,6 +383,183 @@ function renderNow(state) {
       feed.append(li);
     }
   }
+}
+
+/**
+ * The briefing answers the decisions that depend on a live location. It only
+ * re-fetches when that location changes; actions explicitly invalidate it.
+ */
+async function refreshPilotBriefing(state) {
+  const card = $('#now-briefing-card');
+  const key = state?.inGame && state.location
+    ? `${state.locationId || ''}|${state.location}`
+    : null;
+
+  if (!key) {
+    card.hidden = true;
+    briefingFor = null;
+    return;
+  }
+
+  if (key === briefingFor) return;
+  briefingFor = key;
+
+  const briefing = await getJson('/api/briefing');
+  if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}`) return;
+
+  renderPilotBriefing(briefing);
+}
+
+async function reloadPilotBriefing() {
+  briefingFor = null;
+  if (nowState) await refreshPilotBriefing(nowState);
+}
+
+function briefingMap(placeId, place) {
+  showView('map');
+  if (placeId) centreOn(placeId);
+  else if (place) jumpToPlace(place);
+}
+
+async function addBriefingStop() {
+  if (!nowState?.location) return;
+
+  const button = $('#briefing-add-stop');
+  button.disabled = true;
+  try {
+    await fetch('/api/trips/stops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placeId: nowState.locationId || '', place: nowState.location, note: null }),
+    });
+    await loadTrips();
+    await reloadPilotBriefing();
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function pinBriefingToOverlay() {
+  const button = $('#briefing-overlay');
+  button.disabled = true;
+  try {
+    await fetch('/api/overlay', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible: true }) });
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function briefingStopRow(briefing, stop) {
+  const row = el('div', 'briefing-row');
+  const main = el('div', 'briefing-main');
+  const name = el('button', 'briefing-link', stop.place);
+  name.title = 'Show this stop on the map';
+  name.addEventListener('click', () => briefingMap(stop.placeId, stop.place));
+  main.append(name);
+  if (stop.note) main.append(el('div', 'briefing-detail', stop.note));
+  row.append(main);
+
+  const done = el('button', 'ghost tiny', 'Mark collected');
+  done.title = 'Cross this stop off';
+  done.addEventListener('click', async () => {
+    done.disabled = true;
+    try {
+      await tripCall(`/api/trips/${briefing.tripId}/stops/${stop.id}/toggle`);
+      await reloadPilotBriefing();
+    } finally {
+      done.disabled = false;
+    }
+  });
+  row.append(done);
+  return row;
+}
+
+function briefingShoppingRow(item) {
+  const row = el('div', 'briefing-row');
+  const main = el('div', 'briefing-main');
+  main.append(el('b', null, item.name));
+  main.append(el('div', 'briefing-detail', `${item.needed} ${item.unit || 'needed'} · ${item.terminal} · ${money(item.price)}`));
+  row.append(main);
+
+  const map = el('button', 'ghost tiny', 'Map');
+  map.title = 'Show this seller on the map';
+  map.addEventListener('click', () => {
+    showView('map');
+    centreOnTerminal(item.terminal, null);
+  });
+  row.append(map);
+  return row;
+}
+
+function renderPilotBriefing(briefing) {
+  const card = $('#now-briefing-card');
+  if (!briefing?.location) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#briefing-title').textContent = briefing.location;
+  $('#briefing-sub').textContent = briefing.tripTitle
+    ? `Active flight plan · ${briefing.tripTitle}`
+    : 'No active flight plan';
+
+  const stops = $('#briefing-stops');
+  stops.textContent = '';
+  for (const stop of briefing.stops || []) stops.append(briefingStopRow(briefing, stop));
+  $('#briefing-stops-section').hidden = !(briefing.stops || []).length;
+
+  const shopping = $('#briefing-shopping');
+  shopping.textContent = '';
+  for (const item of briefing.shopping || []) shopping.append(briefingShoppingRow(item));
+  $('#briefing-shopping-section').hidden = !(briefing.shopping || []).length;
+
+  const trade = $('#briefing-trade');
+  trade.textContent = '';
+  for (const lead of briefing.trade || []) {
+    const row = el('div', 'briefing-row');
+    const main = el('div', 'briefing-main');
+    const commodity = el('button', 'briefing-link', lead.commodity);
+    commodity.title = 'Open this commodity in Market';
+    commodity.addEventListener('click', () => openCommodity(lead.commodity));
+    main.append(commodity);
+    main.append(el('div', 'briefing-detail',
+      `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
+    row.append(main);
+    row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
+    trade.append(row);
+  }
+  if ((briefing.trade || []).length)
+    trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
+  $('#briefing-trade-section').hidden = !(briefing.trade || []).length;
+
+  const services = $('#briefing-services');
+  services.textContent = '';
+  for (const service of briefing.services || []) {
+    const chip = el('span', `briefing-service ${service.status.replaceAll(' ', '-')}`,
+      `${service.name}: ${service.status}`);
+    chip.title = service.dataEnabled ? 'From enabled community data' : 'No installed data reports this service';
+    services.append(chip);
+  }
+  $('#briefing-services-section').hidden = !(briefing.services || []).length;
+
+  const stash = $('#briefing-stash');
+  stash.textContent = '';
+  for (const item of briefing.stash || []) {
+    const row = el('div', 'briefing-row');
+    const main = el('div', 'briefing-main');
+    main.append(el('b', null, item.name));
+    main.append(el('div', 'briefing-detail', item.category));
+    row.append(main);
+    stash.append(row);
+  }
+  $('#briefing-stash-section').hidden = !(briefing.stash || []).length;
+
+  $('#briefing-map').onclick = () => briefingMap(briefing.locationId, briefing.location);
+  $('#briefing-add-stop').onclick = addBriefingStop;
+  $('#briefing-overlay').onclick = pinBriefingToOverlay;
+  $('#briefing-overlay').hidden = isOverlay;
+  card.hidden = false;
 }
 
 setInterval(() => { $('#now-clock').textContent = clock(sessionStarted); }, 1000);
@@ -3102,6 +3322,7 @@ async function loadJobList() {
   } catch { /* server down; the page still shows contracts */ }
 
   renderPinnedJob(jobs);
+  reloadPilotBriefing().catch(() => {});
 
   // Shopping and crafting are different work, so they live on different
   // pages; the cards themselves are identical.
@@ -6391,6 +6612,7 @@ const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
 async function loadTrips() {
   trips = await getJson('/api/trips');
   renderTripCard();
+  reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
   drawTripPath();
 }
@@ -8867,6 +9089,8 @@ async function maybeShowSetup() {
 }
 
 async function boot() {
+  initNowCardCollapsers();
+
   if (isOverlay) {
     document.body.classList.add('overlay');
 
