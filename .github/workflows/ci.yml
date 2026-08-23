@@ -106,9 +106,15 @@ jobs:
 
           # A comment fix or a rename genuinely changes nothing stored, and a
           # check that cannot be answered is a check people learn to ignore.
-          if git log "$BASE"..HEAD --format='%B' | grep -qi 'no-payload-bump'; then
+          #
+          # A trailer, anchored to the start of a line, rather than a bare word
+          # anywhere in the message: the commit that first documented this
+          # waiver waived the check by explaining it, which is a poor way for a
+          # guard to fail. Prose can now name the trailer without invoking it.
+          if git log "$BASE"..HEAD --format='%B' | grep -qiE '^No-payload-bump:[[:space:]]*[^[:space:]]'; then
             echo
-            echo "Waived: a commit message says no-payload-bump."
+            echo "Waived by a commit trailer:"
+            git log "$BASE"..HEAD --format='%B' | grep -iE '^No-payload-bump:' | sed 's/^/  /'
             exit 0
           fi
 
@@ -118,6 +124,8 @@ jobs:
           echo "::error::"
           echo "::error::Sessions already on disk are skipped by fingerprint, so whatever"
           echo "::error::this now reads will be invisible to every install that has run"
-          echo "::error::before - the ones with the most history. Bump the constant, or"
-          echo "::error::put 'no-payload-bump' in a commit message if nothing stored changed."
+          echo "::error::before - the ones with the most history. Bump the constant, or, if"
+          echo "::error::nothing stored actually changed, add a commit trailer on its own line:"
+          echo "::error::"
+          echo "::error::    No-payload-bump: renamed a private field, nothing new is read"
           exit 1

@@ -41,9 +41,17 @@ in src/Quantumwake.Data/SessionStore.cs does not move.
 ```
 
 A rename or a comment fix genuinely changes nothing stored, and a check that
-cannot be answered is one people learn to route around — so `no-payload-bump`
-in a commit message waives it. Use that when nothing stored changed, and move
-the constant when something did.
+cannot be answered is one people learn to route around. So a commit trailer,
+on its own line, waives it:
+
+```
+No-payload-bump: renamed a private field, nothing new is read
+```
+
+The trailer is anchored to the start of a line, and needs a reason after the
+colon, precisely so that writing *about* it — as this paragraph does — does not
+switch the check off. Use it when nothing stored changed, and move the constant
+when something did.
 
 `SchemaVersion`, beside it, answers a different question: bump that only when a
 stored payload can no longer be *read*, since a mismatch drops the table
