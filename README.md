@@ -347,6 +347,21 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.7.0
+
+- **What the cargo cost you.** Buying a commodity was never read. The tag was
+  routed, but the pattern behind it only fitted a sale, so every purchase fell
+  through as an unrecognised line - the last unmatched tag in 418 MB of logs.
+  Cargo could be watched leaving and never arriving, and no run could be priced.
+  Buying is the same transaction written differently: the total is `price`
+  rather than `amount`, there is no `transactionMode`, and the quantity is
+  counted in centi-SCU - so a 320 SCU hold reads as 32,000 unless it is
+  converted. Both shapes parse now, quantities are SCU on either side, and the
+  13 purchases on this install come out at prices per SCU that agree with the
+  figure the game printed beside them. *Cargo bought* on the Commodities page
+  stops reading zero, and every counter you have bought from says what it
+  charged.
+
 ### 0.6.17
 
 - **Fixed the stray character in 64 places.** A byte-level repair in 0.6.15
