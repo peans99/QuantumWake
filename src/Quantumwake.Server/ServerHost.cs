@@ -485,6 +485,12 @@ public static class ServerHost
             LogLibrary lib, UexData uex, UexFeeds feeds) =>
             BuildBriefing(live.Current, trips, jobs, lib, uex, feeds));
 
+        // The map reads the same deliberately limited service evidence as the
+        // briefing. It receives map ids, not UEX's terminal names, so its
+        // filtering and detail card use exactly the resolver the trade views do.
+        app.MapGet("/api/map/services", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
+            BuildMapServices(lib, uex, feeds));
+
         // Server-Sent Events feed for the browser UI.
         //
         // The SignalR hub above stays mapped as the seam for Phase 6 multi-client work,
@@ -2002,6 +2008,41 @@ static int Holes(IEnumerable<ShipSlot> slots)
             [.. shopping.Take(8)], trade, services, stashItems);
     }
 
+    /// <summary>Maps service evidence onto the app's own atlas identifiers.</summary>
+    static IReadOnlyList<MapServicePlace> BuildMapServices(LogLibrary lib, UexData uex, UexFeeds feeds)
+    {
+        var servicesByPlace = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string? terminalOrPlace, string service)
+        {
+            var place = lib.Terminals.Resolve(terminalOrPlace);
+            if (place is null)
+                return;
+
+            if (!servicesByPlace.TryGetValue(place.RawId, out var services))
+                servicesByPlace[place.RawId] = services = new(StringComparer.Ordinal);
+
+            services.Add(service);
+        }
+
+        // A known counter is a useful broad answer to "shops". It does not
+        // claim a particular item is stocked; the briefing makes that narrower
+        // assertion only when a current shopping-list line matches it.
+        foreach (var terminal in uex.KnownTerminals())
+            Add(terminal, "shop");
+
+        foreach (var terminal in feeds.FuelPrices.Select(fuel => fuel.Terminal))
+            Add(terminal, "refuel");
+
+        foreach (var place in feeds.PlaceDirectory.Where(place => place.Clinic is true))
+            Add(place.Name, "clinic");
+
+        return servicesByPlace
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .Select(entry => new MapServicePlace(entry.Key, [.. entry.Value.OrderBy(service => service)]))
+            .ToList();
+    }
+
     static GameInstall? ResolveInstall(string[] args, IConfiguration configuration)
     {
         var index = Array.IndexOf(args, "--path");
@@ -2081,6 +2122,9 @@ public sealed record BriefingService(string Name, string Status, bool DataEnable
 
 /// <summary>One item last seen at the live place.</summary>
 public sealed record BriefingStash(string Name, string Category, DateTimeOffset LastSeen);
+
+/// <summary>One atlas place and the services the installed feeds can locate there.</summary>
+public sealed record MapServicePlace(string PlaceId, IReadOnlyList<string> Services);
 
 
 /// <summary>

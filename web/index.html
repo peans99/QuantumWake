@@ -283,6 +283,12 @@
         <input type="checkbox" id="map-goods">
         <span>Goods on hover</span>
       </label>
+      <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
+        <button type="button" class="active" data-service="" title="Show every place">All</button>
+        <button type="button" data-service="shop" title="UEX-listed counters and shops">▦ Shops</button>
+        <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
+        <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
+      </div>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
@@ -326,6 +332,7 @@
           <span class="map-info-kind" id="map-info-kind"></span>
           <span id="map-info-visits"></span>
         </div>
+        <div class="map-info-services" id="map-info-services" hidden></div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
         <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>

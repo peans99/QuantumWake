@@ -60,4 +60,26 @@ public class PilotBriefingTests
         Assert.True(page.Truth("__dom.node('#now-briefing-card').classList.contains('collapsed')"));
         Assert.Contains("briefing", page.Text("localStorage.getItem('qw-now-collapsed-cards')"));
     }
+
+    [Fact]
+    public void A_service_filter_keeps_only_matching_places_and_marks_the_place_card()
+    {
+        var page = new Page();
+
+        page.Do("""
+            atlas = [
+              { rawId: 'clinic', name: 'Seraphim', kind: 'Station', visits: 1, system: '', body: '', lastVisit: null },
+              { rawId: 'shop', name: 'Area18', kind: 'City', visits: 1, system: '', body: '', lastVisit: null }
+            ];
+            mapServicesByPlace.set('clinic', ['clinic']);
+            mapServicesByPlace.set('shop', ['shop']);
+            selectMapService('clinic');
+            showMapInfo(atlas[0]);
+            """);
+
+        Assert.Equal("clinic", page.Text("mapServiceFilter"));
+        Assert.Equal(1, page.Count("__dom.node('#starmap').byClass('map-node').length"));
+        Assert.Contains("✚", page.NodeText("#map-info-services"));
+        Assert.Contains("Clinic", page.NodeText("#map-info-services"));
+    }
 }
