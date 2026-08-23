@@ -347,8 +347,17 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.14
+### 0.6.15
 
+- **Waking up is not a hospital visit.** The game prints the same line for
+  every bed - the clinic bed you crawl into and the hab bed you wake up in at
+  login - so every login was being counted as a medical bed. They are told
+  apart now by what surrounds them: a bed within three minutes of leaving the
+  menus, with nothing having happened to you, is waking up. On this install
+  that is 27 of them, and Port Tressler drops from 68 bed visits to 54. Beds
+  used after a death or an incapacitation are marked as such, since that is the
+  one case that is unambiguously medical. The section is called *Beds used*
+  now, and the logins are still reported - just not counted as treatment.
 - **Standing: who you have worked for.** A table on the Contracts page of every
   issuer, how many contracts you took, how many you finished and the rate, how
   many you walked away from, and the span you have been working for them. This

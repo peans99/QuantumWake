@@ -119,6 +119,35 @@ public sealed class SessionBuilder
     private int _kills;
     private int _deaths;
 
+    /// <summary>When something last happened to the player's body, if it has.</summary>
+    private DateTimeOffset? _lastCasualty;
+
+    /// <summary>When the player last left the menus for the world.</summary>
+    private DateTimeOffset? _enteredGame;
+
+    /// <summary>
+    /// Waking up at login, treatment after a casualty, or a bed used to heal.
+    /// </summary>
+    /// <remarks>
+    /// Three minutes because a login lands the player in a bed and the toast
+    /// follows the spawn immediately; fifteen because crawling to a bed after a
+    /// fight takes a while, and anything longer starts collecting beds that
+    /// have nothing to do with the death.
+    /// </remarks>
+    private string BedKind(DateTimeOffset at)
+    {
+        if (_lastCasualty is { } hurt && at - hurt <= TimeSpan.FromMinutes(15))
+            return "after-death";
+
+        var arrived = _enteredGame ?? _firstSeen;
+
+        if (arrived is { } spawned && at - spawned <= TimeSpan.FromMinutes(3) && _lastCasualty is null)
+            return "wake";
+
+        return "heal";
+    }
+
+
     /// <summary>Timestamp of the last corpse-item line, for burst grouping.</summary>
     private DateTimeOffset? _lastCorpseAt;
     private readonly HashSet<string> _corpseItems = [];
@@ -314,6 +343,15 @@ public sealed class SessionBuilder
             return;
 
         Accrue(_currentRules, at - _rulesSince);
+
+        // Leaving the menus is the moment the player is standing in the world -
+        // and for anyone who logged out in a bed, the moment they wake up in
+        // one. Measuring from the log start instead would count the launcher
+        // and the loading screen, which is why a wake-up looked like a trip to
+        // a clinic nine minutes in.
+        if (_currentRules.Equals("SC_Frontend", StringComparison.OrdinalIgnoreCase))
+            _enteredGame = at;
+
         _currentRules = rules;
         _rulesSince = at;
     }
@@ -551,6 +589,7 @@ public sealed class SessionBuilder
         if (notification.IsIncapacitation)
         {
             _incapacitations++;
+            _lastCasualty = notification.Timestamp;
 
             // Being incapacitated and waking somewhere else is a respawn, and
             // the commoner kind: a corpse-recovery burst only follows a full
@@ -573,6 +612,10 @@ public sealed class SessionBuilder
         // stronger than waiting for the next death, though still only a hint,
         // since a bed also just heals. Repeat toasts at the same place inside
         // an hour are one visit.
+        //
+        // The game prints this same line for the hab bed you wake up in at
+        // login, which is why the kind is worked out from what surrounds it
+        // rather than from the text - see MedicalBedVisit.Kind.
         if (notification.IsMedicalBed)
         {
             var place = _locationState.State.Current?.DisplayName;
@@ -584,8 +627,16 @@ public sealed class SessionBuilder
 
             if (place is not null && !repeat)
             {
-                _medicalBeds.Add(new MedicalBedVisit(notification.Timestamp, place));
-                Timeline(notification.Timestamp, "medbed", "Used a medical bed", place);
+                var kind = BedKind(notification.Timestamp);
+
+                _medicalBeds.Add(new MedicalBedVisit(notification.Timestamp, place, kind));
+
+                Timeline(notification.Timestamp, "medbed", kind switch
+                {
+                    "wake" => "Woke up here",
+                    "after-death" => "Treated at a medical bed",
+                    _ => "Used a bed",
+                }, place);
             }
 
             return;
@@ -840,6 +891,7 @@ public sealed class SessionBuilder
 
         _lastCorpseAt = corpse.Timestamp;
         _deaths++;
+        _lastCasualty = corpse.Timestamp;
 
         // Where the player wakes is the closest the logs come to naming their
         // respawn point: the game never records the choice, so the next place
