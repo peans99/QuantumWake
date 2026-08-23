@@ -134,7 +134,10 @@ public sealed class SessionStore : IDisposable
     /// </remarks>
     // 3: bed visits gained a kind, so summaries cached before it would show
     //    every login as a medical bed for ever.
-    private const int PayloadVersion = 3;
+    // 4: commodity purchases parse at last. Every session summarised before
+    //    0.7.0 recorded the sale and dropped the buy, so Cargo bought would
+    //    have stayed at zero on exactly the installs with the most history.
+    private const int PayloadVersion = 4;
 
 
     /// <summary>

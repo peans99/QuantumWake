@@ -360,7 +360,9 @@ release workflow lifts it from here, so it is written once.
   13 purchases on this install come out at prices per SCU that agree with the
   figure the game printed beside them. *Cargo bought* on the Commodities page
   stops reading zero, and every counter you have bought from says what it
-  charged.
+  charged. Sessions you have already got were summarised by a build that dropped
+  the buy, so the first launch after this update re-reads your backups once to
+  fill them in - slower than usual, and only that once.
 
 ### 0.6.17
 
