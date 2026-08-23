@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
@@ -56,6 +57,13 @@ public static class ServerHost
 
         builder.Services.AddSingleton(library);
 
+        // The wipe is read before anything asks the library a question, so no
+        // page can render pre-wipe totals in the moment before it is applied.
+        var wipes = new WipeStore();
+        builder.Services.AddSingleton(wipes);
+        library.Wipe = wipes.Current;
+
+
         // Only when there is one. Registering a null instance throws
         // "Value cannot be null. (Parameter 'implementationInstance')" out of
         // the container - which is how a missing install used to take the
@@ -83,6 +91,11 @@ public static class ServerHost
         builder.Services.AddSingleton<UexData>();
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
+        builder.Services.AddSingleton<TripStore>();
+        builder.Services.AddSingleton<UpdateStore>();
+        builder.Services.AddSingleton<UpdateCheck>();
+
+
         builder.Services.AddSingleton<OverlayLayoutStore>();
 
         builder.Services.ConfigureHttpJsonOptions(options =>
@@ -107,7 +120,12 @@ public static class ServerHost
         {
             var files = new PhysicalFileProvider(webRoot);
             app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
-            app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
+
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = files,
+                OnPrepareResponse = MustRevalidate,
+            });
         }
         else if (EmbeddedWeb.HasFiles)
         {
@@ -117,6 +135,18 @@ public static class ServerHost
         }
 
         app.MapHub<LiveHub>("/hub/live");
+
+        // Without this the browser applies its own guess at how long a file
+        // stays fresh, and an update arrives half-applied: the version number
+        // comes from the API and reads new, while the page around it is the old
+        // stylesheet and the old script. Reported as "I updated and the map has
+        // not changed", and the only cure was knowing to press Ctrl+F5.
+        //
+        // no-cache does not mean "do not cache" - it means "ask first". The tag
+        // is still sent, the answer is still 304, and the whole conversation is
+        // a loopback round trip. Correctness is worth a millisecond.
+        static void MustRevalidate(StaticFileResponseContext context) =>
+            context.Context.Response.Headers.CacheControl = "no-cache";
 
         app.MapGet("/api/install", (LogLibrary lib) => install is null
             ? Results.NotFound(new { message = "No Star Citizen install found." })
@@ -306,6 +336,40 @@ public static class ServerHost
             };
         });
 
+        // ---- update checks: asked for once, never on a timer ----
+
+        // Local state only. Answering this question costs no network, so the
+        // page can decide whether to ask without connecting to anything.
+        app.MapGet("/api/updates", (UpdateStore updates) =>
+        {
+            var preference = updates.Current;
+
+            return new
+            {
+                preference.Asked,
+                preference.Automatic,
+                preference.LastCheckedAt,
+                preference.LastSeenVersion,
+                releases = UpdateCheck.ReleasesPage
+            };
+        });
+
+        app.MapPost("/api/updates/answer", (bool automatic, UpdateStore updates) =>
+            Results.Ok(updates.Answer(automatic)));
+
+        // The one call that reaches the internet, and only from a click or from
+        // a startup the player has already agreed to.
+        app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check) =>
+        {
+            var assembly = typeof(ServerHost).Assembly;
+            var current = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+            var result = await check.LookAsync(current);
+            updates.Checked(result.Latest);
+
+            return Results.Ok(result);
+        });
+
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
@@ -396,10 +460,20 @@ public static class ServerHost
 
             foreach (var l in lib.Ledger(days ?? 0))
             {
+                // The kiosk logs one line per order, and the order can be for
+                // several: "quantity[2] client_price[168000]" is two drives at
+                // 84,000, not one at 168,000. Without the count on the line,
+                // buying two of something twice reads as two purchases of one,
+                // and the price looks doubled rather than the order being.
+                // Cargo already carries its SCU in the text.
+                var what = l.Kind == "Item bought" && l.Quantity > 1
+                    ? $"{l.What} ×{l.Quantity}"
+                    : l.What;
+
                 entries.Add(new LogbookLine(
                     l.At,
                     l.Amount > 0 ? "sold" : "bought",
-                    l.What, l.Where, l.Shop, l.Amount));
+                    what, l.Where, l.Shop, l.Amount));
             }
 
             foreach (var p in lib.Pickups(days ?? 0))
@@ -464,6 +538,7 @@ public static class ServerHost
                 t.At,
                 t.IsSell,
                 t.Place,
+                t.PlaceId,
                 t.Scu,
                 t.Amount,
                 t.UnitPrice,
@@ -725,8 +800,25 @@ public static class ServerHost
                 .OrderBy(i => i.className));
 
         // Hauls worth flying, sized to a hold and a wallet the caller names.
-        app.MapGet("/api/routes", (UexData uex, double? scu, decimal? capital, string? from) =>
-            uex.Routes(scu ?? 0, capital ?? 0, from, 30));
+        // Each end of a haul carries the map's own id for it where the terminal
+        // could be matched, so planning a run puts real dots on the map instead
+        // of the page guessing at the names a second time.
+        app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
+            uex.Routes(scu ?? 0, capital ?? 0, from, 30).Select(r => new
+            {
+                r.Commodity,
+                r.BuyAt,
+                buyAtId = lib.Terminals.IdFor(r.BuyAt),
+                r.BuyPrice,
+                r.SellAt,
+                sellAtId = lib.Terminals.IdFor(r.SellAt),
+                r.SellPrice,
+                r.MarginPerScu,
+                r.Units,
+                r.Profit,
+                r.Outlay,
+                r.LimitedBy
+            }));
 
         // Where the player last woke, for the Now card. Its own endpoint
         // because the casualties page recomputes every statistic to answer,
@@ -734,9 +826,17 @@ public static class ServerHost
         app.MapGet("/api/respawn", (LogLibrary lib) =>
         {
             var respawns = lib.Respawns();
+            var beds = lib.MedicalBeds();
+
+            // Two different signals, shown side by side rather than ranked:
+            // a bed is where regen gets set but is also just where someone
+            // healed, and waking somewhere is proof of nothing but the past.
+            var bed = beds.Count > 0
+                ? new { beds[0].Place, beds[0].At, times = beds.Count }
+                : null;
 
             if (respawns.Count == 0)
-                return Results.Ok(new { known = false });
+                return Results.Ok(new { known = bed is not null, bed });
 
             var latest = respawns[0];
 
@@ -755,7 +855,8 @@ public static class ServerHost
                 latest.Cause,
                 agreeing,
                 of = recent.Count,
-                settled = agreeing >= 2
+                settled = agreeing >= 2,
+                bed
             });
         });
 
@@ -820,12 +921,25 @@ public static class ServerHost
                 .Take(10)
                 .ToList();
 
+            // The other signal: beds are where regen is set, when it is set.
+            var beds = lib.MedicalBeds(days ?? 0);
+
+            var bedsUsed = beds
+                .GroupBy(b => b.Place, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new { place = g.Key, times = g.Count(), last = g.Max(b => b.At) })
+                .OrderByDescending(x => x.last)
+                .Take(10)
+                .ToList();
+
             return new
             {
                 deaths,
                 lastWokeAt = respawns.Count > 0 ? respawns[0].Place : null,
                 lastWokeWhen = respawns.Count > 0 ? respawns[0].At : (DateTimeOffset?)null,
+                lastBedAt = beds.Count > 0 ? beds[0].Place : null,
+                lastBedWhen = beds.Count > 0 ? beds[0].At : (DateTimeOffset?)null,
                 wokeAt,
+                bedsUsed,
                 incapacitations = sessions.Sum(s => s.Incapacitations),
                 sessionsWithDeaths = sessions.Count(s => s.Deaths > 0),
                 averageFee = fees.Count > 0 ? fees.Average(f => f.fee) : 0,
@@ -928,13 +1042,16 @@ public static class ServerHost
                     var buyPrice = commodity?.BestBuy > 0 ? commodity.BestBuy : (decimal?)null;
                     var buyAt = commodity?.BestBuy > 0 ? commodity.BestBuyTerminal : null;
 
-                    if (buyPrice is null)
+                    if (buyPrice is null && MatchItem(lib, item.Name) is { Uuid: { } uuid })
                     {
-                        var reference = lib.Community.Items
-                            .FirstOrDefault(kv => string.Equals(kv.Value.Name, item.Name, StringComparison.OrdinalIgnoreCase));
+                        buyPrice = uex.ItemPrice(uuid);
 
-                        if (reference.Value?.Uuid is { } uuid)
-                            buyPrice = uex.ItemPrice(uuid);
+                        // A price with no counter behind it is half an answer:
+                        // the card said what a shield costs and left "where"
+                        // blank, which is the only part you can act on. The
+                        // same loose match the shopping lookup uses, so a line
+                        // reading "Hydro Jet" still finds the HydroJet.
+                        buyAt = uex.ItemMarket(uuid).MinBy(r => r.Buy)?.Terminal;
                     }
 
                     return new
@@ -954,6 +1071,8 @@ public static class ServerHost
                 {
                     job.Id,
                     job.Title,
+                    job.Destination,
+                    job.DestinationId,
                     job.Kind,
                     job.Source,
                     job.CreatedAt,
@@ -971,7 +1090,16 @@ public static class ServerHost
                 body.Title ?? "Untitled job",
                 body.Kind ?? "list",
                 body.Source,
-                body.Items ?? [])));
+                body.Items ?? [],
+                body.Destination,
+                body.DestinationId)));
+
+        // Where a list is to be shopped. Cleared by sending nothing, which is
+        // a real answer: a list for wherever you happen to be.
+        app.MapPost("/api/jobs/{id}/destination", (string id, JobStore jobs, DestinationRequest body) =>
+            jobs.SetDestination(id, body.Place, body.PlaceId)
+                ? Results.Ok(new { id, body.Place })
+                : Results.NotFound());
 
         // One thing added from a catalogue page, into whichever list the
         // player is currently filling.
@@ -989,6 +1117,48 @@ public static class ServerHost
 
         app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
             jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        // ---- flight plans: where to go next, in order ----
+
+        // ---- the wipe: where the player's countable history begins ----
+
+        app.MapGet("/api/wipe", (WipeStore wipes, LogLibrary lib) => Describe(wipes.Current, lib));
+
+        app.MapPost("/api/wipe", (WipeRequest body, WipeStore wipes, LogLibrary lib) =>
+        {
+            var wipe = wipes.Set(body.At, body.Patch, ScopeOf(body.Covers));
+            lib.Wipe = wipe;
+
+            return Results.Ok(Describe(wipe, lib));
+        });
+
+        app.MapGet("/api/trips", (TripStore trips) => trips.All());
+
+        app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
+            Results.Ok(trips.Add(body.Title, body.Stops)));
+
+        // One stop added from the map, a route or a list, into whichever plan
+        // the player is filling.
+        app.MapPost("/api/trips/stops", (TripStore trips, TripStop body) =>
+        {
+            var trip = trips.AddStop(body);
+            return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
+        });
+
+        app.MapPost("/api/trips/{id}/track", (string id, TripStore trips) =>
+            trips.Track(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/toggle", (string id, string stopId, TripStore trips) =>
+            trips.ToggleStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/move", (string id, string stopId, int delta, TripStore trips) =>
+            trips.MoveStop(id, stopId, delta) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/trips/{id}/stops/{stopId}", (string id, string stopId, TripStore trips) =>
+            trips.RemoveStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/trips/{id}", (string id, TripStore trips) =>
+            trips.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
         // ---- optional UEX feeds, each switched on by itself ----
 
@@ -1050,15 +1220,214 @@ public static class ServerHost
 
         // Every terminal price for one commodity: the map grades its sellers
         // and buyers by these, by price or by SCU capacity.
-        app.MapGet("/api/uex/market", (UexData uex, string commodity) =>
-            uex.Market(commodity).Select(r => new
+        /*
+         * What can be bolted onto one of your ships, and where it is sold.
+         *
+         * The ship data carries every port with the rule for what may replace
+         * what is in it, so this is the game's own answer rather than a guess:
+         * a size 2 shield port takes a size 2 shield, and the shops that stock
+         * one are known. Ports nobody sells parts for come back empty and are
+         * dropped, so the page shows what can actually be shopped for today.
+         */
+        app.MapGet("/api/fleet/upgrades", (LogLibrary lib, UexData uex, string ship) =>
+        {
+            var slots = lib.Community.Slots(ship);
+
+            if (slots.Count == 0)
+                return Results.Ok(new
+                {
+                    ship,
+
+                    // Told apart on purpose: an install whose reference data
+                    // predates ports needs a refresh, which is a different
+                    // sentence from "this ship has nothing to change".
+                    known = lib.Community.HasSlots,
+                    groups = Array.Empty<object>()
+                });
+
+            // Everything sold, by what it is and how big: one pass over the
+            // catalogue rather than one per port.
+            var catalogue = lib.Community.Items.Values
+                .Where(i => i.Uuid is not null && i.Type is { Length: > 0 })
+                .GroupBy(i => (i.Type!, i.Size))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var groups = slots
+                .GroupBy(s => (s.Kind, s.Size))
+                .Select(group =>
+                {
+                    var fitted = group
+                        .Select(s => s.Fitted)
+                        .Where(f => f is { Length: > 0 })
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    var options = (catalogue.TryGetValue(group.Key, out var candidates) ? candidates : [])
+                        .Select(item => new
+                        {
+                            item.Name,
+                            item.Manufacturer,
+                            item.Grade,
+                            price = uex.ItemPrice(item.Uuid),
+                            shops = uex.ItemMarket(item.Uuid)
+                                .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                                .Select(g => g.MinBy(r => r.Buy)!)
+                                .OrderBy(r => r.Buy)
+                                .Take(4)
+                                .Select(r =>
+                                {
+                                    var place = lib.Terminals.Resolve(r.Terminal);
+
+                                    return new
+                                    {
+                                        terminal = r.Terminal,
+                                        placeId = place?.RawId ?? string.Empty,
+                                        place = place?.Name,
+                                        system = place?.System,
+                                        security = TerminalPlaces.SecurityOfSystem(place?.System),
+                                        price = r.Buy
+                                    };
+                                })
+                                .ToList()
+                        })
+
+                        // Nothing to buy is not an upgrade: an item with no
+                        // shop behind it would send the player nowhere.
+                        .Where(o => o.Name is { Length: > 0 } && o.shops.Count > 0)
+                        .OrderBy(o => o.price ?? decimal.MaxValue)
+                        .Take(12)
+                        .ToList();
+
+                    return new
+                    {
+                        kind = group.Key.Kind,
+                        size = group.Key.Size,
+                        ports = Holes(group),
+                        fitted,
+                        options
+                    };
+                })
+                .Where(g => g.options.Count > 0)
+                .OrderBy(g => g.kind)
+                .ThenBy(g => g.size)
+                .ToList();
+
+            return Results.Ok(new { ship, known = true, groups });
+        });
+
+        /*
+         * Everything a shopping list can be written from.
+         *
+         * A list line is free text and stays free text - the player knows what
+         * they want better than this app does - but making them spell
+         * "Quantanium" or "FR-76 Chest Armor" from memory is asking them to
+         * guess at names already sitting in the reference data. Only things
+         * that can actually be bought are offered: a name with no counter
+         * behind it would put a line on the list that no plan could ever
+         * route.
+         */
+        app.MapGet("/api/shopping/catalogue", (LogLibrary lib, UexData uex) =>
+        {
+            var commodities = lib.Community.All.Values
+                .Select(c => c.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var items = lib.Community.Items.Values
+                .Where(i => i.Name is { Length: > 0 } && uex.ItemPrice(i.Uuid) is > 0)
+                .Select(i => i.Name!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return new { commodities, items };
+        });
+
+        /*
+         * Where to buy one named thing - whatever kind of thing it is.
+         *
+         * A shopping list is written by hand, so a line on it can be a
+         * commodity ("Agricium"), a ship part ("Atlas Quantum Drive"), or a
+         * typo. The trade market and the item shops are two different feeds
+         * with two different join keys, and the list should not have to know
+         * which one its line belongs to - so both are tried here and the
+         * answer says which one replied.
+         */
+        app.MapGet("/api/shopping/sellers", (LogLibrary lib, UexData uex, string name) =>
+        {
+            object Row(string kind, string terminal, decimal price, decimal scu, DateTimeOffset? seen)
             {
-                terminal = r.Terminal,
-                buy = r.Buy,
-                sell = r.Sell,
-                buyScu = r.BuyScu,
-                sellScu = r.SellScu,
-                seenAt = r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : (DateTimeOffset?)null
+                var place = lib.Terminals.Resolve(terminal);
+
+                return new
+                {
+                    kind,
+                    terminal,
+                    placeId = place?.RawId ?? string.Empty,
+                    place = place?.Name,
+                    system = place?.System,
+                    security = TerminalPlaces.SecurityOfSystem(place?.System),
+                    price,
+                    scu,
+                    seenAt = seen
+                };
+            }
+
+            var traded = uex.Market(name)
+                .Where(r => r.Buy > 0)
+                .OrderBy(r => r.Buy)
+                .Select(r => Row("commodity", r.Terminal, r.Buy, r.BuyScu,
+                    r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : null))
+                .ToList();
+
+            if (traded.Count > 0)
+                return new { name, kind = "commodity", sellers = (IReadOnlyList<object>)traded };
+
+            // Items join on the game's entity uuid, which only the reference
+            // data knows, so the written name has to find the item first.
+            var item = MatchItem(lib, name);
+
+            if (item is null)
+                return new { name, kind = "unknown", sellers = (IReadOnlyList<object>)Array.Empty<object>() };
+
+            var stocked = uex.ItemMarket(item.Uuid)
+                .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.MinBy(r => r.Buy)!)
+                .OrderBy(r => r.Buy)
+                .Select(r => Row("item", r.Terminal, r.Buy, 0, null))
+                .ToList();
+
+            return new { name = item.Name ?? name, kind = "item", sellers = (IReadOnlyList<object>)stocked };
+        });
+
+        // Every counter that trades one commodity, with where it is and how
+        // rough the neighbourhood is - so the page can offer a choice rather
+        // than one number, and say what taking the best price would cost.
+        app.MapGet("/api/uex/market", (LogLibrary lib, UexData uex, string commodity) =>
+            uex.Market(commodity).Select(r =>
+            {
+                var place = lib.Terminals.Resolve(r.Terminal);
+
+                return new
+                {
+                    terminal = r.Terminal,
+
+                    // The map's own id for the place this counter stands in,
+                    // empty when the two naming schemes cannot be reconciled.
+                    // The page shades and plans by this rather than matching
+                    // names itself.
+                    placeId = place?.RawId ?? string.Empty,
+                    place = place?.Name,
+                    system = place?.System,
+                    security = TerminalPlaces.SecurityOfSystem(place?.System),
+                    buy = r.Buy,
+                    sell = r.Sell,
+                    buyScu = r.BuyScu,
+                    sellScu = r.SellScu,
+                    seenAt = r.Seen > 0 ? DateTimeOffset.FromUnixTimeSeconds(r.Seen) : (DateTimeOffset?)null
+                };
             }));
 
         app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>
@@ -1168,7 +1537,120 @@ public static class ServerHost
         return app;
     }
 
-    /// <summary>Bridges the library's progress callback to the shared status.</summary>
+    /// <summary>
+/// The wipe as the page reads it: names rather than a flags number, and the
+/// count of what it is holding back, which is the honest part.
+/// </summary>
+static object Describe(Wipe wipe, LogLibrary lib) => new
+{
+    at = wipe.At == DateTimeOffset.MinValue ? (DateTimeOffset?)null : wipe.At,
+    wipe.Patch,
+
+    // A patch that landed after the line currently drawn. The page offers it
+    // and the player decides: the logs can date a patch, but nothing in them
+    // says whether it wiped.
+    suggested = lib.PatchSinceWipe() is { } found
+        ? new { patch = $"Alpha {found.Patch}", at = found.At }
+        : null,
+    covers = Enum.GetValues<WipeScope>()
+        .Where(v => v is not (WipeScope.None or WipeScope.Everything) && wipe.Scope.HasFlag(v))
+        .Select(v => v.ToString().ToLowerInvariant())
+        .ToArray(),
+    hidden = lib.SessionsBeforeWipe(),
+    stored = lib.Store.Count(),
+    @default = WipeStore.Default.At
+};
+
+/// <summary>
+/// What the page said the wipe took.
+/// </summary>
+/// <remarks>
+/// Unknown names are ignored rather than refused: a scope this build does not
+/// have is a page from a newer one, and the sensible reading of "money and
+/// something I have never heard of" is money.
+/// </remarks>
+static WipeScope ScopeOf(List<string>? covers)
+{
+    if (covers is null || covers.Count == 0)
+        return WipeScope.Everything;
+
+    var scope = WipeScope.None;
+
+    foreach (var name in covers)
+        if (Enum.TryParse<WipeScope>(name, ignoreCase: true, out var one))
+            scope |= one;
+
+    return scope == WipeScope.None ? WipeScope.Everything : scope;
+}
+
+/// <summary>
+/// The reference item a written line means, or null.
+/// </summary>
+/// <remarks>
+/// Hand-written names are close, not exact: "Atlas quantum drive" for "Atlas",
+/// a manufacturer word in front, a plural on the end. An exact name wins; then
+/// a whole-word containment either way, longest first, so "Bulwark" does not
+/// beat "Bulwark Mk2" for a line naming the Mk2. A guess this loose is only
+/// safe because the answer is shown with its price and shop: the player sees
+/// what was matched before flying anywhere.
+/// </remarks>
+static ItemInfo? MatchItem(LogLibrary lib, string written)
+{
+    var wanted = Compact(written);
+    if (wanted.Length < 3)
+        return null;
+
+    ItemInfo? best = null;
+    var bestLength = 0;
+
+    foreach (var item in lib.Community.Items.Values)
+    {
+        if (item.Name is not { Length: > 0 } name || item.Uuid is null)
+            continue;
+
+        var compact = Compact(name);
+        if (compact.Length == 0)
+            continue;
+
+        if (compact == wanted)
+            return item;
+
+        if (compact.Length > bestLength
+            && (compact.Contains(wanted, StringComparison.Ordinal) || wanted.Contains(compact, StringComparison.Ordinal)))
+        {
+            best = item;
+            bestLength = compact.Length;
+        }
+    }
+
+    return best;
+
+    static string Compact(string value) =>
+        new([.. value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
+}
+
+/// <summary>
+/// How many holes of one kind and size a ship really has.
+/// </summary>
+/// <remarks>
+/// Two things stop this being a count of rows. A port that accepts sizes 1 to
+/// 3 is three rows and one hole. And a gimbal mount accepts a gun directly or
+/// a gimbal that then holds the gun, so the mount and the gun inside it are
+/// the same hole offered twice - which is why a Corsair looked like it had
+/// twelve size 2 gun ports instead of six. A port whose id extends another
+/// port's id is inside it, so only the outermost of each chain is counted.
+/// </remarks>
+static int Holes(IEnumerable<ShipSlot> slots)
+{
+    var ports = slots.Select(s => s.Port).Distinct(StringComparer.Ordinal).ToList();
+
+    return ports.Count(port =>
+        !ports.Any(other => other != port && port.StartsWith(other + ".", StringComparison.Ordinal)));
+}
+
+/// <summary>Bridges the library's progress callback to the shared status.</summary>
+
+
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
@@ -1225,7 +1707,27 @@ public sealed record UexCredentialsRequest(string? Token, string? Secret);
 public sealed record InstallPathRequest(string? Path);
 
 /// <summary>Body of POST /api/jobs.</summary>
-public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
+public sealed record JobRequest(
+    string? Title,
+    string? Kind,
+    string? Source,
+    List<JobItem>? Items,
+    string? Destination = null,
+    string? DestinationId = null);
+
+/// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
+public sealed record DestinationRequest(string? Place, string? PlaceId);
+
+
+/// <summary>
+/// Body of POST /api/wipe. A null date counts everything again, and
+/// <paramref name="Covers"/> names what the wipe took - "money", "ships",
+/// "inventory", "history" - with an empty list read as all of it.
+/// </summary>
+public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>? Covers);
+
+/// <summary>Body of POST /api/trips.</summary>
+public sealed record TripRequest(string? Title, List<TripStop>? Stops);
 
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(

@@ -45,6 +45,27 @@ public sealed record ItemInfo(
     string? Uuid = null,
     string? Name = null);
 
+/// <summary>
+/// One port on a ship that the player is allowed to change.
+/// </summary>
+/// <param name="Port">
+/// The data's own id for this port, unique within the ship. Two turrets both
+/// call their gun "hardpoint_class_2", so counting how many of something a
+/// ship has needs an identity the name cannot give.
+/// </param>
+/// <param name="Hardpoint">The game's name for the port, e.g. hardpoint_shield_generator.</param>
+/// <param name="Kind">What fits: QuantumDrive, Shield, Cooler, PowerPlant, WeaponGun...</param>
+/// <param name="Size">The component size the port takes. Ports with a range are split by size.</param>
+/// <param name="Fitted">The part in it as the ship comes, when the data names one.</param>
+public sealed record ShipSlot(
+    string Port,
+    string Hardpoint,
+    string Kind,
+    int Size,
+    string? Fitted,
+    int FittedGrade,
+    string? FittedUuid);
+
 /// <summary>A body's real position within its system, star at the origin.</summary>
 public sealed record BodyPosition(double X, double Y);
 
@@ -146,6 +167,7 @@ public sealed class CommunityData
     private readonly string _directory;
     private Dictionary<string, CommodityInfo> _byId = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ShipInfo> _ships = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, List<ShipSlot>> _shipSlots = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ItemInfo> _items = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, Dictionary<string, BodyPosition>> _positions = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _manufacturers = new(StringComparer.OrdinalIgnoreCase);
@@ -163,6 +185,7 @@ public sealed class CommunityData
     private string DigestPath => Path.Combine(_directory, "digest.json");
     private string MetaPath => Path.Combine(_directory, "meta.json");
     private string ShipsDigestPath => Path.Combine(_directory, "digest-ships.json");
+    private string SlotsDigestPath => Path.Combine(_directory, "digest-ship-slots.json");
     private string ItemsDigestPath => Path.Combine(_directory, "digest-items.json");
     private string PositionsDigestPath => Path.Combine(_directory, "digest-positions.json");
     private string ManufacturersDigestPath => Path.Combine(_directory, "digest-manufacturers.json");
@@ -205,6 +228,31 @@ public sealed class CommunityData
             .Select(p => p.Value)
             .FirstOrDefault();
     }
+
+    /// <summary>
+    /// The ports on a ship the player can change, by the same display name
+    /// <see cref="Ship"/> takes. Empty when the ship is unknown, and equally
+    /// when the reference data predates this build - the caller says which.
+    /// </summary>
+    public IReadOnlyList<ShipSlot> Slots(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName) || _shipSlots.Count == 0)
+            return [];
+
+        var key = displayName.Trim().Replace(' ', '_');
+
+        if (_shipSlots.TryGetValue(key, out var exact))
+            return exact;
+
+        return _shipSlots
+            .Where(p => p.Key.StartsWith(key + "_", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.Key.Length)
+            .Select(p => (IReadOnlyList<ShipSlot>)p.Value)
+            .FirstOrDefault() ?? [];
+    }
+
+    /// <summary>True once the reference data carries ship ports at all.</summary>
+    public bool HasSlots => _shipSlots.Count > 0;
 
     /// <summary>Item reference by class name, or null.</summary>
     public ItemInfo? Item(string? itemClass) =>
@@ -261,6 +309,7 @@ public sealed class CommunityData
             throw new InvalidDataException("The community dataset parsed to zero commodities.");
 
         var ships = DigestShips(shipsJson);
+        var slots = DigestShipSlots(shipsJson);
         var items = DigestItems(fpsItemsJson, shipItemsJson);
         var positions = DigestPositions(starmapJson);
         var manufacturers = DigestManufacturers(manufacturersJson);
@@ -271,6 +320,7 @@ public sealed class CommunityData
         Directory.CreateDirectory(_directory);
         File.WriteAllText(DigestPath, JsonSerializer.Serialize(digest));
         File.WriteAllText(ShipsDigestPath, JsonSerializer.Serialize(ships));
+        File.WriteAllText(SlotsDigestPath, JsonSerializer.Serialize(slots));
         File.WriteAllText(ItemsDigestPath, JsonSerializer.Serialize(items));
         File.WriteAllText(PositionsDigestPath, JsonSerializer.Serialize(positions));
         File.WriteAllText(ManufacturersDigestPath, JsonSerializer.Serialize(manufacturers));
@@ -281,6 +331,7 @@ public sealed class CommunityData
 
         _byId = digest;
         _ships = ships;
+        _shipSlots = slots;
         _items = items;
         _positions = positions;
         _manufacturers = manufacturers;
@@ -299,6 +350,7 @@ public sealed class CommunityData
 
         _byId = new Dictionary<string, CommodityInfo>(StringComparer.OrdinalIgnoreCase);
         _ships = new Dictionary<string, ShipInfo>(StringComparer.OrdinalIgnoreCase);
+        _shipSlots = new Dictionary<string, List<ShipSlot>>(StringComparer.OrdinalIgnoreCase);
         _items = new Dictionary<string, ItemInfo>(StringComparer.OrdinalIgnoreCase);
         _manufacturers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _resourceSpawns = [];
@@ -316,6 +368,17 @@ public sealed class CommunityData
 
             _byId = Load<CommodityInfo>(DigestPath);
             _ships = Load<ShipInfo>(ShipsDigestPath);
+
+            // Added after the first releases, so an install that downloaded
+            // the dataset before this build has everything except this file.
+            // Missing means "not known yet", which the pages say out loud
+            // rather than showing a ship with no ports.
+            if (File.Exists(SlotsDigestPath))
+                _shipSlots = JsonSerializer.Deserialize<Dictionary<string, List<ShipSlot>>>(
+                        File.ReadAllText(SlotsDigestPath))
+                    is { } s ? new Dictionary<string, List<ShipSlot>>(s, StringComparer.OrdinalIgnoreCase)
+                             : new Dictionary<string, List<ShipSlot>>(StringComparer.OrdinalIgnoreCase);
+
             _items = Load<ItemInfo>(ItemsDigestPath);
 
             if (File.Exists(PositionsDigestPath))
@@ -351,6 +414,7 @@ public sealed class CommunityData
             // A corrupt cache means the feature is off, not that the app fails.
             _byId = new Dictionary<string, CommodityInfo>(StringComparer.OrdinalIgnoreCase);
             _ships = new Dictionary<string, ShipInfo>(StringComparer.OrdinalIgnoreCase);
+            _shipSlots = new Dictionary<string, List<ShipSlot>>(StringComparer.OrdinalIgnoreCase);
             _items = new Dictionary<string, ItemInfo>(StringComparer.OrdinalIgnoreCase);
         }
     }
@@ -523,6 +587,115 @@ public sealed class CommunityData
 
         return result;
     }
+
+    /// <summary>
+    /// The parts a ship can be shopped for: every port the game lets the
+    /// player change, with the size it takes and what it comes with.
+    /// </summary>
+    /// <remarks>
+    /// The loadout is a tree - a turret holds its guns, a quantum drive holds
+    /// its jump drive - and every entry carries both what is fitted and what
+    /// the port accepts. Only editable ports are kept, because a fixed one is
+    /// not a decision, and only the kinds that are actually bought: a ship has
+    /// thirty-four manoeuvring thrusters and a dozen doors, and no shop sells
+    /// either. A port with a size range becomes one slot per size, since that
+    /// is the question being asked of the shop.
+    /// </remarks>
+    public static Dictionary<string, List<ShipSlot>> DigestShipSlots(string shipsJson)
+    {
+        var result = new Dictionary<string, List<ShipSlot>>(StringComparer.OrdinalIgnoreCase);
+
+        using var doc = JsonDocument.Parse(shipsJson);
+
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var entry in doc.RootElement.EnumerateArray())
+        {
+            var className = Str(entry, "ClassName");
+
+            if (className is null || !entry.TryGetProperty("Loadout", out var loadout))
+                continue;
+
+            var slots = new List<ShipSlot>();
+            Walk(loadout, slots);
+
+            if (slots.Count > 0)
+                result[className] = slots;
+        }
+
+        return result;
+
+        static void Walk(JsonElement ports, List<ShipSlot> into)
+        {
+            if (ports.ValueKind != JsonValueKind.Array)
+                return;
+
+            foreach (var port in ports.EnumerateArray())
+            {
+                Keep(port, into);
+
+                // A gun hangs off a turret and a jump drive off a quantum
+                // drive, so the children are ports too.
+                if (port.TryGetProperty("Loadout", out var children))
+                    Walk(children, into);
+            }
+        }
+
+        static void Keep(JsonElement port, List<ShipSlot> into)
+        {
+            if (!port.TryGetProperty("Editable", out var editable) || editable.ValueKind != JsonValueKind.True)
+                return;
+
+            if (!port.TryGetProperty("CompatibleTypes", out var types) || types.ValueKind != JsonValueKind.Array)
+                return;
+
+            var hardpoint = Str(port, "HardpointName") ?? "?";
+            var min = (int)(Num(port, "MinSize") ?? 0);
+            var max = (int)(Num(port, "MaxSize") ?? min);
+
+            // The fitted part is what the ship flies with today, which is the
+            // only thing a candidate can be judged against.
+            var fitted = Str(port, "Name");
+            if (fitted is not null && fitted.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+                fitted = null;
+
+            foreach (var accepted in types.EnumerateArray())
+            {
+                var kind = Str(accepted, "Type");
+
+                if (kind is null || !Shoppable.Contains(kind))
+                    continue;
+
+                for (var size = min; size <= max && size <= 12; size++)
+                    into.Add(new ShipSlot(
+                        Str(port, "PortId") ?? hardpoint,
+                        hardpoint,
+                        kind,
+                        size,
+                        fitted,
+                        (int)(Num(port, "Grade") ?? 0),
+                        Str(port, "UUID")));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The port kinds worth shopping for.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately short. Every ship is a hundred ports of screens, doors,
+    /// lights and thrusters, none of which anyone buys; these are the ones
+    /// that sit behind a shop counter and change how the ship flies or fights.
+    /// A kind nothing is sold for simply comes back empty, so the cost of
+    /// keeping one too many here is nothing.
+    /// </remarks>
+    private static readonly HashSet<string> Shoppable = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "QuantumDrive", "Shield", "PowerPlant", "Cooler",
+        "WeaponGun", "Turret", "MissileLauncher", "Missile",
+        "Radar", "EMP", "QuantumInterdictionGenerator", "MiningArm",
+    };
 
     /// <summary>
     /// Item class name → what kind of thing it is, from both the FPS and the

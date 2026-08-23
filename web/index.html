@@ -107,6 +107,36 @@
 
   <div class="render-errors" id="render-errors" hidden></div>
 
+  <div class="notice" id="stale" hidden>
+    <div class="notice-body">
+      <b>Prices are getting old</b>
+      <span class="muted" id="stale-detail"></span>
+    </div>
+    <div class="notice-actions">
+      <button class="ghost" id="stale-refresh">Refresh now</button>
+      <button class="ghost" id="stale-dismiss">Not now</button>
+    </div>
+  </div>
+
+  <div class="notice" id="update" hidden>
+    <div class="notice-body">
+      <b id="update-title">Look for a newer version?</b>
+      <span class="muted" id="update-detail"></span>
+    </div>
+    <div class="notice-actions" id="update-actions"></div>
+  </div>
+
+  <div class="notice" id="patch" hidden>
+    <div class="notice-body">
+      <b id="patch-title">A new patch arrived</b>
+      <span class="muted" id="patch-detail"></span>
+    </div>
+    <div class="notice-actions">
+      <button class="ghost" id="patch-wiped">It wiped — start there</button>
+      <button class="ghost" id="patch-kept">It did not wipe</button>
+    </div>
+  </div>
+
   <div class="scan" id="scan" hidden>
     <div class="scan-head">
       <span id="scan-label">Reading logs…</span>
@@ -160,7 +190,6 @@
         <div class="card-label">This session</div>
         <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
         <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
-        <div class="statline"><span>Kills</span><b id="now-kills">0</b></div>
         <div class="note" id="combat-note"></div>
       </article>
 
@@ -168,6 +197,7 @@
         <div class="card-label">Wake up at</div>
         <div class="value" id="now-respawn">—</div>
         <div class="sub" id="now-respawn-sub"></div>
+        <div class="sub" id="now-respawn-bed"></div>
       </article>
 
       <article class="card span2" id="now-job-card" data-card="job" hidden>
@@ -175,6 +205,16 @@
         <div class="now-job-title" id="now-job-title"></div>
         <div id="now-job-progress"></div>
         <ul class="now-job-items" id="now-job-items"></ul>
+      </article>
+
+      <article class="card span2" id="now-trip-card" data-card="trip" hidden>
+        <div class="card-label">Flight plan</div>
+        <div class="now-trip-head">
+          <div class="now-trip-title" id="now-trip-title"></div>
+          <div id="now-trip-progress"></div>
+        </div>
+        <div class="now-trip-next" id="now-trip-next"></div>
+        <div class="now-trip-stops" id="now-trip-stops"></div>
       </article>
 
       <article class="card span2" id="trade-advice-card" data-card="trade" hidden>
@@ -212,9 +252,17 @@
       <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
         <option value="price">Shade by price</option>
         <option value="scu">Shade by capacity</option>
+        <option value="mine">Shade by my own prices</option>
       </select>
+      <div class="seg" id="map-side" hidden title="Which side of the counter the map is showing">
+        <button type="button" data-side="sell" class="active">Selling</button>
+        <button type="button" data-side="buy">Buying</button>
+      </div>
+      <select id="map-window" class="select period" data-all="All time" hidden
+              title="How far back your own receipts count"></select>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
+      <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
       <button class="ghost" id="map-here">Centre on me</button>
       <button class="ghost" id="map-reset">Reset view</button>
@@ -223,7 +271,14 @@
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="map-tip" id="map-tip" hidden></div>
-      <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details</div>
+      <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details · double-click for its trade</div>
+
+      <aside class="cargo-panel" id="cargo-panel" hidden>
+        <button class="map-info-close" id="cargo-close" aria-label="Close">×</button>
+        <div class="cargo-kicker" id="cargo-kicker"></div>
+        <div class="cargo-title" id="cargo-title"></div>
+        <div class="cargo-body" id="cargo-body"></div>
+      </aside>
 
       <aside class="map-info" id="map-info" hidden>
         <button class="map-info-close" id="map-info-close" aria-label="Close">×</button>
@@ -235,6 +290,7 @@
         </div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
+        <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
         <div class="map-info-lore muted" id="map-info-lore" hidden></div>
         <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
@@ -269,7 +325,7 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th>
+            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -309,6 +365,15 @@
     </p>
     <div id="casualties-woke" class="bars"></div>
 
+    <h2 class="spaced">Medical beds used</h2>
+    <p class="muted caption">
+      A regen location is set at a medical bed or an insurance office, so this
+      is the most direct hint the logs give — but the same notification fires
+      when a bed is only used to heal, and the game never states where regen
+      actually is. Most recent first.
+    </p>
+    <div id="casualties-beds" class="bars"></div>
+
     <h2 class="spaced">Claim fees, by ship</h2>
     <div class="table-wrap">
       <table id="casualties-fees">
@@ -337,6 +402,10 @@
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
       <textarea id="job-items" rows="5"
                 placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
+      <div class="job-form-row">
+        <select id="job-add" class="select"></select>
+        <select id="job-place" class="select"></select>
+      </div>
       <div class="job-form-actions">
         <button type="submit" class="ghost">Save list</button>
         <button type="button" class="ghost" id="job-cancel">Cancel</button>
@@ -624,6 +693,14 @@
       Built by binding each location's inventory query to the place you opened it
       at. Removals are never logged, so this is what has been <em>seen</em> stored
       somewhere, not a live stock level.
+    </p>
+    <p class="muted caption">
+      <b>Pledged items will not be here</b> until you touch them. Nothing arrives
+      in your account through <code>Game.log</code> — a ship, a suit or a weapon
+      you bought on the site, or that came with a pack, is simply there the first
+      time you look. It shows up here once you pick it up, move it, or open the
+      inventory at the place it is stored, because that is the first moment the
+      game writes anything about it down.
     </p>
     <div id="stash-grid" class="stash-grid"></div>
   </section>
@@ -922,7 +999,9 @@
       <p class="muted" id="overlay-copy">
         Off by default. Turning it on shows a transparent panel over the game —
         Star Citizen must run in Borderless Windowed for it to be visible.
-        <code>Ctrl+Alt+O</code> toggles click-through, <code>Ctrl+Alt+←/→</code>
+        It arrives ready to move and resize; the <b>📌 pin</b> button in its header
+        puts it out of the way, so clicks reach the game instead. Unpin it from
+        the tray icon, or with <code>Ctrl+Alt+O</code>. <code>Ctrl+Alt+←/→</code>
         changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
         remembered.
       </p>
@@ -971,9 +1050,71 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>New versions</h3>
+        <button class="ghost" id="update-check">Check now</button>
+      </div>
+      <p class="muted">
+        Asks GitHub which release is newest and says so if it is ahead of this
+        one. One request, carrying nothing but the request — no identifier, no
+        version, no count of anything. Downloading and installing stays yours to
+        do: the button opens the release page in your browser.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="update-auto">
+        <span>Check when the app starts</span>
+      </label>
+      <span class="muted" id="update-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Last wipe</h3>
+        <button class="ghost" id="wipe-save">Save</button>
+        <button class="ghost" id="wipe-clear">Count everything</button>
+      </div>
+      <p class="muted">
+        A data wipe resets what your account holds, so logs from before one
+        describe an account you no longer have — adding those sales to this
+        account's income makes a wrong number, not a bigger one. Sessions before
+        this date are kept and still parsed, they are simply not counted.
+        Moving the date back brings every one of them straight back.
+      </p>
+      <div class="wipe-row">
+        <input type="date" id="wipe-at" class="search" title="The day the wipe landed">
+        <input type="text" id="wipe-patch" class="search" maxlength="24" placeholder="Patch, e.g. Alpha 4.8">
+        <span class="muted" id="wipe-status"></span>
+      </div>
+
+      <p class="muted caption wipe-caption">
+        Wipes come at different depths — some take aUEC and leave the hangar,
+        some clear inventories and leave balances. Tick only what this one
+        actually took; everything left unticked keeps its whole history.
+      </p>
+      <div class="wipe-scope">
+        <label class="toggle">
+          <input type="checkbox" id="wipe-money" checked>
+          <span>Money — spending, income, ledger, cargo</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="wipe-ships" checked>
+          <span>Ships — what you own, and your fleet count</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="wipe-inventory" checked>
+          <span>Inventory — stashes, worn kit, pickups</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="wipe-history" checked>
+          <span>Play history — sessions, places, contracts</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Community commodity names</h3>
         <button class="ghost" id="settings-community-enable" hidden>Download</button>
-        <button class="ghost" id="settings-community-disable" hidden>Disable and delete</button>
+        <button class="ghost danger" id="settings-community-disable" hidden>Disable and delete</button>
       </div>
       <p class="muted" id="settings-community-copy">
         Commodity names for your cargo, where each commodity trades, and the
@@ -1064,11 +1205,20 @@
         </p>
 
         <p class="about-note">
+          It exists because I went looking for it and it was not there. There are
+          good <code>Game.log</code> tools, but none of them was a whole product
+          built around an org and the things I wanted to keep track of — so I
+          built the one I had been looking for, and it is free for the community
+          to use, and meant to stay that way.
+        </p>
+
+        <p class="about-note">
           No account, no configuration, no upload. It reads <code>Game.log</code>
           and the backups beside it, resolves the names from your own copy of the
           game, and shows you what is there. Nothing is written to the game
           directory, and the app connects to the internet only when you ask it
-          to, from the Settings page — never on its own.
+          to — the optional datasets from the Settings page, and the version
+          check if you turn that on. Never otherwise, and never on a timer.
         </p>
 
         <dl class="about-facts">
@@ -1077,6 +1227,7 @@
           <div><dt>Dashboard</dt><dd>127.0.0.1:31337</dd></div>
           <div><dt>Licence</dt><dd>Apache 2.0</dd></div>
           <div><dt>Built by</dt><dd>nekron</dd></div>
+          <div><dt>Discord</dt><dd>nekhron</dd></div>
         </dl>
 
         <h2 class="spaced">Credits</h2>
@@ -1092,6 +1243,105 @@
           Fankit Agreement. Full attribution, with what was taken from each,
           in <code>docs/credits.md</code>.
         </p>
+
+        <h2 class="spaced">Questions</h2>
+
+        <div class="faq">
+          <details>
+            <summary>Why is my pledged ship, armour or gun missing?</summary>
+            <p>
+              Nothing that arrives in your account is written to
+              <code>Game.log</code>. A pledge, a pack, a rental or anything bought
+              on the website is simply <em>there</em> the next time you look, and
+              the game says nothing about it. It appears here the first time you
+              actually use it — fly the ship, wear the armour, move the item —
+              because that is the first moment there is a line to read.
+            </p>
+          </details>
+
+          <details>
+            <summary>Why are my totals lower than I expected?</summary>
+            <p>
+              Sessions from before the last wipe are kept but not counted, because
+              a wipe ends one account and starts another. Settings → <b>Last wipe</b>
+              says how many sessions that is, lets you move the date, and lets you
+              say what the wipe actually took — some reset aUEC and leave your
+              hangar alone. Nothing is deleted: move the date back and it all
+              returns.
+            </p>
+          </details>
+
+          <details>
+            <summary>Where did the kill counter go?</summary>
+            <p>
+              Removed, because it could only ever read zero. Star Citizen 4.9
+              does not write kill or vehicle-destruction lines to
+              <code>Game.log</code> at all — checked line by line across every
+              backup on this machine: not one. A counter pinned at zero reads as
+              a broken feature rather than a missing one, so the honest thing is
+              to say so here instead of showing it.
+            </p>
+            <p>
+              The parser for those events is written and tested against the old
+              format, sitting dormant. If CIG starts logging them again the
+              counter comes back with it.
+            </p>
+          </details>
+
+          <details>
+            <summary>Why does the map not show where I am, exactly?</summary>
+            <p>
+              No player position is logged. Location is inferred from discrete
+              signals — inventory requests, quantum routes, spawns — so the map is
+              a topology, not a radar, and every estimate carries a confidence
+              rather than pretending to a precision it does not have.
+            </p>
+          </details>
+
+          <details>
+            <summary>The overlay will not let me click the game.</summary>
+            <p>
+              Press its <b>📌 pin</b> button and clicks pass straight through. To get
+              it back, right-click the tray icon and untick <b>Pin overlay</b>, or
+              press <code>Ctrl+Alt+O</code>. It arrives unpinned, so it can be
+              dragged where you want it first.
+            </p>
+          </details>
+
+          <details>
+            <summary>Does it touch the game, or my account?</summary>
+            <p>
+              No. It reads <code>Game.log</code> and the backups beside it, and
+              nothing is written to the game directory, no memory is read and
+              nothing is injected. It connects to the internet only when you ask
+              it to from the Settings page, never on its own.
+            </p>
+          </details>
+
+          <details>
+            <summary>Does it phone home, or check for updates?</summary>
+            <p>
+              It sends nothing about you, ever — no identifier, no usage, no
+              statistics. It can look up whether a newer release exists, and only
+              if you say yes: you are asked once, and Settings → <b>New versions</b>
+              carries the switch and a <b>Check now</b> button. That look is one
+              request to GitHub's public release feed, which carries nothing but
+              the request. Nothing is downloaded or installed for you — you get a
+              link to the release page.
+            </p>
+          </details>
+
+          <details>
+            <summary>Something is wrong, or missing. Where do I say so?</summary>
+            <p>
+              Please do. Message <b>nekhron</b> on Discord, or raise an issue at
+              <a href="https://github.com/peans99/QuantumWake/issues" target="_blank"
+                 rel="noreferrer">github.com/peans99/QuantumWake/issues</a>. A log
+              line that was parsed wrongly, with the line itself, is the most
+              useful thing you can send.
+            </p>
+          </details>
+        </div>
 
         <p class="about-legal">
           Star Citizen®, Roberts Space Industries® and Cloud Imperium® are
@@ -1153,8 +1403,9 @@
         <input type="checkbox" id="setup-overlay">
         <div>
           <b>In-game overlay widget</b>
-          <span>A compact always-on-top readout over the game. Ctrl+Alt+O unlocks
-          it, Ctrl+Alt+←/→ change page, Ctrl+Alt+F goes fullscreen.</span>
+          <span>A compact always-on-top readout over the game. Drag it where you
+          want it, then pin it to let clicks through. Ctrl+Alt+←/→ change page,
+          Ctrl+Alt+F goes fullscreen.</span>
         </div>
       </label>
 
@@ -1176,6 +1427,19 @@
           where you are, and what your fleet and stash are worth.</span>
         </div>
       </label>
+
+      <div class="setup-wipe" id="setup-wipe-row">
+        <b>Your last wipe</b>
+        <span class="muted">
+          A wipe ends one account and starts another, so totals that reach past
+          one are about an account you no longer have. Sessions before this date
+          stay on disk and stop being counted — move it any time in Settings.
+        </span>
+        <div class="wipe-row">
+          <input type="date" id="setup-wipe" class="search" title="The day the last wipe landed">
+          <span class="muted" id="setup-wipe-note"></span>
+        </div>
+      </div>
 
       <div class="setup-feeds" id="setup-feeds" hidden>
         <div class="setup-feeds-head">Extra UEX feeds — take only what you need</div>

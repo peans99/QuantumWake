@@ -33,9 +33,10 @@ itself, across every fixed drive.
 
 It then sits in the notification area. Right-click to open the dashboard, show
 or hide the overlay, or quit. The in-game overlay is off until you turn it on -
-from the Settings page or the tray - and the choice is remembered. `Ctrl+Alt+O`
-toggles overlay click-through, and the dashboard is on
-<http://127.0.0.1:31337>.
+from the Settings page or the tray - and the choice is remembered. The overlay
+arrives ready to move; its **📌 pin** button puts it out of the way so clicks
+reach the game, and the tray icon (or `Ctrl+Alt+O`) brings it back. The
+dashboard is on <http://127.0.0.1:31337>.
 
 Windows will warn that the publisher is unknown — the binary is not code signed,
 which costs money a free fan tool does not have. **More info → Run anyway**.
@@ -59,8 +60,9 @@ events, not a radar.*
 
 | View | Contents |
 |---|---|
+| **Flight plan** | Where to go next and the rest of the run, on the Now page and drawn over the map as numbered stops. Built from a trade route, a shopping list, or by hand — and stops cross themselves off as you land |
 | **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
-| **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells |
+| **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells. Picking one opens its cargo panel: best terminals now, your own prices over the last day, three days or seven, and a selling/buying toggle. Double-click a place for what it takes and offers |
 | **Sessions** | Every session you have played, in-game time separated from menu time |
 | **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on |
 | **Places** | Most-visited locations and quantum destinations |
@@ -98,9 +100,14 @@ runtime with no external lookup service involved.
 
 ## Why another one
 
-There are a dozen `Game.log` tools, and [docs/landscape.md](docs/landscape.md)
-surveys them honestly, including the one that overlaps this heavily. Three
-things here are not in the others:
+It exists because I went looking for it and it was not there: good `Game.log`
+tools, but none of them a whole product built around an org and the things I
+wanted to keep track of. So this is the one I had been looking for, and it is
+free for the community to use, and meant to stay that way.
+
+[docs/landscape.md](docs/landscape.md) surveys the dozen that came before it
+honestly, including the one that overlaps this heavily. Three things here are
+not in the others:
 
 - **The whole map, not just your trail.** Others plot where you went. This draws
   every place it can resolve — 292 of them, against the 72 this install has
@@ -113,6 +120,19 @@ things here are not in the others:
 - **It says what the logs cannot support.** Inferred locations carry a
   confidence level, estimates are labelled and capped, and an event CIG removed
   produces an explanation rather than a bare zero.
+
+## Totals describe the account you are playing
+
+A data wipe ends one account and starts another, so totals that reach past one
+are answering about an account you no longer have. Sessions from before the last
+wipe are kept and still parsed — they are simply not counted, and the Settings
+page says how many that is.
+
+Wipes come at different depths, so you say what this one took: money, ships,
+inventory, play history. Tick only what it actually reset and the rest keeps its
+whole history — after an aUEC-only wipe your ledger starts again while your
+fleet and the places you have been carry on. The date defaults to Alpha 4.8 on
+15 May 2026 and is yours to move, or to switch off entirely if you want the lot.
 
 ## Two things it deliberately does not do
 
@@ -240,6 +260,18 @@ format quirks were caught that grepping had hidden, including multi-line entries
 whose continuations carry their own timestamp (15% of notifications were being
 silently dropped).
 
+## Tests
+
+```powershell
+dotnet test Quantumwake.slnx -c Release
+```
+
+Two suites. `Quantumwake.Tests` covers the parser, the session builder, the
+resolvers and the stores, against fixtures copied from real log lines.
+`Quantumwake.WebTests` runs `web/app.js` itself under a JavaScript engine with a
+stub document, so the dashboard's own logic - prices, plans, panels - is tested
+rather than eyeballed.
+
 ## Documentation
 
 - [docs/findings.md](docs/findings.md) — the missing-combat-events evidence
@@ -302,3 +334,199 @@ version:
 Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
 trademarks of Cloud Imperium Rights LLC. This is an unofficial fan tool, not
 affiliated with or endorsed by Cloud Imperium Games.
+
+---
+
+## Release notes
+
+Newest first. Each version's section is what the GitHub release says too — the
+release workflow lifts it from here, so it is written once.
+
+### 0.6.12
+
+The map learns what things are, the app learns what it cannot count, and the
+buttons stop looking borrowed.
+
+- **A shopping list can say where it is for.** The new-list form has a
+  destination picker - every place the app knows, visited ones first - and a
+  second picker for what to add: 203 tradeable commodities and 2,349 parts and
+  pieces of gear that can actually be bought. Picking one writes the line into
+  the box, where it can be given a quantity like anything else; the box is
+  still free text and the pickers only spell things for you.
+  The plan then starts every line at that place when it sells the thing, ranks
+  it first among the stops, and says so at the top of the chooser. Leave it
+  blank for anywhere, which is what it did before. It is a field on the card
+  too, because the run you meant on Tuesday is not the run you fly on Friday.
+- **The map declutters itself.** At system scale only the busiest places are
+  named - thirteen of them, rather than every place you have ever visited
+  fighting for the same air - and the budget grows with the square of the zoom,
+  so names arrive as you ask for detail. Past the detail threshold every name
+  that fits is drawn, as before. A searched-for place is never rationed.
+- **A jump in progress is drawn.** When the drive spools, the map runs a
+  marching dashed vector from where you are to where you are going, with a
+  pulsing ring waiting at the far end. The live feed always knew the
+  destination; the map never showed the journey.
+- **A body groups its places when you look at it.** Hovering the space a planet
+  occupies lights the bubble its outposts and stations sit in, and clicking the
+  gaps between them frames that body. At rest the bubble stays a faint ground
+  rather than another thing to read.
+- **The kill counter is gone.** It could only ever read zero: 4.9 writes no
+  kill or vehicle-destruction line at all, so a counter pinned at zero read as a
+  broken feature rather than a missing one. The About page says where it went
+  and what would bring it back.
+- **The map was not clickable at all with a real mouse.** It captured the
+  pointer the moment you pressed, and a captured pointer delivers the click to
+  the element holding the capture - so every click meant for a place went to the
+  map instead. Nothing opened: not the card, not the trade panel on a
+  double-click, not a stop onto a plan. The capture now waits until you have
+  actually moved four pixels, so a press is a click and a drag is still a drag.
+  It had been that way since the map was written; it passed its own tests
+  because a synthetic click aimed straight at a node bypasses pointer capture,
+  which is the one thing a real mouse cannot do.
+- **Your position pulses again.** The marker was drawn all along, but the live
+  feed repeats your location every second and each repeat rebuilt the marker,
+  restarting a 2.2-second animation a fifth of the way in. It is redrawn only
+  when you actually move now.
+- **A ship part on a list says where to buy it.** The card priced shields and
+  coolers but left "where" blank, which is the half you can act on.
+- **Upgrades works for every ship, not just some.** The panel asked by display
+  name - "Drake Corsair" - while the ship data is keyed by class - DRAK_Corsair.
+  Anything whose maker word is not its code (Drake, Anvil, Aegis) or that spells
+  a variant differently (Mk II against Mk2) came back empty.
+- **Half the map was unclickable.** Every mark carries an invisible pad so a
+  small one is easy to hit, and in a crowded cluster those pads covered their
+  neighbours — the topmost won every click, so most places would not open their
+  card, would not open their trade panel on a double-click, and could not be
+  added to a plan. The pad now stops at the halfway line to the nearest
+  neighbour. 151 of 290 places were unreachable; now none are.
+- **A commodity now colours the whole map.** Pick one and every mark takes the
+  price grade or goes slate — a station left cyan among a scale running green to
+  gold read as a value on that scale when it was not one.
+- **Click a commodity on the Market page** for every counter UEX knows, not just
+  the best one: what each pays, what that costs you against the best, how much
+  it will actually take or sell you, and whether it sits in policed or lawless
+  space — with a filter for monitored space only, and a click to find any of
+  them on the map.
+- **A shopping list can hold ship parts.** A line is whatever you wrote, so
+  "Bulwark" now finds the shield and its shop counters the same way "Agricium"
+  finds the trade good, and each seller says which system it is in and whether
+  the law reaches it.
+- **What fits your ship, and where to buy it.** Every ship on the Fleet page has
+  an *Upgrades* button: the game's own port list — quantum drive, shields,
+  coolers, power plants, guns, racks — each with what it flies with now, what is
+  sold that fits, the maker and grade, the price and the cheapest counter. Any
+  of it goes onto a shopping list in one click. This needs the community
+  dataset; refresh it on the Settings page if the panel says so.
+- **A shopping list, by location.** The chooser has a second view: every counter
+  that carries any of your list, ranked by how much of it one landing covers,
+  with what that landing costs and whether it is lawless. Tick the stops you
+  mean to fly and the plan is built from them — later stops only pick up what
+  earlier ones missed, and *Fewest stops* covers the whole list in as few
+  landings as it can. Buying each thing where it is cheapest is one landing per
+  thing, which is rarely the run you want.
+- **The logbook says how many.** A kiosk logs one line per order, so buying
+  two of something wrote one line reading the price of both: two orders of two
+  read as two purchases of one at twice the price. The count is on the line now.
+- **Shops at rest stops are on the map now.** "Platinum CRU-L4" and its like are
+  named for the station code alone, which matched nothing in the atlas, so every
+  item shop out there was a stop with no dot and no route.
+
+- **The map draws what a place is.** Every kind has its own mark — a skyline for
+  a city, a headframe for a mine, an orbit for a research station, a crate for a
+  distribution centre — in the same colour it always had, so the legend is a
+  reminder rather than something to memorise. And planets are finally on the
+  map: they were labels with nothing drawn, which is why a station looked bigger
+  than the world it orbits. Each body is a quiet disc with its places on it.
+  The marks are single bold silhouettes rather than little drawings: they are
+  read at six pixels, where a headframe and an orbit turn to mush. Sizes are
+  levelled too — visits still nudge a mark, but gently, because a four-fold
+  range made the map read as a jumble of sizes rather than a set of places.
+
+- **A crowded cluster opens up when you zoom in.** microTech piled its sites on
+  top of each other however far you zoomed; the cluster now spreads once the
+  view is close enough to be naming everything, and stays compact at system
+  scale where it should read as one place. Clicks near a cluster work again too
+  — an invisible hover disc had been landing on its neighbour's dots.
+- **Commodity search answers to part of a name.** "medical" finds Medical
+  Supplies; before, only the exact full name matched, and nothing ever showed
+  you what that name was. Shortest match wins, a place name still finds the
+  place, and the suggestion list offers commodities beside places.
+
+- **The map draws what a place is.** Every kind has its own mark now — a skyline
+  for a city, a headframe for a mine, an orbit for a research station, a crate
+  for a distribution centre — in the same colour it always had, so the legend is
+  a reminder rather than something to memorise. And planets are finally on the
+  map: they were labels with nothing drawn, which is why a station looked bigger
+  than the world it orbits. Each body is a quiet disc with its places on it.
+- **The overlay arrives usable.**
+ It used to start click-through: a pane that
+  could not be moved, resized or closed, with a hotkey nothing mentioned as the
+  only way out. Now it starts ready to grab, and a **📌 pin** button in its header
+  puts it out of the way. The tray icon brings it back — a pinned window passes
+  every click to the game, so it cannot carry its own way out — and `Ctrl+Alt+O`
+  still works.
+- **It can tell you a new version is out**, if you let it. You are asked once at
+  startup; Settings → *New versions* holds the switch and a Check now button.
+  One request to GitHub's public release feed, carrying nothing about you, and
+  nothing is downloaded or installed — you get the release page.
+- **It notices patches.** Nothing in the logs says an account was wiped, but they
+  date every version, so the app brings the date and asks the one question it
+  cannot answer: did that patch wipe? Asked once per patch. The first-run wizard
+  asks the same thing before anything is counted.
+- **A FAQ on the About page**, including why pledged ships and armour are missing
+  until you touch them — nothing that arrives in an account is written to the
+  log — and where to report anything wrong: **nekhron** on Discord, or the
+  GitHub issues page.
+- **Medical beds are tracked.** The game does log something about regen after
+  all: using a bed says so. A bed at a known place is a more direct hint at
+  where you will wake than waiting for the next death, so it is shown beside the
+  wake-up inference rather than instead of it — 191 bed visits against 22
+  wake-ups here, so most bed use is just healing.
+- **Every button looks like the app.** The HUD button style was written inside
+  the map's toolbar, so the map had chamfered cyan buttons and the other
+  twenty-nine were whatever Windows draws by default. Delete now reads as
+  destructive, an on state reads as on, and keyboard focus is visible.
+- **The overlay stops flickering on its tab strip.** Hovering the strip made the
+  widget's dissolved menu groups spring back into floating boxes, which reflowed
+  the strip, slid it left, took the pointer off the group, dropped the hover and
+  flipped it straight back — a layout fighting the cursor.
+- **An update no longer arrives half-applied.** The dashboard's stylesheet and
+  script were served with no caching rule, so the browser guessed how long they
+  stayed fresh: the version number came from the app and read new while the page
+  around it was the previous release. Only Ctrl+F5 fixed that, which is not
+  something anyone should have to know. Both are revalidated on every load now —
+  still a 304, still instant, but always the build you are running.
+- **This update re-reads your logs once.** A summary parsed by an older build
+  knows nothing of fields added since — medical beds would have been invisible
+  to everyone already running the app — so the cache retires itself and the
+  first start after updating rebuilds it. Two seconds here for 149 backups.
+  Nothing is lost: it all comes from the logs.
+
+- **The map prices cargo.** Pick a commodity and every place it trades is graded
+  by what it is worth there: the best terminals now, from UEX, beside your own
+  receipts over the last day, three days, seven or longer. Selling and buying
+  are a toggle rather than a search prefix nothing mentioned, and a third
+  shading — *my own prices* — grades the map from your receipts alone, so it
+  works with the price feed switched off.
+- **Double-click a place** for what it takes and offers: what you have sold
+  there, what you have bought, what the catalogue says it stocks, and the
+  receipts behind all of it.
+- **Flight plans.** A list of places in the order you mean to fly them, on the
+  Now page as *jump next* and drawn over the map as numbered stops. Build one by
+  hand, from a trade route in one click, or from a shopping list — which now
+  asks which seller you meant, marks the ones too small to fill your order, and
+  defaults to the cheapest that can. **Stops cross themselves off when you land**,
+  because the app already knows where you are.
+- **Totals describe the account you are playing.** Sessions from before the last
+  wipe are kept and still parsed, but no longer counted. Wipes come at different
+  depths, so you say what this one took — money, ships, inventory, play history —
+  and anything it did not take keeps its whole history. Defaults to Alpha 4.8 on
+  15 May 2026 and lives on the Settings page.
+- **Stale prices offer to renew themselves.** The price feed is still fetched
+  only on your click, but if the snapshot has turned a day old the app says so
+  at startup and offers the one click that fixes it. "Not now" lasts the day.
+- **The overlay can show the flight plan**, and a card added in a later version
+  no longer arrives switched off for anyone who had touched those settings.
+- Under the hood: UEX terminal names are matched to map places once, on the
+  server, so the shading, the panel and the plan cannot disagree; and the
+  dashboard's own JavaScript has tests for the first time.

@@ -57,6 +57,7 @@ public sealed class LiveSessionService : BackgroundService
     private readonly LogLibrary _library;
     private readonly GameInstall? _install;
     private readonly ILogger<LiveSessionService> _logger;
+    private readonly TripStore? _trips;
     private readonly Lock _gate = new();
 
     private SessionBuilder _builder;
@@ -64,21 +65,30 @@ public sealed class LiveSessionService : BackgroundService
     private string? _currentShip;
     private readonly List<TimelineEntry> _recent = [];
 
+    /// <summary>Where the player was last seen, so an arrival fires once.</summary>
+    private string? _lastPlace;
+
     /// <param name="install">
     /// Defaulted so the container can still build this service on a machine
     /// where no install was found: the live tail has nothing to follow, and
     /// the rest of the app runs regardless.
     /// </param>
+    /// <param name="trips">
+    /// Optional, so the container can build this service before flight plans
+    /// exist as a concept - the live tail works with or without one.
+    /// </param>
     public LiveSessionService(
         IHubContext<LiveHub> hub,
         LogLibrary library,
         ILogger<LiveSessionService> logger,
-        GameInstall? install = null)
+        GameInstall? install = null,
+        TripStore? trips = null)
     {
         _hub = hub;
         _library = library;
         _install = install;
         _logger = logger;
+        _trips = trips;
         _builder = new SessionBuilder(install?.GameLogPath ?? "live");
     }
 
@@ -132,6 +142,16 @@ public sealed class LiveSessionService : BackgroundService
                 _currentShip = null;
 
             Current = Snapshot();
+
+            // Landing somewhere crosses that stop off the tracked plan. The app
+            // already knows where the player is standing, so asking them to
+            // tick a box for it would be asking for data it holds. Fired on the
+            // change, not on every event, so a long stay ticks once.
+            if (Current.LocationId is { Length: > 0 } here && here != _lastPlace)
+            {
+                _lastPlace = here;
+                _trips?.Arrived(here, Current.Location);
+            }
         }
     }
 

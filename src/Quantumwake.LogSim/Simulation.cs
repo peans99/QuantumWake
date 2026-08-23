@@ -22,6 +22,24 @@ internal static class Fixtures
         ("Stanton4_Shubin_SM0_22", "Shubin SM0-22")
     ];
 
+    /// <summary>
+    /// Cargo the simulated pilot moves, as the ids the game logs.
+    /// </summary>
+    /// <remarks>
+    /// Real resource ids from the community digest, so a simulated install
+    /// exercises the name lookup rather than dodging it - the whole point of
+    /// the cargo map is that a receipt can be tied to a named commodity. The
+    /// base price, combined with a steady per-place multiplier, is what makes
+    /// one terminal genuinely the best place to sell a given commodity.
+    /// </remarks>
+    public static readonly (string Resource, int BasePrice)[] Commodities =
+    [
+        ("bde5a2c8-2ef4-46ac-9403-2fcb79e4016c", 1540),  // Quantainium
+        ("7f4599b0-a2b2-4178-8c7e-13292054ab20", 452),   // Laranite
+        ("dc6fbcbb-5990-4ed5-82ee-93152dab7845", 268),   // Agricium
+        ("accacd33-3a1a-4ec7-8b4a-14b9f028047c", 88)     // Processed Food
+    ];
+
     public static readonly string[] Destinations =
     [
         "Stanton4_NewBabbage", "OOC_Stanton_4_Microtech", "LOC_rs_ext_stan-pyro_jp1",
@@ -235,6 +253,65 @@ internal sealed class Simulation
         Advance(5, 20);
 
         VisitLocation(Pick(Fixtures.Locations).Id);
+
+        // Cargo, at about half the stops. Buying and selling both happen, so
+        // the map has two sides of the counter to shade.
+        if (_random.NextDouble() < 0.55)
+        {
+            Advance(30, 240);
+            RunTrade();
+        }
+    }
+
+    /// <summary>One kiosk trade at wherever the pilot is standing.</summary>
+    /// <remarks>
+    /// The log never says where a trade happened - every cargo terminal reports
+    /// the same shop id - so this deliberately writes no location of its own.
+    /// Recovering the place from the last arrival is the app's job, and leaving
+    /// the line bare is what keeps that path honest.
+    /// </remarks>
+    private void RunTrade()
+    {
+        var (resource, basePrice) = Pick(Fixtures.Commodities);
+        var selling = _random.NextDouble() < 0.65;
+
+        // Whole boxes, as the kiosk deals in.
+        var quantity = _random.Next(1, 21) * 16;
+
+        // Buying costs less per SCU than selling pays, or there would be no
+        // trade to plan; the jitter stops every visit reading the same price.
+        var unit = basePrice
+            * PriceFactor(_currentLocation, resource)
+            * (selling ? 1.0 : 0.78)
+            * (0.96 + _random.NextDouble() * 0.08);
+
+        _log.CommodityTrade(
+            _now,
+            _options.Geid,
+            Math.Round((decimal)(unit * quantity), 2),
+            quantity,
+            resource,
+            selling,
+            _random.NextDouble() < 0.5 ? "Location" : "ResourceContainer");
+
+        Noise(_random.Next(2, 6));
+    }
+
+    /// <summary>
+    /// How good one place is for one commodity, steady across sessions.
+    /// </summary>
+    /// <remarks>
+    /// Rolled from the ids rather than stored, so it survives a reseed: a map
+    /// whose best terminal moved on every run would be untestable.
+    /// </remarks>
+    private static double PriceFactor(string place, string resource)
+    {
+        var hash = 17u;
+
+        foreach (var c in $"{place}|{resource}")
+            hash = unchecked(hash * 31 + c);
+
+        return 0.78 + hash % 45 / 100.0;
     }
 
     private void RunCombat()
