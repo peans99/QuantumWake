@@ -1113,6 +1113,12 @@ td.outward { color: var(--amber); }
 
 /* Player marker. */
 .map-here { pointer-events: none; }
+
+/* A jump in progress: the one thing on this map that is happening now. */
+.map-travel { pointer-events: none; }
+.map-travel .travel-line { fill: none; stroke: var(--cyan-hot, #7fe4ff); opacity: .85; }
+.map-travel .travel-target { fill: none; stroke: var(--cyan-hot, #7fe4ff); }
+
 .map-here .here-ring { fill: none; stroke: var(--cyan); opacity: .9; }
 .map-here .here-pulse { fill: none; stroke: var(--cyan); }
 .map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
@@ -1151,6 +1157,14 @@ td.outward { color: var(--amber); }
   stroke: rgba(53, 200, 240, .18);
   stroke-width: 1;
   pointer-events: none;
+  transition: fill-opacity .18s ease, stroke .18s ease;
+}
+
+/* Hovering the space a body occupies groups its places for as long as you
+   look at them. */
+.map-body.lit {
+  fill-opacity: .13;
+  stroke: rgba(53, 200, 240, .5);
 }
 
 /* Marks scale with the node, so hover has to grow the whole group. */
