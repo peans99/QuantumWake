@@ -2134,6 +2134,17 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 }
 .setup-opt.setup-sub:hover { border-color: var(--cyan); }
 
+/* A heading inside a table body, separating one family of rows from the next
+   without breaking the column alignment a second table would. */
+.group-row td {
+  padding-top: 14px;
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  border-bottom-color: transparent;
+}
+.group-row:first-child td { padding-top: 4px; }
+
 /* The way into a commodity's own page, sat beside its name. Quiet until the
    row is hovered: it is a second action on a cell that already has one. */
 .drill {

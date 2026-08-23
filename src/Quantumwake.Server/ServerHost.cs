@@ -713,6 +713,10 @@ public static class ServerHost
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));
 
+        // What the logs are still carrying. Unscoped by wipe on purpose - see
+        // LogLibrary.Signals.
+        app.MapGet("/api/signals", (LogLibrary lib) => lib.Signals());
+
         // The community catalogue joined onto this install's trades, plus UEX
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.
