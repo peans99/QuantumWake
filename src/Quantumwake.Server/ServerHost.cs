@@ -1316,6 +1316,36 @@ public static class ServerHost
         });
 
         /*
+         * Everything a shopping list can be written from.
+         *
+         * A list line is free text and stays free text - the player knows what
+         * they want better than this app does - but making them spell
+         * "Quantanium" or "FR-76 Chest Armor" from memory is asking them to
+         * guess at names already sitting in the reference data. Only things
+         * that can actually be bought are offered: a name with no counter
+         * behind it would put a line on the list that no plan could ever
+         * route.
+         */
+        app.MapGet("/api/shopping/catalogue", (LogLibrary lib, UexData uex) =>
+        {
+            var commodities = lib.Community.All.Values
+                .Select(c => c.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var items = lib.Community.Items.Values
+                .Where(i => i.Name is { Length: > 0 } && uex.ItemPrice(i.Uuid) is > 0)
+                .Select(i => i.Name!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return new { commodities, items };
+        });
+
+        /*
          * Where to buy one named thing - whatever kind of thing it is.
          *
          * A shopping list is written by hand, so a line on it can be a

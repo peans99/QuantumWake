@@ -2507,21 +2507,17 @@ async function loadJobList() {
 
     // Where this list is for, changeable here because it is a plan rather than
     // a fact: the run you meant on Tuesday is not the run you fly on Friday.
-    const where = el('input', 'job-place-edit');
-    where.type = 'text';
-    where.value = job.destination || '';
-    where.placeholder = 'anywhere';
-    where.title = 'Where you mean to shop. Leave blank for anywhere.';
-    where.setAttribute('list', 'job-places');
+    const where = el('select', 'select job-place-edit');
+    where.title = 'Where you mean to shop';
+    fillPlaceOptions(where, job.destinationId || job.destination || '');
 
     where.addEventListener('change', async () => {
-      fillPlaceOptions();
-      const picked = placeByName(where.value);
+      const picked = pickedPlace(where);
 
       await fetch(`/api/jobs/${job.id}/destination`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ place: where.value.trim() || null, placeId: picked?.rawId || null }),
+        body: JSON.stringify({ place: picked.name, placeId: picked.id }),
       });
 
       loadJobList();
@@ -2640,42 +2636,139 @@ function parseJobItems(text) {
 }
 
 /**
- * The places a list can be pointed at.
+ * Fills a picker with every place the app knows, and selects one.
  *
- * Typed rather than picked from three hundred options: the player knows the
- * name of the station they are flying to, and a datalist lets them type three
- * letters of it. Anything unrecognised is still kept as written - a list for
- * "wherever the org is meeting" is a real list, it just cannot be drawn.
+ * Picked rather than typed: these are places the app already knows by name -
+ * from the game's own data and from where you have actually been - so making
+ * someone spell "CRU-L4 Shallow Fields Station" is asking them to guess at
+ * something already on the screen. Somewhere you have visited heads the list,
+ * because a run is usually to a place you have flown to before.
+ *
+ * @param selected The place id to select, or a plain name for a destination
+ *   saved before this was a picker.
  */
-function fillPlaceOptions() {
-  const list = $('#job-places');
-  if (!list || !atlas.length || list.childElementCount) return;
+function fillPlaceOptions(select, selected) {
+  if (!select) return;
 
-  // Visited first: where you have been is where you are most likely going.
-  const ordered = [...atlas].sort((a, b) => (b.visits || 0) - (a.visits || 0));
+  select.textContent = '';
 
-  for (const place of ordered) {
-    const option = document.createElement('option');
-    option.value = place.name;
-    list.append(option);
+  const anywhere = document.createElement('option');
+  anywhere.value = '';
+  anywhere.textContent = 'Anywhere — no particular stop';
+  select.append(anywhere);
+
+  const been = atlas.filter((l) => l.visits > 0).sort((a, b) => b.visits - a.visits);
+  const rest = atlas.filter((l) => !l.visits).sort((a, b) => a.name.localeCompare(b.name));
+
+  const add = (label, places) => {
+    if (!places.length) return;
+
+    const group = document.createElement('optgroup');
+    group.label = label;
+
+    for (const place of places) {
+      const option = document.createElement('option');
+      option.value = place.rawId;
+      option.textContent = place.system ? `${place.name} · ${place.system}` : place.name;
+      group.append(option);
+    }
+
+    select.append(group);
+  };
+
+  add('Where you have been', been);
+  add('Everywhere else', rest);
+
+  if (!selected) {
+    select.value = '';
+    return;
+  }
+
+  select.value = selected;
+
+  // A destination saved as free text, from before this was a picker, or a
+  // place this atlas cannot name. Kept rather than silently dropped.
+  if (select.value !== selected) {
+    const kept = document.createElement('option');
+    kept.value = selected;
+    kept.textContent = selected;
+    select.append(kept);
+    select.value = selected;
   }
 }
 
-/** The atlas place a typed name means, or null when it names nothing we draw. */
-const placeByName = (typed) => {
-  const wanted = (typed || '').trim().toLowerCase();
-  if (!wanted) return null;
+/** What a picked option means: its id, and the name to store beside it. */
+const pickedPlace = (select) => {
+  const id = select.value;
+  if (!id) return { name: null, id: null };
 
-  return atlas.find((l) => l.name.toLowerCase() === wanted)
-    ?? atlas.find((l) => l.name.toLowerCase().includes(wanted))
-    ?? null;
+  const place = atlas.find((l) => l.rawId === id);
+  return { name: place?.name ?? id, id: place ? id : null };
 };
+
+/**
+ * The things this install knows how to buy, fetched once.
+ *
+ * Offered as a picker beside the free-text box rather than instead of it: the
+ * box is still the list, and this is a way to put a correctly spelled line in
+ * it. Only what can actually be bought is listed, because a line nothing sells
+ * is a line no plan can route.
+ */
+let catalogue = null;
+
+async function fillItemOptions(select) {
+  if (!select || select.childElementCount) return;
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Add something we know…';
+  select.append(placeholder);
+
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+
+  const add = (label, names) => {
+    if (!names?.length) return;
+
+    const group = document.createElement('optgroup');
+    group.label = label;
+
+    for (const name of names) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      group.append(option);
+    }
+
+    select.append(group);
+  };
+
+  add('Cargo', catalogue.commodities);
+  add('Ship parts and gear', catalogue.items);
+}
 
 $('#jobs-new')?.addEventListener('click', () => {
   const form = $('#job-form');
   form.hidden = !form.hidden;
-  fillPlaceOptions();
+  fillPlaceOptions($('#job-place'), '');
+  fillItemOptions($('#job-add'));
   if (!form.hidden) $('#job-title').focus();
+});
+
+// Picking a name writes it into the box, where it can be given a quantity like
+// any other line. The box stays the list; this only spells things.
+$('#job-add')?.addEventListener('change', () => {
+  const picked = $('#job-add').value;
+  if (!picked) return;
+
+  const box = $('#job-items');
+  const lines = box.value.split('\n').filter((l) => l.trim());
+
+  if (!lines.some((l) => l.trim().toLowerCase().startsWith(picked.toLowerCase())))
+    lines.push(picked);
+
+  box.value = `${lines.join('\n')}\n`;
+  $('#job-add').value = '';
+  box.focus();
 });
 
 $('#job-cancel')?.addEventListener('click', () => { $('#job-form').hidden = true; });
@@ -2686,8 +2779,7 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   const items = parseJobItems($('#job-items').value);
   if (!items.length) return;
 
-  const typed = $('#job-place').value;
-  const place = placeByName(typed);
+  const picked = pickedPlace($('#job-place'));
 
   await fetch('/api/jobs', {
     method: 'POST',
@@ -2697,10 +2789,9 @@ $('#job-form')?.addEventListener('submit', async (e) => {
       kind: 'list',
       items,
 
-      // What was typed is kept even when the map cannot place it; the id is
-      // only there so a plan can draw the stop.
-      destination: typed.trim() || null,
-      destinationId: place?.rawId || null,
+      // The name is what the card shows; the id is what a plan draws with.
+      destination: picked.name,
+      destinationId: picked.id,
     }),
   });
 
