@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![154 tests](https://img.shields.io/badge/tests-154%20passing-4fd48a)
+![350 tests](https://img.shields.io/badge/tests-350%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -50,7 +50,7 @@ From source instead:
 ![The star map](docs/images/map.png)
 
 *Stanton, Pyro and Nyx. Solid nodes are places this install has actually been —
-72 of the 292 the resolver can place — sized by how often. Star Citizen logs no
+67 of the 290 the resolver can place — sized by how often. Star Citizen logs no
 player position, so this is a topology map built from location and quantum-travel
 events, not a radar.*
 
@@ -61,16 +61,17 @@ events, not a radar.*
 | View | Contents |
 |---|---|
 | **Flight plan** | Where to go next and the rest of the run, on the Now page and drawn over the map as numbered stops. Built from a trade route, a shopping list, or by hand — and stops cross themselves off as you land |
+| **Shopping** | Lists that hold cargo and ship parts alike, checked against your stashes. Pick what to add and where you mean to shop, then read the list as a set of landings: every counter that carries any of it, ranked by how much one stop covers, with *fewest stops* to pack the run |
 | **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
 | **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells. Picking one opens its cargo panel: best terminals now, your own prices over the last day, three days or seven, and a selling/buying toggle. Double-click a place for what it takes and offers |
 | **Sessions** | Every session you have played, in-game time separated from menu time |
-| **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on |
+| **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on. **Upgrades** opens the game's own port list for that ship: what fits each hole, what it costs, and the counter that stocks it |
 | **Places** | Most-visited locations and quantum destinations |
 | **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
 | **Spending** | Confirmed purchases by shop, item and category |
 | **Ledger** | Every transaction, back-tracked to the place it happened |
 | **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
-| **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on |
+| **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on. Click a commodity for every counter that trades it — price, what it costs you against the best, stock or demand, and whether it sits in policed or lawless space |
 | **Loot** | When each item first appeared in your inventories, with the place |
 | **Loadout** | The kit you are wearing, by slot, with size, grade and maker |
 | **Stash** | What is in your inventory and where you left it |
@@ -91,6 +92,10 @@ back to the community.
   <tr>
     <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><sub><b>Sessions</b> — in-game time kept separate from time spent in menus</sub></td>
     <td width="50%"><a href="docs/images/stash.png"><img src="docs/images/stash.png" alt="Stash"></a><br><sub><b>Stash</b> — what you are carrying and where you left the rest</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/images/upgrades.png"><img src="docs/images/upgrades.png" alt="Upgrades"></a><br><sub><b>Upgrades</b> — what fits a ship, from the game's own port list, priced and with the counter that stocks it</sub></td>
+    <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — every counter that trades a commodity: price, what it costs against the best, stock, and whether the law reaches it</sub></td>
   </tr>
 </table>
 
@@ -252,7 +257,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 154 tests
+dotnet test Quantumwake.slnx      # 350 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
