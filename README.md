@@ -383,9 +383,6 @@ release workflow lifts it from here, so it is written once.
   per faction. **This is not your reputation**: nothing in the logs carries a rep
   value, the tags cover a fraction of contracts, and a faction with no annotated
   title shows a blank rather than a zero.
-
-### 0.6.13
-
 - **StarStrings, installed from Settings if you want it.** A community text mod
   by **MrKraken** that rewrites the game's English text to read more usefully:
   contracts that award blueprints tagged `[BP]`, shorter item names, the
