@@ -1068,6 +1068,35 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>StarStrings</h3>
+        <button class="ghost" id="starstrings-check">Check for a new build</button>
+        <button class="ghost" id="starstrings-install">Install</button>
+        <button class="ghost" id="starstrings-remove" hidden>Remove</button>
+      </div>
+      <p class="muted">
+        A community text mod by <b>MrKraken</b> that rewrites the game's English
+        text to read more usefully: contracts that award blueprints are tagged
+        <code>[BP]</code>, item names are shortened, contracts show the
+        reputation they pay, and the mining guide is sorted by rarity.
+        <a href="https://github.com/MrKraken/StarStrings" target="_blank" rel="noreferrer">github.com/MrKraken/StarStrings</a>
+        &mdash; not written by, or affiliated with, this app.
+      </p>
+      <p class="muted warn" id="starstrings-warning">
+        <b>This is the only thing here that writes into your game folder.</b>
+        It puts two files in your LIVE directory &mdash;
+        <code>Data\Localization\english\global.ini</code> and
+        <code>USER.cfg</code> &mdash; and nothing else; anything else in the
+        download is refused. Whatever is already there is copied aside first, and
+        <em>Remove</em> puts it back. It changes text only: no game binary, no
+        memory, nothing the anti-cheat looks at. A game patch may replace it, and
+        then it simply is not installed any more. Restart the game for a change
+        to take effect.
+      </p>
+      <span class="muted" id="starstrings-status">Not installed.</span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Last wipe</h3>
         <button class="ghost" id="wipe-save">Save</button>
         <button class="ghost" id="wipe-clear">Count everything</button>
@@ -1239,6 +1268,9 @@
           The optional commodity names, trade locations and ship reference:
           StarCitizenWiki's <code>scunpacked-data</code>, generated with octfx's
           ScDataDumper. The optional live prices: UEX and its datarunners.
+          The optional in-game text mod is <b>StarStrings</b>, written and
+          maintained entirely by <b>MrKraken</b> &mdash; this app only offers to
+          install their release for you, and to remove it again.
           Manufacturer marks from the official Star Citizen Fankit, under the
           Fankit Agreement. Full attribution, with what was taken from each,
           in <code>docs/credits.md</code>.
@@ -1367,7 +1399,8 @@
     all-slain (DimmaDont), SCStats (Maple33), SCPlay (ckuma), AutoTrackR2,
     SC-Kill-Monitor and citizenmon - with the p4k format from the scdatatools
     lineage. Optional commodity names come from StarCitizenWiki's scunpacked-data,
-    built with octfx's ScDataDumper. Full attribution in docs/credits.md.
+    built with octfx's ScDataDumper. The optional text mod is StarStrings by
+    MrKraken. Full attribution in docs/credits.md.
   </span>
   <span class="foot-version" id="foot-version" title="Build version"></span>
 </footer>

@@ -2802,7 +2802,93 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   loadJobList();
 });
 
+/* ---------- StarStrings ---------- */
+
+/**
+ * MrKraken's text mod, installed on request.
+ *
+ * Kept at arm's length on purpose. This app is read-only everywhere else, and
+ * this one card writes into somebody's game install, so the page says exactly
+ * which two files it writes, offers to take them back out, and never touches
+ * anything without a click. The state it shows is what is on disk rather than
+ * what we once did: a game patch can drop the localisation file back without
+ * telling anyone, and "installed" has to mean the files are still there.
+ */
+async function loadStarStrings(check = false) {
+  const status = $('#starstrings-status');
+  if (!status) return;
+
+  const state = await getJson(`/api/starstrings${check ? '?check=true' : ''}`).catch(() => null);
+
+  if (!state) {
+    status.textContent = 'Could not read the install state.';
+    return;
+  }
+
+  $('#starstrings-remove').hidden = !state.installed;
+  $('#starstrings-install').textContent = state.installed ? 'Reinstall' : 'Install';
+
+  const bits = [];
+
+  if (state.installed) {
+    bits.push(`Installed: ${state.release || 'unknown build'}`);
+    if (state.installedAt) bits.push(`put in place ${relative(state.installedAt)}`);
+  } else if (state.displaced) {
+    bits.push('Installed by this app, but the files are gone — a game patch will do that. Install again to put it back.');
+  } else {
+    bits.push('Not installed.');
+  }
+
+  if (state.latest) {
+    bits.push(state.newer
+      ? `A newer build is out: ${state.latest.name}. Install to take it.`
+      : `Newest build: ${state.latest.name}${state.installed ? ' — you have it' : ''}`);
+  }
+
+  if (!state.gameRoot) bits.push('No game folder found, so there is nowhere to install it.');
+
+  status.textContent = bits.join(' · ');
+  $('#starstrings-install').disabled = !state.gameRoot;
+}
+
+function initStarStrings() {
+  const install = $('#starstrings-install');
+  if (!install) return;
+
+  $('#starstrings-check').addEventListener('click', async () => {
+    $('#starstrings-status').textContent = 'Asking GitHub…';
+    await loadStarStrings(true);
+  });
+
+  install.addEventListener('click', async () => {
+    install.disabled = true;
+    $('#starstrings-status').textContent = 'Downloading and writing…';
+
+    const answer = await fetch('/api/starstrings/install', { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => ({ problem: 'The install could not be started.' }));
+
+    install.disabled = false;
+
+    if (answer.problem) {
+      $('#starstrings-status').textContent = answer.problem;
+      return;
+    }
+
+    await loadStarStrings(true);
+    alertLine($('#starstrings-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+  });
+
+  $('#starstrings-remove').addEventListener('click', async () => {
+    await fetch('/api/starstrings/remove', { method: 'POST' }).catch(() => {});
+    await loadStarStrings();
+  });
+
+  loadStarStrings();
+}
+
 /* ---------- logbook ---------- */
+
 
 /**
  * The logbook page: one merged timeline of what the pilot actually did -
@@ -7834,6 +7920,7 @@ initStaleNotice();
 initWipe();
 initWipePrompt();
 initUpdates();
+initStarStrings();
 
 /* ---------- scan progress ---------- */
 

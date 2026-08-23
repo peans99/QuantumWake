@@ -445,7 +445,38 @@ all-slain (many patterns, partial degradation).
 
 ---
 
+## The one thing that writes outside our own folder
+
+Everything else here reads. StarStrings is the exception, and it is built as an
+exception rather than as a feature that happens to write files.
+
+It is a text mod by MrKraken: two files copied into the game's LIVE folder - the
+English localisation table and the one-line config that selects it - which make
+contracts, item names and the mining guide read more usefully. No binary, no
+memory, nothing the anti-cheat looks at. The app offers to fetch their release
+and put it there, and to take it back out. Their work stays theirs: nothing is
+vendored, modified or re-hosted, and the download comes from their own releases.
+
+Three rules make that safe enough to offer:
+
+- **The archive is judged by where it resolves, not by what it claims.** Two
+  paths are accepted and everything else refuses the whole install without a
+  byte being written - not skipped, refused, because a release carrying a file
+  we did not expect is a release we do not understand. The check runs on the
+  resolved path: `Data/Localization/../../Bin64/StarCitizen.exe` starts with an
+  allowed prefix, lands inside the game folder, and is still the executable.
+- **An install is a list, not a folder.** Every file written is recorded with
+  where it went and what it displaced; removing restores the displaced file or
+  deletes ours, and touches nothing it did not put there.
+- **Installed means the files are still there.** A patch can drop the original
+  localisation back without telling anyone, so the page checks the disk rather
+  than believing its own record.
+
+Updates are by publish date, because the project publishes every build to a tag
+literally called `latest` - a version string would compare equal forever.
+
 ## Read-only and safe by default
+
 
 Adopted from SCStats' stance, which is the correct posture for anything touching
 a live game install under anti-cheat:
