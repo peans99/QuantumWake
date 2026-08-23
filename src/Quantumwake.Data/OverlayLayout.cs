@@ -28,7 +28,7 @@ public sealed record OverlayLayout(
 
     /// <summary>The Now page's cards, by their data-card name.</summary>
     public static readonly IReadOnlyList<string> SelectableCards =
-        ["location", "briefing", "ship", "session", "handle", "feed", "stats", "respawn", "job", "trip", "trade"];
+        ["location", "briefing", "ship", "session", "handle", "feed", "stats", "respawn", "job", "checklist", "trip", "trade"];
 
     public static OverlayLayout Default => new(
         ["now", "map", "commodities", "market", "loadout", "stash"],

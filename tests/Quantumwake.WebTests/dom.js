@@ -159,7 +159,7 @@ const GROUPS = {
   '#view-now .card[data-card]': [
     '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
     '#now-handle-card', '#now-feed-card', '#now-stats-card', '#now-respawn-card',
-    '#now-job-card', '#now-trip-card', '#trade-advice-card',
+    '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
   ],
 };
 
@@ -209,7 +209,7 @@ for (const [selector, card] of [
   ['#now-ship-card', 'ship'], ['#now-session-card', 'session'],
   ['#now-handle-card', 'handle'], ['#now-feed-card', 'feed'],
   ['#now-stats-card', 'stats'], ['#now-respawn-card', 'respawn'],
-  ['#now-job-card', 'job'], ['#now-trip-card', 'trip'], ['#trade-advice-card', 'trade'],
+  ['#now-job-card', 'job'], ['#now-checklist-card', 'checklist'], ['#now-trip-card', 'trip'], ['#trade-advice-card', 'trade'],
 ]) node(selector).dataset.card = card;
 
 /* Network: a routing table the test fills in, and a record of what was asked. */

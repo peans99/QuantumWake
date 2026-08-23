@@ -1983,6 +1983,57 @@ td.with-track .track:focus-visible { opacity: 1; }
 body.overlay .now-job-title { font-size: 12px; }
 body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 
+/* A pinned checklist is a second authored stream beside a pinned shopping
+ * list. The card keeps the next few actions useful at a glance, while the
+ * Checklists page carries all the metadata and editing controls. */
+.now-checklist-head { display: flex; gap: 8px; align-items: baseline; }
+.now-checklist-head .now-job-title { flex: 1; }
+.now-checklist-items, .checklist-items { list-style: none; margin: 7px 0 0; padding: 0; }
+.checklist-item {
+  display: flex; align-items: flex-start; gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid rgba(53, 200, 240, .08);
+}
+.checklist-item:last-child { border-bottom: 0; }
+.checklist-item input { margin: 3px 0 0; accent-color: var(--cyan); }
+.checklist-item-main { min-width: 0; flex: 1; }
+.checklist-item-text { font-size: 12.5px; }
+.checklist-item.done .checklist-item-text { text-decoration: line-through; color: var(--dim); }
+.checklist-note { margin-top: 2px; font-size: 11px; line-height: 1.4; }
+.checklist-due { margin-top: 3px; color: var(--amber); font-size: 10.5px; }
+.checklist-attachments { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.checklist-attachment {
+  border: 1px solid var(--rule); background: rgba(53, 200, 240, .05); color: var(--muted);
+  font: inherit; font-size: 10px; padding: 2px 5px; text-decoration: none; cursor: pointer;
+}
+.checklist-attachment:hover { color: var(--cyan-hot); border-color: var(--cyan); }
+body.overlay .checklist-item { padding: 3px 0; gap: 5px; }
+body.overlay .checklist-item-text { font-size: 10.5px; }
+body.overlay .checklist-attachments, body.overlay .checklist-due { display: none; }
+
+/* Checklists are deliberately generous with optional fields: a bare task is
+ * one line, while a calendar-like task can carry a place, reference and link. */
+.checklist-new { display: flex; gap: 8px; align-items: center; margin: 0 0 13px; }
+.checklist-new .search { flex: 1; }
+.checklist-card {
+  border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep, #1e4763);
+  background: linear-gradient(160deg, rgba(10, 20, 32, .5), rgba(6, 12, 20, .35));
+  padding: 12px 15px; margin-bottom: 10px;
+}
+.checklist-composer { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.checklist-composer > input, .checklist-fields input, .checklist-fields select {
+  box-sizing: border-box; width: 100%; background: rgba(8, 18, 30, .9); border: 1px solid var(--rule);
+  color: var(--text); font: inherit; font-size: 12px; padding: 6px 8px; outline: none;
+}
+.checklist-composer > input:focus, .checklist-fields input:focus, .checklist-fields select:focus { border-color: var(--cyan); }
+.checklist-fields { display: grid; grid-template-columns: 1fr 1fr 170px; gap: 7px; margin-top: 7px; }
+.checklist-fields + .checklist-fields { grid-template-columns: 1fr 1fr; }
+.checklist-composer > .ghost { margin-top: 7px; }
+
+@media (max-width: 700px) {
+  .checklist-new { align-items: stretch; flex-direction: column; }
+  .checklist-fields, .checklist-fields + .checklist-fields { grid-template-columns: 1fr; }
+}
+
 .ghost.on,
 .ghost.on:hover:not(:disabled) {
   color: var(--green);
