@@ -110,6 +110,12 @@ public sealed record PickupRecord(
 
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
+/// <param name="Rep">
+/// The reputation the title says it pays, when a text mod has annotated it -
+/// see <see cref="ContractTags"/>. Null means nobody said, which is the usual
+/// case and is not the same as zero.
+/// </param>
+/// <param name="Blueprint">Whether the title is tagged as awarding a blueprint.</param>
 public sealed record ContractLine(
     DateTimeOffset At,
     string Name,
@@ -120,7 +126,31 @@ public sealed record ContractLine(
     string Outcome,
     int Steps,
     int StepsDone,
-    double? Minutes);
+    double? Minutes,
+    int? Rep = null,
+    bool Blueprint = false);
+
+/// <summary>
+/// How much work this install has done for one faction.
+/// </summary>
+/// <remarks>
+/// Not reputation: the logs carry none, and the value lives on a server this
+/// app never talks to. This is the countable thing underneath it - contracts
+/// taken, finished and walked away from, per issuer, over time - which is what
+/// actually moves standing. <paramref name="Rep"/> is filled in only from
+/// titles a text mod has annotated, and <paramref name="RepFrom"/> says how
+/// many of the contracts that number came from, so it can never be mistaken
+/// for a total.
+/// </remarks>
+public sealed record Standing(
+    string Issuer,
+    int Contracts,
+    int Completed,
+    int Abandoned,
+    DateTimeOffset First,
+    DateTimeOffset Last,
+    int Rep,
+    int RepFrom);
 
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
@@ -1043,7 +1073,10 @@ public sealed class LogLibrary : IDisposable
                 .OrderByDescending(c => c.FirstSeen)
                 .Select(c => new ContractLine(
                     c.FirstSeen,
-                    c.DisplayName,
+
+                    // The annotations come off the name and become fields: a
+                    // contract should still read as its own title.
+                    ContractTags.Clean(c.DisplayName),
                     c.Issuer,
                     c.Type,
                     c.System,
@@ -1051,7 +1084,56 @@ public sealed class LogLibrary : IDisposable
                     c.Outcome.ToString(),
                     c.Steps,
                     c.StepsDone,
-                    c.TimeToComplete?.TotalMinutes))
+                    c.TimeToComplete?.TotalMinutes,
+                    ContractTags.RepFrom(c.DisplayName),
+                    ContractTags.AwardsBlueprint(c.DisplayName)))
+        ];
+    }
+
+    /// <summary>
+    /// Work done per faction, most first.
+    /// </summary>
+    /// <remarks>
+    /// The honest answer to "how is my standing with these people": every
+    /// contract of theirs this install has taken, how many were finished, and
+    /// when. Reputation itself is never logged - the client opens a channel to
+    /// a reputation service and the numbers stay on the far side of it - so the
+    /// only thing that can be counted is the work, and the only rep that can be
+    /// shown is what a text mod wrote on a title.
+    /// </remarks>
+    public IReadOnlyList<Standing> Standings(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+
+        return
+        [
+            .. Counted(WipeScope.History)
+                .SelectMany(s => s.Contracts)
+                .Where(c => c.FirstSeen >= cutoff && !string.IsNullOrWhiteSpace(c.Issuer))
+                .GroupBy(c => ContractTags.IssuerKey(c.Issuer))
+                .Select(g =>
+                {
+                    var rep = g.Select(c => ContractTags.RepFrom(c.DisplayName))
+                        .Where(r => r is not null)
+                        .Select(r => r!.Value)
+                        .ToList();
+
+                    return new Standing(
+                        // The fullest spelling the logs used, so a row reads as
+                        // "Bounty Hunters Guild" rather than "BHG".
+                        g.Select(c => c.Issuer)
+                            .OrderByDescending(name => name.Length)
+                            .First(),
+                        g.Count(),
+                        g.Count(c => c.Outcome == ContractOutcome.Completed),
+                        g.Count(c => c.Outcome == ContractOutcome.Abandoned),
+                        g.Min(c => c.FirstSeen),
+                        g.Max(c => c.FirstSeen),
+                        rep.Sum(),
+                        rep.Count);
+                })
+                .OrderByDescending(s => s.Completed)
+                .ThenByDescending(s => s.Contracts)
         ];
     }
 
@@ -1122,7 +1204,16 @@ public sealed class LogLibrary : IDisposable
     /// Where the player has woken after dying, newest first. Inferred from the
     /// first place seen after each death, since the game logs no respawn point.
     /// </summary>
-    /// <summary>Medical beds used, newest first - where regen is set, if it was.</summary>
+    /// <summary>
+    /// Beds used, newest first, each labelled with which kind it looks like.
+    /// </summary>
+    /// <remarks>
+    /// The game prints one line for every bed - the clinic bed after a fight
+    /// and the hab bed you wake up in at login - so the kind is inferred from
+    /// what surrounds it and is honest about being a guess. Regen is only set
+    /// at a real medical bed, so a "wake" is not evidence of anything.
+    /// </remarks>
+
     public IReadOnlyList<MedicalBedVisit> MedicalBeds(int days = 0)
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;

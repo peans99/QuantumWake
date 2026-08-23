@@ -75,8 +75,10 @@ public static class ServerHost
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
-        // Solely for the opt-in community-dataset download; nothing else in the
-        // application makes an outbound request.
+        // Every outbound request in the application shares this client: the
+        // opt-in community-dataset download, the update check, and the
+        // StarStrings release check and download. All of them happen on a
+        // click, none of them carry an identifier.
         builder.Services.AddHttpClient("community", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -94,6 +96,12 @@ public static class ServerHost
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
+
+        // MrKraken's StarStrings, installed on request. The only thing in the
+        // app that writes outside its own data folder.
+        builder.Services.AddSingleton<StarStringsStore>();
+        builder.Services.AddSingleton<StarStrings>();
+
 
 
         builder.Services.AddSingleton<OverlayLayoutStore>();
@@ -359,7 +367,59 @@ public static class ServerHost
 
         // The one call that reaches the internet, and only from a click or from
         // a startup the player has already agreed to.
+        /*
+         * StarStrings: what is installed, what is available, and the two
+         * buttons that change it.
+         *
+         * Read is free and offline; the release check costs one request and is
+         * only made when asked, in keeping with everything else here.
+         */
+        app.MapGet("/api/starstrings", async (StarStringsStore store, StarStrings mod, bool? check) =>
+        {
+            var installed = store.Current;
+            var present = store.StillPresent();
+            var latest = check == true ? await mod.LatestAsync() : null;
+
+            return new
+            {
+                repository = StarStrings.Repository,
+                gameRoot = install?.RootPath,
+
+                // "Installed" means the files are still there. A game patch can
+                // put the original localisation back without telling anyone.
+                installed = present,
+                displaced = installed is not null && !present,
+                release = installed?.Release,
+                installedAt = installed?.InstalledAt,
+                publishedAt = installed?.PublishedAt,
+                files = installed?.Files.Select(f => f.Path) ?? [],
+                latest = latest is null ? null : new
+                {
+                    latest.Name,
+                    latest.PublishedAt,
+                    latest.Url
+                },
+                newer = StarStrings.IsNewer(installed, latest)
+            };
+        });
+
+        app.MapPost("/api/starstrings/install", async (StarStrings mod) =>
+        {
+            if (install is not { } game)
+                return Results.BadRequest(new { problem = "No Star Citizen install was found to write into." });
+
+            var (done, problem) = await mod.InstallAsync(game);
+
+            return problem is null
+                ? Results.Ok(new { done!.Release, done.InstalledAt, files = done.Files.Count })
+                : Results.BadRequest(new { problem });
+        });
+
+        app.MapPost("/api/starstrings/remove", (StarStrings mod) =>
+            Results.Ok(new { removed = mod.Remove() }));
+
         app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check) =>
+
         {
             var assembly = typeof(ServerHost).Assembly;
             var current = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -640,6 +700,10 @@ public static class ServerHost
         app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
+        // Work done per faction, and the little reputation anyone has written
+        // down. See LogLibrary.Standings for why those are two different things.
+        app.MapGet("/api/standing", (LogLibrary lib, int? days) => lib.Standings(days ?? 0));
+
         // The community catalogue joined onto this install's trades, plus UEX
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.
@@ -862,7 +926,7 @@ public static class ServerHost
 
         // What dying has cost: deaths and incapacitations over time, where they
         // happened, and the claim fees the fleet implies.
-        app.MapGet("/api/casualties", (LogLibrary lib, int? days) =>
+        app.MapGet("/api/casualties", (LogLibrary lib, UexFeeds feeds, int? days) =>
         {
             var stats = lib.Stats(days ?? 0);
             var sessions = lib.Sessions()
@@ -924,12 +988,52 @@ public static class ServerHost
             // The other signal: beds are where regen is set, when it is set.
             var beds = lib.MedicalBeds(days ?? 0);
 
-            var bedsUsed = beds
-                .GroupBy(b => b.Place, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new { place = g.Key, times = g.Count(), last = g.Max(b => b.At) })
+            // Waking up at login is not a visit to a clinic, and the game says
+            // both with the same line - so the counted ones are the beds the
+            // player went to, and the rest are reported separately rather than
+            // dropped.
+            //
+            // The place directory can rule a bed OUT of being medical, and
+            // nothing more: somewhere with no clinic had no clinic bed to use,
+            // whatever the toast said. It cannot rule one IN - Port Tressler
+            // has habs and a clinic, so a bed there is still either - and a
+            // place the directory does not carry says nothing at all.
+            string Sort(Quantumwake.Core.State.MedicalBedVisit bed) => bed.Kind switch
+            {
+                "wake" or "after-death" => bed.Kind,
+                _ when feeds.HasClinic(bed.Place) == false => "hab",
+                _ => "heal",
+            };
+
+            var sorted = beds.Select(b => new { Bed = b, Kind = Sort(b) }).ToList();
+            var deliberate = sorted.Where(b => b.Kind != "wake" && b.Kind != "hab").ToList();
+
+            var bedsUsed = deliberate
+                .GroupBy(b => b.Bed.Place, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new
+                {
+                    place = g.Key,
+                    times = g.Count(),
+                    last = g.Max(b => b.Bed.At),
+                    afterDeath = g.Count(b => b.Kind == "after-death")
+                })
                 .OrderByDescending(x => x.last)
                 .Take(10)
                 .ToList();
+
+            var bedKinds = new
+            {
+                wake = sorted.Count(b => b.Kind == "wake"),
+                afterDeath = sorted.Count(b => b.Kind == "after-death"),
+                hab = sorted.Count(b => b.Kind == "hab"),
+                heal = sorted.Count(b => b.Kind == "heal"),
+
+                // Whether the directory could be asked at all, and whether the
+                // copy on disk is new enough to carry the flag - so the page
+                // can offer a refresh rather than quietly sorting nothing.
+                directory = feeds.PlaceDirectory.Count,
+                clinicsKnown = feeds.PlaceDirectory.Count(p => p.Clinic is not null)
+            };
 
             return new
             {
@@ -940,6 +1044,7 @@ public static class ServerHost
                 lastBedWhen = beds.Count > 0 ? beds[0].At : (DateTimeOffset?)null,
                 wokeAt,
                 bedsUsed,
+                bedKinds,
                 incapacitations = sessions.Sum(s => s.Incapacitations),
                 sessionsWithDeaths = sessions.Count(s => s.Deaths > 0),
                 averageFee = fees.Count > 0 ? fees.Average(f => f.fee) : 0,

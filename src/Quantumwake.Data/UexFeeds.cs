@@ -21,7 +21,21 @@ public sealed record UexRefinery(string Commodity, string Terminal, string? Syst
 public sealed record UexRawPrice(string Commodity, string Terminal, decimal Sell);
 
 /// <summary>One place in UEX's own hierarchy: a station, city, outpost or point of interest.</summary>
-public sealed record UexPlace(string Name, string? Nickname, string Kind, string? System, string? Planet);
+/// <param name="Clinic">
+/// Whether the place has a clinic, when the directory says. Null means the feed
+/// did not carry the flag for this row - which is not the same as "no clinic",
+/// and callers have to keep the two apart.
+/// </param>
+/// <param name="Habitation">Whether it has habs, on the same terms.</param>
+public sealed record UexPlace(
+    string Name,
+    string? Nickname,
+    string Kind,
+    string? System,
+    string? Planet,
+    bool? Clinic = null,
+    bool? Habitation = null);
+
 
 /// <summary>
 /// The optional half of the UEX integration: feeds beyond the core price
@@ -167,6 +181,44 @@ public sealed class UexFeeds
     public IReadOnlyList<UexPlace> PlaceDirectory => Read<UexPlace>(Places);
 
     /// <summary>
+    /// Whether a place has a clinic: true, false, or null for "not known".
+    /// </summary>
+    /// <remarks>
+    /// Used to tell a bed at a hospital from a bed in a hab. The directory
+    /// names places its own way, so a name is matched exactly, then by
+    /// nickname, then by one containing the other - the same shape of match the
+    /// terminal join uses, and equally unwilling to guess between two hits.
+    /// </remarks>
+    public bool? HasClinic(string? place)
+    {
+        if (string.IsNullOrWhiteSpace(place))
+            return null;
+
+        var wanted = Compact(place);
+        if (wanted.Length < 4)
+            return null;
+
+        var directory = PlaceDirectory;
+
+        var exact = directory.FirstOrDefault(p =>
+            string.Equals(Compact(p.Name), wanted, StringComparison.OrdinalIgnoreCase)
+                || (p.Nickname is not null && string.Equals(Compact(p.Nickname), wanted, StringComparison.OrdinalIgnoreCase)));
+
+        if (exact is not null)
+            return exact.Clinic;
+
+        var loose = directory
+            .Where(p => Compact(p.Name).Contains(wanted, StringComparison.OrdinalIgnoreCase)
+                || wanted.Contains(Compact(p.Name), StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToList();
+
+        return loose.Count == 1 ? loose[0].Clinic : null;
+    }
+
+
+
+    /// <summary>
     /// The cheapest rental of a vehicle, matched the way purchase prices are:
     /// UEX drops the manufacturer from names that our display names carry.
     /// </summary>
@@ -269,12 +321,27 @@ public sealed class UexFeeds
                     Str(row, "nickname"),
                     kinds[i],
                     Str(row, "star_system_name"),
-                    Str(row, "planet_name")));
+                    Str(row, "planet_name"),
+                    Flag(row, "has_clinic"),
+                    Flag(row, "has_habitation")));
             }
         }
 
         return places;
     }
+
+    /// <summary>
+    /// A 0/1 flag from the directory, or null when the row does not carry it.
+    /// </summary>
+    /// <remarks>
+    /// Absent and false are different answers here: one says "this place has no
+    /// clinic", the other says "nobody recorded whether it does", and a bed at
+    /// each of those means something different.
+    /// </remarks>
+    private static bool? Flag(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt32() != 0
+            : null;
 
     private static IEnumerable<JsonElement> Rows(JsonElement root) =>
         root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array

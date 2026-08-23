@@ -347,6 +347,52 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.6.17
+
+- **Fixed the stray character in 64 places.** A byte-level repair in 0.6.15
+  matched the tail of every valid middot as well as the broken one it was aimed
+  at, doubling the lead byte - so separators across the Settings feeds, the
+  market and the map read as a replacement glyph. All 64 repaired, every text
+  file checked as valid UTF-8.
+- **A bed where there is no clinic was a hab bed.** With the UEX place
+  directory enabled, a bed used somewhere with no clinic is ruled out of being
+  medical - which the directory can do, while the reverse it cannot: Port
+  Tressler has habs and a clinic, so a bed there is still either one, and the
+  app says so rather than picking. On this install it rules out nothing, since
+  every bed was used at a place that has a clinic; it earns its keep for anyone
+  who beds down at outposts.
+- **Waking up is not a hospital visit.** The game prints the same line for
+  every bed - the clinic bed you crawl into and the hab bed you wake up in at
+  login - so every login was being counted as a medical bed. They are told
+  apart now by what surrounds them: a bed within three minutes of leaving the
+  menus, with nothing having happened to you, is waking up. On this install
+  that is 27 of them, and Port Tressler drops from 68 bed visits to 54. Beds
+  used after a death or an incapacitation are marked as such, since that is the
+  one case that is unambiguously medical. The section is called *Beds used*
+  now, and the logins are still reported - just not counted as treatment.
+- **Standing: who you have worked for.** A table on the Contracts page of every
+  issuer, how many contracts you took, how many you finished and the rate, how
+  many you walked away from, and the span you have been working for them. This
+  install: 16 factions, 205 contracts, 62% finished. Two spellings of one
+  faction are one row - the game writes both "Red Wind" and "Redwind", and BHG
+  for the Bounty Hunters Guild.
+- **What a contract pays, where anyone has written it down.** The game logs a
+  contract's displayed title, and that title comes from the file the StarStrings
+  mod replaces - so with the mod installed, titles carry `[150 Rep]` and `[BP]`
+  and the app reads them straight off. Shown as chips on the contract and summed
+  per faction. **This is not your reputation**: nothing in the logs carries a rep
+  value, the tags cover a fraction of contracts, and a faction with no annotated
+  title shows a blank rather than a zero.
+- **StarStrings, installed from Settings if you want it.** A community text mod
+  by **MrKraken** that rewrites the game's English text to read more usefully:
+  contracts that award blueprints tagged `[BP]`, shorter item names, the
+  reputation a contract pays shown on it, and the mining guide sorted by rarity.
+  The app fetches their release, checks whether a newer build is out, and can
+  take it back out again. It is the only thing here that writes into your game
+  folder: two files, anything else in the download refused outright, whatever
+  was there copied aside first and put back on removal. Entirely MrKraken's
+  work - nothing of theirs is bundled or altered here.
+
 ### 0.6.12
 
 The map learns what things are, the app learns what it cannot count, and the

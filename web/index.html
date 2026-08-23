@@ -365,13 +365,18 @@
     </p>
     <div id="casualties-woke" class="bars"></div>
 
-    <h2 class="spaced">Medical beds used</h2>
+    <h2 class="spaced">Beds used</h2>
     <p class="muted caption">
       A regen location is set at a medical bed or an insurance office, so this
-      is the most direct hint the logs give — but the same notification fires
-      when a bed is only used to heal, and the game never states where regen
-      actually is. Most recent first.
+      is the most direct hint the logs give — but the game prints the same line
+      for every bed, including the hab bed you wake up in when you log in.
+      Those are told apart by what surrounds them rather than by the text:
+      <b>waking up</b> is a bed within minutes of a session starting with
+      nothing having happened to you, and it is left out of the counts below.
+      A bed used after a death or an incapacitation is the one case that is
+      unambiguously medical. Most recent first.
     </p>
+    <p class="muted caption" id="beds-kinds"></p>
     <div id="casualties-beds" class="bars"></div>
 
     <h2 class="spaced">Claim fees, by ship</h2>
@@ -730,6 +735,30 @@
       </div>
     </div>
     <div class="summary-strip" id="contract-summary"></div>
+    <h2 class="spaced">Standing</h2>
+    <p class="muted caption">
+      Who you have worked for and how much of it you finished. <b>This is not
+      your reputation</b> &mdash; the game logs none: the client opens a channel
+      to a reputation service and every number stays on the far side of it. What
+      can be counted is the work, which is what moves standing. The
+      <em>rep</em> column fills in only for contracts whose title has been
+      annotated by the StarStrings text mod, and says how many contracts it
+      could read.
+    </p>
+    <div class="table-wrap">
+      <table id="standing-table">
+        <thead>
+          <tr>
+            <th>Issuer</th>
+            <th class="num">Contracts</th><th class="num">Finished</th>
+            <th class="num">Abandoned</th><th class="num">Rep seen</th>
+            <th>Worked for</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
     <h2 class="spaced">Contracts by issuer</h2>
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
@@ -746,7 +775,7 @@
         <thead>
           <tr>
             <th>When</th><th>Issuer</th><th>Type</th><th>Difficulty</th>
-            <th>System</th><th>Outcome</th>
+            <th>System</th><th>Outcome</th><th>Pays</th>
             <th class="num">Steps</th><th class="num">Took</th>
           </tr>
         </thead>
@@ -1068,6 +1097,35 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>StarStrings</h3>
+        <button class="ghost" id="starstrings-check">Check for a new build</button>
+        <button class="ghost" id="starstrings-install">Install</button>
+        <button class="ghost" id="starstrings-remove" hidden>Remove</button>
+      </div>
+      <p class="muted">
+        A community text mod by <b>MrKraken</b> that rewrites the game's English
+        text to read more usefully: contracts that award blueprints are tagged
+        <code>[BP]</code>, item names are shortened, contracts show the
+        reputation they pay, and the mining guide is sorted by rarity.
+        <a href="https://github.com/MrKraken/StarStrings" target="_blank" rel="noreferrer">github.com/MrKraken/StarStrings</a>
+        &mdash; not written by, or affiliated with, this app.
+      </p>
+      <p class="muted warn" id="starstrings-warning">
+        <b>This is the only thing here that writes into your game folder.</b>
+        It puts two files in your LIVE directory &mdash;
+        <code>Data\Localization\english\global.ini</code> and
+        <code>USER.cfg</code> &mdash; and nothing else; anything else in the
+        download is refused. Whatever is already there is copied aside first, and
+        <em>Remove</em> puts it back. It changes text only: no game binary, no
+        memory, nothing the anti-cheat looks at. A game patch may replace it, and
+        then it simply is not installed any more. Restart the game for a change
+        to take effect.
+      </p>
+      <span class="muted" id="starstrings-status">Not installed.</span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Last wipe</h3>
         <button class="ghost" id="wipe-save">Save</button>
         <button class="ghost" id="wipe-clear">Count everything</button>
@@ -1239,6 +1297,9 @@
           The optional commodity names, trade locations and ship reference:
           StarCitizenWiki's <code>scunpacked-data</code>, generated with octfx's
           ScDataDumper. The optional live prices: UEX and its datarunners.
+          The optional in-game text mod is <b>StarStrings</b>, written and
+          maintained entirely by <b>MrKraken</b> &mdash; this app only offers to
+          install their release for you, and to remove it again.
           Manufacturer marks from the official Star Citizen Fankit, under the
           Fankit Agreement. Full attribution, with what was taken from each,
           in <code>docs/credits.md</code>.
@@ -1367,7 +1428,8 @@
     all-slain (DimmaDont), SCStats (Maple33), SCPlay (ckuma), AutoTrackR2,
     SC-Kill-Monitor and citizenmon - with the p4k format from the scdatatools
     lineage. Optional commodity names come from StarCitizenWiki's scunpacked-data,
-    built with octfx's ScDataDumper. Full attribution in docs/credits.md.
+    built with octfx's ScDataDumper. The optional text mod is StarStrings by
+    MrKraken. Full attribution in docs/credits.md.
   </span>
   <span class="foot-version" id="foot-version" title="Build version"></span>
 </footer>

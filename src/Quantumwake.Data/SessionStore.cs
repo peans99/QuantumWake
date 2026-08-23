@@ -132,7 +132,10 @@ public sealed class SessionStore : IDisposable
     /// into the fingerprint retires every row at once, at the cost of one cold
     /// backfill after an upgrade - and that cost is the feature working.
     /// </remarks>
-    private const int PayloadVersion = 2;
+    // 3: bed visits gained a kind, so summaries cached before it would show
+    //    every login as a medical bed for ever.
+    private const int PayloadVersion = 3;
+
 
     /// <summary>
     /// Fingerprint identifying a file's current contents without reading them.
