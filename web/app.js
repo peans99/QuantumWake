@@ -2274,8 +2274,15 @@ async function loadCasualties() {
   if (kinds) {
     const parts = [];
     if (kinds.afterDeath) parts.push(`${kinds.afterDeath} after a death or incapacitation`);
-    if (kinds.heal) parts.push(`${kinds.heal} used mid-session`);
+    if (kinds.heal) parts.push(`${kinds.heal} used mid-session, which could be either`);
+    if (kinds.hab) parts.push(`${kinds.hab} at places with no clinic, so hab beds - not counted above`);
     if (kinds.wake) parts.push(`${kinds.wake} were waking up at login, not counted above`);
+
+    // The directory can only rule a bed out, and only if it is on disk. Say so
+    // rather than leaving the mid-session pile unexplained.
+    if (!kinds.clinicsKnown) {
+      parts.push('enable the place directory in Settings to rule out beds at places with no clinic');
+    }
 
     $('#beds-kinds').textContent = parts.join(' · ');
   }
