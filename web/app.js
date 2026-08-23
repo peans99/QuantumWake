@@ -3551,6 +3551,66 @@ async function renderSettings() {
 
   await renderUexAuto();
   await renderUexFeeds();
+  await renderSignals();
+}
+
+/**
+ * Which signals are still arriving, and when each last did.
+ *
+ * The date is the point. Every telemetry removal so far has looked, from in
+ * here, exactly like a quiet week - so the table leads with when a thing last
+ * happened, and marks the rows that have gone quiet rather than leaving the
+ * reader to compare eighteen dates by eye.
+ *
+ * "Quiet" is measured against this install's own last session, not against
+ * today: someone coming back after a month away should not be told that
+ * everything broke while they were gone.
+ */
+async function renderSignals() {
+  const table = $('#signals-table');
+  if (!table) return;
+
+  let rows;
+  try {
+    rows = await getJson('/api/signals');
+  } catch {
+    return;
+  }
+
+  const body = table.querySelector('tbody');
+  body.textContent = '';
+
+  const played = Math.max(...rows.map((r) => (r.lastSeen ? Date.parse(r.lastSeen) : 0)), 0);
+  const QUIET = 21 * 86400000;
+
+  let group = null;
+
+  for (const row of rows) {
+    if (row.group !== group) {
+      group = row.group;
+
+      const head = el('tr', 'group-row');
+      const cell = el('td', 'muted', group);
+      cell.colSpan = 4;
+      head.append(cell);
+      body.append(head);
+    }
+
+    const seen = row.lastSeen ? Date.parse(row.lastSeen) : null;
+    const quiet = seen !== null && played - seen > QUIET;
+
+    const tr = el('tr');
+    tr.append(el('td', null, row.name));
+    tr.append(el('td', row.total ? 'num' : 'num muted', row.total ? row.total.toLocaleString() : '—'));
+    tr.append(el('td', row.sessions ? 'num' : 'num muted', row.sessions || '—'));
+
+    const last = el('td', seen === null ? 'muted' : (quiet ? 'outward' : 'muted'));
+    last.textContent = seen === null ? 'never' : `${dateOf(row.lastSeen)}${quiet ? ' · gone quiet' : ''}`;
+    tr.append(last);
+
+    if (row.note) tr.title = row.note;
+    body.append(tr);
+  }
 }
 
 /**

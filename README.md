@@ -353,6 +353,17 @@ release workflow lifts it from here, so it is written once.
 
 ### 0.7.0
 
+- **A page that says when the game stopped telling us something.** Star Citizen
+  has logged less with every patch - quantum detail went in 4.0.1, inter-system
+  jumps in 4.1.0, combat entirely by 4.9 - and from inside this app every one of
+  those removals looked exactly like a quiet evening. Settings now lists each
+  kind of thing the app reads, how much of it this install has, and *when it
+  last arrived*, with anything that has gone quiet for three weeks marked. The
+  window is measured against your own last session rather than today, so coming
+  back from a month away does not report that everything broke while you were
+  gone. Read from the stored sessions rather than from the parser, because a
+  scan skips unchanged backups and parser counters would only describe whatever
+  happened to be re-read.
 - **A commodity, in full.** Market answered "where does this sell" and stopped
   there. Clicking through from a row now opens the good's own page: what it has
   been worth day by day, demand against supply over the same weeks, every

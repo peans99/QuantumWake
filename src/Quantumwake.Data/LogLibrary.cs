@@ -153,6 +153,26 @@ public sealed record Standing(
     int RepFrom);
 
 /// <summary>
+/// Whether one kind of thing is still arriving in the logs.
+/// </summary>
+/// <remarks>
+/// The point is the date, not the count. CIG has removed telemetry patch by
+/// patch - quantum detail in 4.0.1, inter-system jumps in 4.1.0, combat
+/// entirely by 4.9 - and every removal looked, from inside the app, exactly
+/// like a quiet evening. A signal that stopped six weeks ago has stopped; a
+/// signal nobody has ever seen may simply be one this player does not do.
+/// </remarks>
+/// <param name="Sessions">Sessions carrying at least one, which dates the signal.</param>
+/// <param name="Note">Why it reads zero, when the reason is known.</param>
+public sealed record SignalHealth(
+    string Name,
+    string Group,
+    int Total,
+    int Sessions,
+    DateTimeOffset? LastSeen,
+    string? Note);
+
+/// <summary>
 /// Somebody this install has flown with, as far as the logs can tell.
 /// </summary>
 /// <remarks>
@@ -1159,6 +1179,70 @@ public sealed class LogLibrary : IDisposable
                 })
                 .OrderByDescending(s => s.Completed)
                 .ThenByDescending(s => s.Contracts)
+        ];
+    }
+
+    /// <summary>
+    /// What the logs are still carrying, and when each thing last arrived.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read from stored sessions rather than from the parser, which matters
+    /// more than it sounds: a scan skips every unchanged backup, so parser
+    /// counters describe whatever happened to be re-read rather than the
+    /// install. Summaries are the whole history, and they are what the pages
+    /// draw from - so this answers "is the app still seeing this", which is the
+    /// question, rather than "did the parser match something just now".
+    /// </para>
+    /// <para>
+    /// Deliberately unscoped by wipe. A wipe ends an account, not the client's
+    /// willingness to log a thing, and drawing the line here would make a
+    /// removed event and a fresh start look identical.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<SignalHealth> Signals()
+    {
+        var sessions = _store.All();
+
+        SignalHealth Count(
+            string name, string group, Func<SessionSummary, int> howMany, string? note = null)
+        {
+            var seen = sessions.Where(s => howMany(s) > 0).ToList();
+
+            return new SignalHealth(
+                name, group,
+                sessions.Sum(howMany),
+                seen.Count,
+                seen.Count > 0 ? seen.Max(s => s.StartedAt) : null,
+                note);
+        }
+
+        return
+        [
+            Count("Sessions", "Flight", _ => 1),
+            Count("Places visited", "Flight", s => s.Locations.Count),
+            Count("Ships flown", "Flight", s => s.Ships.Count),
+            Count("Quantum jumps", "Flight", s => s.Jumps.Count),
+            Count("Contracts", "Flight", s => s.Contracts.Count),
+            Count("Party mentions", "Flight", s => s.PartyNotes.Count,
+                "Only fires when somebody joins or drops while you are grouped."),
+
+            Count("Item purchases", "Economy", s => s.Purchases.Count),
+            Count("Commodity sales", "Economy", s => s.Trades.Count(t => t.IsSell)),
+            Count("Commodity purchases", "Economy", s => s.Trades.Count(t => !t.IsSell)),
+
+            Count("Loadout attachments", "Gear", s => s.Loadout.Count),
+            Count("Stash listings", "Gear", s => s.Stash.Count),
+            Count("Items first seen", "Gear", s => s.Pickups.Count),
+            Count("Blueprints", "Gear", s => s.Blueprints.Count),
+
+            Count("Beds used", "Casualties", s => s.MedicalBeds.Count),
+            Count("Incapacitations", "Casualties", s => s.Incapacitations),
+            Count("Deaths", "Casualties", s => s.Deaths,
+                "Inferred from corpse item-recovery bursts: 4.9 logs no death event."),
+            Count("Kills", "Casualties", s => s.Kills,
+                "Not logged at all since 4.9. The parser is written and dormant, "
+                + "and this fills in by itself if CIG restore the events."),
         ];
     }
 
