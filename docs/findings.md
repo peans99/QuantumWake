@@ -1,5 +1,12 @@
 # Findings: the kill-event problem
 
+> **Since 0.6.8 the app shows no kill counter.** Everything below still holds -
+> the events are absent, and the parser for them is written and dormant - but a
+> counter that can only ever read zero looks like a broken feature rather than a
+> missing one. The About page's FAQ answers "where did the kill counter go"
+> instead, and the counter returns with the events if CIG restore them.
+
+
 ## Claim
 
 `<Actor Death>` and `<Vehicle Destruction>` events — the foundation of nearly

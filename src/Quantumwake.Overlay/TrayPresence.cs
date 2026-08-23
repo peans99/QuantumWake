@@ -25,9 +25,20 @@ internal sealed class TrayPresence : IDisposable
 {
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _overlayItem;
+    private readonly ToolStripMenuItem _pinItem;
 
     public event Action? OpenDashboardRequested;
     public event Action<bool>? OverlayToggled;
+
+    /// <summary>
+    /// Pin the overlay out of the way, or take it back.
+    /// </summary>
+    /// <remarks>
+    /// The only control that works in both directions: a pinned overlay passes
+    /// every click to the game, so it cannot carry its own way back.
+    /// </remarks>
+    public event Action<bool>? OverlayPinned;
+
     public event Action? QuitRequested;
 
     /// <summary>The tray's answer to "it cannot find my game".</summary>
@@ -43,10 +54,19 @@ internal sealed class TrayPresence : IDisposable
 
         _overlayItem.CheckedChanged += (_, _) => OverlayToggled?.Invoke(_overlayItem.Checked);
 
+        _pinItem = new ToolStripMenuItem("Pin overlay (clicks reach the game)")
+        {
+            CheckOnClick = true,
+            Enabled = overlayVisible
+        };
+
+        _pinItem.CheckedChanged += (_, _) => OverlayPinned?.Invoke(_pinItem.Checked);
+
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("Open dashboard", null,
             (_, _) => OpenDashboardRequested?.Invoke()));
         menu.Items.Add(_overlayItem);
+        menu.Items.Add(_pinItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Set Star Citizen folder…", null,
             (_, _) => SetInstallFolderRequested?.Invoke()));
@@ -71,6 +91,23 @@ internal sealed class TrayPresence : IDisposable
         if (_overlayItem.Checked != visible)
             _overlayItem.Checked = visible;
     }
+
+    /// <summary>
+    /// Reflects a pin that happened elsewhere - the header button, or the hotkey.
+    /// </summary>
+    /// <remarks>
+    /// The tick has to match the screen. This is the control someone reaches for
+    /// when the overlay has stopped answering the mouse, and a tick that
+    /// disagrees with what they are looking at is worse than no tick at all.
+    /// </remarks>
+    public void SetOverlayPinned(bool pinned)
+    {
+        if (_pinItem.Checked != pinned)
+            _pinItem.Checked = pinned;
+    }
+
+    /// <summary>Pinning means nothing while the overlay is not on screen.</summary>
+    public void SetPinAvailable(bool available) => _pinItem.Enabled = available;
 
     public void Notify(string message)
     {

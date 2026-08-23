@@ -151,6 +151,7 @@ body.overlay::before { background: repeating-linear-gradient(0deg, rgba(53,200,2
 body.overlay main { padding: 4px 7px 7px; max-width: none; }
 
 /* Prose and filter controls are page-only. */
+body.overlay .notice,
 body.overlay .caption,
 body.overlay .map-head p,
 body.overlay .controls,
@@ -229,6 +230,18 @@ body.overlay .tabs::-webkit-scrollbar { display: none; }
 body.overlay .tab-group,
 body.overlay .group-menu { display: contents; }
 body.overlay .group-btn { display: none; }
+
+/*
+ * And they stay dissolved while hovered. `.tab-group:hover .group-menu` is a
+ * class, a pseudo-class and a class - it outranks `body.overlay .group-menu`,
+ * so in the widget a hover turned the dissolved group back into a floating
+ * box: the strip reflowed, everything shifted left, the pointer was no longer
+ * over the group, the hover dropped, and it flipped back. Reported as the
+ * overlay flickering and sliding left on the menu, which is exactly what a
+ * layout that fights the cursor looks like.
+ */
+body.overlay .tab-group:hover .group-menu,
+body.overlay .tab-group:focus-within .group-menu { display: contents; }
 
 /* The widget is ~330px wide and the full strip is twenty tabs; at that size
    most of them scrolled out of reach. Which few it carries is the user's
@@ -649,7 +662,336 @@ h2.spaced { margin-top: 32px; }
 .note-inline { color: var(--dim); }
 .caption { font-size: 11.5px; margin: -6px 0 16px; max-width: 76ch; line-height: 1.6; padding-left: 11px; }
 
+/* ---------- a commodity's counters ---------- */
+
+.commodity-open { color: var(--cyan); }
+.commodity-open:hover { color: var(--cyan-hot); }
+
+#market-table tr.expanded > td { border-bottom: 0; }
+#market-table tr.market-detail > td {
+  padding: 0 15px 14px;
+  background: rgba(0, 0, 0, .25);
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 0 9px;
+}
+.detail-head b { font-size: 12.5px; color: var(--cyan-hot); }
+.detail-head .seg button { font-size: 10px; padding: 4px 9px; }
+
+.detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.detail-table th {
+  text-align: left;
+  padding: 5px 9px;
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+}
+.detail-table th.num, .detail-table td.num { text-align: right; }
+.detail-table td { padding: 5px 9px; border-bottom: 1px solid rgba(23, 41, 60, .5); }
+.detail-table tr:hover td { background: rgba(53, 200, 240, .05); }
+
+/*
+ * Security is a word, not a colour alone: "lawless" has to survive being read
+ * by someone who cannot tell the amber from the green.
+ */
+.sec {
+  font-size: 9.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+}
+.sec-monitored { color: var(--green); border-color: #1f5c3d; }
+.sec-lawless { color: var(--red); border-color: #6b2820; }
+.sec-unknown { color: var(--dim); }
+.sec-system { font-size: 10.5px; }
+
+.detail-note { font-size: 10.5px; line-height: 1.55; margin-top: 9px; max-width: 92ch; }
+.detail-empty { font-size: 12px; padding: 10px 0; }
+
+/* The two pickers under the box: what to add, and where it is for. */
+.job-form-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.job-form-row .select { flex: 1 1 22ch; min-width: 0; }
+
+/* The destination on a list card: a control, not a label, because it is a
+
+   decision the player revises. */
+.job-place-edit {
+  max-width: 26ch;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+/* ---------- a shopping list seen by location ---------- */
+
+
+.chooser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.chooser-views button { font-size: 10px; padding: 4px 9px; }
+
+.chooser-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 8px;
+}
+.chooser-actions button { font-size: 10px; padding: 5px 10px; }
+
+.chooser-stop {
+
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(23, 41, 60, .55);
+}
+.chooser-stop:hover { background: rgba(53, 200, 240, .04); }
+
+.stop-tick { padding-top: 2px; cursor: pointer; }
+.stop-tick input { accent-color: var(--cyan); cursor: pointer; }
+
+.stop-what .name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.stop-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+/*
+ * Three states, because the question is not only "what is sold here" but
+ * "what would this landing still be for": mine is what this stop supplies,
+ * taken is what an earlier stop already covers, plain is unclaimed.
+ */
+.stop-item {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  color: var(--dim);
+}
+.stop-item.mine { color: var(--cyan-hot); border-color: #1d4d63; }
+.stop-item.taken { opacity: .4; text-decoration: line-through; }
+
+.stop-sum {
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* ---------- what fits a ship ---------- */
+
+
+.ship-upgrade { margin-top: 10px; font-size: 10px; padding: 5px 10px; }
+
+/*
+ * A table of parts cannot live in a third of a row, so the card takes the
+ * whole row while its panel is open and lays itself out downwards.
+ */
+.ship-card.opened {
+  grid-column: 1 / -1;
+  display: block;
+}
+.ship-card.opened .ship-logo { display: none; }
+
+.upgrade-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.upgrade-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.upgrade-head b { font-size: 12px; color: var(--cyan-hot); }
+.upgrade-head span { font-size: 10px; }
+
+.upgrade-group { border-bottom: 1px solid rgba(23, 41, 60, .6); }
+
+.upgrade-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 4px;
+  text-align: left;
+  flex-wrap: wrap;
+}
+.upgrade-toggle:hover { background: rgba(53, 200, 240, .05); }
+.upgrade-toggle.open .upgrade-kind { color: var(--cyan-hot); }
+.upgrade-kind { font-size: 11.5px; color: var(--cyan); min-width: 15ch; }
+.upgrade-fitted { font-size: 10.5px; color: var(--dim); flex: 1; }
+.upgrade-count { font-size: 10px; }
+
+.upgrade-options { padding: 2px 4px 12px; overflow-x: auto; }
+
+.upgrade-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.upgrade-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+}
+.upgrade-table th.num, .upgrade-table td.num { text-align: right; }
+.upgrade-table td { padding: 4px 8px; border-bottom: 1px solid rgba(23, 41, 60, .45); }
+.upgrade-table tr:hover td { background: rgba(53, 200, 240, .04); }
+.upgrade-table .sec { margin-left: 7px; }
+
+/* ---------- buttons ---------- */
+
+
+
+/*
+ * The look belongs to the element, not to a class somebody has to remember.
+ *
+ * It started scoped to `.map-tools`, then moved to `.ghost` - and a button that
+ * forgot the class still came out as Windows chrome in the middle of a HUD.
+ * There is no version of "remember the class on all forty of them, and on every
+ * one added later" that stays true, so the default is now correct and the
+ * exceptions say they are exceptions.
+ */
+button {
+  background: linear-gradient(160deg, rgba(23, 41, 60, .5), rgba(7, 12, 20, .5));
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  padding: 5px 13px;
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: border-color .14s, color .14s, background .14s;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--cyan-deep);
+  background: linear-gradient(160deg, rgba(53, 200, 240, .16), rgba(13, 92, 120, .1));
+  color: var(--cyan-hot);
+}
+
+/* Pressed reads as pressed: the lift goes away rather than deepening. */
+button:active:not(:disabled) {
+  background: rgba(53, 200, 240, .05);
+  color: var(--cyan);
+}
+
+/* Keyboard focus has to survive the clipped corner, which crops an outline. */
+button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--cyan);
+  color: var(--cyan-hot);
+}
+
+button:disabled { opacity: .35; cursor: default; }
+
+/*
+ * Buttons that are really text: a place name, a search result, a tab, an ✕.
+ * Each already declares its own background and border, but not the type - and a
+ * PLACE NAME SHOUTED IN CAPS is what a base rule gets wrong if nothing says
+ * otherwise. Listed together so the exceptions are countable.
+ */
+.tabs button,
+.place-link,
+.map-result,
+.more-toggle,
+.sold-chip,
+.group-btn,
+.map-info-close,
+.market-close,
+.trip-place,
+.trip-number,
+.seg button,
+.pager-btn,
+.upgrade-toggle {
+  text-transform: none;
+  letter-spacing: normal;
+  clip-path: none;
+}
+
+/* Those that mean to shout, keeping the tracking that goes with it. */
+.tabs button,
+.seg button,
+.pager-btn,
+.group-btn {
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+
+/* A destructive action should not look like the three beside it. */
+button.danger:hover:not(:disabled),
+button.ghost.danger:hover:not(:disabled) {
+  border-color: var(--red);
+  background: rgba(255, 90, 77, .12);
+  color: var(--red);
+}
+
+
+
+/*
+ * This style lived inside `.map-tools`, so the map had HUD buttons and the
+ * other twenty-nine - New list, Save, Delete, Refresh, Plan trip - were
+ * whatever Windows draws by default: grey, rounded, and from another
+ * application. The rule is the same one, unscoped, and everything that was
+ * already writing `class="ghost"` picks it up.
+ *
+ * Chamfered like the panels, because the corner cut is the one shape this
+ * interface repeats everywhere.
+ */
+/* `.ghost` now means "the ordinary button", which is the default; it stays as a
+   name because forty places write it and its modifiers hang off it. */
+
+/* The one action a screen is actually for. */
+button.primary {
+  background: var(--cyan);
+  border: 1px solid var(--cyan);
+  color: #041018;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 7px 18px;
+  cursor: pointer;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: background .14s, border-color .14s;
+}
+button.primary:hover:not(:disabled) { background: var(--cyan-hot); border-color: var(--cyan-hot); }
+button.primary:active:not(:disabled) { background: var(--cyan-deep); border-color: var(--cyan-deep); }
+button.primary:disabled { opacity: .55; cursor: default; }
+
 /* ---------- summary tiles ---------- */
+
 
 .summary-strip {
   display: grid;
@@ -771,20 +1113,7 @@ td.outward { color: var(--amber); }
 .map-tools .toggle input { accent-color: var(--cyan); cursor: pointer; }
 .map-tools .toggle:hover { color: var(--fg); }
 
-.map-tools button.ghost {
-  background: transparent;
-  border: 1px solid var(--rule);
-  color: var(--muted);
-  padding: 5px 12px;
-  font-family: var(--display);
-  font-size: 11px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: border-color .15s, color .15s;
-}
-.map-tools button.ghost:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
-.map-tools button.ghost:disabled { opacity: .35; cursor: default; }
+/* The map's buttons are the app's buttons; see the button section below. */
 
 #starmap { cursor: grab; touch-action: none; }
 #starmap.dragging { cursor: grabbing; }
@@ -802,6 +1131,12 @@ td.outward { color: var(--amber); }
 
 /* Player marker. */
 .map-here { pointer-events: none; }
+
+/* A jump in progress: the one thing on this map that is happening now. */
+.map-travel { pointer-events: none; }
+.map-travel .travel-line { fill: none; stroke: var(--cyan-hot, #7fe4ff); opacity: .85; }
+.map-travel .travel-target { fill: none; stroke: var(--cyan-hot, #7fe4ff); }
+
 .map-here .here-ring { fill: none; stroke: var(--cyan); opacity: .9; }
 .map-here .here-pulse { fill: none; stroke: var(--cyan); }
 .map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
@@ -828,6 +1163,31 @@ td.outward { color: var(--amber); }
 }
 .legend .item { display: flex; align-items: center; gap: 8px; }
 .legend .swatch { width: 7px; height: 7px; transform: rotate(45deg); }
+.legend .swatch-mark { width: 13px; height: 13px; overflow: visible; }
+
+/*
+ * The body under a cluster. Barely there on purpose: it is the ground its
+ * places stand on, and a bright planet would compete with the marks that are
+ * the actual answer to "where can I go".
+ */
+.map-body {
+  fill-opacity: .055;
+  stroke: rgba(53, 200, 240, .18);
+  stroke-width: 1;
+  pointer-events: none;
+  transition: fill-opacity .18s ease, stroke .18s ease;
+}
+
+/* Hovering the space a body occupies groups its places for as long as you
+   look at them. */
+.map-body.lit {
+  fill-opacity: .13;
+  stroke: rgba(53, 200, 240, .5);
+}
+
+/* Marks scale with the node, so hover has to grow the whole group. */
+.map-mark { transition: opacity .15s; }
+
 
 /* ---------- fleet ---------- */
 
@@ -1342,7 +1702,13 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 
 /* Search mode: matches glow, the rest recede but stay for context. The dim is
    deep - at .16 the crowd still competed with the answer. */
-.map-node.dim { opacity: .07; }
+/*
+ * Recessive, not erased. At .07 the rest of the map was a rumour, which made
+ * the lit places float with nothing to be near; slate at .18 keeps the shape
+ * of the system under the answer.
+ */
+.map-node.dim { opacity: .18; }
+
 .map-node.hl .hl-ring { animation: hl-breathe 2.4s ease-in-out infinite; }
 .map-node.hl .map-label { fill: #a9f5c9; }
 
@@ -1554,7 +1920,13 @@ td.with-track .track:focus-visible { opacity: 1; }
 body.overlay .now-job-title { font-size: 12px; }
 body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 
-.ghost.on { color: var(--green); border-color: var(--green); }
+.ghost.on,
+.ghost.on:hover:not(:disabled) {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(79, 212, 138, .12);
+}
+
 
 .job-card {
   display: block;
@@ -1727,20 +2099,8 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 
 .setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
 
-.setup .primary {
-  background: var(--cyan);
-  border: 0;
-  color: #041018;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 9px 20px;
-  cursor: pointer;
-}
-.setup .primary:hover { background: var(--cyan-hot, #7fe4ff); }
-.setup .primary:disabled { opacity: .55; cursor: default; }
+/* The wizard's is the same button with more air around the words. */
+.setup .primary { font-size: 13px; padding: 9px 22px; }
 
 /* ---------- fleet: ownership ticks and blended prices ---------- */
 
@@ -1782,6 +2142,311 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
   z-index: 5;
 }
 .map-info[hidden] { display: none; }
+
+/*
+ * The cargo panel sits opposite the detail card, so a place can be identified
+ * and its trade read at the same time. It scrolls inside the map frame rather
+ * than growing it: the map's height is the page's anchor.
+ */
+.cargo-panel {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 306px;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  padding: 13px 15px 15px;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .96), rgba(6, 12, 20, .94));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12px;
+  z-index: 5;
+}
+.cargo-panel[hidden] { display: none; }
+.cargo-panel::-webkit-scrollbar { width: 6px; }
+.cargo-panel::-webkit-scrollbar-track { background: rgba(0, 0, 0, .3); }
+.cargo-panel::-webkit-scrollbar-thumb { background: var(--rule-hot); }
+
+.cargo-kicker { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+.cargo-title {
+  font-size: 15px;
+  color: var(--cyan-hot);
+  margin: 3px 24px 10px 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.cargo-body { display: flex; flex-direction: column; gap: 3px; }
+.cargo-h {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px;
+  margin-top: 9px;
+}
+.cargo-empty { color: var(--dim); font-size: 11px; line-height: 1.5; padding: 3px 0; }
+.cargo-goods { color: var(--muted); font-size: 11px; line-height: 1.5; padding: 3px 0; }
+
+.cargo-row {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  background: rgba(0, 0, 0, .2);
+}
+.cargo-row:hover { background: rgba(53, 200, 240, .06); border-left-color: var(--cyan-deep); }
+.cargo-row .swatch { width: 8px; height: 8px; transform: rotate(45deg); }
+.cargo-row-main { min-width: 0; }
+.cargo-row .name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cargo-row .sub { font-size: 10px; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+.cargo-row .price { font-family: var(--mono); font-size: 12px; text-align: right; }
+.cargo-row .price .u { display: block; font-size: 8.5px; color: var(--dim); letter-spacing: .08em; }
+
+/* One receipt in the history list - reading matter, not a button. */
+.cargo-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 6px;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(23, 41, 60, .5);
+}
+.cargo-line:last-child { border-bottom: 0; }
+.cargo-line .when { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.cargo-line .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.cargo-line .rate { font-family: var(--mono); font-size: 10.5px; }
+.cargo-line.sell .rate { color: var(--green); }
+.cargo-line.buy .rate { color: var(--amber); }
+
+/*
+ * Choosing where to buy, inside the list being planned. A common good sells in
+ * fifty places, so the cheapest is offered as the default rather than imposed
+ * as the answer.
+ */
+.trip-chooser {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(0, 0, 0, .25);
+  clip-path: var(--chamfer);
+}
+.chooser-head {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.chooser-rows { display: flex; flex-direction: column; gap: 5px; }
+.chooser-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+  align-items: center;
+}
+.chooser-row .select { width: 100%; min-width: 0; font-size: 11.5px; padding: 4px 7px; }
+.chooser-what .name { font-size: 12.5px; }
+.chooser-what .sub { font-size: 10.5px; color: var(--dim); font-family: var(--mono); }
+.chooser-none { font-size: 11px; color: var(--dim); font-style: italic; }
+.chooser-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.chooser-foot .spacer { flex: 1; }
+
+@media (max-width: 700px) {
+  .chooser-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+}
+
+/*
+ * A standing offer, not an alert: it appears under the header, states what is
+ * old and how old, and both of its answers are one click. Nothing about it
+ * blocks the page - stale prices are still prices.
+ */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule-hot);
+  border-left: 2px solid var(--amber);
+  background: linear-gradient(90deg, rgba(255, 171, 61, .07), transparent 60%);
+  clip-path: var(--chamfer);
+}
+.notice[hidden] { display: none; }
+.notice-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.notice-body b { color: var(--amber); font-size: 13px; font-weight: 600; }
+.notice-body .muted { font-size: 11.5px; }
+.notice-actions { display: flex; gap: 7px; }
+
+.wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
+.wipe-row .search { font-size: 12px; }
+.wipe-caption { margin: 10px 0 6px; padding-left: 0; }
+.wipe-scope { display: flex; flex-direction: column; gap: 6px; }
+.wipe-scope .toggle { font-size: 12px; }
+
+
+/* The wizard's wipe step: prose above the field, like the options around it. */
+.setup-wipe {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--rule);
+  background: rgba(0, 0, 0, .18);
+}
+.setup-wipe b { font-size: 13px; }
+.setup-wipe span { font-size: 11.5px; line-height: 1.55; }
+.setup-wipe .wipe-row { margin-top: 6px; }
+
+/* Questions on the About page
+: shut by default, because a wall of answers to
+   questions you do not have is not help. */
+.faq { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; }
+.faq details {
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-hot);
+  background: rgba(0, 0, 0, .2);
+  padding: 8px 12px;
+}
+.faq details[open] { border-left-color: var(--cyan); }
+.faq summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  list-style: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: "+ "; color: var(--cyan); font-family: var(--mono); }
+.faq details[open] summary::before { content: "− "; }
+.faq summary:hover { color: var(--cyan-hot); }
+.faq p {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+  max-width: 74ch;
+}
+.faq a { color: var(--cyan); }
+
+/* ---------- flight plans ---------- */
+
+
+
+
+/*
+ * A stop reads as a numbered line: the number is the button, because crossing
+ * one off is the thing done most and it should be the easiest thing to hit.
+ */
+.trip-stop {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 6px;
+  border-left: 2px solid transparent;
+}
+.trip-stop.next { border-left-color: var(--cyan); background: rgba(53, 200, 240, .06); }
+.trip-stop.done { opacity: .55; }
+.trip-stop.done .trip-place { text-decoration: line-through; }
+
+.trip-number {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(0, 0, 0, .3);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color .14s, color .14s;
+}
+.trip-number:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+.trip-stop.next .trip-number { border-color: var(--cyan); color: var(--cyan-hot); }
+.trip-stop.done .trip-number { color: var(--green); border-color: #1f5c3d; }
+
+.trip-stop-main { min-width: 0; }
+.trip-place {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.trip-place:hover { color: var(--cyan-hot); }
+.trip-note { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
+
+.trip-tools { display: flex; gap: 3px; }
+.trip-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+
+button.ghost.tiny {
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  min-width: 0;
+}
+button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
+
+/* The Now card: where to jump next, then the rest of the run. */
+.now-trip-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.now-trip-title { font-size: 15px; color: var(--cyan-hot); }
+.now-trip-next {
+  margin: 9px 0;
+  padding: 9px 11px;
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  background: rgba(53, 200, 240, .05);
+}
+.now-trip-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+.now-trip-where { font-size: 19px; color: var(--text); margin-top: 3px; }
+.now-trip-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.now-trip-stops { display: flex; flex-direction: column; gap: 2px; }
+
+/* The plan drawn over the map. */
+.trip-layer { pointer-events: none; }
+.trip-leg { stroke: var(--cyan); stroke-opacity: .45; fill: none; }
+.trip-leg.done { stroke: var(--green); stroke-opacity: .3; }
+
+.trip-mark { pointer-events: auto; cursor: pointer; }
+.trip-mark circle { fill: rgba(6, 12, 20, .92); stroke: var(--cyan); }
+.trip-mark text { fill: var(--cyan-hot); font-family: var(--mono); }
+.trip-mark.next circle { stroke: var(--cyan-hot); filter: url(#glow); }
+.trip-mark.done circle { stroke: #1f5c3d; }
+.trip-mark.done text { fill: var(--green); }
+
+/* Sell / buy, as a two-state switch rather than a hidden search prefix. */
+
+.map-tools .seg { display: inline-flex; border: 1px solid var(--rule); }
+.map-tools .seg[hidden] { display: none; }
+.map-tools .seg button {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background .14s, color .14s;
+}
+.map-tools .seg button:hover { color: var(--text); }
+.map-tools .seg button.active { background: rgba(53, 200, 240, .13); color: var(--cyan-hot); }
+
+/* The toolbar is already long; these two ride in the space that is left. */
+#map-window { min-width: 116px; padding: 5px 8px; }
+.map-tools .seg button { padding: 5px 9px; }
+
 
 .map-info-close {
   position: absolute;
@@ -1872,3 +2537,9 @@ th.sortable.sort-asc::after { content: " ▴"; color: var(--cyan); }
 .advice b { color: var(--cyan-hot); }
 
 body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
+
+/* Tooltip hint pointing at the click that shows every good, the commodity
+   rows in the search suggestions, and the count above the chips. */
+.map-tip .goods.hint { color: var(--cyan); font-size: 10px; letter-spacing: .06em; margin-top: 2px; }
+.map-result .name.good { color: var(--green); }
+.sold-count { width: 100%; font-size: 10.5px; margin-bottom: 5px; }

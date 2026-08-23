@@ -77,6 +77,10 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 /// Where the sale happened, back-tracked from the last arrival before it. Cargo
 /// terminals all share a single kiosk id, so their own name says nothing.
 /// </param>
+/// <param name="PlaceId">
+/// The same place as an engine id, so the map can put a receipt on the node it
+/// already draws instead of matching on a display name two places can share.
+/// </param>
 /// <param name="Commodity">
 /// What was in the boxes — resolved from the opt-in community dataset, null
 /// when it is disabled or the id is unknown to it.
@@ -85,6 +89,7 @@ public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
     string Place,
+    string PlaceId,
     int Scu,
     decimal Amount,
     decimal UnitPrice,
@@ -476,6 +481,14 @@ public static class ItemCategories
 /// <param name="FirstFlown">Start of the earliest session this ship appears in.</param>
 /// <param name="LastFlown">Start of the most recent session this ship appears in.</param>
 /// <param name="Reference">Community ship data - role, crew, claim costs - when the dataset is enabled and the name matched.</param>
+/// <param name="ClassName">
+/// The game's own name for this ship (<c>DRAK_Corsair</c>), which is what the
+/// reference data is keyed by. <see cref="Name"/> is for reading - "Drake
+/// Corsair" - and cannot be turned back into the key, because the display
+/// manufacturer is a word and the class carries a code: Drake is DRAK, Anvil
+/// is ANVL, and "Mk II" is Mk2. Anything asking the reference data a question
+/// about this ship has to carry this along.
+/// </param>
 public sealed record ShipTotal(
     string Name,
     TimeSpan EstimatedTime,
@@ -483,8 +496,13 @@ public sealed record ShipTotal(
     int Sessions,
     DateTimeOffset FirstFlown,
     DateTimeOffset LastFlown,
-    ShipInfo? Reference = null);
+    ShipInfo? Reference = null,
+    string ClassName = "");
+/// <summary>When a game version was first seen in this install's logs.</summary>
+public sealed record PatchArrival(string Patch, DateTimeOffset At);
+
 public sealed record PlaceTotal(
+
     string RawId,
     string Name,
     string? System,
@@ -553,6 +571,112 @@ public sealed class LogLibrary : IDisposable
     public SessionStore Store => _store;
 
     /// <summary>
+    /// The line a wipe draws, and how deep it goes.
+    /// </summary>
+    /// <remarks>
+    /// Null means count everything. Set from <see cref="WipeStore"/> at startup
+    /// and whenever the player changes it, so one assignment moves every total
+    /// the wipe actually touched - and leaves the rest alone.
+    /// </remarks>
+    public Wipe? Wipe { get; set; }
+
+    /// <summary>The date, when there is one to apply.</summary>
+    private DateTimeOffset? WipedAt =>
+        Wipe is { At: var at } && at > DateTimeOffset.MinValue ? at : null;
+
+    /// <summary>
+    /// Every session that counts towards one kind of total, newest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The single door onto the store, because a total that reaches past a wipe
+    /// is answering about an account the player no longer has. One filter here
+    /// rather than at each question means a view added later cannot forget it.
+    /// </para>
+    /// <para>
+    /// Which totals it applies to is the player's own answer, because wipes
+    /// come at different depths: a patch that resets aUEC and leaves the hangar
+    /// alone should not blank the fleet, and one that clears inventories should
+    /// not blank the ledger. Asking for the wrong category is the one way to
+    /// get this wrong, so every caller names what it is counting.
+    /// </para>
+    /// <para>
+    /// Nothing is deleted either way - the sessions are still stored, still
+    /// parsed, and come back the moment the date moves.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<SessionSummary> Counted(WipeScope counting) =>
+        Narrow(_store.All(), counting);
+
+    /// <summary>The same rule applied to a list already in hand.</summary>
+    private IReadOnlyList<SessionSummary> Narrow(
+        IReadOnlyList<SessionSummary> sessions, WipeScope counting) =>
+        WipedAt is { } since && Wipe!.Scope.HasFlag(counting)
+            ? [.. sessions.Where(s => s.StartedAt >= since)]
+            : sessions;
+
+    /// <summary>
+    /// When each game version first appears in the logs, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A wipe cannot be read out of the logs - nothing says "your account was
+    /// reset". What can be read is when a patch arrived, and wipes arrive with
+    /// patches, so the app offers the date and lets the player say whether it
+    /// wiped. That is the honest shape of this: evidence for the question, not
+    /// an answer invented to look clever.
+    /// </para>
+    /// <para>
+    /// Grouped by major.minor, because 4.9.188 and 4.9.190 are the same patch to
+    /// a player and only the first of them is a date worth offering. Reads every
+    /// stored session rather than the counted ones: the whole point is to notice
+    /// a patch that arrived after the line currently drawn.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<PatchArrival> PatchArrivals() =>
+    [
+        .. _store.All()
+            .Where(s => !string.IsNullOrWhiteSpace(s.GameVersion))
+            .Select(s => (Patch: MajorMinor(s.GameVersion!), s.StartedAt))
+            .Where(x => x.Patch is not null)
+            .GroupBy(x => x.Patch!, StringComparer.Ordinal)
+            .Select(g => new PatchArrival(g.Key, g.Min(x => x.StartedAt)))
+            .OrderBy(a => a.At)
+    ];
+
+    /// <summary>"4.9.188.23497" to "4.9", or null when it is not a version.</summary>
+    private static string? MajorMinor(string version)
+    {
+        var parts = version.Split('.');
+
+        return parts.Length >= 2 && int.TryParse(parts[0], out _) && int.TryParse(parts[1], out _)
+            ? $"{parts[0]}.{parts[1]}"
+            : null;
+    }
+
+    /// <summary>
+    /// The newest patch that arrived after the line currently drawn, if any.
+    /// </summary>
+    /// <remarks>
+    /// Offered, never applied: only the player knows whether that patch wiped.
+    /// A patch on the same day as the current wipe is the wipe already recorded,
+    /// so it is not offered back.
+    /// </remarks>
+    public PatchArrival? PatchSinceWipe()
+    {
+        var since = WipedAt ?? DateTimeOffset.MinValue;
+
+        return PatchArrivals()
+            .Where(a => a.At > since.AddHours(12))
+            .OrderByDescending(a => a.At)
+            .FirstOrDefault();
+    }
+
+    /// <summary>How many stored sessions started before the wipe.</summary>
+    public int SessionsBeforeWipe() =>
+        WipedAt is { } since ? _store.All().Count(s => s.StartedAt < since) : 0;
+
+    /// <summary>
     /// Ingests every log file for an install, skipping unchanged ones.
     /// </summary>
     /// <returns>How many files were parsed (as opposed to served from cache).</returns>
@@ -618,7 +742,7 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<LedgerEntry> Ledger(int days = 0)
     {
-        var sessions = _store.All();
+        var sessions = Counted(WipeScope.Money);
 
         if (days > 0)
         {
@@ -693,9 +817,21 @@ public sealed class LogLibrary : IDisposable
     /// at the first hit.
     /// </para>
     /// </remarks>
-    private static string PlaceAt(SessionSummary session, DateTimeOffset at)
+    private static string PlaceAt(SessionSummary session, DateTimeOffset at) =>
+        PlaceRefAt(session, at).Name;
+
+    /// <summary>
+    /// The same back-track as <see cref="PlaceAt"/>, keeping the engine id.
+    /// </summary>
+    /// <remarks>
+    /// The map draws its nodes from engine ids, so a receipt carrying only a
+    /// display name cannot be placed on one exactly. Carrying the id through
+    /// costs nothing and makes the join certain.
+    /// </remarks>
+    private static (string Id, string Name) PlaceRefAt(SessionSummary session, DateTimeOffset at)
     {
         DateTimeOffset? bestAt = null;
+        string? bestId = null;
         string? best = null;
 
         for (var i = session.Locations.Count - 1; i >= 0; i--)
@@ -703,6 +839,7 @@ public sealed class LogLibrary : IDisposable
             if (session.Locations[i].At <= at)
             {
                 bestAt = session.Locations[i].At;
+                bestId = session.Locations[i].RawId;
                 best = session.Locations[i].DisplayName;
                 break;
             }
@@ -716,13 +853,14 @@ public sealed class LogLibrary : IDisposable
 
             if (bestAt is null || jump.At > bestAt)
             {
+                bestId = jump.ToId;
                 best = jump.ToName;
             }
 
             break;
         }
 
-        return best ?? "Unknown";
+        return (bestId ?? string.Empty, best ?? "Unknown");
     }
 
     /// <summary>
@@ -775,6 +913,36 @@ public sealed class LogLibrary : IDisposable
         return atlas;
     }
 
+    private TerminalPlaces? _terminalPlaces;
+
+    /// <summary>
+    /// Terminal-name to map-place lookup, built from the atlas on first use.
+    /// </summary>
+    /// <remarks>
+    /// Held here because the atlas is here: every caller that needs the join -
+    /// the price shading, the flight plan, the trade advisor - then agrees with
+    /// every other one, which is the whole point of doing it in a single place.
+    /// Rebuilt when the atlas grows, since a place first visited today is a
+    /// place a terminal can now be matched to.
+    /// </remarks>
+    public TerminalPlaces Terminals
+    {
+        get
+        {
+            var atlas = Atlas();
+
+            if (_terminalPlaces is null || _terminalCount != atlas.Count)
+            {
+                _terminalPlaces = new TerminalPlaces(atlas);
+                _terminalCount = atlas.Count;
+            }
+
+            return _terminalPlaces;
+        }
+    }
+
+    private int _terminalCount = -1;
+
     /// <summary>The vendor's brand name where the game publishes one.</summary>
     /// <remarks>
     /// Commodity kiosks have no brand - every one of them logs as
@@ -816,7 +984,7 @@ public sealed class LogLibrary : IDisposable
     /// </remarks>
     public IReadOnlyList<TradeRecord> Trades(int days = 0)
     {
-        var sessions = _store.All();
+        var sessions = Counted(WipeScope.Money);
 
         if (days > 0)
         {
@@ -825,19 +993,25 @@ public sealed class LogLibrary : IDisposable
         }
 
         return [.. sessions
-            .SelectMany(s => s.Trades.Select(t => new TradeRecord(
-                t.At,
-                t.IsSell,
-                PlaceAt(s, t.At),
-                t.Quantity,
-                t.Amount,
-                t.Quantity > 0 ? t.Amount / t.Quantity : 0,
-                t.Mode,
-                Community.Commodity(t.ResourceId))))
+            .SelectMany(s => s.Trades.Select(t =>
+            {
+                var place = PlaceRefAt(s, t.At);
+
+                return new TradeRecord(
+                    t.At,
+                    t.IsSell,
+                    place.Name,
+                    place.Id,
+                    t.Quantity,
+                    t.Amount,
+                    t.Quantity > 0 ? t.Amount / t.Quantity : 0,
+                    t.Mode,
+                    Community.Commodity(t.ResourceId));
+            }))
             .OrderByDescending(t => t.At)];
     }
 
-    public IReadOnlyList<SessionSummary> Sessions() => _store.All();
+    public IReadOnlyList<SessionSummary> Sessions() => Counted(WipeScope.History);
 
     public SessionSummary? Session(string id) => _store.Get(id);
 
@@ -863,7 +1037,7 @@ public sealed class LogLibrary : IDisposable
 
         return
         [
-            .. _store.All()
+            .. Counted(WipeScope.History)
                 .SelectMany(s => s.Contracts)
                 .Where(c => c.FirstSeen >= cutoff)
                 .OrderByDescending(c => c.FirstSeen)
@@ -890,7 +1064,7 @@ public sealed class LogLibrary : IDisposable
     {
         return
         [
-            .. _store.All()
+            .. Counted(WipeScope.Inventory)
                 .SelectMany(s => s.Blueprints)
                 .GroupBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(g => new BlueprintReceipt(g.Min(b => b.At), g.Key))
@@ -911,7 +1085,7 @@ public sealed class LogLibrary : IDisposable
     /// appears to have emptied.
     /// </param>
     public IReadOnlyList<StashLocation> Stash(bool everSeen = false) =>
-        StashView(_store.All(), everSeen);
+        StashView(Counted(WipeScope.Inventory), everSeen);
 
     private List<StashLocation> StashView(IReadOnlyList<SessionSummary> sessions, bool everSeen) =>
     [
@@ -948,13 +1122,29 @@ public sealed class LogLibrary : IDisposable
     /// Where the player has woken after dying, newest first. Inferred from the
     /// first place seen after each death, since the game logs no respawn point.
     /// </summary>
+    /// <summary>Medical beds used, newest first - where regen is set, if it was.</summary>
+    public IReadOnlyList<MedicalBedVisit> MedicalBeds(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+
+        // Through the same door as every other question: a bed used on an
+        // account that has since been wiped is not a hint about this one.
+        return
+        [
+            .. Counted(WipeScope.History)
+                .SelectMany(s => s.MedicalBeds)
+                .Where(b => b.At >= cutoff)
+                .OrderByDescending(b => b.At)
+        ];
+    }
+
     public IReadOnlyList<RespawnRecord> Respawns(int days = 0)
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
 
         return
         [
-            .. _store.All()
+            .. Counted(WipeScope.History)
                 .SelectMany(s => s.Respawns)
                 .Where(r => r.At >= cutoff)
                 .OrderByDescending(r => r.At)
@@ -967,7 +1157,7 @@ public sealed class LogLibrary : IDisposable
         var firsts = new List<PickupRecord>();
 
         // Oldest first, so the first sighting wins and later ones are noise.
-        foreach (var session in _store.All().OrderBy(s => s.StartedAt))
+        foreach (var session in Counted(WipeScope.Inventory).OrderBy(s => s.StartedAt))
         {
             foreach (var pickup in session.Pickups.OrderBy(p => p.At))
             {
@@ -1001,7 +1191,7 @@ public sealed class LogLibrary : IDisposable
         if (!Community.IsEnabled)
             return [];
 
-        var trades = _store.All()
+        var trades = Counted(WipeScope.Money)
             .SelectMany(s => s.Trades)
             .Where(t => t.ResourceId is not null)
             .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
@@ -1036,13 +1226,21 @@ public sealed class LogLibrary : IDisposable
     /// </param>
     public LibraryStats Stats(int days = 0)
     {
-        var sessions = _store.All();
+        var sessions = Counted(WipeScope.History);
 
         if (days > 0)
         {
             var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
             sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
         }
+
+        // This one method answers for four different kinds of total, and a
+        // wipe need not have taken all four. Each aggregate below counts from
+        // its own list: after a money-only wipe the ledger starts again while
+        // the fleet, the stashes and the places keep their whole history.
+        var spending = Narrow(sessions, WipeScope.Money);
+        var hangar = Narrow(sessions, WipeScope.Ships);
+        var holdings = Narrow(sessions, WipeScope.Inventory);
 
         if (sessions.Count == 0)
         {
@@ -1060,7 +1258,7 @@ public sealed class LogLibrary : IDisposable
             };
         }
 
-        var ships = sessions
+        var ships = hangar
             .SelectMany(s => s.Ships.Select(ship => (Session: s.Id, s.StartedAt, Ship: ship)))
             .GroupBy(x => ShipName(x.Ship), StringComparer.Ordinal)
             .Select(g => new ShipTotal(
@@ -1076,7 +1274,13 @@ public sealed class LogLibrary : IDisposable
                 // named the class after it.
                 g.Select(x => Community.Ship($"{x.Ship.Manufacturer}_{x.Ship.Model}"))
                     .FirstOrDefault(r => r is not null)
-                 ?? Community.Ship(g.Key)))
+                 ?? Community.Ship(g.Key),
+
+                // Kept so later questions - what fits this ship, what does it
+                // cost to claim - can be asked of the reference data at all.
+                g.Select(x => $"{x.Ship.Manufacturer}_{x.Ship.Model}")
+                    .FirstOrDefault(name => Community.Ship(name) is not null)
+                 ?? $"{g.First().Ship.Manufacturer}_{g.First().Ship.Model}"))
 
             // "Unmanned" variants (Cutlass Black Unmanned Salvage and kin) are
             // mission derelicts the player boarded, not ships they own; they
@@ -1108,7 +1312,7 @@ public sealed class LogLibrary : IDisposable
             .ToList();
 
         var contracts = sessions.SelectMany(s => s.Contracts).ToList();
-        var purchases = sessions.SelectMany(s => s.Purchases).Where(p => p.Confirmed).ToList();
+        var purchases = spending.SelectMany(s => s.Purchases).Where(p => p.Confirmed).ToList();
 
         // Grouped by display name rather than class, so the same weapon bought
         // in two colourways adds up as one line instead of two mystery ids.
@@ -1118,21 +1322,21 @@ public sealed class LogLibrary : IDisposable
             .OrderByDescending(i => i.Total)
             .ToList();
 
-        var trades = sessions.SelectMany(s => s.Trades).ToList();
+        var trades = spending.SelectMany(s => s.Trades).ToList();
         var income = trades.Where(t => t.IsSell).Sum(t => t.Amount);
         var commoditySpend = trades.Where(t => !t.IsSell).Sum(t => t.Amount);
 
         // Grouped by where the sale happened, not by kiosk. Every commodity
         // terminal in the game shares one shop id, so grouping on that produced
         // a single bar labelled "Admin lt base g" holding every sale ever made.
-        var tradeShops = sessions
+        var tradeShops = spending
             .SelectMany(s => s.Trades.Where(t => t.IsSell).Select(t => (Place: PlaceAt(s, t.At), t.Amount, t.Quantity)))
             .GroupBy(t => t.Place, StringComparer.OrdinalIgnoreCase)
             .Select(g => new SpendTotal(g.Key, g.Sum(t => t.Amount), g.Sum(t => t.Quantity)))
             .OrderByDescending(s => s.Total)
             .ToList();
 
-        var fleetHistory = sessions
+        var fleetHistory = hangar
             .Where(s => s.FleetSize is > 0)
             .OrderBy(s => s.StartedAt)
             .Select(s => new FleetPoint(s.StartedAt, s.FleetSize!.Value))
@@ -1141,7 +1345,7 @@ public sealed class LogLibrary : IDisposable
         // Last equipped per slot, across the whole library. Restricting to a
         // single session looked tidier but lost real gear: the newest session
         // recorded no arms, legs or core, so those slots vanished entirely.
-        var allWorn = sessions
+        var allWorn = holdings
             .SelectMany(s => s.Loadout)
             .Where(l => LoadoutCategories.IsEquipment(l.Port))
             .ToList();
@@ -1185,7 +1389,7 @@ public sealed class LogLibrary : IDisposable
 
         // Items are only ever added to the log, never removed, so this is the
         // union of everything seen at each place rather than current contents.
-        var stash = StashView(sessions, everSeen: false);
+        var stash = StashView(holdings, everSeen: false);
 
         return new LibraryStats
         {

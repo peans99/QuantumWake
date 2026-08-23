@@ -153,6 +153,14 @@ public sealed record NotificationEvent(
     /// <summary>True when this notification reports a contract being accepted.</summary>
     public bool IsContractAccepted =>
         Text.StartsWith("Contract Accepted", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the player used a medical bed. The game reports that the bed
+    /// healed them, and separately explains how a regen location is reset -
+    /// but never states where regen now is. This marks the act, nothing more.
+    /// </summary>
+    public bool IsMedicalBed =>
+        Text.StartsWith("Medical Bed", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>

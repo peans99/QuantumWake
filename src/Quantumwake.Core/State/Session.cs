@@ -69,6 +69,17 @@ public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
 /// logs named is where they woke. Being revived where you fell is excluded,
 /// since the place did not change.
 /// </remarks>
+/// <summary>
+/// A medical bed the player used, and where.
+/// </summary>
+/// <remarks>
+/// A regen location is set at a medical bed or an insurance office, so this is
+/// the most direct hint the logs give about where someone will wake. Still a
+/// hint: the same toast fires when a bed is used only to heal, and the game
+/// never states the regen location either way.
+/// </remarks>
+public sealed record MedicalBedVisit(DateTimeOffset At, string Place);
+
 /// <param name="Cause">"death" or "incapacitated" - both end up somewhere new.</param>
 public sealed record RespawnRecord(
     DateTimeOffset At,
@@ -234,6 +245,9 @@ public sealed record SessionSummary
 
     /// <summary>Where the player woke after dying - inferred, never stated.</summary>
     public IReadOnlyList<RespawnRecord> Respawns { get; init; } = [];
+
+    /// <summary>Medical beds used, which is where a regen location gets set.</summary>
+    public IReadOnlyList<MedicalBedVisit> MedicalBeds { get; init; } = [];
 
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);

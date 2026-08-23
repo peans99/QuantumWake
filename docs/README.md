@@ -9,9 +9,9 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 
 | Doc | What's in it |
 |---|---|
-| [findings.md](findings.md) | **Read this first.** The kill-event problem, with evidence. |
+| [findings.md](findings.md) | **Read this first.** The kill-event problem, with evidence. The app stopped showing a kill counter in 0.6.8; the events are still absent and the parser still dormant. |
 | [log-format-reference.md](log-format-reference.md) | Line formats verified present in the local logs, plus the removed ones. |
-| [architecture.md](architecture.md) | Design decisions for Quantumwake and the reasons behind them. |
+| [architecture.md](architecture.md) | Design decisions for Quantumwake and the reasons behind them - including shopping lists and destinations, what fits a ship, and the four rules the star map learned the hard way. |
 | [phase-1-core.md](phase-1-core.md) | Build log: the Core parser, what it verified, and the quirks it uncovered. |
 | [phases-2-5.md](phases-2-5.md) | Build log: server, dashboard, map, overlay, and the dormant combat parser. |
 | [log-simulator.md](log-simulator.md) | The fake-log generator: how to use it and why it reproduces the format's quirks. |
@@ -21,6 +21,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [credits.md](credits.md) | Every external resource this app uses, and what was taken from each. |
 | [naming.md](naming.md) | Why the project is called Quantum Wake, and what the name had to survive. |
 | [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
+| [org-network.md](org-network.md) | Plan, unbuilt: pooling blueprints, stashes and prices across an org. |
 | [releasing.md](releasing.md) | Bump, tag, and what the pipeline does with it. |
 
 The seven per-tool write-ups that used to sit in `docs/tools/` have been

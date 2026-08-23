@@ -130,6 +130,36 @@ public sealed class LogWriter : IDisposable
                  $"Player has selected point {destination} as their destination, routing locally " +
                  $"[Team_CGP4][QuantumTravel]");
 
+    /// <summary>
+    /// A cargo kiosk trade, in the shape the real client writes.
+    /// </summary>
+    /// <remarks>
+    /// Two details matter for the parser. The commodity appears only as
+    /// <c>resourceGUID</c> - there is no name anywhere on the line - and the box
+    /// breakdown follows on an unstamped continuation line, so a reader that
+    /// assumes one entry per line loses it.
+    /// </remarks>
+    public void CommodityTrade(
+        DateTimeOffset at,
+        string geid,
+        decimal amount,
+        int quantity,
+        string resourceGuid,
+        bool isSell,
+        string mode)
+    {
+        var verb = isSell ? "Sell" : "Buy";
+
+        Line(at, $"[Notice] <CEntityComponentCommodityUIProvider::SendCommodity{verb}Request> " +
+                 $"Sending SShopCommodity{verb}Request - playerId[{geid}] shopId[730090005328] " +
+                 $"shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] " +
+                 $"amount[{amount.ToString("F6", CultureInfo.InvariantCulture)}] " +
+                 $"resourceGUID[{resourceGuid}] autoLoading[0] quantity[{quantity}] " +
+                 $"transactionMode[{mode}] [Team_ActorFeatures][Shops]");
+
+        Raw($"Cargo Box Data:  [boxSize[16] | unitAmount[{Math.Max(1, quantity / 16)}]]");
+    }
+
     public void ContractMarker(DateTimeOffset at, string missionId, string generator, string contract, string definitionId) =>
         Line(at, $"[Notice] <SMarkerHandler_Base::CreateMissionObjectiveMarker> Creating objective marker: " +
                  $"missionId [{missionId}], generator name [{generator}], " +

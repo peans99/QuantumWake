@@ -70,6 +70,32 @@ function clock(fromIso) {
 const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
 
+/**
+ * A calendar day as it was written, not as the reader's clock re-reads it.
+ *
+ * A wipe is a day rather than a moment: it is stored at midnight UTC and typed
+ * into a date field that means UTC. Formatting that in local time shows the day
+ * before to everyone west of Greenwich - the Settings field said the 15th while
+ * the notice beside it said the 14th, which is exactly how a date stops being
+ * believed.
+ */
+const UTC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Assembled from the UTC parts rather than asked of Intl: a timeZone option is
+// not honoured everywhere this page runs, and a date that quietly falls back to
+// local time is the bug this exists to prevent.
+const dayUtc = (iso) => {
+  const at = new Date(iso);
+
+  return `${UTC_MONTHS[at.getUTCMonth()]} ${String(at.getUTCDate()).padStart(2, '0')}, `
+    + `${at.getUTCFullYear()}`;
+};
+
+/* Day and month only, for dense rows where a year wraps the line. */
+
+const dayOf = (iso) => new Date(iso).toLocaleDateString([], { month: 'short', day: '2-digit' });
+
 async function getJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} -> ${response.status}`);
@@ -239,8 +265,11 @@ function renderNow(state) {
   $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
 
-  // The map follows the live feed, so the marker moves as the player does.
+  // The map follows the live feed, so the marker moves as the player does -
+  // and shows the jump while it is happening, not only where it ended.
   setHere(state.locationId);
+  setTravel(state.travelling ? state.travellingToId : null);
+  tripArrived(state.locationId);
 
   // The trade card follows too, refreshing only when the place changes.
   refreshTradeAdvice(state.location).catch(() => {});
@@ -259,15 +288,15 @@ function renderNow(state) {
   $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
-  $('#now-kills').textContent = state.kills ?? 0;
 
-  // Be explicit about what each number is and is not. Deaths are inferred, and
-  // zero kills is the game not reporting them rather than a bug.
-  $('#combat-note').textContent = (state.kills ?? 0) === 0
-    ? 'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
-      + '<Actor Death>, and an Incapacitated notification is not always raised. '
-      + 'Kills cannot be counted at all: no surviving event names a killer.'
-    : '';
+  // Be explicit about what each number is and is not. Deaths are inferred, so
+  // the note is permanent rather than conditional: there is no state of the
+  // game in which it stops being true. Kills are not shown at all - 4.9 logs
+  // nothing that names a killer, and a counter stuck at zero reads as broken
+  // rather than absent. The About page says where they went.
+  $('#combat-note').textContent =
+    'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
+    + '<Actor Death>, and an Incapacitated notification is not always raised.';
 
   sessionStarted = state.sessionStarted || null;
 
@@ -413,6 +442,8 @@ async function loadHistory() {
   loadRespawn().catch((e) => console.error('respawn', e));
   loadOutfitting().catch((e) => console.error('outfitting', e));
   loadRoutes().catch((e) => console.error('routes', e));
+  loadCargoReceipts().catch((e) => console.error('cargo receipts', e));
+  loadTrips().catch((e) => console.error('trips', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -930,6 +961,186 @@ async function loadMarket() {
   if (($('#map-search')?.value || '').trim() && atlas.length) drawMap();
 }
 
+/* ---------- where a commodity actually trades ---------- */
+
+/**
+ * Every terminal for one commodity, fetched once and kept.
+ *
+ * The table's UEX column answers "what is the best price anywhere", which is
+ * one number and often a bad plan: the best price can be four jumps into
+ * lawless space, or be a counter that wants nine SCU. The choice belongs to the
+ * player, so the rows behind that number are shown and ranked, with what it
+ * would cost to take each one.
+ */
+const terminalCache = new Map();
+
+async function terminalsFor(commodity) {
+  if (!terminalCache.has(commodity)) {
+    terminalCache.set(commodity,
+      getJson(`/api/uex/market?commodity=${encodeURIComponent(commodity)}`).catch(() => []));
+  }
+
+  return terminalCache.get(commodity);
+}
+
+/** What the open detail is showing, so the controls can redraw it. */
+const detailView = { commodity: null, buying: false, monitoredOnly: false };
+
+/**
+ * Demand small enough that the trip is the wrong shape.
+ *
+ * Not a hard rule - a hauler carrying two SCU is fine - but a counter wanting
+ * 12 SCU is not where a full hold goes, and the number alone does not say so
+ * at a glance.
+ */
+const THIN_SCU = 64;
+
+function toggleMarketDetail(entry, row) {
+  const open = row.nextElementSibling?.classList.contains('market-detail');
+
+  // One at a time: two open tables in one page is a page nobody reads.
+  $$('#market-table tr.market-detail').forEach((n) => n.remove());
+  $$('#market-table tr.expanded').forEach((n) => n.classList.remove('expanded'));
+
+  if (open) {
+    detailView.commodity = null;
+    return;
+  }
+
+  detailView.commodity = entry.name;
+  row.classList.add('expanded');
+
+  const holder = el('tr', 'market-detail');
+  const cell = el('td');
+  cell.colSpan = 8;
+  holder.append(cell);
+  row.after(holder);
+
+  renderMarketDetail(entry, cell);
+}
+
+async function renderMarketDetail(entry, cell) {
+  cell.textContent = '';
+
+  const head = el('div', 'detail-head');
+  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+
+  const side = el('div', 'seg');
+  for (const [value, label] of [['sell', 'Where to sell'], ['buy', 'Where to buy']]) {
+    const button = el('button', (value === 'buy') === detailView.buying ? 'active' : null, label);
+    button.addEventListener('click', () => {
+      detailView.buying = value === 'buy';
+      renderMarketDetail(entry, cell);
+    });
+    head.append(button);
+    side.append(button);
+  }
+
+  head.textContent = '';
+  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+  head.append(side);
+
+  const safe = el('label', 'toggle');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = detailView.monitoredOnly;
+  box.addEventListener('change', () => {
+    detailView.monitoredOnly = box.checked;
+    renderMarketDetail(entry, cell);
+  });
+
+  safe.append(box);
+  safe.append(el('span', null, 'Monitored space only'));
+  head.append(safe);
+  cell.append(head);
+
+  const all = await terminalsFor(entry.name);
+  const priceOf = (r) => (detailView.buying ? r.buy : r.sell);
+  const scuOf = (r) => (detailView.buying ? r.buyScu : r.sellScu);
+
+  const rows = all
+    .filter((r) => priceOf(r) > 0)
+    .filter((r) => !detailView.monitoredOnly || r.security === 'monitored')
+    .sort((a, b) => (detailView.buying ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a)));
+
+  if (!rows.length) {
+    cell.append(el('div', 'muted detail-empty', all.length
+      ? 'Nothing left after that filter — every counter for this is outside monitored space.'
+      : 'No prices for this commodity. UEX may be off, or nobody has reported one.'));
+    return;
+  }
+
+  const best = priceOf(rows[0]);
+
+  const table = el('table', 'detail-table');
+  const header = el('tr');
+  for (const [label, cls] of [['Terminal', null], ['Where', null], ['Space', null],
+    [detailView.buying ? 'Buy' : 'Sell', 'num'], ['vs best', 'num'],
+    [detailView.buying ? 'In stock' : 'Wanted', 'num'], ['Seen', 'num']]) {
+    header.append(el('th', cls, label));
+  }
+  table.append(header);
+
+  for (const row of rows.slice(0, 40)) {
+    const tr = el('tr');
+    const price = priceOf(row);
+    const scu = Math.round(scuOf(row));
+
+    const name = el('td');
+    const jump = el('button', 'place-link', row.terminal);
+    jump.title = row.placeId ? 'Show it on the map' : 'The map cannot place this terminal';
+    jump.disabled = !row.placeId;
+    jump.addEventListener('click', () => {
+      showView('map');
+      centreOnTerminal(row.terminal, row.placeId);
+    });
+    name.append(jump);
+    tr.append(name);
+
+    tr.append(el('td', 'muted', row.place || '—'));
+
+    const space = el('td');
+    space.append(el('span', `sec sec-${row.security}`, row.security));
+    if (row.system) space.append(el('span', 'muted sec-system', ` ${row.system}`));
+    tr.append(space);
+
+    tr.append(el('td', 'num', money(price)));
+
+    // What choosing this one costs against the best on offer, which is the
+    // number the single "best price" column never showed.
+    const gap = detailView.buying ? (price - best) / best : (best - price) / best;
+    tr.append(el('td', gap > 0.001 ? 'num outward' : 'num muted',
+      gap > 0.001 ? `−${(gap * 100).toFixed(0)}%` : 'best'));
+
+    const stock = el('td', 'num');
+    if (scu > 0) {
+      stock.append(el('span', scu < THIN_SCU ? 'outward' : null, `${scu.toLocaleString()} SCU`));
+      if (scu < THIN_SCU) {
+        stock.title = detailView.buying
+          ? 'Thin stock — a full hold will not be filled here'
+          : 'Small demand — this counter will not take a full hold';
+      }
+    } else {
+      stock.append(el('span', 'muted', '—'));
+    }
+    tr.append(stock);
+
+    tr.append(el('td', 'num muted', row.seenAt ? ago(row.seenAt) : '—'));
+    table.append(tr);
+  }
+
+  cell.append(table);
+
+  const shown = Math.min(rows.length, 40);
+  const note = detailView.monitoredOnly
+    ? `${shown} of ${all.length} counters — lawless space hidden.`
+    : `${shown} of ${all.length} counters.`;
+
+  cell.append(el('div', 'muted detail-note',
+    `${note} Security is by system: Stanton is policed, Pyro and Nyx are not. `
+    + 'Nothing in the game logs threat, so this is where a place is, not what happened there.'));
+}
+
 function renderMarket() {
   $('#market-offer').hidden = marketEntries.length > 0;
 
@@ -970,7 +1181,15 @@ function renderMarket() {
 
   for (const entry of rows) {
     const tr = el('tr');
-    tr.append(el('td', null, entry.name));
+
+    // The name is the way in: one best price is an answer, and the rows behind
+    // it are the choice.
+    const nameCell = el('td');
+    const opener = el('button', 'place-link commodity-open', entry.name);
+    opener.title = 'Every counter that trades this, and what each one costs you';
+    opener.addEventListener('click', () => toggleMarketDetail(entry, tr));
+    nameCell.append(opener);
+    tr.append(nameCell);
     tr.append(el('td', 'muted', entry.groups.join(', ')));
     tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
     tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
@@ -1092,11 +1311,36 @@ function facilityTokens(keys) {
  * buying, rather than where it can be sold. The Market page's two map links
  * write both forms into the search box, so they survive as shareable ?q= urls.
  */
+/**
+ * The commodity a typed term means.
+ *
+ * Exact names only was too strict to use: "medical" found nothing because the
+ * commodity is "Medical Supplies", and nothing on the map offered the full
+ * name, so the search looked broken. A prefix or a contained word now counts,
+ * shortest name first so "gold" means Gold rather than Golden Medmon - but
+ * only when no place answers to the same term, since a typed place name
+ * should still find the place.
+ */
+function matchCommodity(name) {
+  const lower = name.trim().toLowerCase();
+  if (!lower) return null;
+
+  const exact = marketEntries.find((e) => e.name.toLowerCase() === lower);
+  if (exact) return exact;
+
+  if (atlas.some((l) => l.name.toLowerCase().includes(lower)))
+    return null;
+
+  const byLength = (a, b) => a.name.length - b.name.length;
+
+  return marketEntries.filter((e) => e.name.toLowerCase().startsWith(lower)).sort(byLength)[0]
+    ?? marketEntries.filter((e) => e.name.toLowerCase().includes(lower)).sort(byLength)[0]
+    ?? null;
+}
+
 function commoditySites(term) {
   const buying = term.startsWith('buy:');
-  const name = (buying ? term.slice(4) : term).trim();
-
-  const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
+  const entry = matchCommodity(buying ? term.slice(4) : term);
   if (!entry) return null;
 
   const keys = buying ? entry.bought : entry.sold;
@@ -1788,7 +2032,7 @@ async function loadRoutes() {
     const td = el('td', 'muted', from
       ? 'No route starts from where you are - or UEX has no terminal here.'
       : 'Nothing to show. Enable UEX prices on the Settings page.');
-    td.colSpan = 10;
+    td.colSpan = 11;
     tr.append(td);
     body.append(tr);
     return;
@@ -1806,6 +2050,24 @@ async function loadRoutes() {
     tr.append(el('td', 'num outward', money(route.outlay)));
     tr.append(el('td', 'num inward', money(route.profit)));
 
+    // One click turns a haul into a plan: buy there, sell there, in order.
+    const plan = el('td');
+    const button = el('button', 'ghost tiny', 'Plan');
+    button.title = 'Start a flight plan for this run';
+    button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
+      {
+        placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
+        place: route.buyAt,
+        note: `Buy ${Math.floor(route.units).toLocaleString()} SCU at ${money(route.buyPrice)}`,
+      },
+      {
+        placeId: route.sellAtId || placeIdForTerminal(route.sellAt),
+        place: route.sellAt,
+        note: `Sell at ${money(route.sellPrice)} · +${money(route.profit)}`,
+      },
+    ]));
+    plan.append(button);
+
     const capped = el('td', 'muted', route.limitedBy);
     capped.title = route.limitedBy === 'capital'
       ? 'Your capital runs out before the hold does'
@@ -1813,6 +2075,7 @@ async function loadRoutes() {
         ? 'The shop does not stock enough to fill the hold'
         : 'The hold is the limit - the good case';
     tr.append(capped);
+    tr.append(plan);
 
     body.append(tr);
   }
@@ -1844,13 +2107,28 @@ async function loadRespawn() {
     return;
   }
 
-  $('#now-respawn').textContent = data.place;
+  // Two signals, neither promoted over the other: a bed is where a regen
+  // location gets set, but the same toast fires when one is used only to
+  // heal; waking somewhere proves only where you woke. Both are shown and
+  // labelled, and the headline is whichever happened last.
+  const bedIsNewer = data.bed && (!data.at || new Date(data.bed.at) > new Date(data.at));
+
+  $('#now-respawn').textContent = bedIsNewer ? data.bed.place : (data.place ?? data.bed?.place ?? '—');
+
+  // Each line names its own place. The headline is only the more recent of
+  // the two, and saying "woke there" under a different place read as though
+  // both signals agreed when they do not.
+  $('#now-respawn-sub').textContent = data.bed
+    ? `last medical bed · ${data.bed.place}, ${relative(data.bed.at)}`
+    : '';
 
   // "Deaths" would be wrong for the commoner case: most wake-ups follow an
   // incapacitation rather than a corpse recovery, so both read as "times down".
-  $('#now-respawn-sub').textContent = data.settled
-    ? `inferred · ${data.agreeing} of your last ${data.of} times down`
-    : `inferred · last one only, ${relative(data.at)}`;
+  $('#now-respawn-bed').textContent = data.place
+    ? (data.settled
+      ? `last woke · ${data.place}, ${data.agreeing} of your last ${data.of} times down`
+      : `last woke · ${data.place}, ${relative(data.at)}`)
+    : '';
 
   card.hidden = false;
 }
@@ -1887,6 +2165,12 @@ async function loadCasualties() {
   bars('#casualties-woke',
     (data.wokeAt || []).map((w) => ({
       label: w.place, value: w.times, onClick: () => jumpToPlace(w.place),
+    })),
+    (v) => `${v}`);
+
+  bars('#casualties-beds',
+    (data.bedsUsed || []).map((b) => ({
+      label: b.place, value: b.times, onClick: () => jumpToPlace(b.place),
     })),
     (v) => `${v}`);
 
@@ -2221,6 +2505,26 @@ async function loadJobList() {
     head.append(el('b', null, job.title));
     head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
 
+    // Where this list is for, changeable here because it is a plan rather than
+    // a fact: the run you meant on Tuesday is not the run you fly on Friday.
+    const where = el('select', 'select job-place-edit');
+    where.title = 'Where you mean to shop';
+    fillPlaceOptions(where, job.destinationId || job.destination || '');
+
+    where.addEventListener('change', async () => {
+      const picked = pickedPlace(where);
+
+      await fetch(`/api/jobs/${job.id}/destination`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ place: picked.name, placeId: picked.id }),
+      });
+
+      loadJobList();
+    });
+
+    head.append(where);
+
     const spacer = el('span', 'spacer');
     head.append(spacer);
 
@@ -2243,7 +2547,14 @@ async function loadJobList() {
     });
     head.append(toggle);
 
-    const remove = el('button', 'ghost', 'Delete');
+    // A list knows where its missing things are sold, which is a shopping trip
+    // waiting to be flown - once the player has said which seller they meant.
+    const shop = el('button', 'ghost', 'Plan trip');
+    shop.title = 'Turn what is still missing into a flight plan';
+    shop.addEventListener('click', () => planShoppingTrip(job, card));
+    head.append(shop);
+
+    const remove = el('button', 'ghost danger', 'Delete');
     remove.addEventListener('click', async () => {
       await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
       loadJobList();
@@ -2324,10 +2635,140 @@ function parseJobItems(text) {
     });
 }
 
+/**
+ * Fills a picker with every place the app knows, and selects one.
+ *
+ * Picked rather than typed: these are places the app already knows by name -
+ * from the game's own data and from where you have actually been - so making
+ * someone spell "CRU-L4 Shallow Fields Station" is asking them to guess at
+ * something already on the screen. Somewhere you have visited heads the list,
+ * because a run is usually to a place you have flown to before.
+ *
+ * @param selected The place id to select, or a plain name for a destination
+ *   saved before this was a picker.
+ */
+function fillPlaceOptions(select, selected) {
+  if (!select) return;
+
+  select.textContent = '';
+
+  const anywhere = document.createElement('option');
+  anywhere.value = '';
+  anywhere.textContent = 'Anywhere — no particular stop';
+  select.append(anywhere);
+
+  const been = atlas.filter((l) => l.visits > 0).sort((a, b) => b.visits - a.visits);
+  const rest = atlas.filter((l) => !l.visits).sort((a, b) => a.name.localeCompare(b.name));
+
+  const add = (label, places) => {
+    if (!places.length) return;
+
+    const group = document.createElement('optgroup');
+    group.label = label;
+
+    for (const place of places) {
+      const option = document.createElement('option');
+      option.value = place.rawId;
+      option.textContent = place.system ? `${place.name} · ${place.system}` : place.name;
+      group.append(option);
+    }
+
+    select.append(group);
+  };
+
+  add('Where you have been', been);
+  add('Everywhere else', rest);
+
+  if (!selected) {
+    select.value = '';
+    return;
+  }
+
+  select.value = selected;
+
+  // A destination saved as free text, from before this was a picker, or a
+  // place this atlas cannot name. Kept rather than silently dropped.
+  if (select.value !== selected) {
+    const kept = document.createElement('option');
+    kept.value = selected;
+    kept.textContent = selected;
+    select.append(kept);
+    select.value = selected;
+  }
+}
+
+/** What a picked option means: its id, and the name to store beside it. */
+const pickedPlace = (select) => {
+  const id = select.value;
+  if (!id) return { name: null, id: null };
+
+  const place = atlas.find((l) => l.rawId === id);
+  return { name: place?.name ?? id, id: place ? id : null };
+};
+
+/**
+ * The things this install knows how to buy, fetched once.
+ *
+ * Offered as a picker beside the free-text box rather than instead of it: the
+ * box is still the list, and this is a way to put a correctly spelled line in
+ * it. Only what can actually be bought is listed, because a line nothing sells
+ * is a line no plan can route.
+ */
+let catalogue = null;
+
+async function fillItemOptions(select) {
+  if (!select || select.childElementCount) return;
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Add something we know…';
+  select.append(placeholder);
+
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+
+  const add = (label, names) => {
+    if (!names?.length) return;
+
+    const group = document.createElement('optgroup');
+    group.label = label;
+
+    for (const name of names) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      group.append(option);
+    }
+
+    select.append(group);
+  };
+
+  add('Cargo', catalogue.commodities);
+  add('Ship parts and gear', catalogue.items);
+}
+
 $('#jobs-new')?.addEventListener('click', () => {
   const form = $('#job-form');
   form.hidden = !form.hidden;
+  fillPlaceOptions($('#job-place'), '');
+  fillItemOptions($('#job-add'));
   if (!form.hidden) $('#job-title').focus();
+});
+
+// Picking a name writes it into the box, where it can be given a quantity like
+// any other line. The box stays the list; this only spells things.
+$('#job-add')?.addEventListener('change', () => {
+  const picked = $('#job-add').value;
+  if (!picked) return;
+
+  const box = $('#job-items');
+  const lines = box.value.split('\n').filter((l) => l.trim());
+
+  if (!lines.some((l) => l.trim().toLowerCase().startsWith(picked.toLowerCase())))
+    lines.push(picked);
+
+  box.value = `${lines.join('\n')}\n`;
+  $('#job-add').value = '';
+  box.focus();
 });
 
 $('#job-cancel')?.addEventListener('click', () => { $('#job-form').hidden = true; });
@@ -2338,14 +2779,25 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   const items = parseJobItems($('#job-items').value);
   if (!items.length) return;
 
+  const picked = pickedPlace($('#job-place'));
+
   await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: $('#job-title').value, kind: 'list', items }),
+    body: JSON.stringify({
+      title: $('#job-title').value,
+      kind: 'list',
+      items,
+
+      // The name is what the card shows; the id is what a plan draws with.
+      destination: picked.name,
+      destinationId: picked.id,
+    }),
   });
 
   $('#job-title').value = '';
   $('#job-items').value = '';
+  $('#job-place').value = '';
   $('#job-form').hidden = true;
   loadJobList();
 });
@@ -3092,9 +3544,180 @@ function renderFleetShips() {
       body.append(hint);
     }
 
+    // Ground vehicles have no ports anyone sells parts for, so the offer is
+    // made only where it can be kept.
+    if (!grounded) {
+      const upgrade = el('button', 'ghost ship-upgrade', 'Upgrades');
+      upgrade.title = `What fits ${ship.name}, and where to buy it`;
+      upgrade.addEventListener('click', () => showUpgrades(ship.name, ship.className, card));
+      body.append(upgrade);
+    }
+
     card.append(body);
     (grounded ? vehicleGrid : grid).append(card);
   }
+}
+
+/* ---------- what fits a ship, and where it is sold ---------- */
+
+/**
+ * The upgrade panel for one ship, fetched once per ship.
+ *
+ * The game's own data says what each port accepts, so this is not a guess: a
+ * size 2 shield port takes a size 2 shield, and the shops that stock one are
+ * known. What the panel is for is the trip - every option carries where it can
+ * be bought, and every line can go straight onto a shopping list.
+ */
+const upgradeCache = new Map();
+
+async function upgradesFor(ship) {
+  if (!upgradeCache.has(ship)) {
+    upgradeCache.set(ship,
+      getJson(`/api/fleet/upgrades?ship=${encodeURIComponent(ship)}`).catch(() => null));
+  }
+
+  return upgradeCache.get(ship);
+}
+
+/** Ports are named for the game's files; this is what a pilot calls them. */
+const PORT_WORDS = {
+  QuantumDrive: 'Quantum drive',
+  Shield: 'Shield',
+  PowerPlant: 'Power plant',
+  Cooler: 'Cooler',
+  WeaponGun: 'Gun',
+  Turret: 'Gun mount',
+  MissileLauncher: 'Missile rack',
+  Missile: 'Missile',
+  Radar: 'Radar',
+  EMP: 'EMP',
+  QuantumInterdictionGenerator: 'Quantum interdiction',
+  MiningArm: 'Mining arm',
+};
+
+/**
+ * @param ship The name to show.
+ * @param key The game's class name, which is what the reference data is keyed
+ *   by. "Drake Corsair" answers nothing; DRAK_Corsair answers everything.
+ */
+async function showUpgrades(ship, key, card) {
+  const open = card.querySelector('.upgrade-panel');
+
+  if (open) {
+    open.remove();
+    card.classList.remove('opened');
+    return;
+  }
+
+  // One at a time: the cards are a grid, and two of them spanning the row
+  // pushes everything else off the screen.
+  $$('.ship-card.opened').forEach((other) => {
+    other.classList.remove('opened');
+    other.querySelector('.upgrade-panel')?.remove();
+  });
+
+  card.classList.add('opened');
+
+  const panel = el('div', 'upgrade-panel');
+  panel.append(el('div', 'muted', 'Reading the ship…'));
+  card.append(panel);
+
+  const answer = await upgradesFor(key || ship);
+  panel.textContent = '';
+
+  if (!answer?.known) {
+    panel.append(el('div', 'muted',
+      'The reference data on this machine predates ship ports. Refresh the '
+      + 'community dataset on the Settings page and this fills in.'));
+    return;
+  }
+
+  if (!answer.groups?.length) {
+    panel.append(el('div', 'muted',
+      'Nothing on this one is sold in game — every port it has is fixed, or '
+      + 'nobody stocks a part for it.'));
+    return;
+  }
+
+  const head = el('div', 'upgrade-head');
+  head.append(el('b', null, `What fits ${ship}`));
+  head.append(el('span', 'muted', 'the game’s own port list · prices from UEX'));
+  panel.append(head);
+
+  for (const group of answer.groups) {
+    const row = el('div', 'upgrade-group');
+
+    const title = el('button', 'upgrade-toggle');
+    title.append(el('span', 'upgrade-kind', `${PORT_WORDS[group.kind] || group.kind} S${group.size}`));
+    title.append(el('span', 'muted', `${group.ports} port${group.ports === 1 ? '' : 's'}`));
+
+    // What it flies with now is the only thing a candidate can be judged
+    // against, so it sits on the closed row rather than inside.
+    if (group.fitted?.length)
+      title.append(el('span', 'upgrade-fitted', `now: ${group.fitted.join(' · ')}`));
+
+    title.append(el('span', 'muted upgrade-count', `${group.options.length} sold`));
+
+    const body = el('div', 'upgrade-options');
+    body.hidden = true;
+
+    title.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      title.classList.toggle('open', !body.hidden);
+      if (!body.hidden && !body.dataset.filled) fillUpgradeOptions(body, group);
+    });
+
+    row.append(title);
+    row.append(body);
+    panel.append(row);
+  }
+}
+
+function fillUpgradeOptions(body, group) {
+  body.dataset.filled = '1';
+  body.textContent = '';
+
+  const table = el('table', 'upgrade-table');
+  const header = el('tr');
+  for (const [label, cls] of [['Part', null], ['Maker', null], ['Grade', 'num'],
+    ['Price', 'num'], ['Cheapest at', null], ['', 'num']]) {
+    header.append(el('th', cls, label));
+  }
+  table.append(header);
+
+  for (const option of group.options) {
+    const tr = el('tr');
+    tr.append(el('td', null, option.name));
+    tr.append(el('td', 'muted', option.manufacturer || '—'));
+    tr.append(el('td', 'num muted', option.grade ? `G${option.grade}` : '—'));
+    tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
+
+    // One shop on the row and the rest in the tooltip: the choice of counter
+    // belongs to the trip, and the trip is planned from the list.
+    const shop = option.shops[0];
+    const where = el('td');
+    const jump = el('button', 'place-link', shop.terminal);
+    jump.disabled = !shop.placeId;
+    jump.title = option.shops.map((s) => `${s.terminal} — ${money(s.price)}`).join('\n');
+    jump.addEventListener('click', () => {
+      showView('map');
+      centreOnTerminal(shop.terminal, shop.placeId);
+    });
+    where.append(jump);
+
+    if (shop.security === 'lawless')
+      where.append(el('span', 'sec sec-lawless', 'lawless'));
+
+    tr.append(where);
+
+    const add = el('td', 'num');
+    add.append(trackButton(option.name, 1, ''));
+    tr.append(add);
+
+    table.append(tr);
+  }
+
+  body.append(table);
 }
 
 /** "3 days ago", "2 months ago" - easier to scan than a date. */
@@ -3559,8 +4182,18 @@ const JUMP_LANES = [
   ['Stanton', 'Nyx'],
 ];
 
-/** How far a body's sites reach, given how many it has. */
-const clusterRadius = (count) => (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1));
+/**
+ * How far a body's sites reach, given how many it has.
+ *
+ * The phyllotaxis spacing that fits at system scale is far too tight once the
+ * dots are big enough to read: a well-visited site is 17 units across on its
+ * own while neighbours sit 5.2 apart, so microTech's twenty-two piled into
+ * each other however far you zoomed in. Zoomed in the whole cluster opens up,
+ * which is exactly when there is room for it - the same trade the bodies
+ * themselves make.
+ */
+const clusterRadius = (count) =>
+  (count <= 1 ? 14 : 13 + 5.2 * Math.sqrt(count - 1)) * (isDetailed() ? 2.1 : 1);
 
 /**
  * Works out where each star sits and how far its bodies orbit, from what the
@@ -3934,12 +4567,103 @@ function fitToHighlights(term) {
 function setHere(rawId) {
   const changed = (rawId || null) !== hereId;
   hereId = rawId || null;
-  drawHere();
+
+  /*
+   * Only when it actually moves.
+   *
+   * The live feed repeats the same place every second, and this used to redraw
+   * on every one of them. The marker's pulse is an SVG animation of a growing
+   * ring over 2.2 seconds, and rebuilding the element restarts it - so it got
+   * a fifth of the way out, was replaced, and started again. The marker was
+   * there the whole time and never appeared to pulse, which is worse than not
+   * being drawn: it looks like a dead dot rather than a missing feature.
+   */
+  if (changed || !$('#starmap').querySelector('.map-here'))
+    drawHere();
 
   // Follow mode: the map pans itself as the player moves, so a second monitor
   // shows the journey without being touched.
   if (followHere && changed && hereId)
     centreOn(hereId);
+}
+
+/** Where the live feed says the player is quantum-travelling to, if anywhere. */
+let travelId = null;
+
+/**
+ * Marks a jump in progress, and is safe to call before the map is drawn.
+ *
+ * The same rule as the here-marker: only rebuild when the destination changes,
+ * or the marching dashes restart every time the feed repeats itself and the
+ * line looks painted on.
+ */
+function setTravel(rawId) {
+  const changed = (rawId || null) !== travelId;
+  travelId = rawId || null;
+
+  if (changed || (travelId && !$('#starmap').querySelector('.map-travel')))
+    drawTravel();
+}
+
+/**
+ * The line from where you are to where you are headed.
+ *
+ * The map has always known both ends - the live feed names the destination the
+ * moment the drive spools - and drew neither as a journey. A jump is the one
+ * time the map can show something happening rather than something recorded, so
+ * it gets a marching dashed vector and a ring waiting at the far end.
+ */
+function drawTravel() {
+  const map = $('#starmap');
+  map.querySelectorAll('.map-travel').forEach((n) => n.remove());
+
+  const from = hereId && nodeAt.get(hereId);
+  const to = travelId && nodeAt.get(travelId);
+
+  // Either end can be a place the map cannot draw - an unmapped outpost, or a
+  // destination in a system this atlas has no layout for. A half-drawn vector
+  // pointing at nothing would be worse than none.
+  if (!from || !to) return;
+
+  const zoom = view.w / HOME_VIEW.w;
+  const group = svgEl('g', { class: 'map-travel' });
+
+  const line = svgEl('line', {
+    x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+    class: 'travel-line',
+    'stroke-width': 1.5 * zoom,
+    'stroke-dasharray': `${7 * zoom} ${5 * zoom}`,
+    filter: 'url(#glow)',
+  });
+
+  line.append(svgEl('animate', {
+    attributeName: 'stroke-dashoffset',
+    values: `${12 * zoom};0`,
+    dur: '0.85s',
+    repeatCount: 'indefinite',
+  }));
+
+  group.append(line);
+
+  const target = svgEl('circle', {
+    cx: to.x, cy: to.y, r: 11 * zoom,
+    class: 'travel-target',
+    'stroke-width': 1.3 * zoom,
+  });
+
+  target.append(svgEl('animate', {
+    attributeName: 'r',
+    values: `${9 * zoom};${19 * zoom}`,
+    dur: '1.6s',
+    repeatCount: 'indefinite',
+  }));
+
+  target.append(svgEl('animate', {
+    attributeName: 'opacity', values: '.8;0', dur: '1.6s', repeatCount: 'indefinite',
+  }));
+
+  group.append(target);
+  map.append(group);
 }
 
 function drawHere() {
@@ -4009,15 +4733,39 @@ function initMap() {
 
   let drag = null;
 
+  /*
+   * Pressing is not yet dragging.
+   *
+   * The map captures the pointer so a drag that leaves the window still pans,
+   * and capturing on pointerdown looked like the place to do it. It is not:
+   * while an element holds the capture, the browser delivers the click to that
+   * element rather than to whatever is under the cursor - so every click meant
+   * for a place was delivered to the map, and no place ever opened its card,
+   * its trade panel, or went onto a plan. The map has been unclickable with a
+   * real mouse since it was written; only a synthetic click dispatched
+   * straight at a node ever worked, which is how it passed its own tests.
+   *
+   * So the capture waits for movement. Below the slop a press is a click and
+   * is left entirely alone; past it the drag begins and takes the pointer.
+   */
+  const DRAG_SLOP = 4;
+
   map.addEventListener('pointerdown', (e) => {
     cancelAnimationFrame(viewAnimation);
-    drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
-    map.setPointerCapture(e.pointerId);
-    map.classList.add('dragging');
+    drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moving: false };
   });
 
   map.addEventListener('pointermove', (e) => {
     if (!drag) return;
+
+    if (!drag.moving) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < DRAG_SLOP)
+        return;
+
+      drag.moving = true;
+      map.setPointerCapture?.(e.pointerId);
+      map.classList.add('dragging');
+    }
 
     const box = map.getBoundingClientRect();
     view.x = drag.vx - ((e.clientX - drag.x) / box.width) * view.w;
@@ -4027,9 +4775,13 @@ function initMap() {
 
   const endDrag = (e) => {
     if (!drag) return;
+
+    if (drag.moving) {
+      map.releasePointerCapture?.(e.pointerId);
+      map.classList.remove('dragging');
+    }
+
     drag = null;
-    map.releasePointerCapture?.(e.pointerId);
-    map.classList.remove('dragging');
   };
 
   map.addEventListener('pointerup', endDrag);
@@ -4040,6 +4792,7 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
+  initCargoPanel();
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
   // Escape clears the search and glides home; clicking anywhere else just
@@ -4162,11 +4915,19 @@ function renderSearchResults() {
   const matches = atlas
     .filter((l) => l.name.toLowerCase().includes(term))
     .sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name))
-    .slice(0, 8);
+    .slice(0, 6);
+
+  // Commodities belong here too: without them there was no way to learn that
+  // the thing you wanted is spelled "Medical Supplies", and the search looked
+  // broken when it was only being literal.
+  const goods = marketEntries
+    .filter((e) => e.name.toLowerCase().includes(term) && (e.sold.length || e.bought.length))
+    .sort((a, b) => a.name.length - b.name.length)
+    .slice(0, 6);
 
   box.textContent = '';
 
-  if (matches.length === 0) {
+  if (matches.length === 0 && goods.length === 0) {
     box.hidden = true;
     return;
   }
@@ -4182,6 +4943,22 @@ function renderSearchResults() {
       box.hidden = true;
       centreOn(match.rawId);
       showMapInfo(match);
+    });
+
+    box.append(row);
+  }
+
+  for (const good of goods) {
+    const row = el('button', 'map-result');
+    row.type = 'button';
+    row.append(el('span', 'name good', good.name));
+    row.append(el('span', 'where',
+      `commodity · ${good.sold.length} sellers`));
+
+    row.addEventListener('click', () => {
+      box.hidden = true;
+      $('#map-search').value = good.name;
+      drawMap();
     });
 
     box.append(row);
@@ -4203,6 +4980,17 @@ let shadeScale = null;
 const nodeShade = new Map();
 
 const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
+
+/*
+ * The colour of a place that has nothing to do with the chosen commodity.
+ *
+ * Slate rather than its own kind colour: with a commodity picked the map stops
+ * being a map of kinds and becomes a map of one price, and a station left
+ * cyan among a scale running green to gold reads as a value on that scale when
+ * it is not one. Every mark takes the grade or takes this.
+ */
+const NO_TRADE = '#42525f';
+
 
 /** Interpolates the poor-to-best ramp; 1 is the gold end. */
 function shadeColour(t) {
@@ -4242,6 +5030,14 @@ function prepareShading(term, sites) {
   const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
   if (!entry) return;
 
+  // Shading by your own receipts needs no fetch and works with UEX off: the
+  // question it answers is "where did I do best with this", not "what is it
+  // worth today". Both are useful; only the player knows which they meant.
+  if (shadeSelect.value === 'mine') {
+    shadeFromReceipts(entry.name, buying);
+    return;
+  }
+
   if (shadeRows.name !== entry.name) {
     shadeRows = { name: entry.name, rows: null };
 
@@ -4273,8 +5069,11 @@ function prepareShading(term, sites) {
     const place = atlas.find((l) => l.rawId === id);
     if (!place) continue;
 
-    const matched = shadeRows.rows.filter(
-      (r) => metricOf(r) > 0 && terminalMatchesPlace(r.terminal, place.name));
+    // The server resolves each terminal to a place; the name match is only for
+    // rows it could not place, which would otherwise shade nothing at all.
+    const matched = shadeRows.rows.filter((r) => metricOf(r) > 0
+      && (r.placeId ? r.placeId === id : terminalMatchesPlace(r.terminal, place.name)));
+
     if (!matched.length) continue;
 
     const value = invert
@@ -4306,6 +5105,1245 @@ function prepareShading(term, sites) {
   };
 }
 
+/* ---------- cargo panel ---------- */
+
+/**
+ * Every cargo receipt this install holds, fetched once.
+ *
+ * The catalogue and UEX say what a commodity is worth *now*; these say what the
+ * player was actually paid, and where. Both belong in the same panel, because
+ * the question - is this still the run it was last week? - needs the two side
+ * by side. A few hundred receipts is nothing to loop over, and the panel
+ * changes commodity, side and window often enough that a round trip per twiddle
+ * would be the slow part.
+ */
+let cargoReceipts = [];
+
+/** What the panel is showing. */
+const cargo = {
+  name: null,
+  buying: false,
+  days: 0,
+
+  /** Set when the panel is showing one station rather than one commodity. */
+  place: null,
+};
+
+async function loadCargoReceipts() {
+  cargoReceipts = (await getJson('/api/commodities?days=0'))
+    .filter((t) => t.commodity && t.unitPrice > 0);
+
+  if (!$('#cargo-panel').hidden) drawMap();
+}
+
+/** Receipts inside the panel's window. */
+function receiptsInWindow() {
+  const cutoff = cargo.days ? Date.now() - cargo.days * 86400000 : null;
+  return cutoff ? cargoReceipts.filter((t) => new Date(t.at).getTime() >= cutoff) : cargoReceipts;
+}
+
+/** The catalogue entry a search term names, or null when it names a place. */
+function commodityEntry(term) {
+  const name = (term.startsWith('buy:') ? term.slice(4) : term).trim();
+  return marketEntries.find((e) => e.name.toLowerCase() === name) || null;
+}
+
+/**
+ * One row per place for a commodity on one side of the counter.
+ *
+ * Best is side-aware - the most you were paid selling, the least you paid
+ * buying - and the average is weighted by volume rather than by receipt, so one
+ * 320 SCU run does not count the same as one 2 SCU top-up.
+ */
+function receiptsFor(name, buying) {
+  const byPlace = new Map();
+
+  for (const trade of receiptsInWindow()) {
+    if (trade.commodity !== name || trade.isSell === buying) continue;
+
+    const key = trade.placeId || trade.place;
+    let row = byPlace.get(key);
+
+    if (!row) {
+      row = {
+        id: trade.placeId, name: trade.place,
+        trades: 0, scu: 0, amount: 0, best: 0, average: 0, latest: 0, latestAt: null,
+      };
+      byPlace.set(key, row);
+    }
+
+    row.trades += 1;
+    row.scu += trade.scu;
+    row.amount += Number(trade.amount);
+
+    row.best = row.trades === 1
+      ? trade.unitPrice
+      : (buying ? Math.min(row.best, trade.unitPrice) : Math.max(row.best, trade.unitPrice));
+
+    if (!row.latestAt || new Date(trade.at) > new Date(row.latestAt)) {
+      row.latestAt = trade.at;
+      row.latest = trade.unitPrice;
+    }
+  }
+
+  for (const row of byPlace.values()) row.average = row.scu ? row.amount / row.scu : 0;
+
+  return [...byPlace.values()].sort((a, b) => (buying ? a.best - b.best : b.best - a.best));
+}
+
+/** Keeps the toolbar's controls in step with the search term driving them. */
+function syncCargoControls() {
+  for (const button of $$('#map-side button')) {
+    button.classList.toggle('active', (button.dataset.side === 'buy') === cargo.buying);
+  }
+}
+
+/**
+ * Shows, hides or refills the panel for whatever the map is currently showing.
+ * Called from drawMap, so the panel can never disagree with the shading.
+ */
+function syncCargoPanel(term, sites) {
+  const entry = sites ? commodityEntry(term) : null;
+
+  cargo.name = entry ? entry.name : null;
+  cargo.buying = term.startsWith('buy:');
+
+  $('#map-side').hidden = !entry;
+  $('#map-window').hidden = !entry && !cargo.place;
+  syncCargoControls();
+
+  // A flight plan holds the panel until it is closed: it is the thing being
+  // worked on, and a redraw must not pull it out from under the player.
+  if (cargo.trip) {
+    renderTripPanel();
+    return;
+  }
+
+  if (cargo.place) {
+    renderStationPanel();
+    return;
+  }
+
+  if (!entry) {
+    $('#cargo-panel').hidden = true;
+    return;
+  }
+
+  renderCommodityPanel(entry);
+}
+
+function cargoPanelHead(kicker, title) {
+  $('#cargo-kicker').textContent = kicker;
+  $('#cargo-title').textContent = title;
+  $('#cargo-panel').hidden = false;
+
+  const body = $('#cargo-body');
+  body.textContent = '';
+  return body;
+}
+
+const windowWord = () =>
+  (PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
+
+function renderCommodityPanel(entry) {
+  const body = cargoPanelHead(cargo.buying ? 'Commodity · buying' : 'Commodity · selling', entry.name);
+
+  // What the market says today, from the rows the shading already fetched.
+  body.append(el('div', 'cargo-h', cargo.buying ? 'Cheapest terminals' : 'Best terminals'));
+
+  if (shadeRows.name === entry.name && shadeRows.rows?.length) {
+    const priceOf = (row) => (cargo.buying ? row.buy : row.sell);
+    const scuOf = (row) => (cargo.buying ? row.buyScu : row.sellScu);
+
+    const rows = shadeRows.rows
+      .filter((r) => priceOf(r) > 0)
+      .sort((a, b) => (cargo.buying ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a)))
+      .slice(0, 10);
+
+    const values = rows.map(priceOf);
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+
+    for (const row of rows) {
+      const t = hi === lo ? 1 : (priceOf(row) - lo) / (hi - lo);
+
+      body.append(cargoRow({
+        colour: shadeColour(cargo.buying ? 1 - t : t),
+        name: row.terminal,
+        sub: `${Math.round(scuOf(row)).toLocaleString()} SCU ${cargo.buying ? 'in stock' : 'of demand'}`,
+        value: priceOf(row),
+        onClick: () => centreOnTerminal(row.terminal, row.placeId),
+      }));
+    }
+  } else {
+    body.append(el('div', 'cargo-empty', shadeRows.name === entry.name
+      ? 'No live prices for this commodity. UEX may be off — see Settings.'
+      : 'Fetching live prices…'));
+  }
+
+  // What the player was actually paid, which the market cannot tell them.
+  const mine = receiptsFor(entry.name, cargo.buying);
+  body.append(el('div', 'cargo-h', `Your receipts · ${windowWord()}`));
+
+  if (!mine.length) {
+    body.append(el('div', 'cargo-empty',
+      `You have never ${cargo.buying ? 'bought' : 'sold'} this in that window.`));
+  }
+
+  const best = mine.length ? mine[0].best : 0;
+  const worst = mine.length ? mine[mine.length - 1].best : 0;
+
+  for (const row of mine) {
+    const span = Math.abs(best - worst);
+    const t = span === 0 ? 1 : Math.abs(row.best - worst) / span;
+
+    body.append(cargoRow({
+      colour: shadeColour(cargo.buying ? 1 - t : t),
+      name: row.name,
+      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+        + ` · avg ${Math.round(row.average).toLocaleString()} · ${dayOf(row.latestAt)}`,
+      value: row.best,
+      onClick: () => {
+        if (row.id) centreOn(row.id);
+        showStation(row.id, row.name);
+      },
+    }));
+  }
+
+  const history = receiptsInWindow().filter((t) => t.commodity === entry.name);
+  body.append(el('div', 'cargo-h', `Trade history · ${history.length}`));
+  cargoHistory(body, history, (t) => t.place);
+}
+
+/**
+ * One station's trade, opened by double-clicking it.
+ *
+ * The detail card answers "what is this place"; this answers "what moves
+ * through it" - which the card has no room for once a station has a dozen
+ * commodities on each side of the counter.
+ */
+function renderStationPanel() {
+  const place = cargo.place;
+  const key = place.id || place.name;
+  const body = cargoPanelHead('Station', place.name);
+
+  const at = receiptsInWindow().filter((t) => (t.placeId || t.place) === key);
+
+  const add = el('button', 'ghost tiny wide', 'Add as a stop');
+  add.title = 'Put this place on the flight plan';
+  add.addEventListener('click', () => addStop(place.id, place.name, null));
+  body.append(add);
+
+  cargoSection(body, 'Accepts · you sold here', at.filter((t) => t.isSell), false);
+  cargoSection(body, 'Offers · you bought here', at.filter((t) => !t.isSell), true);
+
+  // The catalogue's own answer, which covers commodities never traded here.
+  const catalogue = place.location ? commoditiesSoldAt(place.location) : [];
+
+  if (catalogue.length) {
+    body.append(el('div', 'cargo-h', `Catalogue says it sells · ${catalogue.length}`));
+
+    const list = el('div', 'cargo-goods');
+    list.textContent = catalogue.slice(0, 24).join(', ')
+      + (catalogue.length > 24 ? `, +${catalogue.length - 24} more` : '');
+    body.append(list);
+  }
+
+  body.append(el('div', 'cargo-h', `Trade history · ${at.length}`));
+  cargoHistory(body, at, (t) => t.commodity);
+}
+
+/** One side of a station's counter, grouped by commodity. */
+function cargoSection(body, title, trades, buying) {
+  body.append(el('div', 'cargo-h', title));
+
+  if (!trades.length) {
+    body.append(el('div', 'cargo-empty', 'Nothing on record in that window.'));
+    return;
+  }
+
+  const byName = new Map();
+
+  for (const trade of trades) {
+    const row = byName.get(trade.commodity)
+      || { name: trade.commodity, trades: 0, scu: 0, amount: 0, latestAt: null };
+
+    row.trades += 1;
+    row.scu += trade.scu;
+    row.amount += Number(trade.amount);
+    if (!row.latestAt || new Date(trade.at) > new Date(row.latestAt)) row.latestAt = trade.at;
+
+    byName.set(trade.commodity, row);
+  }
+
+  for (const row of [...byName.values()].sort((a, b) => b.scu - a.scu)) {
+    body.append(cargoRow({
+      colour: buying ? '#ffab3d' : '#4fd48a',
+      name: row.name,
+      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+        + ` · ${dayOf(row.latestAt)}`,
+      value: row.amount / (row.scu || 1),
+
+      // Drilling into a commodity from a station shades the whole map for it,
+      // so the next question - where else does this go - is already answered.
+      onClick: () => searchCommodity(row.name, buying),
+    }));
+  }
+}
+
+function cargoRow({ colour, name, sub, value, onClick }) {
+  const row = el('div', 'cargo-row');
+
+  const swatch = el('span', 'swatch');
+  swatch.style.background = colour;
+  row.append(swatch);
+
+  const middle = el('div', 'cargo-row-main');
+  middle.append(el('div', 'name', name));
+  middle.append(el('div', 'sub', sub));
+  row.append(middle);
+
+  const price = el('div', 'price', Math.round(Number(value) || 0).toLocaleString());
+  price.append(el('span', 'u', 'aUEC / SCU'));
+  row.append(price);
+
+  if (onClick) {
+    row.tabIndex = 0;
+    row.addEventListener('click', onClick);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    });
+  }
+
+  return row;
+}
+
+/** The receipt list: newest first, capped so a long history stays scrollable. */
+function cargoHistory(body, trades, describe) {
+  if (!trades.length) {
+    body.append(el('div', 'cargo-empty', 'No trades in that window.'));
+    return;
+  }
+
+  for (const trade of trades.slice(0, 30)) {
+    const line = el('div', `cargo-line ${trade.isSell ? 'sell' : 'buy'}`);
+    line.append(el('span', 'when', dayOf(trade.at)));
+    line.append(el('span', 'what',
+      `${trade.isSell ? 'Sold' : 'Bought'} ${trade.scu} SCU · ${describe(trade)}`));
+    line.append(el('span', 'rate', Math.round(trade.unitPrice).toLocaleString()));
+    body.append(line);
+  }
+
+  if (trades.length > 30) {
+    body.append(el('div', 'cargo-empty', `+ ${trades.length - 30} older, on the Cargo page.`));
+  }
+}
+
+/** Opens the panel on one station. */
+function showStation(rawId, name) {
+  const location = atlas.find((l) => l.rawId === rawId);
+
+  cargo.trip = false;
+  cargo.place = { id: rawId, name: name || location?.name || rawId, location };
+  $('#map-window').hidden = false;
+  $('#map-info').hidden = true;
+  renderStationPanel();
+}
+
+/** Puts a commodity in the search box, which is what drives the whole map. */
+function searchCommodity(name, buying) {
+  cargo.trip = false;
+  cargo.place = null;
+  $('#map-search').value = buying ? `buy:${name}` : name;
+  $('#map-results').hidden = true;
+  drawMap();
+}
+
+/**
+ * Centres on the atlas place a UEX terminal name belongs to.
+ *
+ * Terminal names are not atlas names - "TDD, Area 18" against "Area18" - so
+ * this uses the same loose match the shading joins on, and simply does nothing
+ * when the map cannot name the place.
+ */
+function centreOnTerminal(terminal, placeId) {
+  const match = placeId
+    ? atlas.find((l) => l.rawId === placeId)
+    : atlas.find((l) => terminalMatchesPlace(terminal, l.name));
+
+  if (!match) return;
+
+  centreOn(match.rawId);
+  showStation(match.rawId, match.name);
+}
+
+/** The panel's own controls. Wired once, from initMap. */
+function initCargoPanel() {
+  $('#map-side').addEventListener('click', (e) => {
+    const button = e.target.closest('button');
+    if (!button || !cargo.name) return;
+
+    // The search box is the single source of truth for which side the map is
+    // showing, so the toggle rewrites the term rather than keeping its own flag.
+    searchCommodity(cargo.name, button.dataset.side === 'buy');
+  });
+
+  $('#map-window').addEventListener('change', (e) => {
+    cargo.days = Number(e.target.value) || 0;
+    drawMap();
+  });
+
+  $('#map-plan').addEventListener('click', () => {
+    showTripPanel();
+    drawMap();
+  });
+
+  // The detail card can put the place it is describing on the plan.
+  $('#map-info-stop').addEventListener('click', () => {
+    if (mapInfoLocation) addStop(mapInfoLocation.rawId, mapInfoLocation.name, null);
+  });
+
+  $('#cargo-close').addEventListener('click', () => {
+    if (!cargo.trip && cargo.place && cargo.name) {
+      cargo.place = null;
+      drawMap();
+      return;
+    }
+
+    cargo.trip = false;
+    cargo.place = null;
+    $('#cargo-panel').hidden = true;
+    $('#map-window').hidden = true;
+  });
+}
+
+/**
+ * Grades the lit places by what the player was paid at them, as the offline
+ * alternative to UEX's view of today.
+ */
+function shadeFromReceipts(name, buying) {
+  const rows = receiptsFor(name, buying).filter((r) => r.id);
+  if (!rows.length) return;
+
+  // A place you have traded at is an answer even when the catalogue has never
+  // heard of it, so receipts light their own nodes rather than only grading
+  // the ones the catalogue lit.
+  for (const row of rows) {
+    highlightIds.add(row.id);
+    nodeShade.set(row.id, { value: row.best });
+  }
+
+  const values = rows.map((r) => r.best);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  for (const shade of nodeShade.values()) {
+    const t = max === min ? 1 : (shade.value - min) / (max - min);
+    shade.colour = shadeColour(buying ? 1 - t : t);
+  }
+
+  shadeScale = {
+    min,
+    max,
+    invert: buying,
+    unit: 'aUEC/SCU',
+    label: buying
+      ? `your buy price, ${windowWord()}, cheapest is gold`
+      : `your sell price, ${windowWord()}, best is gold`,
+    plain: 'no receipt of yours here',
+  };
+}
+
+/* ---------- flight plans ---------- */
+
+/**
+ * The player's own routes: where they mean to go, in order.
+ *
+ * Everything else on this page is observed or downloaded. A plan is authored,
+ * so it lives on the server rather than in the browser - the overlay is a
+ * second window onto the same session, and a plan that existed in only one of
+ * them would be worse than none.
+ */
+let trips = [];
+
+/** The plan the Now card and the map are following. */
+const tracked = () => trips.find((t) => t.tracked) || null;
+
+/** Where to go now: the first stop not yet crossed off. */
+const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
+
+async function loadTrips() {
+  trips = await getJson('/api/trips');
+  renderTripCard();
+  if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
+  drawTripPath();
+}
+
+/** POST/DELETE against the trip API, then re-read: plans are small. */
+async function tripCall(url, method = 'POST') {
+  await fetch(url, { method });
+  await loadTrips();
+}
+
+/**
+ * Adds a stop to whatever plan the player is filling, and says where it went.
+ *
+ * The map, the routes table and a shopping list all funnel through here, so a
+ * stop means the same thing wherever it came from.
+ */
+async function addStop(placeId, place, note) {
+  await fetch('/api/trips/stops', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ placeId: placeId || '', place, note: note || null }),
+  });
+
+  await loadTrips();
+  showTripPanel();
+}
+
+/** Starts a plan from a list of stops - a trade run, or a shopping trip. */
+async function planTrip(title, stops) {
+  await fetch('/api/trips', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, stops }),
+  });
+
+  await loadTrips();
+  showView('map');
+  showTripPanel();
+  drawMap();
+}
+
+/* ---------- the Now card ---------- */
+
+/**
+ * The tracked plan on the Now page, and so in the overlay: where to go next,
+ * then the rest of the run.
+ */
+function renderTripCard() {
+  const card = $('#now-trip-card');
+  if (!card) return;
+
+  const trip = tracked();
+
+  if (!trip || !trip.stops.length) {
+    card.hidden = true;
+    return;
+  }
+
+  const done = trip.stops.filter((s) => s.done).length;
+  const next = nextStop(trip);
+
+  $('#now-trip-title').textContent = trip.title;
+
+  const progress = $('#now-trip-progress');
+  progress.textContent = '';
+  progress.append(jobProgress(done, trip.stops.length,
+    `${done} of ${trip.stops.length} stops`));
+
+  const jump = $('#now-trip-next');
+  jump.textContent = '';
+
+  if (next) {
+    jump.append(el('div', 'now-trip-label', 'Jump next'));
+    jump.append(el('div', 'now-trip-where', next.place));
+    if (next.note) jump.append(el('div', 'now-trip-note', next.note));
+  } else {
+    jump.append(el('div', 'inward', 'Every stop is crossed off. Good run.'));
+  }
+
+  // The whole path, in order, ticked as it goes - the flight plan proper.
+  const list = $('#now-trip-stops');
+  list.textContent = '';
+
+  trip.stops.forEach((stop, index) => {
+    list.append(tripStopRow(trip, stop, index, stop === next));
+  });
+
+  card.hidden = false;
+}
+
+/**
+ * One stop, wherever it is shown. Clicking the number crosses it off; clicking
+ * the name flies the map to it.
+ */
+function tripStopRow(trip, stop, index, isNext) {
+  const row = el('div', `trip-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
+
+  const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
+  number.title = stop.done ? 'Not done after all' : 'Cross this stop off';
+  number.addEventListener('click',
+    () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/toggle`));
+  row.append(number);
+
+  const main = el('div', 'trip-stop-main');
+  const name = el('button', 'trip-place', stop.place);
+  name.title = 'Show it on the map';
+  name.addEventListener('click', () => {
+    showView('map');
+    if (stop.placeId) centreOn(stop.placeId);
+    showTripPanel();
+  });
+
+  main.append(name);
+  if (stop.note) main.append(el('div', 'trip-note', stop.note));
+  row.append(main);
+
+  return row;
+}
+
+/* ---------- the map's trip panel ---------- */
+
+/** Opens the side panel on the tracked plan. */
+function showTripPanel() {
+  cargo.place = null;
+  cargo.trip = true;
+  renderTripPanel();
+}
+
+function renderTripPanel() {
+  const trip = tracked();
+  const body = cargoPanelHead('Flight plan', trip ? trip.title : 'No plan yet');
+
+  if (!trip || !trip.stops.length) {
+    body.append(el('div', 'cargo-empty',
+      'Double-click a place, or use Add stop on its card, to start a plan. '
+      + 'A trade route or a shopping list can start one for you.'));
+    return;
+  }
+
+  const done = trip.stops.filter((s) => s.done).length;
+  body.append(jobProgress(done, trip.stops.length, `${done} of ${trip.stops.length} stops`));
+
+  const next = nextStop(trip);
+
+  trip.stops.forEach((stop, index) => {
+    const row = tripStopRow(trip, stop, index, stop === next);
+
+    // The panel is where a plan is edited; the Now card only reads it.
+    const tools = el('div', 'trip-tools');
+
+    const up = el('button', 'ghost tiny', '↑');
+    up.title = 'Earlier in the run';
+    up.disabled = index === 0;
+    up.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=-1`));
+
+    const down = el('button', 'ghost tiny', '↓');
+    down.title = 'Later in the run';
+    down.disabled = index === trip.stops.length - 1;
+    down.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=1`));
+
+    const drop = el('button', 'ghost tiny', '×');
+    drop.title = 'Drop this stop';
+    drop.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+
+    tools.append(up, down, drop);
+    row.append(tools);
+    body.append(row);
+  });
+
+  const actions = el('div', 'trip-actions');
+
+  const track = el('button', 'ghost', trip.tracked ? 'Stop tracking' : 'Track');
+  track.title = 'Show this plan on the Now page';
+  track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
+  actions.append(track);
+
+  const scrap = el('button', 'ghost danger', 'Delete plan');
+  scrap.addEventListener('click', async () => {
+    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+    cargo.trip = false;
+    $('#cargo-panel').hidden = true;
+    drawMap();
+  });
+  actions.append(scrap);
+
+  body.append(actions);
+
+  // Other plans, so one can be picked up again without a management screen.
+  const others = trips.filter((t) => t !== trip);
+
+  if (others.length) {
+    body.append(el('div', 'cargo-h', 'Other plans'));
+
+    for (const other of others) {
+      const row = el('div', 'cargo-row');
+      row.append(el('span', 'swatch'));
+
+      const main = el('div', 'cargo-row-main');
+      main.append(el('div', 'name', other.title));
+      main.append(el('div', 'sub',
+        `${other.stops.filter((s) => s.done).length} of ${other.stops.length} stops`));
+      row.append(main);
+
+      row.tabIndex = 0;
+      row.addEventListener('click', () => tripCall(`/api/trips/${other.id}/track`));
+      body.append(row);
+    }
+  }
+}
+
+/* ---------- the plan on the map ---------- */
+
+/**
+ * Draws the tracked plan over the map: numbered stops in running order, joined
+ * by the path between them.
+ *
+ * Numbers rather than colour, because the question is "where next", not "how
+ * good": a plan has an order and the map has to show it. Stops the map cannot
+ * place - somewhere with no engine id - are still listed in the panel, so a
+ * plan is never silently short of a stop.
+ */
+function drawTripPath() {
+  const map = $('#starmap');
+  if (!map) return;
+
+  map.querySelectorAll('.trip-layer').forEach((n) => n.remove());
+
+  const trip = tracked();
+  if (!trip) return;
+
+  const points = trip.stops
+    .map((stop, index) => ({ stop, index, at: nodeAt.get(stop.placeId) }))
+    .filter((p) => p.at);
+
+  if (!points.length) return;
+
+  const layer = svgEl('g', { class: 'trip-layer' });
+  const zoom = view.w / HOME_VIEW.w;
+  const next = nextStop(trip);
+
+  // The path first, so the numbers sit on top of it.
+  for (let i = 1; i < points.length; i++) {
+    const from = points[i - 1];
+    const to = points[i];
+
+    layer.append(svgEl('line', {
+      x1: from.at.x, y1: from.at.y, x2: to.at.x, y2: to.at.y,
+      class: `trip-leg${to.stop.done ? ' done' : ''}`,
+      'stroke-width': 1.6 * zoom,
+      'stroke-dasharray': `${6 * zoom} ${5 * zoom}`,
+    }));
+  }
+
+  for (const point of points) {
+    const badge = svgEl('g', {
+      class: `trip-mark${point.stop.done ? ' done' : ''}${point.stop === next ? ' next' : ''}`,
+    });
+
+    badge.append(svgEl('circle', {
+      cx: point.at.x, cy: point.at.y - 15 * zoom, r: 8 * zoom, 'stroke-width': 1.4 * zoom,
+    }));
+
+    const number = svgEl('text', {
+      x: point.at.x, y: point.at.y - 15 * zoom, 'text-anchor': 'middle',
+      'dominant-baseline': 'central', style: `font-size:${9 * zoom}px`,
+    });
+
+    number.textContent = point.stop.done ? '✓' : String(point.index + 1);
+    badge.append(number);
+
+    const title = svgEl('title');
+    title.textContent = `Stop ${point.index + 1}: ${point.stop.place}`
+      + (point.stop.note ? ` — ${point.stop.note}` : '');
+    badge.append(title);
+
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showTripPanel();
+    });
+
+    layer.append(badge);
+  }
+
+  map.append(layer);
+}
+
+/**
+ * Opens the plan when the player lands on one of its stops.
+ *
+ * Arriving is the moment the stop's note matters - what was I here to buy? -
+ * and the server has already crossed it off by the time this runs.
+ */
+let tripHere = null;
+
+function tripArrived(locationId) {
+  if (!locationId || locationId === tripHere) return;
+  tripHere = locationId;
+
+  const trip = tracked();
+  if (!trip || !trip.stops.some((s) => s.placeId === locationId)) return;
+
+  loadTrips().then(() => {
+    cargo.trip = true;
+    cargo.place = null;
+    renderTripPanel();
+  });
+}
+
+/**
+ * The atlas place a UEX terminal name belongs to, or empty.
+ *
+ * Terminal names are not atlas names - "TDD, Area 18" against "Area18" - and
+ * the server does that join once, from the atlas, so every page agrees on the
+ * answer. Rows that carry a `placeId` are believed; this is only the fallback
+ * for a terminal name arriving from somewhere that has not been given one.
+ * A stop the map cannot place still belongs on the plan.
+ */
+const placeIdForTerminal = (terminal) =>
+  atlas.find((l) => terminalMatchesPlace(terminal, l.name))?.rawId || '';
+
+/**
+ * Where a line on a list can be bought, cheapest first, cached for the session.
+ *
+ * The list's own `buyAt` is only ever the cheapest one UEX knows. That is a
+ * fine default and a poor answer: the cheapest seller of a common good is
+ * routinely three jumps out of the way, and the player is the only one who
+ * knows what else the run has to fit around.
+ *
+ * A line is whatever the player wrote, so the server is asked rather than the
+ * commodity market alone: "Agricium" is a trade good, "Bulwark" is a shield
+ * bought from a shop counter, and a shopping list is allowed to hold both.
+ */
+const sellerCache = new Map();
+
+async function sellersOf(item) {
+  if (sellerCache.has(item.name)) return sellerCache.get(item.name);
+
+  const fallback = item.buyAt
+    ? [{ terminal: item.buyAt, placeId: placeIdForTerminal(item.buyAt), price: item.buyPrice || 0, scu: 0 }]
+    : [];
+
+  const found = await getJson(`/api/shopping/sellers?name=${encodeURIComponent(item.name)}`)
+    .catch(() => null);
+
+  const sellers = (found?.sellers ?? [])
+    .slice(0, 12)
+    .map((r) => ({
+      terminal: r.terminal,
+      placeId: r.placeId || placeIdForTerminal(r.terminal),
+      place: r.place || '',
+      system: r.system || '',
+      security: r.security || 'unknown',
+      price: r.price,
+      scu: r.scu || 0,
+      kind: r.kind,
+    }));
+
+  const answer = sellers.length ? sellers : fallback;
+  sellerCache.set(item.name, answer);
+  return answer;
+}
+
+/**
+ * Stock is per terminal and the list says how much is wanted, so the two can
+ * be compared: flying to the cheapest seller of 10 SCU to find 3 is a wasted
+ * landing, and the page knew before you left.
+ */
+const shortStock = (seller, item) =>
+  item.needed > 0 && seller.scu > 0 && seller.scu < item.needed;
+
+/**
+ * The seller a line starts on.
+ *
+ * A list written for a place is a decision already made, so a counter there
+ * wins even when somewhere else is cheaper - that is the whole point of saying
+ * where you are going. Otherwise: the cheapest that can actually fill the
+ * order, else the cheapest.
+ */
+const defaultSeller = (sellers, item, destination) => {
+  const there = destination && sellers.filter((seller) => atSameStop(seller, destination));
+
+  if (there?.length)
+    return there.find((seller) => !shortStock(seller, item)) ?? there[0];
+
+  return sellers.find((seller) => !shortStock(seller, item)) ?? sellers[0];
+};
+
+/** Whether a seller stands at the place a list is pointed at. */
+const atSameStop = (seller, destination) => {
+  if (!destination) return false;
+
+  if (destination.id && seller.placeId) return seller.placeId === destination.id;
+
+  return !!destination.name && (
+    terminalMatchesPlace(seller.terminal, destination.name)
+    || (!!seller.place && terminalMatchesPlace(seller.place, destination.name)));
+};
+
+function sellerLabel(seller, item) {
+  const stock = seller.scu
+    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ' — short' : ''}`
+    : '';
+
+  // Where it is and whether the law reaches it: the cheapest counter is
+  // routinely the one in Pyro, and that is a decision, not a detail.
+  const where = seller.system ? ` · ${seller.system}` : '';
+  const risk = seller.security === 'lawless' ? ' — lawless' : '';
+
+  return seller.price > 0
+    ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
+    : `${seller.terminal}${stock}${where}${risk}`;
+}
+
+/**
+ * Turns what a list is still missing into a run, asking where to buy each thing.
+ *
+ * One stop per terminal rather than per item, because a trip is a sequence of
+ * places: three things bought at Area18 is one landing. Anything with no known
+ * seller is shown and left off rather than quietly dropped.
+ */
+async function planShoppingTrip(job, card) {
+  card.querySelectorAll('.trip-chooser').forEach((n) => n.remove());
+
+  const missing = job.items.filter((i) => !i.have);
+
+  if (!missing.length) {
+    alertLine($('#jobs-list'), 'Everything on this list is already in hand.');
+    return;
+  }
+
+  // Where this list said it was for, when it said anything.
+  const destination = job.destination
+    ? { name: job.destination, id: job.destinationId || '' }
+    : null;
+
+  const chooser = el('div', 'trip-chooser');
+
+  const head = el('div', 'chooser-head');
+  head.append(el('span', null, destination
+    ? `Where to buy — ${destination.name} first`
+    : 'Where to buy — one stop per terminal'));
+  chooser.append(head);
+
+  const rows = el('div', 'chooser-rows');
+  rows.append(el('div', 'muted', 'Looking up sellers…'));
+  chooser.append(rows);
+  card.append(chooser);
+
+  const options = await Promise.all(missing.map(async (item) => ({
+    item,
+    sellers: await sellersOf(item),
+  })));
+
+  rows.textContent = '';
+
+  // What the player picked, item name to terminal. Empty means "leave it off".
+  const chosen = new Map();
+  const foot = el('div', 'chooser-foot');
+  const count = el('span', 'muted');
+
+  const retally = () => {
+    const stops = new Set([...chosen.values()].filter(Boolean));
+    count.textContent = stops.size
+      ? `${stops.size} stop${stops.size === 1 ? '' : 's'}`
+      : 'nothing chosen';
+  };
+
+  /*
+   * The same decision, seen from either end.
+   *
+   * By item is "where do I get this", which is how a list is written. By
+   * location is "what is this landing worth", which is how a run is flown -
+   * the point of a shopping list is to rotate around the map picking things
+   * up, and that question cannot be answered one dropdown at a time. Both
+   * write into `chosen`, so switching view never loses a choice, and the plan
+   * is built from the one answer either of them wrote.
+   */
+  const stops = [];
+
+  const renderItems = () => {
+    rows.textContent = '';
+
+    for (const { item, sellers } of options) {
+      const row = el('div', 'chooser-row');
+
+      const what = el('div', 'chooser-what');
+      what.append(el('div', 'name', item.name));
+      what.append(el('div', 'sub', item.needed > 0
+        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''} needed`
+        : 'any amount'));
+      row.append(what);
+
+      if (!sellers.length) {
+        row.append(el('div', 'chooser-none', 'no known seller — left off'));
+        rows.append(row);
+        continue;
+      }
+
+      const select = el('select', 'select');
+
+      for (const seller of sellers) {
+        const option = document.createElement('option');
+        option.value = seller.terminal;
+        option.textContent = sellerLabel(seller, item);
+        select.append(option);
+      }
+
+      const skip = document.createElement('option');
+      skip.value = '';
+      skip.textContent = 'Leave this one off';
+      select.append(skip);
+
+      select.value = chosen.get(item.name) ?? defaultSeller(sellers, item, destination).terminal;
+      chosen.set(item.name, select.value);
+
+      select.addEventListener('change', () => {
+        chosen.set(item.name, select.value);
+
+        // A choice made here is the player's, so a ticked stop must not
+        // silently overwrite it later.
+        stops.length = 0;
+        retally();
+      });
+
+      row.append(select);
+      rows.append(row);
+    }
+  };
+
+  const renderLocations = () => {
+    rows.textContent = '';
+
+    // Every terminal any of the list can be bought at, and what it would
+    // supply. Ranked by how much of the list one landing covers, then by what
+    // that landing costs.
+    const counters = new Map();
+
+    for (const { item, sellers } of options)
+      for (const seller of sellers) {
+        const counter = counters.get(seller.terminal) || { seller, supplies: [] };
+
+        counter.supplies.push({ item, seller });
+        counters.set(seller.terminal, counter);
+      }
+
+    const ranked = [...counters.values()]
+      .map((counter) => ({
+        ...counter,
+        cost: counter.supplies.reduce((sum, s) =>
+          sum + (s.seller.price > 0 ? s.seller.price * Math.max(1, s.item.needed) : 0), 0),
+        chosen: atSameStop(counter.seller, destination),
+      }))
+
+      // The place the list is for leads, whatever it carries: you are landing
+      // there regardless, so what it can supply is the first question.
+      .sort((a, b) => Number(b.chosen) - Number(a.chosen)
+        || b.supplies.length - a.supplies.length
+        || a.cost - b.cost)
+      .slice(0, 20);
+
+    if (!ranked.length) {
+      rows.append(el('div', 'muted', 'Nothing on this list has a known seller.'));
+      return;
+    }
+
+    // The default plan buys each thing wherever it is cheapest, which is one
+    // landing per thing. Fuel and time cost more than the difference, so the
+    // panel offers the other answer outright.
+    const fewest = el('div', 'chooser-actions');
+    const pack = el('button', 'ghost', 'Fewest stops');
+    pack.title = 'Cover the list with as few landings as possible';
+
+    pack.addEventListener('click', () => {
+      stops.length = 0;
+
+      const left = new Set(options.filter((o) => o.sellers.length).map((o) => o.item.name));
+
+      while (left.size) {
+        // Most of what is still missing, and the cheapest of those.
+        const best = ranked
+          .map((counter) => ({
+            counter,
+            covers: counter.supplies.filter((s) => left.has(s.item.name)),
+          }))
+          .filter((c) => c.covers.length)
+          .sort((a, b) => b.covers.length - a.covers.length
+            || a.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0)
+             - b.covers.reduce((sum, s) => sum + s.seller.price * Math.max(1, s.item.needed), 0))[0];
+
+        if (!best) break;
+
+        stops.push(best.counter.seller.terminal);
+        best.covers.forEach((s) => left.delete(s.item.name));
+      }
+
+      assignFromStops();
+      renderLocations();
+      retally();
+    });
+
+    fewest.append(pack);
+    rows.append(fewest);
+
+    for (const counter of ranked) {
+      const row = el('div', 'chooser-stop');
+
+      const tick = el('label', 'stop-tick');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = stops.includes(counter.seller.terminal);
+
+      box.addEventListener('change', () => {
+        const already = stops.indexOf(counter.seller.terminal);
+
+        if (box.checked && already < 0) stops.push(counter.seller.terminal);
+        else if (!box.checked && already >= 0) stops.splice(already, 1);
+
+        assignFromStops();
+        renderLocations();
+        retally();
+      });
+
+      tick.append(box);
+      row.append(tick);
+
+      const what = el('div', 'stop-what');
+      const name = el('div', 'name');
+      name.append(el('span', null, counter.seller.terminal));
+
+      if (counter.seller.security === 'lawless')
+        name.append(el('span', 'sec sec-lawless', 'lawless'));
+
+      what.append(name);
+
+      // What this landing is actually for: the things it can supply, greyed
+      // where a stop ticked earlier already has them.
+      const supplies = el('div', 'stop-items');
+
+      for (const { item } of counter.supplies) {
+        const taken = chosen.get(item.name);
+        const mine = taken === counter.seller.terminal;
+
+        supplies.append(el('span',
+          mine ? 'stop-item mine' : taken ? 'stop-item taken' : 'stop-item',
+          item.name));
+      }
+
+      what.append(supplies);
+      row.append(what);
+
+      const sum = el('div', 'stop-sum');
+      sum.append(el('div', null, `${counter.supplies.length} of ${options.length}`));
+      if (counter.cost > 0) sum.append(el('div', 'muted', money(counter.cost)));
+      if (counter.seller.system) sum.append(el('div', 'muted', counter.seller.system));
+      row.append(sum);
+
+      rows.append(row);
+    }
+  };
+
+  /** Ticked stops fill the list in the order they were ticked, first come. */
+  const assignFromStops = () => {
+    for (const { item } of options) chosen.set(item.name, '');
+
+    for (const terminal of stops)
+      for (const { item, sellers } of options)
+        if (!chosen.get(item.name) && sellers.some((s) => s.terminal === terminal))
+          chosen.set(item.name, terminal);
+  };
+
+  const views = el('div', 'seg chooser-views');
+
+  for (const [key, label] of [['item', 'By item'], ['location', 'By location']]) {
+    const button = el('button', key === 'item' ? 'active' : null, label);
+
+    button.addEventListener('click', () => {
+      views.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+
+      if (key === 'item') {
+        renderItems();
+        return;
+      }
+
+      // The plan arrives here already made - by item, or by the defaults -
+      // so the ticks show it rather than starting blank and quietly
+      // disagreeing with the count at the bottom of the panel.
+      if (!stops.length)
+        for (const terminal of chosen.values())
+          if (terminal && !stops.includes(terminal)) stops.push(terminal);
+
+      renderLocations();
+    });
+
+    views.append(button);
+  }
+
+  head.append(views);
+
+  renderItems();
+  retally();
+
+  const create = el('button', 'ghost', 'Create plan');
+  create.addEventListener('click', async () => {
+    const byPlace = new Map();
+
+    for (const { item, sellers } of options) {
+      const terminal = chosen.get(item.name);
+      if (!terminal) continue;
+
+      const seller = sellers.find((s) => s.terminal === terminal);
+      const need = item.needed > 0
+        ? `${item.name} ${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+        : item.name;
+
+      const line = byPlace.get(terminal)
+        || { items: [], cost: 0, priced: true, placeId: seller?.placeId || '' };
+
+      line.items.push(need);
+
+      if (seller?.price > 0 && item.needed > 0) line.cost += seller.price * item.needed;
+      else line.priced = false;
+
+      byPlace.set(terminal, line);
+    }
+
+    if (!byPlace.size) {
+      alertLine($('#jobs-list'), 'Nothing is chosen, so there is no run to fly.');
+      return;
+    }
+
+    const stops = [...byPlace.entries()].map(([place, line]) => ({
+      placeId: line.placeId || placeIdForTerminal(place),
+      place,
+
+      // The estimate is only shown when every item at the stop has a price;
+      // a partial total reads as the cost of the landing and is not.
+      note: line.items.join(', ') + (line.priced && line.cost > 0 ? ` · ~${money(line.cost)}` : ''),
+    }));
+
+    chooser.remove();
+    await planTrip(`${job.title} run`, stops);
+  });
+
+  const cancel = el('button', 'ghost', 'Cancel');
+  cancel.addEventListener('click', () => chooser.remove());
+
+  foot.append(count);
+  foot.append(el('span', 'spacer'));
+  foot.append(create);
+  foot.append(cancel);
+  chooser.append(foot);
+}
+
+/** A one-line notice under a section, for when a button cannot do its job. */
+function alertLine(host, text) {
+  host.querySelectorAll('.trip-alert').forEach((n) => n.remove());
+
+  const line = el('p', 'muted trip-alert', text);
+  host.prepend(line);
+  setTimeout(() => line.remove(), 6000);
+}
+
 /** What the hover tip currently shows, so pointermove does not rebuild it. */
 let tipKey = null;
 
@@ -4314,8 +6352,12 @@ function appendTipGoods(tip, names) {
   if (!names.length) return;
 
   const shown = names.slice(0, 6).join(', ');
-  const more = names.length > 6 ? ` +${names.length - 6} more` : '';
-  tip.append(el('span', 'goods', `Sells ${shown}${more}`));
+  tip.append(el('span', 'goods', `Sells ${shown}${names.length > 6 ? '…' : ''}`));
+
+  // A tooltip cannot hold a hundred names, so it says where they are rather
+  // than trailing off into "+109 more" with no way to see them.
+  if (names.length > 6)
+    tip.append(el('span', 'goods hint', `click for all ${names.length}`));
 }
 
 /** The hover tooltip: name, kind and history at the cursor, instantly. */
@@ -4447,6 +6489,10 @@ function renderMapInfoSold() {
     if (!names.length) {
       list.append(el('span', 'muted', 'Nothing known to sell here.'));
     } else {
+      // The count matters when there are a hundred: the tooltip promised them
+      // all, and this is where they are.
+      list.append(el('div', 'sold-count muted', `${names.length} sold here · click one to light its sellers`));
+
       for (const name of names) {
         const chip = el('button', 'sold-chip', name);
         chip.type = 'button';
@@ -4560,6 +6606,7 @@ function drawMap() {
   if (highlightIds && highlightIds.size === 0) highlightIds = null;
 
   prepareShading(term, sites);
+  syncCargoPanel(term, sites);
 
   const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
 
@@ -4568,9 +6615,14 @@ function drawMap() {
     const seen = atlas.filter((l) => l.visits > 0).length;
     if (term && !highlightIds) count.textContent = 'no match';
     else if (sites) {
+      // Name what was matched: the term may have been a fragment, and the
+      // user should see which commodity the map decided they meant.
+      const matched = matchCommodity(term.startsWith('buy:') ? term.slice(4) : term);
+      const what = matched ? matched.name : term;
+
       count.textContent = term.startsWith('buy:')
-        ? `stocked at ${highlightIds.size} places the map can name`
-        : `sells at ${highlightIds.size} places the map can name`;
+        ? `${what} — stocked at ${highlightIds.size} places the map can name`
+        : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
@@ -4630,7 +6682,12 @@ function drawMap() {
   if (wasHome) view = { ...home };
 
   const maxVisits = Math.max(1, ...locations.map((l) => l.visits));
-  const radiusFor = (visits) => 4 + Math.sqrt(visits / maxVisits) * 13;
+  // Visits still nudge the size, but gently. At four times the range a busy
+  // outpost dwarfed a station and the map read as a jumble of sizes rather
+  // than a set of places; the count lives in the tip and on the Places page,
+  // where a number can be a number.
+  const radiusFor = (visits) => 7 + Math.sqrt(visits / maxVisits) * 4;
+
 
   // Stars, orbit rings and system labels.
   for (const [system, centre] of Object.entries(SYSTEM_LAYOUT)) {
@@ -4697,6 +6754,21 @@ function drawMap() {
     map.append(jumpLabel);
   }
 
+  // Every body's hover disc goes in one layer, added before any node is
+  // drawn. Appending them as each body was built put a later body's disc on
+  // top of an earlier body's dots - and in SVG the thing on top takes the
+  // pointer, so clicking those dots did nothing at all. Widening the clusters
+  // made the discs bigger and the dead zones with them.
+  const hoverLayer = svgEl('g');
+
+  // The bodies go in a layer of their own, under everything, for the same
+  // reason: drawn as each cluster was built, a later planet's disc painted over
+  // an earlier one's marks. It cannot steal a click - the disc is
+  // pointer-events: none - but it could still hide the places on a neighbour.
+  const bodyLayer = svgEl('g');
+  map.append(bodyLayer);
+  map.append(hoverLayer);
+
   // Bodies and their locations.
   for (const [system, bodies] of Object.entries(grouped)) {
     if (system === 'other') continue;
@@ -4740,6 +6812,9 @@ function drawMap() {
       const sites = bodies.get(bodyName);
       const reach = clusterRadius(sites.length);
 
+      // Before the sites, so their marks sit on the world rather than behind it.
+      if (bodyName !== '—') drawBodyDisc(bodyLayer, bx, by, reach, system, `${system}/${bodyName}`);
+
       // Body names sit outside the cluster they head, so the sites below have
       // clear air to put their own labels in. They are placed first and claim
       // their box, so site labels flow around them.
@@ -4770,12 +6845,40 @@ function drawMap() {
           fill: '#000', 'fill-opacity': '0', 'pointer-events': 'fill',
         });
 
+        const bubble = () => map.querySelector(`.map-body[data-body="${system}/${bodyName}"]`);
+
         bodyHover.addEventListener('pointermove', (e) => {
-          if (tipKey !== bodyKey) showBodyTip(bodyName, system, sites);
+          if (tipKey !== bodyKey) {
+            showBodyTip(bodyName, system, sites);
+
+            // Lit only while the pointer is in it: at rest the bubble is a
+            // ground the eye can ignore, and under the pointer it is the
+            // answer to "which of these belong together".
+            bubble()?.classList.add('lit');
+          }
+
           moveMapTip(e);
         });
-        bodyHover.addEventListener('pointerleave', hideMapTip);
-        map.append(bodyHover);
+
+        bodyHover.addEventListener('pointerleave', () => {
+          bubble()?.classList.remove('lit');
+          hideMapTip();
+        });
+
+        // Clicking the space between a body's places frames that body. The
+        // dots themselves keep their own click - this is only the gaps, which
+        // did nothing at all before.
+        bodyHover.addEventListener('click', (e) => {
+          e.stopPropagation();
+          animateViewTo({
+            x: bx - (reach + 26),
+            y: by - (reach + 26),
+            w: (reach + 26) * 2,
+            h: (reach + 26) * 2,
+          });
+        });
+
+        hoverLayer.append(bodyHover);
       }
 
       // Sites are spread by golden angle rather than in rings. Rings of a fixed
@@ -4783,17 +6886,26 @@ function drawMap() {
       // rather than a cluster and stacks the labels on top of each other;
       // phyllotaxis fills the disc evenly at any count, and microTech alone has
       // over a hundred.
-      sites.forEach((site, siteIndex) => {
+      // Every position first, then each node is told how much room it has.
+      // A cluster is drawn tighter than the pad that makes a lone dot easy to
+      // click, so without this the last site drawn owns every point it covers
+      // and its neighbours cannot be clicked at all.
+      const spots = sites.map((site, siteIndex) => {
         const spin = siteIndex * 2.39996;
         const distance = clusterRadius(siteIndex + 1);
 
-        drawNode(
-          map,
-          bx + Math.cos(spin) * distance,
-          by + Math.sin(spin) * distance,
-          site,
-          radiusFor(site.visits),
-          { x: bx, y: by });
+        return { x: bx + Math.cos(spin) * distance, y: by + Math.sin(spin) * distance };
+      });
+
+      sites.forEach((site, siteIndex) => {
+        const spot = spots[siteIndex];
+
+        let nearest = Infinity;
+        spots.forEach((other, j) => {
+          if (j !== siteIndex) nearest = Math.min(nearest, Math.hypot(other.x - spot.x, other.y - spot.y));
+        });
+
+        drawNode(map, spot.x, spot.y, site, radiusFor(site.visits), { x: bx, y: by }, nearest / 2);
       });
     });
   }
@@ -4817,14 +6929,170 @@ function drawMap() {
   drawLegend(locations);
   applyView();
   drawHere();
+  drawTravel();
+  drawTripPath();
   fitToHighlights(term || null);
+}
+
+/* ---------- what a place looks like ---------- */
+
+/**
+ * A mark per kind, drawn in a box from -1 to 1 so size stays the caller's
+ * business.
+ *
+ * Colour alone was carrying the whole taxonomy: nine kinds, nine dots, and a
+ * legend to memorise. A shape can be read without the legend - a headframe is a
+ * mine whether or not you remember that mines are brown - and the colour stays
+ * exactly as it was, so anyone who had learnt it loses nothing.
+ *
+ * Deliberately blunt geometry. These are drawn between four and seventeen
+ * pixels across, where a detailed glyph turns to mush; a silhouette that
+ * survives being tiny beats one that looks good in a design tool.
+ */
+const KIND_SHAPES = {
+  // A skyline. Two steps rather than three: at eight pixels a third is a smudge.
+  City: [{ tag: 'path', attrs: { d: 'M-1 .9 L-1 -.15 L-.05 -.15 L-.05 -1 L1 -1 L1 .9 Z' } }],
+
+  // A ring - the one shape that reads as "you dock inside it".
+  Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
+
+  // A plain disc: the commonest stop, and the quietest mark.
+  RestStop: [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: .92 } }],
+
+  // A dome on the ground.
+  Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
+
+  // A spoil heap. Nothing on top of it - the headframe it used to carry turned
+  // to mush at map size, which is the size it is always drawn at.
+  Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
+
+  // An angular rock.
+  Asteroid: [{ tag: 'polygon', attrs: { points: '-.55,-.85 .55,-.85 1,0 .55,.85 -.55,.85 -1,0' } }],
+
+  // A cross: legible at any size, and nothing else on the map is one.
+  Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
+
+  // Cargo moving: an arrow, not a crate with a band nobody could see.
+  DistributionCentre: [{ tag: 'polygon', attrs: { points: '-1,-.85 .95,0 -1,.85 -1,.3 -.15,0 -1,-.3' } }],
+
+  // The same diamond the jump lanes wear.
+  JumpPoint: [{ tag: 'polygon', attrs: { points: '0,-1 1,0 0,1 -1,0' } }],
+
+  MissionBeacon: [{ tag: 'polygon', attrs: { points: '0,1 -1,-.85 0,-.3 1,-.85' } }],
+};
+
+/** Anything without a mark of its own keeps the dot it always had. */
+const PLAIN_MARK = [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: 1 } }];
+
+/**
+ * Draws a place's mark at a size.
+ *
+ * @param solid Somewhere with history is filled; somewhere never visited is an
+ *   outline, exactly as when every kind was a circle.
+ */
+/**
+ * Equal radius is not equal weight: a triangle inside a circle covers under
+ * half of it, so the same number drew a mine that looked half the size of a
+ * rest stop beside it. Each shape is nudged until they read as one set.
+ */
+const SHAPE_WEIGHT = {
+  City: 0.92,
+  Station: 1,
+  RestStop: 0.95,
+  Outpost: 1.05,
+  Mine: 1.18,
+  Asteroid: 1,
+  Research: 1.06,
+  DistributionCentre: 1.12,
+  JumpPoint: 1.15,
+  MissionBeacon: 1.15,
+};
+
+function kindMark(kind, x, y, radius, colour, solid) {
+  const size = radius * (SHAPE_WEIGHT[kind] ?? 1);
+
+  const group = svgEl('g', {
+    class: 'map-mark',
+    transform: `translate(${x} ${y}) scale(${size})`,
+  });
+
+  for (const part of KIND_SHAPES[kind] ?? PLAIN_MARK) {
+    group.append(svgEl(part.tag, {
+      ...part.attrs,
+
+      // Line parts are strokes whatever the history: a filled orbit or shaft is
+      // a blob. Everything else fills once the place has been visited.
+      fill: solid ? colour : 'none',
+      stroke: colour,
+
+      // Heavy enough to survive being drawn six pixels across, which is the
+      // size these are actually used at; an outline at .14 disappeared.
+      'stroke-width': 0.22,
+      'stroke-linejoin': 'round',
+      'fill-rule': part.evenodd ? 'evenodd' : 'nonzero',
+      opacity: solid ? 0.92 : 0.6,
+    }));
+  }
+
+  return group;
+}
+
+/**
+ * The body a cluster belongs to, drawn as the disc its places sit on.
+ *
+ * Planets and moons are not in the atlas at all - the game names locations, not
+ * the rocks they are on - so a body was a label and nothing else, and a station
+ * ended up looking larger than the planet holding it. Drawing the disc puts the
+ * hierarchy back: the big quiet circle is the world, the marks on it are the
+ * places you can actually go.
+ */
+/**
+ * The bubble a body's places sit in.
+ *
+ * The layout is already polar - each site is placed by golden angle around its
+ * body - but a ring of dots does not say "these belong to Hurston" on its own.
+ * The disc does, and it is deliberately faint: it is a ground, not a thing to
+ * look at. Hovering brings it up, which is when the grouping is the question
+ * being asked.
+ *
+ * @param key Identifies the bubble so the hover area over the same body can
+ *   light it without either having to know where the other one is drawn.
+ */
+function drawBodyDisc(layer, x, y, reach, system, key) {
+  const disc = svgEl('circle', {
+    cx: x, cy: y, r: reach + 7,
+    class: 'map-body',
+    fill: SYSTEM_COLOURS[system] || '#9fb8ff',
+  });
+
+  if (key) disc.dataset.body = key;
+
+  layer.append(disc);
 }
 
 /**
  * @param anchor The body this site belongs to, if any. Labels are pushed away
  *   from it so a cluster fans its names outwards instead of stacking them.
  */
-function drawNode(map, x, y, location, radius, anchor = null) {
+/**
+ * How far a mark's invisible click target reaches.
+ *
+ * A small mark needs a pad around it to be clickable at all, but the pad must
+ * stop inside the neighbour's half of the gap: SVG gives a shared point to
+ * whatever was drawn last, so an overlapping pad does not make a click
+ * ambiguous - it makes the covered node unclickable. In a cluster that was
+ * most of them, which is why clicking a station, opening its trade panel and
+ * adding it to a plan all failed on the same places. Never below the mark
+ * itself, which is always its own target.
+ */
+const hitPad = (radius, room) => Math.max(radius + 1, Math.min(radius + 8, room));
+
+/**
+ * @param room Half the distance to the nearest neighbour, when there is one.
+ *   The click pad stops there rather than reaching across it.
+ */
+function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
+
   const colour = KIND_COLOURS[location.kind] || KIND_COLOURS.Unknown;
   const been = location.visits > 0;
 
@@ -4841,7 +7109,10 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   // The dot itself claims its square so no neighbour's label sits on it.
   claimedBoxes.push({ x0: x - radius - 1, y0: y - radius - 1, x1: x + radius + 1, y1: y + radius + 1 });
 
-  group.append(svgEl('circle', { cx: x, cy: y, r: radius + 8, fill: colour, opacity: '0', class: 'hit' }));
+  group.append(svgEl('circle', {
+    cx: x, cy: y, r: hitPad(radius, room), fill: colour, opacity: '0', class: 'hit',
+  }));
+
 
   // In shaded commodity mode the ring and dot carry the price grade; a lit
   // place UEX has no price for keeps the plain green ring.
@@ -4856,15 +7127,16 @@ function drawNode(map, x, y, location, radius, anchor = null) {
 
   // Somewhere never visited is drawn as an outline, so the places that carry
   // history read as solid against the rest of the map. A price shade
-  // overrides the kind colour - in that mode the colour IS the price.
-  const dotColour = shade?.colour ?? colour;
+  // overrides the kind colour - in that mode the colour IS the price, and
+  // that has to hold for the whole map: a place with no price for the chosen
+  // commodity goes slate, including one the catalogue lit but nobody has
+  // priced. Otherwise the kind colours sit in the same picture as the scale
+  // and the eye has two colour languages to read at once.
+  const dotColour = shade?.colour ?? (shadeScale ? NO_TRADE : colour);
 
-  group.append(been || shade
-    ? svgEl('circle', { cx: x, cy: y, r: radius, fill: dotColour, opacity: '.85' })
-    : svgEl('circle', {
-        cx: x, cy: y, r: radius, fill: 'none',
-        stroke: dotColour, 'stroke-width': '1.1', opacity: '.42',
-      }));
+  // A price shade means the colour IS the price, so the mark keeps its shape
+  // and takes the graded colour: a mine is still a mine at 1,872 aUEC.
+  group.append(kindMark(location.kind, x, y, radius, dotColour, been || !!shade));
 
   // A styled tooltip that appears instantly - the native <title> takes a
   // second to show and cannot be read against the game-HUD styling.
@@ -4877,6 +7149,14 @@ function drawNode(map, x, y, location, radius, anchor = null) {
   group.addEventListener('click', (e) => {
     e.stopPropagation();
     showMapInfo(location);
+  });
+
+  // Double-click for the fuller story: what this station takes and offers. The
+  // card has no room for a dozen commodities on each side of the counter.
+  group.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    showStation(location.rawId, location.name);
   });
 
   // Labelling everything is unreadable at this density, so only places with
@@ -4897,6 +7177,7 @@ function drawNode(map, x, y, location, radius, anchor = null) {
       anchor,
       text: location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name,
       priority: (highlighted ? 1_000_000 : 0) + location.visits,
+      pinned: highlighted,
     });
   }
 
@@ -4932,12 +7213,35 @@ function boxesCollide(a, b) {
  * fits nowhere is dropped: an unreadable pile names nothing, while a bare dot
  * still answers on hover and click.
  */
+/**
+ * How many names the map will show at the current zoom.
+ *
+ * Collision avoidance alone is not decluttering: it stops names overlapping,
+ * but at system scale microTech still asks for twenty-two of them and the ones
+ * that fit form a wall of text around the disc. So the whole view gets a
+ * budget, spent on the busiest places first, and it grows with the square of
+ * the zoom - zooming in is asking for detail, and that is when there is room
+ * to put it. Past the detail threshold every label that fits is drawn.
+ */
+const labelBudget = () => {
+  if (isDetailed()) return Infinity;
+
+  const zoom = HOME_VIEW.w / view.w;
+  return Math.max(12, Math.round(14 * zoom * zoom));
+};
+
 function placeLabels(map) {
   const size = labelSize();
+  const budget = labelBudget();
+  let spent = 0;
 
   pendingLabels.sort((a, b) => b.priority - a.priority);
 
   for (const want of pendingLabels) {
+    // A search match is the answer to a question, so it is never rationed;
+    // everything else queues for the budget.
+    if (!want.pinned && spent >= budget) continue;
+
     const { x, y, radius, anchor } = want;
 
     const dx = anchor ? x - anchor.x : 0;
@@ -4979,6 +7283,7 @@ function placeLabels(map) {
       want.group.append(label);
 
       claimedBoxes.push(box);
+      if (!want.pinned) spent++;
       break;
     }
   }
@@ -5006,9 +7311,9 @@ function drawLegend(locations) {
 
     const plain = el('div', 'item');
     const swatch = el('span', 'swatch');
-    swatch.style.background = '#4fd48a';
+    swatch.style.background = NO_TRADE;
     plain.append(swatch);
-    plain.append(el('span', null, 'no UEX price for it here'));
+    plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
     legend.append(plain);
     return;
   }
@@ -5017,8 +7322,13 @@ function drawLegend(locations) {
 
   for (const kind of kinds) {
     const item = el('div', 'item');
-    const swatch = el('span', 'swatch');
-    swatch.style.background = KIND_COLOURS[kind] || KIND_COLOURS.Unknown;
+
+    // The legend draws the mark itself rather than a square of its colour -
+    // there is no point naming a shape the key does not show.
+    const swatch = document.createElementNS(SVG_NS, 'svg');
+    swatch.setAttribute('viewBox', '-1.35 -1.35 2.7 2.7');
+    swatch.setAttribute('class', 'swatch-mark');
+    swatch.append(kindMark(kind, 0, 0, 1, KIND_COLOURS[kind] || KIND_COLOURS.Unknown, true));
     item.append(swatch);
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);
@@ -5074,6 +7384,456 @@ onInput('#stash-search', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-period', () => libraryStats && renderStash(libraryStats));
 onInput('#stash-latest', () => libraryStats && renderStash(libraryStats));
 $('#stash-ever')?.addEventListener('change', () => libraryStats && renderStash(libraryStats));
+
+/* ---------- stale prices ---------- */
+
+/**
+ * Offers to renew the price table when it has gone stale.
+ *
+ * UEX is fetched on a click and never on a timer, which is the right default
+ * and has one cost: a table pulled a fortnight ago looks exactly like one
+ * pulled this morning, and every margin on the page is quietly wrong. So the
+ * app looks once at startup, and if the snapshot has turned a day old it says
+ * so and offers the one click that fixes it.
+ *
+ * An offer, not an alert: nothing is blocked, dismissing it lasts the day, and
+ * the check runs once per load rather than on any schedule.
+ */
+const STALE_AFTER_HOURS = 24;
+const STALE_DISMISSED = 'qw-uex-stale-dismissed';
+
+/** Feeds enabled alongside the price table, which age at the same rate. */
+let staleFeeds = [];
+
+function dismissedToday() {
+  try {
+    const until = Number(localStorage.getItem(STALE_DISMISSED) || 0);
+    return until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+const hoursSince = (iso) => (Date.now() - new Date(iso).getTime()) / 3600000;
+
+async function checkPriceAge() {
+  const notice = $('#stale');
+  if (!notice || dismissedToday()) return;
+
+  let uex;
+  try {
+    uex = await getJson('/api/uex');
+  } catch {
+    return;
+  }
+
+  // Nothing to renew when the integration is off or has never been fetched:
+  // the Settings page already offers to turn it on, and being nagged about a
+  // feature you have not enabled is noise.
+  if (!uex.enabled || !uex.fetchedAt) return;
+
+  const age = hoursSince(uex.fetchedAt);
+
+  staleFeeds = await getJson('/api/uex/feeds')
+    .then((feeds) => feeds.filter((f) => f.enabled && (!f.fetchedAt || hoursSince(f.fetchedAt) >= STALE_AFTER_HOURS)))
+    .catch(() => []);
+
+  if (age < STALE_AFTER_HOURS && !staleFeeds.length) return;
+
+  const parts = [`Prices last fetched ${ago(uex.fetchedAt)}`];
+
+  if (staleFeeds.length) {
+    parts.push(`${staleFeeds.length} other feed${staleFeeds.length === 1 ? '' : 's'} as old`);
+  }
+
+  parts.push('margins and best-price rankings are only as fresh as this');
+
+  $('#stale-detail').textContent = `${parts.join(' · ')}.`;
+  notice.hidden = false;
+}
+
+function initStaleNotice() {
+  const notice = $('#stale');
+  if (!notice) return;
+
+  $('#stale-refresh').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Fetching…';
+
+    try {
+      // The prices first, then whatever else had gone stale with them: a
+      // refresh that renewed half of it would leave the same problem behind.
+      await fetch('/api/uex/enable', { method: 'POST' });
+
+      for (const feed of staleFeeds) {
+        await fetch(`/api/uex/feeds/${encodeURIComponent(feed.key)}/enable`, { method: 'POST' });
+      }
+
+      notice.hidden = true;
+      loadMarket().catch(() => { /* the page keeps the numbers it has */ });
+      renderSettings().catch(() => { /* Settings redraws on its next visit */ });
+    } catch {
+      button.textContent = 'Could not fetch';
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $('#stale-dismiss').addEventListener('click', () => {
+    notice.hidden = true;
+
+    // Until tomorrow rather than forever: the answer to "not now" is "ask me
+    // again when it matters", and by then the prices are a day older still.
+    try {
+      localStorage.setItem(STALE_DISMISSED, String(Date.now() + 86400000));
+    } catch { /* private browsing: the offer returns on the next load */ }
+  });
+}
+
+/* ---------- the wipe ---------- */
+
+/**
+ * The line under the player's history, on the Settings page.
+ *
+ * Every total the app reports describes the account being played now, and a
+ * data wipe ends one account and starts another. The date is a setting because
+ * CIG decides when wipes land, and because someone looking back at an older
+ * patch should be able to wind it back and see the lot.
+ */
+async function loadWipe() {
+  const field = $('#wipe-at');
+  if (!field) return;
+
+  let wipe;
+  try {
+    wipe = await getJson('/api/wipe');
+  } catch {
+    return;
+  }
+
+  field.value = wipe.at ? new Date(wipe.at).toISOString().slice(0, 10) : '';
+  $('#wipe-patch').value = wipe.patch === 'no wipe' ? '' : wipe.patch;
+
+  for (const [name, box] of Object.entries(WIPE_SCOPES)) {
+    $(box).checked = (wipe.covers || []).includes(name);
+  }
+
+  showWipeStatus(wipe);
+}
+
+/** What a wipe can take, and the box that says whether this one did. */
+const WIPE_SCOPES = {
+  money: '#wipe-money',
+  ships: '#wipe-ships',
+  inventory: '#wipe-inventory',
+  history: '#wipe-history',
+};
+
+const chosenScopes = () =>
+  Object.entries(WIPE_SCOPES).filter(([, box]) => $(box).checked).map(([name]) => name);
+
+function showWipeStatus(wipe) {
+  const status = $('#wipe-status');
+  if (!status) return;
+
+  if (!wipe.at) {
+    status.textContent = `counting all ${(wipe.stored ?? 0).toLocaleString()} sessions`;
+    return;
+  }
+
+  if (wipe.hidden === 0) {
+    status.textContent = 'nothing on record from before this';
+    return;
+  }
+
+  const covers = wipe.covers || [];
+  const sessions = `${wipe.hidden.toLocaleString()} session${wipe.hidden === 1 ? '' : 's'} before this`;
+
+  // A partial wipe hides nothing outright, so saying "not counted" flat would
+  // be a lie: those sessions still count towards everything it did not take.
+  status.textContent = covers.length === Object.keys(WIPE_SCOPES).length
+    ? `${sessions} are kept but not counted`
+    : `${sessions} still count, except for ${covers.join(', ')}`;
+}
+
+async function saveWipe(at, patch) {
+  const status = $('#wipe-status');
+
+  try {
+    const response = await fetch('/api/wipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ at, patch, covers: chosenScopes() }),
+    });
+
+    if (!response.ok) throw new Error(response.statusText);
+
+    // Every page's numbers just changed, so they are all re-read rather than
+    // left to be discovered stale on the next visit.
+    await loadHistory();
+    await loadWipe();
+
+    if (status) status.textContent = `${status.textContent} · saved`;
+  } catch (e) {
+    if (status) status.textContent = `could not save: ${e.message}`;
+  }
+}
+
+function initWipe() {
+  const field = $('#wipe-at');
+  if (!field) return;
+
+  $('#wipe-save').addEventListener('click', () => {
+    if (!field.value) {
+      $('#wipe-status').textContent = 'pick a date, or use "count everything"';
+      return;
+    }
+
+    saveWipe(`${field.value}T00:00:00Z`, $('#wipe-patch').value.trim());
+  });
+
+  $('#wipe-clear').addEventListener('click', () => saveWipe(null, null));
+
+  // A depth changed without a date is still a change worth keeping, and there
+  // is no second Save button to reach for.
+  for (const box of Object.values(WIPE_SCOPES)) {
+    $(box).addEventListener('change', () => {
+      if (field.value) saveWipe(`${field.value}T00:00:00Z`, $('#wipe-patch').value.trim());
+    });
+  }
+}
+
+/* ---------- new versions ---------- */
+
+/**
+ * Asks, once, whether this copy may look for a newer one.
+ *
+ * The app's standing promise is that it connects only when asked, and a version
+ * check is a connection. So the first start puts the question on screen with
+ * three answers - every start, just this once, or never - and never asks again
+ * whichever way it goes. The check itself is a plain GET of a public release
+ * feed: it sends nothing, and what it learns is what anyone can read.
+ */
+async function checkForUpdate() {
+  const notice = $('#update');
+  if (!notice || isOverlay) return;
+
+  let state;
+  try {
+    state = await getJson('/api/updates');
+  } catch {
+    return;
+  }
+
+  if (!state.asked) {
+    askAboutUpdates(state);
+    return;
+  }
+
+  if (state.automatic) await runUpdateCheck({ quiet: true });
+}
+
+/** The question, with its three answers. */
+function askAboutUpdates(state) {
+  const notice = $('#update');
+
+  $('#update-title').textContent = 'Look for a newer version?';
+  $('#update-detail').textContent =
+    'One request to GitHub, sending nothing about you or this machine. '
+    + 'Nothing is downloaded or installed — you would get a link.';
+
+  const actions = $('#update-actions');
+  actions.textContent = '';
+
+  const answer = async (automatic, thenCheck) => {
+    await fetch(`/api/updates/answer?automatic=${automatic}`, { method: 'POST' });
+    notice.hidden = true;
+    renderUpdateSettings().catch(() => { /* Settings redraws on its next visit */ });
+    if (thenCheck) await runUpdateCheck({ quiet: false });
+  };
+
+  const every = el('button', 'ghost', 'Yes, every start');
+  every.addEventListener('click', () => answer(true, true));
+
+  const once = el('button', 'ghost', 'Just this once');
+  once.addEventListener('click', () => answer(false, true));
+
+  const never = el('button', 'ghost', 'No thanks');
+  never.addEventListener('click', () => answer(false, false));
+
+  actions.append(every, once, never);
+  notice.hidden = false;
+}
+
+/**
+ * Runs a check and says what it found.
+ *
+ * @param quiet Say nothing when this copy is current - true for a startup
+ *   check, which nobody asked a question of, and false for a click, which is a
+ *   question and deserves an answer either way.
+ */
+async function runUpdateCheck({ quiet }) {
+  const notice = $('#update');
+
+  let result;
+  try {
+    const response = await fetch('/api/updates/check', { method: 'POST' });
+    result = await response.json();
+  } catch {
+    if (!quiet) $('#update-status').textContent = 'could not reach GitHub just now';
+    return;
+  }
+
+  renderUpdateSettings().catch(() => { /* the toggle is still right */ });
+
+  if (!result.newer) {
+    if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
+    notice.hidden = true;
+    return;
+  }
+
+  $('#update-title').textContent = `Quantum Wake ${result.latest} is out`;
+  $('#update-detail').textContent = `You are running ${result.current}.`
+    + (result.publishedAt ? ` Published ${dayUtc(result.publishedAt)}.` : '');
+
+  const actions = $('#update-actions');
+  actions.textContent = '';
+
+  const open = el('button', 'ghost', 'Open the release page');
+  open.addEventListener('click', () => {
+    window.open(result.url, '_blank', 'noreferrer');
+    notice.hidden = true;
+  });
+
+  const later = el('button', 'ghost', 'Later');
+  later.addEventListener('click', () => { notice.hidden = true; });
+
+  actions.append(open, later);
+  notice.hidden = false;
+}
+
+/** The Settings block: the toggle, and what the last look found. */
+async function renderUpdateSettings() {
+  const toggle = $('#update-auto');
+  if (!toggle) return;
+
+  const state = await getJson('/api/updates');
+  toggle.checked = !!state.automatic;
+
+  const status = $('#update-status');
+  if (!status) return;
+
+  status.textContent = state.lastCheckedAt
+    ? `last checked ${ago(state.lastCheckedAt)}`
+    : 'never checked';
+}
+
+function initUpdates() {
+  const toggle = $('#update-auto');
+  if (!toggle) return;
+
+  toggle.addEventListener('change', async () => {
+    await fetch(`/api/updates/answer?automatic=${toggle.checked}`, { method: 'POST' });
+    renderUpdateSettings().catch(() => { /* the box already shows the choice */ });
+  });
+
+  $('#update-check').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    $('#update-status').textContent = 'looking…';
+
+    try {
+      await runUpdateCheck({ quiet: false });
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+/**
+ * Offers to move the wipe line when a new patch has landed since it.
+
+ *
+ * Nothing in the logs says an account was reset - there is no such line. What
+ * they do say is when a patch arrived, and wipes arrive with patches, so the
+ * app brings the date and the player answers the one question it cannot: did
+ * that one wipe? Answering either way is remembered for that patch, so it is
+ * asked once rather than every launch.
+ */
+const PATCH_ANSWERED = 'qw-patch-answered';
+
+function patchAnswered(patch) {
+  try {
+    return (localStorage.getItem(PATCH_ANSWERED) || '').split(',').includes(patch);
+  } catch {
+    return false;
+  }
+}
+
+function rememberPatchAnswer(patch) {
+  try {
+    const seen = (localStorage.getItem(PATCH_ANSWERED) || '').split(',').filter(Boolean);
+    if (!seen.includes(patch)) seen.push(patch);
+    localStorage.setItem(PATCH_ANSWERED, seen.join(','));
+  } catch { /* private browsing: it asks again next time, which is not harmful */ }
+}
+
+/** The patch offered right now, so the buttons know what they are answering. */
+let offeredPatch = null;
+
+async function checkForWipe() {
+  const notice = $('#patch');
+  if (!notice) return;
+
+  let wipe;
+  try {
+    wipe = await getJson('/api/wipe');
+  } catch {
+    return;
+  }
+
+  const found = wipe.suggested;
+  if (!found || patchAnswered(found.patch)) return;
+
+  offeredPatch = found;
+
+  $('#patch-title').textContent = `${found.patch} arrived on ${dayUtc(found.at)}`;
+  $('#patch-detail').textContent = wipe.at
+    ? `Your history is counted from ${dayUtc(wipe.at)}. If that patch wiped, the line belongs there instead.`
+    : 'Nothing is being held back at the moment. If that patch wiped, your totals are counting an account you no longer have.';
+
+  notice.hidden = false;
+}
+
+function initWipePrompt() {
+  const notice = $('#patch');
+  if (!notice) return;
+
+  $('#patch-wiped').addEventListener('click', async () => {
+    if (!offeredPatch) return;
+
+    rememberPatchAnswer(offeredPatch.patch);
+    notice.hidden = true;
+
+    // Straight to the full depth: a patch wipe is the ordinary kind, and the
+    // Settings page is where a partial one gets its detail.
+    await saveWipe(offeredPatch.at, offeredPatch.patch);
+  });
+
+  $('#patch-kept').addEventListener('click', () => {
+    if (offeredPatch) rememberPatchAnswer(offeredPatch.patch);
+    notice.hidden = true;
+  });
+}
+
+/* Wired at load, like the other page-level controls
+: neither belongs to a
+   view, and both must work before anything has been rendered. */
+initStaleNotice();
+initWipe();
+initWipePrompt();
+initUpdates();
 
 /* ---------- scan progress ---------- */
 
@@ -5181,6 +7941,21 @@ async function maybeShowSetup() {
       list.append(row);
     }
 
+    // The wipe, offered before anything has been counted. The date defaults to
+    // the newest patch this install has logs from, because a first run on an
+    // old machine is exactly when "why is my total so big" starts.
+    try {
+      const wipe = await getJson('/api/wipe');
+      const suggested = wipe.suggested;
+
+      $('#setup-wipe').value = new Date(suggested ? suggested.at : wipe.at || Date.now())
+        .toISOString().slice(0, 10);
+
+      $('#setup-wipe-note').textContent = suggested
+        ? `${suggested.patch} arrived then — change it if your last wipe was another one.`
+        : `${wipe.patch} — change it if your last wipe was another one.`;
+    } catch { /* the field keeps whatever the markup had */ }
+
     const uexBox = $('#setup-uex');
     const syncFeeds = () => { $('#setup-feeds').hidden = !uexBox.checked; };
     uexBox.addEventListener('change', syncFeeds);
@@ -5231,6 +8006,17 @@ async function maybeShowSetup() {
           await fetch(`/api/uex/feeds/${box.dataset.feed}/enable`, { method: 'POST' })
             .catch(() => {});
         }
+      }
+
+      const chosenWipe = $('#setup-wipe').value;
+
+      if (chosenWipe) {
+        status.textContent = 'Setting where your history starts…';
+        await fetch('/api/wipe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ at: `${chosenWipe}T00:00:00Z`, patch: 'set at first run' }),
+        }).catch(() => { /* Settings can set it later */ });
       }
 
       await fetch('/api/setup/done', { method: 'POST' });
@@ -5303,7 +8089,17 @@ async function boot() {
   if (!isSnapshot) {
     connectStream();
     watchScan();
+
+    // Once per load, never on a timer: the offer to renew a price table that
+    // has gone a day old, and the line the wipe draws under the history.
+    checkPriceAge().catch(() => { /* prices are usable whatever their age */ });
+    checkForWipe().catch(() => { /* the Settings page still carries the line */ });
+    checkForUpdate().catch(() => { /* an unanswered question is not a failure */ });
   }
+
+  renderUpdateSettings().catch(() => { /* Settings fills in on its next visit */ });
+
+  loadWipe().catch(() => { /* Settings shows it on its next visit */ });
 
   maybeShowSetup().catch(() => { /* wizard is a nicety, never a blocker */ });
 

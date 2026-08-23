@@ -22,7 +22,25 @@ The check exists because the failure is quiet otherwise. Publishing passes
 stamped binary — while the repository, and the About page of anyone who builds
 from source, keep claiming the previous number.
 
+## Before the tag
+
+A release is tested as one thing, in the place it will be used.
+
+1. **Merge every outstanding branch** into one integration branch named for the
+   build — `release/0.6.0`. Reviewing four branches separately and tagging their
+   sum is how a release ships a combination nobody ran.
+2. **Check it out in `C:\Quantumwake`** and leave it there. The real folder,
+   against the real install, for as long as it takes to trust it.
+3. **Run both suites green**: `dotnet test Quantumwake.slnx -c Release`. The
+   pipeline runs them again, but finding it here costs a minute and finding it
+   there costs a tag.
+4. **Write the release notes into `README.md`**, newest section at the bottom
+   under `## Release notes`. The workflow lifts that section into the GitHub
+   release, so the words exist once. No section means the release page carries
+   only the standing copy, and the build log says so.
+
 ## The steps
+
 
 ```powershell
 # 1. Bump Directory.Build.props, on a branch, as its own pull request.

@@ -121,10 +121,24 @@ public sealed class SessionStore : IDisposable
     }
 
     /// <summary>
+    /// Bumped whenever a parser change makes stored summaries incomplete.
+    /// </summary>
+    /// <remarks>
+    /// Backups are skipped by fingerprint, so a session parsed before a field
+    /// existed keeps its stale payload for ever. Medical beds landed exactly
+    /// that way: the parser reads them, the page asks for them, and everyone
+    /// who had already run the app saw none, because their sessions had been
+    /// summarised by a build that had never heard of a bed. Folding the version
+    /// into the fingerprint retires every row at once, at the cost of one cold
+    /// backfill after an upgrade - and that cost is the feature working.
+    /// </remarks>
+    private const int PayloadVersion = 2;
+
+    /// <summary>
     /// Fingerprint identifying a file's current contents without reading them.
     /// </summary>
     public static string Fingerprint(FileInfo file) =>
-        $"{file.Length}:{file.LastWriteTimeUtc.Ticks}";
+        $"v{PayloadVersion}:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
 
     /// <summary>True when this exact file version has already been ingested.</summary>
     public bool IsCurrent(string sourceFile, string fingerprint)
