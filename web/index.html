@@ -10,7 +10,7 @@
 <body>
 
 <header class="topbar">
-  <span class="railmark">Quantum Wake Â· a pilot's logbook</span>
+  <span class="railmark">Quantum Wake · a pilot's logbook</span>
   <div class="brandmark" aria-hidden="true"></div>
 
   <div class="brand">
@@ -26,7 +26,7 @@
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
     <div class="tab-group">
-      <button type="button" class="group-btn">Jobs<span class="caret">â¾</span></button>
+      <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="jobs">Shopping</button>
         <button data-view="blueprints">Blueprints</button>
@@ -34,7 +34,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Flight<span class="caret">â¾</span></button>
+      <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
@@ -45,7 +45,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Economy<span class="caret">â¾</span></button>
+      <button type="button" class="group-btn">Economy<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="spending">Spending</button>
         <button data-view="ledger">Ledger</button>
@@ -54,7 +54,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Reference<span class="caret">â¾</span></button>
+      <button type="button" class="group-btn">Reference<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="ships">Ships</button>
         <button data-view="parts">Parts</button>
@@ -63,7 +63,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Gear<span class="caret">â¾</span></button>
+      <button type="button" class="group-btn">Gear<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="loadout">Loadout</button>
         <button data-view="stash">Stash</button>
@@ -71,7 +71,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Settings<span class="caret">â¾</span></button>
+      <button type="button" class="group-btn">Settings<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
@@ -81,7 +81,7 @@
   </nav>
 
   <div class="status">
-    <span id="install" class="muted">detectingâ¦</span>
+    <span id="install" class="muted">detecting…</span>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
 </header>
@@ -95,7 +95,7 @@
     <p class="muted">
       Every drive was searched, along with the RSI launcher's own record of
       where it installed the game. If it lives somewhere unusual, point us at
-      it: the folder holding <code>Game.log</code>, or its parent â usually
+      it: the folder holding <code>Game.log</code>, or its parent — usually
       something ending in <code>StarCitizen\LIVE</code>.
     </p>
     <div class="no-install-row">
@@ -132,14 +132,14 @@
       <span class="muted" id="patch-detail"></span>
     </div>
     <div class="notice-actions">
-      <button class="ghost" id="patch-wiped">It wiped â start there</button>
+      <button class="ghost" id="patch-wiped">It wiped — start there</button>
       <button class="ghost" id="patch-kept">It did not wipe</button>
     </div>
   </div>
 
   <div class="scan" id="scan" hidden>
     <div class="scan-head">
-      <span id="scan-label">Reading logsâ¦</span>
+      <span id="scan-label">Reading logs…</span>
       <span class="scan-count" id="scan-count"></span>
     </div>
     <div class="scan-track"><div class="scan-fill" id="scan-fill"></div></div>
@@ -153,36 +153,36 @@
 
       <article class="card hero" data-card="location">
         <div class="card-label">Location</div>
-        <div class="hero-value" id="now-location">â</div>
+        <div class="hero-value" id="now-location">—</div>
         <div class="hero-sub" id="now-location-sub"></div>
         <div class="confidence" id="now-confidence"></div>
         <div class="travel" id="now-travel" hidden>
-          <span class="travel-arrow">â¸</span>
+          <span class="travel-arrow">▸</span>
           <span id="now-travel-to"></span>
         </div>
       </article>
 
       <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
-        <div class="value" id="now-ship">â</div>
+        <div class="value" id="now-ship">—</div>
       </article>
 
       <article class="card" data-card="session">
         <div class="card-label">Session</div>
-        <div class="value" id="now-clock">â</div>
+        <div class="value" id="now-clock">—</div>
         <div class="sub" id="now-mode"></div>
       </article>
 
       <article class="card" data-card="handle">
         <div class="card-label">Handle</div>
-        <div class="value" id="now-handle">â</div>
+        <div class="value" id="now-handle">—</div>
         <div class="sub" id="now-version"></div>
       </article>
 
       <article class="card span2" data-card="feed">
         <div class="card-label">Live feed</div>
         <ul class="feed" id="now-feed">
-          <li class="empty">Waiting for the gameâ¦</li>
+          <li class="empty">Waiting for the game…</li>
         </ul>
       </article>
 
@@ -195,7 +195,7 @@
 
       <article class="card" id="now-respawn-card" data-card="respawn" hidden>
         <div class="card-label">Wake up at</div>
-        <div class="value" id="now-respawn">â</div>
+        <div class="value" id="now-respawn">—</div>
         <div class="sub" id="now-respawn-sub"></div>
         <div class="sub" id="now-respawn-bed"></div>
       </article>
@@ -232,7 +232,7 @@
       <h2>Star map</h2>
       <p class="muted">
         Star Citizen does not log player position, so this is a topology map built
-        from location and quantum-travel events â last known place, not a live radar.
+        from location and quantum-travel events — last known place, not a live radar.
       </p>
     </div>
 
@@ -246,7 +246,7 @@
         <span>Goods on hover</span>
       </label>
       <span class="map-search-box">
-        <input type="search" id="map-search" placeholder="Find a place or commodityâ¦" autocomplete="off">
+        <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
       </span>
       <select id="map-shade" class="select" hidden title="What the highlight colour encodes">
@@ -271,17 +271,17 @@
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="map-tip" id="map-tip" hidden></div>
-      <div class="map-hint muted">Scroll or +/â to zoom Â· drag to pan Â· click a place for details Â· double-click for its trade</div>
+      <div class="map-hint muted">Scroll or +/− to zoom · drag to pan · click a place for details · double-click for its trade</div>
 
       <aside class="cargo-panel" id="cargo-panel" hidden>
-        <button class="map-info-close" id="cargo-close" aria-label="Close">Ã</button>
+        <button class="map-info-close" id="cargo-close" aria-label="Close">×</button>
         <div class="cargo-kicker" id="cargo-kicker"></div>
         <div class="cargo-title" id="cargo-title"></div>
         <div class="cargo-body" id="cargo-body"></div>
       </aside>
 
       <aside class="map-info" id="map-info" hidden>
-        <button class="map-info-close" id="map-info-close" aria-label="Close">Ã</button>
+        <button class="map-info-close" id="map-info-close" aria-label="Close">×</button>
         <div class="map-info-name" id="map-info-name"></div>
         <div class="map-info-where muted" id="map-info-where"></div>
         <div class="map-info-row">
@@ -312,7 +312,7 @@
       </div>
     </div>
     <p class="muted caption">
-      The best hauls UEX knows, sized to a real hold and a real wallet â pick
+      The best hauls UEX knows, sized to a real hold and a real wallet — pick
       one of your ships and the money you can spend, and the ranking becomes
       what <em>this</em> run earns rather than a margin in the abstract. Each
       row says what capped it: your hold, your capital, or the shop's own
@@ -368,7 +368,7 @@
     <h2 class="spaced">Medical beds used</h2>
     <p class="muted caption">
       A regen location is set at a medical bed or an insurance office, so this
-      is the most direct hint the logs give â but the same notification fires
+      is the most direct hint the logs give — but the same notification fires
       when a bed is only used to heal, and the game never states where regen
       actually is. Most recent first.
     </p>
@@ -392,7 +392,7 @@
       </div>
     </div>
     <p class="muted caption">
-      Lists of things to gather, checked against what your stashes hold â so a
+      Lists of things to gather, checked against what your stashes hold — so a
       list knows what is still missing, where the rest of it is, and what the
       missing part costs. The <em>+ list</em> button on Market, Parts and
       Mining adds to whichever list you are filling.
@@ -401,9 +401,9 @@
     <form class="job-form" id="job-form" hidden>
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
       <textarea id="job-items" rows="5"
-                placeholder="One per line â &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
+                placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
       <input type="text" id="job-place" list="job-places" autocomplete="off"
-             placeholder="Where are you shopping? Optional — leave blank for anywhere">
+             placeholder="Where are you shopping? Optional &mdash; leave blank for anywhere">
       <datalist id="job-places"></datalist>
       <div class="job-form-actions">
         <button type="submit" class="ghost">Save list</button>
@@ -415,7 +415,7 @@
 
     <h2 class="spaced">Contracts in progress</h2>
     <p class="muted caption">
-      Taken from the running session only â contracts are dropped when you
+      Taken from the running session only — contracts are dropped when you
       leave the game, so a closed game has none.
     </p>
     <div id="jobs-contracts"></div>
@@ -431,10 +431,10 @@
       </div>
     </div>
     <p class="muted caption">
-      What you can craft, and what it still needs. Pick a blueprint â yours are
+      What you can craft, and what it still needs. Pick a blueprint — yours are
       listed first, since the game tells the logs which ones you have been
-      given â and it becomes a tracked build with its materials checked against
-      your stashes. The full catalogue lives under Reference â Crafting.
+      given — and it becomes a tracked build with its materials checked against
+      your stashes. The full catalogue lives under Reference → Crafting.
     </p>
 
     <div id="blueprint-jobs"></div>
@@ -449,8 +449,8 @@
       </div>
     </div>
     <p class="muted caption">
-      The record itself: the latest things you did in the verse â sessions
-      flown, cargo and gear traded, items first seen â one timeline, newest
+      The record itself: the latest things you did in the verse — sessions
+      flown, cargo and gear traded, items first seen — one timeline, newest
       first. Places fly to the map.
     </p>
     <ul class="feed logbook" id="logbook-feed">
@@ -463,7 +463,7 @@
     <div class="section-bar">
       <h2>Play history</h2>
       <div class="controls">
-        <input type="search" id="sessions-search" class="search" placeholder="Search ship or placeâ¦"
+        <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
                autocomplete="off" spellcheck="false">
         <select id="sessions-period" class="select period" title="Filter by date"></select>
       </div>
@@ -493,7 +493,7 @@
     <h2>Fleet size over time</h2>
     <p class="muted caption">
       Owned-vehicle count reported by the game's entitlement query each
-      session â ships <em>and</em> ground vehicles together, which is why it can
+      session — ships <em>and</em> ground vehicles together, which is why it can
       sit above the ticked roster below. Names are not logged, only the total.
     </p>
     <div class="map-wrap fleet-chart-wrap">
@@ -503,13 +503,13 @@
     <div class="section-bar">
       <h2 class="spaced">Ships</h2>
       <div class="controls">
-        <input type="search" id="fleet-search" class="search" placeholder="Search shipsâ¦"
+        <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
         <select id="fleet-period" class="select period" data-all="Any time" title="Filter by when last flown"></select>
       </div>
     </div>
     <p class="muted caption">
-      Counted from control-token releases â flight counts are exact, times
+      Counted from control-token releases — flight counts are exact, times
       aboard (~) estimated from the last known stop. The roster comes from the
       logs, so rentals and ships since sold appear too: untick them and they
       leave every total. Prices are UEX in-game purchase prices, when enabled.
@@ -571,7 +571,7 @@
     <div class="summary-strip" id="ledger-summary"></div>
     <p class="muted caption">
       Every movement the logs record, newest first. There is no wallet event in
-      Game.log, so this is a record of what went out and came in â not a balance.
+      Game.log, so this is a record of what went out and came in — not a balance.
       Item purchases are confirmed by the server; cargo trades are amounts
       requested at the kiosk, marked with ~.
     </p>
@@ -639,13 +639,13 @@
     <div class="section-bar">
       <h2>Equipment by slot</h2>
       <div class="controls">
-        <input type="search" id="loadout-search" class="search" placeholder="Search items or slotsâ¦"
+        <input type="search" id="loadout-search" class="search" placeholder="Search items or slots…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
     <p class="muted caption">
-      What was last equipped in each slot. Numbered siblings are merged â nine
-      magazine ports read as one row with counts â and slots that are not really
+      What was last equipped in each slot. Numbered siblings are merged — nine
+      magazine ports read as one row with counts — and slots that are not really
       equipment are left out: the character model, the mobiGlas and radar
       fixtures, and the hands, which hold things transiently rather than equip them.
     </p>
@@ -675,7 +675,7 @@
     <div class="section-bar">
       <h2>Items seen by location</h2>
       <div class="controls">
-        <input type="search" id="stash-search" class="search" placeholder="Search items or placesâ¦"
+        <input type="search" id="stash-search" class="search" placeholder="Search items or places…"
                autocomplete="off" spellcheck="false">
         <select id="stash-period" class="select period" data-all="Seen any time" title="Filter by when last seen"></select>
         <label class="toggle" title="Show each item only where it was seen most recently">
@@ -695,7 +695,7 @@
     </p>
     <p class="muted caption">
       <b>Pledged items will not be here</b> until you touch them. Nothing arrives
-      in your account through <code>Game.log</code> â a ship, a suit or a weapon
+      in your account through <code>Game.log</code> — a ship, a suit or a weapon
       you bought on the site, or that came with a pack, is simply there the first
       time you look. It shows up here once you pick it up, move it, or open the
       inventory at the place it is stored, because that is the first moment the
@@ -709,7 +709,7 @@
     <div class="section-bar">
       <h2>Places</h2>
       <div class="controls">
-        <input type="search" id="places-search" class="search" placeholder="Search placesâ¦"
+        <input type="search" id="places-search" class="search" placeholder="Search places…"
                autocomplete="off" spellcheck="false">
         <select id="places-period" class="select period" title="Filter by date"></select>
       </div>
@@ -737,7 +737,7 @@
     <h2 class="spaced">Every contract</h2>
     <p class="muted caption">
       Newest first. Steps counts the objectives the game showed in your journal
-      and how many finished â the game never names them, so the count is the
+      and how many finished — the game never names them, so the count is the
       story: abandoned four steps in reads differently from dropped at the first.
     </p>
     <div class="table-wrap">
@@ -763,7 +763,7 @@
         <button class="ghost" id="market-refresh" hidden
                 title="Fetch the latest prices from UEX now">Refresh prices</button>
         <select id="market-group" class="select" title="Filter by commodity group"></select>
-        <input type="search" id="market-search" class="search" placeholder="Search commoditiesâ¦"
+        <input type="search" id="market-search" class="search" placeholder="Search commodities…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
@@ -778,7 +778,7 @@
     <div class="community-offer" id="market-offer" hidden>
       <div>
         <b>This page needs the community dataset.</b>
-        Enable it from the Settings page â one file, downloaded once, only on
+        Enable it from the Settings page — one file, downloaded once, only on
         your click.
       </div>
     </div>
@@ -820,13 +820,13 @@
       <h2>Ship catalogue</h2>
       <div class="controls">
         <select id="ships-career" class="select" title="Filter by career"></select>
-        <input type="search" id="ships-search" class="search" placeholder="Search shipsâ¦"
+        <input type="search" id="ships-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
     <p class="muted caption">
-      Every flyable the community dataset describes â career, crew and what an
-      insurance claim costs â priced at UEX in-game purchase prices where a
+      Every flyable the community dataset describes — career, crew and what an
+      insurance claim costs — priced at UEX in-game purchase prices where a
       shop sells one. Pure reference: your own hangar lives on the Fleet page.
       Needs the community dataset (and UEX for prices) in Settings.
     </p>
@@ -856,13 +856,13 @@
       <h2>Parts &amp; gear catalogue</h2>
       <div class="controls">
         <select id="parts-type" class="select" title="Filter by type"></select>
-        <input type="search" id="parts-search" class="search" placeholder="Search parts and gearâ¦"
+        <input type="search" id="parts-search" class="search" placeholder="Search parts and gear…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
     <p class="muted caption">
-      Every ship component and piece of personal gear in the community digest â
-      type, size, grade, maker â with UEX in-game prices joined by entity uuid
+      Every ship component and piece of personal gear in the community digest —
+      type, size, grade, maker — with UEX in-game prices joined by entity uuid
       where a shop stocks one. Needs the community dataset (and UEX for prices)
       in Settings.
     </p>
@@ -889,7 +889,7 @@
       <div class="controls">
         <select id="mining-kind" class="select" title="Filter by resource kind"></select>
         <select id="mining-system" class="select" title="Filter by system"></select>
-        <input type="search" id="mining-search" class="search" placeholder="Search resources and placesâ¦"
+        <input type="search" id="mining-search" class="search" placeholder="Search resources and places…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
@@ -930,7 +930,7 @@
           <option value="reward">From rewards</option>
           <option value="owned">In your library</option>
         </select>
-        <input type="search" id="crafting-search" class="search" placeholder="Search blueprintsâ¦"
+        <input type="search" id="crafting-search" class="search" placeholder="Search blueprints…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
@@ -959,14 +959,14 @@
     <div class="section-bar">
       <h2>New items</h2>
       <div class="controls">
-        <input type="search" id="loot-search" class="search" placeholder="Search itemsâ¦"
+        <input type="search" id="loot-search" class="search" placeholder="Search items…"
                autocomplete="off" spellcheck="false">
         <select id="loot-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
 
     <p class="muted caption">
-      When an item was first seen in your inventories â a signal for looting,
+      When an item was first seen in your inventories — a signal for looting,
       buying and receiving alike, since the game logs inventory listings rather
       than pickups. An item counts once, at its first ever appearance.
     </p>
@@ -993,14 +993,14 @@
     <div class="option-block" id="option-overlay">
       <div class="option-head">
         <h3>In-game overlay</h3>
-        <button class="ghost" id="overlay-toggle" hidden>â</button>
+        <button class="ghost" id="overlay-toggle" hidden>—</button>
       </div>
       <p class="muted" id="overlay-copy">
-        Off by default. Turning it on shows a transparent panel over the game â
+        Off by default. Turning it on shows a transparent panel over the game —
         Star Citizen must run in Borderless Windowed for it to be visible.
-        It arrives ready to move and resize; the <b>ð pin</b> button in its header
+        It arrives ready to move and resize; the <b>📌 pin</b> button in its header
         puts it out of the way, so clicks reach the game instead. Unpin it from
-        the tray icon, or with <code>Ctrl+Alt+O</code>. <code>Ctrl+Alt+â/â</code>
+        the tray icon, or with <code>Ctrl+Alt+O</code>. <code>Ctrl+Alt+←/→</code>
         changes page and <code>Ctrl+Alt+F</code> goes fullscreen. The choice is
         remembered.
       </p>
@@ -1019,7 +1019,7 @@
       <p class="muted">
         The widget is small and the dashboard is not, so it should carry a
         chosen few rather than everything. Changes reach a running overlay
-        within a few seconds â no restart. Fullscreen ignores this and shows
+        within a few seconds — no restart. Fullscreen ignores this and shows
         the lot.
       </p>
 
@@ -1054,7 +1054,7 @@
       </div>
       <p class="muted">
         Asks GitHub which release is newest and says so if it is ahead of this
-        one. One request, carrying nothing but the request â no identifier, no
+        one. One request, carrying nothing but the request — no identifier, no
         version, no count of anything. Downloading and installing stays yours to
         do: the button opens the release page in your browser.
       </p>
@@ -1073,7 +1073,7 @@
       </div>
       <p class="muted">
         A data wipe resets what your account holds, so logs from before one
-        describe an account you no longer have â adding those sales to this
+        describe an account you no longer have — adding those sales to this
         account's income makes a wrong number, not a bigger one. Sessions before
         this date are kept and still parsed, they are simply not counted.
         Moving the date back brings every one of them straight back.
@@ -1085,26 +1085,26 @@
       </div>
 
       <p class="muted caption wipe-caption">
-        Wipes come at different depths â some take aUEC and leave the hangar,
+        Wipes come at different depths — some take aUEC and leave the hangar,
         some clear inventories and leave balances. Tick only what this one
         actually took; everything left unticked keeps its whole history.
       </p>
       <div class="wipe-scope">
         <label class="toggle">
           <input type="checkbox" id="wipe-money" checked>
-          <span>Money â spending, income, ledger, cargo</span>
+          <span>Money — spending, income, ledger, cargo</span>
         </label>
         <label class="toggle">
           <input type="checkbox" id="wipe-ships" checked>
-          <span>Ships â what you own, and your fleet count</span>
+          <span>Ships — what you own, and your fleet count</span>
         </label>
         <label class="toggle">
           <input type="checkbox" id="wipe-inventory" checked>
-          <span>Inventory â stashes, worn kit, pickups</span>
+          <span>Inventory — stashes, worn kit, pickups</span>
         </label>
         <label class="toggle">
           <input type="checkbox" id="wipe-history" checked>
-          <span>Play history â sessions, places, contracts</span>
+          <span>Play history — sessions, places, contracts</span>
         </label>
       </div>
     </div>
@@ -1117,7 +1117,7 @@
       </div>
       <p class="muted" id="settings-community-copy">
         Commodity names for your cargo, where each commodity trades, and the
-        ship and item reference for the Fleet and Loadout pages â all from
+        ship and item reference for the Fleet and Loadout pages — all from
         StarCitizenWiki / scunpacked-data. Enabling downloads a set of public
         files (~110&nbsp;MB, kept as a few MB) into local app data. The app
         connects to the internet only when you ask it to, here, and never on
@@ -1134,7 +1134,7 @@
         <button class="ghost" id="uex-disable" hidden>Disable</button>
       </div>
       <p class="muted">
-        Crowd-sourced market prices from <em>uexcorp.space</em> â a third party,
+        Crowd-sourced market prices from <em>uexcorp.space</em> — a third party,
         separate from the community dataset. Enabling fetches the current price
         table and shows best sell prices on the Market page. Like everything
         here: only on your click, never on a timer.
@@ -1148,7 +1148,7 @@
 
       <div class="uex-feeds" id="uex-feeds">
         <p class="muted">
-          <b>Extra feeds.</b> Narrower tables that each serve one page â take
+          <b>Extra feeds.</b> Narrower tables that each serve one page — take
           only what you need. Every one is a separate download on your click,
           and can be dropped again without touching the rest.
         </p>
@@ -1158,7 +1158,7 @@
       <div class="uex-push" id="uex-push-block">
         <p class="muted">
           <b>Report your prices back.</b> Every logged kiosk sale carries an
-          exact unit price at a known terminal â the numbers UEX datarunners
+          exact unit price at a known terminal — the numbers UEX datarunners
           type in by hand. With your own UEX application token and secret key
           (from your UEX account), you can contribute them. Keys are stored in
           local app data only; every report is a button you press, previewed
@@ -1198,7 +1198,7 @@
         <h2>About</h2>
 
         <p class="about-goal">
-          The goal is a frictionless companion for Star Citizen â one that gathers
+          The goal is a frictionless companion for Star Citizen — one that gathers
           the useful information the game already writes down, and hands it back to
           fellow players without asking anything of them.
         </p>
@@ -1206,7 +1206,7 @@
         <p class="about-note">
           It exists because I went looking for it and it was not there. There are
           good <code>Game.log</code> tools, but none of them was a whole product
-          built around an org and the things I wanted to keep track of â so I
+          built around an org and the things I wanted to keep track of — so I
           built the one I had been looking for, and it is free for the community
           to use, and meant to stay that way.
         </p>
@@ -1216,13 +1216,13 @@
           and the backups beside it, resolves the names from your own copy of the
           game, and shows you what is there. Nothing is written to the game
           directory, and the app connects to the internet only when you ask it
-          to â the optional datasets from the Settings page, and the version
+          to — the optional datasets from the Settings page, and the version
           check if you turn that on. Never otherwise, and never on a timer.
         </p>
 
         <dl class="about-facts">
-          <div><dt>Version</dt><dd id="about-version">â</dd></div>
-          <div><dt>Install</dt><dd id="about-install">â</dd></div>
+          <div><dt>Version</dt><dd id="about-version">—</dd></div>
+          <div><dt>Install</dt><dd id="about-install">—</dd></div>
           <div><dt>Dashboard</dt><dd>127.0.0.1:31337</dd></div>
           <div><dt>Licence</dt><dd>Apache 2.0</dd></div>
           <div><dt>Built by</dt><dd>nekron</dd></div>
@@ -1253,7 +1253,7 @@
               <code>Game.log</code>. A pledge, a pack, a rental or anything bought
               on the website is simply <em>there</em> the next time you look, and
               the game says nothing about it. It appears here the first time you
-              actually use it â fly the ship, wear the armour, move the item â
+              actually use it — fly the ship, wear the armour, move the item —
               because that is the first moment there is a line to read.
             </p>
           </details>
@@ -1262,9 +1262,9 @@
             <summary>Why are my totals lower than I expected?</summary>
             <p>
               Sessions from before the last wipe are kept but not counted, because
-              a wipe ends one account and starts another. Settings â <b>Last wipe</b>
+              a wipe ends one account and starts another. Settings → <b>Last wipe</b>
               says how many sessions that is, lets you move the date, and lets you
-              say what the wipe actually took â some reset aUEC and leave your
+              say what the wipe actually took — some reset aUEC and leave your
               hangar alone. Nothing is deleted: move the date back and it all
               returns.
             </p>
@@ -1275,7 +1275,7 @@
             <p>
               Removed, because it could only ever read zero. Star Citizen 4.9
               does not write kill or vehicle-destruction lines to
-              <code>Game.log</code> at all â checked line by line across every
+              <code>Game.log</code> at all — checked line by line across every
               backup on this machine: not one. A counter pinned at zero reads as
               a broken feature rather than a missing one, so the honest thing is
               to say so here instead of showing it.
@@ -1291,7 +1291,7 @@
             <summary>Why does the map not show where I am, exactly?</summary>
             <p>
               No player position is logged. Location is inferred from discrete
-              signals â inventory requests, quantum routes, spawns â so the map is
+              signals — inventory requests, quantum routes, spawns — so the map is
               a topology, not a radar, and every estimate carries a confidence
               rather than pretending to a precision it does not have.
             </p>
@@ -1300,7 +1300,7 @@
           <details>
             <summary>The overlay will not let me click the game.</summary>
             <p>
-              Press its <b>ð pin</b> button and clicks pass straight through. To get
+              Press its <b>📌 pin</b> button and clicks pass straight through. To get
               it back, right-click the tray icon and untick <b>Pin overlay</b>, or
               press <code>Ctrl+Alt+O</code>. It arrives unpinned, so it can be
               dragged where you want it first.
@@ -1320,12 +1320,12 @@
           <details>
             <summary>Does it phone home, or check for updates?</summary>
             <p>
-              It sends nothing about you, ever â no identifier, no usage, no
+              It sends nothing about you, ever — no identifier, no usage, no
               statistics. It can look up whether a newer release exists, and only
-              if you say yes: you are asked once, and Settings â <b>New versions</b>
+              if you say yes: you are asked once, and Settings → <b>New versions</b>
               carries the switch and a <b>Check now</b> button. That look is one
               request to GitHub's public release feed, which carries nothing but
-              the request. Nothing is downloaded or installed for you â you get a
+              the request. Nothing is downloaded or installed for you — you get a
               link to the release page.
             </p>
           </details>
@@ -1343,7 +1343,7 @@
         </div>
 
         <p class="about-legal">
-          Star CitizenÂ®, Roberts Space IndustriesÂ® and Cloud ImperiumÂ® are
+          Star Citizen®, Roberts Space Industries® and Cloud Imperium® are
           registered trademarks of Cloud Imperium Rights LLC. An unofficial fan
           tool, not affiliated with or endorsed by Cloud Imperium Games.
         </p>
@@ -1357,7 +1357,7 @@
   <img src="assets/emblem.jpg" alt="Quantum Wake" class="emblem">
   <img src="assets/manufacturers/_madebycommunity.png" alt="Made by the Community" class="mbc">
   <span>
-    Star CitizenÂ®, Roberts Space IndustriesÂ® and Cloud ImperiumÂ® are registered
+    Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
     trademarks of Cloud Imperium Rights LLC. Manufacturer marks from the official
     Star Citizen Fankit, used under the Fankit Agreement. This is an unofficial
     fan tool, not affiliated with or endorsed by Cloud Imperium Games.
@@ -1384,7 +1384,7 @@
       </div>
 
       <p class="muted">
-        Reading your Star Citizen logs for the first time â your whole history
+        Reading your Star Citizen logs for the first time — your whole history
         is being rebuilt from the log backups on this machine. While that runs,
         pick how the app should behave. Everything here can be changed later in
         Settings, and nothing talks to the internet unless you turn it on.
@@ -1392,7 +1392,7 @@
 
       <div class="setup-progress">
         <div class="scan-head">
-          <span id="setup-scan-label">Checking logsâ¦</span>
+          <span id="setup-scan-label">Checking logs…</span>
           <span class="scan-count" id="setup-scan-count"></span>
         </div>
         <div class="scan-track"><div class="scan-fill" id="setup-scan-fill"></div></div>
@@ -1403,7 +1403,7 @@
         <div>
           <b>In-game overlay widget</b>
           <span>A compact always-on-top readout over the game. Drag it where you
-          want it, then pin it to let clicks through. Ctrl+Alt+â/â change page,
+          want it, then pin it to let clicks through. Ctrl+Alt+←/→ change page,
           Ctrl+Alt+F goes fullscreen.</span>
         </div>
       </label>
@@ -1432,7 +1432,7 @@
         <span class="muted">
           A wipe ends one account and starts another, so totals that reach past
           one are about an account you no longer have. Sessions before this date
-          stay on disk and stop being counted â move it any time in Settings.
+          stay on disk and stop being counted — move it any time in Settings.
         </span>
         <div class="wipe-row">
           <input type="date" id="setup-wipe" class="search" title="The day the last wipe landed">
@@ -1441,7 +1441,7 @@
       </div>
 
       <div class="setup-feeds" id="setup-feeds" hidden>
-        <div class="setup-feeds-head">Extra UEX feeds â take only what you need</div>
+        <div class="setup-feeds-head">Extra UEX feeds — take only what you need</div>
         <div id="setup-feed-list"></div>
       </div>
 
