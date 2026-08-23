@@ -165,8 +165,13 @@ public sealed class StarStrings(IHttpClientFactory factory, StarStringsStore sto
                     File.Copy(target, backup, overwrite: true);
                 }
 
-                entry.ExtractToFile(target, overwrite: true);
+                // Recorded before the write, not after. Extraction can fail
+                // partway through a file it has already begun overwriting, and
+                // a target added only on success leaves that half-written file
+                // out of the rollback - along with the backup that is the only
+                // way back to it.
                 written.Add(new InstalledFile(target, backup));
+                entry.ExtractToFile(target, overwrite: true);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -185,7 +190,23 @@ public sealed class StarStrings(IHttpClientFactory factory, StarStringsStore sto
         var install = new StarStringsInstall(
             latest.Name, latest.PublishedAt, DateTimeOffset.UtcNow, root, written);
 
-        store.Record(install);
+        try
+        {
+            store.Record(install);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The manifest is the only record of what was displaced, so an
+            // install that cannot be written down cannot be taken out again
+            // either. Undoing it now is the honest end: the alternative is a
+            // modded game folder the app has no memory of touching.
+            log.LogWarning(e, "StarStrings manifest could not be written; undoing the install");
+            Restore(written);
+
+            return (null, "The install could not be recorded, so it was undone. "
+                + "Nothing was left in your game folder.");
+        }
+
         return (install, null);
     }
 

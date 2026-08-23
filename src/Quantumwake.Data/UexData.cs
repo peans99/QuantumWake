@@ -140,6 +140,20 @@ public sealed class UexData
     private readonly Dictionary<string, (DateTimeOffset At, UexHistory History)> _historyCache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Guards the swap between a fetched table and the one in use.
+    /// </summary>
+    /// <remarks>
+    /// Held only around the commit and around Disable, never across a network
+    /// call. Everything it protects - the dictionaries, FetchedAt, the history
+    /// cache - is replaced wholesale rather than edited, so readers outside the
+    /// lock see one table or the other and never a half-written one.
+    /// </remarks>
+    private readonly Lock _gate = new();
+
+    /// <summary>Bumped by Disable, so a fetch begun before it stands down.</summary>
+    private int _generation;
+
     private readonly string _directory;
 
     private Dictionary<string, UexPrice> _prices = new(StringComparer.OrdinalIgnoreCase);
@@ -341,8 +355,20 @@ public sealed class UexData
     /// Fetches current prices, the terminal list, vehicle purchase prices and
     /// item prices. Anonymous endpoints, on the user's click only.
     /// </summary>
+    /// <remarks>
+    /// The fetch happens outside the lock and the commit inside it, with a
+    /// generation taken at the start. Since 0.7.0 this can be running on the
+    /// background refresher when the player presses Disable, and a fetch that
+    /// finished afterwards used to rewrite every file it had just deleted -
+    /// turning UEX back on behind them, and re-arming the automatic refresh,
+    /// which only runs while UEX is enabled. A stale generation stands down.
+    /// </remarks>
     public async Task<int> EnableAsync(HttpClient http, CancellationToken token = default)
     {
+        int began;
+        lock (_gate)
+            began = _generation;
+
         var priceDoc = await http.GetFromJsonAsync<JsonElement>(PricesUrl, token);
         var terminalDoc = await http.GetFromJsonAsync<JsonElement>(TerminalsUrl, token);
         var vehicleDoc = await http.GetFromJsonAsync<JsonElement>(VehiclePricesUrl, token);
@@ -356,25 +382,38 @@ public sealed class UexData
         var vehicles = DigestVehicles(vehicleDoc);
         var (itemPrices, itemMarket) = DigestItemPrices(itemDoc);
 
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
-        File.WriteAllText(IdsPath, JsonSerializer.Serialize(ids));
-        File.WriteAllText(TerminalsPath, JsonSerializer.Serialize(terminals.Select(t => new[] { (object)t.Id, t.Name })));
-        File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
-        File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
-        File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
-        File.WriteAllText(ItemMarketPath, JsonSerializer.Serialize(itemMarket));
-        File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
+        lock (_gate)
+        {
+            // Disable landed while this was in flight, so the player has since
+            // said no. Writing now would answer a question nobody asked twice.
+            if (began != _generation)
+                return 0;
 
-        _prices = prices;
-        _commodityIds = ids;
-        _terminals = terminals;
-        _matrix = matrix;
-        _vehicles = vehicles;
-        _itemPrices = itemPrices;
-        _itemMarket = itemMarket;
-        FetchedAt = DateTimeOffset.UtcNow;
-        return _prices.Count;
+            Directory.CreateDirectory(_directory);
+            File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
+            File.WriteAllText(IdsPath, JsonSerializer.Serialize(ids));
+            File.WriteAllText(TerminalsPath, JsonSerializer.Serialize(terminals.Select(t => new[] { (object)t.Id, t.Name })));
+            File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
+            File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
+            File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
+            File.WriteAllText(ItemMarketPath, JsonSerializer.Serialize(itemMarket));
+            File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
+
+            _prices = prices;
+            _commodityIds = ids;
+            _terminals = terminals;
+            _matrix = matrix;
+            _vehicles = vehicles;
+            _itemPrices = itemPrices;
+            _itemMarket = itemMarket;
+            FetchedAt = DateTimeOffset.UtcNow;
+
+            // A price table that has just been replaced makes every cached
+            // history a description of the previous one.
+            _historyCache.Clear();
+
+            return _prices.Count;
+        }
     }
 
     /// <summary>
@@ -436,13 +475,22 @@ public sealed class UexData
     public async Task<UexHistory> HistoryAsync(
         string commodity, HttpClient http, int perSide = 4, CancellationToken token = default)
     {
-        if (_historyCache.TryGetValue(commodity, out var cached)
-            && DateTimeOffset.UtcNow - cached.At < HistoryFreshFor)
-            return cached.History;
+        // Two readers can open the same commodity at once, and a refresh can
+        // replace the tables underneath both, so the lookups are taken together
+        // under the lock rather than read from a dictionary being swapped.
+        int commodityId;
+        List<UexMarketRow> rows;
 
-        if (!_commodityIds.TryGetValue(commodity, out var commodityId)
-            || !_matrix.TryGetValue(commodity, out var rows))
-            return new UexHistory(commodity, 0, 0, []);
+        lock (_gate)
+        {
+            if (_historyCache.TryGetValue(commodity, out var cached)
+                && DateTimeOffset.UtcNow - cached.At < HistoryFreshFor)
+                return cached.History;
+
+            if (!_commodityIds.TryGetValue(commodity, out commodityId)
+                || !_matrix.TryGetValue(commodity, out rows!))
+                return new UexHistory(commodity, 0, 0, []);
+        }
 
         var sample = SampleTerminals(rows, perSide);
 
@@ -467,7 +515,9 @@ public sealed class UexData
         var series = fetched.Where(s => s is not null).Select(s => s!).ToList();
         var history = new UexHistory(commodity, series.Count, rows.Count, series);
 
-        _historyCache[commodity] = (DateTimeOffset.UtcNow, history);
+        lock (_gate)
+            _historyCache[commodity] = (DateTimeOffset.UtcNow, history);
+
         return history;
     }
 
@@ -512,8 +562,21 @@ public sealed class UexData
             : 0;
 
     /// <summary>Deletes the price cache. Credentials are removed separately.</summary>
+    /// <remarks>
+    /// Bumps the generation first, so a refresh already fetching stands down
+    /// instead of putting everything back. See <see cref="EnableAsync"/>.
+    /// </remarks>
     public void Disable()
     {
+        lock (_gate)
+            DisableCore();
+    }
+
+    private void DisableCore()
+    {
+        _generation++;
+        _historyCache.Clear();
+
         foreach (var path in new[]
         {
             PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath,
