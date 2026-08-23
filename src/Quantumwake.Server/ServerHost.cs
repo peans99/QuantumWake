@@ -97,6 +97,11 @@ public static class ServerHost
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
 
+        // Prices are the one dataset here with a shelf life, so they are the one
+        // thing allowed to refetch themselves - and only once asked.
+        builder.Services.AddSingleton<TradeDataStore>();
+        builder.Services.AddHostedService<TradeDataRefresh>();
+
         // MrKraken's StarStrings, installed on request. The only thing in the
         // app that writes outside its own data folder.
         builder.Services.AddSingleton<StarStringsStore>();
@@ -1552,6 +1557,34 @@ public static class ServerHost
         {
             uex.Disable();
             return Results.Ok(new { enabled = false });
+        });
+
+        // Whether prices may refetch themselves, and when one was last tried.
+        // staleAfterHours is served rather than duplicated in the page: the
+        // interval is a judgement about someone else's server, and it should be
+        // stated in one place.
+        app.MapGet("/api/uex/auto", (TradeDataStore auto, UexData uex) =>
+        {
+            var preference = auto.Current;
+
+            return new
+            {
+                preference.Asked,
+                preference.Automatic,
+                preference.LastCheckedAt,
+                staleAfterHours = TradeDataStore.StaleAfter.TotalHours,
+                fetchedAt = uex.FetchedAt,
+
+                // The toggle is meaningless while UEX is off, and the page says
+                // so rather than offering a switch that does nothing.
+                uexEnabled = uex.IsEnabled
+            };
+        });
+
+        app.MapPost("/api/uex/auto/answer", (bool automatic, TradeDataStore auto) =>
+        {
+            var preference = auto.Answer(automatic);
+            return Results.Ok(new { preference.Asked, preference.Automatic });
         });
 
         // Stored only in local app data; posting empty values removes them.
