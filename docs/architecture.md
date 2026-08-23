@@ -201,6 +201,64 @@ chooser — one row per missing thing, its sellers cheapest first with price and
 stock, each row skippable — and the stop count updates as the choices change.
 Anything with no known seller is shown as such rather than quietly dropped.
 
+### A list is not only cargo, and not only a set of things
+
+A line on a list is whatever the player wrote, so the lookup behind it cannot
+assume a kind. `/api/shopping/sellers` tries the commodity market first and the
+item shops second, matching a written name against the reference catalogue
+loosely enough that "Hydro Jet" finds the HydroJet cooler, and says which feed
+answered. That single endpoint is what lets one list hold "Agricium 20 SCU" and
+"Bulwark" and route both.
+
+The chooser then offers the same decision from either end:
+
+- **By item** — where do I get this? One row per line, sellers cheapest first,
+  each carrying its system and whether the law reaches it. This is how a list is
+  written.
+- **By location** — what is this landing worth? One row per counter, ranked by
+  how much of the list it covers, then by what that stop costs. Ticking a stop
+  claims everything it can supply that an earlier tick has not; unticking hands
+  those back to whatever is left. **Fewest stops** packs the list greedily,
+  because buying each thing where it is cheapest is one landing per thing, and
+  fuel and time cost more than the difference.
+
+Both views write into one map of line → terminal, so switching never loses a
+choice and the plan is built from a single answer.
+
+A list can also say **where it is for**, chosen when it is written and
+changeable afterwards. That is a preference rather than a filter: a line whose
+destination stocks it starts there even when somewhere else is cheaper — which
+is what naming a destination means — and a line it does not stock falls back to
+the cheapest seller that can fill the order. The place also leads the location
+view whatever it carries, because the landing is already decided.
+
+Both halves of writing a list are pickers over data the app already holds: every
+place it can name, visited ones first, and everything that can actually be
+bought — commodities and priced items, nothing else, because a line no shop
+sells is a line no plan can route. The free-text box remains the list; the
+pickers only spell things.
+
+### What fits a ship
+
+The ships dataset carries each vessel's whole loadout tree, and every port in it
+states what may replace what is fitted: a type, a size range, and whether the
+game lets the player change it at all. That is the game's own answer to "what
+fits", so the Fleet page can offer parts without guessing — each with what the
+ship flies with today, what is sold that fits, and the counter that stocks it.
+
+Two things in that data are not what they look like. A port accepting sizes 1
+to 3 is three rows in the digest and one hole in the ship. And a gimbal mount
+offers the same hole twice — once for a gun, once for the gimbal that then
+holds one — so a port whose id extends another port's id is inside it, and only
+the outermost of each chain is counted. Without that a Corsair reports twelve
+size 2 gun ports instead of six.
+
+The join is by class name (`DRAK_Corsair`), never by display name. "Drake
+Corsair" cannot be turned back into the key: the display manufacturer is a word
+where the class carries a code, and variants spell themselves differently
+("Mk II" against `Mk2`). The raw log tokens *are* the class name, so a ship
+carries it from the parser to the page and every reference lookup uses it.
+
 **The two naming schemes are reconciled once, on the server.** UEX names the
 counter ("Admin - Port Tressler", "Seraphim"), the game names the place ("Port
 Tressler", "Seraphim Station"), and every feature that puts a price on the map
@@ -208,8 +266,12 @@ or a terminal on a plan needs the join. `TerminalPlaces` does it from the atlas
 and hands the id out with the data - on `/api/uex/market` rows and on both ends
 of a trade route - so the shading, the panel and the plan cannot disagree. The
 rule is narrow on purpose: exact name, then the place named inside the terminal
-(longest wins), then the terminal named inside a place, and an ambiguous or
-short match resolves to nothing. A stop on the wrong dot sends someone to the
+(longest wins), then the terminal named inside a place, then the station code a
+shop chain names itself after - "Platinum CRU-L4" is at "CRU-L4 Shallow Fields
+Station", where neither name contains the other. A code is safe to match on
+because it is never a word: only a leading token carrying a digit counts, which
+stops "Port Tressler" claiming every counter with "port" in its name. An
+ambiguous or short match resolves to nothing. A stop on the wrong dot sends someone to the
 wrong moon; a stop with no dot is still a stop, with its name and notes intact.
 
 That is also why arrival matches on the name when a stop has no id: those stops
@@ -282,7 +344,49 @@ together, since renewing half of it leaves the same problem. It is an offer, not
 an alert: nothing is blocked, "not now" lasts until tomorrow rather than for
 ever, and the check still never runs on a schedule.
 
+## The map is a control surface, not a picture
+
+Four rules the star map learned the hard way. Each was invisible in a
+screenshot, and three of them survived a green test suite.
+
+**Do not take the pointer until it moves.** The map captures the pointer on
+drag so a pan that leaves the window keeps working, and capturing on
+`pointerdown` is the obvious place. It is also wrong: while an element holds
+the capture the browser delivers the *click* to that element rather than to
+whatever is under the cursor, so every click aimed at a place went to the
+`<svg>` instead. Nothing on the map opened - not a detail card, not a trade
+panel, not a stop onto a plan - and it had been that way since the map was
+written. The capture now waits for four pixels of movement, which makes a press
+a click and a drag still a drag.
+
+**A click target must not reach into its neighbour's.** Marks carry an
+invisible pad so a small one is easy to hit. In a cluster those pads overlapped,
+and SVG gives a shared point to whatever was drawn last, so the covered node
+became unclickable rather than merely ambiguous: 151 of 290 places. The pad now
+stops at the halfway line to the nearest neighbour and never shrinks below the
+mark itself.
+
+**An animation restarted is an animation nobody sees.** The live feed repeats
+the player's position every second, and the marker redrew on every message,
+restarting a 2.2-second pulse a fifth of the way in. It looked like a dead dot.
+Both the here-marker and the travel vector redraw only when what they describe
+actually changes.
+
+**Decluttering is a budget, not collision avoidance.** Avoiding collisions stops
+names overlapping but never stops them being asked for, and one moon can want
+twenty-two. The view has a label budget spent on the busiest places first,
+growing with the square of the zoom: names arrive as detail is asked for. A
+searched-for place is never rationed - a lit dot the user cannot name is not an
+answer.
+
+Grouping follows from the layout rather than fighting it. Sites are already
+placed by golden angle around their body, so the bubble behind them only has to
+say they belong together: faint at rest, lit while the pointer is inside it, and
+clickable in the gaps to frame that body. A force simulation would settle
+differently on every draw, which is precisely what a label placer cannot have.
+
 ## Testing the page, not just the server
+
 
 
 The dashboard is a single script against the browser's globals - no framework,
@@ -308,7 +412,23 @@ honest:
 What it does not cover is layout, CSS, and anything the browser itself decides.
 For that there is still no substitute for looking.
 
+### What a synthetic click cannot see
+
+The page tests dispatch events straight at elements, which is enough for panels,
+choosers and state - and structurally blind to anything the browser does between
+a real input and a handler. Pointer capture is exactly that: a click dispatched
+at a node bypasses it, so the suite reported a working map for as long as the
+map was unclickable.
+
+Where behaviour depends on real input, drive real input. Chrome's DevTools
+protocol takes `Input.dispatchMouseEvent` over a websocket, which is how the
+capture bug was proved (handler fired 0 times before the fix, 1 after) and how
+panning was checked for regressions afterwards. It is not wired into
+`dotnet test`; it lives in the session scratchpad as a script, and that gap is
+known.
+
 ## Resilience: fail soft, and say so
+
 
 
 CIG removes log events patch over patch — quantum travel in 4.0.1, death scope in
