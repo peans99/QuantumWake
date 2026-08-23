@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![422 tests](https://img.shields.io/badge/tests-422%20passing-4fd48a)
+![428 tests](https://img.shields.io/badge/tests-428%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -74,6 +74,7 @@ events, not a radar.*
 | **Ledger** | Every transaction, back-tracked to the place it happened |
 | **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
 | **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on. Click a commodity for every counter that trades it — price, what it costs you against the best, stock or demand, and whether it sits in policed or lawless space |
+| **Commodity** | One good in full, opened from Market: what it has been worth day by day, demand against supply over the same weeks, every counter that buys it and every counter that stocks it, and your own receipts for it. Deep-linkable — `#commodity/Aluminum` |
 | **Loot** | When each item first appeared in your inventories, with the place |
 | **Loadout** | The kit you are wearing, by slot, with size, grade and maker |
 | **Stash** | What is in your inventory and where you left it |
@@ -260,7 +261,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 422 tests
+dotnet test Quantumwake.slnx      # 428 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -352,6 +353,23 @@ release workflow lifts it from here, so it is written once.
 
 ### 0.7.0
 
+- **A commodity, in full.** Market answered "where does this sell" and stopped
+  there. Clicking through from a row now opens the good's own page: what it has
+  been worth day by day, demand against supply over the same weeks, every
+  counter that buys it and every counter that stocks it - each against the best
+  price and dated - and your own receipts underneath, from your logs rather than
+  anybody's price table. UEX turns out to serve per-counter history, which is
+  where the two charts come from. It serves it one counter at a time, though, so
+  a good trading at thirty-five of them would be thirty-five requests to draw one
+  line: the app asks the busiest few instead, taken from both ends of the trade -
+  where a hold empties and where it fills - and says on the page how many of how
+  many it sampled. Ranked by volume, never by price, because the best price is
+  often a counter wanting nine SCU and a trend drawn from those describes a
+  market nobody trades in. Each counter carries its last reported figure forward
+  until it reports again, so a day nobody reported reads as quiet rather than as
+  a collapse. Fetched on the click that opens the page, never on a page load and
+  never while UEX is off, and the page has a link of its own -
+  `#commodity/Aluminum`.
 - **The people you fly with.** A 4.9 log names another player in exactly one
   place: the toasts announcing that somebody in your party came online or
   dropped. There is no roster event, no join event carrying a member list, and
