@@ -615,8 +615,9 @@
         <b>Name the cargo?</b>
         The community keeps the id-to-name table as a public file
         (StarCitizenWiki / scunpacked-data). Enabling this downloads it once.
-        The app connects to the internet only on your request, here or from the
-        Settings page - never on its own.
+        This one is fetched on your request and never again on its own; only
+        the market price table can be given standing leave to refresh, and only
+        if you turn that on.
       </div>
       <button class="ghost" id="community-enable">Download community data</button>
       <span class="muted" id="community-status"></span>
@@ -1178,9 +1179,10 @@
         Commodity names for your cargo, where each commodity trades, and the
         ship and item reference for the Fleet and Loadout pages — all from
         StarCitizenWiki / scunpacked-data. Enabling downloads a set of public
-        files (~110&nbsp;MB, kept as a few MB) into local app data. The app
-        connects to the internet only when you ask it to, here, and never on
-        its own. Disabling deletes the local copy.
+        files (~110&nbsp;MB, kept as a few MB) into local app data. Fetched when
+        you ask and never again on its own — this one has no automatic refresh,
+        because a commodity's name does not change while you play. Disabling
+        deletes the local copy.
       </p>
       <span class="muted" id="settings-community-status"></span>
     </div>
@@ -1195,10 +1197,19 @@
       <p class="muted">
         Crowd-sourced market prices from <em>uexcorp.space</em> — a third party,
         separate from the community dataset. Enabling fetches the current price
-        table and shows best sell prices on the Market page. Like everything
-        here: only on your click, never on a timer.
+        table and shows best sell prices on the Market page. On your click,
+        unless you turn on the refresh below — the one thing here that may go
+        out on its own.
       </p>
       <span class="muted" id="uex-status"></span>
+
+      <label class="toggle uex-auto-row">
+        <input type="checkbox" id="uex-auto-toggle">
+        <span>
+          Keep prices current while the app is open
+          <em class="muted" id="uex-auto-note"></em>
+        </span>
+      </label>
 
       <label class="toggle uex-age-row">
         <input type="checkbox" id="uex-age-toggle" checked>
@@ -1274,9 +1285,11 @@
           No account, no configuration, no upload. It reads <code>Game.log</code>
           and the backups beside it, resolves the names from your own copy of the
           game, and shows you what is there. Nothing is written to the game
-          directory, and the app connects to the internet only when you ask it
-          to — the optional datasets from the Settings page, and the version
-          check if you turn that on. Never otherwise, and never on a timer.
+          directory, and the app connects to the internet only where you have
+          said it may — the optional datasets from the Settings page, and, if
+          you turn them on, the version check and the market-price refresh.
+          Those last two are the only ones that go out without a click, and both
+          are off until you say otherwise.
         </p>
 
         <dl class="about-facts">
@@ -1374,8 +1387,10 @@
             <p>
               No. It reads <code>Game.log</code> and the backups beside it, and
               nothing is written to the game directory, no memory is read and
-              nothing is injected. It connects to the internet only when you ask
-              it to from the Settings page, never on its own.
+              nothing is injected. It connects to the internet only where you
+              have said it may, from the Settings page — and the two that can go
+              out unattended, the version check and the market-price refresh,
+              are both off until you turn them on.
             </p>
           </details>
 
@@ -1487,6 +1502,17 @@
           <b>UEX market prices <em>online</em></b>
           <span>Crowd-sourced prices: best places to sell, trade advice from
           where you are, and what your fleet and stash are worth.</span>
+        </div>
+      </label>
+
+      <label class="setup-opt setup-sub" id="setup-uex-auto-row" hidden>
+        <input type="checkbox" id="setup-uex-auto">
+        <div>
+          <b>Keep those prices current <em>the only automatic connection</em></b>
+          <span>Refetches the price table every few hours while the app is
+          open, so it describes today's market rather than the day you set this
+          up. Nothing else here ever goes out on its own, and this can be turned
+          off again in Settings.</span>
         </div>
       </label>
 

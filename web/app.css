@@ -2123,6 +2123,17 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 }
 .setup-opt span { color: var(--muted); font-size: 12px; line-height: 1.45; }
 
+/* An option that only means anything under the one above it: indented into the
+   parent's text column and hung off a single rule, so it reads as a condition
+   of that choice rather than a fourth thing to weigh. */
+.setup-opt.setup-sub {
+  margin-left: 27px;
+  margin-top: -6px;
+  border-width: 0 0 0 1px;
+  padding-block: 9px;
+}
+.setup-opt.setup-sub:hover { border-color: var(--cyan); }
+
 .setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
 
 /* The wizard's is the same button with more air around the words. */

@@ -3163,8 +3163,53 @@ async function renderSettings() {
     $('#uex-save-creds').textContent = uex.hasCredentials ? 'Replace keys' : 'Save keys';
   } catch { /* as above */ }
 
+  await renderUexAuto();
   await renderUexFeeds();
 }
+
+/**
+ * The automatic refresh switch.
+ *
+ * Disabled rather than hidden while UEX is off: a switch that vanishes reads as
+ * a feature that does not exist, whereas a greyed one with a reason reads as a
+ * door you have not opened yet. The note carries the interval and the last
+ * attempt, because "automatic" without a period is a promise with no shape.
+ */
+async function renderUexAuto() {
+  const toggle = $('#uex-auto-toggle');
+  const note = $('#uex-auto-note');
+  if (!toggle) return;
+
+  try {
+    const auto = await getJson('/api/uex/auto');
+
+    toggle.checked = auto.automatic;
+    toggle.disabled = !auto.uexEnabled;
+
+    if (!auto.uexEnabled) {
+      note.textContent = 'fetch prices first';
+      return;
+    }
+
+    const every = `every ${auto.staleAfterHours} hours`;
+
+    note.textContent = auto.automatic
+      ? (auto.lastCheckedAt ? `${every} · last tried ${dateOf(auto.lastCheckedAt)}` : every)
+      : `off · prices stay as fetched`;
+  } catch { /* Settings redraws on its next visit */ }
+}
+
+$('#uex-auto-toggle')?.addEventListener('change', async (e) => {
+  const toggle = e.currentTarget;
+
+  try {
+    await fetch(`/api/uex/auto/answer?automatic=${toggle.checked}`, { method: 'POST' });
+  } catch {
+    toggle.checked = !toggle.checked;
+  }
+
+  await renderUexAuto();
+});
 
 /**
  * The optional UEX feeds, each with its own switch: they serve different
@@ -7589,11 +7634,15 @@ $('#stash-ever')?.addEventListener('change', () => libraryStats && renderStash(l
 /**
  * Offers to renew the price table when it has gone stale.
  *
- * UEX is fetched on a click and never on a timer, which is the right default
- * and has one cost: a table pulled a fortnight ago looks exactly like one
- * pulled this morning, and every margin on the page is quietly wrong. So the
- * app looks once at startup, and if the snapshot has turned a day old it says
- * so and offers the one click that fixes it.
+ * UEX is fetched on a click unless the automatic refresh has been turned on,
+ * and a click-only table has one cost: one pulled a fortnight ago looks exactly
+ * like one pulled this morning, and every margin on the page is quietly wrong.
+ * So the app looks once at startup, and if the snapshot has turned a day old it
+ * says so and offers the one click that fixes it.
+ *
+ * This is the path for everyone who left the refresh off, and it stays for
+ * them: with it on the table never reaches a day old, so the offer simply never
+ * fires rather than needing to know about it.
  *
  * An offer, not an alert: nothing is blocked, dismissing it lasts the day, and
  * the check runs once per load rather than on any schedule.
@@ -8157,7 +8206,18 @@ async function maybeShowSetup() {
     } catch { /* the field keeps whatever the markup had */ }
 
     const uexBox = $('#setup-uex');
-    const syncFeeds = () => { $('#setup-feeds').hidden = !uexBox.checked; };
+
+    // The feed list and the refresh switch are both conditions of taking UEX at
+    // all, so they appear with it and go away with it - and the switch is
+    // cleared on the way out, or unticking UEX would leave an agreement behind
+    // for a thing that was never enabled.
+    const syncFeeds = () => {
+      $('#setup-feeds').hidden = !uexBox.checked;
+      $('#setup-uex-auto-row').hidden = !uexBox.checked;
+
+      if (!uexBox.checked) $('#setup-uex-auto').checked = false;
+    };
+
     uexBox.addEventListener('change', syncFeeds);
     syncFeeds();
   } catch { /* no feed list; the wizard still works */ }
@@ -8206,6 +8266,12 @@ async function maybeShowSetup() {
           await fetch(`/api/uex/feeds/${box.dataset.feed}/enable`, { method: 'POST' })
             .catch(() => {});
         }
+
+        // Recorded as an answer either way: someone who read the option and
+        // left it alone has declined, and should not be asked a second time.
+        await fetch(
+          `/api/uex/auto/answer?automatic=${$('#setup-uex-auto').checked}`,
+          { method: 'POST' }).catch(() => {});
       }
 
       const chosenWipe = $('#setup-wipe').value;

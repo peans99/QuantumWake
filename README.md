@@ -18,8 +18,9 @@ it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
 of the whole 'verse with your own trail across it.
 
 It is read-only and never touches the game. It connects to the internet only
-when you ask it to - the optional integrations on the Settings page - and never
-on its own.
+where you have said it may - the optional integrations on the Settings page -
+and the only two that can go out unattended, the version check and the
+market-price refresh, are off until you turn them on.
 
 > **Pre-1.0.** Until version 1.0 this product will keep changing significantly:
 > pages appear and move, data formats shift, and an update may re-read your logs
@@ -162,8 +163,9 @@ running Easy Anti-Cheat:
 - Reads log files only; nothing is ever written to the game directory
 - No memory access, no DLL injection, no DirectX or WinAPI hooking
 - No CDN, no telemetry, no phoning home. The app connects to the internet only
-  at your request, from the Settings page - the optional community dataset - and
-  never on its own
+  where you have said it may, from the Settings page - the optional datasets,
+  and the two things that can go out unattended: the version check and the
+  market-price refresh, both off until you turn them on
 - The overlay is an ordinary top-most window using documented Win32 styles
 
 The trade-off of doing it safely: an always-on-top window is **not** composited
@@ -349,6 +351,16 @@ release workflow lifts it from here, so it is written once.
 
 ### 0.7.0
 
+- **Prices can keep themselves current.** The price table is the one thing here
+  with a shelf life: pulled a fortnight ago it looks exactly like one pulled this
+  morning, and every margin on the page is quietly wrong. It can now be given
+  standing leave to refetch itself every six hours while the app is open -
+  offered during first-flight setup under the UEX option, and switchable any time
+  in Settings. It is off unless you turn it on, it does nothing while UEX itself
+  is off, and turning it on never enables UEX by the back door. This is the only
+  thing in the app that goes out without a click, which is why it is asked for
+  rather than assumed, and why the About page now names it. The startup offer to
+  refresh a day-old table stays for everyone who leaves this off.
 - **What the cargo cost you.** Buying a commodity was never read. The tag was
   routed, but the pattern behind it only fitted a sale, so every purchase fell
   through as an unrecognised line - the last unmatched tag in 418 MB of logs.
