@@ -22,6 +22,33 @@ The check exists because the failure is quiet otherwise. Publishing passes
 stamped binary — while the repository, and the About page of anyone who builds
 from source, keep claiming the previous number.
 
+## The other version
+
+`PayloadVersion`, in `src/Quantumwake.Data/SessionStore.cs`, is the one nobody
+remembers — and forgetting it is worse than forgetting the release version,
+because nothing anywhere goes red. Backups are skipped by fingerprint, so a
+session summarised before a field existed keeps that summary for ever: the
+parser reads the new thing, the page asks for it, and every install that has run
+before shows nothing. The installs with the most history see the least.
+
+It has happened twice — medical beds in 0.6, commodity purchases in 0.7 — so it
+is checked now as well. `ci.yml` fails a pull request that touches the parser,
+the events, the session record or its builder without moving `PayloadVersion`:
+
+```
+This change touches the parser or the session summary, but PayloadVersion
+in src/Quantumwake.Data/SessionStore.cs does not move.
+```
+
+A rename or a comment fix genuinely changes nothing stored, and a check that
+cannot be answered is one people learn to route around — so `no-payload-bump`
+in a commit message waives it. Use that when nothing stored changed, and move
+the constant when something did.
+
+`SchemaVersion`, beside it, answers a different question: bump that only when a
+stored payload can no longer be *read*, since a mismatch drops the table
+outright rather than merely re-reading the logs.
+
 ## Before the tag
 
 A release is tested as one thing, in the place it will be used.
