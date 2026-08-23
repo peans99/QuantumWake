@@ -163,6 +163,7 @@ function showView(name) {
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
   if (name === 'casualties') loadCasualties().catch(() => {});
+  if (name === 'crew') loadCrew().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
@@ -439,6 +440,7 @@ async function loadHistory() {
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
   loadCasualties().catch((e) => console.error('casualties', e));
+  loadCrew().catch((e) => console.error('crew', e));
   loadRespawn().catch((e) => console.error('respawn', e));
   loadOutfitting().catch((e) => console.error('outfitting', e));
   loadRoutes().catch((e) => console.error('routes', e));
@@ -2306,6 +2308,80 @@ async function loadCasualties() {
 }
 
 onInput('#casualties-period', loadCasualties);
+
+/* ---------- crew ---------- */
+
+/**
+ * The people the party channel has named.
+ *
+ * The counts are arrivals and departures, not time together, and the page says
+ * so rather than dressing them up as a friends list. Anyone who was already
+ * online when you grouped up and stayed to the end never produced a toast, so
+ * absence from this table means nothing at all - which is exactly why the
+ * summary counts what was *seen* rather than claiming a total.
+ */
+async function loadCrew() {
+  const table = $('#crew-table');
+  if (!table) return;
+
+  const days = Number($('#crew-period').value) || 0;
+
+  let rows;
+  try {
+    rows = await getJson(`/api/crew?days=${days}`);
+  } catch {
+    return;
+  }
+
+  const arrivals = rows.reduce((total, r) => total + r.connected, 0);
+  const drops = rows.reduce((total, r) => total + r.dropped, 0);
+
+  tiles('#crew-summary', [
+    ['People named', rows.length],
+    ['Arrivals seen', arrivals],
+    ['Drops seen', drops],
+    ['Most flown with', rows.length ? rows[0].handle : '—'],
+  ]);
+
+  bars('#crew-chart',
+    rows.slice(0, 12).map((r) => ({
+      label: r.handle,
+      value: r.sessions,
+      note: `${r.connected} arrival${r.connected === 1 ? '' : 's'}`,
+    })),
+    (v) => `${v} session${v === 1 ? '' : 's'}`);
+
+  const body = table.querySelector('tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted',
+      'Nobody named in that range — the game only says so when someone joins or '
+      + 'drops while you are partied with them.');
+    td.colSpan = 7;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const row of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, row.handle));
+    tr.append(el('td', 'num', String(row.sessions)));
+    tr.append(el('td', 'num', String(row.connected)));
+    tr.append(el('td', 'num', String(row.dropped)));
+
+    // Blank rather than zero: never having taken lead is not a score.
+    tr.append(el('td', row.ledParty ? 'num' : 'num muted', row.ledParty || '—'));
+
+    tr.append(el('td', 'muted', dateOf(row.first)));
+    tr.append(el('td', 'muted', dateOf(row.last)));
+    body.append(tr);
+  }
+}
+
+onInput('#crew-period', loadCrew);
 
 /* ---------- outfitting ---------- */
 

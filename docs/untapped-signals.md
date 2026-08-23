@@ -123,12 +123,50 @@ Gives hangar size used (Small/Medium/Large), and ship retrieval/stow events. A
 decent proxy for "sessions where you actually took a ship out", and the hangar
 names identify the station.
 
-## 6. Cargo and freight — needs investigation
+## 6. Cargo and freight — investigated, and a dead end
 
 `<Update Container Items Add New Item>` (294) names item classes entering
 containers, and `FreightElevatorKiosk` appears in the shop UI component. Between
-them there may be enough to track cargo hauling, which would pair well with the
-`HaulCargo_*` contracts we already parse. Not yet confirmed end to end.
+them there looked to be enough to track cargo hauling, which would have paired
+well with the `HaulCargo_*` contracts we already parse.
+
+**Checked in 0.7.0, and there is not.** The word *freight* is everywhere - 6,488
+hits across six recent 4.9 sessions - but almost all of it is
+`CSCLoadingPlatformManager` state changes and errors about missing light groups.
+The only lines from the kiosk itself read:
+
+```
+<CEntityComponentFreightElevatorUIProvider::FillUnstowRequest>
+  FreightElevatorKiosk_FreightElevator_Util_HangarSmall[776094926102] -
+  Processed bindings into transfer request - Entities: 1, Location: 4075093849
+```
+
+A count of entities and an opaque location id. No item class, no quantity, no
+commodity. Hangar size is legible from the kiosk name (`HangarSmall`,
+`HangarLarge`), which is worth something to §5, but cargo hauling cannot be
+reconstructed from this. Do not re-investigate without a new line shape.
+
+## 6b. The party channel — taken in 0.7.0
+
+Missed by the original sweep, and the best of what was left: the HUD's party
+notifications are the **only** lines in a 4.9 log that name another player.
+
+```
+<SHUDEvent_OnNotification> Added notification "Party
+D-Rud disconnected.: " [94] to queue. ...
+```
+
+Five titles appear - `Party`, `New Party Leader`, `Party Disbanded`, and the
+matchmaking pair `Party Launch` / `Party Launch Accepted` - and they are not
+interchangeable: disbanding has to be recognised by its title, because its body
+names nobody. Across this install 291 notifications yield 273 readable notes
+naming 27 people; the remaining 18 are queue chatter and one line the game
+garbled.
+
+The limit is worth restating wherever this gets used: there is **no roster
+event**. Presence is inferred from arrival and departure toasts alone, so
+somebody already online when you group up, who stays until you log off, produces
+nothing whatever. Every figure built on this is a floor, never a total.
 
 ## 7. Lower value
 

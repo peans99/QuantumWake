@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![350 tests](https://img.shields.io/badge/tests-350%20passing-4fd48a)
+![422 tests](https://img.shields.io/badge/tests-422%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -69,6 +69,7 @@ events, not a radar.*
 | **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on. **Upgrades** opens the game's own port list for that ship: what fits each hole, what it costs, and the counter that stocks it |
 | **Places** | Most-visited locations and quantum destinations |
 | **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
+| **Crew** | The people you fly with, from the only lines in a 4.9 log that name anyone — sessions shared, arrivals and drops seen, and who has led the party. A floor rather than a total: someone already online when you grouped up produces no line at all |
 | **Spending** | Confirmed purchases by shop, item and category |
 | **Ledger** | Every transaction, back-tracked to the place it happened |
 | **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
@@ -259,7 +260,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 350 tests
+dotnet test Quantumwake.slnx      # 422 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -351,6 +352,18 @@ release workflow lifts it from here, so it is written once.
 
 ### 0.7.0
 
+- **The people you fly with.** A 4.9 log names another player in exactly one
+  place: the toasts announcing that somebody in your party came online or
+  dropped. There is no roster event, no join event carrying a member list, and
+  no player id anywhere - so that channel is the whole of what can be known,
+  and the new *Crew* page is built from it. 27 people on this install, ranked by
+  sessions shared rather than by toast count, since a player with a poor
+  connection would otherwise outrank everyone who quietly flew a whole night
+  with you. The page states plainly that every figure is a floor: a friend
+  already online when you grouped up, who stayed until you logged off, produces
+  no line at all. Arrivals and drops also reach the live feed as they happen.
+  Of 291 party notifications, 273 are read and the remaining 18 name nobody -
+  join-queue and matchmaking chatter, left unread rather than guessed at.
 - **Prices can keep themselves current.** The price table is the one thing here
   with a shelf life: pulled a fortnight ago it looks exactly like one pulled this
   morning, and every margin on the page is quietly wrong. It can now be given

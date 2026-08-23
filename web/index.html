@@ -41,6 +41,7 @@
         <button data-view="fleet">Fleet</button>
         <button data-view="places">Places</button>
         <button data-view="contracts">Contracts</button>
+        <button data-view="crew">Crew</button>
         <button data-view="casualties">Casualties</button>
       </div>
     </div>
@@ -334,6 +335,51 @@
   </section>
 
   <!-- CASUALTIES -->
+  <section id="view-crew" class="view">
+    <div class="section-bar">
+      <h2>Crew</h2>
+      <div class="controls">
+        <select id="crew-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      The people you fly with. Star Citizen 4.9 logs no party roster &mdash;
+      there is no join event carrying a member list and no player id anywhere
+      &mdash; so this is built from the only lines that name anyone: the toasts
+      announcing that somebody in your party came online or dropped.
+      <b>Every number here is a floor, never a total.</b> A friend who was
+      already online when you grouped up and stayed until you logged off
+      produces no toast at all, so an evening flown together can leave no trace.
+      What these rows can be trusted to say is that these people were there
+      &mdash; never that nobody else was.
+    </p>
+
+    <div class="summary-strip" id="crew-summary"></div>
+
+    <h2 class="spaced">Most flown with</h2>
+    <div id="crew-chart" class="bars"></div>
+
+    <h2 class="spaced">Everyone named</h2>
+    <p class="muted caption">
+      Ranked by sessions rather than by toasts: a player with a poor connection
+      would otherwise outrank the people who quietly flew whole nights with you.
+      <em>Led</em> counts the times party lead passed to them.
+    </p>
+    <div class="table-wrap">
+      <table id="crew-table">
+        <thead>
+          <tr>
+            <th>Handle</th>
+            <th class="num">Sessions</th><th class="num">Came online</th>
+            <th class="num">Dropped</th><th class="num">Led</th>
+            <th>First</th><th>Last</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="view-casualties" class="view">
     <div class="section-bar">
       <h2>Casualties</h2>

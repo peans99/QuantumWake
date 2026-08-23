@@ -51,6 +51,7 @@ public sealed class SessionBuilder
 
     private readonly List<RespawnRecord> _respawns = [];
     private readonly List<MedicalBedVisit> _medicalBeds = [];
+    private readonly List<PartyNote> _partyNotes = [];
 
     /// <summary>Set by a death or incapacitation, cleared by the location that answers it.</summary>
     private DateTimeOffset? _awaitingRespawn;
@@ -600,6 +601,33 @@ public sealed class SessionBuilder
             return;
         }
 
+        // The party channel is the only place another player is ever named, so
+        // these are kept whole rather than counted: who, when, and what happened.
+        // Lines naming nobody - a join queue opening, a broadcast, the one
+        // garbled string in this corpus - read as null and stop here.
+        if (notification.IsParty)
+        {
+            if (Party.Read(notification.Timestamp, notification.Text) is { } note)
+            {
+                _partyNotes.Add(note);
+
+                // Only arrivals and departures reach the timeline. Lead changing
+                // hands is real, but it happens in flurries while a party
+                // re-forms, and a feed saying "X is now leader" five times in a
+                // minute buries the flight it is meant to describe.
+                if (note.Moment is PartyMoment.Connected or PartyMoment.Disconnected)
+                    Timeline(
+                        note.At,
+                        "party",
+                        note.Moment == PartyMoment.Connected
+                            ? $"{note.Handle} came online"
+                            : $"{note.Handle} dropped",
+                        "in your party");
+            }
+
+            return;
+        }
+
         if (notification.IsContractAccepted)
         {
             var title = notification.Text["Contract Accepted:".Length..].Trim(' ', ':');
@@ -967,6 +995,7 @@ public sealed class SessionBuilder
             Blueprints = _blueprintReceipts,
             Respawns = _respawns,
             MedicalBeds = _medicalBeds,
+            PartyNotes = _partyNotes,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,
