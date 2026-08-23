@@ -469,12 +469,81 @@ function renderContracts(stats) {
     (v) => `${v}`);
 
   loadContractList().catch((e) => console.error('contracts', e));
+  loadStanding().catch((e) => console.error('standing', e));
 }
 
 /**
  * The contract list, with the objective progress the game pushes but never
  * showed anywhere: how many journal steps a contract had and how many closed.
  */
+/**
+ * Work done per faction.
+ *
+ * Deliberately not called reputation. Nothing in the logs carries a rep value -
+ * the client opens a channel to a reputation service and the numbers live on
+ * the other side of it - so this counts the thing that moves it instead. Where
+ * a text mod has written the reward onto a contract's title, that number is
+ * shown as what it is: something somebody else worked out, on the few contracts
+ * they got to.
+ */
+async function loadStanding() {
+  const days = Number($('#contracts-period').value) || 0;
+  const rows = await getJson(`/api/standing?days=${days}`).catch(() => []);
+  const body = $('#standing-table tbody');
+
+  if (!body) return;
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No contracts in that range.');
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const row of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, row.issuer));
+    tr.append(el('td', 'num', String(row.contracts)));
+
+    const done = el('td', 'num');
+    done.append(el('span', row.completed ? 'done' : 'muted', String(row.completed)));
+
+    // Finishing rate is the part that reads as standing: nine of ten is a
+    // different relationship from nine of thirty.
+    if (row.contracts > 0)
+      done.append(el('span', 'muted', ` · ${Math.round((row.completed / row.contracts) * 100)}%`));
+
+    tr.append(done);
+    tr.append(el('td', row.abandoned ? 'num outward' : 'num muted', String(row.abandoned)));
+
+    // Never a bare zero: no annotated title is "nobody wrote it down", which is
+    // not the same as "this pays nothing".
+    const rep = el('td', 'num');
+
+    if (row.repFrom > 0) {
+      rep.append(el('span', null, row.rep.toLocaleString()));
+      rep.append(el('span', 'muted', ` · from ${row.repFrom}`));
+      rep.title = `Read from ${row.repFrom} contract title${row.repFrom === 1 ? '' : 's'} the StarStrings mod has annotated`;
+    } else {
+      rep.append(el('span', 'muted', '—'));
+      rep.title = 'No annotated title among these, so nobody has written down what they pay';
+    }
+
+    tr.append(rep);
+
+    const span = el('td', 'muted');
+    span.textContent = row.first === row.last
+      ? dateOf(row.first)
+      : `${dateOf(row.first)} → ${dateOf(row.last)}`;
+    tr.append(span);
+
+    body.append(tr);
+  }
+}
+
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
   const rows = await getJson(`/api/contracts?days=${days}`);
@@ -484,7 +553,7 @@ async function loadContractList() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No contracts in that range.');
-    td.colSpan = 8;
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -511,6 +580,27 @@ async function loadContractList() {
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
     tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+
+    // What the title says it pays, when a text mod has annotated it. Silence
+    // is the honest default: most titles say nothing, and a zero would read as
+    // "this pays nothing" rather than "nobody wrote it down".
+    const pays = el('td');
+
+    if (row.rep) {
+      const chip = el('span', 'tag-rep', `${row.rep.toLocaleString()} rep`);
+      chip.title = 'From the contract title, annotated by the StarStrings mod';
+      pays.append(chip);
+    }
+
+    if (row.blueprint) {
+      const chip = el('span', 'tag-bp', 'BP');
+      chip.title = 'Tagged as awarding a blueprint';
+      pays.append(chip);
+    }
+
+    if (!row.rep && !row.blueprint) pays.append(el('span', 'muted', '—'));
+
+    tr.append(pays);
 
     // Steps only exist for missions whose objectives were pushed while the
     // log was being written; older contracts honestly show nothing.

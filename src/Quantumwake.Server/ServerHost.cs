@@ -700,6 +700,10 @@ public static class ServerHost
         app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
+        // Work done per faction, and the little reputation anyone has written
+        // down. See LogLibrary.Standings for why those are two different things.
+        app.MapGet("/api/standing", (LogLibrary lib, int? days) => lib.Standings(days ?? 0));
+
         // The community catalogue joined onto this install's trades, plus UEX
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.

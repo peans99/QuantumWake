@@ -880,7 +880,20 @@ h2.spaced { margin-top: 32px; }
 }
 .muted.warn code { color: inherit; }
 
+/* What a contract's own title claims it pays, when somebody has annotated it. */
+.tag-rep, .tag-bp {
+  font-size: 10px;
+  letter-spacing: .06em;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  margin-right: 5px;
+  white-space: nowrap;
+}
+.tag-rep { color: var(--cyan); border-color: #1d4d63; }
+.tag-bp { color: var(--green); border-color: #1f5c3d; }
+
 /* ---------- buttons ---------- */
+
 
 
 
