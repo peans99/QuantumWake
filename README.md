@@ -351,8 +351,14 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.0
+### 0.7.1
 
+- **Read-only over the network.** `-Lan` puts the dashboard on a tablet, and put
+  the API there with it - including the endpoints that store UEX keys, write into
+  your game folder and move the line your history is counted from, none of which
+  ask who is calling. From any machine but this one it is now reads and the live
+  feed only; everything else gets a refusal, and the app says so at startup when
+  the switch is on.
 - **Graphs, on all three places a commodity shows up.** The drill-down gains
   two more: the margin a buy-here-sell-there run would have earned per SCU, day
   by day, and the same weeks drawn counter by counter, because the best-of line
