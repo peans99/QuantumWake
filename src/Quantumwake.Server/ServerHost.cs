@@ -475,6 +475,16 @@ public static class ServerHost
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
+        // The Now page is a briefing, not another report to go hunting through:
+        // one request joins the live place to the player's plan, shopping lists,
+        // stash, and opt-in market feeds. The game never writes a cargo manifest,
+        // so trade rows are deliberately "buy here, sell there" leads rather than
+        // pretending the player is carrying a commodity it cannot see.
+        app.MapGet("/api/briefing", (
+            LiveSessionService live, TripStore trips, JobStore jobs,
+            LogLibrary lib, UexData uex, UexFeeds feeds) =>
+            BuildBriefing(live.Current, trips, jobs, lib, uex, feeds));
+
         // Server-Sent Events feed for the browser UI.
         //
         // The SignalR hub above stays mapped as the seam for Phase 6 multi-client work,
@@ -1872,6 +1882,126 @@ static int Holes(IEnumerable<ShipSlot> slots)
             .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
     }
 
+    /// <summary>Builds the short list of useful things at the player's live place.</summary>
+    /// <remarks>
+    /// A briefing is deliberately narrower than its source pages. The next three
+    /// stops are enough to act on without hiding the rest of a plan, and the
+    /// shopping/stash lists are capped for the same reason: Now is for deciding
+    /// what to do before leaving a hangar, not for replacing their full views.
+    /// </remarks>
+    static PilotBriefing BuildBriefing(
+        NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds)
+    {
+        var trip = trips.Tracked();
+        var stops = trip?.Stops.Where(s => !s.Done).Take(3)
+            .Select(s => new BriefingStop(s.Id, s.PlaceId, s.Place, s.Note))
+            .ToList() ?? [];
+
+        if (!now.InGame || string.IsNullOrWhiteSpace(now.Location))
+            return new PilotBriefing(now.LocationId, now.Location, trip?.Id, trip?.Title, stops, [], [], [], []);
+
+        var placeId = now.LocationId;
+        var place = now.Location;
+        var stats = lib.Stats();
+
+        // A shopping list already says "in hand" for anything found in any
+        // stash. Keep that same conservative reading here: a line may be at a
+        // different moon, but recommending a second purchase would be worse
+        // than leaving the player to move what they already own.
+        var held = stats.Stash
+            .SelectMany(s => s.Groups)
+            .SelectMany(g => g.Items)
+            .Select(i => i.Name)
+            .ToList();
+
+        var worn = stats.Loadout
+            .SelectMany(slot => slot.Items)
+            .Select(i => i.Name)
+            .ToList();
+
+        bool InHand(string name) => worn.Contains(name, StringComparer.OrdinalIgnoreCase)
+            || held.Any(h => h.Equals(name, StringComparison.OrdinalIgnoreCase)
+                || h.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+        bool AtHere(string terminal)
+        {
+            var resolved = lib.Terminals.Resolve(terminal);
+
+            return placeId is { Length: > 0 } && resolved?.RawId == placeId
+                || string.Equals(resolved?.Name, place, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var shopping = new List<BriefingShopping>();
+
+        foreach (var job in jobs.All().Where(j => !j.Done))
+        foreach (var item in job.Items.Where(i => !InHand(i.Name)))
+        {
+            var commodity = uex.Market(item.Name)
+                .Where(row => row.Buy > 0 && AtHere(row.Terminal))
+                .OrderBy(row => row.Buy)
+                .Select(row => new { row.Terminal, row.Buy, Kind = "commodity" })
+                .FirstOrDefault();
+
+            var stocked = commodity is null && MatchItem(lib, item.Name) is { Uuid: { } uuid }
+                ? uex.ItemMarket(uuid)
+                    .Where(row => AtHere(row.Terminal))
+                    .OrderBy(row => row.Buy)
+                    .Select(row => new { row.Terminal, row.Buy, Kind = "item" })
+                    .FirstOrDefault()
+                : null;
+
+            var seller = commodity ?? stocked;
+            if (seller is not null)
+                shopping.Add(new BriefingShopping(
+                    job.Id, job.Title, item.Name, item.Needed, item.Unit,
+                    seller.Terminal, seller.Buy, seller.Kind));
+        }
+
+        var stash = stats.Stash
+            .FirstOrDefault(s => placeId is { Length: > 0 }
+                ? s.LocationId == placeId
+                : string.Equals(s.Name, place, StringComparison.OrdinalIgnoreCase));
+
+        var stashItems = stash?.Groups
+            .SelectMany(group => group.Items.Select(item =>
+                new BriefingStash(item.Name, group.Category, item.LastSeen)))
+            .OrderBy(item => ItemCategories.Rank(item.Category))
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToList() ?? [];
+
+        var services = new List<BriefingService>
+        {
+            // A listed item is evidence of an actual shop at this location;
+            // absence is deliberately not read as "no shops", because the
+            // catalogue only knows things currently on the player's lists.
+            new("Shops", shopping.Count > 0 ? "items listed" : "not reported", uex.IsEnabled),
+            new("Trade counter", uex.TerminalFor(place) is not null ? "known" : "not listed", uex.IsEnabled),
+            new("Refuel", feeds.FuelPrices.Any(f => AtHere(f.Terminal)) ? "known" : "not listed",
+                feeds.IsEnabled(UexFeeds.Fuel)),
+            new("Clinic", feeds.HasClinic(place) switch
+            {
+                true => "known",
+                false => "not listed",
+                _ => "not reported"
+            }, feeds.IsEnabled(UexFeeds.Places)),
+
+            // Neither Game.log nor the installed UEX feeds describe repair
+            // services. Leaving that uncertainty visible is more useful than
+            // treating a refuel counter as proof a repair pad is present.
+            new("Repair", "not reported", false)
+        };
+
+        var trade = uex.Opportunities(place, limit: 3)
+            .Select(o => new BriefingTrade(
+                o.Commodity, o.BuyHere, o.SellThere, o.SellTerminal, o.MarginPerScu))
+            .ToList();
+
+        return new PilotBriefing(
+            placeId, place, trip?.Id, trip?.Title, stops,
+            [.. shopping.Take(8)], trade, services, stashItems);
+    }
+
     static GameInstall? ResolveInstall(string[] args, IConfiguration configuration)
     {
         var index = Array.IndexOf(args, "--path");
@@ -1921,6 +2051,36 @@ public sealed record JobRequest(
 
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);
+
+/// <summary>The current place joined onto the small set of decisions it enables.</summary>
+public sealed record PilotBriefing(
+    string? LocationId,
+    string? Location,
+    string? TripId,
+    string? TripTitle,
+    IReadOnlyList<BriefingStop> Stops,
+    IReadOnlyList<BriefingShopping> Shopping,
+    IReadOnlyList<BriefingTrade> Trade,
+    IReadOnlyList<BriefingService> Services,
+    IReadOnlyList<BriefingStash> Stash);
+
+/// <summary>One outstanding flight-plan stop, in the order it will be flown.</summary>
+public sealed record BriefingStop(string Id, string PlaceId, string Place, string? Note);
+
+/// <summary>One missing shopping-list item stocked at the live place.</summary>
+public sealed record BriefingShopping(
+    string JobId, string JobTitle, string Name, double Needed, string Unit,
+    string Terminal, decimal Price, string Kind);
+
+/// <summary>A market lead, never a claim about cargo currently in the hold.</summary>
+public sealed record BriefingTrade(
+    string Commodity, decimal BuyHere, decimal SellThere, string SellTerminal, decimal MarginPerScu);
+
+/// <summary>A service the installed data can identify, or explicitly cannot.</summary>
+public sealed record BriefingService(string Name, string Status, bool DataEnabled);
+
+/// <summary>One item last seen at the live place.</summary>
+public sealed record BriefingStash(string Name, string Category, DateTimeOffset LastSeen);
 
 
 /// <summary>
