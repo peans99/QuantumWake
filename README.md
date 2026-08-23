@@ -353,6 +353,17 @@ release workflow lifts it from here, so it is written once.
 
 ### 0.7.0
 
+- **Graphs, on all three places a commodity shows up.** The drill-down gains
+  two more: the margin a buy-here-sell-there run would have earned per SCU, day
+  by day, and the same weeks drawn counter by counter, because the best-of line
+  hides which counter it was and they do not move together - one holding a price
+  while the rest slide is the thing worth knowing. Expanding a row on Market now
+  carries a sparkline with the range and the span it covers, and a button
+  through to the full page. And the Cargo page finally has a shape: what hauling
+  has earned you against what it cost, as running totals rather than per-week
+  takings, since a hold is sold a few times a month and a weekly line would be
+  mostly floor with spikes - a business collapsing between runs rather than one
+  being run occasionally.
 - **A page that says when the game stopped telling us something.** Star Citizen
   has logged less with every patch - quantum detail went in 4.0.1, inter-system
   jumps in 4.1.0, combat entirely by 4.9 - and from inside this app every one of

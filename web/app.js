@@ -1151,6 +1151,14 @@ async function renderMarketDetail(entry, cell) {
 
   head.textContent = '';
   head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+
+  // Beside the title rather than at the far end: the detail table is wider than
+  // the panel, so anything pushed right is pushed off the edge.
+  const more = el('button', 'ghost detail-more', 'Full picture ↗');
+  more.title = 'Price and demand over time, both counter lists, and your receipts';
+  more.addEventListener('click', () => openCommodity(entry.name));
+  head.append(more);
+
   head.append(side);
 
   const safe = el('label', 'toggle');
@@ -1166,6 +1174,12 @@ async function renderMarketDetail(entry, cell) {
   safe.append(el('span', null, 'Monitored space only'));
   head.append(safe);
   cell.append(head);
+
+  // The strip goes in before the table is awaited, so the panel does not sit
+  // empty while a fetch per counter runs. It fills itself in afterwards.
+  const strip = el('div', 'detail-spark');
+  cell.append(strip);
+  drawDetailSpark(strip, entry.name).catch(() => strip.remove());
 
   const all = await terminalsFor(entry.name);
   const priceOf = (r) => (detailView.buying ? r.buy : r.sell);
@@ -2413,6 +2427,87 @@ async function loadCrew() {
 
 onInput('#crew-period', loadCrew);
 
+/**
+ * The one-line version of the price chart, for the expanded Market row.
+ *
+ * No axes and no grid: at this size a gridline is noise, and the two numbers
+ * that matter - the range it moved in, and how long that covers - read better
+ * as text beside it than as labels inside it. Anything more belongs on the
+ * page the button next to it opens.
+ */
+async function drawDetailSpark(strip, commodity) {
+  const trend = await getJson(`/api/uex/history?commodity=${encodeURIComponent(commodity)}`);
+  const daily = dailyMarket(trend).filter((d) => d.bestSell > 0);
+
+  if (daily.length < 2) {
+    strip.remove();
+    return;
+  }
+
+  const values = daily.map((d) => d.bestSell);
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = Math.max(1, high - low);
+  const days = Math.round((daily[daily.length - 1].t - daily[0].t) / 86400000);
+
+  const svg = svgEl('svg', {
+    class: 'spark', viewBox: '0 0 240 34', preserveAspectRatio: 'none',
+    role: 'img', 'aria-label': `${commodity} price over the last ${days} days`,
+  });
+
+  svg.append(svgEl('path', {
+    d: daily.map((d, i) =>
+      `${i ? 'L' : 'M'} ${(i / (daily.length - 1) * 238 + 1).toFixed(1)} `
+      + `${(31 - ((d.bestSell - low) / span) * 28).toFixed(1)}`).join(' '),
+    fill: 'none', stroke: '#35c8f0', 'stroke-width': '1.5',
+    'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+  }));
+
+  strip.append(svg);
+  strip.append(el('span', 'muted',
+    `${money(low)} – ${money(high)} over ${days} days, best counter each day`));
+}
+
+/**
+ * Cargo earnings over time, as running totals.
+ *
+ * Deliberately cumulative. A hold is sold a handful of times a month, so a line
+ * of per-week takings is mostly zero with occasional spikes - which reads as a
+ * business collapsing between runs rather than as one being run occasionally.
+ * A running total only ever goes up, and the gap between the two lines is the
+ * number a hauler actually wants.
+ *
+ * Both lines start at zero on the day before the first trade, so a single
+ * receipt still draws a line rather than a dot the chart cannot scale.
+ */
+function drawCargoEarnings(trades) {
+  const svg = $('#cargo-chart');
+  if (!svg) return;
+
+  const ordered = [...trades].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+
+  const running = (side) => {
+    const rows = ordered.filter((t) => (side === 'sell' ? t.isSell : !t.isSell));
+    if (!rows.length) return [];
+
+    let total = 0;
+    const start = Date.parse(rows[0].at) - 86400000;
+
+    return [{ t: start, v: 0 }, ...rows.map((t) => {
+      total += Number(t.amount) || 0;
+      return { t: Date.parse(t.at), v: total };
+    })];
+  };
+
+  const series = [
+    { label: 'Earned selling cargo', points: running('sell') },
+    { label: 'Spent buying it', points: running('buy') },
+  ];
+
+  timeChart(svg, series, (v) => `${Math.round(v / 1000).toLocaleString()}k`);
+  chartKey('#cargo-chart-key', series);
+}
+
 /* ---------- one commodity, in full ---------- */
 
 const CHART_COLOURS = ['#35c8f0', '#ffb454', '#7fe4ff', '#ff7a8a'];
@@ -2599,6 +2694,32 @@ async function openCommodity(name) {
 
   timeChart($('#commodity-price-chart'), priceSeries, (v) => Math.round(v).toLocaleString());
   chartKey('#commodity-price-key', priceSeries);
+
+  // Only days where both ends are known: a margin needs a buy price as well as
+  // a sell one, and subtracting from zero would draw the sale price again under
+  // a name that means something else.
+  const marginSeries = [{
+    label: 'Margin per SCU',
+    points: daily.filter((d) => d.bestSell > 0 && d.bestBuy > 0)
+      .map((d) => ({ t: d.t, v: d.bestSell - d.bestBuy })),
+  }];
+
+  timeChart($('#commodity-margin-chart'), marginSeries, (v) => Math.round(v).toLocaleString());
+  chartKey('#commodity-margin-key', marginSeries);
+
+  // One line per counter, capped at the palette: past four the lines start
+  // repeating colours and the chart stops being readable.
+  const counterSeries = trend.series
+    .map((s) => ({
+      label: s.terminal,
+      points: s.points.filter((p) => p.sell > 0)
+        .map((p) => ({ t: Date.parse(p.at), v: p.sell })),
+    }))
+    .filter((s) => s.points.length > 1)
+    .slice(0, CHART_COLOURS.length);
+
+  timeChart($('#commodity-counter-chart'), counterSeries, (v) => Math.round(v).toLocaleString());
+  chartKey('#commodity-counter-key', counterSeries);
 
   const scuSeries = [
     { label: 'Demand — SCU they will take', points: daily.map((d) => ({ t: d.t, v: d.demand })) },
@@ -3875,6 +3996,8 @@ function renderCommodities(trades) {
     current.scu += trade.scu;
     byShop.set(trade.place, current);
   }
+
+  drawCargoEarnings(trades);
 
   bars('#cargo-shops',
     [...byShop.entries()]

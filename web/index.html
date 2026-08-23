@@ -669,6 +669,17 @@
       <span class="muted" id="community-status"></span>
     </div>
 
+    <h2 class="spaced">What hauling has been worth</h2>
+    <p class="muted caption">
+      Running totals, not per-week takings: a hold is sold a few times a month,
+      so a line drawn week by week would be mostly floor with occasional spikes
+      and would read as a business collapsing between runs. The gap between the
+      two lines is what cargo has actually made you.
+    </p>
+    <svg id="cargo-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Cargo earnings over time"></svg>
+    <div class="chart-key" id="cargo-chart-key"></div>
+
     <h2 class="spaced">Revenue by location</h2>
     <div id="cargo-shops" class="bars"></div>
 
@@ -912,6 +923,28 @@
     <svg id="commodity-price-chart" class="timechart" viewBox="0 0 1000 220"
          preserveAspectRatio="none" role="img" aria-label="Price over time"></svg>
     <div class="chart-key" id="commodity-price-key"></div>
+
+    <h2 class="spaced">What a run would have made</h2>
+    <p class="muted caption">
+      Best price paid to you that day, less the cheapest anyone charged for it —
+      the margin per SCU a buy-here-sell-there run would have earned. Blank when
+      nobody in the sample stocks it, since a good you cannot buy has no margin,
+      only a sale price.
+    </p>
+    <svg id="commodity-margin-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Margin per SCU over time"></svg>
+    <div class="chart-key" id="commodity-margin-key"></div>
+
+    <h2 class="spaced">Counter by counter</h2>
+    <p class="muted caption">
+      The same weeks, unaggregated: what each sampled counter was paying. The
+      best-of line above hides which one it was, and counters do not move
+      together — one holding a price while the rest slide is the thing worth
+      knowing.
+    </p>
+    <svg id="commodity-counter-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Price per counter over time"></svg>
+    <div class="chart-key" id="commodity-counter-key"></div>
 
     <h2 class="spaced">Demand against supply</h2>
     <p class="muted caption">

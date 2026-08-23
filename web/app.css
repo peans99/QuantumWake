@@ -2134,6 +2134,27 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 }
 .setup-opt.setup-sub:hover { border-color: var(--cyan); }
 
+/* The price strip inside an expanded Market row: a line and a sentence sharing
+   one baseline, so it reads as a caption rather than as a second chart. */
+.detail-spark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 10px;
+  font-size: 11.5px;
+}
+.detail-spark .spark {
+  width: 240px;
+  height: 34px;
+  flex: none;
+  background: rgba(10, 22, 32, .35);
+  border: 1px solid var(--rule);
+}
+
+/* Sits beside the title: the detail table is wider than the panel, so anything
+   pushed to the far end is pushed off the edge entirely. */
+.detail-more { flex: none; }
+
 /* A heading inside a table body, separating one family of rows from the next
    without breaking the column alignment a second table would. */
 .group-row td {
@@ -2154,9 +2175,11 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
   cursor: pointer;
   font-size: 12px;
   padding: 0 4px;
-  opacity: 0;
+  opacity: .4;
   transition: opacity .12s, color .12s;
 }
+/* Dim rather than hidden. A control that only exists on hover is one nobody
+   finds by looking, and is no control at all on a touch screen. */
 tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .drill:hover { color: var(--cyan); }
 
