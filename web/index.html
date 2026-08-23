@@ -892,6 +892,82 @@
   </section>
 
   <!-- REFERENCE: ships -->
+  <!-- Drill-down for one commodity. Opened from Market; no tab of its own. -->
+  <section id="view-commodity" class="view">
+    <div class="section-bar">
+      <h2 id="commodity-name">Commodity</h2>
+      <div class="controls">
+        <button class="ghost" id="commodity-back">&larr; Market</button>
+      </div>
+    </div>
+    <p class="muted caption" id="commodity-sub"></p>
+
+    <div class="summary-strip" id="commodity-summary"></div>
+
+    <h2 class="spaced">What it has been worth</h2>
+    <p class="muted caption" id="commodity-trend-note">
+      Best price across the sampled counters, day by day. The gap between the
+      two lines is the margin a run would have earned that day.
+    </p>
+    <svg id="commodity-price-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Price over time"></svg>
+    <div class="chart-key" id="commodity-price-key"></div>
+
+    <h2 class="spaced">Demand against supply</h2>
+    <p class="muted caption">
+      How much those counters would still take off you, against how much they
+      had on the shelf. Each counter carries its last reported figure forward
+      until it reports again, so a day nobody reported is not drawn as a
+      collapse.
+    </p>
+    <svg id="commodity-scu-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Demand and stock over time"></svg>
+    <div class="chart-key" id="commodity-scu-key"></div>
+
+    <h2 class="spaced">Where it sells &mdash; counters that buy from you</h2>
+    <div class="table-wrap">
+      <table id="commodity-sell-table">
+        <thead>
+          <tr>
+            <th>Counter</th><th class="num">Pays</th><th class="num">Wants</th>
+            <th class="num">vs best</th><th>Reported</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="spaced">Where it buys &mdash; counters that stock it</h2>
+    <div class="table-wrap">
+      <table id="commodity-buy-table">
+        <thead>
+          <tr>
+            <th>Counter</th><th class="num">Costs</th><th class="num">In stock</th>
+            <th class="num">vs cheapest</th><th>Reported</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="spaced">Your own receipts</h2>
+    <p class="muted caption">
+      What you actually paid and were paid, from your logs rather than from
+      anyone's price table.
+    </p>
+    <div class="table-wrap">
+      <table id="commodity-mine-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Side</th><th>Place</th>
+            <th class="num">SCU</th><th class="num">Total</th><th class="num">Per SCU</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="view-ships" class="view">
     <div class="section-bar">
       <h2>Ship catalogue</h2>

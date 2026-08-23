@@ -1563,6 +1563,27 @@ public static class ServerHost
             return Results.Ok(new { enabled = false });
         });
 
+        // What a commodity has been doing lately. A fetch per counter, so it
+        // happens on the click that opens the page and is then cached - never
+        // as part of a page load, and never at all while UEX is off.
+        app.MapGet("/api/uex/history", async (
+            UexData uex, IHttpClientFactory httpFactory, string commodity, CancellationToken token) =>
+        {
+            if (!uex.IsEnabled)
+                return Results.Ok(new UexHistory(commodity, 0, 0, []));
+
+            try
+            {
+                return Results.Ok(
+                    await uex.HistoryAsync(commodity, httpFactory.CreateClient("community"), token: token));
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+            {
+                return Results.Problem(
+                    title: "UEX history could not be fetched.", detail: e.Message, statusCode: 502);
+            }
+        });
+
         // Whether prices may refetch themselves, and when one was last tried.
         // staleAfterHours is served rather than duplicated in the page: the
         // interval is a judgement about someone else's server, and it should be

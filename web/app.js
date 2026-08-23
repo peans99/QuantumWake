@@ -151,7 +151,12 @@ function showView(name) {
   if (name === 'assets') name = 'fleet';
 
   const buttons = $$('#tabs button');
-  const target = buttons.find((b) => b.dataset.view === name);
+
+  // The commodity page is a drill-down rather than a tab: it has no button of
+  // its own, and keeps Market lit, because Market is where it is opened from.
+  const target = buttons.find(
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name));
+
   if (!target) return;
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
@@ -205,7 +210,23 @@ function viewFromHash() {
   return $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
+/**
+ * The commodity page carries its subject in the fragment - #commodity/Aluminum
+ * - so a drill-down is a link like every other view, and survives a refresh.
+ */
+function commodityFromHash() {
+  const raw = location.hash.replace(/^#/, '');
+  return raw.startsWith('commodity/') ? decodeURIComponent(raw.slice('commodity/'.length)) : null;
+}
+
 window.addEventListener('hashchange', () => {
+  const commodity = commodityFromHash();
+
+  if (commodity) {
+    if (commodity !== openCommodityName) openCommodity(commodity).catch(() => {});
+    return;
+  }
+
   const name = viewFromHash();
   if (name) showView(name);
 });
@@ -1281,6 +1302,15 @@ function renderMarket() {
     opener.title = 'Every counter that trades this, and what each one costs you';
     opener.addEventListener('click', () => toggleMarketDetail(entry, tr));
     nameCell.append(opener);
+
+    // The row below answers "where"; the page answers "and what has it been
+    // doing". Kept as a second control so the quick look stays one click.
+    const drill = el('button', 'drill', '↗');
+    drill.title = 'Open the full picture: price and demand over time';
+    drill.setAttribute('aria-label', `Open ${entry.name} in full`);
+    drill.addEventListener('click', () => openCommodity(entry.name));
+    nameCell.append(drill);
+
     tr.append(nameCell);
     tr.append(el('td', 'muted', entry.groups.join(', ')));
     tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
@@ -2382,6 +2412,286 @@ async function loadCrew() {
 }
 
 onInput('#crew-period', loadCrew);
+
+/* ---------- one commodity, in full ---------- */
+
+const CHART_COLOURS = ['#35c8f0', '#ffb454', '#7fe4ff', '#ff7a8a'];
+
+/**
+ * A multi-line time chart.
+ *
+ * Days are the x axis rather than sample index: counters report when they feel
+ * like it, so plotting by index would stretch a quiet fortnight to the same
+ * width as a busy afternoon and invent a trend out of the reporting rate.
+ */
+function timeChart(svg, series, format) {
+  svg.textContent = '';
+
+  const drawable = series.filter((s) => s.points.length > 1);
+
+  if (!drawable.length) {
+    const text = svgEl('text', {
+      x: 500, y: 110, 'text-anchor': 'middle', class: 'empty-note',
+    });
+    text.textContent = 'NOT ENOUGH HISTORY YET';
+    svg.append(text);
+    return;
+  }
+
+  const all = drawable.flatMap((s) => s.points);
+  const times = all.map((p) => p.t);
+  const values = all.map((p) => p.v);
+
+  const t0 = Math.min(...times);
+  const t1 = Math.max(...times);
+  const span = Math.max(1, t1 - t0);
+
+  // Zero is included so a line that halves looks halved. Starting the axis at
+  // the lowest value makes every wobble look like a crash.
+  const top = Math.max(...values, 0);
+  const bottom = Math.min(...values, 0);
+  const height = Math.max(1, top - bottom);
+
+  const x = (t) => 46 + ((t - t0) / span) * 930;
+  const y = (v) => 196 - ((v - bottom) / height) * 170;
+
+  for (const value of [bottom, (bottom + top) / 2, top]) {
+    svg.append(svgEl('line', { x1: 46, y1: y(value), x2: 976, y2: y(value), class: 'grid' }));
+    const label = svgEl('text', { x: 4, y: y(value) + 4, class: 'axis' });
+    label.textContent = format(value);
+    svg.append(label);
+  }
+
+  for (const [edge, anchor] of [[t0, 'start'], [t1, 'end']]) {
+    const label = svgEl('text', { x: x(edge), y: 214, 'text-anchor': anchor, class: 'axis' });
+    label.textContent = new Date(edge).toLocaleDateString([], { month: 'short', day: '2-digit' });
+    svg.append(label);
+  }
+
+  drawable.forEach((line, i) => {
+    const colour = CHART_COLOURS[i % CHART_COLOURS.length];
+    const d = line.points
+      .map((p, n) => `${n ? 'L' : 'M'} ${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`)
+      .join(' ');
+
+    svg.append(svgEl('path', {
+      d, fill: 'none', stroke: colour, 'stroke-width': '2',
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }));
+  });
+}
+
+/** The key under a chart: a line has no meaning without one. */
+function chartKey(container, series) {
+  const box = $(container);
+  box.textContent = '';
+
+  series.forEach((line, i) => {
+    if (line.points.length < 2) return;
+
+    const entry = el('span');
+    const swatch = el('i');
+    swatch.style.background = CHART_COLOURS[i % CHART_COLOURS.length];
+    entry.append(swatch, document.createTextNode(line.label));
+    box.append(entry);
+  });
+}
+
+/**
+ * Rolls per-counter history up into one series per question.
+ *
+ * Each counter is carried forward to the day before the next report, then the
+ * days are combined. Without the carry-forward a day on which only two of eight
+ * counters reported would read as demand collapsing and recovering, which is a
+ * story about UEX's contributors rather than about the market.
+ */
+function dailyMarket(history) {
+  const days = new Map();
+  const DAY = 86400000;
+
+  for (const terminal of history.series) {
+    if (!terminal.points.length) continue;
+
+    const points = terminal.points.map((p) => ({ ...p, day: Math.floor(Date.parse(p.at) / DAY) }));
+    const last = points[points.length - 1].day;
+
+    let i = 0;
+    let held = null;
+
+    for (let day = points[0].day; day <= last; day++) {
+      while (i < points.length && points[i].day <= day) held = points[i++];
+
+      const bucket = days.get(day) || { bestSell: 0, bestBuy: 0, demand: 0, stock: 0 };
+      if (held.sell > 0) bucket.bestSell = Math.max(bucket.bestSell, held.sell);
+      if (held.buy > 0) bucket.bestBuy = bucket.bestBuy ? Math.min(bucket.bestBuy, held.buy) : held.buy;
+      bucket.demand += held.demand;
+      bucket.stock += held.stock;
+      days.set(day, bucket);
+    }
+  }
+
+  return [...days.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([day, v]) => ({ t: day * DAY, ...v }));
+}
+
+/** What the page is showing, so Back and a redraw know where they are. */
+let openCommodityName = null;
+
+/**
+ * The full picture for one commodity.
+ *
+ * The history is a request per counter, so it happens here - on the click that
+ * opens the page - rather than anywhere a page merely loads.
+ */
+async function openCommodity(name) {
+  openCommodityName = name;
+  showView('commodity');
+
+  // showView wrote #commodity; the subject belongs in the link too.
+  const fragment = `#commodity/${encodeURIComponent(name)}`;
+  if (location.hash !== fragment) history.replaceState(null, '', fragment);
+
+  $('#commodity-name').textContent = name;
+  $('#commodity-sub').textContent = 'Asking UEX what this has been doing…';
+
+  // A link straight into this page arrives before Market has ever been opened,
+  // so the catalogue its headline figures come from is not loaded yet.
+  if (!marketEntries.length) await loadMarket().catch(() => {});
+
+  const entry = marketEntries.find((e) => e.name === name);
+
+  tiles('#commodity-summary', [
+    ['Best sell now', entry?.uex?.bestSell > 0 ? money(entry.uex.bestSell) : '—'],
+    ['15-day average', entry?.uex?.avgSell > 0 ? money(entry.uex.avgSell) : '—'],
+    ['You have sold', entry?.myScuSold ? `${entry.myScuSold.toLocaleString()} SCU` : '—'],
+    ['It earned you', entry?.myRevenue ? money(entry.myRevenue) : '—'],
+  ]);
+
+  renderCommodityCounters(await terminalsFor(name).catch(() => []), entry);
+  renderCommodityReceipts(name);
+
+  // Named "trend", not "history": a local called history shadows window.history
+  // for this whole function, and the fragment is written above it.
+  let trend;
+  try {
+    trend = await getJson(`/api/uex/history?commodity=${encodeURIComponent(name)}`);
+  } catch {
+    $('#commodity-sub').textContent = 'UEX could not be reached, so no history is drawn.';
+    return;
+  }
+
+  // Racing clicks: the reader has moved on, and this answer is for a page that
+  // is no longer open.
+  if (openCommodityName !== name) return;
+
+  const daily = dailyMarket(trend);
+
+  $('#commodity-sub').textContent = trend.sampled
+    ? `${entry?.groups?.join(', ') || 'Commodity'} · history from the ${trend.sampled} busiest `
+      + `of ${trend.terminals} counters that trade it, by demand and by stock.`
+    : 'No history available — UEX is off, or nobody has reported this one.';
+
+  const priceSeries = [
+    { label: 'Best price paid to you', points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
+    { label: 'Cheapest price charged to you', points: daily.filter((d) => d.bestBuy > 0).map((d) => ({ t: d.t, v: d.bestBuy })) },
+  ];
+
+  timeChart($('#commodity-price-chart'), priceSeries, (v) => Math.round(v).toLocaleString());
+  chartKey('#commodity-price-key', priceSeries);
+
+  const scuSeries = [
+    { label: 'Demand — SCU they will take', points: daily.map((d) => ({ t: d.t, v: d.demand })) },
+    { label: 'Supply — SCU on the shelf', points: daily.map((d) => ({ t: d.t, v: d.stock })) },
+  ];
+
+  timeChart($('#commodity-scu-chart'), scuSeries, (v) => Math.round(v).toLocaleString());
+  chartKey('#commodity-scu-key', scuSeries);
+}
+
+/** The two counter tables: where a hold empties, and where it fills. */
+function renderCommodityCounters(rows, entry) {
+  const sells = rows.filter((r) => r.sell > 0).sort((a, b) => b.sell - a.sell);
+  const buys = rows.filter((r) => r.buy > 0).sort((a, b) => a.buy - b.buy);
+
+  const best = sells.length ? sells[0].sell : 0;
+  const cheapest = buys.length ? buys[0].buy : 0;
+
+  fillCounterTable('#commodity-sell-table', sells, (r) => [
+    money(r.sell),
+    r.sellScu ? `${Math.round(r.sellScu).toLocaleString()} SCU` : '—',
+    best && r.sell < best ? `−${money(best - r.sell)}` : 'best',
+  ], (r) => best && r.sell < best);
+
+  fillCounterTable('#commodity-buy-table', buys, (r) => [
+    money(r.buy),
+    r.buyScu ? `${Math.round(r.buyScu).toLocaleString()} SCU` : '—',
+    cheapest && r.buy > cheapest ? `+${money(r.buy - cheapest)}` : 'cheapest',
+  ], (r) => cheapest && r.buy > cheapest);
+
+  // Unused here, but keeps the signature honest about what it was given.
+  void entry;
+}
+
+function fillCounterTable(selector, rows, cells, isWorse) {
+  const body = $(selector).querySelector('tbody');
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No counter known to trade it this way.');
+    td.colSpan = 5;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const row of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, row.terminal));
+
+    const [price, volume, delta] = cells(row);
+    tr.append(el('td', 'num', price));
+    tr.append(el('td', 'num', volume));
+    tr.append(el('td', `num ${isWorse(row) ? 'outward' : 'inward'}`, delta));
+
+    tr.append(el('td', 'muted', row.seen ? dateOf(new Date(row.seen * 1000).toISOString()) : '—'));
+    body.append(tr);
+  }
+}
+
+/** What this install actually paid and was paid for the thing. */
+async function renderCommodityReceipts(name) {
+  const body = $('#commodity-mine-table').querySelector('tbody');
+  body.textContent = '';
+
+  let trades = [];
+  try {
+    trades = (await getJson('/api/commodities?days=0')).filter((t) => t.commodity === name);
+  } catch { /* the tables above still stand on their own */ }
+
+  if (!trades.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'You have not traded this one.');
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const trade of trades.sort((a, b) => new Date(b.at) - new Date(a.at))) {
+    const tr = el('tr');
+    tr.append(el('td', null, dateOf(trade.at)));
+    tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(tdPlace(trade.place));
+    tr.append(el('td', 'num', String(trade.scu)));
+    tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
+    tr.append(el('td', 'num muted', money(trade.unitPrice)));
+    body.append(tr);
+  }
+}
+
+$('#commodity-back')?.addEventListener('click', () => showView('market'));
 
 /* ---------- outfitting ---------- */
 
@@ -8383,8 +8693,11 @@ async function boot() {
     setInterval(() => applyOverlayLayout().catch(() => {}), 5000);
   }
 
+  const deepCommodity = commodityFromHash();
   const requested = viewFromHash();
-  if (requested) showView(requested);
+
+  if (deepCommodity) openCommodity(deepCommodity).catch(() => {});
+  else if (requested) showView(requested);
 
   // ?q= pre-fills the map search, so a commodity view is a shareable link:
   // /?q=Copper#map opens the map with the sellers lit.

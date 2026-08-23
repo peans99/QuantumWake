@@ -2134,6 +2134,51 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
 }
 .setup-opt.setup-sub:hover { border-color: var(--cyan); }
 
+/* The way into a commodity's own page, sat beside its name. Quiet until the
+   row is hovered: it is a second action on a cell that already has one. */
+.drill {
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity .12s, color .12s;
+}
+tr:hover .drill, .drill:focus-visible { opacity: 1; }
+.drill:hover { color: var(--cyan); }
+
+/* Time-series charts on the commodity page. Height is fixed and the viewBox is
+   stretched to fit, so the same drawing code works at any window width without
+   re-measuring anything. */
+.timechart {
+  width: 100%;
+  height: 220px;
+  display: block;
+  background: rgba(10, 22, 32, .35);
+  border: 1px solid var(--rule);
+}
+.timechart .grid { stroke: rgba(53, 200, 240, .10); stroke-width: 1; }
+.timechart .axis { fill: var(--dim); font-size: 11px; font-family: inherit; }
+.timechart .empty-note { fill: var(--muted); font-size: 13px; }
+
+.chart-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.chart-key span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-key i {
+  width: 14px;
+  height: 2px;
+  display: inline-block;
+  border-radius: 1px;
+}
+
 .setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
 
 /* The wizard's is the same button with more air around the words. */

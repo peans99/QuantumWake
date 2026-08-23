@@ -368,6 +368,34 @@ The startup offer stays for everyone who leaves the refresh off. With it on the
 table never reaches a day old, so the offer simply never fires - two paths to
 the same freshness, neither needing to know about the other.
 
+## A trend has to be sampled, because UEX sells it by the counter
+
+`commodities_prices_history` takes an `id_terminal` and refuses to answer
+without one. A commodity trading at thirty-five counters is therefore
+thirty-five requests to draw one line, which is not a reasonable thing to do to
+a volunteer-run API on somebody clicking a row.
+
+`UexData.SampleTerminals` picks a few instead, and picks them from both ends of
+the trade: the counters with the most demand, where a full hold goes, and the
+ones with the most stock, where it comes from. **Ranked by volume, never by
+price.** The best price is one number and frequently a bad plan - it can be a
+counter wanting nine SCU - and a trend drawn only from the top of the market
+describes a market nobody trades in. A counter leading both lists is asked about
+once, since bounding the request count is the entire point.
+
+The page says how many of how many it sampled, because "the price of Aluminum"
+and "the price at the six busiest counters for Aluminum" are different claims.
+
+The other half is the carry-forward in `dailyMarket`. Counters report when their
+contributors happen to look, so summing only the counters that reported on a
+given day makes demand appear to collapse and recover on the rhythm of UEX's
+volunteers rather than the game's economy. Each counter holds its last reported
+figure until it reports again, and the days are combined after that.
+
+Fetched on the click that opens the page - never on a page load, never while UEX
+is off - and then cached for six hours, because clicking back into a commodity
+to look at the other chart should not spend the requests again.
+
 ## The map is a control surface, not a picture
 
 Four rules the star map learned the hard way. Each was invisible in a

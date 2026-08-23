@@ -30,6 +30,29 @@ public sealed record UexMarketRow(
     int TerminalId, string Terminal, decimal Buy, decimal Sell, decimal BuyScu = 0, decimal SellScu = 0,
     long Seen = 0);
 
+/// <summary>One commodity's price and stock at one counter, at one moment.</summary>
+/// <param name="Sell">What the counter pays you per SCU; 0 when it does not buy.</param>
+/// <param name="Buy">What it charges you per SCU; 0 when it does not sell.</param>
+/// <param name="Demand">SCU it will still take off you.</param>
+/// <param name="Stock">SCU it has on the shelf.</param>
+public sealed record UexHistoryPoint(
+    DateTimeOffset At, decimal Sell, decimal Buy, decimal Demand, decimal Stock);
+
+/// <summary>One counter's history for one commodity, oldest first.</summary>
+public sealed record UexTerminalHistory(
+    int TerminalId, string Terminal, IReadOnlyList<UexHistoryPoint> Points);
+
+/// <summary>
+/// What a commodity has been doing lately, across a sample of its counters.
+/// </summary>
+/// <param name="Sampled">Counters actually fetched.</param>
+/// <param name="Terminals">Counters trading it at all - the sample's denominator.</param>
+public sealed record UexHistory(
+    string Commodity,
+    int Sampled,
+    int Terminals,
+    IReadOnlyList<UexTerminalHistory> Series);
+
 /// <summary>Cheapest in-game purchase of a vehicle.</summary>
 public sealed record UexVehiclePrice(decimal Price, string Terminal);
 
@@ -99,6 +122,23 @@ public sealed class UexData
     public const string SubmitUrl = "https://api.uexcorp.space/2.0/data_submit";
     public const string VehiclePricesUrl = "https://api.uexcorp.space/2.0/vehicles_purchases_prices_all";
     public const string ItemPricesUrl = "https://api.uexcorp.space/2.0/items_prices_all";
+
+    /// <summary>
+    /// Per-counter price and stock history. Takes id_terminal and id_commodity
+    /// and serves nothing without the first, which is why a commodity-wide
+    /// trend has to be sampled rather than simply asked for.
+    /// </summary>
+    public const string PriceHistoryUrl = "https://api.uexcorp.space/2.0/commodities_prices_history";
+
+    /// <summary>
+    /// How long a fetched history is reused. Long, because these move on the
+    /// scale of days and the alternative is a burst of requests every time
+    /// somebody clicks back into a commodity.
+    /// </summary>
+    public static readonly TimeSpan HistoryFreshFor = TimeSpan.FromHours(6);
+
+    private readonly Dictionary<string, (DateTimeOffset At, UexHistory History)> _historyCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private readonly string _directory;
 
@@ -336,6 +376,140 @@ public sealed class UexData
         FetchedAt = DateTimeOffset.UtcNow;
         return _prices.Count;
     }
+
+    /// <summary>
+    /// Which counters to ask about, when a commodity has more than anyone wants
+    /// to make requests for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UEX serves history one counter at a time, so a commodity trading at
+    /// thirty-five of them would be thirty-five requests to draw one line. The
+    /// sample is taken from both ends of the trade instead: the counters with
+    /// the most demand, which is where a full hold goes, and the ones with the
+    /// most stock, which is where it comes from. A counter that leads both lists
+    /// is asked about once.
+    /// </para>
+    /// <para>
+    /// Deliberately not "the best price". Best price is one number and often a
+    /// bad plan - it can be a counter wanting nine SCU - and a trend drawn only
+    /// from the top of the market describes a market nobody trades in.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<UexMarketRow> SampleTerminals(
+        IEnumerable<UexMarketRow> rows, int perSide)
+    {
+        var all = rows.ToList();
+
+        var demanded = all.Where(r => r.Sell > 0)
+            .OrderByDescending(r => r.SellScu)
+            .Take(perSide);
+
+        var stocked = all.Where(r => r.Buy > 0)
+            .OrderByDescending(r => r.BuyScu)
+            .Take(perSide);
+
+        return
+        [
+            .. demanded.Concat(stocked)
+                .DistinctBy(r => r.TerminalId)
+                .OrderByDescending(r => Math.Max(r.SellScu, r.BuyScu))
+        ];
+    }
+
+    /// <summary>
+    /// What a commodity has been doing at a sample of its counters.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On a click, never on a timer: this is a fetch per counter, and the app
+    /// does not spend somebody else's bandwidth speculatively. Kept for
+    /// <see cref="HistoryFreshFor"/> afterwards, because reopening a commodity
+    /// to look at the other chart should not re-fetch anything.
+    /// </para>
+    /// <para>
+    /// A counter that fails or returns nothing is dropped rather than failing
+    /// the request: a chart from six counters is worth having when the seventh
+    /// times out.
+    /// </para>
+    /// </remarks>
+    public async Task<UexHistory> HistoryAsync(
+        string commodity, HttpClient http, int perSide = 4, CancellationToken token = default)
+    {
+        if (_historyCache.TryGetValue(commodity, out var cached)
+            && DateTimeOffset.UtcNow - cached.At < HistoryFreshFor)
+            return cached.History;
+
+        if (!_commodityIds.TryGetValue(commodity, out var commodityId)
+            || !_matrix.TryGetValue(commodity, out var rows))
+            return new UexHistory(commodity, 0, 0, []);
+
+        var sample = SampleTerminals(rows, perSide);
+
+        var fetched = await Task.WhenAll(sample.Select(async row =>
+        {
+            try
+            {
+                var url = $"{PriceHistoryUrl}?id_terminal={row.TerminalId}&id_commodity={commodityId}";
+                var doc = await http.GetFromJsonAsync<JsonElement>(url, token);
+                var points = DigestHistory(doc);
+
+                return points.Count > 0
+                    ? new UexTerminalHistory(row.TerminalId, row.Terminal, points)
+                    : null;
+            }
+            catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
+            {
+                return null;
+            }
+        }));
+
+        var series = fetched.Where(s => s is not null).Select(s => s!).ToList();
+        var history = new UexHistory(commodity, series.Count, rows.Count, series);
+
+        _historyCache[commodity] = (DateTimeOffset.UtcNow, history);
+        return history;
+    }
+
+    /// <summary>Turns one counter's history response into points, oldest first.</summary>
+    private static List<UexHistoryPoint> DigestHistory(JsonElement doc)
+    {
+        var points = new List<UexHistoryPoint>();
+
+        if (!doc.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return points;
+
+        foreach (var row in data.EnumerateArray())
+        {
+            var added = Number(row, "date_added");
+            if (added <= 0)
+                continue;
+
+            points.Add(new UexHistoryPoint(
+                DateTimeOffset.FromUnixTimeSeconds((long)added),
+                Number(row, "price_sell"),
+                Number(row, "price_buy"),
+                Number(row, "scu_sell"),
+                Number(row, "scu_buy")));
+        }
+
+        // UEX returns newest first; a chart reads left to right.
+        points.Sort((a, b) => a.At.CompareTo(b.At));
+        return points;
+    }
+
+    /// <summary>A numeric field, however the feed chose to encode it.</summary>
+    private static decimal Number(JsonElement row, string name) =>
+        row.TryGetProperty(name, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.Number => value.GetDecimal(),
+                JsonValueKind.String => decimal.TryParse(
+                    value.GetString(), System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0,
+                _ => 0
+            }
+            : 0;
 
     /// <summary>Deletes the price cache. Credentials are removed separately.</summary>
     public void Disable()
