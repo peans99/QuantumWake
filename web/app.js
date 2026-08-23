@@ -263,7 +263,7 @@ function renderNow(state) {
   $('#link').title = state.connected ? 'live' : 'disconnected';
 
   $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
-  $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' �· ');
+  $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
 
   // The map follows the live feed, so the marker moves as the player does -
   // and shows the jump while it is happening, not only where it ended.
@@ -514,7 +514,7 @@ async function loadStanding() {
     // Finishing rate is the part that reads as standing: nine of ten is a
     // different relationship from nine of thirty.
     if (row.contracts > 0)
-      done.append(el('span', 'muted', ` �· ${Math.round((row.completed / row.contracts) * 100)}%`));
+      done.append(el('span', 'muted', ` · ${Math.round((row.completed / row.contracts) * 100)}%`));
 
     tr.append(done);
     tr.append(el('td', row.abandoned ? 'num outward' : 'num muted', String(row.abandoned)));
@@ -525,7 +525,7 @@ async function loadStanding() {
 
     if (row.repFrom > 0) {
       rep.append(el('span', null, row.rep.toLocaleString()));
-      rep.append(el('span', 'muted', ` �· from ${row.repFrom}`));
+      rep.append(el('span', 'muted', ` · from ${row.repFrom}`));
       rep.title = `Read from ${row.repFrom} contract title${row.repFrom === 1 ? '' : 's'} the StarStrings mod has annotated`;
     } else {
       rep.append(el('span', 'muted', '—'));
@@ -934,7 +934,7 @@ async function refreshTradeAdvice(place) {
   }
 
   $('#trade-advice-sub').textContent =
-    `${advice.terminal} �· best margins per SCU, UEX community prices`;
+    `${advice.terminal} · best margins per SCU, UEX community prices`;
 
   const list = $('#trade-advice');
   list.textContent = '';
@@ -1533,7 +1533,7 @@ function renderShipsRef() {
   for (const ship of rows) {
     const tr = el('tr');
     const name = el('td', null, ship.name);
-    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ' �· ground'));
+    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ' · ground'));
     tr.append(name);
 
     tr.append(el('td', 'muted', ship.career ?? '—'));
@@ -1892,7 +1892,7 @@ function renderCraftingRef() {
           body: JSON.stringify({
             title: `Craft ${bp.output}`,
             kind: 'craft',
-            source: `${bp.output} blueprint �· ${craftTime(bp.craftSeconds)} to craft`,
+            source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`,
             items: parseJobItems(bp.materials.join('\n')),
           }),
         }).catch(() => { button.textContent = 'failed'; });
@@ -2094,7 +2094,7 @@ async function loadRoutes() {
     select.append(new Option('On foot / no hold', '0'));
 
     for (const ship of ships)
-      select.append(new Option(`${ship.name} �· ${ship.reference.cargoScu} SCU`, ship.reference.cargoScu));
+      select.append(new Option(`${ship.name} · ${ship.reference.cargoScu} SCU`, ship.reference.cargoScu));
 
     if (ships.length) select.selectedIndex = 1;
     select.dataset.filled = '1';
@@ -2153,7 +2153,7 @@ async function loadRoutes() {
       {
         placeId: route.sellAtId || placeIdForTerminal(route.sellAt),
         place: route.sellAt,
-        note: `Sell at ${money(route.sellPrice)} �· +${money(route.profit)}`,
+        note: `Sell at ${money(route.sellPrice)} · +${money(route.profit)}`,
       },
     ]));
     plan.append(button);
@@ -2209,15 +2209,15 @@ async function loadRespawn() {
   // the two, and saying "woke there" under a different place read as though
   // both signals agreed when they do not.
   $('#now-respawn-sub').textContent = data.bed
-    ? `last medical bed �· ${data.bed.place}, ${relative(data.bed.at)}`
+    ? `last medical bed · ${data.bed.place}, ${relative(data.bed.at)}`
     : '';
 
   // "Deaths" would be wrong for the commoner case: most wake-ups follow an
   // incapacitation rather than a corpse recovery, so both read as "times down".
   $('#now-respawn-bed').textContent = data.place
     ? (data.settled
-      ? `last woke �· ${data.place}, ${data.agreeing} of your last ${data.of} times down`
-      : `last woke �· ${data.place}, ${relative(data.at)}`)
+      ? `last woke · ${data.place}, ${data.agreeing} of your last ${data.of} times down`
+      : `last woke · ${data.place}, ${relative(data.at)}`)
     : '';
 
   card.hidden = false;
@@ -2426,8 +2426,8 @@ $('#jobs-plan')?.addEventListener('click', async (e) => {
       body: JSON.stringify({
         title: `Craft ${bp.output}`,
         kind: 'craft',
-        source: `${bp.output} blueprint �· ${craftTime(bp.craftSeconds)} to craft`
-          + (bp.owned ? ' �· in your library' : ''),
+        source: `${bp.output} blueprint · ${craftTime(bp.craftSeconds)} to craft`
+          + (bp.owned ? ' · in your library' : ''),
         items: parseJobItems(bp.materials.join('\n')),
       }),
     });
@@ -2522,11 +2522,11 @@ async function loadJobContracts() {
     const card = el('article', 'job-card');
 
     const head = el('div', 'job-head');
-    head.append(el('b', null, `${contract.issuer} �· ${contract.type}`));
+    head.append(el('b', null, `${contract.issuer} · ${contract.type}`));
     if (contract.difficulty) head.append(el('span', 'job-kind', contract.difficulty));
     card.append(head);
 
-    const sub = [contract.system, `taken ${relative(contract.at)}`].filter(Boolean).join(' �· ');
+    const sub = [contract.system, `taken ${relative(contract.at)}`].filter(Boolean).join(' · ');
     card.append(el('div', 'muted', sub));
 
     if (contract.steps > 0) {
@@ -2689,7 +2689,7 @@ async function loadJobList() {
       const need = item.needed > 0
         ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
         : '';
-      tr.append(el('td', 'job-mark', item.have ? '✓' : '�·'));
+      tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
       tr.append(el('td', null, item.name));
       tr.append(el('td', 'num muted', need));
 
@@ -2734,11 +2734,11 @@ function parseJobItems(text) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const match = line.match(/^(.*?)[\s�·x×]*?([\d.]+)\s*(SCU|scu)?$/);
+      const match = line.match(/^(.*?)[\s·x×]*?([\d.]+)\s*(SCU|scu)?$/);
 
       if (match && match[1].trim()) {
         return {
-          name: match[1].replace(/[\s×x�·]+$/, '').trim(),
+          name: match[1].replace(/[\s×x·]+$/, '').trim(),
           needed: Number(match[2]) || 0,
           unit: match[3] ? 'SCU' : '',
         };
@@ -2782,7 +2782,7 @@ function fillPlaceOptions(select, selected) {
     for (const place of places) {
       const option = document.createElement('option');
       option.value = place.rawId;
-      option.textContent = place.system ? `${place.name} �· ${place.system}` : place.name;
+      option.textContent = place.system ? `${place.name} · ${place.system}` : place.name;
       group.append(option);
     }
 
@@ -2960,7 +2960,7 @@ async function loadStarStrings(check = false) {
 
   if (!state.gameRoot) bits.push('No game folder found, so there is nowhere to install it.');
 
-  status.textContent = bits.join(' �· ');
+  status.textContent = bits.join(' · ');
   $('#starstrings-install').disabled = !state.gameRoot;
 }
 
@@ -3023,7 +3023,7 @@ async function loadLogbook() {
     const li = el('li');
 
     const when = new Date(row.at);
-    const stamp = `${dateOf(row.at)} �· ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     li.append(el('span', 't', stamp));
 
     li.append(el('span', `k ${row.kind}`, row.kind));
@@ -3198,7 +3198,7 @@ async function renderUexFeeds() {
     const status = el('span', 'muted');
 
     status.textContent = feed.enabled
-      ? `on �· fetched ${feed.fetchedAt ? ago(feed.fetchedAt) : '—'}`
+      ? `on · fetched ${feed.fetchedAt ? ago(feed.fetchedAt) : '—'}`
       : 'off';
 
     button.addEventListener('click', () =>
@@ -3275,7 +3275,7 @@ $('#uex-preview').addEventListener('click', async () => {
     status.textContent = matched.length
       ? `${matched.length} price${matched.length === 1 ? '' : 's'} across `
         + `${terminals.size} terminal${terminals.size === 1 ? '' : 's'}`
-        + (skipped ? ` �· ${skipped} skipped (place not matched to a UEX terminal)` : '')
+        + (skipped ? ` · ${skipped} skipped (place not matched to a UEX terminal)` : '')
       : rows.length
         ? `nothing sendable: ${rows.length} sale${rows.length === 1 ? '' : 's'} but no place matched a UEX terminal`
         : 'no named sales in the last 30 days';
@@ -3298,7 +3298,7 @@ $('#uex-send').addEventListener('click', async (e) => {
     const body = await result.json();
     if (!result.ok) throw new Error(body.title || result.statusText);
 
-    status.textContent = body.results.join(' �· ') || 'nothing sent';
+    status.textContent = body.results.join(' · ') || 'nothing sent';
     button.hidden = true;
   } catch (err) {
     status.textContent = `failed: ${err.message}`;
@@ -3699,7 +3699,7 @@ function renderFleetShips() {
     stat.append(el('span', null, ` flight${ship.sorties === 1 ? '' : 's'}`));
 
     const seconds = toSeconds(ship.estimatedTime);
-    if (seconds > 0) stat.append(el('span', 'note-inline', ` �· ~${duration(seconds)}`));
+    if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
     body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
@@ -3710,17 +3710,17 @@ function renderFleetShips() {
       const r = ship.reference;
       const bits = [];
 
-      if (r.role && r.career && r.role !== r.career) bits.push(`${r.career} �· ${r.role}`);
+      if (r.role && r.career && r.role !== r.career) bits.push(`${r.career} · ${r.role}`);
       else if (r.role || r.career) bits.push(r.role || r.career);
       if (r.crew > 0) bits.push(`crew ${r.crew}`);
 
       if (bits.length)
-        body.append(el('div', 'ship-ref', bits.join(' �· ')));
+        body.append(el('div', 'ship-ref', bits.join(' · ')));
 
       if (r.expeditedCost > 0) {
         body.append(el('div', 'ship-ref muted',
           `claim: expedite ${money(r.expeditedCost)}`
-          + (r.standardClaimTime ? ` �· ~${Math.round(r.standardClaimTime)}m wait` : '')));
+          + (r.standardClaimTime ? ` · ~${Math.round(r.standardClaimTime)}m wait` : '')));
       }
     }
 
@@ -3730,7 +3730,7 @@ function renderFleetShips() {
 
     if (assetsData?.priced) {
       body.append(assetRow?.price
-        ? el('div', 'ship-price', `${money(assetRow.price.price)} �· ${assetRow.price.terminal}`)
+        ? el('div', 'ship-price', `${money(assetRow.price.price)} · ${assetRow.price.terminal}`)
         : el('div', 'ship-price muted', 'not sold in game'));
     }
 
@@ -3840,7 +3840,7 @@ async function showUpgrades(ship, key, card) {
 
   const head = el('div', 'upgrade-head');
   head.append(el('b', null, `What fits ${ship}`));
-  head.append(el('span', 'muted', 'the game’s own port list �· prices from UEX'));
+  head.append(el('span', 'muted', 'the game’s own port list · prices from UEX'));
   panel.append(head);
 
   for (const group of answer.groups) {
@@ -3853,7 +3853,7 @@ async function showUpgrades(ship, key, card) {
     // What it flies with now is the only thing a candidate can be judged
     // against, so it sits on the closed row rather than inside.
     if (group.fitted?.length)
-      title.append(el('span', 'upgrade-fitted', `now: ${group.fitted.join(' �· ')}`));
+      title.append(el('span', 'upgrade-fitted', `now: ${group.fitted.join(' · ')}`));
 
     title.append(el('span', 'muted upgrade-count', `${group.options.length} sold`));
 
@@ -4149,7 +4149,7 @@ function renderLoadout(stats) {
       const body = el('div', 'slot-body');
 
       const label = slot.slotCount > 1
-        ? `${slot.label} �· ${slot.slotCount} slots`
+        ? `${slot.label} · ${slot.slotCount} slots`
         : slot.label || slot.port;
 
       body.append(el('div', 'card-label', label));
@@ -4167,7 +4167,7 @@ function renderLoadout(stats) {
           if (r.size > 0) bits.push(`S${r.size}`);
           if (r.grade > 0) bits.push(`grade ${r.grade}`);
           if (r.manufacturer) bits.push(r.manufacturer);
-          if (bits.length) line.append(el('span', 'slot-ref', ` �· ${bits.join(' �· ')}`));
+          if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
         }
 
         body.append(line);
@@ -4313,7 +4313,7 @@ async function renderStash(stats) {
   for (const place of places) {
     const card = el('article', 'card');
     { const label = el('div', 'card-label'); label.append(placeLink(place.name)); card.append(label); }
-    card.append(el('div', 'sub', `${place.itemCount} item types �· last seen ${dateOf(place.lastSeen)}`));
+    card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
@@ -5136,7 +5136,7 @@ function renderSearchResults() {
     row.type = 'button';
     row.append(el('span', 'name', match.name));
     row.append(el('span', 'where',
-      [match.body, match.system].filter(Boolean).join(' �· ') || 'unmapped'));
+      [match.body, match.system].filter(Boolean).join(' · ') || 'unmapped'));
 
     row.addEventListener('click', () => {
       box.hidden = true;
@@ -5152,7 +5152,7 @@ function renderSearchResults() {
     row.type = 'button';
     row.append(el('span', 'name good', good.name));
     row.append(el('span', 'where',
-      `commodity �· ${good.sold.length} sellers`));
+      `commodity · ${good.sold.length} sellers`));
 
     row.addEventListener('click', () => {
       box.hidden = true;
@@ -5445,7 +5445,7 @@ const windowWord = () =>
   (PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
 
 function renderCommodityPanel(entry) {
-  const body = cargoPanelHead(cargo.buying ? 'Commodity �· buying' : 'Commodity �· selling', entry.name);
+  const body = cargoPanelHead(cargo.buying ? 'Commodity · buying' : 'Commodity · selling', entry.name);
 
   // What the market says today, from the rows the shading already fetched.
   body.append(el('div', 'cargo-h', cargo.buying ? 'Cheapest terminals' : 'Best terminals'));
@@ -5482,7 +5482,7 @@ function renderCommodityPanel(entry) {
 
   // What the player was actually paid, which the market cannot tell them.
   const mine = receiptsFor(entry.name, cargo.buying);
-  body.append(el('div', 'cargo-h', `Your receipts �· ${windowWord()}`));
+  body.append(el('div', 'cargo-h', `Your receipts · ${windowWord()}`));
 
   if (!mine.length) {
     body.append(el('div', 'cargo-empty',
@@ -5499,8 +5499,8 @@ function renderCommodityPanel(entry) {
     body.append(cargoRow({
       colour: shadeColour(cargo.buying ? 1 - t : t),
       name: row.name,
-      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} �· ${row.scu.toLocaleString()} SCU`
-        + ` �· avg ${Math.round(row.average).toLocaleString()} �· ${dayOf(row.latestAt)}`,
+      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+        + ` · avg ${Math.round(row.average).toLocaleString()} · ${dayOf(row.latestAt)}`,
       value: row.best,
       onClick: () => {
         if (row.id) centreOn(row.id);
@@ -5510,7 +5510,7 @@ function renderCommodityPanel(entry) {
   }
 
   const history = receiptsInWindow().filter((t) => t.commodity === entry.name);
-  body.append(el('div', 'cargo-h', `Trade history �· ${history.length}`));
+  body.append(el('div', 'cargo-h', `Trade history · ${history.length}`));
   cargoHistory(body, history, (t) => t.place);
 }
 
@@ -5533,14 +5533,14 @@ function renderStationPanel() {
   add.addEventListener('click', () => addStop(place.id, place.name, null));
   body.append(add);
 
-  cargoSection(body, 'Accepts �· you sold here', at.filter((t) => t.isSell), false);
-  cargoSection(body, 'Offers �· you bought here', at.filter((t) => !t.isSell), true);
+  cargoSection(body, 'Accepts · you sold here', at.filter((t) => t.isSell), false);
+  cargoSection(body, 'Offers · you bought here', at.filter((t) => !t.isSell), true);
 
   // The catalogue's own answer, which covers commodities never traded here.
   const catalogue = place.location ? commoditiesSoldAt(place.location) : [];
 
   if (catalogue.length) {
-    body.append(el('div', 'cargo-h', `Catalogue says it sells �· ${catalogue.length}`));
+    body.append(el('div', 'cargo-h', `Catalogue says it sells · ${catalogue.length}`));
 
     const list = el('div', 'cargo-goods');
     list.textContent = catalogue.slice(0, 24).join(', ')
@@ -5548,7 +5548,7 @@ function renderStationPanel() {
     body.append(list);
   }
 
-  body.append(el('div', 'cargo-h', `Trade history �· ${at.length}`));
+  body.append(el('div', 'cargo-h', `Trade history · ${at.length}`));
   cargoHistory(body, at, (t) => t.commodity);
 }
 
@@ -5579,8 +5579,8 @@ function cargoSection(body, title, trades, buying) {
     body.append(cargoRow({
       colour: buying ? '#ffab3d' : '#4fd48a',
       name: row.name,
-      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} �· ${row.scu.toLocaleString()} SCU`
-        + ` �· ${dayOf(row.latestAt)}`,
+      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+        + ` · ${dayOf(row.latestAt)}`,
       value: row.amount / (row.scu || 1),
 
       // Drilling into a commodity from a station shades the whole map for it,
@@ -5631,7 +5631,7 @@ function cargoHistory(body, trades, describe) {
     const line = el('div', `cargo-line ${trade.isSell ? 'sell' : 'buy'}`);
     line.append(el('span', 'when', dayOf(trade.at)));
     line.append(el('span', 'what',
-      `${trade.isSell ? 'Sold' : 'Bought'} ${trade.scu} SCU �· ${describe(trade)}`));
+      `${trade.isSell ? 'Sold' : 'Bought'} ${trade.scu} SCU · ${describe(trade)}`));
     line.append(el('span', 'rate', Math.round(trade.unitPrice).toLocaleString()));
     body.append(line);
   }
@@ -6180,16 +6180,16 @@ const atSameStop = (seller, destination) => {
 
 function sellerLabel(seller, item) {
   const stock = seller.scu
-    ? ` �· ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ' — short' : ''}`
+    ? ` · ${Math.round(seller.scu).toLocaleString()} SCU${shortStock(seller, item) ? ' — short' : ''}`
     : '';
 
   // Where it is and whether the law reaches it: the cheapest counter is
   // routinely the one in Pyro, and that is a decision, not a detail.
-  const where = seller.system ? ` �· ${seller.system}` : '';
+  const where = seller.system ? ` · ${seller.system}` : '';
   const risk = seller.security === 'lawless' ? ' — lawless' : '';
 
   return seller.price > 0
-    ? `${seller.terminal} �· ${money(seller.price)}${stock}${where}${risk}`
+    ? `${seller.terminal} · ${money(seller.price)}${stock}${where}${risk}`
     : `${seller.terminal}${stock}${where}${risk}`;
 }
 
@@ -6517,7 +6517,7 @@ async function planShoppingTrip(job, card) {
 
       // The estimate is only shown when every item at the stop has a price;
       // a partial total reads as the cost of the landing and is not.
-      note: line.items.join(', ') + (line.priced && line.cost > 0 ? ` �· ~${money(line.cost)}` : ''),
+      note: line.items.join(', ') + (line.priced && line.cost > 0 ? ` · ~${money(line.cost)}` : ''),
     }));
 
     chooser.remove();
@@ -6606,10 +6606,10 @@ function showBodyTip(bodyName, system, sites) {
   tip.textContent = '';
   tip.append(el('strong', null, bodyName));
   tip.append(el('span', 'muted', system));
-  tip.append(el('span', null, `${sites.length} place${sites.length === 1 ? '' : 's'} �· ${visited.length} visited`));
+  tip.append(el('span', null, `${sites.length} place${sites.length === 1 ? '' : 's'} · ${visited.length} visited`));
 
   if (visits > 0)
-    tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} �· last ${relative(last)}`));
+    tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
 
   if ($('#map-goods').checked) {
     if (!bodyGoodsCache.has(tipKey)) {
@@ -6690,7 +6690,7 @@ function renderMapInfoSold() {
     } else {
       // The count matters when there are a hundred: the tooltip promised them
       // all, and this is where they are.
-      list.append(el('div', 'sold-count muted', `${names.length} sold here �· click one to light its sellers`));
+      list.append(el('div', 'sold-count muted', `${names.length} sold here · click one to light its sellers`));
 
       for (const name of names) {
         const chip = el('button', 'sold-chip', name);
@@ -6715,7 +6715,7 @@ function showMapInfo(location) {
 
   $('#map-info-name').textContent = location.name;
   $('#map-info-where').textContent =
-    [location.body, location.system].filter(Boolean).join(' �· ') || 'unmapped';
+    [location.body, location.system].filter(Boolean).join(' · ') || 'unmapped';
   $('#map-info-kind').textContent = location.kind.replace(/([a-z])([A-Z])/g, '$1 $2');
 
   $('#map-info-visits').textContent = location.visits > 0
@@ -6824,7 +6824,7 @@ function drawMap() {
         : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
-    else count.textContent = `${locations.length} shown �· ${seen} of ${atlas.length} visited`;
+    else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.
@@ -7505,7 +7505,7 @@ function drawLegend(locations) {
 
     const lo = Math.round(shadeScale.invert ? shadeScale.max : shadeScale.min).toLocaleString();
     const hi = Math.round(shadeScale.invert ? shadeScale.min : shadeScale.max).toLocaleString();
-    item.append(el('span', null, `${shadeScale.label} �· ${lo} → ${hi} ${shadeScale.unit}`));
+    item.append(el('span', null, `${shadeScale.label} · ${lo} → ${hi} ${shadeScale.unit}`));
     legend.append(item);
 
     const plain = el('div', 'item');
@@ -7647,7 +7647,7 @@ async function checkPriceAge() {
 
   parts.push('margins and best-price rankings are only as fresh as this');
 
-  $('#stale-detail').textContent = `${parts.join(' �· ')}.`;
+  $('#stale-detail').textContent = `${parts.join(' · ')}.`;
   notice.hidden = false;
 }
 
@@ -7773,7 +7773,7 @@ async function saveWipe(at, patch) {
     await loadHistory();
     await loadWipe();
 
-    if (status) status.textContent = `${status.textContent} �· saved`;
+    if (status) status.textContent = `${status.textContent} · saved`;
   } catch (e) {
     if (status) status.textContent = `could not save: ${e.message}`;
   }
@@ -8062,7 +8062,7 @@ async function watchScan() {
       panel.hidden = false;
 
       $('#scan-fill').style.width = `${status.percent}%`;
-      $('#scan-count').textContent = `${status.done} / ${status.total} �· ${status.elapsedSeconds}s`;
+      $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
       $('#scan-file').textContent = status.file || '';
 
       $('#scan-label').textContent = status.parsed > 0
@@ -8072,7 +8072,7 @@ async function watchScan() {
       // Finished: fill the bar, then reload the views with the new data.
       $('#scan-fill').style.width = '100%';
       $('#scan-label').textContent = 'Scan complete';
-      $('#scan-count').textContent = `${status.parsed} parsed �· ${status.elapsedSeconds}s`;
+      $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
       $('#scan-file').textContent = '';
 
       await wait(1200);
@@ -8261,8 +8261,8 @@ async function boot() {
 
   try {
     const install = await getJson('/api/install');
-    $('#install').textContent = `${install.channel} �· ${install.backups} logs`;
-    $('#about-install').textContent = `${install.channel} �· ${install.backups} logs`;
+    $('#install').textContent = `${install.channel} · ${install.backups} logs`;
+    $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
   } catch {
     $('#install').textContent = 'no install found';
     $('#about-install').textContent = 'none found';
