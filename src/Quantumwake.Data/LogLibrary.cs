@@ -1204,7 +1204,16 @@ public sealed class LogLibrary : IDisposable
     /// Where the player has woken after dying, newest first. Inferred from the
     /// first place seen after each death, since the game logs no respawn point.
     /// </summary>
-    /// <summary>Medical beds used, newest first - where regen is set, if it was.</summary>
+    /// <summary>
+    /// Beds used, newest first, each labelled with which kind it looks like.
+    /// </summary>
+    /// <remarks>
+    /// The game prints one line for every bed - the clinic bed after a fight
+    /// and the hab bed you wake up in at login - so the kind is inferred from
+    /// what surrounds it and is honest about being a guess. Regen is only set
+    /// at a real medical bed, so a "wake" is not evidence of anything.
+    /// </remarks>
+
     public IReadOnlyList<MedicalBedVisit> MedicalBeds(int days = 0)
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;

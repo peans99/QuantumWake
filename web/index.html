@@ -365,13 +365,18 @@
     </p>
     <div id="casualties-woke" class="bars"></div>
 
-    <h2 class="spaced">Medical beds used</h2>
+    <h2 class="spaced">Beds used</h2>
     <p class="muted caption">
       A regen location is set at a medical bed or an insurance office, so this
-      is the most direct hint the logs give — but the same notification fires
-      when a bed is only used to heal, and the game never states where regen
-      actually is. Most recent first.
+      is the most direct hint the logs give — but the game prints the same line
+      for every bed, including the hab bed you wake up in when you log in.
+      Those are told apart by what surrounds them rather than by the text:
+      <b>waking up</b> is a bed within minutes of a session starting with
+      nothing having happened to you, and it is left out of the counts below.
+      A bed used after a death or an incapacitation is the one case that is
+      unambiguously medical. Most recent first.
     </p>
+    <p class="muted caption" id="beds-kinds"></p>
     <div id="casualties-beds" class="bars"></div>
 
     <h2 class="spaced">Claim fees, by ship</h2>

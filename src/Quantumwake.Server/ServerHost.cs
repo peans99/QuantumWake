@@ -988,12 +988,31 @@ public static class ServerHost
             // The other signal: beds are where regen is set, when it is set.
             var beds = lib.MedicalBeds(days ?? 0);
 
-            var bedsUsed = beds
+            // Waking up at login is not a visit to a clinic, and the game says
+            // both with the same line - so the counted ones are the beds the
+            // player went to, and the rest are reported separately rather than
+            // dropped.
+            var deliberate = beds.Where(b => b.Kind != "wake").ToList();
+
+            var bedsUsed = deliberate
                 .GroupBy(b => b.Place, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new { place = g.Key, times = g.Count(), last = g.Max(b => b.At) })
+                .Select(g => new
+                {
+                    place = g.Key,
+                    times = g.Count(),
+                    last = g.Max(b => b.At),
+                    afterDeath = g.Count(b => b.Kind == "after-death")
+                })
                 .OrderByDescending(x => x.last)
                 .Take(10)
                 .ToList();
+
+            var bedKinds = new
+            {
+                wake = beds.Count(b => b.Kind == "wake"),
+                afterDeath = beds.Count(b => b.Kind == "after-death"),
+                heal = beds.Count(b => b.Kind == "heal")
+            };
 
             return new
             {
@@ -1004,6 +1023,7 @@ public static class ServerHost
                 lastBedWhen = beds.Count > 0 ? beds[0].At : (DateTimeOffset?)null,
                 wokeAt,
                 bedsUsed,
+                bedKinds,
                 incapacitations = sessions.Sum(s => s.Incapacitations),
                 sessionsWithDeaths = sessions.Count(s => s.Deaths > 0),
                 averageFee = fees.Count > 0 ? fees.Average(f => f.fee) : 0,
