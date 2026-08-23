@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
@@ -121,10 +122,54 @@ public static class ServerHost
         // Bind to loopback unless explicitly opened up. Standalone mode is local-only;
         // exposing the dashboard to the LAN (for a tablet as second screen) is opt-in.
         var port = builder.Configuration.GetValue("Port", 31337);
-        var host = builder.Configuration.GetValue<bool>("Lan") ? "0.0.0.0" : "127.0.0.1";
-        builder.WebHost.UseUrls($"http://{host}:{port}");
+        var lan = builder.Configuration.GetValue<bool>("Lan");
+        builder.WebHost.UseUrls($"http://{(lan ? "0.0.0.0" : "127.0.0.1")}:{port}");
 
         var app = builder.Build();
+
+        // Opening the dashboard to the LAN opens the API with it, and neither
+        // has a login - so from off this machine it is read-only.
+        //
+        // The point of -Lan is a tablet showing the dashboard, which needs reads
+        // and the live feed and nothing else. Everything that changes something
+        // is a POST: storing UEX credentials, installing StarStrings into the
+        // game directory, moving the wipe line, forcing a rescan. None of that
+        // should be reachable by anyone who joins the same wifi.
+        //
+        // GET, HEAD and OPTIONS pass, as does the SignalR hub - LiveHub declares
+        // no callable methods, so it only ever broadcasts outwards. Requests
+        // from this machine are untouched, so the app itself is unaffected.
+        if (lan)
+        {
+            app.Use(async (context, next) =>
+            {
+                var remote = context.Connection.RemoteIpAddress;
+                var here = remote is null || IPAddress.IsLoopback(remote);
+
+                var reads = HttpMethods.IsGet(context.Request.Method)
+                    || HttpMethods.IsHead(context.Request.Method)
+                    || HttpMethods.IsOptions(context.Request.Method)
+                    || context.Request.Path.StartsWithSegments("/hub");
+
+                if (here || reads)
+                {
+                    await next();
+                    return;
+                }
+
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    message = "Quantum Wake is read-only over the network. Changes "
+                        + "have to be made on the machine running it.",
+                });
+            });
+
+            app.Logger.LogWarning(
+                "Listening on every interface (-Lan). Anyone on this network can read your "
+                + "history; changing anything still requires this machine.");
+        }
 
         // The web UI lives outside the project so the overlay and the browser load the
         // exact same files.
@@ -1700,7 +1745,8 @@ public static class ServerHost
             });
         }
 
-        app.Logger.LogInformation("Quantum Wake by nekron - http://{Host}:{Port}", host, port);
+        app.Logger.LogInformation(
+            "Quantum Wake by nekron - http://{Host}:{Port}", lan ? "0.0.0.0" : "127.0.0.1", port);
         return app;
     }
 

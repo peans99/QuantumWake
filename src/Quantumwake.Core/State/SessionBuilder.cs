@@ -362,10 +362,41 @@ public sealed class SessionBuilder
         if (span <= TimeSpan.Zero)
             return;
 
-        if (rules.Equals("SC_Frontend", StringComparison.OrdinalIgnoreCase))
+        if (IsMenu(rules))
             _menu += span;
         else
             _inGame += span;
+    }
+
+    /// <summary>SC_Frontend is the menu shell; everything else is being in the game.</summary>
+    private static bool IsMenu(string rules) =>
+        rules.Equals("SC_Frontend", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Playtime including the stretch still open, without banking it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Build"/> used to close the open interval by calling
+    /// <see cref="Accrue"/>, which is harmless when a file is consumed once and
+    /// built once - and ruinous live, where every event and every broadcast
+    /// rebuilds. Nothing advanced <c>_rulesSince</c>, so each rebuild added the
+    /// whole span again on top of the last: an hour-long session archived on
+    /// rotation with a playtime measured in weeks. Returning the total instead
+    /// of accumulating it makes Build safe to call as often as anyone likes.
+    /// </remarks>
+    private (TimeSpan InGame, TimeSpan Menu) Playtime()
+    {
+        if (_currentRules is null)
+            return (_inGame, _menu);
+
+        var open = _lastSeen - _rulesSince;
+
+        if (open <= TimeSpan.Zero)
+            return (_inGame, _menu);
+
+        return IsMenu(_currentRules)
+            ? (_inGame, _menu + open)
+            : (_inGame + open, _menu);
     }
 
     /// <summary>
@@ -957,14 +988,17 @@ public sealed class SessionBuilder
     private void Timeline(DateTimeOffset at, string kind, string text, string? detail) =>
         _timeline.Add(new TimelineEntry(at, kind, text, detail));
 
-    /// <summary>Builds the summary. Safe to call once the file has been consumed.</summary>
+    /// <summary>
+    /// Builds the summary. Reads state without changing it, so the live feed can
+    /// rebuild on every event.
+    /// </summary>
     public SessionSummary Build()
     {
         var started = _firstSeen ?? default;
 
-        // Close the final open interval so the last stretch is not lost.
-        if (_currentRules is not null)
-            Accrue(_currentRules, _lastSeen - _rulesSince);
+        // The stretch still open is closed into the returned totals, never
+        // banked - see Playtime.
+        var (inGame, menu) = Playtime();
 
         var ships = _ships
             .Select(p => new ShipUsage(p.Key, p.Value.Manufacturer, p.Value.Time, p.Value.Sorties))
@@ -982,8 +1016,8 @@ public sealed class SessionBuilder
             Geid = _geid,
             BuildTag = _buildTag,
             GameVersion = _gameVersion,
-            InGameDuration = _inGame,
-            MenuDuration = _menu,
+            InGameDuration = inGame,
+            MenuDuration = menu,
             Ships = ships,
             Locations = _locations,
             Jumps = _jumps,

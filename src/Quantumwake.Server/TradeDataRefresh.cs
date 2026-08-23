@@ -52,28 +52,45 @@ public sealed class TradeDataRefresh(
         }
     }
 
+    /// <remarks>
+    /// Nothing in here may escape. An exception out of <see cref="ExecuteAsync"/>
+    /// stops the whole host by default, so a full disk or a locked cache file
+    /// would close the dashboard, the overlay and the live feed - because a
+    /// price refresh failed. Both the timestamp write and the fetch touch the
+    /// filesystem, so both are inside.
+    /// </remarks>
     private async Task RefreshIfDueAsync(CancellationToken token)
     {
-        if (!preference.IsDue(uex.FetchedAt, DateTimeOffset.UtcNow))
-            return;
-
-        // Recorded before the attempt, not after: a fetch that throws must still
-        // push the next try out to RetryAfter, and a fetch that hangs until
-        // shutdown must not leave the timestamp untouched for the next launch.
-        preference.Checked();
-
         try
         {
+            if (!preference.IsDue(uex.FetchedAt, DateTimeOffset.UtcNow))
+                return;
+
+            // Recorded before the attempt, not after: a fetch that throws must
+            // still push the next try out to RetryAfter, and one that hangs
+            // until shutdown must not leave the timestamp untouched.
+            preference.Checked();
+
             var count = await uex.EnableAsync(factory.CreateClient("community"), token);
             logger.LogInformation("Refreshed {Count} UEX prices automatically.", count);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Shutdown arrived mid-fetch. Not a failure, and not ours to log.
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException
                                       or InvalidDataException or JsonException)
         {
-            // Being unable to refresh is not a problem with the running copy: the
-            // prices already in hand stay, the page keeps saying how old they
-            // are, and the next attempt is RetryAfter away.
+            // Being unable to refresh is not a problem with the running copy:
+            // the prices in hand stay, the page keeps saying how old they are,
+            // and the next attempt is RetryAfter away.
             logger.LogDebug(e, "Automatic UEX refresh could not reach the price feed.");
+        }
+        catch (Exception e)
+        {
+            // Anything else is a surprise and worth saying so - but still not
+            // worth taking the app down for.
+            logger.LogWarning(e, "Automatic UEX refresh failed unexpectedly.");
         }
     }
 }
