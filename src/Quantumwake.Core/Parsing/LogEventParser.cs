@@ -234,7 +234,7 @@ public sealed partial class LogEventParser
                         line.Timestamp,
                         m.Groups["shop"].Value,
                         decimal.Parse(m.Groups["amount"].ValueSpan, System.Globalization.CultureInfo.InvariantCulture),
-                        int.Parse(m.Groups["qty"].ValueSpan),
+                        ScuQuantity(m),
                         line.Tag.EndsWith("SellRequest", StringComparison.Ordinal),
                         m.Groups["mode"].Success ? m.Groups["mode"].Value : null,
                         m.Groups["resource"].Success ? m.Groups["resource"].Value.ToLowerInvariant() : null)),
@@ -582,6 +582,28 @@ public sealed partial class LogEventParser
             int.Parse(m.Groups["vehicles"].ValueSpan));
     }
 
+    /// <summary>
+    /// A commodity quantity in SCU, whichever unit the line wrote it in.
+    /// </summary>
+    /// <remarks>
+    /// Sell lines count SCU, buy lines count centi-SCU and say so. Everything
+    /// downstream - the timeline entry, the Commodities table, the per-counter
+    /// totals - is labelled SCU, so the conversion belongs here rather than at
+    /// each of them. Rounded rather than truncated: every buy observed is a
+    /// whole number of boxes, and if a fractional one ever appears, one SCU is a
+    /// better answer than none.
+    /// </remarks>
+    private static int ScuQuantity(Match m)
+    {
+        var quantity = decimal.Parse(
+            m.Groups["qty"].ValueSpan, System.Globalization.CultureInfo.InvariantCulture);
+
+        if (m.Groups["centi"].Success)
+            quantity /= 100m;
+
+        return (int)Math.Round(quantity, MidpointRounding.AwayFromZero);
+    }
+
     private static ObjectiveState ParseObjectiveState(string raw) => raw switch
     {
         "MISSION_OBJECTIVE_STATE_INPROGRESS" => ObjectiveState.InProgress,
@@ -605,10 +627,22 @@ public sealed partial class LogEventParser
         RegexOptions.Compiled)]
     private static partial Regex ShopResponseRegex { get; }
 
+    // Buying and selling are the same transaction written two ways, and the
+    // differences are not cosmetic:
+    //
+    //   sell  ... amount[1058400.000000] ... quantity[288] transactionMode[...]
+    //   buy   ... price[63980.000000]    ... quantity[32000.000000 cSCU]
+    //
+    // The total is "amount" one way and "price" the other, and the quantity is
+    // SCU one way and centi-SCU the other - a hundredfold difference that would
+    // otherwise read a 320 SCU load as 32,000. \b keeps "amount" off the tail of
+    // the "unitAmount" that appears later in both shapes; transactionMode is
+    // sell-only, which is why it was already optional.
     [GeneratedRegex(
-        @"shopName\[(?<shop>[^\]]+)\].*?amount\[(?<amount>[\d.]+)\]" +
+        @"shopName\[(?<shop>[^\]]+)\].*?\b(?:amount|price)\[(?<amount>[\d.]+)\]" +
         @"(?:.*?resourceGUID\[(?<resource>[0-9a-fA-F-]{36})\])?" +
-        @".*?quantity\[(?<qty>\d+)\](?:.*?transactionMode\[(?<mode>[^\]]*)\])?",
+        @".*?quantity\[(?<qty>[\d.]+)(?:\s*(?<centi>cSCU))?\]" +
+        @"(?:.*?transactionMode\[(?<mode>[^\]]*)\])?",
         RegexOptions.Compiled)]
     private static partial Regex CommodityRegex { get; }
 
