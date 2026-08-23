@@ -1071,6 +1071,8 @@ public static class ServerHost
                 {
                     job.Id,
                     job.Title,
+                    job.Destination,
+                    job.DestinationId,
                     job.Kind,
                     job.Source,
                     job.CreatedAt,
@@ -1088,7 +1090,16 @@ public static class ServerHost
                 body.Title ?? "Untitled job",
                 body.Kind ?? "list",
                 body.Source,
-                body.Items ?? [])));
+                body.Items ?? [],
+                body.Destination,
+                body.DestinationId)));
+
+        // Where a list is to be shopped. Cleared by sending nothing, which is
+        // a real answer: a list for wherever you happen to be.
+        app.MapPost("/api/jobs/{id}/destination", (string id, JobStore jobs, DestinationRequest body) =>
+            jobs.SetDestination(id, body.Place, body.PlaceId)
+                ? Results.Ok(new { id, body.Place })
+                : Results.NotFound());
 
         // One thing added from a catalogue page, into whichever list the
         // player is currently filling.
@@ -1666,7 +1677,17 @@ public sealed record UexCredentialsRequest(string? Token, string? Secret);
 public sealed record InstallPathRequest(string? Path);
 
 /// <summary>Body of POST /api/jobs.</summary>
-public sealed record JobRequest(string? Title, string? Kind, string? Source, List<JobItem>? Items);
+public sealed record JobRequest(
+    string? Title,
+    string? Kind,
+    string? Source,
+    List<JobItem>? Items,
+    string? Destination = null,
+    string? DestinationId = null);
+
+/// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
+public sealed record DestinationRequest(string? Place, string? PlaceId);
+
 
 /// <summary>
 /// Body of POST /api/wipe. A null date counts everything again, and

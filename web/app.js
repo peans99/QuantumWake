@@ -2505,6 +2505,30 @@ async function loadJobList() {
     head.append(el('b', null, job.title));
     head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
 
+    // Where this list is for, changeable here because it is a plan rather than
+    // a fact: the run you meant on Tuesday is not the run you fly on Friday.
+    const where = el('input', 'job-place-edit');
+    where.type = 'text';
+    where.value = job.destination || '';
+    where.placeholder = 'anywhere';
+    where.title = 'Where you mean to shop. Leave blank for anywhere.';
+    where.setAttribute('list', 'job-places');
+
+    where.addEventListener('change', async () => {
+      fillPlaceOptions();
+      const picked = placeByName(where.value);
+
+      await fetch(`/api/jobs/${job.id}/destination`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ place: where.value.trim() || null, placeId: picked?.rawId || null }),
+      });
+
+      loadJobList();
+    });
+
+    head.append(where);
+
     const spacer = el('span', 'spacer');
     head.append(spacer);
 
@@ -2615,9 +2639,42 @@ function parseJobItems(text) {
     });
 }
 
+/**
+ * The places a list can be pointed at.
+ *
+ * Typed rather than picked from three hundred options: the player knows the
+ * name of the station they are flying to, and a datalist lets them type three
+ * letters of it. Anything unrecognised is still kept as written - a list for
+ * "wherever the org is meeting" is a real list, it just cannot be drawn.
+ */
+function fillPlaceOptions() {
+  const list = $('#job-places');
+  if (!list || !atlas.length || list.childElementCount) return;
+
+  // Visited first: where you have been is where you are most likely going.
+  const ordered = [...atlas].sort((a, b) => (b.visits || 0) - (a.visits || 0));
+
+  for (const place of ordered) {
+    const option = document.createElement('option');
+    option.value = place.name;
+    list.append(option);
+  }
+}
+
+/** The atlas place a typed name means, or null when it names nothing we draw. */
+const placeByName = (typed) => {
+  const wanted = (typed || '').trim().toLowerCase();
+  if (!wanted) return null;
+
+  return atlas.find((l) => l.name.toLowerCase() === wanted)
+    ?? atlas.find((l) => l.name.toLowerCase().includes(wanted))
+    ?? null;
+};
+
 $('#jobs-new')?.addEventListener('click', () => {
   const form = $('#job-form');
   form.hidden = !form.hidden;
+  fillPlaceOptions();
   if (!form.hidden) $('#job-title').focus();
 });
 
@@ -2629,14 +2686,27 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   const items = parseJobItems($('#job-items').value);
   if (!items.length) return;
 
+  const typed = $('#job-place').value;
+  const place = placeByName(typed);
+
   await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: $('#job-title').value, kind: 'list', items }),
+    body: JSON.stringify({
+      title: $('#job-title').value,
+      kind: 'list',
+      items,
+
+      // What was typed is kept even when the map cannot place it; the id is
+      // only there so a plan can draw the stop.
+      destination: typed.trim() || null,
+      destinationId: place?.rawId || null,
+    }),
   });
 
   $('#job-title').value = '';
   $('#job-items').value = '';
+  $('#job-place').value = '';
   $('#job-form').hidden = true;
   loadJobList();
 });
@@ -5790,9 +5860,33 @@ async function sellersOf(item) {
 const shortStock = (seller, item) =>
   item.needed > 0 && seller.scu > 0 && seller.scu < item.needed;
 
-/** Cheapest that can actually fill the order, else cheapest. */
-const defaultSeller = (sellers, item) =>
-  sellers.find((seller) => !shortStock(seller, item)) ?? sellers[0];
+/**
+ * The seller a line starts on.
+ *
+ * A list written for a place is a decision already made, so a counter there
+ * wins even when somewhere else is cheaper - that is the whole point of saying
+ * where you are going. Otherwise: the cheapest that can actually fill the
+ * order, else the cheapest.
+ */
+const defaultSeller = (sellers, item, destination) => {
+  const there = destination && sellers.filter((seller) => atSameStop(seller, destination));
+
+  if (there?.length)
+    return there.find((seller) => !shortStock(seller, item)) ?? there[0];
+
+  return sellers.find((seller) => !shortStock(seller, item)) ?? sellers[0];
+};
+
+/** Whether a seller stands at the place a list is pointed at. */
+const atSameStop = (seller, destination) => {
+  if (!destination) return false;
+
+  if (destination.id && seller.placeId) return seller.placeId === destination.id;
+
+  return !!destination.name && (
+    terminalMatchesPlace(seller.terminal, destination.name)
+    || (!!seller.place && terminalMatchesPlace(seller.place, destination.name)));
+};
 
 function sellerLabel(seller, item) {
   const stock = seller.scu
@@ -5826,10 +5920,17 @@ async function planShoppingTrip(job, card) {
     return;
   }
 
+  // Where this list said it was for, when it said anything.
+  const destination = job.destination
+    ? { name: job.destination, id: job.destinationId || '' }
+    : null;
+
   const chooser = el('div', 'trip-chooser');
 
   const head = el('div', 'chooser-head');
-  head.append(el('span', null, 'Where to buy — one stop per terminal'));
+  head.append(el('span', null, destination
+    ? `Where to buy — ${destination.name} first`
+    : 'Where to buy — one stop per terminal'));
   chooser.append(head);
 
   const rows = el('div', 'chooser-rows');
@@ -5901,7 +6002,7 @@ async function planShoppingTrip(job, card) {
       skip.textContent = 'Leave this one off';
       select.append(skip);
 
-      select.value = chosen.get(item.name) ?? defaultSeller(sellers, item).terminal;
+      select.value = chosen.get(item.name) ?? defaultSeller(sellers, item, destination).terminal;
       chosen.set(item.name, select.value);
 
       select.addEventListener('change', () => {
@@ -5939,8 +6040,14 @@ async function planShoppingTrip(job, card) {
         ...counter,
         cost: counter.supplies.reduce((sum, s) =>
           sum + (s.seller.price > 0 ? s.seller.price * Math.max(1, s.item.needed) : 0), 0),
+        chosen: atSameStop(counter.seller, destination),
       }))
-      .sort((a, b) => b.supplies.length - a.supplies.length || a.cost - b.cost)
+
+      // The place the list is for leads, whatever it carries: you are landing
+      // there regardless, so what it can supply is the first question.
+      .sort((a, b) => Number(b.chosen) - Number(a.chosen)
+        || b.supplies.length - a.supplies.length
+        || a.cost - b.cost)
       .slice(0, 20);
 
     if (!ranked.length) {
