@@ -146,24 +146,15 @@ public static class ServerHost
                 var remote = context.Connection.RemoteIpAddress;
                 var here = remote is null || IPAddress.IsLoopback(remote);
 
-                var reads = HttpMethods.IsGet(context.Request.Method)
-                    || HttpMethods.IsHead(context.Request.Method)
-                    || HttpMethods.IsOptions(context.Request.Method)
-                    || context.Request.Path.StartsWithSegments("/hub");
-
-                if (here || reads)
+                if (here || LanGuard.AllowsFromElsewhere(
+                        context.Request.Method, context.Request.Path.Value ?? "/"))
                 {
                     await next();
                     return;
                 }
 
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    message = "Quantum Wake is read-only over the network. Changes "
-                        + "have to be made on the machine running it.",
-                });
+                await context.Response.WriteAsJsonAsync(new { message = LanGuard.Refusal });
             });
 
             app.Logger.LogWarning(

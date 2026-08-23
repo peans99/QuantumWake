@@ -16,6 +16,13 @@ most often, for an agent that is about to start writing.
 - Branches are pushed freely. Pull requests and merges to `main` happen only
   when Nicolas asks.
 
+## Versioning
+
+Raise the **patch** in `Directory.Build.props` with every change, in the same
+commit as the work, and rename the release-notes heading in `README.md` to match
+rather than opening a second one. Major and minor move only when Nicolas says
+so.
+
 ## The three things that fail silently
 
 1. **`PayloadVersion`.** Change the parser, the events, `Session.cs` or

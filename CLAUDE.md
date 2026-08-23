@@ -55,6 +55,16 @@ In this order, no steps skipped:
 to build when the tag disagrees with it. That one is enforced and hard to
 forget.
 
+**Raise the patch with every change** — 0.7.1, 0.7.2, 0.7.3 — as part of the
+same commit as the work. Major and minor move only when Nicolas says so; never
+decide on your own that something is big enough to be 0.8.
+
+Rename the release-notes heading in `README.md` as you go rather than opening a
+second one, so there is always exactly one section and it always matches the
+version in the props file. That is what keeps the workflow able to find it: it
+lifts the section matching the tag and nothing else, and a version that quietly
+grew its own heading is a feature nobody reads about.
+
 `PayloadVersion` in `src/Quantumwake.Data/SessionStore.cs` is the one that gets
 forgotten, and forgetting it fails **silently**. Backups are skipped by
 fingerprint, so a session summarised before a field existed keeps that summary
