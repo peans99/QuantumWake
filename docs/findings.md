@@ -1,5 +1,36 @@
 # Findings: the kill-event problem
 
+## Reputation is not logged either
+
+Checked the same way, across all 148 backups on this install: the only line
+mentioning reputation is the gRPC channel being opened.
+
+```
+<ReuseChannel> Reusing channel for 'sc.external.services.reputation.v1.ReputationService'
+```
+
+Not one faction, value or delta. Reputation lives on a server the client asks
+over that channel, and the answers never reach the log. So there is no way to
+report a rep total, and the app does not pretend otherwise.
+
+Two things can be done instead, and the app does both:
+
+- **Count the work.** Contracts taken, finished and abandoned per issuer is what
+  actually moves standing, and all of it is in the logs. That is the *Standing*
+  table on the Contracts page - and it is labelled as work rather than
+  reputation.
+- **Read what somebody else worked out.** The game logs a contract's *displayed*
+  title, which comes from the localisation file, and the StarStrings text mod
+  writes the reward into that title - `[150 Rep]`, `[BP]`. With the mod
+  installed the log carries the number in the only place the game was ever going
+  to put it.
+
+The coverage of that second route is small and worth stating plainly: of ~90,000
+lines in the mod's `global.ini`, 25 titles carry a rep tag, and against the 178
+distinct contract titles in this install exactly one family matches. So the
+column is shown where it is known and left blank - never zero - everywhere else.
+
+
 > **Since 0.6.8 the app shows no kill counter.** Everything below still holds -
 > the events are absent, and the parser for them is written and dormant - but a
 > counter that can only ever read zero looks like a broken feature rather than a

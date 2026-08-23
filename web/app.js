@@ -469,12 +469,81 @@ function renderContracts(stats) {
     (v) => `${v}`);
 
   loadContractList().catch((e) => console.error('contracts', e));
+  loadStanding().catch((e) => console.error('standing', e));
 }
 
 /**
  * The contract list, with the objective progress the game pushes but never
  * showed anywhere: how many journal steps a contract had and how many closed.
  */
+/**
+ * Work done per faction.
+ *
+ * Deliberately not called reputation. Nothing in the logs carries a rep value -
+ * the client opens a channel to a reputation service and the numbers live on
+ * the other side of it - so this counts the thing that moves it instead. Where
+ * a text mod has written the reward onto a contract's title, that number is
+ * shown as what it is: something somebody else worked out, on the few contracts
+ * they got to.
+ */
+async function loadStanding() {
+  const days = Number($('#contracts-period').value) || 0;
+  const rows = await getJson(`/api/standing?days=${days}`).catch(() => []);
+  const body = $('#standing-table tbody');
+
+  if (!body) return;
+  body.textContent = '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', 'No contracts in that range.');
+    td.colSpan = 6;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const row of rows) {
+    const tr = el('tr');
+    tr.append(el('td', null, row.issuer));
+    tr.append(el('td', 'num', String(row.contracts)));
+
+    const done = el('td', 'num');
+    done.append(el('span', row.completed ? 'done' : 'muted', String(row.completed)));
+
+    // Finishing rate is the part that reads as standing: nine of ten is a
+    // different relationship from nine of thirty.
+    if (row.contracts > 0)
+      done.append(el('span', 'muted', ` · ${Math.round((row.completed / row.contracts) * 100)}%`));
+
+    tr.append(done);
+    tr.append(el('td', row.abandoned ? 'num outward' : 'num muted', String(row.abandoned)));
+
+    // Never a bare zero: no annotated title is "nobody wrote it down", which is
+    // not the same as "this pays nothing".
+    const rep = el('td', 'num');
+
+    if (row.repFrom > 0) {
+      rep.append(el('span', null, row.rep.toLocaleString()));
+      rep.append(el('span', 'muted', ` · from ${row.repFrom}`));
+      rep.title = `Read from ${row.repFrom} contract title${row.repFrom === 1 ? '' : 's'} the StarStrings mod has annotated`;
+    } else {
+      rep.append(el('span', 'muted', '—'));
+      rep.title = 'No annotated title among these, so nobody has written down what they pay';
+    }
+
+    tr.append(rep);
+
+    const span = el('td', 'muted');
+    span.textContent = row.first === row.last
+      ? dateOf(row.first)
+      : `${dateOf(row.first)} → ${dateOf(row.last)}`;
+    tr.append(span);
+
+    body.append(tr);
+  }
+}
+
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
   const rows = await getJson(`/api/contracts?days=${days}`);
@@ -484,7 +553,7 @@ async function loadContractList() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', 'No contracts in that range.');
-    td.colSpan = 8;
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -511,6 +580,27 @@ async function loadContractList() {
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
     tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+
+    // What the title says it pays, when a text mod has annotated it. Silence
+    // is the honest default: most titles say nothing, and a zero would read as
+    // "this pays nothing" rather than "nobody wrote it down".
+    const pays = el('td');
+
+    if (row.rep) {
+      const chip = el('span', 'tag-rep', `${row.rep.toLocaleString()} rep`);
+      chip.title = 'From the contract title, annotated by the StarStrings mod';
+      pays.append(chip);
+    }
+
+    if (row.blueprint) {
+      const chip = el('span', 'tag-bp', 'BP');
+      chip.title = 'Tagged as awarding a blueprint';
+      pays.append(chip);
+    }
+
+    if (!row.rep && !row.blueprint) pays.append(el('span', 'muted', '—'));
+
+    tr.append(pays);
 
     // Steps only exist for missions whose objectives were pushed while the
     // log was being written; older contracts honestly show nothing.
@@ -2170,9 +2260,32 @@ async function loadCasualties() {
 
   bars('#casualties-beds',
     (data.bedsUsed || []).map((b) => ({
-      label: b.place, value: b.times, onClick: () => jumpToPlace(b.place),
+      label: b.afterDeath ? `${b.place} · ${b.afterDeath} after a death` : b.place,
+      value: b.times,
+      onClick: () => jumpToPlace(b.place),
     })),
     (v) => `${v}`);
+
+  // The logins are counted and shown rather than hidden: leaving them out
+  // silently would make the totals look wrong to anyone who remembers using a
+  // bed more often than this.
+  const kinds = data.bedKinds;
+
+  if (kinds) {
+    const parts = [];
+    if (kinds.afterDeath) parts.push(`${kinds.afterDeath} after a death or incapacitation`);
+    if (kinds.heal) parts.push(`${kinds.heal} used mid-session, which could be either`);
+    if (kinds.hab) parts.push(`${kinds.hab} at places with no clinic, so hab beds - not counted above`);
+    if (kinds.wake) parts.push(`${kinds.wake} were waking up at login, not counted above`);
+
+    // The directory can only rule a bed out, and only if it is on disk. Say so
+    // rather than leaving the mid-session pile unexplained.
+    if (!kinds.clinicsKnown) {
+      parts.push('enable the place directory in Settings to rule out beds at places with no clinic');
+    }
+
+    $('#beds-kinds').textContent = parts.join(' · ');
+  }
 
   $('#casualties-woke-note').textContent = data.lastWokeAt
     ? `Last woke at ${data.lastWokeAt}, ${relative(data.lastWokeWhen)}. Inferred, `
@@ -2802,7 +2915,93 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   loadJobList();
 });
 
+/* ---------- StarStrings ---------- */
+
+/**
+ * MrKraken's text mod, installed on request.
+ *
+ * Kept at arm's length on purpose. This app is read-only everywhere else, and
+ * this one card writes into somebody's game install, so the page says exactly
+ * which two files it writes, offers to take them back out, and never touches
+ * anything without a click. The state it shows is what is on disk rather than
+ * what we once did: a game patch can drop the localisation file back without
+ * telling anyone, and "installed" has to mean the files are still there.
+ */
+async function loadStarStrings(check = false) {
+  const status = $('#starstrings-status');
+  if (!status) return;
+
+  const state = await getJson(`/api/starstrings${check ? '?check=true' : ''}`).catch(() => null);
+
+  if (!state) {
+    status.textContent = 'Could not read the install state.';
+    return;
+  }
+
+  $('#starstrings-remove').hidden = !state.installed;
+  $('#starstrings-install').textContent = state.installed ? 'Reinstall' : 'Install';
+
+  const bits = [];
+
+  if (state.installed) {
+    bits.push(`Installed: ${state.release || 'unknown build'}`);
+    if (state.installedAt) bits.push(`put in place ${relative(state.installedAt)}`);
+  } else if (state.displaced) {
+    bits.push('Installed by this app, but the files are gone — a game patch will do that. Install again to put it back.');
+  } else {
+    bits.push('Not installed.');
+  }
+
+  if (state.latest) {
+    bits.push(state.newer
+      ? `A newer build is out: ${state.latest.name}. Install to take it.`
+      : `Newest build: ${state.latest.name}${state.installed ? ' — you have it' : ''}`);
+  }
+
+  if (!state.gameRoot) bits.push('No game folder found, so there is nowhere to install it.');
+
+  status.textContent = bits.join(' · ');
+  $('#starstrings-install').disabled = !state.gameRoot;
+}
+
+function initStarStrings() {
+  const install = $('#starstrings-install');
+  if (!install) return;
+
+  $('#starstrings-check').addEventListener('click', async () => {
+    $('#starstrings-status').textContent = 'Asking GitHub…';
+    await loadStarStrings(true);
+  });
+
+  install.addEventListener('click', async () => {
+    install.disabled = true;
+    $('#starstrings-status').textContent = 'Downloading and writing…';
+
+    const answer = await fetch('/api/starstrings/install', { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => ({ problem: 'The install could not be started.' }));
+
+    install.disabled = false;
+
+    if (answer.problem) {
+      $('#starstrings-status').textContent = answer.problem;
+      return;
+    }
+
+    await loadStarStrings(true);
+    alertLine($('#starstrings-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+  });
+
+  $('#starstrings-remove').addEventListener('click', async () => {
+    await fetch('/api/starstrings/remove', { method: 'POST' }).catch(() => {});
+    await loadStarStrings();
+  });
+
+  loadStarStrings();
+}
+
 /* ---------- logbook ---------- */
+
 
 /**
  * The logbook page: one merged timeline of what the pilot actually did -
@@ -7834,6 +8033,7 @@ initStaleNotice();
 initWipe();
 initWipePrompt();
 initUpdates();
+initStarStrings();
 
 /* ---------- scan progress ---------- */
 

@@ -78,7 +78,22 @@ public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
 /// hint: the same toast fires when a bed is used only to heal, and the game
 /// never states the regen location either way.
 /// </remarks>
-public sealed record MedicalBedVisit(DateTimeOffset At, string Place);
+/// <param name="Kind">
+/// Which kind of bed this looks like. The game cannot be asked: it prints the
+/// same line - "Medical Bed: The bed has restored your health and reset your
+/// BDL" - for the clinic bed you crawl into after a fight and for the hab bed
+/// you wake up in when you log in. So the kind is read from what surrounds it:
+/// <list type="bullet">
+/// <item><c>wake</c> - within minutes of the session starting, before anything
+/// has happened to you. That is logging in, not treatment.</item>
+/// <item><c>after-death</c> - you had died or been incapacitated shortly
+/// before, which is the one case where a bed is unambiguously medical.</item>
+/// <item><c>heal</c> - a bed used mid-session with no death behind it.</item>
+/// </list>
+/// A guess, and labelled as one wherever it is shown.
+/// </param>
+public sealed record MedicalBedVisit(DateTimeOffset At, string Place, string Kind = "heal");
+
 
 /// <param name="Cause">"death" or "incapacitated" - both end up somewhere new.</param>
 public sealed record RespawnRecord(
