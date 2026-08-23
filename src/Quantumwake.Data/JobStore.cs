@@ -17,6 +17,14 @@ public sealed record JobItem(string Name, double Needed, string Unit = "");
 /// Shown on the Now page - and so in the overlay, where a job is worth having
 /// while actually flying.
 /// </param>
+/// <param name="Destination">
+/// Where the player means to do this shopping, when they have decided. A list
+/// is usually written with a place already in mind - the stop you are flying to
+/// anyway - and saying so up front is different from being told the cheapest
+/// counter afterwards: it makes the plan prefer that place and leaves the rest
+/// as the exception. Null means "anywhere", which is the honest default.
+/// </param>
+/// <param name="DestinationId">The map's id for it, so a plan can draw the stop.</param>
 public sealed record Job(
     string Id,
     string Title,
@@ -25,7 +33,9 @@ public sealed record Job(
     DateTimeOffset CreatedAt,
     bool Done,
     IReadOnlyList<JobItem> Items,
-    bool Pinned = false);
+    bool Pinned = false,
+    string? Destination = null,
+    string? DestinationId = null);
 
 /// <summary>
 /// The player's own plans, kept in a file beside the caches.
@@ -56,7 +66,13 @@ public sealed class JobStore
             return [.. _jobs];
     }
 
-    public Job Add(string title, string kind, string? source, IReadOnlyList<JobItem> items)
+    public Job Add(
+        string title,
+        string kind,
+        string? source,
+        IReadOnlyList<JobItem> items,
+        string? destination = null,
+        string? destinationId = null)
     {
         var job = new Job(
             Guid.NewGuid().ToString("N")[..8],
@@ -65,7 +81,10 @@ public sealed class JobStore
             source,
             DateTimeOffset.UtcNow,
             Done: false,
-            items);
+            items,
+            Pinned: false,
+            Destination: string.IsNullOrWhiteSpace(destination) ? null : destination.Trim(),
+            DestinationId: string.IsNullOrWhiteSpace(destinationId) ? null : destinationId.Trim());
 
         lock (_gate)
         {
@@ -74,6 +93,26 @@ public sealed class JobStore
         }
 
         return job;
+    }
+
+    /// <summary>Points a list at a place, or at nowhere in particular.</summary>
+    public bool SetDestination(string id, string? place, string? placeId)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Id == id);
+            if (index < 0)
+                return false;
+
+            _jobs[index] = _jobs[index] with
+            {
+                Destination = string.IsNullOrWhiteSpace(place) ? null : place.Trim(),
+                DestinationId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim(),
+            };
+
+            Save();
+            return true;
+        }
     }
 
     /// <summary>
