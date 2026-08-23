@@ -402,9 +402,10 @@
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
       <textarea id="job-items" rows="5"
                 placeholder="One per line — &quot;Hadanite 23&quot;, &quot;Agricium 1.16 SCU&quot;, or just a name"></textarea>
-      <input type="text" id="job-place" list="job-places" autocomplete="off"
-             placeholder="Where are you shopping? Optional &mdash; leave blank for anywhere">
-      <datalist id="job-places"></datalist>
+      <div class="job-form-row">
+        <select id="job-add" class="select"></select>
+        <select id="job-place" class="select"></select>
+      </div>
       <div class="job-form-actions">
         <button type="submit" class="ghost">Save list</button>
         <button type="button" class="ghost" id="job-cancel">Cancel</button>

@@ -342,13 +342,17 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.10
+### 0.6.12
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
 
 - **A shopping list can say where it is for.** The new-list form has a
-  destination field - type three letters of a station and the list is that run.
+  destination picker - every place the app knows, visited ones first - and a
+  second picker for what to add: 203 tradeable commodities and 2,349 parts and
+  pieces of gear that can actually be bought. Picking one writes the line into
+  the box, where it can be given a quantity like anything else; the box is
+  still free text and the pickers only spell things for you.
   The plan then starts every line at that place when it sells the thing, ranks
   it first among the stops, and says so at the top of the chooser. Leave it
   blank for anywhere, which is what it did before. It is a field on the card
