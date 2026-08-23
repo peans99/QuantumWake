@@ -347,6 +347,22 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.6.14
+
+- **Standing: who you have worked for.** A table on the Contracts page of every
+  issuer, how many contracts you took, how many you finished and the rate, how
+  many you walked away from, and the span you have been working for them. This
+  install: 16 factions, 205 contracts, 62% finished. Two spellings of one
+  faction are one row - the game writes both "Red Wind" and "Redwind", and BHG
+  for the Bounty Hunters Guild.
+- **What a contract pays, where anyone has written it down.** The game logs a
+  contract's displayed title, and that title comes from the file the StarStrings
+  mod replaces - so with the mod installed, titles carry `[150 Rep]` and `[BP]`
+  and the app reads them straight off. Shown as chips on the contract and summed
+  per faction. **This is not your reputation**: nothing in the logs carries a rep
+  value, the tags cover a fraction of contracts, and a faction with no annotated
+  title shows a blank rather than a zero.
+
 ### 0.6.13
 
 - **StarStrings, installed from Settings if you want it.** A community text mod
