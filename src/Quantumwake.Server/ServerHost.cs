@@ -926,7 +926,7 @@ public static class ServerHost
 
         // What dying has cost: deaths and incapacitations over time, where they
         // happened, and the claim fees the fleet implies.
-        app.MapGet("/api/casualties", (LogLibrary lib, int? days) =>
+        app.MapGet("/api/casualties", (LogLibrary lib, UexFeeds feeds, int? days) =>
         {
             var stats = lib.Stats(days ?? 0);
             var sessions = lib.Sessions()
@@ -992,15 +992,29 @@ public static class ServerHost
             // both with the same line - so the counted ones are the beds the
             // player went to, and the rest are reported separately rather than
             // dropped.
-            var deliberate = beds.Where(b => b.Kind != "wake").ToList();
+            //
+            // The place directory can rule a bed OUT of being medical, and
+            // nothing more: somewhere with no clinic had no clinic bed to use,
+            // whatever the toast said. It cannot rule one IN - Port Tressler
+            // has habs and a clinic, so a bed there is still either - and a
+            // place the directory does not carry says nothing at all.
+            string Sort(Quantumwake.Core.State.MedicalBedVisit bed) => bed.Kind switch
+            {
+                "wake" or "after-death" => bed.Kind,
+                _ when feeds.HasClinic(bed.Place) == false => "hab",
+                _ => "heal",
+            };
+
+            var sorted = beds.Select(b => new { Bed = b, Kind = Sort(b) }).ToList();
+            var deliberate = sorted.Where(b => b.Kind != "wake" && b.Kind != "hab").ToList();
 
             var bedsUsed = deliberate
-                .GroupBy(b => b.Place, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(b => b.Bed.Place, StringComparer.OrdinalIgnoreCase)
                 .Select(g => new
                 {
                     place = g.Key,
                     times = g.Count(),
-                    last = g.Max(b => b.At),
+                    last = g.Max(b => b.Bed.At),
                     afterDeath = g.Count(b => b.Kind == "after-death")
                 })
                 .OrderByDescending(x => x.last)
@@ -1009,9 +1023,16 @@ public static class ServerHost
 
             var bedKinds = new
             {
-                wake = beds.Count(b => b.Kind == "wake"),
-                afterDeath = beds.Count(b => b.Kind == "after-death"),
-                heal = beds.Count(b => b.Kind == "heal")
+                wake = sorted.Count(b => b.Kind == "wake"),
+                afterDeath = sorted.Count(b => b.Kind == "after-death"),
+                hab = sorted.Count(b => b.Kind == "hab"),
+                heal = sorted.Count(b => b.Kind == "heal"),
+
+                // Whether the directory could be asked at all, and whether the
+                // copy on disk is new enough to carry the flag - so the page
+                // can offer a refresh rather than quietly sorting nothing.
+                directory = feeds.PlaceDirectory.Count,
+                clinicsKnown = feeds.PlaceDirectory.Count(p => p.Clinic is not null)
             };
 
             return new

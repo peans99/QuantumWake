@@ -347,8 +347,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.15
+### 0.6.16
 
+- **A bed where there is no clinic was a hab bed.** With the UEX place
+  directory enabled, a bed used somewhere with no clinic is ruled out of being
+  medical - which the directory can do, while the reverse it cannot: Port
+  Tressler has habs and a clinic, so a bed there is still either one, and the
+  app says so rather than picking. On this install it rules out nothing, since
+  every bed was used at a place that has a clinic; it earns its keep for anyone
+  who beds down at outposts.
 - **Waking up is not a hospital visit.** The game prints the same line for
   every bed - the clinic bed you crawl into and the hab bed you wake up in at
   login - so every login was being counted as a medical bed. They are told
