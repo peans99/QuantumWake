@@ -347,8 +347,13 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.16
+### 0.6.17
 
+- **Fixed the stray character in 64 places.** A byte-level repair in 0.6.15
+  matched the tail of every valid middot as well as the broken one it was aimed
+  at, doubling the lead byte - so separators across the Settings feeds, the
+  market and the map read as a replacement glyph. All 64 repaired, every text
+  file checked as valid UTF-8.
 - **A bed where there is no clinic was a hab bed.** With the UEX place
   directory enabled, a bed used somewhere with no clinic is ruled out of being
   medical - which the directory can do, while the reverse it cannot: Port
