@@ -22,6 +22,8 @@ where you have said it may - the optional integrations on the Settings page -
 and the only two that can go out unattended, the version check and the
 market-price refresh, are off until you turn them on.
 
+![Quantum Wake at a glance](docs/images/quantum-wake-at-a-glance.png)
+
 > **Pre-1.0.** Until version 1.0 this product will keep changing significantly:
 > pages appear and move, data formats shift, and an update may re-read your logs
 > or ask you to re-enable an integration. Nothing you care about is at risk -
@@ -351,7 +353,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.1
+### 0.7.2
+
+- **An accurate overview, at a glance.** The README now leads with a visual
+  guide to what Quantum Wake reads, what it can show, the limits of the logs,
+  and the optional integrations that add live market data or local reference
+  names. It distinguishes `Game.log` from `Data.p4k`, avoids promising a wallet,
+  radar, or complete inventory history, and names UEX, StarCitizenWiki's
+  scunpacked-data, StarStrings and GitHub rather than integrations the app does
+  not use.
 
 - **Read-only over the network.** `-Lan` puts the dashboard on a tablet, and put
   the API there with it - including the endpoints that store UEX keys, write into
