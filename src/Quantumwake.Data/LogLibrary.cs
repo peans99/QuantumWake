@@ -152,6 +152,31 @@ public sealed record Standing(
     int Rep,
     int RepFrom);
 
+/// <summary>
+/// Somebody this install has flown with, as far as the logs can tell.
+/// </summary>
+/// <remarks>
+/// The party channel announces that a player connected or dropped while you were
+/// grouped with them; there is no roster event, so presence is inferred from
+/// those announcements and nothing else. That makes every field here a floor
+/// rather than a total: a friend who was already online when you grouped up, and
+/// who stayed until you logged off, produces no notification at all and so does
+/// not appear. What the numbers can be trusted to say is that these people were
+/// there - never that nobody else was.
+/// </remarks>
+/// <param name="Sessions">Sessions in which they were named at least once.</param>
+/// <param name="Connected">Times they came online while partied with you.</param>
+/// <param name="Dropped">Times they went offline the same way.</param>
+/// <param name="LedParty">Times party lead passed to them.</param>
+public sealed record Wingman(
+    string Handle,
+    int Sessions,
+    int Connected,
+    int Dropped,
+    int LedParty,
+    DateTimeOffset First,
+    DateTimeOffset Last);
+
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
 /// <param name="Bought">Facility keys where kiosks stock it.</param>
@@ -1134,6 +1159,64 @@ public sealed class LogLibrary : IDisposable
                 })
                 .OrderByDescending(s => s.Completed)
                 .ThenByDescending(s => s.Contracts)
+        ];
+    }
+
+    /// <summary>
+    /// Everyone the party channel has named, most-flown-with first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ranked by sessions rather than by notifications, because a notification
+    /// count measures somebody's connection quality more than your time
+    /// together: one player who dropped and rejoined nine times in an evening
+    /// would otherwise outrank nine people who each flew a whole night with you.
+    /// </para>
+    /// <para>
+    /// Your own handles are dropped. You appear in your own logs whenever party
+    /// lead passes to you, and a list of the people you fly with should not have
+    /// you at the top of it.
+    /// </para>
+    /// <para>
+    /// Scoped to <see cref="WipeScope.History"/>: who you flew with is play
+    /// history, and a wipe takes an account's possessions rather than the memory
+    /// of an evening.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<Wingman> Wingmen(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+        var sessions = Counted(WipeScope.History);
+
+        // Every handle this install has played under, so a rename does not put
+        // an older self in the list beside your friends.
+        var mine = sessions
+            .Select(s => s.Handle)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+
+        return
+        [
+            .. sessions
+                .SelectMany(s => s.PartyNotes.Select(note => (Session: s.Id, Note: note)))
+                .Where(x => x.Note.Handle is not null
+                            && x.Note.At >= cutoff
+                            && !mine.Contains(x.Note.Handle))
+                .GroupBy(x => x.Note.Handle!, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new Wingman(
+                    // The most recent spelling: handles are grouped without
+                    // regard to case, and the newest is likeliest to be how they
+                    // write it now.
+                    g.OrderByDescending(x => x.Note.At).First().Note.Handle!,
+                    g.Select(x => x.Session).Distinct().Count(),
+                    g.Count(x => x.Note.Moment == PartyMoment.Connected),
+                    g.Count(x => x.Note.Moment == PartyMoment.Disconnected),
+                    g.Count(x => x.Note.Moment == PartyMoment.BecameLeader),
+                    g.Min(x => x.Note.At),
+                    g.Max(x => x.Note.At)))
+                .OrderByDescending(w => w.Sessions)
+                .ThenByDescending(w => w.Connected)
+                .ThenBy(w => w.Handle, StringComparer.OrdinalIgnoreCase)
         ];
     }
 

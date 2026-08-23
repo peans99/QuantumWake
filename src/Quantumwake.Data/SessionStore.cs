@@ -137,7 +137,9 @@ public sealed class SessionStore : IDisposable
     // 4: commodity purchases parse at last. Every session summarised before
     //    0.7.0 recorded the sale and dropped the buy, so Cargo bought would
     //    have stayed at zero on exactly the installs with the most history.
-    private const int PayloadVersion = 4;
+    // 5: party notifications are kept, so sessions summarised before them name
+    //    nobody and the Crew page would be empty for everyone but new installs.
+    private const int PayloadVersion = 5;
 
 
     /// <summary>

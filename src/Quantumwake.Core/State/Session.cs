@@ -264,6 +264,12 @@ public sealed record SessionSummary
     /// <summary>Medical beds used, which is where a regen location gets set.</summary>
     public IReadOnlyList<MedicalBedVisit> MedicalBeds { get; init; } = [];
 
+    /// <summary>
+    /// Party notifications, the only lines in a 4.9 log naming another player.
+    /// Not a roster - see <see cref="Party"/> for the difference.
+    /// </summary>
+    public IReadOnlyList<PartyNote> PartyNotes { get; init; } = [];
+
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
 

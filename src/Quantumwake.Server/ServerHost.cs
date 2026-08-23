@@ -709,6 +709,10 @@ public static class ServerHost
         // down. See LogLibrary.Standings for why those are two different things.
         app.MapGet("/api/standing", (LogLibrary lib, int? days) => lib.Standings(days ?? 0));
 
+        // Who the party channel has named. See LogLibrary.Wingmen for why these
+        // are floors rather than totals.
+        app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));
+
         // The community catalogue joined onto this install's trades, plus UEX
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.
