@@ -265,8 +265,10 @@ function renderNow(state) {
   $('#now-location').textContent = state.location || (state.inGame ? 'Unknown' : 'In menus');
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
 
-  // The map follows the live feed, so the marker moves as the player does.
+  // The map follows the live feed, so the marker moves as the player does -
+  // and shows the jump while it is happening, not only where it ended.
   setHere(state.locationId);
+  setTravel(state.travelling ? state.travellingToId : null);
   tripArrived(state.locationId);
 
   // The trade card follows too, refreshing only when the place changes.
@@ -4424,6 +4426,85 @@ function setHere(rawId) {
     centreOn(hereId);
 }
 
+/** Where the live feed says the player is quantum-travelling to, if anywhere. */
+let travelId = null;
+
+/**
+ * Marks a jump in progress, and is safe to call before the map is drawn.
+ *
+ * The same rule as the here-marker: only rebuild when the destination changes,
+ * or the marching dashes restart every time the feed repeats itself and the
+ * line looks painted on.
+ */
+function setTravel(rawId) {
+  const changed = (rawId || null) !== travelId;
+  travelId = rawId || null;
+
+  if (changed || (travelId && !$('#starmap').querySelector('.map-travel')))
+    drawTravel();
+}
+
+/**
+ * The line from where you are to where you are headed.
+ *
+ * The map has always known both ends - the live feed names the destination the
+ * moment the drive spools - and drew neither as a journey. A jump is the one
+ * time the map can show something happening rather than something recorded, so
+ * it gets a marching dashed vector and a ring waiting at the far end.
+ */
+function drawTravel() {
+  const map = $('#starmap');
+  map.querySelectorAll('.map-travel').forEach((n) => n.remove());
+
+  const from = hereId && nodeAt.get(hereId);
+  const to = travelId && nodeAt.get(travelId);
+
+  // Either end can be a place the map cannot draw - an unmapped outpost, or a
+  // destination in a system this atlas has no layout for. A half-drawn vector
+  // pointing at nothing would be worse than none.
+  if (!from || !to) return;
+
+  const zoom = view.w / HOME_VIEW.w;
+  const group = svgEl('g', { class: 'map-travel' });
+
+  const line = svgEl('line', {
+    x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+    class: 'travel-line',
+    'stroke-width': 1.5 * zoom,
+    'stroke-dasharray': `${7 * zoom} ${5 * zoom}`,
+    filter: 'url(#glow)',
+  });
+
+  line.append(svgEl('animate', {
+    attributeName: 'stroke-dashoffset',
+    values: `${12 * zoom};0`,
+    dur: '0.85s',
+    repeatCount: 'indefinite',
+  }));
+
+  group.append(line);
+
+  const target = svgEl('circle', {
+    cx: to.x, cy: to.y, r: 11 * zoom,
+    class: 'travel-target',
+    'stroke-width': 1.3 * zoom,
+  });
+
+  target.append(svgEl('animate', {
+    attributeName: 'r',
+    values: `${9 * zoom};${19 * zoom}`,
+    dur: '1.6s',
+    repeatCount: 'indefinite',
+  }));
+
+  target.append(svgEl('animate', {
+    attributeName: 'opacity', values: '.8;0', dur: '1.6s', repeatCount: 'indefinite',
+  }));
+
+  group.append(target);
+  map.append(group);
+}
+
 function drawHere() {
   const map = $('#starmap');
   map.querySelectorAll('.map-here').forEach((n) => n.remove());
@@ -6534,7 +6615,7 @@ function drawMap() {
       const reach = clusterRadius(sites.length);
 
       // Before the sites, so their marks sit on the world rather than behind it.
-      if (bodyName !== '—') drawBodyDisc(bodyLayer, bx, by, reach, system);
+      if (bodyName !== '—') drawBodyDisc(bodyLayer, bx, by, reach, system, `${system}/${bodyName}`);
 
       // Body names sit outside the cluster they head, so the sites below have
       // clear air to put their own labels in. They are placed first and claim
@@ -6566,11 +6647,39 @@ function drawMap() {
           fill: '#000', 'fill-opacity': '0', 'pointer-events': 'fill',
         });
 
+        const bubble = () => map.querySelector(`.map-body[data-body="${system}/${bodyName}"]`);
+
         bodyHover.addEventListener('pointermove', (e) => {
-          if (tipKey !== bodyKey) showBodyTip(bodyName, system, sites);
+          if (tipKey !== bodyKey) {
+            showBodyTip(bodyName, system, sites);
+
+            // Lit only while the pointer is in it: at rest the bubble is a
+            // ground the eye can ignore, and under the pointer it is the
+            // answer to "which of these belong together".
+            bubble()?.classList.add('lit');
+          }
+
           moveMapTip(e);
         });
-        bodyHover.addEventListener('pointerleave', hideMapTip);
+
+        bodyHover.addEventListener('pointerleave', () => {
+          bubble()?.classList.remove('lit');
+          hideMapTip();
+        });
+
+        // Clicking the space between a body's places frames that body. The
+        // dots themselves keep their own click - this is only the gaps, which
+        // did nothing at all before.
+        bodyHover.addEventListener('click', (e) => {
+          e.stopPropagation();
+          animateViewTo({
+            x: bx - (reach + 26),
+            y: by - (reach + 26),
+            w: (reach + 26) * 2,
+            h: (reach + 26) * 2,
+          });
+        });
+
         hoverLayer.append(bodyHover);
       }
 
@@ -6622,6 +6731,7 @@ function drawMap() {
   drawLegend(locations);
   applyView();
   drawHere();
+  drawTravel();
   drawTripPath();
   fitToHighlights(term || null);
 }
@@ -6738,12 +6848,26 @@ function kindMark(kind, x, y, radius, colour, solid) {
  * hierarchy back: the big quiet circle is the world, the marks on it are the
  * places you can actually go.
  */
-function drawBodyDisc(layer, x, y, reach, system) {
+/**
+ * The bubble a body's places sit in.
+ *
+ * The layout is already polar - each site is placed by golden angle around its
+ * body - but a ring of dots does not say "these belong to Hurston" on its own.
+ * The disc does, and it is deliberately faint: it is a ground, not a thing to
+ * look at. Hovering brings it up, which is when the grouping is the question
+ * being asked.
+ *
+ * @param key Identifies the bubble so the hover area over the same body can
+ *   light it without either having to know where the other one is drawn.
+ */
+function drawBodyDisc(layer, x, y, reach, system, key) {
   const disc = svgEl('circle', {
     cx: x, cy: y, r: reach + 7,
     class: 'map-body',
     fill: SYSTEM_COLOURS[system] || '#9fb8ff',
   });
+
+  if (key) disc.dataset.body = key;
 
   layer.append(disc);
 }
@@ -6855,6 +6979,7 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
       anchor,
       text: location.name.length > 24 ? `${location.name.slice(0, 23)}…` : location.name,
       priority: (highlighted ? 1_000_000 : 0) + location.visits,
+      pinned: highlighted,
     });
   }
 
@@ -6890,12 +7015,35 @@ function boxesCollide(a, b) {
  * fits nowhere is dropped: an unreadable pile names nothing, while a bare dot
  * still answers on hover and click.
  */
+/**
+ * How many names the map will show at the current zoom.
+ *
+ * Collision avoidance alone is not decluttering: it stops names overlapping,
+ * but at system scale microTech still asks for twenty-two of them and the ones
+ * that fit form a wall of text around the disc. So the whole view gets a
+ * budget, spent on the busiest places first, and it grows with the square of
+ * the zoom - zooming in is asking for detail, and that is when there is room
+ * to put it. Past the detail threshold every label that fits is drawn.
+ */
+const labelBudget = () => {
+  if (isDetailed()) return Infinity;
+
+  const zoom = HOME_VIEW.w / view.w;
+  return Math.max(12, Math.round(14 * zoom * zoom));
+};
+
 function placeLabels(map) {
   const size = labelSize();
+  const budget = labelBudget();
+  let spent = 0;
 
   pendingLabels.sort((a, b) => b.priority - a.priority);
 
   for (const want of pendingLabels) {
+    // A search match is the answer to a question, so it is never rationed;
+    // everything else queues for the budget.
+    if (!want.pinned && spent >= budget) continue;
+
     const { x, y, radius, anchor } = want;
 
     const dx = anchor ? x - anchor.x : 0;
@@ -6937,6 +7085,7 @@ function placeLabels(map) {
       want.group.append(label);
 
       claimedBoxes.push(box);
+      if (!want.pinned) spent++;
       break;
     }
   }

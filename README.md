@@ -342,11 +342,24 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.6.8
+### 0.6.9
 
 The map learns what things are, the app learns what it cannot count, and the
 buttons stop looking borrowed.
 
+- **The map declutters itself.** At system scale only the busiest places are
+  named - thirteen of them, rather than every place you have ever visited
+  fighting for the same air - and the budget grows with the square of the zoom,
+  so names arrive as you ask for detail. Past the detail threshold every name
+  that fits is drawn, as before. A searched-for place is never rationed.
+- **A jump in progress is drawn.** When the drive spools, the map runs a
+  marching dashed vector from where you are to where you are going, with a
+  pulsing ring waiting at the far end. The live feed always knew the
+  destination; the map never showed the journey.
+- **A body groups its places when you look at it.** Hovering the space a planet
+  occupies lights the bubble its outposts and stations sit in, and clicking the
+  gaps between them frames that body. At rest the bubble stays a faint ground
+  rather than another thing to read.
 - **The kill counter is gone.** It could only ever read zero: 4.9 writes no
   kill or vehicle-destruction line at all, so a counter pinned at zero read as a
   broken feature rather than a missing one. The About page says where it went
