@@ -3280,7 +3280,10 @@ async function openCommodity(name) {
   $('#commodity-sub').textContent = trend.sampled
     ? `${entry?.groups?.join(', ') || 'Commodity'} · history from the ${trend.sampled} busiest `
       + `of ${trend.terminals} counters that trade it, by demand and by stock.`
-    : 'No history available — UEX is off, or nobody has reported this one.';
+    : trend.terminals
+      ? `Live UEX quotes are available at ${trend.terminals} counters, but no price-history samples loaded. `
+        + 'The counter tables above are still the current report.'
+      : 'No UEX market counters are currently reported for this commodity.';
 
   const priceSeries = [
     { label: 'Best price paid to you', points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
