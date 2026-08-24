@@ -353,15 +353,21 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.9
+### 0.8.10
 
 - **Build the exact log story you need to test.** The simulator now has named,
-  deterministic scenarios for a cargo run, confirmed versus rejected spending,
-  medical respawn, a crew flight, contract completion with a blueprint, and the
-  archived combat format. `--scenario all` combines them, while
-  `--list-scenarios` explains the focused choices. Every scenario is parsed
-  back through the production reader in tests, including a check that no known
-  tag went unmatched.
+  deterministic scenarios for 19 focused cases: single and multi-stop trading,
+  tricky purchase confirmation, medical and death recovery, full party
+  lifecycle, completed and abandoned contracts, loadout and stash changes,
+  fleet and ship retrieval, location correction, disconnects, and archived
+  combat. `--scenario all` combines them, while `--list-scenarios` explains the
+  focused choices. Every scenario is parsed back through the production reader
+  in tests, including a check that no known tag went unmatched.
+
+- **Cargo buys now reproduce the real hundredfold unit trap.** The game writes
+  sales as SCU under `amount`, but purchases as centi-SCU under `price`. The
+  simulator now preserves that difference so a generated 32 SCU purchase proves
+  the production parser returns 32, rather than quietly accepting 3,200.
 
 - **Share what your logs know, as a file.** Settings can now save a JSON file
   of your own data for another pilot: what you paid and were paid at a named

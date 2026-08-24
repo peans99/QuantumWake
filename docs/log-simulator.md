@@ -58,10 +58,23 @@ show. They write one completed `LIVE\Game.log` and print their expected facts.
 | Scenario | Story |
 |---|---|
 | `cargo-run` | Buy 16 SCU at Port Tressler, fly, then sell it at New Babbage |
+| `multi-stop-trader` | Move two commodities through three locations and two jumps |
 | `spending` | One confirmed equipment purchase and one rejected purchase |
+| `purchase-pairing` | Ignore the wrong kiosk and intermediate response before confirmation |
 | `medical-respawn` | Incapacitation, inferred respawn, and an after-death medical bed |
+| `medical-kinds` | Login wake, after-casualty treatment, and ordinary healing beds |
+| `death-recovery` | Collapse a corpse-item burst into one death and recovery location |
+| `revived-in-place` | Incapacitation followed by revival without inventing a respawn |
 | `crew-flight` | Party arrivals, leader change, quantum flight, and a departure |
+| `party-lifecycle` | Connect, lead, disconnect, reconnect, ignore chatter, then disband |
 | `contract-complete` | Two visible mission steps completed, followed by a blueprint |
+| `contract-abandoned` | One visible objective progresses and is then withdrawn |
+| `loadout-swap` | Repeat an armour sighting and change the weapon in one slot |
+| `stash-browse` | Browse two location inventories and one personal inventory |
+| `fleet-growth` | Observe changing entitlement counts and retain the largest fleet |
+| `ship-retrieval` | Join a duplicate spawn line to a ship model learned later |
+| `location-resolution` | Replace a generic Rest Stop target with the actual arrival |
+| `unexpected-disconnect` | Distinguish timeout, player request, and routine teardown |
 | `combat` | One player kill, one death, and a destroyed vehicle |
 | `all` | Every focused story composed into one session |
 

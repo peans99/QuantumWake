@@ -25,7 +25,7 @@ if (options.ListScenarios)
     Console.WriteLine();
 
     foreach (var scenario in ScenarioCatalogue.All)
-        Console.WriteLine($"  {scenario.Name,-18} {scenario.Description}");
+        Console.WriteLine($"  {scenario.Name,-22} {scenario.Description}");
 
     return 0;
 }
