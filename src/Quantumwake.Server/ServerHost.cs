@@ -1434,6 +1434,34 @@ public static class ServerHost
             return Results.Ok(new { batch = Summarise(imports.Add(reading!, fingerprint, body.SourceName, DateTimeOffset.UtcNow)) });
         });
 
+        // Receipts and blueprints keep their own doors, and this is deliberate.
+        //
+        // /api/commodities feeds four separate aggregates on the Cargo page and
+        // /api/blueprints/owned feeds the "Set as goal" picker. Concatenating
+        // would mean remembering to filter in five places, which is how one gets
+        // forgotten - and the one that gets forgotten produces a lifetime
+        // earnings figure counting somebody else's sales, or a build plan for a
+        // blueprint the reader does not hold. Arriving in a different payload
+        // makes that impossible rather than merely unlikely.
+        app.MapGet("/api/imports/receipts", (ImportStore imports, string? imported) =>
+            Shared(imports, imported ?? "all").SelectMany(batch =>
+                (batch.Receipts?.Rows ?? []).Select(row => new
+                {
+                    row.At, row.IsSell, row.Place, row.PlaceId, row.Scu,
+                    row.Amount, row.UnitPrice, row.Commodity, row.ResourceId,
+                    observedTo = batch.Receipts!.ObservedTo,
+                    imported = Marker(batch),
+                })));
+
+        app.MapGet("/api/imports/blueprints", (ImportStore imports, string? imported) =>
+            Shared(imports, imported ?? "all").SelectMany(batch =>
+                (batch.Blueprints?.Rows ?? []).Select(row => new
+                {
+                    row.At,
+                    row.Name,
+                    imported = Marker(batch),
+                })));
+
         app.MapPost("/api/imports/{id}/hide", (string id, ImportStore imports) =>
             imports.ToggleHidden(id) ? Results.Ok(new { id }) : Results.NotFound());
 
