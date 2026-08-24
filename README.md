@@ -353,6 +353,12 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.7.18
+
+- **A clearer overview at the top of this page.** The at-a-glance graphic is
+  the same picture in a wider frame, so it fits a screen rather than asking
+  you to scroll it. Nothing in the app changed.
+
 ### 0.7.17
 
 - **Commodity history now says what is actually missing.** When live UEX
