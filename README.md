@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.11
+### 0.7.12
 
 - **A map that does not invent geography.** System Positions now shows one
   system at a time with community-starmap bearings and relative orbital
@@ -386,8 +386,12 @@ release workflow lifts it from here, so it is written once.
 - **Trade routes that admit uncertainty.** The planner now ranks recent,
   capacity-backed reports first, can limit itself to fresh quotes, and shows
   the reported stock, buyer demand, quote age and alternate buyers beside each
-  estimated profit. A route can be capped by buyer demand as well as the hold,
-  wallet and seller stock; prices remain community reports, not live inventory.
+  estimated profit. Choose routes with reported capacity, only routes whose
+  reports cover the whole target load, or include price-only estimates; the
+  evidence column says which case applies. An unrecognised UEX terminal makes
+  a clearly-labelled text plan instead of pretending both stops will appear on
+  the map. Prices remain community reports, not live inventory or a travel-time
+  estimate.
 
 - **A checklist that travels with you.** Make ordinary preparation lists for
   departures and operations, then pin one to Now and, if wanted, the overlay.

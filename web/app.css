@@ -1952,9 +1952,12 @@ td.with-track .track:focus-visible { opacity: 1; }
 .price-age.old { color: var(--amber); }
 .price-age.stale { color: var(--red); }
 
-/* Routes keep the price's uncertainty beside the profit: a number reported at
-   two counters at different times is useful context, not a verdict on stock. */
+/* The profit remains an estimate even when both capacity figures were reported:
+   UEX cannot observe the counter between the report and the player's arrival. */
 .route-report { min-width: 190px; }
+.route-feasibility { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.route-feasibility.reported-full { color: var(--green); }
+.route-feasibility.reported-partial { color: var(--amber); }
 .route-freshness { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .route-freshness.fresh { color: var(--green); }
 .route-freshness.aging { color: var(--amber); }

@@ -393,6 +393,11 @@
           <option value="reliable">Reliable first</option>
           <option value="profit">Highest estimated profit</option>
         </select>
+        <select id="routes-evidence" class="select" title="How much reported availability a route needs">
+          <option value="reported">Reported capacity</option>
+          <option value="full">Reported full load</option>
+          <option value="any">Include unknown capacity</option>
+        </select>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
@@ -404,11 +409,12 @@
       </div>
     </div>
     <p class="muted caption">
-      Estimated UEX hauls, sized to a real hold and wallet. Reliable first
-      favours recent reports and enough reported stock and demand; highest
-      estimated profit remains available when you want the optimistic view.
-      A price report is not live inventory — each row shows what limits it and
-      how old its two quotes are.
+      Estimated UEX hauls, sized to a real hold and wallet. “Reported capacity”
+      requires a stock and demand report on both ends; “full load” also requires
+      those reports to cover your target SCU. A price report is not live
+      inventory, terminal access, or travel time — each row shows the evidence
+      behind its estimate and the age of its two quotes.
+      <span id="routes-origin-note"></span>
     </p>
     <div class="table-wrap">
       <table id="routes-table">
@@ -417,7 +423,7 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Report</th><th>Capped by</th><th></th>
+            <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>

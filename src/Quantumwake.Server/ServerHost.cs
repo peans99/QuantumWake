@@ -934,14 +934,15 @@ public static class ServerHost
         // could be matched, so planning a run puts real dots on the map instead
         // of the page guessing at the names a second time.
         app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from,
-            string? ranking, bool? freshOnly) =>
+            string? ranking, bool? freshOnly, string? evidence) =>
             uex.Routes(
                 scu ?? 0,
                 capital ?? 0,
                 from,
                 limit: 30,
                 reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
-                freshOnly: freshOnly == true).Select(r => new
+                freshOnly: freshOnly == true,
+                evidence: evidence ?? "any").Select(r => new
             {
                 r.Commodity,
                 r.BuyAt,
@@ -955,8 +956,14 @@ public static class ServerHost
                 r.Profit,
                 r.Outlay,
                 r.LimitedBy,
+                r.DesiredUnits,
                 r.BuyStockScu,
                 r.SellDemandScu,
+                r.BuyAvailability,
+                r.SellAvailability,
+                r.Availability,
+                mapReady = !string.IsNullOrWhiteSpace(lib.Terminals.IdFor(r.BuyAt))
+                    && !string.IsNullOrWhiteSpace(lib.Terminals.IdFor(r.SellAt)),
                 r.BuySeenAt,
                 r.SellSeenAt,
                 r.Freshness,
