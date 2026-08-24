@@ -106,6 +106,10 @@ public class CargoPanelTests
     public void The_window_leaves_out_older_receipts()
     {
         var page = Loaded();
+        // Receipt dates are deliberately fixed, so the window's clock must be
+        // fixed too; otherwise this assertion changes merely because a day
+        // passed on the machine running it.
+        page.Do("Date.now = () => Date.parse('2026-08-23T00:00:00Z');");
 
         var all = page.Count("receiptsFor('Laranite', false).length");
         page.Do("cargo.days = 3;");

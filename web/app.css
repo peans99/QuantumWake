@@ -1180,6 +1180,24 @@ td.outward { color: var(--amber); }
 .map-service-filter button:hover { color: var(--text); }
 .map-service-filter button.active { color: var(--cyan-hot); background: rgba(53, 200, 240, .13); }
 
+/* Work layers are intentionally separate from services: a shopping run and a
+   refuel stop can overlap, so the two filters compose instead of competing. */
+.map-focus-filter { display: inline-flex; border: 1px solid var(--rule); }
+.map-focus-filter button {
+  border: 0;
+  border-right: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.map-focus-filter button:last-child { border-right: 0; }
+.map-focus-filter button:hover { color: var(--text); }
+.map-focus-filter button.active { color: var(--green); background: rgba(79, 212, 138, .10); }
+
 /* The map's buttons are the app's buttons; see the button section below. */
 
 #starmap { cursor: grab; touch-action: none; }
@@ -1210,6 +1228,9 @@ td.outward { color: var(--amber); }
 .map-here .here-tick { stroke: var(--cyan-hot, #7fe4ff); opacity: .9; }
 .map-here .here-leader { stroke: var(--cyan-hot, #7fe4ff); opacity: .8; }
 .map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
+.map-price-age { fill: none; stroke-width: 1.5; stroke-dasharray: 3 3; pointer-events: none; }
+.map-price-age.aging { stroke: var(--amber); }
+.map-price-age.stale { stroke: var(--red); }
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {
   font-size: 14px;

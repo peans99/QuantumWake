@@ -92,4 +92,44 @@ public class MapModeTests
         Assert.Equal("Pyro", page.Text("__dom.node('#map-system').value"));
         Assert.Contains("YOU ARE HERE", page.NodeText("#starmap"));
     }
+
+    [Fact]
+    public void Work_layer_keeps_only_the_active_plan_stops_on_the_map()
+    {
+        var page = new Page();
+        page.Do("""
+            atlas = [
+              { rawId: 'a18', name: 'Area18', system: 'Stanton', body: 'ArcCorp', kind: 'City', visits: 1 },
+              { rawId: 'tressler', name: 'Port Tressler', system: 'Stanton', body: 'microTech', kind: 'Station', visits: 1 }
+            ];
+            trips = [{ tracked: true, stops: [{ placeId: 'tressler', place: 'Port Tressler', done: false }] }];
+            __dom.node('#map-mode').value = 'system';
+            __dom.node('#map-system').value = 'Stanton';
+            selectMapFocus('plan');
+            """);
+
+        Assert.Equal(1, page.Count("nodeAt.size"));
+        Assert.True(page.Truth("nodeAt.has('tressler')"));
+        Assert.Equal("1 plan location shown", page.NodeText("#map-count"));
+    }
+
+    [Fact]
+    public void Label_density_can_trade_detail_for_quiet()
+    {
+        var page = new Page();
+        page.Do("__dom.node('#map-label-density').value = 'quiet';");
+
+        Assert.Equal(8, page.Number("labelBudget()"));
+    }
+
+    [Fact]
+    public void Commodity_freshness_is_labelled_without_claiming_place_age()
+    {
+        var page = new Page();
+        page.Do("Date.now = () => Date.parse('2026-08-24T00:00:00Z');");
+
+        Assert.Equal("fresh", page.Text("priceFreshness('2026-08-23T12:00:00Z').state"));
+        Assert.Equal("aging", page.Text("priceFreshness('2026-08-18T00:00:00Z').state"));
+        Assert.Equal("stale", page.Text("priceFreshness('2026-08-01T00:00:00Z').state"));
+    }
 }
