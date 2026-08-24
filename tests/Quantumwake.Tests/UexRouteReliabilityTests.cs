@@ -64,4 +64,40 @@ public class UexRouteReliabilityTests : IDisposable
         Assert.All(uex.Routes(64, 10_000, freshOnly: true), r => Assert.Equal("fresh", r.Freshness));
         Assert.Equal("Stale gold", uex.Routes(64, 10_000, reliableFirst: false)[0].Commodity);
     }
+
+    /// <summary>A cache written before UEX's date_modified was stored: no row is stamped.</summary>
+    private sealed class UnstampedFeed : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            const string rows = """
+                {"data":[
+                  {"id_commodity":1,"commodity_name":"Beryl","id_terminal":1,"terminal_name":"Seller","price_buy":10,"price_sell":0,"scu_buy":80,"scu_sell_stock":0,"date_modified":0},
+                  {"id_commodity":1,"commodity_name":"Beryl","id_terminal":2,"terminal_name":"Buyer","price_buy":0,"price_sell":25,"scu_buy":0,"scu_sell_stock":64,"date_modified":0}
+                ]}
+                """;
+
+            var body = request.RequestUri!.ToString().Contains("commodities_prices_all")
+                ? rows
+                : "{\"data\":[]}";
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    [Fact]
+    public async Task Fresh_only_cannot_empty_a_cache_that_carries_no_timestamps()
+    {
+        var uex = new UexData(_directory);
+        await uex.EnableAsync(new HttpClient(new UnstampedFeed()));
+
+        // Every row reads "unknown" here, so honouring the filter would hide the
+        // whole table - on exactly the installs with the longest history, and
+        // with an empty state that blames the location instead of the cache.
+        var route = Assert.Single(uex.Routes(scu: 64, capital: 10_000, freshOnly: true));
+        Assert.Equal("unknown", route.Freshness);
+    }
 }

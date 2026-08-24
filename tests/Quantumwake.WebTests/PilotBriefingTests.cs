@@ -82,4 +82,23 @@ public class PilotBriefingTests
         Assert.Contains("✚", page.NodeText("#map-info-services"));
         Assert.Contains("Clinic", page.NodeText("#map-info-services"));
     }
+
+    [Fact]
+    public void A_briefing_that_cannot_be_fetched_is_not_left_describing_the_last_place()
+    {
+        var page = AtArea18();
+        Assert.Contains("GrimHEX", page.NodeText("#briefing-stops"));
+
+        // Travel, and let the fetch for the new place fail.
+        page.Do("delete __fetch.routes['/api/briefing'];");
+        page.Do("renderNow({ connected:true, inGame:true, locationId:'Lorville', location:'Lorville', confidence:'High', recentEvents:[] });");
+
+        // Area18's stops and stash must not stay on screen labelled Lorville.
+        Assert.True(page.Truth("__dom.node('#now-briefing-card').hidden"));
+
+        // And the next render tries again, rather than waiting for another move.
+        var asked = page.Fetched().Count(url => url == "GET /api/briefing");
+        page.Do("renderNow({ connected:true, inGame:true, locationId:'Lorville', location:'Lorville', confidence:'High', recentEvents:[] });");
+        Assert.Equal(asked + 1, page.Fetched().Count(url => url == "GET /api/briefing"));
+    }
 }

@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.6
+### 0.7.7
 
 - **The Market panel stopped being expensive to open.** Its price strip was
   asking UEX about eight counters every time a row was expanded, which is the
