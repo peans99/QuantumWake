@@ -149,16 +149,76 @@ public sealed class LogWriter : IDisposable
         string mode)
     {
         var verb = isSell ? "Sell" : "Buy";
+        var total = amount.ToString("F6", CultureInfo.InvariantCulture);
+
+        // The live game uses different fields and units on each side. In
+        // particular, buy quantity is centi-SCU; smoothing both into the sell
+        // shape would leave the parser's hundredfold conversion untested.
+        var transaction = isSell
+            ? $"amount[{total}] resourceGUID[{resourceGuid}] autoLoading[0] " +
+              $"quantity[{quantity}] transactionMode[{mode}]"
+            : $"price[{total}] resourceGUID[{resourceGuid}] autoLoading[0] " +
+              $"quantity[{quantity * 100:F6} cSCU]";
 
         Line(at, $"[Notice] <CEntityComponentCommodityUIProvider::SendCommodity{verb}Request> " +
                  $"Sending SShopCommodity{verb}Request - playerId[{geid}] shopId[730090005328] " +
                  $"shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] " +
-                 $"amount[{amount.ToString("F6", CultureInfo.InvariantCulture)}] " +
-                 $"resourceGUID[{resourceGuid}] autoLoading[0] quantity[{quantity}] " +
-                 $"transactionMode[{mode}] [Team_ActorFeatures][Shops]");
+                 $"{transaction} [Team_ActorFeatures][Shops]");
 
         Raw($"Cargo Box Data:  [boxSize[16] | unitAmount[{Math.Max(1, quantity / 16)}]]");
     }
+
+    /// <summary>An item attached to a player slot, as emitted on spawn and refresh.</summary>
+    public void Attachment(
+        DateTimeOffset at,
+        string handle,
+        string itemClass,
+        string entityId,
+        string port,
+        string status = "persistent") =>
+        Line(at, $"[Notice] <AttachmentReceived> Player[{handle}] " +
+                 $"Attachment[{itemClass}_{entityId}, {itemClass}, {entityId}] " +
+                 $"Status[{status}] Port[{port}] Elapsed[22.216066] [Team_ActorFeatures][Inventory]");
+
+    /// <summary>Binds an opaque inventory scope to the location most recently named.</summary>
+    public void InventoryQuery(DateTimeOffset at, string geid, string scope, string key) =>
+        Line(at, $"[Notice] <Query Inventory> Query Inventory[{geid}:{scope}:{key}] " +
+                 "[Team_ActorFeatures][Inventory]");
+
+    /// <summary>An item observed while one inventory page is being browsed.</summary>
+    public void InventoryItem(
+        DateTimeOffset at,
+        string geid,
+        string scope,
+        string key,
+        string itemClass) =>
+        Line(at, $"[Notice] <Update Container Items Add New Item> End Page " +
+                 $"Entity Class[{itemClass}] Rank[simulated] " +
+                 $"SourceInventory[{geid}:{scope}:{key}] [Team_ActorFeatures][Inventory]");
+
+    /// <summary>The owned-vehicle totals returned by an ASOP entitlement query.</summary>
+    public void FleetQuery(DateTimeOffset at, int entitlements, int vehicles) =>
+        Line(at, $"[Notice] <VehicleListQuery> Fetching vehicle list completed. " +
+                 $"Retrieved {entitlements} entitlements out of {vehicles} vehicules. " +
+                 "[Team_GameServices][ASOP][Entitlement][Insurance]");
+
+    /// <summary>A ship elevator reports a retrieved entity before its model is known.</summary>
+    public void VehicleSpawn(DateTimeOffset at, string entityId, string landingArea) =>
+        Line(at, "[Notice] <CEntityComponentShipListProvider::SetVehicleSpawnedInformations> " +
+                 $"VehicleEntityId: [{entityId}] LandingArea: {landingArea} " +
+                 "[Team_GameServices][ASOP]");
+
+    /// <summary>An incidental line that ties a retrieved entity id to a ship model.</summary>
+    public void VehicleIdentity(DateTimeOffset at, string vehicleId, string entityId) =>
+        Line(at, $"[Notice] <Vehicle Initialization> Registered {vehicleId}[{entityId}] " +
+                 "with ItemNavigation and local navigation [Team_VehicleFeatures][Vehicle]");
+
+    /// <summary>One item in the tight burst produced when a corpse is created.</summary>
+    public void CorpseItem(DateTimeOffset at, string itemClass, string port) =>
+        Line(at, "[Notice] <Adding non kept item " +
+                 "[CSCActorCorpseUtils::PopulateItemPortForItemRecoveryEntitlement]> " +
+                 $"Item '{itemClass}_200000000218 - Class({itemClass}) - simulated', " +
+                 $"Recorded data is: Port Name '{port}', Class {itemClass} [Team_ActorFeatures][Actor]");
 
     public void ContractMarker(
         DateTimeOffset at,
@@ -251,9 +311,9 @@ public sealed class LogWriter : IDisposable
             "rescue service beacons to revive you before the 'Time to Death' timer expires.",
             id);
 
-    public void Disconnect(DateTimeOffset at, string reason, string gameRules) =>
+    public void Disconnect(DateTimeOffset at, string reason, string gameRules, bool remote = false) =>
         Line(at, $"[Notice] <Channel Disconnected> cause=30010 reason=\"{reason}\" frame=10136 " +
-                 $"isRemote=0 viewState=eCVS_InGame map=\"megamap\" gamerules=\"{gameRules}\" " +
+                 $"isRemote={(remote ? 1 : 0)} viewState=eCVS_InGame map=\"megamap\" gamerules=\"{gameRules}\" " +
                  $"hostType=\"Replicant\" remoteAddr=<local>:12300 localAddr=<local>:16");
 
     // ---------------- dormant combat ----------------
