@@ -353,13 +353,45 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.7
+### 0.8.8
 
-- **Trade history can be asked for by the trade, not by the session.** A window
-  of "the last seven days" used to be measured against when each play session
-  began, so an evening that started just outside the window took every trade
-  made inside it out of the answer. It counts the trades themselves now.
-  Nothing you can see changed yet; this is the groundwork for sharing.
+- **Share what your logs know, as a file.** Settings can now save a JSON file
+  of your own data for another pilot: what you paid and were paid at a named
+  terminal, which blueprints you hold, and the jobs, checklists and flight
+  plans you have written. Each is a separate tick and the trade window
+  defaults to the last seven days, since a price older than that is a rumour
+  rather than a lead. You see the counts before anything is written.
+
+- **What is deliberately not in it.** Market prices from UEX are a third
+  party's, crowd-sourced by their datarunners, and are not ours to pass on;
+  the crafting catalogue is game data this project has never redistributed.
+  A blueprint in a shared file is the name and date the game announced you
+  were given it, never a recipe. Your UEX keys are never in it.
+
+- **Open a file somebody sent you, and take it away again.** Shared files get
+  their own page under Settings. Each one says whose it is, when the data in
+  it was observed rather than merely when it arrived, and what could not be
+  read. Nothing is mixed into your own jobs, checklists or history: removing
+  an import takes the whole thing away and leaves your work untouched, and
+  you can drop one part of a file while keeping the rest, or hide it without
+  deleting it.
+
+- **Their rows beside yours, when you ask for it.** One switch shows imported
+  jobs, checklists and plans alongside your own, marked with whose they are
+  and checked against your stashes &mdash; so "Bob needs four Agricium" reads
+  beside "and you have some at Port Tressler". It starts off. Their cards
+  carry no buttons that change anything; the one thing you can do is copy a
+  list into your own, which makes your copy and leaves theirs alone.
+
+- **Their trades and blueprints stay out of your totals.** Imported receipts
+  appear in their own block on Cargo rather than in your earnings, and
+  imported blueprints answer "who can craft this" without entering the picker
+  that builds a plan you could not carry out.
+
+- **A trade window now means the trades.** Asking for "the last seven days"
+  used to be measured against when each play session began, so an evening
+  that started just outside the window took every trade made inside it out of
+  the answer.
 
 ### 0.7.18
 
