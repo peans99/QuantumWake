@@ -195,6 +195,11 @@ public sealed record SignalHealth(
 /// <param name="Connected">Times they came online while partied with you.</param>
 /// <param name="Dropped">Times they went offline the same way.</param>
 /// <param name="LedParty">Times party lead passed to them.</param>
+/// <param name="Joined">
+/// Times they joined the party - a different fact from coming online, and the
+/// only one of these that means somebody was not there a moment before.
+/// </param>
+/// <param name="Left">Times they left it, as opposed to merely dropping.</param>
 public sealed record Wingman(
     string Handle,
     int Sessions,
@@ -202,7 +207,9 @@ public sealed record Wingman(
     int Dropped,
     int LedParty,
     DateTimeOffset First,
-    DateTimeOffset Last);
+    DateTimeOffset Last,
+    int Joined = 0,
+    int Left = 0);
 
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
@@ -1340,7 +1347,9 @@ public sealed class LogLibrary : IDisposable
                     g.Count(x => x.Note.Moment == PartyMoment.Disconnected),
                     g.Count(x => x.Note.Moment == PartyMoment.BecameLeader),
                     g.Min(x => x.Note.At),
-                    g.Max(x => x.Note.At)))
+                    g.Max(x => x.Note.At),
+                    g.Count(x => x.Note.Moment == PartyMoment.Joined),
+                    g.Count(x => x.Note.Moment == PartyMoment.Left)))
                 .OrderByDescending(w => w.Sessions)
                 .ThenByDescending(w => w.Connected)
                 .ThenBy(w => w.Handle, StringComparer.OrdinalIgnoreCase)

@@ -642,18 +642,26 @@ public sealed class SessionBuilder
             {
                 _partyNotes.Add(note);
 
-                // Only arrivals and departures reach the timeline. Lead changing
-                // hands is real, but it happens in flurries while a party
-                // re-forms, and a feed saying "X is now leader" five times in a
-                // minute buries the flight it is meant to describe.
-                if (note.Moment is PartyMoment.Connected or PartyMoment.Disconnected)
-                    Timeline(
-                        note.At,
-                        "party",
-                        note.Moment == PartyMoment.Connected
-                            ? $"{note.Handle} came online"
-                            : $"{note.Handle} dropped",
-                        "in your party");
+                // Lead changing hands does not reach the timeline. It is real,
+                // but it happens in flurries while a party re-forms, and a feed
+                // saying "X is now leader" five times in a minute buries the
+                // flight it is meant to describe.
+                //
+                // Joining and leaving are worded apart from coming online and
+                // dropping on purpose: somebody who logs out and back in did not
+                // leave, and a feed that says the same thing for both makes a
+                // friend with a poor connection look like one who walked off.
+                var said = note.Moment switch
+                {
+                    PartyMoment.Connected => $"{note.Handle} came online",
+                    PartyMoment.Disconnected => $"{note.Handle} dropped",
+                    PartyMoment.Joined => $"{note.Handle} joined the party",
+                    PartyMoment.Left => $"{note.Handle} left the party",
+                    _ => null,
+                };
+
+                if (said is not null)
+                    Timeline(note.At, "party", said, "in your party");
             }
 
             return;
