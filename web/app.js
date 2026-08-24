@@ -5509,6 +5509,49 @@ function preferredMapSystem() {
   return here && SYSTEM_COLOURS[here] ? here : 'Stanton';
 }
 
+function currentMapLocation() {
+  return hereId ? atlas.find((location) => location.rawId === hereId) || null : null;
+}
+
+// This remains visible even when the selected system is not the player's. A
+// one-system map is less misleading than a whole-system schematic, but should
+// never turn "where am I?" into a hidden state.
+function updateHereControl() {
+  const control = $('#map-here');
+  const label = $('#map-here-label');
+  if (!control || !label) return;
+
+  const here = currentMapLocation();
+  control.disabled = !here;
+  control.classList.toggle('located', !!here);
+  label.textContent = here ? `You · ${here.name}` : 'Location unknown';
+
+  if (!here) control.title = 'The live log has not named your location yet';
+  else if (mapMode() === 'network') control.title = `Show ${here.name} in ${here.system}`;
+  else if (mapSystem() !== here.system) control.title = `Show ${here.name} in ${here.system}`;
+  else control.title = `Centre on ${here.name}`;
+}
+
+/** Makes the player's system and place visible without changing filters. */
+function focusHere() {
+  const here = currentMapLocation();
+  if (!here) return false;
+
+  if (here.system && SYSTEM_COLOURS[here.system]
+    && (mapMode() !== 'system' || mapSystem() !== here.system)) {
+    $('#map-mode').value = 'system';
+    $('#map-system').value = here.system;
+    syncMapModeControls();
+    try {
+      localStorage.setItem(MAP_MODE_KEY, 'system');
+      localStorage.setItem(MAP_SYSTEM_KEY, here.system);
+    } catch { /* private mode */ }
+    drawMap();
+  }
+
+  return centreOn(here.rawId);
+}
+
 function syncMapModeControls() {
   const mode = $('#map-mode');
   const system = $('#map-system');
@@ -5530,6 +5573,7 @@ function syncMapModeControls() {
   if (note) note.textContent = mode.value === 'system'
     ? `${system.value || 'This system'}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.`
     : 'Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.';
+  updateHereControl();
 }
 
 // Service data is intentionally a set of place ids, not a claim about every
@@ -6000,6 +6044,8 @@ function setHere(rawId) {
   if (changed || !$('#starmap').querySelector('.map-here'))
     drawHere();
 
+  updateHereControl();
+
   // Follow mode: the map pans itself as the player moves, so a second monitor
   // shows the journey without being touched.
   if (followHere && changed && hereId)
@@ -6085,12 +6131,51 @@ function drawTravel() {
   map.append(group);
 }
 
+// The jump map has deliberately no place nodes. It can still locate the player
+// honestly at system level, which makes its otherwise abstract graph useful
+// without pretending it knows a position inside that system.
+function drawNetworkHere(map) {
+  const here = currentMapLocation();
+  const point = here?.system && SYSTEM_LAYOUT[here.system];
+  if (!point) return;
+
+  const group = svgEl('g', { class: 'map-here' });
+  group.append(svgEl('circle', {
+    cx: point.x, cy: point.y, r: point.radius + 15, class: 'here-ring', 'stroke-width': '2',
+  }));
+  group.append(svgEl('circle', { cx: point.x, cy: point.y, r: 6, class: 'here-dot', 'stroke-width': '1.4' }));
+
+  const pulse = svgEl('circle', {
+    cx: point.x, cy: point.y, r: point.radius + 12, class: 'here-pulse', 'stroke-width': '1.2',
+  });
+  pulse.append(svgEl('animate', {
+    attributeName: 'r', values: `${point.radius + 10};${point.radius + 30}`, dur: '2.2s', repeatCount: 'indefinite',
+  }));
+  pulse.append(svgEl('animate', {
+    attributeName: 'opacity', values: '.65;0', dur: '2.2s', repeatCount: 'indefinite',
+  }));
+  group.append(pulse);
+
+  const label = svgEl('text', {
+    x: point.x, y: point.y - point.radius - 26, 'text-anchor': 'middle',
+    class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
+  });
+  label.textContent = `YOU · ${here.name}`;
+  group.append(label);
+  map.append(group);
+}
+
 function drawHere() {
   const map = $('#starmap');
   map.querySelectorAll('.map-here').forEach((n) => n.remove());
 
+  if (mapMode() === 'network') {
+    drawNetworkHere(map);
+    return;
+  }
+
   const point = hereId && nodeAt.get(hereId);
-  $('#map-here').disabled = !point;
+  updateHereControl();
   if (!point) return;
 
   // Two rings: a steady one to read against the dot, and an expanding pulse.
@@ -6102,6 +6187,17 @@ function drawHere() {
 
   group.append(svgEl('circle', {
     cx: point.x, cy: point.y, r: ring, class: 'here-ring', 'stroke-width': 1.6 * zoom,
+  }));
+  group.append(svgEl('line', {
+    x1: point.x - ring - 5 * zoom, y1: point.y, x2: point.x + ring + 5 * zoom, y2: point.y,
+    class: 'here-tick', 'stroke-width': zoom,
+  }));
+  group.append(svgEl('line', {
+    x1: point.x, y1: point.y - ring - 5 * zoom, x2: point.x, y2: point.y + ring + 5 * zoom,
+    class: 'here-tick', 'stroke-width': zoom,
+  }));
+  group.append(svgEl('circle', {
+    cx: point.x, cy: point.y, r: 4 * zoom, class: 'here-dot', 'stroke-width': zoom,
   }));
 
   const pulse = svgEl('circle', {
@@ -6119,7 +6215,7 @@ function drawHere() {
     x: point.x, y: point.y - ring - 7 * zoom, 'text-anchor': 'middle',
     class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
   });
-  label.textContent = 'YOU ARE HERE';
+  label.textContent = `YOU · ${currentMapLocation()?.name || 'HERE'}`;
   group.append(label);
 
   map.append(group);
@@ -6208,7 +6304,7 @@ function initMap() {
 
   $('#map-reset').addEventListener('click', () => animateViewTo(HOME_VIEW));
 
-  $('#map-here').addEventListener('click', () => centreOn(hereId));
+  $('#map-here').addEventListener('click', focusHere);
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
   const mode = $('#map-mode');
@@ -8104,7 +8200,8 @@ function drawJumpNetwork(map, locations) {
   map.append(title);
 
   $('#map-count').textContent = `${systems.length} systems · jump network`;
-  $('#map-here').disabled = true;
+  drawNetworkHere(map);
+  updateHereControl();
   drawLegend([]);
   applyView();
 }
@@ -8157,7 +8254,10 @@ function drawMap() {
   syncCargoPanel(term, sites);
 
   const allLocations = atlas.filter((l) =>
-    (!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0));
+    // Service and visit filters answer a different question from position. The
+    // player never vanishes merely because their current place lacks the
+    // selected service or has not been recorded as a visit yet.
+    l.rawId === hereId || ((!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0)));
   const selectedSystem = mapSystem();
   const locations = mapMode() === 'system' && selectedSystem
     ? allLocations.filter((location) => location.system === selectedSystem)

@@ -324,7 +324,9 @@
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
-      <button class="ghost" id="map-here">Centre on me</button>
+      <button class="ghost map-player" id="map-here" title="Show your current location on the map">
+        <span aria-hidden="true">⌖</span> <span id="map-here-label">Your location</span>
+      </button>
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
     <p class="muted map-mode-note" id="map-mode-note"></p>

@@ -67,4 +67,29 @@ public class MapModeTests
         Assert.Contains("3 systems", page.NodeText("#map-count"));
         Assert.Equal(0, page.Count("nodeAt.size"));
     }
+
+    [Fact]
+    public void Player_location_remains_findable_when_viewing_another_system()
+    {
+        var page = new Page();
+        page.Do("""
+            atlas = [
+              { rawId: 'stan', name: 'Area18', system: 'Stanton', body: 'ArcCorp', kind: 'City', visits: 1 },
+              { rawId: 'pyro', name: 'Gaslight', system: 'Pyro', body: 'Pyro V', kind: 'RestStop', visits: 1 }
+            ];
+            hereId = 'pyro';
+            performance = { now: () => 0 };
+            __dom.node('#map-mode').value = 'system';
+            __dom.node('#map-system').value = 'Stanton';
+            syncMapModeControls();
+            __beforeFocus = __dom.node('#map-here-label').textContent;
+            __focused = focusHere();
+            """);
+
+        Assert.Equal("You · Gaslight", page.Text("__beforeFocus"));
+        Assert.True(page.Truth("__focused"));
+        Assert.Equal("system", page.Text("__dom.node('#map-mode').value"));
+        Assert.Equal("Pyro", page.Text("__dom.node('#map-system').value"));
+        Assert.Contains("YOU · Gaslight", page.NodeText("#starmap"));
+    }
 }

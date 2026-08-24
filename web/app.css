@@ -1159,6 +1159,8 @@ td.outward { color: var(--amber); }
 .map-tools .toggle:hover { color: var(--fg); }
 .map-mode-note { margin: -2px 0 10px; font-size: 12px; }
 .map-unpositioned { fill: var(--amber) !important; }
+.map-player { white-space: nowrap; }
+.map-player.located { color: var(--cyan-hot); border-color: var(--cyan); }
 
 /* Services are a filter rather than a separate map mode: small labelled glyphs
    keep the toolbar readable while their titles still explain the evidence. */
@@ -1204,6 +1206,8 @@ td.outward { color: var(--amber); }
 
 .map-here .here-ring { fill: none; stroke: var(--cyan); opacity: .9; }
 .map-here .here-pulse { fill: none; stroke: var(--cyan); }
+.map-here .here-dot { fill: var(--cyan-hot, #7fe4ff); stroke: #07131b; }
+.map-here .here-tick { stroke: var(--cyan-hot, #7fe4ff); opacity: .9; }
 .map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {
