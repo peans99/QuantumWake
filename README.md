@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.4
+### 0.8.5
 
 - **Trade history can be asked for by the trade, not by the session.** A window
   of "the last seven days" used to be measured against when each play session

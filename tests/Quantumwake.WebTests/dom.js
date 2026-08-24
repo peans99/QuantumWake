@@ -47,6 +47,10 @@ class El {
     this.hidden = false;
     this.disabled = false;
     this.tabIndex = 0;
+
+    /* A file input's picked files. Empty until a test puts one there, as an
+       empty picker is in a browser. */
+    this.files = [];
     this.parentElement = null;
   }
 
