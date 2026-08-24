@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.10
+### 0.7.11
 
 - **A map that does not invent geography.** System Positions now shows one
   system at a time with community-starmap bearings and relative orbital
@@ -371,6 +371,10 @@ release workflow lifts it from here, so it is written once.
   listed services. Label density can be quiet, automatic or full, controls can
   be saved as a reusable view, and commodity searches show the UEX report age
   without mislabelling visits or services as stale.
+- **Cleaner map symbols.** Rest stops and asteroids now have distinct compact
+  silhouettes. When a service, work, or commodity focus gives them enough
+  room, places carry small shop, refuel, and clinic badges outside their base
+  icon, with the map legend explaining the badges.
 
 - **The Market panel stopped being expensive to open.** Its price strip was
   asking UEX about eight counters every time a row was expanded, which is the

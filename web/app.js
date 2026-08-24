@@ -5605,6 +5605,57 @@ const serviceKey = (name) => ({
 
 const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
 
+// Service is a property of a place, not its identity. Badges sit outside the
+// location glyph so a clinic at a station still reads as a station first.
+function drawServiceBadges(group, x, y, radius, services) {
+  const badges = svgEl('g', { class: 'map-service-badges' });
+  const badgeRadius = Math.max(3.2, radius * .42);
+  const orbit = radius + badgeRadius + 3;
+
+  services.forEach((service, index) => {
+    const angle = -Math.PI / 2 + (index - (services.length - 1) / 2) * .76;
+    const bx = x + Math.cos(angle) * orbit;
+    const by = y + Math.sin(angle) * orbit;
+    const badge = svgEl('g', { class: `map-service-badge ${service}` });
+    badge.append(svgEl('circle', { cx: bx, cy: by, r: badgeRadius }));
+
+    if (service === 'shop') {
+      badge.append(svgEl('rect', {
+        x: bx - badgeRadius * .52, y: by - badgeRadius * .52,
+        width: badgeRadius * 1.04, height: badgeRadius * 1.04, class: 'service-glyph',
+      }));
+      badge.append(svgEl('line', { x1: bx, y1: by - badgeRadius * .52, x2: bx, y2: by + badgeRadius * .52, class: 'service-glyph' }));
+    } else if (service === 'refuel') {
+      badge.append(svgEl('path', {
+        d: `M ${bx} ${by - badgeRadius * .68} C ${bx + badgeRadius * .56} ${by - badgeRadius * .14}, ${bx + badgeRadius * .42} ${by + badgeRadius * .56}, ${bx} ${by + badgeRadius * .62} C ${bx - badgeRadius * .42} ${by + badgeRadius * .56}, ${bx - badgeRadius * .56} ${by - badgeRadius * .14}, ${bx} ${by - badgeRadius * .68} Z`,
+        class: 'service-glyph',
+      }));
+    } else if (service === 'clinic') {
+      badge.append(svgEl('path', {
+        d: `M ${bx - badgeRadius * .22} ${by - badgeRadius * .64} H ${bx + badgeRadius * .22} V ${by - badgeRadius * .22} H ${bx + badgeRadius * .64} V ${by + badgeRadius * .22} H ${bx + badgeRadius * .22} V ${by + badgeRadius * .64} H ${bx - badgeRadius * .22} V ${by + badgeRadius * .22} H ${bx - badgeRadius * .64} V ${by - badgeRadius * .22} H ${bx - badgeRadius * .22} Z`,
+        class: 'service-glyph',
+      }));
+    } else {
+      badge.append(svgEl('path', {
+        d: `M ${bx - badgeRadius * .58} ${by} H ${bx + badgeRadius * .58} M ${bx} ${by - badgeRadius * .58} V ${by + badgeRadius * .58}`,
+        class: 'service-glyph',
+      }));
+    }
+
+    const title = svgEl('title');
+    title.textContent = SERVICE_META[service]?.label || service;
+    badge.append(title);
+    badges.append(badge);
+  });
+
+  group.append(badges);
+}
+
+function showServiceBadges(location, highlighted) {
+  return servicesAt(location).length > 0
+    && (isDetailed() || highlighted || !!mapServiceFilter || !!mapFocusFilter);
+}
+
 function selectMapService(service, openMap = false, redraw = true) {
   mapServiceFilter = service || '';
   for (const button of $$('#map-service-filter button'))
@@ -8800,8 +8851,9 @@ const KIND_SHAPES = {
   // A ring - the one shape that reads as "you dock inside it".
   Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
 
-  // A plain disc: the commonest stop, and the quietest mark.
-  RestStop: [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: .92 } }],
+  // A horizontal berth: it stays distinct from an asteroid's uneven rock
+  // silhouette even when a map icon is only a handful of pixels across.
+  RestStop: [{ tag: 'rect', attrs: { x: -1, y: -.62, width: 2, height: 1.24, rx: .34 } }],
 
   // A dome on the ground.
   Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
@@ -8810,8 +8862,9 @@ const KIND_SHAPES = {
   // to mush at map size, which is the size it is always drawn at.
   Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
 
-  // An angular rock.
-  Asteroid: [{ tag: 'polygon', attrs: { points: '-.55,-.85 .55,-.85 1,0 .55,.85 -.55,.85 -1,0' } }],
+  // An uneven rock: the lopsided outline is intentional, otherwise it reads
+  // too much like a rest-stop berth at a glance.
+  Asteroid: [{ tag: 'polygon', attrs: { points: '-.72,-.92 .5,-.72 1,.02 .42,.9 -.74,.62 -1,-.18' } }],
 
   // A cross: legible at any size, and nothing else on the map is one.
   Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
@@ -8991,6 +9044,9 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
   // and takes the graded colour: a mine is still a mine at 1,872 aUEC.
   group.append(kindMark(location.kind, x, y, radius, dotColour, been || !!shade));
 
+  if (showServiceBadges(location, highlighted))
+    drawServiceBadges(group, x, y, radius, servicesAt(location));
+
   // A styled tooltip that appears instantly - the native <title> takes a
   // second to show and cannot be read against the game-HUD styling.
   group.addEventListener('pointerenter', () => showMapTip(location));
@@ -9158,6 +9214,22 @@ function drawLegend(locations) {
     legend.append(item);
   };
 
+  const appendServiceLegend = () => {
+    const shown = new Set();
+    for (const location of locations) {
+      const highlighted = highlightIds?.has(location.rawId) ?? false;
+      if (!showServiceBadges(location, highlighted)) continue;
+      for (const service of servicesAt(location)) shown.add(service);
+    }
+
+    for (const service of shown) {
+      const item = el('div', 'item');
+      item.append(el('span', 'service-tip', SERVICE_META[service]?.icon || '•'));
+      item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
+      legend.append(item);
+    }
+  };
+
   // Shaded commodity mode swaps the kind legend for the price gradient: in
   // that mode colour means price, so the legend must say so.
   if (shadeScale) {
@@ -9181,6 +9253,7 @@ function drawLegend(locations) {
     plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
     legend.append(plain);
     appendPriceFreshness();
+    appendServiceLegend();
     return;
   }
 
@@ -9201,6 +9274,7 @@ function drawLegend(locations) {
   }
 
   appendPriceFreshness();
+  appendServiceLegend();
 }
 
 /* ---------- filters ---------- */
