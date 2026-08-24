@@ -14,6 +14,12 @@ dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12
 # Include kill and vehicle-destruction events
 dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
 
+# Write one exact, repeatable story to LIVE\Game.log
+dotnet run --project src\Quantumwake.LogSim -c Release -- --scenario cargo-run
+
+# See every focused story and what it is meant to prove
+dotnet run --project src\Quantumwake.LogSim -c Release -- --list-scenarios
+
 # Append to Game.log in real time, 120 simulated seconds per real second
 dotnet run --project src\Quantumwake.LogSim -c Release -- --live --speed 120
 ```
@@ -37,8 +43,32 @@ real LIVE totals.
 | `--speed <x>` | 60 | Live mode: simulated seconds per real second |
 | `--legs <n>` | 6 | Trips per session |
 | `--combat` | off | Emit `<Actor Death>` and `<Vehicle Destruction>` |
+| `--list-scenarios` | off | List the focused deterministic stories |
+| `--scenario <name>` | none | Write one focused story instead of random sessions |
+| `--start <date>` | today at 20:00 | ISO 8601 timestamp for deterministic scenario entries |
 | `--handle <name>` | `testpilot` | Player handle |
 | `--seed <n>` | 1337 | Deterministic output |
+
+## Focused scenarios
+
+The random simulator remains useful for load and variety. Named scenarios fill
+the other gap: reproducing one state exactly, then knowing what the app ought to
+show. They write one completed `LIVE\Game.log` and print their expected facts.
+
+| Scenario | Story |
+|---|---|
+| `cargo-run` | Buy 16 SCU at Port Tressler, fly, then sell it at New Babbage |
+| `spending` | One confirmed equipment purchase and one rejected purchase |
+| `medical-respawn` | Incapacitation, inferred respawn, and an after-death medical bed |
+| `crew-flight` | Party arrivals, leader change, quantum flight, and a departure |
+| `contract-complete` | Two visible mission steps completed, followed by a blueprint |
+| `combat` | One player kill, one death, and a destroyed vehicle |
+| `all` | Every focused story composed into one session |
+
+For a stable file timestamp as well as stable event content, pass an explicit
+start such as `--start 2026-08-24T20:00:00Z`. Automated tests generate every
+scenario, feed it back through `LogFileReader` and `SessionBuilder`, assert the
+claimed session facts, and require zero unmatched known tags.
 
 ## Why it reproduces the ugly parts
 
@@ -89,8 +119,9 @@ the game's doing, not a defect.
 
 ## Limitations
 
-The simulator writes plausible content, not a faithful replay. Quantum origins
-and destinations are drawn from observed pools rather than following a coherent
-route graph, so a jump may "start" somewhere the previous leg did not end.
-Session pacing is randomised within bounds. It is a parser and UI exercise, not
-a flight recorder.
+The random simulator writes plausible content, not a faithful replay. Quantum
+origins and destinations are drawn from observed pools rather than following a
+coherent route graph, so a jump may "start" somewhere the previous leg did not
+end. Session pacing is randomised within bounds. Named scenarios are coherent
+and repeatable, but still synthetic parser and UI exercises rather than flight
+recordings.

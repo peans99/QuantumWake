@@ -353,7 +353,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.8
+### 0.8.9
+
+- **Build the exact log story you need to test.** The simulator now has named,
+  deterministic scenarios for a cargo run, confirmed versus rejected spending,
+  medical respawn, a crew flight, contract completion with a blueprint, and the
+  archived combat format. `--scenario all` combines them, while
+  `--list-scenarios` explains the focused choices. Every scenario is parsed
+  back through the production reader in tests, including a check that no known
+  tag went unmatched.
 
 - **Share what your logs know, as a file.** Settings can now save a JSON file
   of your own data for another pilot: what you paid and were paid at a named
