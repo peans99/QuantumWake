@@ -8,7 +8,14 @@
  *
  * Anything the app cannot sensibly do without a browser (network, timers,
  * animation) is stubbed inert, so a test drives the app explicitly rather than
- * racing it. */
+ * racing it.
+ *
+ * One thing it cannot answer: Jint settles an `await` by draining the job queue
+ * where it stands, so a request is never *in flight* - the first caller's fetch
+ * has already returned by the time the second one starts. Withholding a
+ * response to arrange that hangs the engine rather than overlapping the
+ * callers. Guards against two callers racing to fill the same thing are
+ * therefore not testable here; assert the result, not the overlap. */
 
 class ClassList {
   constructor() { this.set = new Set(); }
@@ -49,6 +56,10 @@ class El {
   }
 
   get options() { return this.children.filter((c) => c.tagName === 'option'); }
+
+  /* Elements only, so a text node does not make an "is this list already
+     filled?" guard answer yes. The app leans on that guard. */
+  get childElementCount() { return this.children.filter((c) => c instanceof El).length; }
 
   get selectedOptions() {
     const chosen = this.options.find((o) => o.value === this.value);
@@ -111,9 +122,17 @@ class El {
   closest() { return null; }
   matches() { return false; }
 
-  /** Fires a listener the app attached, as a click or change would. */
+  /**
+   * Fires a listener the app attached, as a click or change would.
+   *
+   * The last handler's return value comes back so a test can await an async
+   * one: half these handlers are submit handlers that post and re-render, and
+   * asserting before that settles tests the moment before the answer.
+   */
   fire(type, event) {
-    for (const handler of this.listeners[type] || []) handler(event || { target: this });
+    let last;
+    for (const handler of this.listeners[type] || []) last = handler(event || { target: this, preventDefault() {} });
+    return last;
   }
 
   /** Every element beneath this one, for assertions. */
@@ -169,6 +188,7 @@ globalThis.__dom = {
     NODES.clear();
     globalThis.__fetch.routes = {};
     globalThis.__fetch.calls = [];
+    globalThis.__fetch.unreachable = [];
   },
 };
 
@@ -184,6 +204,11 @@ globalThis.document = {
   documentElement: new El('html'),
   createElement: (tag) => new El(tag),
   createElementNS: (ns, tag) => new El(tag),
+
+  /* A text node is only ever read back through textContent, so it needs to be
+     no more than something carrying one - and staying outside El is what keeps
+     childElementCount counting elements. */
+  createTextNode: (text) => ({ textContent: text === undefined || text === null ? '' : String(text) }),
   addEventListener() {},
   removeEventListener() {},
 
@@ -213,10 +238,15 @@ for (const [selector, card] of [
 ]) node(selector).dataset.card = card;
 
 /* Network: a routing table the test fills in, and a record of what was asked. */
-globalThis.__fetch = { routes: {}, calls: [] };
+globalThis.__fetch = { routes: {}, calls: [], unreachable: [] };
 
 globalThis.fetch = (url, options) => {
   globalThis.__fetch.calls.push({ url, method: (options && options.method) || 'GET', body: options && options.body });
+
+  // A dropped connection rejects rather than answering with a status, and the
+  // app's error paths are reached only by that shape - not by a 404.
+  if (globalThis.__fetch.unreachable.includes(url))
+    return Promise.reject(new Error(`unreachable: ${url}`));
 
   const body = Object.prototype.hasOwnProperty.call(globalThis.__fetch.routes, url)
     ? globalThis.__fetch.routes[url]

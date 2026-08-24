@@ -159,6 +159,12 @@ function showView(name) {
 
   if (!target) return;
 
+  // Leaving the drill-down forgets its subject. The name alone is not enough
+  // for the hash handler to know the page is up: keep it after a tab click and
+  // a later link back to the same commodity matches, returns, and moves the
+  // fragment with Market still on screen.
+  if (name !== 'commodity') openCommodityName = null;
+
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
 
@@ -403,9 +409,25 @@ async function refreshPilotBriefing(state) {
   }
 
   if (key === briefingFor) return;
+
+  // Claiming the key before the fetch keeps concurrent renders to one request,
+  // so it has to be given back when that request fails - otherwise the card
+  // keeps the previous location's stops, shopping and stash on screen as
+  // though they described where the player is now, and nothing tries again
+  // until they travel somewhere else entirely.
   briefingFor = key;
 
-  const briefing = await getJson('/api/briefing');
+  let briefing;
+  try {
+    briefing = await getJson('/api/briefing');
+  } catch (err) {
+    if (briefingFor === key) {
+      briefingFor = null;
+      card.hidden = true;
+    }
+    throw err;
+  }
+
   if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}`) return;
 
   renderPilotBriefing(briefing);
@@ -2401,9 +2423,13 @@ async function loadRoutes() {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', from
-      ? 'No route starts from where you are - or UEX has no terminal here.'
-      : 'Nothing to show. Enable UEX prices on the Settings page.');
+    // Name the filter when one is on: "no route from here" is the wrong
+    // explanation for a table that only every stale quote was hidden from.
+    const td = el('td', 'muted', freshOnly
+      ? 'Nothing quoted in the last day. Untick "Fresh only" to see older prices.'
+      : from
+        ? 'No route starts from where you are - or UEX has no terminal here.'
+        : 'Nothing to show. Enable UEX prices on the Settings page.');
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
@@ -2795,7 +2821,7 @@ const CHART_COLOURS = ['#35c8f0', '#ffb454', '#7fe4ff', '#ff7a8a'];
 function timeChart(svg, series, format) {
   svg.textContent = '';
 
-  const drawable = series.filter((s) => s.points.length > 1);
+  const drawable = drawableSeries(series);
 
   if (!drawable.length) {
     const text = svgEl('text', {
@@ -2849,14 +2875,21 @@ function timeChart(svg, series, format) {
   });
 }
 
+/**
+ * The lines a chart actually draws. Shared with the key because colours are
+ * handed out by position: count the skipped lines on one side only and every
+ * swatch names the line above it.
+ */
+function drawableSeries(series) {
+  return series.filter((s) => s.points.length > 1);
+}
+
 /** The key under a chart: a line has no meaning without one. */
 function chartKey(container, series) {
   const box = $(container);
   box.textContent = '';
 
-  series.forEach((line, i) => {
-    if (line.points.length < 2) return;
-
+  drawableSeries(series).forEach((line, i) => {
     const entry = el('span');
     const swatch = el('i');
     swatch.style.background = CHART_COLOURS[i % CHART_COLOURS.length];
@@ -2877,10 +2910,13 @@ function dailyMarket(history) {
   const days = new Map();
   const DAY = 86400000;
 
-  for (const terminal of history.series) {
-    if (!terminal.points.length) continue;
+  const counters = history.series
+    .filter((terminal) => terminal.points.length)
+    .map((terminal) => terminal.points.map((p) => ({ ...p, day: Math.floor(Date.parse(p.at) / DAY) })));
 
-    const points = terminal.points.map((p) => ({ ...p, day: Math.floor(Date.parse(p.at) / DAY) }));
+  if (!counters.length) return [];
+
+  for (const points of counters) {
     const last = points[points.length - 1].day;
 
     let i = 0;
@@ -2889,18 +2925,33 @@ function dailyMarket(history) {
     for (let day = points[0].day; day <= last; day++) {
       while (i < points.length && points[i].day <= day) held = points[i++];
 
-      const bucket = days.get(day) || { bestSell: 0, bestBuy: 0, demand: 0, stock: 0 };
+      const bucket = days.get(day) || { bestSell: 0, bestBuy: 0, demand: 0, stock: 0, counters: 0 };
       if (held.sell > 0) bucket.bestSell = Math.max(bucket.bestSell, held.sell);
       if (held.buy > 0) bucket.bestBuy = bucket.bestBuy ? Math.min(bucket.bestBuy, held.buy) : held.buy;
       bucket.demand += held.demand;
       bucket.stock += held.stock;
+      bucket.counters += 1;
       days.set(day, bucket);
     }
   }
 
   return [...days.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([day, v]) => ({ t: day * DAY, ...v }));
+    .map(([day, v]) => ({
+      t: day * DAY,
+      bestSell: v.bestSell,
+      bestBuy: v.bestBuy,
+      counters: v.counters,
+
+      // Per reporting counter rather than summed. Counters enter and leave
+      // UEX's sample - on this install's Iron, eight report at the start and
+      // five by the end - so a total slopes down as reporting thins, which is
+      // the story about UEX's contributors the carry-forward above exists to
+      // avoid. Clipping to the days all eight cover would say it honestly too,
+      // and would throw away the most recent fortnight to do it.
+      demand: v.counters ? v.demand / v.counters : 0,
+      stock: v.counters ? v.stock / v.counters : 0,
+    }));
 }
 
 /** What the page is showing, so Back and a redraw know where they are. */
@@ -2995,8 +3046,8 @@ async function openCommodity(name) {
   chartKey('#commodity-counter-key', counterSeries);
 
   const scuSeries = [
-    { label: 'Demand — SCU they will take', points: daily.map((d) => ({ t: d.t, v: d.demand })) },
-    { label: 'Supply — SCU on the shelf', points: daily.map((d) => ({ t: d.t, v: d.stock })) },
+    { label: 'Demand — SCU the average counter will take', points: daily.map((d) => ({ t: d.t, v: d.demand })) },
+    { label: 'Supply — SCU on the average shelf', points: daily.map((d) => ({ t: d.t, v: d.stock })) },
   ];
 
   timeChart($('#commodity-scu-chart'), scuSeries, (v) => Math.round(v).toLocaleString());
@@ -3862,34 +3913,63 @@ function checklistComposer(list) {
     const where = pickedPlace(place);
     const attachments = [];
     if (where.name) attachments.push({ kind: 'location', label: where.name, target: where.name, placeId: where.id });
-    if (item.value.trim()) {
-      const commodity = catalogue?.commodities?.some((name) => name === item.value);
-      attachments.push({ kind: commodity ? 'commodity' : 'item', label: item.value, target: item.value });
+    const reference = item.value.trim();
+    if (reference) {
+      // The catalogue is filled lazily, so submitting before it lands would
+      // decide "not a commodity" from an empty list and file a real commodity
+      // as an item - which sends the attachment into the Parts search.
+      await fillChecklistReferenceOptions();
+      const commodity = catalogue?.commodities?.includes(reference);
+      attachments.push({ kind: commodity ? 'commodity' : 'item', label: reference, target: reference });
     }
     if (url.value.trim()) attachments.push({ kind: 'url', label: url.value.trim(), target: url.value.trim() });
 
     add.disabled = true;
-    await checklistCall(`/api/checklists/${list.id}/items`, 'POST', {
-      text: task.value,
-      dueAt: due.value ? new Date(due.value).toISOString() : null,
-      note: note.value,
-      attachments,
-    });
+    try {
+      await checklistCall(`/api/checklists/${list.id}/items`, 'POST', {
+        text: task.value,
+        dueAt: due.value ? new Date(due.value).toISOString() : null,
+        note: note.value,
+        attachments,
+      });
+    } finally {
+      // A success re-renders this form away, but a failed request leaves it on
+      // screen - and without this, with a button that never comes back.
+      add.disabled = false;
+    }
   });
   return form;
 }
 
-/** One shared searchable catalogue: duplicating thousands of options per list makes adding a task sluggish. */
-async function fillChecklistReferenceOptions() {
-  const list = $('#checklist-catalogue');
-  if (!list || list.childElementCount) return;
+let catalogueFill = null;
 
-  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
-  for (const name of [...(catalogue.commodities || []), ...(catalogue.items || [])]) {
-    const option = document.createElement('option');
-    option.value = name;
-    list.append(option);
-  }
+/** One shared searchable catalogue: duplicating thousands of options per list makes adding a task sluggish. */
+function fillChecklistReferenceOptions() {
+  const list = $('#checklist-catalogue');
+  if (!list || list.childElementCount) return Promise.resolve();
+
+  // The guard above cannot do this alone. renderChecklists starts one of these
+  // per list without awaiting, so with three lists all three would pass an
+  // empty datalist and each append the whole catalogue. Share the one fill,
+  // and let a later composer retry the fetch if nothing landed.
+  catalogueFill ??= (async () => {
+    // A failed fetch is not cached as an empty catalogue: this is the one
+    // caller that can be asked again, so let the next composer retry.
+    const loaded = catalogue ?? await getJson('/api/shopping/catalogue').catch(() => null);
+    if (!loaded) {
+      catalogueFill = null;
+      return;
+    }
+
+    catalogue = loaded;
+    for (const name of [...(catalogue.commodities || []), ...(catalogue.items || [])]) {
+      const option = document.createElement('option');
+      option.value = name;
+      list.append(option);
+    }
+  })();
+
+  return catalogueFill;
 }
 
 function renderChecklists(lists) {

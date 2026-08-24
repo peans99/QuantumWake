@@ -343,6 +343,13 @@ public sealed class UexData
         var origin = from is { Length: > 0 } ? MatchTerminal(from) : null;
         var routes = new List<UexRoute>();
 
+        // A cache written before UEX's date_modified was stored carries Seen = 0
+        // on every row, so every route reads "unknown" and the filter would drop
+        // all of them - an empty table on exactly the installs with the longest
+        // history, blaming the location for a question the cache cannot answer.
+        // Honour the filter only where there is a timestamp to honour it with.
+        freshOnly &= _matrix.Values.Any(rows => rows.Any(r => r.Seen > 0));
+
         foreach (var (commodity, rows) in _matrix)
         {
             var buy = rows
