@@ -1208,6 +1208,7 @@ td.outward { color: var(--amber); }
 .map-here .here-pulse { fill: none; stroke: var(--cyan); }
 .map-here .here-dot { fill: var(--cyan-hot, #7fe4ff); stroke: #07131b; }
 .map-here .here-tick { stroke: var(--cyan-hot, #7fe4ff); opacity: .9; }
+.map-here .here-leader { stroke: var(--cyan-hot, #7fe4ff); opacity: .8; }
 .map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {

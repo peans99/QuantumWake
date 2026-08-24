@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.8
+### 0.7.9
 
 - **A map that does not invent geography.** System Positions now shows one
   system at a time with community-starmap bearings and relative orbital
@@ -362,9 +362,9 @@ release workflow lifts it from here, so it is written once.
   so Nyx and Delamar cannot look like a microTech neighbourhood.
 - **Your location is always findable.** The map names the live location in its
   toolbar, keeps it visible through filters, and switches to the correct
-  system when selected. Its cyan reticle now labels the exact place; the jump
-  network marks the current system while remaining honest about not knowing an
-  in-system position.
+  system when selected. Its cyan reticle has an offset callout so it does not
+  cover the place label; the jump network marks the current system while
+  remaining honest about not knowing an in-system position.
 
 - **The Market panel stopped being expensive to open.** Its price strip was
   asking UEX about eight counters every time a row was expanded, which is the
