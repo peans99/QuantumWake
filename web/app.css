@@ -1157,6 +1157,8 @@ td.outward { color: var(--amber); }
 }
 .map-tools .toggle input { accent-color: var(--cyan); cursor: pointer; }
 .map-tools .toggle:hover { color: var(--fg); }
+.map-mode-note { margin: -2px 0 10px; font-size: 12px; }
+.map-unpositioned { fill: var(--amber) !important; }
 
 /* Services are a filter rather than a separate map mode: small labelled glyphs
    keep the toolbar readable while their titles still explain the evidence. */

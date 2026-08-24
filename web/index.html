@@ -290,6 +290,11 @@
         <input type="checkbox" id="map-visited-only">
         <span>Visited only</span>
       </label>
+      <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
+        <option value="system">System positions</option>
+        <option value="network">Jump network</option>
+      </select>
+      <select id="map-system" class="select" title="System to draw with relative body positions"></select>
       <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
         <input type="checkbox" id="map-goods">
         <span>Goods on hover</span>
@@ -322,6 +327,7 @@
       <button class="ghost" id="map-here">Centre on me</button>
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
+    <p class="muted map-mode-note" id="map-mode-note"></p>
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>

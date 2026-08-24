@@ -5495,6 +5495,43 @@ const svgEl = (tag, attrs = {}) => {
 let atlas = [];
 const nodeAt = new Map();
 
+// A system view is the honest default: its bodies preserve the bearings and
+// relative distances supplied by the community starmap. The network is useful
+// for planning jump legs, but says out loud that its triangle has no scale.
+const MAP_MODE_KEY = 'qw-map-mode';
+const MAP_SYSTEM_KEY = 'qw-map-system';
+
+function mapMode() { return $('#map-mode')?.value || 'system'; }
+function mapSystem() { return $('#map-system')?.value || ''; }
+
+function preferredMapSystem() {
+  const here = hereId && atlas.find((location) => location.rawId === hereId)?.system;
+  return here && SYSTEM_COLOURS[here] ? here : 'Stanton';
+}
+
+function syncMapModeControls() {
+  const mode = $('#map-mode');
+  const system = $('#map-system');
+  if (!mode || !system) return;
+
+  const systems = [...new Set(atlas.map((location) => location.system)
+    .filter((name) => SYSTEM_COLOURS[name]))].sort();
+
+  if (!system.dataset.filled || [...system.options].map((option) => option.value).join('|') !== systems.join('|')) {
+    const selected = system.value || preferredMapSystem();
+    system.textContent = '';
+    for (const name of systems) system.append(new Option(name, name));
+    system.value = systems.includes(selected) ? selected : (systems[0] || '');
+    system.dataset.filled = '1';
+  }
+
+  system.hidden = mode.value !== 'system';
+  const note = $('#map-mode-note');
+  if (note) note.textContent = mode.value === 'system'
+    ? `${system.value || 'This system'}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.`
+    : 'Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.';
+}
+
 // Service data is intentionally a set of place ids, not a claim about every
 // facility at a location. UEX can identify counters, fuel prices and clinics;
 // it cannot identify repair pads, so repair never becomes a reassuringly empty
@@ -5645,6 +5682,7 @@ async function loadAtlas() {
   mapServicesByPlace.clear();
   for (const place of servicePlaces)
     mapServicesByPlace.set(place.placeId, place.services || []);
+  syncMapModeControls();
   drawMap();
 
   // A detail card can stay open while the history refreshes. Its facts should
@@ -5683,6 +5721,7 @@ function bodyLayout(system, present, centre, sizeOf) {
   // redraw so the spread happens around what the eye is on.
   const spread = isDetailed() ? 1.6 : 1;
   const orbit = centre.orbit * spread;
+  const physical = mapMode() === 'system';
 
   if (!present.some((name) => lookup(name))) {
     present.forEach((bodyName, index) => {
@@ -5690,7 +5729,7 @@ function bodyLayout(system, present, centre, sizeOf) {
       placements.set(bodyName, {
         x: centre.x + Math.cos(angle) * orbit,
         y: centre.y + Math.sin(angle) * orbit,
-        angle,
+        angle, positioned: false,
         from: { x: centre.x, y: centre.y },
       });
     });
@@ -5723,8 +5762,11 @@ function bodyLayout(system, present, centre, sizeOf) {
 
     if (group.pos) {
       angle = Math.atan2(group.pos.y, group.pos.x);
-      const radius = orbit
-        * (0.3 + 0.7 * Math.sqrt(Math.hypot(group.pos.x, group.pos.y) / maxR));
+      const fraction = Math.hypot(group.pos.x, group.pos.y) / maxR;
+      // A local system map can retain the actual radial relationship. The
+      // older all-systems view compresses it because it has to fit several
+      // dense systems in one frame without pretending their frames share scale.
+      const radius = orbit * (physical ? fraction : 0.3 + 0.7 * Math.sqrt(fraction));
       gx = centre.x + Math.cos(angle) * radius;
       gy = centre.y + Math.sin(angle) * radius;
     } else {
@@ -5738,7 +5780,7 @@ function bodyLayout(system, present, centre, sizeOf) {
     group.members.forEach((bodyName, index) => {
       if (index === 0) {
         placements.set(bodyName, {
-          x: gx, y: gy, angle, from: { x: centre.x, y: centre.y },
+          x: gx, y: gy, angle, positioned: Boolean(group.pos), from: { x: centre.x, y: centre.y },
         });
         return;
       }
@@ -5751,7 +5793,7 @@ function bodyLayout(system, present, centre, sizeOf) {
       placements.set(bodyName, {
         x: gx + Math.cos(arc) * gap,
         y: gy + Math.sin(arc) * gap,
-        angle: arc,
+        angle: arc, positioned: Boolean(group.pos),
         from: { x: gx, y: gy },
       });
     });
@@ -6169,6 +6211,21 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
+  const mode = $('#map-mode');
+  const system = $('#map-system');
+  try {
+    mode.value = localStorage.getItem(MAP_MODE_KEY) || 'system';
+    system.value = localStorage.getItem(MAP_SYSTEM_KEY) || '';
+  } catch { /* private mode */ }
+  mode.addEventListener('change', () => {
+    syncMapModeControls();
+    try { localStorage.setItem(MAP_MODE_KEY, mode.value); } catch { /* fine */ }
+    drawMap();
+  });
+  system.addEventListener('change', () => {
+    try { localStorage.setItem(MAP_SYSTEM_KEY, system.value); } catch { /* fine */ }
+    drawMap();
+  });
   for (const button of $$('#map-service-filter button'))
     button.addEventListener('click', () => selectMapService(button.dataset.service));
   initCargoPanel();
@@ -6243,6 +6300,11 @@ function jumpToPlace(name) {
 
   $('#map-search').value = entry ? '' : wanted;
   $('#map-results').hidden = true;
+  if (entry?.system && SYSTEM_COLOURS[entry.system]) {
+    $('#map-mode').value = 'system';
+    $('#map-system').value = entry.system;
+    syncMapModeControls();
+  }
   showView('map');
   drawMap();
 
@@ -7974,6 +8036,79 @@ function renderMapInfoServices(location) {
 /** Lore paragraphs already asked for, name to promise of text-or-null. */
 const loreCache = new Map();
 
+/**
+ * Systems have no shared coordinate frame in the installed game data. Showing
+ * only the jump graph makes that limitation legible instead of turning an
+ * arbitrary triangle into a false atlas of planetary distances.
+ */
+function drawJumpNetwork(map, locations) {
+  const systems = Object.keys(SYSTEM_COLOURS)
+    .filter((system) => locations.some((location) => location.system === system));
+  const home = { x: 0, y: 0, w: 1200, h: 760 };
+  const wasHome = view.w === HOME_VIEW.w && view.h === HOME_VIEW.h
+    && view.x === HOME_VIEW.x && view.y === HOME_VIEW.y;
+
+  HOME_VIEW = home;
+  if (wasHome) view = { ...home };
+  SYSTEM_LAYOUT = {};
+
+  const anchors = {
+    Stanton: { x: 255, y: 240 },
+    Pyro: { x: 945, y: 240 },
+    Nyx: { x: 600, y: 560 },
+  };
+
+  for (const system of systems) {
+    const point = anchors[system] || { x: 600, y: 380 };
+    SYSTEM_LAYOUT[system] = { ...point, radius: 46, colour: SYSTEM_COLOURS[system] };
+  }
+
+  for (const [fromName, toName] of JUMP_LANES) {
+    const from = SYSTEM_LAYOUT[fromName];
+    const to = SYSTEM_LAYOUT[toName];
+    if (!from || !to) continue;
+
+    map.append(svgEl('line', {
+      x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+      class: 'map-edge', 'stroke-width': '2.2', 'stroke-dasharray': '7 8', filter: 'url(#glow)',
+    }));
+  }
+
+  for (const [system, point] of Object.entries(SYSTEM_LAYOUT)) {
+    const group = svgEl('g', { class: 'map-network-system', tabindex: '0' });
+    group.append(svgEl('circle', {
+      cx: point.x, cy: point.y, r: point.radius, fill: point.colour,
+      'fill-opacity': '.13', stroke: point.colour, 'stroke-width': '2', filter: 'url(#glow)',
+    }));
+    group.append(svgEl('circle', { cx: point.x, cy: point.y, r: 9, fill: point.colour, filter: 'url(#glow)' }));
+    const label = svgEl('text', {
+      x: point.x, y: point.y + 72, 'text-anchor': 'middle', class: 'map-sys-label',
+      style: `font-size:${labelSize(1.6)}px`,
+    });
+    label.textContent = system;
+    group.append(label);
+    group.addEventListener('click', () => {
+      $('#map-mode').value = 'system';
+      $('#map-system').value = system;
+      syncMapModeControls();
+      drawMap();
+    });
+    map.append(group);
+  }
+
+  const title = svgEl('text', {
+    x: home.w / 2, y: 92, 'text-anchor': 'middle', class: 'map-label',
+    style: `font-size:${labelSize(1.35)}px;fill:#7796b0;letter-spacing:.18em`,
+  });
+  title.textContent = 'JUMP NETWORK · SCHEMATIC · NOT TO SCALE';
+  map.append(title);
+
+  $('#map-count').textContent = `${systems.length} systems · jump network`;
+  $('#map-here').disabled = true;
+  drawLegend([]);
+  applyView();
+}
+
 function drawMap() {
   const map = $('#starmap');
   map.textContent = '';
@@ -8021,8 +8156,12 @@ function drawMap() {
   prepareShading(term, sites);
   syncCargoPanel(term, sites);
 
-  const locations = atlas.filter((l) =>
+  const allLocations = atlas.filter((l) =>
     (!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0));
+  const selectedSystem = mapSystem();
+  const locations = mapMode() === 'system' && selectedSystem
+    ? allLocations.filter((location) => location.system === selectedSystem)
+    : allLocations;
 
   const count = $('#map-count');
   if (count) {
@@ -8043,6 +8182,8 @@ function drawMap() {
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
     else if (mapServiceFilter)
       count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
+    else if (mapMode() === 'system')
+      count.textContent = `${locations.length} shown in ${selectedSystem} · ${seen} of ${atlas.length} visited`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
@@ -8056,6 +8197,11 @@ function drawMap() {
   glow.append(merge);
   defs.append(glow);
   map.append(defs);
+
+  if (mapMode() === 'network') {
+    drawJumpNetwork(map, allLocations);
+    return;
+  }
 
   // A sparse starfield behind everything. Deterministic - a hash of the index,
   // not Math.random - so redraws do not make the sky shimmer.
@@ -8243,9 +8389,10 @@ function drawMap() {
       const bodyLabel = svgEl('text', {
         x: bodyLabelX, y: bodyLabelY,
         'text-anchor': 'middle', class: 'map-label',
-        style: `fill:#7796b0;font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
+        style: `fill:${!place.positioned && mapMode() === 'system' ? '#ffab3d' : '#7796b0'};font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
       });
-      bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
+      bodyLabel.textContent = bodyName === '—' ? ''
+        : `${bodyName}${!place.positioned && mapMode() === 'system' ? ' · position unavailable' : ''}`;
       map.append(bodyLabel);
 
       if (bodyLabel.textContent) {
