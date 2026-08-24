@@ -1094,6 +1094,20 @@ public sealed class LogLibrary : IDisposable
             .OrderByDescending(t => t.At)];
     }
 
+    /// <summary>
+    /// The handle this install last played under, or null when no session names one.
+    /// </summary>
+    /// <remarks>
+    /// The newest rather than the most frequent: a pilot who renamed wants the
+    /// name they answer to now, and the older one is still in the logs for
+    /// <see cref="Wingmen"/> to keep out of their own friends list.
+    /// </remarks>
+    public string? Handle() =>
+        Counted(WipeScope.History)
+            .OrderByDescending(s => s.StartedAt)
+            .Select(s => s.Handle)
+            .FirstOrDefault(h => !string.IsNullOrWhiteSpace(h));
+
     /// <summary>Cargo trades whose own timestamp falls inside the last <paramref name="days"/> days.</summary>
     /// <remarks>
     /// <see cref="Trades(int)"/> takes its window off <see cref="SessionSummary.StartedAt"/>,
