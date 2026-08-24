@@ -85,6 +85,12 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 /// What was in the boxes — resolved from the opt-in community dataset, null
 /// when it is disabled or the id is unknown to it.
 /// </param>
+/// <param name="ResourceId">
+/// The <c>resourceGUID</c> the log actually carried. <see cref="Commodity"/> is
+/// this id run through a dataset that may be off, may be a different version, or
+/// may not know the id; the id itself is the part the game wrote down. Kept so a
+/// reader with a different catalogue can resolve a name this install could not.
+/// </param>
 public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
@@ -94,7 +100,8 @@ public sealed record TradeRecord(
     decimal Amount,
     decimal UnitPrice,
     string? Mode,
-    string? Commodity = null);
+    string? Commodity = null,
+    string? ResourceId = null);
 
 /// <summary>An item observed entering the player's inventories.</summary>
 /// <remarks>
@@ -1081,9 +1088,31 @@ public sealed class LogLibrary : IDisposable
                     t.Amount,
                     t.Quantity > 0 ? t.Amount / t.Quantity : 0,
                     t.Mode,
-                    Community.Commodity(t.ResourceId));
+                    Community.Commodity(t.ResourceId),
+                    t.ResourceId);
             }))
             .OrderByDescending(t => t.At)];
+    }
+
+    /// <summary>Cargo trades whose own timestamp falls inside the last <paramref name="days"/> days.</summary>
+    /// <remarks>
+    /// <see cref="Trades(int)"/> takes its window off <see cref="SessionSummary.StartedAt"/>,
+    /// which is the right filter for "sessions from this week" and the wrong one
+    /// for "trades from this week": a session that began eight days ago and ran
+    /// past midnight is dropped whole, taking trades made well inside the window
+    /// with it. So fetch two days wider than asked and filter on the trade.
+    ///
+    /// Two rather than one because a single day only covers a session shorter
+    /// than 24 hours, and this is a filter over summaries already in memory - the
+    /// wider fetch costs nothing, while the narrower one loses rows in silence.
+    /// </remarks>
+    public IReadOnlyList<TradeRecord> TradesWithin(int days)
+    {
+        if (days <= 0)
+            return Trades(0);
+
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+        return [.. Trades(days + 2).Where(t => t.At >= cutoff)];
     }
 
     public IReadOnlyList<SessionSummary> Sessions() => Counted(WipeScope.History);

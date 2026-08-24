@@ -353,6 +353,14 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.0
+
+- **Trade history can be asked for by the trade, not by the session.** A window
+  of "the last seven days" used to be measured against when each play session
+  began, so an evening that started just outside the window took every trade
+  made inside it out of the answer. It counts the trades themselves now.
+  Nothing you can see changed yet; this is the groundwork for sharing.
+
 ### 0.7.18
 
 - **A clearer overview at the top of this page.** The at-a-glance graphic is
