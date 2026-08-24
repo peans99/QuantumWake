@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.9
+### 0.8.10
 
 - **The Crew page had been missing half the party channel.** The game
   announces a party changing under two titles that do not begin with the word
