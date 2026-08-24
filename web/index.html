@@ -77,6 +77,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
+        <button data-view="imports">Shared files</button>
       </div>
     </div>
     <button data-view="about">About</button>
@@ -439,6 +440,23 @@
   </section>
 
   <!-- CHECKLISTS -->
+  <section id="view-imports" class="view">
+    <div class="section-bar">
+      <h2>Shared files</h2>
+      <span class="spacer"></span>
+      <button class="ghost" id="imports-pick">Open a file</button>
+      <button class="ghost danger" id="imports-clear">Remove all</button>
+    </div>
+    <p class="muted caption">
+      Files other pilots have shared with you. Nothing here is mixed into your
+      own jobs, checklists or history &mdash; it is kept separately so removing
+      an import takes it away completely and leaves your work untouched.
+    </p>
+    <input type="file" id="imports-file" accept="application/json,.json" hidden>
+    <span class="muted" id="imports-status"></span>
+    <div id="imports-list"></div>
+  </section>
+
   <section id="view-checklists" class="view">
     <div class="section-bar">
       <h2>Checklists</h2>

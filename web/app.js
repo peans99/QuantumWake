@@ -172,6 +172,7 @@ function showView(name) {
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
+  if (name === 'imports') loadImports().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
@@ -4604,6 +4605,191 @@ async function renderSettings() {
   await renderSignals();
   await renderExportPreview();
 }
+
+/* ---------- files other pilots have shared ---------- */
+
+let importBatches = [];
+
+/** A tally, with the zeroes left out. */
+function countLine(counts) {
+  const parts = [];
+  if (counts.receipts) parts.push(`${counts.receipts.toLocaleString()} trades`);
+  if (counts.blueprints) parts.push(`${counts.blueprints} blueprints`);
+  if (counts.jobs) parts.push(`${counts.jobs} jobs`);
+  if (counts.checklists) parts.push(`${counts.checklists} checklists`);
+  if (counts.trips) parts.push(`${counts.trips} flight plans`);
+  return parts.join(' · ');
+}
+
+/**
+ * One imported file.
+ *
+ * Says when it was written as well as when it was imported, because a file
+ * taken this morning can hold a price from March and the older date is the one
+ * that decides whether the numbers are worth anything.
+ */
+function importCard(batch) {
+  const card = el('article', 'import-card');
+
+  const head = el('div', 'job-head');
+  head.append(el('b', null, batch.handle || 'Someone'));
+  if (batch.note) head.append(el('span', 'job-kind', batch.note));
+  if (!batch.readable) head.append(el('span', 'job-kind danger', 'cannot be read'));
+  if (batch.hidden) head.append(el('span', 'job-kind', 'hidden'));
+  head.append(el('span', 'spacer'));
+
+  const hide = el('button', 'ghost tiny', batch.hidden ? 'Show' : 'Hide');
+  hide.title = 'Hiding keeps the file. Removing does not.';
+  hide.addEventListener('click', () => importCall(`/api/imports/${batch.id}/hide`));
+  head.append(hide);
+
+  const remove = el('button', 'ghost danger tiny', 'Remove');
+  remove.title = 'Takes this file away completely. Your own work is not touched.';
+  remove.addEventListener('click', () => importCall(`/api/imports/${batch.id}`, 'DELETE'));
+  head.append(remove);
+  card.append(head);
+
+  card.append(el('div', 'muted', `${batch.sourceName} — imported ${dateOf(batch.importedAt)}, `
+    + `written ${dateOf(batch.exportedAt)} by Quantum Wake ${batch.producerVersion}`));
+
+  const held = countLine(batch.counts);
+  card.append(el('div', 'import-counts', held || 'Nothing left in this file.'));
+
+  // Kept for ever and said plainly: "why does this show 41 when his file said
+  // 43" has to be answerable a month later.
+  const dropped = countLine(batch.rejected);
+  if (dropped) card.append(el('div', 'muted', `Could not be read: ${dropped}.`));
+
+  const cut = countLine(batch.truncated);
+  if (cut) card.append(el('div', 'muted', `Too many to keep, so left out: ${cut}.`));
+
+  if (!batch.readable) {
+    card.append(el('div', 'muted', `This file is in format ${batch.formatVersion}, which this `
+      + 'build does not read. It is kept rather than dropped, since the copy you were sent may '
+      + 'be the only one. Update Quantum Wake, or remove it.'));
+  }
+
+  if (batch.classes.length) {
+    const row = el('div', 'import-classes');
+    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists']];
+
+    for (const [key, label] of named) {
+      if (!batch.classes.includes(key)) continue;
+      const drop = el('button', 'ghost tiny', `Remove the ${label}`);
+      drop.addEventListener('click', () => importCall(`/api/imports/${batch.id}/${key}`, 'DELETE'));
+      row.append(drop);
+    }
+
+    card.append(row);
+  }
+
+  return card;
+}
+
+function renderImports(payload) {
+  const host = $('#imports-list');
+  if (!host) return;
+
+  importBatches = payload.batches || [];
+  host.textContent = '';
+
+  if (payload.quarantined) {
+    host.append(el('p', 'muted', 'An earlier imports file could not be read. It was kept as '
+      + `${payload.quarantined} rather than overwritten, because the files it held came from `
+      + 'other people.'));
+  }
+
+  if (!importBatches.length) {
+    host.append(el('p', 'muted', 'No shared files yet. Open one a friend sent you — it stays '
+      + 'separate from your own history, and you can remove it whenever you like.'));
+    return;
+  }
+
+  for (const batch of importBatches) host.append(importCard(batch));
+}
+
+async function loadImports() {
+  renderImports(await getJson('/api/imports').catch(() => ({ batches: [] })));
+}
+
+async function importCall(url, method = 'POST') {
+  try {
+    await fetch(url, { method });
+  } finally {
+    await loadImports();
+  }
+}
+
+/**
+ * Reads a file the user picked and offers it to the server.
+ *
+ * The text travels in a JSON body rather than as multipart: nothing else here
+ * posts multipart, FileReader hands back the string for nothing, and the size
+ * check stays one question about how many bytes arrived.
+ */
+async function importFile(file) {
+  $('#imports-status').textContent = `Reading ${file.name}…`;
+
+  const text = await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target.result);
+    reader.readAsText(file);
+  });
+
+  await sendImport(text, file.name, false);
+}
+
+async function sendImport(text, sourceName, force) {
+  const status = $('#imports-status');
+
+  const response = await fetch(`/api/imports${force ? '?force=true' : ''}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: text, sourceName }),
+  });
+
+  const answer = await response.json().catch(() => null);
+
+  // Already held. Asked rather than duplicated, because a double-clicked picker
+  // and a deliberate re-import after a purge look identical from here.
+  if (response.status === 409 && answer && answer.batch) {
+    const already = answer.batch;
+    status.textContent = `You imported this on ${dateOf(already.importedAt)} — `
+      + `${countLine(already.counts) || 'nothing left in it'}. `;
+
+    const again = el('button', 'ghost tiny', 'Import it again anyway');
+    again.addEventListener('click', () => sendImport(text, sourceName, true).catch(() => {}));
+    status.append(again);
+    return;
+  }
+
+  if (!response.ok) {
+    status.textContent = (answer && answer.message) || 'That file could not be read.';
+    return;
+  }
+
+  status.textContent = `Imported ${countLine(answer.batch.counts) || 'nothing'} from `
+    + `${answer.batch.handle || 'someone'}.`;
+
+  await loadImports();
+}
+
+$('#imports-pick')?.addEventListener('click', () => $('#imports-file')?.click());
+
+$('#imports-file')?.addEventListener('change', (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  importFile(file)
+    .catch(() => { $('#imports-status').textContent = 'That file could not be read.'; })
+    // Cleared so that picking the same file twice still fires a change.
+    .finally(() => { event.target.value = ''; });
+});
+
+$('#imports-clear')?.addEventListener('click', () => {
+  $('#imports-status').textContent = '';
+  importCall('/api/imports', 'DELETE').catch(() => {});
+});
 
 /* ---------- sharing a file of your own ---------- */
 

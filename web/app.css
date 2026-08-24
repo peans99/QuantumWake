@@ -2590,6 +2590,21 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
 .wipe-row .search { font-size: 12px; }
+/* Shared files: a card per import, shaped like the job cards it sits near so a
+   file somebody else wrote does not get a visual language of its own. */
+.import-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--panel);
+}
+.import-card .muted { font-size: 12px; line-height: 1.6; }
+.import-counts { font-size: 13px; margin: 4px 0; }
+.import-classes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#imports-status { display: inline-block; font-size: 12px; margin-bottom: 8px; }
+
 /* The export block's one non-toggle control, laid out like the wipe row it
    sits near so the Settings page keeps a single shape for "a field and a word". */
 .export-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 6px; }
