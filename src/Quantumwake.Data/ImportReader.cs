@@ -14,6 +14,13 @@ public sealed record ImportProblem(string Message, int Status = 400);
 public sealed record ImportCounts(
     int Receipts = 0, int Blueprints = 0, int Jobs = 0, int Checklists = 0, int Trips = 0)
 {
+    /// <summary>Whether anything at all landed in this tally.</summary>
+    /// <remarks>
+    /// Not serialised: it is a question the C# asks itself, and on the wire it
+    /// would read as a sixth count that means something different from the five
+    /// beside it.
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool Any => Receipts > 0 || Blueprints > 0 || Jobs > 0 || Checklists > 0 || Trips > 0;
 }
 

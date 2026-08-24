@@ -97,6 +97,7 @@ public static class ServerHost
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<ExportBuilder>();
+        builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
 
@@ -1377,6 +1378,55 @@ public static class ServerHost
             });
         });
 
+        // Imports live in their own store and are never folded into the
+        // authored files. Removing one has to leave the pilot's own work
+        // untouched, and that is only cheap if it was never mixed in.
+        app.MapGet("/api/imports", (ImportStore imports) => new
+        {
+            batches = imports.All().Select(Summarise),
+            quarantined = imports.Quarantined,
+        });
+
+        app.MapGet("/api/imports/{id}", (string id, ImportStore imports) =>
+        {
+            var batch = imports.Find(id);
+            return batch is null ? Results.NotFound() : Results.Ok(batch);
+        });
+
+        app.MapPost("/api/imports", (ImportRequest body, ImportStore imports, bool? force) =>
+        {
+            var text = body.Document ?? string.Empty;
+
+            if (ImportReader.TooBig(System.Text.Encoding.UTF8.GetByteCount(text)) is { } tooBig)
+                return Results.Json(new { message = tooBig.Message }, statusCode: tooBig.Status);
+
+            var fingerprint = ImportStore.FingerprintOf(text);
+
+            // The common way to arrive here twice is a double-clicked picker, so
+            // ask rather than refuse: re-importing something purged on purpose
+            // is just as legitimate, and only the reader knows which this is.
+            if (force != true && imports.Matching(fingerprint) is { } already)
+                return Results.Conflict(new { duplicate = true, batch = Summarise(already) });
+
+            var (reading, problem) = ImportReader.Read(text, DateTimeOffset.UtcNow);
+
+            if (problem is not null)
+                return Results.Json(new { message = problem.Message }, statusCode: problem.Status);
+
+            return Results.Ok(new { batch = Summarise(imports.Add(reading!, fingerprint, body.SourceName, DateTimeOffset.UtcNow)) });
+        });
+
+        app.MapPost("/api/imports/{id}/hide", (string id, ImportStore imports) =>
+            imports.ToggleHidden(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/imports/{id}/{cls}", (string id, string cls, ImportStore imports) =>
+            imports.RemoveClass(id, cls) ? Results.Ok(new { id, cls }) : Results.NotFound());
+
+        app.MapDelete("/api/imports/{id}", (string id, ImportStore imports) =>
+            imports.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/imports", (ImportStore imports) => Results.Ok(new { removed = imports.Clear() }));
+
         // ---- flight plans: where to go next, in order ----
 
         // ---- the wipe: where the player's countable history begins ----
@@ -1975,6 +2025,32 @@ static int Holes(IEnumerable<ShipSlot> slots)
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
+    /// <summary>
+    /// A batch without its contents: what the imports list draws.
+    /// </summary>
+    /// <remarks>
+    /// The rows stay behind deliberately. This endpoint is asked for on every
+    /// visit to the page, and a batch can hold twenty thousand receipts.
+    /// </remarks>
+    static object Summarise(ImportBatch batch) => new
+    {
+        batch.Id,
+        batch.ImportedAt,
+        batch.ExportedAt,
+        batch.Handle,
+        batch.Note,
+        batch.SourceName,
+        batch.FormatVersion,
+        batch.ContentVersion,
+        batch.ProducerVersion,
+        batch.Classes,
+        batch.Counts,
+        batch.Rejected,
+        batch.Truncated,
+        batch.Hidden,
+        batch.Readable,
+    };
+
     /// <summary>What this build stamps on a file it writes.</summary>
     /// <remarks>
     /// Reflection rather than a constant, for the same reason /api/version uses
@@ -2289,6 +2365,16 @@ public sealed record ExportRequest(
     public ExportChoice Choice() =>
         new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note);
 }
+
+/// <summary>
+/// Body of POST /api/imports: the file's text, as the picker read it.
+/// </summary>
+/// <remarks>
+/// A JSON body rather than multipart. Nothing else in the app posts multipart,
+/// FileReader hands back the string for nothing, and a body keeps the size check
+/// a single question about how many bytes arrived.
+/// </remarks>
+public sealed record ImportRequest(string? Document, string? SourceName = null);
 
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);
