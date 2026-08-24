@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.9
+### 0.7.10
 
 - **A map that does not invent geography.** System Positions now shows one
   system at a time with community-starmap bearings and relative orbital
@@ -365,6 +365,12 @@ release workflow lifts it from here, so it is written once.
   system when selected. Its cyan reticle has an offset callout so it does not
   cover the place label; the jump network marks the current system while
   remaining honest about not knowing an in-system position.
+- **A map for the run in front of you.** Focus it on the active plan, shopping
+  destinations and known sellers, or recorded stash locations; these layers
+  compose with service filters. Body hovers now summarise those signals and
+  listed services. Label density can be quiet, automatic or full, controls can
+  be saved as a reusable view, and commodity searches show the UEX report age
+  without mislabelling visits or services as stale.
 
 - **The Market panel stopped being expensive to open.** Its price strip was
   asking UEX about eight counters every time a row was expanded, which is the

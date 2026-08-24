@@ -3375,6 +3375,7 @@ async function loadJobList() {
   } catch { /* server down; the page still shows contracts */ }
 
   renderPinnedJob(jobs);
+  refreshMapFocusContext(mapFocusFilter === 'shopping' || mapFocusFilter === 'stash').catch(() => {});
   reloadPilotBriefing().catch(() => {});
 
   // Shopping and crafting are different work, so they live on different
@@ -5588,6 +5589,11 @@ const SERVICE_META = {
 };
 const mapServicesByPlace = new Map();
 let mapServiceFilter = '';
+let mapFocusFilter = '';
+const mapShoppingIds = new Set();
+const mapStashIds = new Set();
+const MAP_SAVED_VIEW_KEY = 'qw-map-saved-view';
+const MAP_LABEL_DENSITY_KEY = 'qw-map-label-density';
 
 const serviceKey = (name) => ({
   Shops: 'shop',
@@ -5599,13 +5605,115 @@ const serviceKey = (name) => ({
 
 const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
 
-function selectMapService(service, openMap = false) {
+function selectMapService(service, openMap = false, redraw = true) {
   mapServiceFilter = service || '';
   for (const button of $$('#map-service-filter button'))
     button.classList.toggle('active', button.dataset.service === mapServiceFilter);
 
   if (openMap) showView('map');
+  if (redraw) drawMap();
+}
+
+function planPlaceIds() {
+  return new Set((tracked()?.stops || []).map((stop) => stop.placeId).filter(Boolean));
+}
+
+function mapFocusIds() {
+  if (mapFocusFilter === 'plan') return planPlaceIds();
+  if (mapFocusFilter === 'shopping') return mapShoppingIds;
+  if (mapFocusFilter === 'stash') return mapStashIds;
+  return null;
+}
+
+function selectMapFocus(focus, redraw = true) {
+  mapFocusFilter = focus || '';
+  for (const button of $$('#map-focus-filter button'))
+    button.classList.toggle('active', button.dataset.focus === mapFocusFilter);
+  if (redraw) drawMap();
+}
+
+function mapLabelDensity() { return $('#map-label-density')?.value || 'auto'; }
+
+function saveMapView() {
+  const saved = {
+    mode: mapMode(), system: mapSystem(), service: mapServiceFilter, focus: mapFocusFilter,
+    visited: $('#map-visited-only').checked, goods: $('#map-goods').checked,
+    labels: mapLabelDensity(), search: $('#map-search').value,
+  };
+  try { localStorage.setItem(MAP_SAVED_VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ }
+
+  const button = $('#map-save-preset');
+  button.textContent = 'Saved';
+  button.title = 'Saved view updated';
+}
+
+function applyMapPreset(name) {
+  let preset = null;
+  if (name === 'saved') {
+    try { preset = JSON.parse(localStorage.getItem(MAP_SAVED_VIEW_KEY) || 'null'); } catch { /* private mode */ }
+    if (!preset) return;
+  } else if (name === 'plan') {
+    preset = { focus: 'plan' };
+  } else if (name === 'shopping') {
+    preset = { focus: 'shopping', goods: true };
+  } else if (name === 'services') {
+    preset = { service: 'refuel', goods: false };
+  } else if (name === 'visited') {
+    preset = { visited: true, focus: '' };
+  } else return;
+
+  if (preset.mode) $('#map-mode').value = preset.mode;
+  if (preset.system) $('#map-system').value = preset.system;
+  if (typeof preset.visited === 'boolean') $('#map-visited-only').checked = preset.visited;
+  if (typeof preset.goods === 'boolean') $('#map-goods').checked = preset.goods;
+  if (preset.labels) $('#map-label-density').value = preset.labels;
+  if (typeof preset.search === 'string') $('#map-search').value = preset.search;
+  selectMapService(preset.service || '', false, false);
+  selectMapFocus(preset.focus || '', false);
+  syncMapModeControls();
   drawMap();
+}
+
+function atlasPlaceId(name) {
+  if (!name) return null;
+  const clean = String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (clean.length < 4) return null;
+  return atlas.find((place) => {
+    const candidate = `${place.name} ${place.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return candidate === clean || candidate.includes(clean) || clean.includes(candidate);
+  })?.rawId || null;
+}
+
+// Jobs give us destinations and sellers; stash remembers presence by place.
+// Both are useful focus layers, but neither is a live inventory or stock claim.
+async function refreshMapFocusContext(redraw = false) {
+  const [jobs, stats] = await Promise.all([
+    getJson('/api/jobs').catch(() => []),
+    getJson('/api/stats').catch(() => null),
+  ]);
+
+  mapShoppingIds.clear();
+  for (const job of jobs.filter((job) => !job.done)) {
+    if (job.destinationId) mapShoppingIds.add(job.destinationId);
+    else if (job.destination) {
+      const destination = atlasPlaceId(job.destination);
+      if (destination) mapShoppingIds.add(destination);
+    }
+
+    for (const item of job.items || []) {
+      if (item.have) continue;
+      const seller = atlasPlaceId(item.buyAt);
+      if (seller) mapShoppingIds.add(seller);
+    }
+  }
+
+  mapStashIds.clear();
+  for (const place of stats?.stash || []) {
+    const id = atlasPlaceId(place.name);
+    if (id) mapStashIds.add(id);
+  }
+
+  if (redraw && atlas.length) drawMap();
 }
 
 /** Non-null while a commodity search is active: the rawIds to light up. */
@@ -5726,6 +5834,7 @@ async function loadAtlas() {
   mapServicesByPlace.clear();
   for (const place of servicePlaces)
     mapServicesByPlace.set(place.placeId, place.services || []);
+  await refreshMapFocusContext();
   syncMapModeControls();
   drawMap();
 
@@ -6332,6 +6441,18 @@ function initMap() {
   });
   for (const button of $$('#map-service-filter button'))
     button.addEventListener('click', () => selectMapService(button.dataset.service));
+  for (const button of $$('#map-focus-filter button'))
+    button.addEventListener('click', () => selectMapFocus(button.dataset.focus));
+
+  const labelDensity = $('#map-label-density');
+  try { labelDensity.value = localStorage.getItem(MAP_LABEL_DENSITY_KEY) || 'auto'; } catch { /* private mode */ }
+  labelDensity.addEventListener('change', () => {
+    try { localStorage.setItem(MAP_LABEL_DENSITY_KEY, labelDensity.value); } catch { /* private mode */ }
+    drawMap();
+  });
+
+  $('#map-preset').addEventListener('change', (event) => applyMapPreset(event.target.value));
+  $('#map-save-preset').addEventListener('click', saveMapView);
   initCargoPanel();
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
@@ -6523,6 +6644,18 @@ function renderSearchResults() {
 let shadeRows = { name: null, rows: null };
 let shadeScale = null;
 const nodeShade = new Map();
+let mapPriceFreshness = null;
+
+function priceFreshness(seenAt) {
+  const at = Date.parse(seenAt || '');
+  if (!Number.isFinite(at)) return null;
+  const hours = Math.max(0, (Date.now() - at) / 3600000);
+  return hours > 14 * 24
+    ? { state: 'stale', label: `UEX report ${Math.floor(hours / 24)}d old` }
+    : hours > 72
+      ? { state: 'aging', label: `UEX report ${Math.floor(hours / 24)}d old` }
+      : { state: 'fresh', label: `UEX report ${Math.max(1, Math.round(hours))}h old` };
+}
 
 const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
 
@@ -6565,6 +6698,7 @@ function terminalMatchesPlace(terminal, place) {
 function prepareShading(term, sites) {
   nodeShade.clear();
   shadeScale = null;
+  mapPriceFreshness = null;
 
   const shadeSelect = $('#map-shade');
   shadeSelect.hidden = !sites;
@@ -6574,6 +6708,8 @@ function prepareShading(term, sites) {
   const name = (buying ? term.slice(4) : term).trim();
   const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
   if (!entry) return;
+
+  if (shadeSelect.value !== 'mine') mapPriceFreshness = priceFreshness(entry.uex?.seenAt);
 
   // Shading by your own receipts needs no fetch and works with UEX off: the
   // question it answers is "where did I do best with this", not "what is it
@@ -7125,7 +7261,10 @@ async function loadTrips() {
   renderTripCard();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
-  drawTripPath();
+  // A plan can itself be the active map layer; rebuild then so adding,
+  // reordering, or crossing off a stop never leaves a ghost destination.
+  if (mapFocusFilter === 'plan') drawMap();
+  else drawTripPath();
 }
 
 /** POST/DELETE against the trip API, then re-read: plans are small. */
@@ -7927,6 +8066,9 @@ function showMapTip(location) {
       `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`));
   }
 
+  if (highlightIds?.has(location.rawId) && mapPriceFreshness)
+    tip.append(el('span', `price-age ${mapPriceFreshness.state}`, mapPriceFreshness.label));
+
   if ($('#map-goods').checked) appendTipGoods(tip, commoditiesSoldAt(location));
 
   const services = servicesAt(location);
@@ -7963,6 +8105,27 @@ function showBodyTip(bodyName, system, sites) {
 
   if (visits > 0)
     tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
+
+  const plan = sites.filter((site) => planPlaceIds().has(site.rawId)).length;
+  const shopping = sites.filter((site) => mapShoppingIds.has(site.rawId)).length;
+  const stash = sites.filter((site) => mapStashIds.has(site.rawId)).length;
+  const work = [
+    plan && `${plan} plan stop${plan === 1 ? '' : 's'}`,
+    shopping && `${shopping} shopping place${shopping === 1 ? '' : 's'}`,
+    stash && `${stash} stash place${stash === 1 ? '' : 's'}`,
+  ].filter(Boolean);
+  if (work.length) tip.append(el('span', 'service-tip', work.join(' · ')));
+
+  const serviceCounts = new Map();
+  for (const site of sites)
+    for (const service of servicesAt(site))
+      serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
+  if (serviceCounts.size) {
+    const summary = [...serviceCounts.entries()]
+      .map(([service, count]) => `${SERVICE_META[service]?.icon || '•'} ${count} ${SERVICE_META[service]?.label || service}`)
+      .join(' · ');
+    tip.append(el('span', 'service-tip', summary));
+  }
 
   if ($('#map-goods').checked) {
     if (!bodyGoodsCache.has(tipKey)) {
@@ -8225,6 +8388,7 @@ function drawMap() {
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
+  const focusIds = mapFocusIds();
   const serviceIds = mapServiceFilter
     ? new Set(atlas.filter((location) => servicesAt(location).includes(mapServiceFilter))
       .map((location) => location.rawId))
@@ -8265,7 +8429,10 @@ function drawMap() {
     // Service and visit filters answer a different question from position. The
     // player never vanishes merely because their current place lacks the
     // selected service or has not been recorded as a visit yet.
-    l.rawId === hereId || ((!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0)));
+    l.rawId === hereId ||
+    (!focusIds || focusIds.has(l.rawId)) &&
+    (!serviceIds || serviceIds.has(l.rawId)) &&
+    (term || !visitedOnly || l.visits > 0));
   const selectedSystem = mapSystem();
   const locations = mapMode() === 'system' && selectedSystem
     ? allLocations.filter((location) => location.system === selectedSystem)
@@ -8288,6 +8455,10 @@ function drawMap() {
         : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else if (mapFocusFilter && focusIds?.size === 0)
+      count.textContent = `no ${mapFocusFilter} locations can be placed yet`;
+    else if (mapFocusFilter)
+      count.textContent = `${locations.length} ${mapFocusFilter} location${locations.length === 1 ? '' : 's'} shown`;
     else if (mapServiceFilter)
       count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
     else if (mapMode() === 'system')
@@ -8796,6 +8967,15 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
       cx: x, cy: y, r: radius + 5, fill: 'none',
       stroke: shade?.colour ?? '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
     }));
+
+    // The report age belongs to the commodity source, not the place itself.
+    // Keep it on a commodity result only, so a stale UEX quote cannot make a
+    // reliable visit or service fact look stale as well.
+    if (mapPriceFreshness && mapPriceFreshness.state !== 'fresh') {
+      group.append(svgEl('circle', {
+        cx: x, cy: y, r: radius + 8, class: `map-price-age ${mapPriceFreshness.state}`,
+      }));
+    }
   }
 
   // Somewhere never visited is drawn as an outline, so the places that carry
@@ -8897,6 +9077,8 @@ function boxesCollide(a, b) {
  * to put it. Past the detail threshold every label that fits is drawn.
  */
 const labelBudget = () => {
+  if (mapLabelDensity() === 'all') return Infinity;
+  if (mapLabelDensity() === 'quiet') return isDetailed() ? 28 : 8;
   if (isDetailed()) return Infinity;
 
   const zoom = HOME_VIEW.w / view.w;
@@ -8966,6 +9148,16 @@ function drawLegend(locations) {
   const legend = $('#map-legend');
   legend.textContent = '';
 
+  const appendPriceFreshness = () => {
+    if (!mapPriceFreshness) return;
+    const item = el('div', `item price-age ${mapPriceFreshness.state}`);
+    const swatch = el('span', 'swatch');
+    swatch.style.background = mapPriceFreshness.state === 'stale' ? '#e85d75'
+      : mapPriceFreshness.state === 'aging' ? '#ffab3d' : '#4fd48a';
+    item.append(swatch, el('span', null, mapPriceFreshness.label));
+    legend.append(item);
+  };
+
   // Shaded commodity mode swaps the kind legend for the price gradient: in
   // that mode colour means price, so the legend must say so.
   if (shadeScale) {
@@ -8988,6 +9180,7 @@ function drawLegend(locations) {
     plain.append(swatch);
     plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
     legend.append(plain);
+    appendPriceFreshness();
     return;
   }
 
@@ -9006,6 +9199,8 @@ function drawLegend(locations) {
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);
   }
+
+  appendPriceFreshness();
 }
 
 /* ---------- filters ---------- */

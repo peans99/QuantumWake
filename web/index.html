@@ -305,6 +305,12 @@
         <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
         <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
       </div>
+      <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
+        <button type="button" class="active" data-focus="" title="Show every place">All</button>
+        <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
+        <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
+        <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
+      </div>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
@@ -320,6 +326,20 @@
       </div>
       <select id="map-window" class="select period" data-all="All time" hidden
               title="How far back your own receipts count"></select>
+      <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
+        <option value="auto">Labels: auto</option>
+        <option value="quiet">Labels: quiet</option>
+        <option value="all">Labels: all</option>
+      </select>
+      <select id="map-preset" class="select" title="Apply or restore a saved map view">
+        <option value="">Map preset</option>
+        <option value="plan">Current plan</option>
+        <option value="shopping">Shopping run</option>
+        <option value="services">Service scan</option>
+        <option value="visited">My places</option>
+        <option value="saved">Saved view</option>
+      </select>
+      <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
