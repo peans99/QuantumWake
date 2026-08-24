@@ -471,6 +471,7 @@ h2.spaced { margin-top: 32px; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: var(--gap);
+  align-items: start;
 }
 
 .card {
@@ -494,6 +495,11 @@ h2.spaced { margin-top: 32px; }
 
 .card.hero, .card.span2 { grid-column: span 2; }
 @media (max-width: 780px) { .card.hero, .card.span2 { grid-column: span 1; } }
+
+/* The briefing can be much taller than the place summary. Giving it a whole
+   row lets the compact status cards fill the first row instead of stretching
+   Location into a large empty panel beside it. */
+.card.now-briefing { grid-column: 1 / -1; }
 
 .card-label {
   font-size: 9.5px;

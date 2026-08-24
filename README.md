@@ -353,7 +353,11 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.10
+### 0.8.11
+
+- **The Now page no longer turns Location into an empty wall.** Compact status
+  cards share the first row, while the actionable briefing uses the full width
+  below them. Location stays only as tall as its actual information.
 
 - **Build the exact log story you need to test.** The simulator now has named,
   deterministic scenarios for 19 focused cases: single and multi-stop trading,
