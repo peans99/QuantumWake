@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.Parsing;
+using Quantumwake.Core.State;
 
 // Quantumwake CLI - backfill and verification harness.
 //
@@ -85,6 +86,8 @@ internal sealed class Report
     private readonly Dictionary<string, int> _gameRules = [];
     private readonly Dictionary<string, int> _contracts = [];
     private readonly Dictionary<string, int> _quantumDestinations = [];
+    private readonly Dictionary<string, int> _partyMoments = [];
+    private readonly Dictionary<string, int> _partyHandles = [];
     private readonly Dictionary<string, int> _eventKinds = [];
     private readonly HashSet<string> _handles = [];
     private readonly HashSet<string> _geids = [];
@@ -96,6 +99,7 @@ internal sealed class Report
     private string _currentFile = "";
     private int _sessionHeaders;
     private int _incapacitations;
+    private int _partyNotifications;
     private int _unmatchedKnownTags;
     private int _corpseDeaths;
     private int _shipRetrievals;
@@ -171,6 +175,26 @@ internal sealed class Report
                     _incapacitations++;
                     _incapacitationFiles.Add(_currentFile);
                 }
+
+                // Both sides are counted rather than just the successes: the gap
+                // between notifications seen and notes read is the number of
+                // lines the reader declined to guess at, and that number should
+                // stay small without ever being forced to zero.
+                if (notification.IsParty)
+                {
+                    _partyNotifications++;
+
+                    if (Party.Read(notification.Timestamp, notification.Text) is { } note)
+                    {
+                        var moment = note.Moment.ToString();
+                        _partyMoments[moment] = _partyMoments.GetValueOrDefault(moment) + 1;
+
+                        if (note.Handle is not null)
+                            _partyHandles[note.Handle] =
+                                _partyHandles.GetValueOrDefault(note.Handle) + 1;
+                    }
+                }
+
                 break;
         }
     }
@@ -204,6 +228,23 @@ internal sealed class Report
         Top("Ships flown", _ships, 10);
         Top("Quantum destinations", _quantumDestinations);
         Top("Contracts", _contracts);
+
+        Section("Party");
+        Console.WriteLine($"  notifications : {_partyNotifications}");
+        Console.WriteLine($"  read as notes : {_partyMoments.Values.Sum()}");
+        Console.WriteLine($"  players named : {_partyHandles.Count}");
+
+        foreach (var (moment, count) in _partyMoments.OrderByDescending(p => p.Value))
+            Console.WriteLine($"    {moment,-14}{count,6}");
+
+        // The unread remainder is queue and matchmaking chatter naming nobody.
+        // Printed rather than hidden: if it ever grows, the channel has gained a
+        // sentence worth reading.
+        var unread = _partyNotifications - _partyMoments.Values.Sum();
+        if (unread > 0)
+            Console.WriteLine($"  -> {unread} named nobody (join queue, broadcasts), left unread.");
+
+        Top("Flown with", _partyHandles, 10);
 
         Section("Combat");
         Console.WriteLine($"  incapacitations   : {_incapacitations} across {_incapacitationFiles.Count} sessions");

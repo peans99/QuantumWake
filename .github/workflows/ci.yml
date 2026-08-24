@@ -49,3 +49,83 @@ jobs:
           name: test-results
           path: artifacts/test
           if-no-files-found: ignore
+
+  # The most expensive failure this project has is silent: the parser learns to
+  # read something, and nobody sees it, because backups are skipped by
+  # fingerprint and every existing session keeps a summary written before the
+  # field existed. It shipped that way once with medical beds and once with
+  # commodity purchases, both caught after the fact.
+  #
+  # PayloadVersion is the fix - it retires every cached row - and the release
+  # workflow already proves that a check is what makes "always bump the version"
+  # a rule rather than a habit. This is the same idea for the other version
+  # nobody remembers.
+  #
+  # Ubuntu on purpose: this is git and grep, and needs none of the SDK.
+  payload-version:
+    name: Cached sessions retired
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: A parser change must retire the cache
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          changed=$(git diff --name-only "$BASE"...HEAD)
+
+          # What can widen a stored summary: the parser that reads events, the
+          # events themselves, the builder that folds them up, and the record it
+          # produces. Anything else may change freely.
+          shaping=$(echo "$changed" | grep -E \
+            '^src/Quantumwake\.Core/(Parsing/|Events/|State/Session\.cs|State/SessionBuilder\.cs)' \
+            || true)
+
+          if [ -z "$shaping" ]; then
+            echo "No payload-shaping file touched; nothing to retire."
+            exit 0
+          fi
+
+          echo "Payload-shaping files in this change:"
+          echo "$shaping" | sed 's/^/  /'
+
+          # Touching SessionStore.cs is not enough - the constant has to move.
+          if git diff "$BASE"...HEAD -- src/Quantumwake.Data/SessionStore.cs \
+             | grep -qE '^\+.*PayloadVersion = [0-9]+'; then
+            echo
+            echo "PayloadVersion moves in this change. Caches will be retired."
+            exit 0
+          fi
+
+          # A comment fix or a rename genuinely changes nothing stored, and a
+          # check that cannot be answered is a check people learn to ignore.
+          #
+          # A trailer, anchored to the start of a line, rather than a bare word
+          # anywhere in the message: the commit that first documented this
+          # waiver waived the check by explaining it, which is a poor way for a
+          # guard to fail. Prose can now name the trailer without invoking it.
+          if git log "$BASE"..HEAD --format='%B' | grep -qiE '^No-payload-bump:[[:space:]]*[^[:space:]]'; then
+            echo
+            echo "Waived by a commit trailer:"
+            git log "$BASE"..HEAD --format='%B' | grep -iE '^No-payload-bump:' | sed 's/^/  /'
+            exit 0
+          fi
+
+          echo
+          echo "::error::This change touches the parser or the session summary, but"
+          echo "::error::PayloadVersion in src/Quantumwake.Data/SessionStore.cs does not move."
+          echo "::error::"
+          echo "::error::Sessions already on disk are skipped by fingerprint, so whatever"
+          echo "::error::this now reads will be invisible to every install that has run"
+          echo "::error::before - the ones with the most history. Bump the constant, or, if"
+          echo "::error::nothing stored actually changed, add a commit trailer on its own line:"
+          echo "::error::"
+          echo "::error::    No-payload-bump: renamed a private field, nothing new is read"
+          exit 1

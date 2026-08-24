@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="app.css?v=0.7.16">
 </head>
 <body>
 
@@ -29,6 +29,7 @@
       <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="jobs">Shopping</button>
+        <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="routes">Routes</button>
       </div>
@@ -41,6 +42,7 @@
         <button data-view="fleet">Fleet</button>
         <button data-view="places">Places</button>
         <button data-view="contracts">Contracts</button>
+        <button data-view="crew">Crew</button>
         <button data-view="casualties">Casualties</button>
       </div>
     </div>
@@ -149,6 +151,10 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <div class="now-card-visibility" id="now-card-visibility" hidden>
+      <span class="muted">Hidden cards</span>
+      <div id="now-hidden-card-list"></div>
+    </div>
     <div class="now-grid">
 
       <article class="card hero" data-card="location">
@@ -162,9 +168,49 @@
         </div>
       </article>
 
+      <article class="card span2 now-briefing" id="now-briefing-card" data-card="briefing" hidden>
+        <div class="card-label">What to do next</div>
+        <div class="briefing-head">
+          <div>
+            <div class="briefing-title" id="briefing-title"></div>
+            <div class="briefing-sub" id="briefing-sub"></div>
+          </div>
+          <div class="briefing-actions">
+            <button class="ghost tiny" id="briefing-add-stop">Add this stop</button>
+            <button class="ghost tiny" id="briefing-map">Show on map</button>
+            <button class="ghost tiny" id="briefing-overlay">Pin to overlay</button>
+          </div>
+        </div>
+        <div class="briefing-grid">
+          <section class="briefing-section" id="briefing-stops-section">
+            <div class="briefing-label">Next stops</div>
+            <div class="briefing-list" id="briefing-stops"></div>
+          </section>
+          <section class="briefing-section" id="briefing-shopping-section">
+            <div class="briefing-label">Available to collect here</div>
+            <div class="briefing-list" id="briefing-shopping"></div>
+          </section>
+          <section class="briefing-section" id="briefing-trade-section">
+            <div class="briefing-label">Trade leads</div>
+            <div class="briefing-list" id="briefing-trade"></div>
+          </section>
+          <section class="briefing-section" id="briefing-services-section">
+            <div class="briefing-label">Services here</div>
+            <div class="briefing-services" id="briefing-services"></div>
+          </section>
+          <section class="briefing-section" id="briefing-stash-section">
+            <div class="briefing-label">Stashed here</div>
+            <div class="briefing-list" id="briefing-stash"></div>
+          </section>
+        </div>
+      </article>
+
       <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
-        <div class="value" id="now-ship">—</div>
+        <div class="now-ship-summary">
+          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
+          <div class="value" id="now-ship">—</div>
+        </div>
       </article>
 
       <article class="card" data-card="session">
@@ -207,6 +253,16 @@
         <ul class="now-job-items" id="now-job-items"></ul>
       </article>
 
+      <article class="card span2" id="now-checklist-card" data-card="checklist" hidden>
+        <div class="card-label">Checklist</div>
+        <div class="now-checklist-head">
+          <div class="now-job-title" id="now-checklist-title"></div>
+          <button class="ghost tiny" id="now-checklist-open">Open</button>
+        </div>
+        <div id="now-checklist-progress"></div>
+        <ul class="now-checklist-items" id="now-checklist-items"></ul>
+      </article>
+
       <article class="card span2" id="now-trip-card" data-card="trip" hidden>
         <div class="card-label">Flight plan</div>
         <div class="now-trip-head">
@@ -241,10 +297,27 @@
         <input type="checkbox" id="map-visited-only">
         <span>Visited only</span>
       </label>
+      <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
+        <option value="system">System positions</option>
+        <option value="network">Jump network</option>
+      </select>
+      <select id="map-system" class="select" title="System to draw with relative body positions"></select>
       <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
         <input type="checkbox" id="map-goods">
         <span>Goods on hover</span>
       </label>
+      <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
+        <button type="button" class="active" data-service="" title="Show every place">All</button>
+        <button type="button" data-service="shop" title="UEX-listed counters and shops">▦ Shops</button>
+        <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
+        <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
+      </div>
+      <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
+        <button type="button" class="active" data-focus="" title="Show every place">All</button>
+        <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
+        <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
+        <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
+      </div>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
@@ -260,13 +333,30 @@
       </div>
       <select id="map-window" class="select period" data-all="All time" hidden
               title="How far back your own receipts count"></select>
+      <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
+        <option value="auto">Labels: auto</option>
+        <option value="quiet">Labels: quiet</option>
+        <option value="all">Labels: all</option>
+      </select>
+      <select id="map-preset" class="select" title="Apply or restore a saved map view">
+        <option value="">Map preset</option>
+        <option value="plan">Current plan</option>
+        <option value="shopping">Shopping run</option>
+        <option value="services">Service scan</option>
+        <option value="visited">My places</option>
+        <option value="saved">Saved view</option>
+      </select>
+      <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
-      <button class="ghost" id="map-here">Centre on me</button>
+      <button class="ghost map-player" id="map-here" title="Show your current location on the map">
+        <span aria-hidden="true">⌖</span> <span id="map-here-label">Your location</span>
+      </button>
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
+    <p class="muted map-mode-note" id="map-mode-note"></p>
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
@@ -288,6 +378,7 @@
           <span class="map-info-kind" id="map-info-kind"></span>
           <span id="map-info-visits"></span>
         </div>
+        <div class="map-info-services" id="map-info-services" hidden></div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
         <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
@@ -305,18 +396,32 @@
       <div class="controls">
         <select id="routes-ship" class="select" title="Whose hold to fill"></select>
         <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <select id="routes-ranking" class="select" title="How to rank trade routes">
+          <option value="reliable">Reliable first</option>
+          <option value="profit">Highest estimated profit</option>
+        </select>
+        <select id="routes-evidence" class="select" title="How much reported availability a route needs">
+          <option value="reported">Reported capacity</option>
+          <option value="full">Reported full load</option>
+          <option value="any">Include unknown capacity</option>
+        </select>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
         </label>
+        <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
+          <input type="checkbox" id="routes-fresh-only">
+          <span>Fresh only</span>
+        </label>
       </div>
     </div>
     <p class="muted caption">
-      The best hauls UEX knows, sized to a real hold and a real wallet — pick
-      one of your ships and the money you can spend, and the ranking becomes
-      what <em>this</em> run earns rather than a margin in the abstract. Each
-      row says what capped it: your hold, your capital, or the shop's own
-      stock. Needs UEX prices, and ship capacities from the community dataset.
+      Estimated UEX hauls, sized to a real hold and wallet. “Reported capacity”
+      requires a stock and demand report on both ends; “full load” also requires
+      those reports to cover your target SCU. A price report is not live
+      inventory, terminal access, or travel time — each row shows the evidence
+      behind its estimate and the age of its two quotes.
+      <span id="routes-origin-note"></span>
     </p>
     <div class="table-wrap">
       <table id="routes-table">
@@ -325,7 +430,7 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th><th></th>
+            <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -333,7 +438,69 @@
     </div>
   </section>
 
+  <!-- CHECKLISTS -->
+  <section id="view-checklists" class="view">
+    <div class="section-bar">
+      <h2>Checklists</h2>
+    </div>
+    <p class="muted caption">
+      Your own preparation notes, not game telemetry. Pin one list to Now and
+      the overlay; locations, items and links stay as references you can open.
+    </p>
+    <div class="checklist-new">
+      <input type="text" id="checklist-title" class="search" placeholder="New checklist, e.g. Pyro departure" autocomplete="off">
+      <button class="ghost" id="checklist-create">Create checklist</button>
+    </div>
+    <datalist id="checklist-catalogue"></datalist>
+    <div id="checklists-list"></div>
+  </section>
+
   <!-- CASUALTIES -->
+  <section id="view-crew" class="view">
+    <div class="section-bar">
+      <h2>Crew</h2>
+      <div class="controls">
+        <select id="crew-period" class="select period" title="Filter by date"></select>
+      </div>
+    </div>
+    <p class="muted caption">
+      The people you fly with. Star Citizen 4.9 logs no party roster &mdash;
+      there is no join event carrying a member list and no player id anywhere
+      &mdash; so this is built from the only lines that name anyone: the toasts
+      announcing that somebody in your party came online or dropped.
+      <b>Every number here is a floor, never a total.</b> A friend who was
+      already online when you grouped up and stayed until you logged off
+      produces no toast at all, so an evening flown together can leave no trace.
+      What these rows can be trusted to say is that these people were there
+      &mdash; never that nobody else was.
+    </p>
+
+    <div class="summary-strip" id="crew-summary"></div>
+
+    <h2 class="spaced">Most flown with</h2>
+    <div id="crew-chart" class="bars"></div>
+
+    <h2 class="spaced">Everyone named</h2>
+    <p class="muted caption">
+      Ranked by sessions rather than by toasts: a player with a poor connection
+      would otherwise outrank the people who quietly flew whole nights with you.
+      <em>Led</em> counts the times party lead passed to them.
+    </p>
+    <div class="table-wrap">
+      <table id="crew-table">
+        <thead>
+          <tr>
+            <th>Handle</th>
+            <th class="num">Sessions</th><th class="num">Came online</th>
+            <th class="num">Dropped</th><th class="num">Led</th>
+            <th>First</th><th>Last</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="view-casualties" class="view">
     <div class="section-bar">
       <h2>Casualties</h2>
@@ -474,6 +641,7 @@
         <select id="sessions-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
+    <p class="muted caption">Select a session to open its route, activity and recorded economy debrief.</p>
     <div class="summary-strip" id="lib-summary"></div>
     <div class="table-wrap">
       <table id="sessions-table">
@@ -615,12 +783,24 @@
         <b>Name the cargo?</b>
         The community keeps the id-to-name table as a public file
         (StarCitizenWiki / scunpacked-data). Enabling this downloads it once.
-        The app connects to the internet only on your request, here or from the
-        Settings page - never on its own.
+        This one is fetched on your request and never again on its own; only
+        the market price table can be given standing leave to refresh, and only
+        if you turn that on.
       </div>
       <button class="ghost" id="community-enable">Download community data</button>
       <span class="muted" id="community-status"></span>
     </div>
+
+    <h2 class="spaced">What hauling has been worth</h2>
+    <p class="muted caption">
+      Running totals, not per-week takings: a hold is sold a few times a month,
+      so a line drawn week by week would be mostly floor with occasional spikes
+      and would read as a business collapsing between runs. The gap between the
+      two lines is what cargo has actually made you.
+    </p>
+    <svg id="cargo-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Cargo earnings over time"></svg>
+    <div class="chart-key" id="cargo-chart-key"></div>
 
     <h2 class="spaced">Revenue by location</h2>
     <div id="cargo-shops" class="bars"></div>
@@ -845,6 +1025,104 @@
   </section>
 
   <!-- REFERENCE: ships -->
+  <!-- Drill-down for one commodity. Opened from Market; no tab of its own. -->
+  <section id="view-commodity" class="view">
+    <div class="section-bar">
+      <h2 id="commodity-name">Commodity</h2>
+      <div class="controls">
+        <button class="ghost" id="commodity-back">&larr; Market</button>
+      </div>
+    </div>
+    <p class="muted caption" id="commodity-sub"></p>
+
+    <div class="summary-strip" id="commodity-summary"></div>
+
+    <h2 class="spaced">What it has been worth</h2>
+    <p class="muted caption" id="commodity-trend-note">
+      Best price across the sampled counters, day by day. The gap between the
+      two lines is the margin a run would have earned that day.
+    </p>
+    <svg id="commodity-price-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Price over time"></svg>
+    <div class="chart-key" id="commodity-price-key"></div>
+
+    <h2 class="spaced">What a run would have made</h2>
+    <p class="muted caption">
+      Best price paid to you that day, less the cheapest anyone charged for it —
+      the margin per SCU a buy-here-sell-there run would have earned. Blank when
+      nobody in the sample stocks it, since a good you cannot buy has no margin,
+      only a sale price.
+    </p>
+    <svg id="commodity-margin-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Margin per SCU over time"></svg>
+    <div class="chart-key" id="commodity-margin-key"></div>
+
+    <h2 class="spaced">Counter by counter</h2>
+    <p class="muted caption">
+      The same weeks, unaggregated: what each sampled counter was paying. The
+      best-of line above hides which one it was, and counters do not move
+      together — one holding a price while the rest slide is the thing worth
+      knowing.
+    </p>
+    <svg id="commodity-counter-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Price per counter over time"></svg>
+    <div class="chart-key" id="commodity-counter-key"></div>
+
+    <h2 class="spaced">Demand against supply</h2>
+    <p class="muted caption">
+      How much those counters would still take off you, against how much they
+      had on the shelf. Each counter carries its last reported figure forward
+      until it reports again, so a day nobody reported is not drawn as a
+      collapse.
+    </p>
+    <svg id="commodity-scu-chart" class="timechart" viewBox="0 0 1000 220"
+         preserveAspectRatio="none" role="img" aria-label="Demand and stock over time"></svg>
+    <div class="chart-key" id="commodity-scu-key"></div>
+
+    <h2 class="spaced">Where it sells &mdash; counters that buy from you</h2>
+    <div class="table-wrap">
+      <table id="commodity-sell-table">
+        <thead>
+          <tr>
+            <th>Counter</th><th class="num">Pays</th><th class="num">Wants</th>
+            <th class="num">vs best</th><th>Reported</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="spaced">Where it buys &mdash; counters that stock it</h2>
+    <div class="table-wrap">
+      <table id="commodity-buy-table">
+        <thead>
+          <tr>
+            <th>Counter</th><th class="num">Costs</th><th class="num">In stock</th>
+            <th class="num">vs cheapest</th><th>Reported</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 class="spaced">Your own receipts</h2>
+    <p class="muted caption">
+      What you actually paid and were paid, from your logs rather than from
+      anyone's price table.
+    </p>
+    <div class="table-wrap">
+      <table id="commodity-mine-table">
+        <thead>
+          <tr>
+            <th>When</th><th>Side</th><th>Place</th>
+            <th class="num">SCU</th><th class="num">Total</th><th class="num">Per SCU</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="view-ships" class="view">
     <div class="section-bar">
       <h2>Ship catalogue</h2>
@@ -1178,9 +1456,10 @@
         Commodity names for your cargo, where each commodity trades, and the
         ship and item reference for the Fleet and Loadout pages — all from
         StarCitizenWiki / scunpacked-data. Enabling downloads a set of public
-        files (~110&nbsp;MB, kept as a few MB) into local app data. The app
-        connects to the internet only when you ask it to, here, and never on
-        its own. Disabling deletes the local copy.
+        files (~110&nbsp;MB, kept as a few MB) into local app data. Fetched when
+        you ask and never again on its own — this one has no automatic refresh,
+        because a commodity's name does not change while you play. Disabling
+        deletes the local copy.
       </p>
       <span class="muted" id="settings-community-status"></span>
     </div>
@@ -1195,10 +1474,19 @@
       <p class="muted">
         Crowd-sourced market prices from <em>uexcorp.space</em> — a third party,
         separate from the community dataset. Enabling fetches the current price
-        table and shows best sell prices on the Market page. Like everything
-        here: only on your click, never on a timer.
+        table and shows best sell prices on the Market page. On your click,
+        unless you turn on the refresh below — the one thing here that may go
+        out on its own.
       </p>
       <span class="muted" id="uex-status"></span>
+
+      <label class="toggle uex-auto-row">
+        <input type="checkbox" id="uex-auto-toggle">
+        <span>
+          Keep prices current while the app is open
+          <em class="muted" id="uex-auto-note"></em>
+        </span>
+      </label>
 
       <label class="toggle uex-age-row">
         <input type="checkbox" id="uex-age-toggle" checked>
@@ -1247,6 +1535,31 @@
       </p>
       <span class="muted" id="settings-rescan-status"></span>
     </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>What the logs still carry</h3>
+      </div>
+      <p class="muted">
+        Star Citizen has been logging less with every patch &mdash; quantum
+        detail went in 4.0.1, inter-system jumps in 4.1.0, combat entirely by
+        4.9 &mdash; and from inside this app each removal looks exactly like a
+        quiet evening. So here is when each thing last arrived. A row that has
+        gone quiet for weeks is worth a look; a row at zero may simply be
+        something you do not do.
+      </p>
+      <div class="table-wrap">
+        <table id="signals-table">
+          <thead>
+            <tr>
+              <th>Signal</th><th class="num">Total</th>
+              <th class="num">Sessions</th><th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section id="view-about" class="view">
@@ -1274,9 +1587,11 @@
           No account, no configuration, no upload. It reads <code>Game.log</code>
           and the backups beside it, resolves the names from your own copy of the
           game, and shows you what is there. Nothing is written to the game
-          directory, and the app connects to the internet only when you ask it
-          to — the optional datasets from the Settings page, and the version
-          check if you turn that on. Never otherwise, and never on a timer.
+          directory, and the app connects to the internet only where you have
+          said it may — the optional datasets from the Settings page, and, if
+          you turn them on, the version check and the market-price refresh.
+          Those last two are the only ones that go out without a click, and both
+          are off until you say otherwise.
         </p>
 
         <dl class="about-facts">
@@ -1374,8 +1689,10 @@
             <p>
               No. It reads <code>Game.log</code> and the backups beside it, and
               nothing is written to the game directory, no memory is read and
-              nothing is injected. It connects to the internet only when you ask
-              it to from the Settings page, never on its own.
+              nothing is injected. It connects to the internet only where you
+              have said it may, from the Settings page — and the two that can go
+              out unattended, the version check and the market-price refresh,
+              are both off until you turn them on.
             </p>
           </details>
 
@@ -1490,6 +1807,17 @@
         </div>
       </label>
 
+      <label class="setup-opt setup-sub" id="setup-uex-auto-row" hidden>
+        <input type="checkbox" id="setup-uex-auto">
+        <div>
+          <b>Keep those prices current <em>the only automatic connection</em></b>
+          <span>Refetches the price table every few hours while the app is
+          open, so it describes today's market rather than the day you set this
+          up. Nothing else here ever goes out on its own, and this can be turned
+          off again in Settings.</span>
+        </div>
+      </label>
+
       <div class="setup-wipe" id="setup-wipe-row">
         <b>Your last wipe</b>
         <span class="muted">
@@ -1514,6 +1842,6 @@
       </div>
     </div>
   </div>
-<script src="app.js"></script>
+<script src="app.js?v=0.7.16"></script>
 </body>
 </html>

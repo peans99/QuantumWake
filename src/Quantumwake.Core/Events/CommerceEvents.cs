@@ -61,8 +61,8 @@ public sealed record ShopFlowResponseEvent(
 /// </summary>
 /// <remarks>
 /// <para>
-/// The only income the logs record, and it dwarfs everything else - single
-/// sales over a million aUEC:
+/// Selling is the only income the logs record, and it dwarfs everything else -
+/// single sales over a million aUEC:
 /// </para>
 /// <code>
 /// &lt;CEntityComponentCommodityUIProvider::SendCommoditySellRequest&gt;
@@ -70,6 +70,22 @@ public sealed record ShopFlowResponseEvent(
 ///   ... quantity[288] transactionMode[ResourceContainer]
 ///   Cargo Box Data: [boxSize[16] | unitAmount[18]]
 /// </code>
+/// <para>
+/// Buying is the same transaction written differently, and until 0.7 it was not
+/// read at all - so cargo could be watched leaving but never arriving, and no
+/// run could be priced. The total is <c>price</c> rather than <c>amount</c>,
+/// the quantity is centi-SCU rather than SCU, and there is no
+/// <c>transactionMode</c>:
+/// </para>
+/// <code>
+/// &lt;CEntityComponentCommodityUIProvider::SendCommodityBuyRequest&gt;
+///   ... shopName[SCShop_Admin_lt_base_g] ... price[63980.000000]
+///   ... quantity[32000.000000 cSCU]
+///   Cargo Box Data: boxSize[16.000000] | unitAmount[20]
+/// </code>
+/// <para>
+/// <see cref="Quantity"/> is SCU on both sides; the parser converts.
+/// </para>
 /// <para>
 /// Unlike item purchases there is no matching server response, so a trade is
 /// recorded as requested rather than confirmed. Totals built on it should be

@@ -394,4 +394,59 @@ public class LogEventParserTests
         Assert.Equal(288, trade.Quantity);
         Assert.Null(trade.ResourceId);
     }
+
+    /// <summary>
+    /// The buy shape, which went unread until 0.7. Three things differ from a
+    /// sale: the total is <c>price</c>, the quantity is centi-SCU, and there is
+    /// no <c>transactionMode</c>.
+    /// </summary>
+    [Fact]
+    public void Extracts_commodity_purchase()
+    {
+        var trade = ParseOne<CommodityTradeEvent>(
+            "<2026-08-03T02:29:40.941Z> [Notice] <CEntityComponentCommodityUIProvider::SendCommodityBuyRequest> " +
+            "Sending SShopCommodityBuyRequest - playerId[204721322607] shopId[730090138592] " +
+            "shopName[SCShop_Admin_lt_base_g] kioskId[730090138591] price[63980.000000] " +
+            "shopPricePerCentiSCU[1.999375] resourceGUID[b999ef65-35be-45bf-908a-5eac6e06ba12] " +
+            "autoLoading[0] quantity[32000.000000 cSCU] Cargo Box Data: boxSize[16.000000] | unitAmount[20]");
+
+        Assert.False(trade.IsSell);
+        Assert.Equal("commodity.buy", trade.Kind);
+        Assert.Equal(63980m, trade.Amount);
+
+        // 32,000 cSCU is 320 SCU - and 320 is what boxSize 16 x unitAmount 20
+        // says was loaded. Reading the number as written would report a hundred
+        // times the cargo any ship in the game can carry.
+        Assert.Equal(320, trade.Quantity);
+
+        Assert.Null(trade.TransactionMode);
+        Assert.Equal("b999ef65-35be-45bf-908a-5eac6e06ba12", trade.ResourceId);
+    }
+
+    /// <summary>
+    /// "price" must not be taken from "shopPricePerCentiSCU", and "amount" must
+    /// not be taken from the "unitAmount" trailing both shapes. Both lines carry
+    /// their decoy after the real field, so a mis-anchored match takes the
+    /// wrong number rather than failing outright.
+    /// </summary>
+    [Theory]
+    [InlineData(
+        "SendCommodityBuyRequest> Sending SShopCommodityBuyRequest - shopName[SCShop_x] " +
+        "price[63980.000000] shopPricePerCentiSCU[1.999375] quantity[1600.000000 cSCU] " +
+        "Cargo Box Data: boxSize[16.000000] | unitAmount[1]",
+        63980, 16)]
+    [InlineData(
+        "SendCommoditySellRequest> Sending SShopCommoditySellRequest - shopName[SCShop_x] " +
+        "amount[146240.000000] quantity[320] transactionMode[Location] " +
+        "Cargo Box Data:  [boxSize[16] | unitAmount[20]]",
+        146240, 320)]
+    public void Trade_totals_are_not_taken_from_the_lookalike_fields(
+        string body, int amount, int scu)
+    {
+        var trade = ParseOne<CommodityTradeEvent>(
+            $"<2026-08-03T02:29:40.941Z> [Notice] <CEntityComponentCommodityUIProvider::{body}");
+
+        Assert.Equal(amount, trade.Amount);
+        Assert.Equal(scu, trade.Quantity);
+    }
 }

@@ -49,12 +49,59 @@ In this order, no steps skipped:
    `Directory.Build.props`, merge, tag, push the tag. The pipeline refuses to
    build when the tag and the version disagree.
 
+## Two version numbers, not one
+
+`Directory.Build.props` is the release version, and the release workflow refuses
+to build when the tag disagrees with it. That one is enforced and hard to
+forget.
+
+**Raise the patch with every change** — 0.7.1, 0.7.2, 0.7.3 — as part of the
+same commit as the work. Major and minor move only when Nicolas says so; never
+decide on your own that something is big enough to be 0.8.
+
+Rename the release-notes heading in `README.md` as you go rather than opening a
+second one, so there is always exactly one section and it always matches the
+version in the props file. That is what keeps the workflow able to find it: it
+lifts the section matching the tag and nothing else, and a version that quietly
+grew its own heading is a feature nobody reads about.
+
+`PayloadVersion` in `src/Quantumwake.Data/SessionStore.cs` is the one that gets
+forgotten, and forgetting it fails **silently**. Backups are skipped by
+fingerprint, so a session summarised before a field existed keeps that summary
+for ever: the parser reads the new thing, the page asks for it, and every
+install that has run before shows nothing. The installs with the most history
+see the least. It has shipped that way twice — medical beds in 0.6, commodity
+purchases in 0.7.
+
+Touch the parser, the events, `Session.cs` or `SessionBuilder.cs`, and move
+`PayloadVersion` in the same change. CI fails the pull request otherwise. When
+nothing stored actually changed — a rename, a comment — waive it with a commit
+trailer on its own line:
+
+```
+No-payload-bump: renamed a private field, nothing new is read
+```
+
+`SchemaVersion` beside it answers a different question: bump that only when a
+stored payload can no longer be *read*, because a mismatch drops the table
+rather than merely re-reading the logs.
+
 ## Release notes
 
 Written for someone deciding whether to update, not for the commit log. What
 changed and what it means for them; nothing about refactors they cannot see.
 The newest version goes directly under the `## Release notes` heading at the
 bottom of `README.md`, and the release workflow lifts that section verbatim.
+
+**It lifts only the section matching the version being tagged.** Everything
+shipping in a release has to be in that one section — a separate `### 0.6.13`
+heading once meant a whole feature shipped unmentioned, because 0.6.13 never got
+a tag of its own.
+
+`README.md` is byte-sensitive: it carries em dashes and middots, and a
+byte-level `sed` repair once mangled 64 of them. Splice whole lines with
+`head`/`tail` rather than running regex over punctuation in place, and check
+afterwards — `grep -c $'\xef\xbf\xbd' README.md` must print 0.
 
 ## Running the tests
 
@@ -67,6 +114,25 @@ dotnet test Quantumwake.slnx -c Release        # both suites
 document, so the dashboard's own logic is tested rather than eyeballed. Add to
 the second one when changing `web/` — it is the only thing standing between a
 broken panel and a screenshot nobody took.
+
+## Then check it against the real logs
+
+Green tests mean the fixtures still parse. They do not mean the app reads *this*
+install. The CLI is the harness for that:
+
+```powershell
+dotnet run --project src\Quantumwake.Cli -c Release
+```
+
+It parses every backup — 151 files, ~420 MB, a few seconds — and prints
+per-event counts and any unmatched tags. **`! unmatched known tags` should read
+0.** A parser change is not finished until it has run against that corpus.
+
+Then check the number it produced against something it did not use. When
+commodity buying started parsing, the give-away was that price ÷ SCU matched
+`shopPricePerCentiSCU`, a field the parser never reads — which is what caught
+the centi-SCU unit and would have caught a hundredfold error that still looked
+like a plausible integer.
 
 ## Seeing it actually run
 
@@ -88,12 +154,26 @@ Two traps. The server serves `bin\Release\net10.0\web`, **not** the repo's
 is locked. And stub `window.EventSource` in any throwaway page you drive, or it
 never settles.
 
+Two more traps once a page has to be *driven* rather than merely loaded. Chrome's
+virtual clock stalls while the live stream holds a request open, so `setTimeout`
+never fires — hang the harness off a `MutationObserver` instead. And a table that
+re-renders when its data lands will discard a panel you opened a moment earlier,
+so reopen until it sticks rather than clicking once.
+
+Rendering earns its keep. It has caught a button clipped off-screen by
+`margin-left:auto` inside a table wider than its panel, a control left invisible
+because it only appeared on hover, and a page that rendered completely blank
+because a local named `history` shadowed `window.history` for a whole function.
+None of those show up in a diff.
+
 ### Driving it against real data without touching Nicolas's
 
 The most useful screenshots come from the real install, and the real install is
 his: the app is usually running on 31337 against
 `%LOCALAPPDATA%\Quantumwake`, and anything written there is his data, not a
-fixture. So copy it and point a second server at the copy:
+fixture. Do not stop it to get a build through either — when the Overlay DLLs
+are locked, build the individual projects rather than the solution. So copy the
+data and point a second server at the copy:
 
 ```powershell
 Copy-Item "$env:LOCALAPPDATA\Quantumwake\*" "$env:TEMP\claude\qw-data" -Recurse
@@ -119,3 +199,9 @@ click path gets tested without writing anything anywhere.
 - The app says what it cannot support: inferred locations carry a confidence,
   estimates are labelled, and a missing signal gets an explanation rather than a
   bare zero. Keep that up in anything new.
+- A number that is a floor is called a floor. The Crew page leads with the fact
+  that it cannot see anyone who never disconnected, because the alternative is a
+  count that looks complete and is not.
+- A negative result is worth writing down. Freight looked like six thousand
+  lines of cargo tracking and turned out to be loading-platform noise; that is
+  recorded in `docs/untapped-signals.md` so nobody spends the day again.

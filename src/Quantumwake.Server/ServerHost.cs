@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
@@ -93,9 +94,15 @@ public static class ServerHost
         builder.Services.AddSingleton<UexData>();
         builder.Services.AddSingleton<UexFeeds>();
         builder.Services.AddSingleton<JobStore>();
+        builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
+
+        // Prices are the one dataset here with a shelf life, so they are the one
+        // thing allowed to refetch themselves - and only once asked.
+        builder.Services.AddSingleton<TradeDataStore>();
+        builder.Services.AddHostedService<TradeDataRefresh>();
 
         // MrKraken's StarStrings, installed on request. The only thing in the
         // app that writes outside its own data folder.
@@ -116,10 +123,45 @@ public static class ServerHost
         // Bind to loopback unless explicitly opened up. Standalone mode is local-only;
         // exposing the dashboard to the LAN (for a tablet as second screen) is opt-in.
         var port = builder.Configuration.GetValue("Port", 31337);
-        var host = builder.Configuration.GetValue<bool>("Lan") ? "0.0.0.0" : "127.0.0.1";
-        builder.WebHost.UseUrls($"http://{host}:{port}");
+        var lan = builder.Configuration.GetValue<bool>("Lan");
+        builder.WebHost.UseUrls($"http://{(lan ? "0.0.0.0" : "127.0.0.1")}:{port}");
 
         var app = builder.Build();
+
+        // Opening the dashboard to the LAN opens the API with it, and neither
+        // has a login - so from off this machine it is read-only.
+        //
+        // The point of -Lan is a tablet showing the dashboard, which needs reads
+        // and the live feed and nothing else. Everything that changes something
+        // is a POST: storing UEX credentials, installing StarStrings into the
+        // game directory, moving the wipe line, forcing a rescan. None of that
+        // should be reachable by anyone who joins the same wifi.
+        //
+        // GET, HEAD and OPTIONS pass, as does the SignalR hub - LiveHub declares
+        // no callable methods, so it only ever broadcasts outwards. Requests
+        // from this machine are untouched, so the app itself is unaffected.
+        if (lan)
+        {
+            app.Use(async (context, next) =>
+            {
+                var remote = context.Connection.RemoteIpAddress;
+                var here = remote is null || IPAddress.IsLoopback(remote);
+
+                if (here || LanGuard.AllowsFromElsewhere(
+                        context.Request.Method, context.Request.Path.Value ?? "/"))
+                {
+                    await next();
+                    return;
+                }
+
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { message = LanGuard.Refusal });
+            });
+
+            app.Logger.LogWarning(
+                "Listening on every interface (-Lan). Anyone on this network can read your "
+                + "history; changing anything still requires this machine.");
+        }
 
         // The web UI lives outside the project so the overlay and the browser load the
         // exact same files.
@@ -434,6 +476,22 @@ public static class ServerHost
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 
+        // The Now page is a briefing, not another report to go hunting through:
+        // one request joins the live place to the player's plan, shopping lists,
+        // stash, and opt-in market feeds. The game never writes a cargo manifest,
+        // so trade rows are deliberately "buy here, sell there" leads rather than
+        // pretending the player is carrying a commodity it cannot see.
+        app.MapGet("/api/briefing", (
+            LiveSessionService live, TripStore trips, JobStore jobs,
+            LogLibrary lib, UexData uex, UexFeeds feeds) =>
+            BuildBriefing(live.Current, trips, jobs, lib, uex, feeds));
+
+        // The map reads the same deliberately limited service evidence as the
+        // briefing. It receives map ids, not UEX's terminal names, so its
+        // filtering and detail card use exactly the resolver the trade views do.
+        app.MapGet("/api/map/services", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
+            BuildMapServices(lib, uex, feeds));
+
         // Server-Sent Events feed for the browser UI.
         //
         // The SignalR hub above stays mapped as the seam for Phase 6 multi-client work,
@@ -704,6 +762,14 @@ public static class ServerHost
         // down. See LogLibrary.Standings for why those are two different things.
         app.MapGet("/api/standing", (LogLibrary lib, int? days) => lib.Standings(days ?? 0));
 
+        // Who the party channel has named. See LogLibrary.Wingmen for why these
+        // are floors rather than totals.
+        app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));
+
+        // What the logs are still carrying. Unscoped by wipe on purpose - see
+        // LogLibrary.Signals.
+        app.MapGet("/api/signals", (LogLibrary lib) => lib.Signals());
+
         // The community catalogue joined onto this install's trades, plus UEX
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.
@@ -867,8 +933,16 @@ public static class ServerHost
         // Each end of a haul carries the map's own id for it where the terminal
         // could be matched, so planning a run puts real dots on the map instead
         // of the page guessing at the names a second time.
-        app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
-            uex.Routes(scu ?? 0, capital ?? 0, from, 30).Select(r => new
+        app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from,
+            string? ranking, bool? freshOnly, string? evidence) =>
+            uex.Routes(
+                scu ?? 0,
+                capital ?? 0,
+                from,
+                limit: 30,
+                reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
+                freshOnly: freshOnly == true,
+                evidence: evidence ?? "any").Select(r => new
             {
                 r.Commodity,
                 r.BuyAt,
@@ -881,7 +955,19 @@ public static class ServerHost
                 r.Units,
                 r.Profit,
                 r.Outlay,
-                r.LimitedBy
+                r.LimitedBy,
+                r.DesiredUnits,
+                r.BuyStockScu,
+                r.SellDemandScu,
+                r.BuyAvailability,
+                r.SellAvailability,
+                r.Availability,
+                mapReady = !string.IsNullOrWhiteSpace(lib.Terminals.IdFor(r.BuyAt))
+                    && !string.IsNullOrWhiteSpace(lib.Terminals.IdFor(r.SellAt)),
+                r.BuySeenAt,
+                r.SellSeenAt,
+                r.Freshness,
+                r.FallbackSells
             }));
 
         // Where the player last woke, for the Now card. Its own endpoint
@@ -1223,6 +1309,31 @@ public static class ServerHost
         app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
             jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
+        // ---- checklists: authored preparation, never guessed from the log ----
+
+        app.MapGet("/api/checklists", (ChecklistStore checklists) => checklists.All());
+
+        app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
+            Results.Ok(checklists.Add(body.Title)));
+
+        app.MapPost("/api/checklists/{id}/items", (string id, ChecklistStore checklists, ChecklistItemRequest body) =>
+        {
+            var list = checklists.AddItem(id, body.Text, body.DueAt, body.Note, body.Attachments);
+            return list is null ? Results.NotFound() : Results.Ok(list);
+        });
+
+        app.MapPost("/api/checklists/{id}/items/{itemId}/toggle", (string id, string itemId, ChecklistStore checklists) =>
+            checklists.ToggleItem(id, itemId) ? Results.Ok(new { id, itemId }) : Results.NotFound());
+
+        app.MapPost("/api/checklists/{id}/pin", (string id, ChecklistStore checklists) =>
+            checklists.TogglePin(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/checklists/{id}/items/{itemId}", (string id, string itemId, ChecklistStore checklists) =>
+            checklists.RemoveItem(id, itemId) ? Results.Ok(new { id, itemId }) : Results.NotFound());
+
+        app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists) =>
+            checklists.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
         // ---- flight plans: where to go next, in order ----
 
         // ---- the wipe: where the player's countable history begins ----
@@ -1540,7 +1651,12 @@ public static class ServerHost
             try
             {
                 var count = await uex.EnableAsync(httpFactory.CreateClient("community"));
-                return Results.Ok(new { enabled = true, prices = count });
+
+                // Not "enabled = true". A fetch that finished after somebody
+                // pressed Disable stands down and applies nothing, and saying
+                // otherwise would leave the page showing an integration that is
+                // off as though it were on.
+                return Results.Ok(new { enabled = uex.IsEnabled, prices = count });
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidDataException or JsonException)
             {
@@ -1552,6 +1668,62 @@ public static class ServerHost
         {
             uex.Disable();
             return Results.Ok(new { enabled = false });
+        });
+
+        // What a commodity has been doing lately. A fetch per counter, so it
+        // happens on the click that opens the page and is then cached - never
+        // as part of a page load, and never at all while UEX is off.
+        app.MapGet("/api/uex/history", async (
+            UexData uex, IHttpClientFactory httpFactory, string commodity,
+            int? perSide, CancellationToken token) =>
+        {
+            if (!uex.IsEnabled)
+                return Results.Ok(new UexHistory(commodity, 0, 0, []));
+
+            // Each counter is a separate request to UEX, so the caller says how
+            // many it needs and the number is clamped here rather than trusted.
+            // The Market panel's strip asks for one per side; the commodity page,
+            // which is a deliberate drill-down, asks for the default four.
+            var sample = Math.Clamp(perSide ?? 4, 1, 8);
+
+            try
+            {
+                return Results.Ok(await uex.HistoryAsync(
+                    commodity, httpFactory.CreateClient("community"), sample, token));
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+            {
+                return Results.Problem(
+                    title: "UEX history could not be fetched.", detail: e.Message, statusCode: 502);
+            }
+        });
+
+        // Whether prices may refetch themselves, and when one was last tried.
+        // staleAfterHours is served rather than duplicated in the page: the
+        // interval is a judgement about someone else's server, and it should be
+        // stated in one place.
+        app.MapGet("/api/uex/auto", (TradeDataStore auto, UexData uex) =>
+        {
+            var preference = auto.Current;
+
+            return new
+            {
+                preference.Asked,
+                preference.Automatic,
+                preference.LastCheckedAt,
+                staleAfterHours = TradeDataStore.StaleAfter.TotalHours,
+                fetchedAt = uex.FetchedAt,
+
+                // The toggle is meaningless while UEX is off, and the page says
+                // so rather than offering a switch that does nothing.
+                uexEnabled = uex.IsEnabled
+            };
+        });
+
+        app.MapPost("/api/uex/auto/answer", (bool automatic, TradeDataStore auto) =>
+        {
+            var preference = auto.Answer(automatic);
+            return Results.Ok(new { preference.Asked, preference.Automatic });
         });
 
         // Stored only in local app data; posting empty values removes them.
@@ -1638,7 +1810,8 @@ public static class ServerHost
             });
         }
 
-        app.Logger.LogInformation("Quantum Wake by nekron - http://{Host}:{Port}", host, port);
+        app.Logger.LogInformation(
+            "Quantum Wake by nekron - http://{Host}:{Port}", lan ? "0.0.0.0" : "127.0.0.1", port);
         return app;
     }
 
@@ -1773,6 +1946,161 @@ static int Holes(IEnumerable<ShipSlot> slots)
             .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
     }
 
+    /// <summary>Builds the short list of useful things at the player's live place.</summary>
+    /// <remarks>
+    /// A briefing is deliberately narrower than its source pages. The next three
+    /// stops are enough to act on without hiding the rest of a plan, and the
+    /// shopping/stash lists are capped for the same reason: Now is for deciding
+    /// what to do before leaving a hangar, not for replacing their full views.
+    /// </remarks>
+    static PilotBriefing BuildBriefing(
+        NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds)
+    {
+        var trip = trips.Tracked();
+        var stops = trip?.Stops.Where(s => !s.Done).Take(3)
+            .Select(s => new BriefingStop(s.Id, s.PlaceId, s.Place, s.Note))
+            .ToList() ?? [];
+
+        if (!now.InGame || string.IsNullOrWhiteSpace(now.Location))
+            return new PilotBriefing(now.LocationId, now.Location, trip?.Id, trip?.Title, stops, [], [], [], []);
+
+        var placeId = now.LocationId;
+        var place = now.Location;
+        var stats = lib.Stats();
+
+        // A shopping list already says "in hand" for anything found in any
+        // stash. Keep that same conservative reading here: a line may be at a
+        // different moon, but recommending a second purchase would be worse
+        // than leaving the player to move what they already own.
+        var held = stats.Stash
+            .SelectMany(s => s.Groups)
+            .SelectMany(g => g.Items)
+            .Select(i => i.Name)
+            .ToList();
+
+        var worn = stats.Loadout
+            .SelectMany(slot => slot.Items)
+            .Select(i => i.Name)
+            .ToList();
+
+        bool InHand(string name) => worn.Contains(name, StringComparer.OrdinalIgnoreCase)
+            || held.Any(h => h.Equals(name, StringComparison.OrdinalIgnoreCase)
+                || h.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+        bool AtHere(string terminal)
+        {
+            var resolved = lib.Terminals.Resolve(terminal);
+
+            return placeId is { Length: > 0 } && resolved?.RawId == placeId
+                || string.Equals(resolved?.Name, place, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var shopping = new List<BriefingShopping>();
+
+        foreach (var job in jobs.All().Where(j => !j.Done))
+        foreach (var item in job.Items.Where(i => !InHand(i.Name)))
+        {
+            var commodity = uex.Market(item.Name)
+                .Where(row => row.Buy > 0 && AtHere(row.Terminal))
+                .OrderBy(row => row.Buy)
+                .Select(row => new { row.Terminal, row.Buy, Kind = "commodity" })
+                .FirstOrDefault();
+
+            var stocked = commodity is null && MatchItem(lib, item.Name) is { Uuid: { } uuid }
+                ? uex.ItemMarket(uuid)
+                    .Where(row => AtHere(row.Terminal))
+                    .OrderBy(row => row.Buy)
+                    .Select(row => new { row.Terminal, row.Buy, Kind = "item" })
+                    .FirstOrDefault()
+                : null;
+
+            var seller = commodity ?? stocked;
+            if (seller is not null)
+                shopping.Add(new BriefingShopping(
+                    job.Id, job.Title, item.Name, item.Needed, item.Unit,
+                    seller.Terminal, seller.Buy, seller.Kind));
+        }
+
+        var stash = stats.Stash
+            .FirstOrDefault(s => placeId is { Length: > 0 }
+                ? s.LocationId == placeId
+                : string.Equals(s.Name, place, StringComparison.OrdinalIgnoreCase));
+
+        var stashItems = stash?.Groups
+            .SelectMany(group => group.Items.Select(item =>
+                new BriefingStash(item.Name, group.Category, item.LastSeen)))
+            .OrderBy(item => ItemCategories.Rank(item.Category))
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToList() ?? [];
+
+        var services = new List<BriefingService>
+        {
+            // A listed item is evidence of an actual shop at this location;
+            // absence is deliberately not read as "no shops", because the
+            // catalogue only knows things currently on the player's lists.
+            new("Shops", shopping.Count > 0 ? "items listed" : "not reported", uex.IsEnabled),
+            new("Trade counter", uex.TerminalFor(place) is not null ? "known" : "not listed", uex.IsEnabled),
+            new("Refuel", feeds.FuelPrices.Any(f => AtHere(f.Terminal)) ? "known" : "not listed",
+                feeds.IsEnabled(UexFeeds.Fuel)),
+            new("Clinic", feeds.HasClinic(place) switch
+            {
+                true => "known",
+                false => "not listed",
+                _ => "not reported"
+            }, feeds.IsEnabled(UexFeeds.Places)),
+
+            // Neither Game.log nor the installed UEX feeds describe repair
+            // services. Leaving that uncertainty visible is more useful than
+            // treating a refuel counter as proof a repair pad is present.
+            new("Repair", "not reported", false)
+        };
+
+        var trade = uex.Opportunities(place, limit: 3)
+            .Select(o => new BriefingTrade(
+                o.Commodity, o.BuyHere, o.SellThere, o.SellTerminal, o.MarginPerScu))
+            .ToList();
+
+        return new PilotBriefing(
+            placeId, place, trip?.Id, trip?.Title, stops,
+            [.. shopping.Take(8)], trade, services, stashItems);
+    }
+
+    /// <summary>Maps service evidence onto the app's own atlas identifiers.</summary>
+    static IReadOnlyList<MapServicePlace> BuildMapServices(LogLibrary lib, UexData uex, UexFeeds feeds)
+    {
+        var servicesByPlace = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string? terminalOrPlace, string service)
+        {
+            var place = lib.Terminals.Resolve(terminalOrPlace);
+            if (place is null)
+                return;
+
+            if (!servicesByPlace.TryGetValue(place.RawId, out var services))
+                servicesByPlace[place.RawId] = services = new(StringComparer.Ordinal);
+
+            services.Add(service);
+        }
+
+        // A known counter is a useful broad answer to "shops". It does not
+        // claim a particular item is stocked; the briefing makes that narrower
+        // assertion only when a current shopping-list line matches it.
+        foreach (var terminal in uex.KnownTerminals())
+            Add(terminal, "shop");
+
+        foreach (var terminal in feeds.FuelPrices.Select(fuel => fuel.Terminal))
+            Add(terminal, "refuel");
+
+        foreach (var place in feeds.PlaceDirectory.Where(place => place.Clinic is true))
+            Add(place.Name, "clinic");
+
+        return servicesByPlace
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .Select(entry => new MapServicePlace(entry.Key, [.. entry.Value.OrderBy(service => service)]))
+            .ToList();
+    }
+
     static GameInstall? ResolveInstall(string[] args, IConfiguration configuration)
     {
         var index = Array.IndexOf(args, "--path");
@@ -1823,6 +2151,39 @@ public sealed record JobRequest(
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);
 
+/// <summary>The current place joined onto the small set of decisions it enables.</summary>
+public sealed record PilotBriefing(
+    string? LocationId,
+    string? Location,
+    string? TripId,
+    string? TripTitle,
+    IReadOnlyList<BriefingStop> Stops,
+    IReadOnlyList<BriefingShopping> Shopping,
+    IReadOnlyList<BriefingTrade> Trade,
+    IReadOnlyList<BriefingService> Services,
+    IReadOnlyList<BriefingStash> Stash);
+
+/// <summary>One outstanding flight-plan stop, in the order it will be flown.</summary>
+public sealed record BriefingStop(string Id, string PlaceId, string Place, string? Note);
+
+/// <summary>One missing shopping-list item stocked at the live place.</summary>
+public sealed record BriefingShopping(
+    string JobId, string JobTitle, string Name, double Needed, string Unit,
+    string Terminal, decimal Price, string Kind);
+
+/// <summary>A market lead, never a claim about cargo currently in the hold.</summary>
+public sealed record BriefingTrade(
+    string Commodity, decimal BuyHere, decimal SellThere, string SellTerminal, decimal MarginPerScu);
+
+/// <summary>A service the installed data can identify, or explicitly cannot.</summary>
+public sealed record BriefingService(string Name, string Status, bool DataEnabled);
+
+/// <summary>One item last seen at the live place.</summary>
+public sealed record BriefingStash(string Name, string Category, DateTimeOffset LastSeen);
+
+/// <summary>One atlas place and the services the installed feeds can locate there.</summary>
+public sealed record MapServicePlace(string PlaceId, IReadOnlyList<string> Services);
+
 
 /// <summary>
 /// Body of POST /api/wipe. A null date counts everything again, and
@@ -1833,6 +2194,16 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+
+/// <summary>Body of POST /api/checklists.</summary>
+public sealed record ChecklistRequest(string? Title);
+
+/// <summary>Body of POST /api/checklists/{id}/items.</summary>
+public sealed record ChecklistItemRequest(
+    string? Text,
+    DateTimeOffset? DueAt,
+    string? Note,
+    List<ChecklistAttachment>? Attachments);
 
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(

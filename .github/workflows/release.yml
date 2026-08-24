@@ -165,9 +165,10 @@ jobs:
           ### What it does not do
 
           Reads ``Game.log`` only. Nothing is written to the game directory, no memory is
-          touched, and nothing is injected. The app connects to the internet only when
-          you ask it to - the optional community dataset, from the Settings page - and
-          never on its own.
+          touched, and nothing is injected. The app connects to the internet only where
+          you have said it may, from the Settings page - the optional datasets, and the
+          two that can go out unattended: the version check and the market-price
+          refresh, both off until you turn them on.
 
           Star Citizen must run in Borderless Windowed for the overlay to be visible.
           "@

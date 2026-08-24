@@ -503,6 +503,38 @@ h2.spaced { margin-top: 32px; }
   margin-bottom: 11px;
 }
 
+/* Now is often a glance-only dashboard. Keeping the label and a small
+   explicit control visible gives every card a stable, reversible summary. */
+.now-card-actions {
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  display: flex;
+  gap: 3px;
+}
+.now-card-action {
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  cursor: pointer;
+}
+.now-collapse:hover { color: var(--cyan-hot); }
+.now-hide:hover { color: var(--amber); }
+.card.user-hidden { display: none !important; }
+.now-card-visibility { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--gap); font-size: 11px; }
+#now-hidden-card-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.now-ship-summary { display: flex; align-items: center; gap: 10px; }
+.now-ship-logo { flex: 0 0 44px; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; }
+.now-ship-logo img { max-width: 100%; max-height: 100%; opacity: .9; }
+.card.collapsed { min-height: 0; padding-top: 10px; padding-bottom: 10px; }
+.card.collapsed > :not(.card-label):not(.now-card-actions) { display: none !important; }
+
 .value { font-size: 21px; font-weight: 500; color: var(--text); }
 .sub { color: var(--muted); font-size: 12px; margin-top: 5px; }
 .note { color: var(--dim); font-size: 10.5px; margin-top: 11px; line-height: 1.55; }
@@ -1077,6 +1109,38 @@ tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 
 td.inward { color: var(--green); }
 td.outward { color: var(--amber); }
 
+.session-row { cursor: pointer; }
+.session-row:focus-visible { outline: 1px solid var(--cyan); outline-offset: -2px; }
+.session-row.open { background: rgba(53, 200, 240, .08); }
+.session-row-toggle { display: inline-block; width: 16px; color: var(--cyan-hot); font-size: 16px; }
+.session-detail-row:hover { background: transparent; }
+.session-detail-row > td { padding: 0; white-space: normal; color: var(--text); font-family: inherit; font-size: inherit; }
+.session-debrief { padding: 16px 18px 19px; background: linear-gradient(155deg, rgba(13, 29, 43, .96), rgba(5, 12, 20, .98)); border-top: 1px solid var(--cyan-deep); border-bottom: 1px solid var(--rule-hot); }
+.session-debrief-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.session-debrief-title { color: var(--cyan-hot); font-size: 16px; margin-bottom: 3px; }
+.session-debrief-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 7px; margin-bottom: 14px; }
+.session-metric { border: 1px solid var(--rule); background: rgba(3, 9, 15, .55); padding: 9px 11px; min-width: 0; }
+.session-metric-value { color: var(--text); font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.session-metric.inward .session-metric-value { color: var(--green); }
+.session-metric.outward .session-metric-value { color: var(--amber); }
+.session-metric-label { color: var(--dim); font-size: 8.5px; letter-spacing: .15em; text-transform: uppercase; margin-top: 4px; }
+.session-debrief-grid { display: grid; grid-template-columns: minmax(240px, 1.2fr) repeat(3, minmax(190px, 1fr)); gap: 12px; align-items: start; }
+.session-debrief-section { min-width: 0; }
+.session-debrief-section h3 { margin: 0 0 8px; color: var(--dim); font-size: 9px; letter-spacing: .16em; text-transform: uppercase; }
+.session-route, .session-debrief-list { margin: 0; padding: 0; list-style: none; }
+.session-route { counter-reset: route; }
+.session-route li { counter-increment: route; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 2px 8px; position: relative; padding: 0 0 10px 22px; }
+.session-route li::before { content: counter(route); position: absolute; left: 0; top: 0; width: 15px; height: 15px; border: 1px solid var(--cyan); border-radius: 50%; color: var(--cyan-hot); font: 8px/15px var(--mono); text-align: center; }
+.session-route li:not(:last-child)::after { content: ''; position: absolute; left: 7px; top: 16px; bottom: 0; width: 1px; background: var(--cyan-deep); }
+.session-route li > .muted:last-child { grid-column: 2; font-size: 10px; }
+.session-route-time { color: var(--dim); font-family: var(--mono); font-size: 10px; }
+.session-debrief-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px; padding: 5px 0; border-top: 1px solid rgba(23, 41, 60, .45); font-size: 11px; }
+.session-debrief-list li:first-child { border-top: 0; }
+.session-debrief-note { margin: 13px 0 0; font-size: 10px; }
+.session-debrief-loading { padding: 18px; }
+@media (max-width: 1300px) { .session-debrief-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
+@media (max-width: 760px) { .session-debrief-grid { grid-template-columns: 1fr; } .session-debrief-head { align-items: flex-start; flex-direction: column; } }
+
 /* ---------- map ---------- */
 
 .map-head { margin-bottom: 13px; }
@@ -1138,6 +1202,46 @@ td.outward { color: var(--amber); }
 }
 .map-tools .toggle input { accent-color: var(--cyan); cursor: pointer; }
 .map-tools .toggle:hover { color: var(--fg); }
+.map-mode-note { margin: -2px 0 10px; font-size: 12px; }
+.map-unpositioned { fill: var(--amber) !important; }
+.map-player { white-space: nowrap; }
+.map-player.located { color: var(--cyan-hot); border-color: var(--cyan); }
+
+/* Services are a filter rather than a separate map mode: small labelled glyphs
+   keep the toolbar readable while their titles still explain the evidence. */
+.map-service-filter { display: inline-flex; border: 1px solid var(--rule); }
+.map-service-filter button {
+  border: 0;
+  border-right: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.map-service-filter button:last-child { border-right: 0; }
+.map-service-filter button:hover { color: var(--text); }
+.map-service-filter button.active { color: var(--cyan-hot); background: rgba(53, 200, 240, .13); }
+
+/* Work layers are intentionally separate from services: a shopping run and a
+   refuel stop can overlap, so the two filters compose instead of competing. */
+.map-focus-filter { display: inline-flex; border: 1px solid var(--rule); }
+.map-focus-filter button {
+  border: 0;
+  border-right: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.map-focus-filter button:last-child { border-right: 0; }
+.map-focus-filter button:hover { color: var(--text); }
+.map-focus-filter button.active { color: var(--green); background: rgba(79, 212, 138, .10); }
 
 /* The map's buttons are the app's buttons; see the button section below. */
 
@@ -1165,7 +1269,18 @@ td.outward { color: var(--amber); }
 
 .map-here .here-ring { fill: none; stroke: var(--cyan); opacity: .9; }
 .map-here .here-pulse { fill: none; stroke: var(--cyan); }
+.map-here .here-dot { fill: var(--cyan-hot, #7fe4ff); stroke: #07131b; }
+.map-here .here-tick { stroke: var(--cyan-hot, #7fe4ff); opacity: .9; }
+.map-here .here-leader { stroke: var(--cyan-hot, #7fe4ff); opacity: .8; }
 .map-here .here-label { fill: var(--cyan); letter-spacing: .22em; }
+.map-price-age { fill: none; stroke-width: 1.5; stroke-dasharray: 3 3; pointer-events: none; }
+.map-price-age.aging { stroke: var(--amber); }
+.map-price-age.stale { stroke: var(--red); }
+.map-service-badges { pointer-events: none; }
+.map-service-badge circle { fill: #07131b; stroke: #3e7186; stroke-width: .8; }
+.map-service-badge .service-glyph { fill: none; stroke: var(--cyan-hot, #7fe4ff); stroke-width: 1.05; stroke-linejoin: round; stroke-linecap: round; }
+.map-service-badge.refuel .service-glyph { fill: rgba(255, 171, 61, .2); stroke: var(--amber); }
+.map-service-badge.clinic .service-glyph { fill: rgba(232, 93, 117, .2); stroke: var(--red); }
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {
   font-size: 14px;
@@ -1882,6 +1997,27 @@ td.with-track .track:focus-visible { opacity: 1; }
 .price-age.old { color: var(--amber); }
 .price-age.stale { color: var(--red); }
 
+/* The profit remains an estimate even when both capacity figures were reported:
+   UEX cannot observe the counter between the report and the player's arrival. */
+.route-report { min-width: 190px; }
+.route-feasibility { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.route-feasibility.reported-full { color: var(--green); }
+.route-feasibility.reported-partial { color: var(--amber); }
+.route-freshness { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.route-freshness.fresh { color: var(--green); }
+.route-freshness.aging { color: var(--amber); }
+.route-freshness.stale { color: var(--red); }
+.route-age, .route-capacity, .route-fallback { margin-top: 3px; font-size: 11px; line-height: 1.2; }
+.route-fallback { color: var(--cyan); }
+
+/* On a laptop the route's evidence is more useful than repeating two derived
+   amounts: margin and outlay can be recovered from buy, sell and profit. */
+@media (max-width: 1450px) {
+  #routes-table th:nth-child(6), #routes-table td:nth-child(6),
+  #routes-table th:nth-child(8), #routes-table td:nth-child(8) { display: none; }
+  .route-report { min-width: 165px; }
+}
+
 .uex-age-row { display: flex; margin-top: 9px; font-size: 12px; }
 
 /* ---------- place links: any location jumps to the map ---------- */
@@ -1945,6 +2081,57 @@ td.with-track .track:focus-visible { opacity: 1; }
 
 body.overlay .now-job-title { font-size: 12px; }
 body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
+
+/* A pinned checklist is a second authored stream beside a pinned shopping
+ * list. The card keeps the next few actions useful at a glance, while the
+ * Checklists page carries all the metadata and editing controls. */
+.now-checklist-head { display: flex; gap: 8px; align-items: baseline; }
+.now-checklist-head .now-job-title { flex: 1; }
+.now-checklist-items, .checklist-items { list-style: none; margin: 7px 0 0; padding: 0; }
+.checklist-item {
+  display: flex; align-items: flex-start; gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid rgba(53, 200, 240, .08);
+}
+.checklist-item:last-child { border-bottom: 0; }
+.checklist-item input { margin: 3px 0 0; accent-color: var(--cyan); }
+.checklist-item-main { min-width: 0; flex: 1; }
+.checklist-item-text { font-size: 12.5px; }
+.checklist-item.done .checklist-item-text { text-decoration: line-through; color: var(--dim); }
+.checklist-note { margin-top: 2px; font-size: 11px; line-height: 1.4; }
+.checklist-due { margin-top: 3px; color: var(--amber); font-size: 10.5px; }
+.checklist-attachments { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.checklist-attachment {
+  border: 1px solid var(--rule); background: rgba(53, 200, 240, .05); color: var(--muted);
+  font: inherit; font-size: 10px; padding: 2px 5px; text-decoration: none; cursor: pointer;
+}
+.checklist-attachment:hover { color: var(--cyan-hot); border-color: var(--cyan); }
+body.overlay .checklist-item { padding: 3px 0; gap: 5px; }
+body.overlay .checklist-item-text { font-size: 10.5px; }
+body.overlay .checklist-attachments, body.overlay .checklist-due { display: none; }
+
+/* Checklists are deliberately generous with optional fields: a bare task is
+ * one line, while a calendar-like task can carry a place, reference and link. */
+.checklist-new { display: flex; gap: 8px; align-items: center; margin: 0 0 13px; }
+.checklist-new .search { flex: 1; }
+.checklist-card {
+  border: 1px solid var(--rule); border-left: 2px solid var(--cyan-deep, #1e4763);
+  background: linear-gradient(160deg, rgba(10, 20, 32, .5), rgba(6, 12, 20, .35));
+  padding: 12px 15px; margin-bottom: 10px;
+}
+.checklist-composer { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.checklist-composer > input, .checklist-fields input, .checklist-fields select {
+  box-sizing: border-box; width: 100%; background: rgba(8, 18, 30, .9); border: 1px solid var(--rule);
+  color: var(--text); font: inherit; font-size: 12px; padding: 6px 8px; outline: none;
+}
+.checklist-composer > input:focus, .checklist-fields input:focus, .checklist-fields select:focus { border-color: var(--cyan); }
+.checklist-fields { display: grid; grid-template-columns: 1fr 1fr 170px; gap: 7px; margin-top: 7px; }
+.checklist-fields + .checklist-fields { grid-template-columns: 1fr 1fr; }
+.checklist-composer > .ghost { margin-top: 7px; }
+
+@media (max-width: 700px) {
+  .checklist-new { align-items: stretch; flex-direction: column; }
+  .checklist-fields, .checklist-fields + .checklist-fields { grid-template-columns: 1fr; }
+}
 
 .ghost.on,
 .ghost.on:hover:not(:disabled) {
@@ -2122,6 +2309,96 @@ body.overlay .now-job-items li { font-size: 10.5px; padding: 2px 0; }
   margin-left: 7px;
 }
 .setup-opt span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+/* An option that only means anything under the one above it: indented into the
+   parent's text column and hung off a single rule, so it reads as a condition
+   of that choice rather than a fourth thing to weigh. */
+.setup-opt.setup-sub {
+  margin-left: 27px;
+  margin-top: -6px;
+  border-width: 0 0 0 1px;
+  padding-block: 9px;
+}
+.setup-opt.setup-sub:hover { border-color: var(--cyan); }
+
+/* The price strip inside an expanded Market row: a line and a sentence sharing
+   one baseline, so it reads as a caption rather than as a second chart. */
+.detail-spark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 10px;
+  font-size: 11.5px;
+}
+.detail-spark .spark {
+  width: 240px;
+  height: 34px;
+  flex: none;
+  background: rgba(10, 22, 32, .35);
+  border: 1px solid var(--rule);
+}
+
+/* Sits beside the title: the detail table is wider than the panel, so anything
+   pushed to the far end is pushed off the edge entirely. */
+.detail-more { flex: none; }
+
+/* A heading inside a table body, separating one family of rows from the next
+   without breaking the column alignment a second table would. */
+.group-row td {
+  padding-top: 14px;
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  border-bottom-color: transparent;
+}
+.group-row:first-child td { padding-top: 4px; }
+
+/* The way into a commodity's own page, sat beside its name. Quiet until the
+   row is hovered: it is a second action on a cell that already has one. */
+.drill {
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+  opacity: .4;
+  transition: opacity .12s, color .12s;
+}
+/* Dim rather than hidden. A control that only exists on hover is one nobody
+   finds by looking, and is no control at all on a touch screen. */
+tr:hover .drill, .drill:focus-visible { opacity: 1; }
+.drill:hover { color: var(--cyan); }
+
+/* Time-series charts on the commodity page. Height is fixed and the viewBox is
+   stretched to fit, so the same drawing code works at any window width without
+   re-measuring anything. */
+.timechart {
+  width: 100%;
+  height: 220px;
+  display: block;
+  background: rgba(10, 22, 32, .35);
+  border: 1px solid var(--rule);
+}
+.timechart .grid { stroke: rgba(53, 200, 240, .10); stroke-width: 1; }
+.timechart .axis { fill: var(--dim); font-size: 11px; font-family: inherit; }
+.timechart .empty-note { fill: var(--muted); font-size: 13px; }
+
+.chart-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.chart-key span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-key i {
+  width: 14px;
+  height: 2px;
+  display: inline-block;
+  border-radius: 1px;
+}
 
 .setup-actions { display: flex; align-items: center; gap: 15px; margin-top: 17px; }
 
@@ -2437,6 +2714,58 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .now-trip-where { font-size: 19px; color: var(--text); margin-top: 3px; }
 .now-trip-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 .now-trip-stops { display: flex; flex-direction: column; gap: 2px; }
+
+/* The live-place briefing is a compact launch checklist, not a second version
+   of every source page. Its links take the player to the detailed view. */
+.briefing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.briefing-title { color: var(--cyan-hot); font-size: 17px; font-weight: 600; }
+.briefing-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.briefing-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; padding-right: 58px; }
+.briefing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
+.briefing-section { min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
+.briefing-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
+.briefing-list { display: flex; flex-direction: column; gap: 3px; }
+.briefing-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(83, 128, 151, .28); padding-top: 5px; min-width: 0; }
+.briefing-row:first-child { border-top: 0; padding-top: 0; }
+.briefing-main { min-width: 0; overflow-wrap: anywhere; }
+.briefing-main b { color: var(--text); font-size: 11.5px; }
+.briefing-link { border: 0; background: transparent; color: var(--cyan-hot); cursor: pointer; font: inherit; font-size: 12px; padding: 0; text-align: left; }
+.briefing-link:hover { text-decoration: underline; }
+.briefing-detail { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 1px; }
+.briefing-caveat { color: var(--dim); font-size: 9.5px; line-height: 1.4; margin-top: 4px; }
+.briefing-services { display: flex; flex-wrap: wrap; gap: 5px; }
+.briefing-service { border: 1px solid var(--rule); color: var(--dim); font: inherit; font-size: 9.5px; padding: 3px 5px; }
+button.briefing-service { background: transparent; cursor: pointer; }
+button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+.briefing-service.known { border-color: #1f5c3d; color: var(--green); }
+.briefing-service.not-listed { color: var(--muted); }
+.briefing-service.not-reported { border-style: dashed; }
+.service-icon { display: inline-block; min-width: 1.25em; color: var(--cyan-hot); font-weight: 600; }
+.service-text { vertical-align: middle; }
+.service-tip { color: var(--cyan-hot); font-size: 10px; }
+
+.map-info-services { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0 3px; }
+.map-service-chip {
+  border: 1px solid var(--rule);
+  background: rgba(53, 200, 240, .06);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  padding: 3px 6px;
+}
+.map-service-chip:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+
+body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
+body.overlay .briefing-head { margin-bottom: 6px; }
+body.overlay .briefing-title { font-size: 13px; }
+body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
+body.overlay .briefing-grid { grid-template-columns: 1fr 1fr; gap: 5px; }
+body.overlay .briefing-section { padding: 5px 6px; }
+body.overlay .briefing-actions { padding-right: 0; }
+body.overlay .briefing-services { gap: 3px; }
+body.overlay .briefing-service { font-size: 8px; padding: 2px 4px; }
+body.overlay .map-service-filter { display: none; }
 
 /* The plan drawn over the map. */
 .trip-layer { pointer-events: none; }

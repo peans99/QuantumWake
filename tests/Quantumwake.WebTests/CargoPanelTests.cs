@@ -106,9 +106,17 @@ public class CargoPanelTests
     public void The_window_leaves_out_older_receipts()
     {
         var page = Loaded();
+        // Receipt dates are deliberately fixed, so the window's clock must be
+        // fixed too; otherwise this assertion changes merely because a day
+        // passed on the machine running it.
+        page.Do("Date.now = () => Date.parse('2026-08-23T00:00:00Z');");
 
         var all = page.Count("receiptsFor('Laranite', false).length");
-        page.Do("cargo.days = 3;");
+
+        // The window is measured back from now, and these receipts are dated:
+        // left against the real clock the answer changes by the hour and then
+        // stops changing at all. Pin the clock to a day the fixture is about.
+        page.Do("Date.now = () => Date.parse('2026-08-22T12:00:00Z'); cargo.days = 3;");
         var recent = page.Count("receiptsFor('Laranite', false).length");
 
         Assert.Equal(3, all);
