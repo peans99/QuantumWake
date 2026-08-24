@@ -39,6 +39,11 @@ public class LanGuardTests
     [InlineData("PUT", "/api/jobs")]
     [InlineData("DELETE", "/api/jobs/1")]
     [InlineData("PATCH", "/api/trips")]
+    // Export is a POST for exactly this line. It is the one endpoint that hands
+    // over the whole history at once, in a file built for keeping, so it must
+    // not be reachable from the tablet the read-only rule exists to serve.
+    [InlineData("POST", "/api/export")]
+    [InlineData("POST", "/api/imports")]
     public void Changing_anything_is_refused(string method, string path)
     {
         Assert.False(LanGuard.AllowsFromElsewhere(method, path));

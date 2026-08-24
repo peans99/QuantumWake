@@ -2590,6 +2590,12 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
 .wipe-row .search { font-size: 12px; }
+/* The export block's one non-toggle control, laid out like the wipe row it
+   sits near so the Settings page keeps a single shape for "a field and a word". */
+.export-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 6px; }
+.export-row .select { font-size: 12px; }
+#export-preview, #export-status { display: block; font-size: 12px; margin-top: 4px; }
+
 .wipe-caption { margin: 10px 0 6px; padding-left: 0; }
 .wipe-scope { display: flex; flex-direction: column; gap: 6px; }
 .wipe-scope .toggle { font-size: 12px; }

@@ -38,37 +38,66 @@ public sealed class Page
         _engine.SetValue("host_log", new Action<string>(line => Log.Add(line)));
 
         Run(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "dom.js")), "dom.js");
-        HideWhatTheMarkupHides();
+        SeedFromMarkup();
         Run(WithoutAutoStart(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js"))), "app.js");
     }
 
     /// <summary>
-    /// Starts the panels, banners and cards that <c>index.html</c> marks
-    /// <c>hidden</c> in the state the browser would start them in.
+    /// Starts the panels, cards and controls in the state the markup gives them.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The stub does not parse the document - the assertions are about what the
-    /// page writes, not how the markup nests - but "is this still hidden?" is a
-    /// real question about half the features here, and a stub where everything
-    /// starts visible answers it wrongly every time. So the one attribute that
-    /// carries initial state is read from the markup itself, rather than each
-    /// test remembering to set it.
+    /// page writes, not how the markup nests - but "is this still hidden?" and
+    /// "is this box ticked?" are real questions about half the features here,
+    /// and a stub where everything starts visible and unticked answers both
+    /// wrongly every time. So the attributes that carry initial state are read
+    /// from the markup itself, rather than each test remembering to set them.
+    /// </para>
+    /// <para>
+    /// <c>selected</c> is seeded onto the select rather than the option, because
+    /// the stub models a select's value and not its option list until the page
+    /// fills one in.
+    /// </para>
     /// </remarks>
-    private void HideWhatTheMarkupHides()
+    private void SeedFromMarkup()
     {
         var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html"));
 
+        string? openSelect = null;
+
         foreach (System.Text.RegularExpressions.Match tag in
-                 System.Text.RegularExpressions.Regex.Matches(markup, "<[a-zA-Z][^>]*>"))
+                 System.Text.RegularExpressions.Regex.Matches(markup, "<[a-zA-Z/][^>]*>"))
         {
-            if (!System.Text.RegularExpressions.Regex.IsMatch(tag.Value, @"\shidden(\s|>|=)"))
-                continue;
+            // A selected option belongs to whichever select is currently open.
+            if (tag.Value.StartsWith("</select", StringComparison.OrdinalIgnoreCase))
+                openSelect = null;
 
             var id = System.Text.RegularExpressions.Regex.Match(tag.Value, @"id=""([^""]+)""");
+
+            if (tag.Value.StartsWith("<select", StringComparison.OrdinalIgnoreCase))
+                openSelect = id.Success ? id.Groups[1].Value : null;
+
+            if (openSelect is not null
+                && tag.Value.StartsWith("<option", StringComparison.OrdinalIgnoreCase)
+                && System.Text.RegularExpressions.Regex.IsMatch(tag.Value, @"\sselected(\s|>|=)"))
+            {
+                var value = System.Text.RegularExpressions.Regex.Match(tag.Value, @"value=""([^""]*)""");
+                if (value.Success)
+                {
+                    _engine.Execute(
+                        $"__dom.node({Quote($"#{openSelect}")}).value = {Quote(value.Groups[1].Value)};");
+                }
+            }
+
             if (!id.Success)
                 continue;
 
-            _engine.Execute($"__dom.node({Quote($"#{id.Groups[1].Value}")}).hidden = true;");
+            if (System.Text.RegularExpressions.Regex.IsMatch(tag.Value, @"\shidden(\s|>|=)"))
+                _engine.Execute($"__dom.node({Quote($"#{id.Groups[1].Value}")}).hidden = true;");
+
+            if (System.Text.RegularExpressions.Regex.IsMatch(tag.Value, @"\schecked(\s|>|=)"))
+                _engine.Execute($"__dom.node({Quote($"#{id.Groups[1].Value}")}).checked = true;");
         }
     }
 

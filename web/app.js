@@ -4602,7 +4602,141 @@ async function renderSettings() {
   await renderUexAuto();
   await renderUexFeeds();
   await renderSignals();
+  await renderExportPreview();
 }
+
+/* ---------- sharing a file of your own ---------- */
+
+/**
+ * The chosen window in days, where zero legitimately means all time.
+ *
+ * Read carefully because the two failure values are far apart: an empty select
+ * through Number() is zero, which would quietly turn "the last week" into every
+ * trade ever made and send a hundred times what was asked for.
+ */
+function exportDays() {
+  // Empty string through Number() is zero, not NaN, so the absent case has to
+  // be caught before the conversion rather than after it.
+  const raw = $('#export-days')?.value;
+  if (raw === undefined || raw === null || raw === '') return 7;
+
+  const chosen = Number(raw);
+  return Number.isFinite(chosen) && chosen >= 0 ? chosen : 7;
+}
+
+/** What the boxes currently say, in the shape the API takes. */
+function exportChoice() {
+  return {
+    receipts: Boolean($('#export-receipts')?.checked),
+    blueprints: Boolean($('#export-blueprints')?.checked),
+    authored: Boolean($('#export-authored')?.checked),
+    handle: Boolean($('#export-handle')?.checked),
+    days: exportDays(),
+  };
+}
+
+/**
+ * What would go, before it goes.
+ *
+ * Counts only - the preview endpoint never returns rows. The point is that a
+ * click to share follows seeing what sharing means, not that the page gets a
+ * second copy of the data.
+ */
+async function renderExportPreview() {
+  const line = $('#export-preview');
+  if (!line) return;
+
+  const choice = exportChoice();
+
+  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+    line.textContent = 'Nothing ticked, so there is nothing to save.';
+    return;
+  }
+
+  try {
+    const counts = await getJson(
+      `/api/export/preview?receipts=${choice.receipts}&blueprints=${choice.blueprints}`
+      + `&authored=${choice.authored}&days=${choice.days}`);
+
+    const parts = [];
+    if (choice.receipts) {
+      parts.push(`${counts.receipts.toLocaleString()} ${counts.receipts === 1 ? 'trade' : 'trades'}`
+        + (choice.days ? ` from the last ${choice.days === 1 ? 'day' : `${choice.days} days`}` : ', all time'));
+    }
+    if (choice.blueprints) parts.push(`${counts.blueprints} blueprints`);
+    if (choice.authored) {
+      parts.push(`${counts.jobs} jobs, ${counts.checklists} checklists, ${counts.trips} flight plans`);
+    }
+
+    line.textContent = `Would save ${parts.join(' · ')}.`;
+  } catch {
+    line.textContent = '';
+  }
+}
+
+/**
+ * Saves the document the server built.
+ *
+ * A POST rather than a link, because export must not be a GET: the LAN rule
+ * lets reads through, and this is the one response that hands over the whole
+ * history at once. So the blob comes back from fetch and is clicked into the
+ * downloads folder here.
+ */
+async function saveExport() {
+  const button = $('#export-save');
+  const status = $('#export-status');
+  const choice = exportChoice();
+
+  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+    status.textContent = 'Tick at least one thing first.';
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent = 'Building the file…';
+
+  let url = null;
+
+  try {
+    const response = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(choice),
+    });
+
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      status.textContent = problem?.message || 'The file could not be built.';
+      return;
+    }
+
+    // The server names it; the header is where that name is.
+    const name = /filename="?([^";]+)"?/i.exec(
+      response.headers.get('content-disposition') || '')?.[1] || 'quantumwake-export.json';
+
+    const blob = await response.blob();
+    url = URL.createObjectURL(blob);
+
+    const link = el('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+
+    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+  } catch {
+    status.textContent = 'The file could not be built.';
+  } finally {
+    // Revoking frees the blob; doing it before the click lands cancels the save.
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
+    button.disabled = false;
+  }
+}
+
+for (const id of ['#export-receipts', '#export-blueprints', '#export-authored', '#export-days']) {
+  $(id)?.addEventListener('change', () => renderExportPreview().catch(() => {}));
+}
+
+$('#export-save')?.addEventListener('click', () => saveExport().catch(() => {}));
 
 /**
  * Which signals are still arriving, and when each last did.
