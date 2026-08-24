@@ -160,11 +160,57 @@ public sealed class LogWriter : IDisposable
         Raw($"Cargo Box Data:  [boxSize[16] | unitAmount[{Math.Max(1, quantity / 16)}]]");
     }
 
-    public void ContractMarker(DateTimeOffset at, string missionId, string generator, string contract, string definitionId) =>
+    public void ContractMarker(
+        DateTimeOffset at,
+        string missionId,
+        string generator,
+        string contract,
+        string definitionId,
+        string? markerId = null) =>
         Line(at, $"[Notice] <SMarkerHandler_Base::CreateMissionObjectiveMarker> Creating objective marker: " +
                  $"missionId [{missionId}], generator name [{generator}], " +
-                 $"contract [{contract}][{Guid.NewGuid()}], contractDefinitionId[{definitionId}] " +
+                 $"contract [{contract}][{markerId ?? Guid.NewGuid().ToString()}], contractDefinitionId[{definitionId}] " +
                  $"[Team_Missions]");
+
+    /// <summary>A non-commodity kiosk purchase request, pending a server answer.</summary>
+    public void ShopRequest(
+        DateTimeOffset at,
+        string geid,
+        string shopName,
+        string shopId,
+        string kioskId,
+        decimal price,
+        string itemName,
+        int quantity) =>
+        Line(at, $"[Notice] <CEntityComponentShopUIProvider::SendShopBuyRequest> " +
+                 $"Sending SShopBuyRequest - playerId[{geid}] shopId[{shopId}] " +
+                 $"shopName[{shopName}] kioskId[{kioskId}] " +
+                 $"client_price[{price.ToString("F6", CultureInfo.InvariantCulture)}] " +
+                 $"itemClassGUID[00000000-0000-0000-0000-000000000001] " +
+                 $"itemName[{itemName}] quantity[{quantity}] [Team_ActorFeatures][Shops]");
+
+    /// <summary>The server outcome paired with the latest request at this kiosk.</summary>
+    public void ShopResponse(
+        DateTimeOffset at,
+        string shopName,
+        string kioskId,
+        string result,
+        string type = "Buying",
+        string kioskState = "Idle") =>
+        Line(at, $"[Notice] <CEntityComponentShopUIProvider::RmShopFlowResponse> " +
+                 $"shopName[{shopName}] kioskId[{kioskId}] kioskState[{kioskState}] " +
+                 $"result[{result}] type[{type}] [Team_ActorFeatures][Shops]");
+
+    /// <summary>A mission journal objective changing state.</summary>
+    public void MissionObjective(
+        DateTimeOffset at,
+        string missionId,
+        string objectiveId,
+        string state,
+        bool shownInLog = true) =>
+        Line(at, $"[Notice] <ObjectiveUpserted> Received ObjectiveUpserted push message for: " +
+                 $"mission_id {missionId} - objective_id {objectiveId} - state {state} " +
+                 $"- created 0 - flags={(shownInLog ? "ShowInLog|" : "Internal|")} [Team_Missions]");
 
     /// <summary>
     /// A notification and its follow-up Action lines. The repeats are the point:
@@ -218,16 +264,18 @@ public sealed class LogWriter : IDisposable
     /// exercise the dormant combat parser end to end.
     /// </summary>
     public void ActorDeath(
-        DateTimeOffset at, string victim, string killer, string weapon, string damageType, string zone) =>
-        Line(at, $"[Notice] <Actor Death> CActor::Kill: '{victim}' [{Random.Shared.Next(10000, 99999)}] " +
-                 $"in zone '{zone}' killed by '{killer}' [{Random.Shared.Next(10000, 99999)}] " +
+        DateTimeOffset at, string victim, string killer, string weapon, string damageType, string zone,
+        string? victimId = null, string? killerId = null) =>
+        Line(at, $"[Notice] <Actor Death> CActor::Kill: '{victim}' [{victimId ?? Random.Shared.Next(10000, 99999).ToString()}] " +
+                 $"in zone '{zone}' killed by '{killer}' [{killerId ?? Random.Shared.Next(10000, 99999).ToString()}] " +
                  $"using '{weapon}' [Class {weapon}] with damage type '{damageType}' " +
                  $"from direction x: 0.512, y: -0.234, z: 0.100 [Team_ActorFeatures][Actor]");
 
     public void VehicleDestruction(
-        DateTimeOffset at, string vehicle, string driver, string attacker, int from, int to, string cause) =>
+        DateTimeOffset at, string vehicle, string driver, string attacker, int from, int to, string cause,
+        string? entityId = null) =>
         Line(at, $"[Notice] <Vehicle Destruction> CVehicle::OnAdvanceDestroyLevel: Vehicle '{vehicle}' " +
-                 $"[{Random.Shared.Next(1000000, 9999999)}] in zone 'Stanton_Yela' " +
+                 $"[{entityId ?? Random.Shared.Next(1000000, 9999999).ToString()}] in zone 'Stanton_Yela' " +
                  $"[pos x: 1.0, y: 2.0, z: 3.0 vel x: 0.0, y: 0.0, z: 0.0] " +
                  $"driven by '{driver}' [999] advanced from destroy level {from} to {to} " +
                  $"caused by '{attacker}' [888] with '{cause}' [Team_VehicleFeatures][Vehicle]");

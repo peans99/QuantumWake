@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Quantumwake.Core\Quantumwake.Core.csproj" />
     <ProjectReference Include="..\..\src\Quantumwake.Data\Quantumwake.Data.csproj" />
+    <ProjectReference Include="..\..\src\Quantumwake.LogSim\Quantumwake.LogSim.csproj" />
 
     <!-- For the policies that live in the server rather than in a store: what a
          machine other than this one may ask for, and what happens to the game
