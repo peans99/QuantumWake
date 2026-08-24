@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.13
+### 0.7.14
 
 - **A map that does not invent geography.** System Positions now shows one
   system at a time with community-starmap bearings and relative orbital

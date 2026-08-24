@@ -324,12 +324,17 @@ function initNowCardCollapsers() {
     const name = card.dataset.card;
     if (!name || card.querySelector('.now-collapse')) continue;
 
-    const button = el('button', 'now-collapse');
+    const actions = el('div', 'now-card-actions');
+    const button = el('button', 'now-collapse now-card-action');
     button.type = 'button';
+    button.title = 'Collapse this card';
+    button.setAttribute('aria-label', 'Collapse this card');
     button.addEventListener('click', () => {
       const collapsed = !card.classList.contains('collapsed');
       card.classList.toggle('collapsed', collapsed);
-      button.textContent = collapsed ? 'Expand' : 'Collapse';
+      button.textContent = collapsed ? '⌄' : '⌃';
+      button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+      button.setAttribute('aria-label', button.title);
       button.setAttribute('aria-expanded', String(!collapsed));
       if (collapsed) collapsedNowCards.add(name);
       else collapsedNowCards.delete(name);
@@ -338,20 +343,23 @@ function initNowCardCollapsers() {
 
     const collapsed = collapsedNowCards.has(name);
     card.classList.toggle('collapsed', collapsed);
-    button.textContent = collapsed ? 'Expand' : 'Collapse';
+    button.textContent = collapsed ? '⌄' : '⌃';
+    button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+    button.setAttribute('aria-label', button.title);
     button.setAttribute('aria-expanded', String(!collapsed));
-    card.append(button);
 
-    const hide = el('button', 'now-hide', 'Hide');
+    const hide = el('button', 'now-hide now-card-action', '×');
     hide.type = 'button';
     hide.title = 'Hide this card from the Now page';
+    hide.setAttribute('aria-label', hide.title);
     hide.addEventListener('click', () => {
       hiddenNowCards.add(name);
       card.classList.add('user-hidden');
       saveHiddenNowCards();
       renderHiddenNowCards();
     });
-    card.append(hide);
+    actions.append(hide, button);
+    card.append(actions);
 
     card.classList.toggle('user-hidden', !isOverlay && hiddenNowCards.has(name));
   }
