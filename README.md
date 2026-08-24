@@ -351,7 +351,13 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.4
+### 0.7.5
+
+- **Trade routes that admit uncertainty.** The planner now ranks recent,
+  capacity-backed reports first, can limit itself to fresh quotes, and shows
+  the reported stock, buyer demand, quote age and alternate buyers beside each
+  estimated profit. A route can be capped by buyer demand as well as the hold,
+  wallet and seller stock; prices remain community reports, not live inventory.
 
 - **A checklist that travels with you.** Make ordinary preparation lists for
   departures and operations, then pin one to Now and, if wanted, the overlay.

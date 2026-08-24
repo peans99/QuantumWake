@@ -361,18 +361,26 @@
       <div class="controls">
         <select id="routes-ship" class="select" title="Whose hold to fill"></select>
         <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <select id="routes-ranking" class="select" title="How to rank trade routes">
+          <option value="reliable">Reliable first</option>
+          <option value="profit">Highest estimated profit</option>
+        </select>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
         </label>
+        <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
+          <input type="checkbox" id="routes-fresh-only">
+          <span>Fresh only</span>
+        </label>
       </div>
     </div>
     <p class="muted caption">
-      The best hauls UEX knows, sized to a real hold and a real wallet — pick
-      one of your ships and the money you can spend, and the ranking becomes
-      what <em>this</em> run earns rather than a margin in the abstract. Each
-      row says what capped it: your hold, your capital, or the shop's own
-      stock. Needs UEX prices, and ship capacities from the community dataset.
+      Estimated UEX hauls, sized to a real hold and wallet. Reliable first
+      favours recent reports and enough reported stock and demand; highest
+      estimated profit remains available when you want the optimistic view.
+      A price report is not live inventory — each row shows what limits it and
+      how old its two quotes are.
     </p>
     <div class="table-wrap">
       <table id="routes-table">
@@ -381,7 +389,7 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th><th></th>
+            <th class="num">Outlay</th><th class="num">Profit</th><th>Report</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>

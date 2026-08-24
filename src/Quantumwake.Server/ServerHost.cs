@@ -933,8 +933,15 @@ public static class ServerHost
         // Each end of a haul carries the map's own id for it where the terminal
         // could be matched, so planning a run puts real dots on the map instead
         // of the page guessing at the names a second time.
-        app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from) =>
-            uex.Routes(scu ?? 0, capital ?? 0, from, 30).Select(r => new
+        app.MapGet("/api/routes", (LogLibrary lib, UexData uex, double? scu, decimal? capital, string? from,
+            string? ranking, bool? freshOnly) =>
+            uex.Routes(
+                scu ?? 0,
+                capital ?? 0,
+                from,
+                limit: 30,
+                reliableFirst: !string.Equals(ranking, "profit", StringComparison.OrdinalIgnoreCase),
+                freshOnly: freshOnly == true).Select(r => new
             {
                 r.Commodity,
                 r.BuyAt,
@@ -947,7 +954,13 @@ public static class ServerHost
                 r.Units,
                 r.Profit,
                 r.Outlay,
-                r.LimitedBy
+                r.LimitedBy,
+                r.BuyStockScu,
+                r.SellDemandScu,
+                r.BuySeenAt,
+                r.SellSeenAt,
+                r.Freshness,
+                r.FallbackSells
             }));
 
         // Where the player last woke, for the Now card. Its own endpoint

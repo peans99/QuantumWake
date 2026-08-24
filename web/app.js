@@ -2381,6 +2381,8 @@ async function loadRoutes() {
 
   const scu = Number(select.value) || 0;
   const capital = Number($('#routes-capital').value) || 0;
+  const ranking = $('#routes-ranking').value || 'reliable';
+  const freshOnly = $('#routes-fresh-only').checked;
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
   const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
@@ -2393,7 +2395,8 @@ async function loadRoutes() {
   let rows = [];
   try {
     rows = await getJson(
-      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`);
+      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
+      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`);
   } catch { /* UEX off */ }
 
   if (!rows.length) {
@@ -2401,7 +2404,7 @@ async function loadRoutes() {
     const td = el('td', 'muted', from
       ? 'No route starts from where you are - or UEX has no terminal here.'
       : 'Nothing to show. Enable UEX prices on the Settings page.');
-    td.colSpan = 11;
+    td.colSpan = 12;
     tr.append(td);
     body.append(tr);
     return;
@@ -2418,6 +2421,24 @@ async function loadRoutes() {
     tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
     tr.append(el('td', 'num outward', money(route.outlay)));
     tr.append(el('td', 'num inward', money(route.profit)));
+
+    const report = el('td', 'route-report');
+    const reportWord = route.freshness === 'fresh' ? 'Fresh reports'
+      : route.freshness === 'aging' ? 'Aging reports'
+        : route.freshness === 'stale' ? 'Stale reports' : 'Report age unknown';
+    report.append(el('div', `route-freshness ${route.freshness || 'unknown'}`, reportWord));
+    const age = (at) => at ? ago(at) : 'unknown';
+    report.append(el('div', 'muted route-age', `Buy ${age(route.buySeenAt)} · sell ${age(route.sellSeenAt)}`));
+    const capacity = [];
+    capacity.push(route.buyStockScu > 0 ? `stock ${Math.floor(route.buyStockScu)} SCU` : 'stock unknown');
+    capacity.push(route.sellDemandScu > 0 ? `demand ${Math.floor(route.sellDemandScu)} SCU` : 'demand unknown');
+    report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
+    if ((route.freshness !== 'fresh' || route.limitedBy === 'demand') && route.fallbackSells?.length) {
+      const choices = route.fallbackSells.map((fallback) =>
+        `${fallback.terminal} ${money(fallback.sellPrice)} (${fallback.freshness || 'unknown'})`).join(' · ');
+      report.append(el('div', 'route-fallback', `Fallback: ${choices}`));
+    }
+    tr.append(report);
 
     // One click turns a haul into a plan: buy there, sell there, in order.
     const plan = el('td');
@@ -2442,6 +2463,8 @@ async function loadRoutes() {
       ? 'Your capital runs out before the hold does'
       : route.limitedBy === 'stock'
         ? 'The shop does not stock enough to fill the hold'
+        : route.limitedBy === 'demand'
+          ? 'The buyer does not report enough demand to take the full run'
         : 'The hold is the limit - the good case';
     tr.append(capped);
     tr.append(plan);
@@ -2453,6 +2476,8 @@ async function loadRoutes() {
 onInput('#routes-capital', loadRoutes);
 $('#routes-ship')?.addEventListener('change', loadRoutes);
 $('#routes-here')?.addEventListener('change', loadRoutes);
+$('#routes-ranking')?.addEventListener('change', loadRoutes);
+$('#routes-fresh-only')?.addEventListener('change', loadRoutes);
 
 /**
  * "Wake up at" on the dashboard: where the last death put you, which is as
