@@ -1231,6 +1231,11 @@ td.outward { color: var(--amber); }
 .map-price-age { fill: none; stroke-width: 1.5; stroke-dasharray: 3 3; pointer-events: none; }
 .map-price-age.aging { stroke: var(--amber); }
 .map-price-age.stale { stroke: var(--red); }
+.map-service-badges { pointer-events: none; }
+.map-service-badge circle { fill: #07131b; stroke: #3e7186; stroke-width: .8; }
+.map-service-badge .service-glyph { fill: none; stroke: var(--cyan-hot, #7fe4ff); stroke-width: 1.05; stroke-linejoin: round; stroke-linecap: round; }
+.map-service-badge.refuel .service-glyph { fill: rgba(255, 171, 61, .2); stroke: var(--amber); }
+.map-service-badge.clinic .service-glyph { fill: rgba(232, 93, 117, .2); stroke: var(--red); }
 .map-label { font-size: 9.5px; fill: var(--muted); font-family: var(--display); letter-spacing: .06em; }
 .map-sys-label {
   font-size: 14px;

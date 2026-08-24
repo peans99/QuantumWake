@@ -132,4 +132,30 @@ public class MapModeTests
         Assert.Equal("aging", page.Text("priceFreshness('2026-08-18T00:00:00Z').state"));
         Assert.Equal("stale", page.Text("priceFreshness('2026-08-01T00:00:00Z').state"));
     }
+
+    [Fact]
+    public void Service_badges_appear_for_a_service_focused_location()
+    {
+        var page = new Page();
+        page.Do("""
+            atlas = [{ rawId: 'tressler', name: 'Port Tressler', system: 'Stanton', body: 'microTech', kind: 'Station', visits: 1 }];
+            mapServicesByPlace.set('tressler', ['shop', 'clinic']);
+            __dom.node('#map-mode').value = 'system';
+            __dom.node('#map-system').value = 'Stanton';
+            mapServiceFilter = 'clinic';
+            drawMap();
+            """);
+
+        Assert.Equal(1, page.Count("__dom.node('#starmap').byClass('map-service-badges').length"));
+        Assert.Equal(2, page.Count("__dom.node('#starmap').byClass('map-service-badge').length"));
+    }
+
+    [Fact]
+    public void Rest_stops_and_asteroids_keep_distinct_silhouettes()
+    {
+        var page = new Page();
+
+        Assert.Equal("rect", page.Text("KIND_SHAPES.RestStop[0].tag"));
+        Assert.Equal("polygon", page.Text("KIND_SHAPES.Asteroid[0].tag"));
+    }
 }
