@@ -173,6 +173,8 @@ function showView(name) {
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
+  if (name === 'commodities') renderSharedReceipts().catch(() => {});
+  if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
@@ -4738,6 +4740,8 @@ function setShowImported(value) {
   loadJobs().catch(() => {});
   loadChecklists().catch(() => {});
   loadTrips?.().catch(() => {});
+  renderSharedReceipts().catch(() => {});
+  renderSharedBlueprints().catch(() => {});
 }
 
 /**
@@ -4954,6 +4958,106 @@ $('#imports-clear')?.addEventListener('click', () => {
   $('#imports-status').textContent = '';
   importCall('/api/imports', 'DELETE').catch(() => {});
 });
+
+/**
+ * Trades and blueprints from other people's files, in their own sections.
+ *
+ * Kept out of the pages' own payloads on purpose. Cargo computes four totals
+ * from /api/commodities and the Blueprints picker feeds "Set as goal" from
+ * /api/blueprints/owned; mixing imported rows into either would mean
+ * remembering to filter in five places, and the one that gets forgotten
+ * produces lifetime earnings counting somebody else's sales, or a build plan
+ * for a blueprint the reader does not hold.
+ */
+async function renderSharedReceipts() {
+  const host = $('#cargo-shared');
+  if (!host) return;
+
+  host.textContent = '';
+  if (showImported === 'none') return;
+
+  const rows = await getJson(`/api/imports/receipts${importedQuery()}`).catch(() => []);
+  if (!rows.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Trades from shared files'));
+  card.append(el('p', 'muted', 'Other people’s receipts, kept out of your own totals '
+    + 'above. Prices are what they were quoted, where and when they say.'));
+
+  const table = el('table', 'data');
+  const head = el('thead');
+  const headRow = el('tr');
+  for (const label of ['When', 'Who', 'Commodity', 'Place', 'SCU', 'Per SCU']) {
+    headRow.append(el('th', label === 'SCU' || label === 'Per SCU' ? 'num' : null, label));
+  }
+  head.append(headRow);
+  table.append(head);
+
+  const body = el('tbody');
+
+  for (const row of rows.slice(0, 200)) {
+    const tr = el('tr');
+    tr.append(el('td', 'muted', dateOf(row.at)));
+    tr.append(el('td', null, row.imported.handle || 'someone'));
+
+    // A name this install cannot resolve is not an error: their dataset knew
+    // something ours does not, or the other way round.
+    tr.append(el('td', row.commodity ? null : 'muted', row.commodity || 'unnamed'));
+    tr.append(el('td', 'muted', row.place));
+    tr.append(el('td', 'num', row.scu.toLocaleString()));
+    tr.append(el('td', 'num', money(row.unitPrice)));
+    body.append(tr);
+  }
+
+  table.append(body);
+  card.append(table);
+
+  if (rows.length > 200) {
+    card.append(el('p', 'muted', `Showing the newest 200 of ${rows.length.toLocaleString()}.`));
+  }
+
+  host.append(card);
+}
+
+async function renderSharedBlueprints() {
+  const host = $('#blueprints-shared');
+  if (!host) return;
+
+  host.textContent = '';
+  if (showImported === 'none') return;
+
+  const rows = await getJson(`/api/imports/blueprints${importedQuery()}`).catch(() => []);
+  if (!rows.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Held by others'));
+  card.append(el('p', 'muted', 'Blueprints the files you have been sent say somebody holds. '
+    + 'They are not in the picker above, because you cannot craft from someone else’s '
+    + 'library — this answers who to ask.'));
+
+  const list = el('ul', 'shared-blueprints');
+
+  // Grouped by name, so "who can craft this" is one line rather than a list to
+  // read across. That is the question the section exists to answer.
+  const byName = new Map();
+
+  for (const row of rows) {
+    const holders = byName.get(row.name) || [];
+    const who = row.imported.handle || 'someone';
+    if (!holders.includes(who)) holders.push(who);
+    byName.set(row.name, holders);
+  }
+
+  for (const [name, holders] of [...byName.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const line = el('li');
+    line.append(el('b', null, name));
+    line.append(el('span', 'muted', ` — ${holders.join(', ')}`));
+    list.append(line);
+  }
+
+  card.append(list);
+  host.append(card);
+}
 
 /* ---------- sharing a file of your own ---------- */
 

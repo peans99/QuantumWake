@@ -2590,6 +2590,19 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
 .wipe-row .search { font-size: 12px; }
+/* Trades and blueprints from other people, in a block of their own so nothing
+   here can be mistaken for one of the reader's totals. */
+.shared-block {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber, #d8a03d);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.shared-block h3 { margin: 0 0 4px; font-size: 13px; }
+.shared-block p { font-size: 12px; margin: 0 0 8px; max-width: 72ch; }
+.shared-blueprints { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+
 /* A row that came out of somebody else's file. Readable exactly like the
    reader's own - the point is to compare them - but never mistakable for it. */
 .job-card.from-a-file, .checklist-card.from-a-file { border-left: 3px solid var(--amber, #d8a03d); }
