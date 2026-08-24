@@ -2953,7 +2953,9 @@ async function loadCasualties() {
   const body = $('#casualties-fees tbody');
   body.textContent = '';
 
-  for (const fee of data.fees) {
+  // Guarded like every other read on this page: one absent array should not
+  // take the whole page down when the rest of the answer arrived intact.
+  for (const fee of data.fees || []) {
     const tr = el('tr');
     tr.append(el('td', null, fee.name));
     tr.append(el('td', 'num outward', money(fee.fee)));
