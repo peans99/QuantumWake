@@ -146,7 +146,9 @@ class El {
    */
   fire(type, event) {
     let last;
-    for (const handler of this.listeners[type] || []) last = handler(event || { target: this, preventDefault() {} });
+    for (const handler of this.listeners[type] || []) {
+      last = handler(event || { target: this, preventDefault() {}, stopPropagation() {} });
+    }
     return last;
   }
 

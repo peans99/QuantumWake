@@ -3727,6 +3727,110 @@ function trackButton(name, needed = 1, unit = '') {
 }
 
 /** The shared progress bar: done over total, with its own wording. */
+/**
+ * What a job needs, and where each of it is.
+ *
+ * Shared by the reader's own cards and by imported ones. The stash and loadout
+ * columns are about the reader either way, which is the whole value of seeing
+ * somebody else's list: "Bob needs four Agricium" reads very differently beside
+ * "and you have some at Port Tressler".
+ */
+function jobLines(job) {
+  const table = el('table', 'job-items');
+  const body = el('tbody');
+
+  for (const item of job.items) {
+    const tr = el('tr', item.have ? 'have' : null);
+
+    const need = item.needed > 0
+      ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+      : '';
+    tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
+    tr.append(el('td', null, item.name));
+    tr.append(el('td', 'num muted', need));
+
+    // Where it is, or where to buy what is missing.
+    const whereCell = el('td', 'muted');
+
+    if (item.wornNow) {
+      whereCell.textContent = 'worn now';
+    } else if (item.where.length) {
+      whereCell.append(placeLink(item.where[0]));
+      if (item.where.length > 1) {
+        const more = el('span', 'note-inline', ` +${item.where.length - 1}`);
+        more.title = item.where.slice(1).join('\n');
+        whereCell.append(more);
+      }
+    } else if (item.buyAt) {
+      whereCell.append(el('span', 'note-inline', 'buy at '));
+      whereCell.append(placeLink(item.buyAt));
+    } else {
+      whereCell.textContent = '—';
+    }
+    tr.append(whereCell);
+
+    tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
+      item.buyPrice ? money(item.buyPrice) : '—'));
+
+    body.append(tr);
+  }
+
+  table.append(body);
+  return table;
+}
+
+/**
+ * The mark on anything that came out of somebody else's file.
+ *
+ * Names them rather than saying "imported": the reader knows the difference
+ * between a list from the friend they fly with and one from a stranger, and
+ * the app does not.
+ */
+function importedChip(from) {
+  const chip = el('span', 'job-kind from-a-file', `from ${from.handle || 'a file'}`);
+  chip.title = `Imported ${dateOf(from.importedAt)} from a shared file. Not your data.`
+    + (from.note ? `\n${from.note}` : '');
+  return chip;
+}
+
+/**
+ * The one thing an imported card can do.
+ *
+ * It posts to the ordinary authoring endpoint, so the copy is minted a fresh
+ * local id through the normal path with the normal checks - the only route by
+ * which somebody else's data becomes yours, and a deliberate one.
+ *
+ * A new list rather than merged into one you have: adding another person's 96
+ * SCU to a line you already had produces a number you never chose.
+ */
+function copyToMine(job) {
+  const copy = el('button', 'ghost tiny', 'Copy to my lists');
+  copy.title = 'Makes your own copy. Theirs stays where it is.';
+
+  copy.addEventListener('click', async () => {
+    copy.disabled = true;
+
+    try {
+      await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: job.title,
+          kind: job.kind,
+          source: `copied from ${job.imported.handle || 'a shared file'}`,
+          items: job.items.map((i) => ({ name: i.name, needed: i.needed, unit: i.unit })),
+        }),
+      });
+    } finally {
+      copy.disabled = false;
+    }
+
+    loadJobList();
+  });
+
+  return copy;
+}
+
 function jobProgress(done, total, label) {
   const wrap = el('div', 'job-progress');
   const track = el('div', 'job-track');
@@ -3749,7 +3853,7 @@ async function loadJobList() {
 
   let jobs = [];
   try {
-    jobs = await getJson('/api/jobs');
+    jobs = await getJson(`/api/jobs${importedQuery()}`);
   } catch { /* server down; the page still shows contracts */ }
 
   renderPinnedJob(jobs);
@@ -3773,10 +3877,34 @@ async function loadJobList() {
 
   for (const job of jobs) {
     const card = el('article', job.done ? 'job-card done' : 'job-card');
+    if (job.imported) card.classList.add('from-a-file');
 
     const head = el('div', 'job-head');
     head.append(el('b', null, job.title));
     head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
+    if (job.imported) head.append(importedChip(job.imported));
+
+    // An imported card carries no control that changes anything.
+    //
+    // Not only because it is somebody else's: the id it arrives under would
+    // address one of yours. Ids are minted per install with no namespace, so a
+    // file exported from this machine and read back holds ids identical to your
+    // own, and every button here builds its URL out of one. The server prefixes
+    // them so those routes miss, and this leaves them undrawn as well - a
+    // button that 404s is still a button somebody pressed expecting something.
+    if (job.imported) {
+      head.append(el('span', 'spacer'));
+      head.append(copyToMine(job));
+      card.append(head);
+      card.append(jobProgress(job.haveCount, job.totalCount,
+        `you have ${job.haveCount} of the ${job.totalCount} things this needs`));
+      card.append(jobLines(job));
+
+      // The same split as any other card: a build belongs on Crafting whoever
+      // wrote it.
+      (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
+      continue;
+    }
 
     // Where this list is for, changeable here because it is a plan rather than
     // a fact: the run you meant on Tuesday is not the run you fly on Friday.
@@ -3840,47 +3968,7 @@ async function loadJobList() {
     card.append(jobProgress(job.haveCount, job.totalCount,
       `${job.haveCount} of ${job.totalCount} in hand`));
 
-    const table = el('table', 'job-items');
-    const body = el('tbody');
-
-    for (const item of job.items) {
-      const tr = el('tr', item.have ? 'have' : null);
-
-      const need = item.needed > 0
-        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
-        : '';
-      tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
-      tr.append(el('td', null, item.name));
-      tr.append(el('td', 'num muted', need));
-
-      // Where it is, or where to buy what is missing.
-      const whereCell = el('td', 'muted');
-
-      if (item.wornNow) {
-        whereCell.textContent = 'worn now';
-      } else if (item.where.length) {
-        whereCell.append(placeLink(item.where[0]));
-        if (item.where.length > 1) {
-          const more = el('span', 'note-inline', ` +${item.where.length - 1}`);
-          more.title = item.where.slice(1).join('\n');
-          whereCell.append(more);
-        }
-      } else if (item.buyAt) {
-        whereCell.append(el('span', 'note-inline', 'buy at '));
-        whereCell.append(placeLink(item.buyAt));
-      } else {
-        whereCell.textContent = '—';
-      }
-      tr.append(whereCell);
-
-      tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
-        item.buyPrice ? money(item.buyPrice) : '—'));
-
-      body.append(tr);
-    }
-
-    table.append(body);
-    card.append(table);
+    card.append(jobLines(job));
     (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
   }
 }
@@ -4165,7 +4253,10 @@ function checklistItemRow(list, item, compact = false) {
 
 function renderPinnedChecklist(lists = checklists) {
   const card = $('#now-checklist-card');
-  const list = lists.find((entry) => entry.pinned);
+
+  // Imported rows arrive with pinned forced false, so this cannot pick one up -
+  // but Now is the one card where being wrong would be loudest, so it says so.
+  const list = lists.find((entry) => entry.pinned && !entry.imported);
   if (!card) return;
 
   if (!list) {
@@ -4337,7 +4428,7 @@ function renderChecklists(lists) {
 }
 
 async function loadChecklists() {
-  checklists = await getJson('/api/checklists').catch(() => []);
+  checklists = await getJson(`/api/checklists${importedQuery()}`).catch(() => []);
   renderChecklists(checklists);
   renderPinnedChecklist(checklists);
 }
@@ -4610,6 +4701,78 @@ async function renderSettings() {
 
 let importBatches = [];
 
+/**
+ * Whether pages show imported rows beside the reader's own, and whose.
+ *
+ * One switch for the whole app rather than one per page: the question somebody
+ * asks is "am I looking at Bob's things or mine", never "am I looking at Bob's
+ * jobs but my own checklists". Off by default, because importing a friend's
+ * forty jobs and finding your own page now has forty-three cards on it is an
+ * ambush by a feature used once.
+ */
+let showImported = 'none';
+
+try {
+  showImported = localStorage.getItem('qw-show-imported') || 'none';
+} catch { /* private browsing; the default is the safe one anyway */ }
+
+/**
+ * The suffix every list endpoint takes, so no page has to remember the name.
+ *
+ * Empty when nothing is being shown, which is the ordinary case: the request
+ * then goes out exactly as it did before this feature existed, and the server
+ * default and the client default cannot drift apart.
+ */
+function importedQuery() {
+  return showImported === 'none' ? '' : `?imported=${encodeURIComponent(showImported)}`;
+}
+
+function setShowImported(value) {
+  showImported = value || 'none';
+
+  try {
+    localStorage.setItem('qw-show-imported', showImported);
+  } catch { /* as above */ }
+
+  // Everything that can carry an imported row re-reads itself.
+  loadJobs().catch(() => {});
+  loadChecklists().catch(() => {});
+  loadTrips?.().catch(() => {});
+}
+
+/**
+ * The control that turns other people's rows on.
+ *
+ * Drawn only when there is something to show. An empty dropdown offering to
+ * filter by nobody is a worse answer than no dropdown.
+ */
+function renderImportedFilter() {
+  const host = $('#imports-filter');
+  if (!host) return;
+
+  host.textContent = '';
+
+  const usable = importBatches.filter((b) => b.readable && !b.hidden && b.classes.length);
+  if (!usable.length) return;
+
+  host.append(el('label', 'muted', 'Show shared rows on my pages: '));
+
+  const select = el('select', 'select');
+  const options = [['none', 'no'], ['all', 'from everyone']];
+  for (const batch of usable) options.push([batch.id, `only ${batch.handle || batch.sourceName}`]);
+
+  for (const [value, label] of options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  }
+
+  select.value = options.some(([v]) => v === showImported) ? showImported : 'none';
+  select.addEventListener('change', () => setShowImported(select.value));
+  host.append(select);
+}
+
 /** A tally, with the zeroes left out. */
 function countLine(counts) {
   const parts = [];
@@ -4706,6 +4869,7 @@ function renderImports(payload) {
   }
 
   for (const batch of importBatches) host.append(importCard(batch));
+  renderImportedFilter();
 }
 
 async function loadImports() {
@@ -8052,7 +8216,7 @@ const tracked = () => trips.find((t) => t.tracked) || null;
 const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
 
 async function loadTrips() {
-  trips = await getJson('/api/trips');
+  trips = await getJson(`/api/trips${importedQuery()}`);
   renderTripCard();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
