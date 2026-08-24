@@ -786,6 +786,7 @@ async function loadHistory() {
   loadRoutes().catch((e) => console.error('routes', e));
   loadCargoReceipts().catch((e) => console.error('cargo receipts', e));
   loadTrips().catch((e) => console.error('trips', e));
+  loadMapNotes().catch((e) => console.error('map notes', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -6604,6 +6605,8 @@ let mapServiceFilter = '';
 let mapFocusFilter = '';
 const mapShoppingIds = new Set();
 const mapStashIds = new Set();
+let mapNotes = [];
+const mapNoteIds = new Set();
 const MAP_SAVED_VIEW_KEY = 'qw-map-saved-view';
 const MAP_LABEL_DENSITY_KEY = 'qw-map-label-density';
 
@@ -6663,6 +6666,22 @@ function drawServiceBadges(group, x, y, radius, services) {
   group.append(badges);
 }
 
+// A small bookmark sits outside the location glyph: a personal note changes
+// neither the place kind nor the UEX service facts already drawn around it.
+function drawMapNoteBadge(group, x, y, radius) {
+  const badge = svgEl('g', { class: 'map-note-badge', 'pointer-events': 'none' });
+  const size = Math.max(3.2, radius * .48);
+  const bx = x + radius + size + 2;
+  const by = y + radius + size + 1;
+  badge.append(svgEl('path', {
+    d: `M ${bx} ${by - size} L ${bx + size} ${by} L ${bx} ${by + size} L ${bx - size} ${by} Z`,
+  }));
+  const title = svgEl('title');
+  title.textContent = 'Personal map note';
+  badge.append(title);
+  group.append(badge);
+}
+
 function showServiceBadges(location, highlighted) {
   return servicesAt(location).length > 0
     && (isDetailed() || highlighted || !!mapServiceFilter || !!mapFocusFilter);
@@ -6685,6 +6704,7 @@ function mapFocusIds() {
   if (mapFocusFilter === 'plan') return planPlaceIds();
   if (mapFocusFilter === 'shopping') return mapShoppingIds;
   if (mapFocusFilter === 'stash') return mapStashIds;
+  if (mapFocusFilter === 'notes') return mapNoteIds;
   return null;
 }
 
@@ -8316,8 +8336,9 @@ let trips = [];
 /** The plan the Now card and the map are following. */
 const tracked = () => trips.find((t) => t.tracked) || null;
 
-/** Where to go now: the first stop not yet crossed off. */
-const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
+/** Where to go now, or what remains to do after reaching the current stop. */
+const nextStop = (trip) => trip?.stops.find((s) =>
+  !s.done || (s.actions || []).some((action) => !action.done)) || null;
 
 async function loadTrips() {
   trips = await getJson(`/api/trips${importedQuery()}`);
@@ -8334,6 +8355,96 @@ async function loadTrips() {
 async function tripCall(url, method = 'POST') {
   await fetch(url, { method });
   await loadTrips();
+}
+
+/** A run sheet is authored work, so checks and edits use the same small trip API. */
+async function runActionCall(url, method = 'POST', body = null) {
+  const options = { method };
+  if (body) {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify(body);
+  }
+  await fetch(url, options);
+  await loadTrips();
+}
+
+const runActionLabel = (kind) => ({
+  load: 'Load', unload: 'Unload', buy: 'Buy', sell: 'Sell', collect: 'Collect',
+  refuel: 'Refuel', repair: 'Repair', do: 'Do',
+}[kind] || 'Do');
+
+function runActionRow(trip, stop, action, editable = false) {
+  const row = el('div', `run-action${action.done ? ' done' : ''}`);
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = !!action.done;
+  check.title = action.done ? 'Mark as still to do' : 'Mark action complete';
+  check.addEventListener('change', () =>
+    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`));
+  row.append(check);
+
+  const text = el('span', 'run-action-text');
+  text.append(el('b', null, runActionLabel(action.kind)));
+  text.append(document.createTextNode(` · ${action.text}`));
+  if (action.quantity !== null && action.quantity !== undefined) {
+    const quantity = Number(action.quantity).toLocaleString();
+    text.append(el('span', 'run-action-quantity', `${quantity}${action.unit ? ` ${action.unit}` : ''}`));
+  }
+  row.append(text);
+
+  if (editable) {
+    const remove = el('button', 'ghost tiny', '×');
+    remove.title = 'Remove this action';
+    remove.addEventListener('click', () =>
+      runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
+    row.append(remove);
+  }
+
+  return row;
+}
+
+function runActionForm(trip, stop) {
+  const form = el('div', 'run-action-form');
+  const kind = document.createElement('select');
+  kind.className = 'select';
+  for (const value of ['load', 'unload', 'buy', 'sell', 'collect', 'refuel', 'repair', 'do'])
+    kind.append(new Option(runActionLabel(value), value));
+
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.className = 'search';
+  text.placeholder = 'What needs doing?';
+
+  const quantity = document.createElement('input');
+  quantity.type = 'number';
+  quantity.className = 'search run-action-amount';
+  quantity.placeholder = 'Qty';
+  quantity.min = '0';
+  quantity.step = 'any';
+
+  const unit = document.createElement('select');
+  unit.className = 'select';
+  unit.append(new Option('No unit', ''));
+  unit.append(new Option('SCU', 'SCU'));
+  unit.append(new Option('units', 'units'));
+  unit.append(new Option('aUEC', 'aUEC'));
+
+  const save = el('button', 'ghost tiny', 'Add');
+  save.addEventListener('click', () => {
+    if (!text.value.trim()) {
+      text.focus();
+      return;
+    }
+    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions`, 'POST', {
+      kind: kind.value,
+      text: text.value,
+      quantity: quantity.value === '' ? null : Number(quantity.value),
+      unit: unit.value || null,
+    });
+  });
+
+  form.append(kind, text, quantity, unit, save);
+  return form;
 }
 
 /**
@@ -8398,7 +8509,7 @@ function renderTripCard() {
   jump.textContent = '';
 
   if (next) {
-    jump.append(el('div', 'now-trip-label', 'Jump next'));
+    jump.append(el('div', 'now-trip-label', next.done ? 'At this stop' : 'Jump next'));
     jump.append(el('div', 'now-trip-where', next.place));
     if (next.note) jump.append(el('div', 'now-trip-note', next.note));
   } else {
@@ -8420,7 +8531,7 @@ function renderTripCard() {
  * One stop, wherever it is shown. Clicking the number crosses it off; clicking
  * the name flies the map to it.
  */
-function tripStopRow(trip, stop, index, isNext) {
+function tripStopRow(trip, stop, index, isNext, editable = false) {
   const row = el('div', `trip-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
 
   const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
@@ -8440,6 +8551,8 @@ function tripStopRow(trip, stop, index, isNext) {
 
   main.append(name);
   if (stop.note) main.append(el('div', 'trip-note', stop.note));
+  for (const action of (stop.actions || []))
+    main.append(runActionRow(trip, stop, action, editable));
   row.append(main);
 
   return row;
@@ -8471,7 +8584,7 @@ function renderTripPanel() {
   const next = nextStop(trip);
 
   trip.stops.forEach((stop, index) => {
-    const row = tripStopRow(trip, stop, index, stop === next);
+    const row = tripStopRow(trip, stop, index, stop === next, true);
 
     // The panel is where a plan is edited; the Now card only reads it.
     const tools = el('div', 'trip-tools');
@@ -8493,7 +8606,15 @@ function renderTripPanel() {
     drop.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
 
-    tools.append(up, down, drop);
+    const addAction = el('button', 'ghost tiny', '+');
+    addAction.title = 'Add a run-sheet action at this stop';
+    addAction.addEventListener('click', () => {
+      const existing = row.querySelector('.run-action-form');
+      if (existing) existing.remove();
+      else row.append(runActionForm(trip, stop));
+    });
+
+    tools.append(addAction, up, down, drop);
     row.append(tools);
     body.append(row);
   });
@@ -9244,6 +9365,85 @@ function commoditiesSoldAt(location) {
     .sort();
 }
 
+/** Personal POIs are local notes, never an assertion about the map's telemetry. */
+async function loadMapNotes() {
+  mapNotes = await getJson('/api/map-notes');
+  mapNoteIds.clear();
+  for (const note of mapNotes) if (note.placeId) mapNoteIds.add(note.placeId);
+  if (mapInfoLocation) renderMapInfoNotes(mapInfoLocation);
+  if (atlas.length) drawMap();
+}
+
+async function saveMapNote(body) {
+  const response = await fetch('/api/map-notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error('Could not save note');
+  await loadMapNotes();
+}
+
+async function removeMapNote(id) {
+  await fetch(`/api/map-notes/${id}`, { method: 'DELETE' });
+  await loadMapNotes();
+}
+
+function renderMapInfoNotes(location) {
+  const host = $('#map-info-notes');
+  if (!host) return;
+  host.textContent = '';
+
+  const notes = mapNotes.filter((note) => note.placeId === location.rawId);
+  host.append(el('div', 'map-note-heading', notes.length ? `Your notes · ${notes.length}` : 'Personal map note'));
+
+  for (const note of notes) {
+    const card = el('div', 'map-note');
+    const top = el('div', 'map-note-top');
+    top.append(el('b', null, note.title));
+    const remove = el('button', 'ghost tiny', '×');
+    remove.title = 'Remove this map note';
+    remove.addEventListener('click', () => removeMapNote(note.id));
+    top.append(remove);
+    card.append(top);
+    if (note.note) card.append(el('div', 'map-note-text', note.note));
+    if (note.tags?.length) card.append(el('div', 'map-note-tags', note.tags.join(' · ')));
+    card.append(el('div', 'map-note-age', `written ${relative(note.updatedAt)}`));
+    host.append(card);
+  }
+
+  const form = el('div', 'map-note-form');
+  const title = document.createElement('input');
+  title.type = 'text';
+  title.className = 'search';
+  title.placeholder = 'Title, e.g. cargo entrance';
+  const detail = document.createElement('input');
+  detail.type = 'text';
+  detail.className = 'search';
+  detail.placeholder = 'Optional note';
+  const tags = document.createElement('input');
+  tags.type = 'text';
+  tags.className = 'search';
+  tags.placeholder = 'Tags, comma separated';
+  const save = el('button', 'ghost tiny', 'Save note');
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      await saveMapNote({
+        placeId: location.rawId,
+        place: location.name,
+        title: title.value,
+        note: detail.value || null,
+        tags: tags.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+      });
+    } finally {
+      save.disabled = false;
+    }
+  });
+  form.append(title, detail, tags, save);
+  host.append(form);
+}
+
 /** The place the detail card currently shows, for re-rendering on toggle. */
 let mapInfoLocation = null;
 
@@ -9306,6 +9506,7 @@ function showMapInfo(location) {
     : '';
 
   renderMapInfoServices(location);
+  renderMapInfoNotes(location);
 
   // In commodity mode, say which side of the search this place is on.
   const trade = $('#map-info-trade');
@@ -10058,6 +10259,9 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
 
   if (showServiceBadges(location, highlighted))
     drawServiceBadges(group, x, y, radius, servicesAt(location));
+
+  if (mapNoteIds.has(location.rawId))
+    drawMapNoteBadge(group, x, y, radius);
 
   // A styled tooltip that appears instantly - the native <title> takes a
   // second to show and cannot be read against the game-HUD styling.

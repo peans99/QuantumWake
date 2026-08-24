@@ -353,7 +353,18 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.11
+### 0.8.12
+
+- **A flight plan is now a run sheet.** Each stop can hold checkable manual
+  load, unload, buy, sell, collect, refuel, repair or free-form instructions,
+  with an optional quantity and unit. Arriving records the landing but keeps
+  that stop active until its run work is crossed off — the log cannot supply a
+  cargo manifest, so these are always visibly your own instructions.
+
+- **The map remembers your places.** Save personal POIs directly on an atlas
+  place with a title, note and tags. They appear as amber diamonds, can be
+  focused with the new Notes filter, and stay clearly separate from services,
+  visits and other game-derived map facts.
 
 - **The Now page no longer turns Location into an empty wall.** Compact status
   cards share the first row, while the actionable briefing uses the full width

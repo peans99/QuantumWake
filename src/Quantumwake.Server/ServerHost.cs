@@ -96,6 +96,7 @@ public static class ServerHost
         builder.Services.AddSingleton<JobStore>();
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
+        builder.Services.AddSingleton<MapNoteStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
@@ -1513,11 +1514,39 @@ public static class ServerHost
         app.MapPost("/api/trips/{id}/stops/{stopId}/move", (string id, string stopId, int delta, TripStore trips) =>
             trips.MoveStop(id, stopId, delta) ? Results.Ok(new { id }) : Results.NotFound());
 
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions", (string id, string stopId,
+            TripStore trips, RunActionRequest body) =>
+            trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit)
+                ? Results.Ok(new { id, stopId }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/toggle", (string id,
+            string stopId, string actionId, TripStore trips) =>
+            trips.ToggleAction(id, stopId, actionId)
+                ? Results.Ok(new { id, stopId, actionId }) : Results.NotFound());
+
+        app.MapDelete("/api/trips/{id}/stops/{stopId}/actions/{actionId}", (string id,
+            string stopId, string actionId, TripStore trips) =>
+            trips.RemoveAction(id, stopId, actionId)
+                ? Results.Ok(new { id, stopId, actionId }) : Results.NotFound());
+
         app.MapDelete("/api/trips/{id}/stops/{stopId}", (string id, string stopId, TripStore trips) =>
             trips.RemoveStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
 
         app.MapDelete("/api/trips/{id}", (string id, TripStore trips) =>
             trips.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        // ---- map notes: personal POIs, deliberately not telemetry ----
+
+        app.MapGet("/api/map-notes", (MapNoteStore notes) => notes.All());
+
+        app.MapPost("/api/map-notes", (MapNoteStore notes, MapNoteRequest body) =>
+        {
+            var item = notes.Add(body.PlaceId, body.Place, body.Title, body.Note, body.Tags);
+            return item is null ? Results.BadRequest(new { message = "Choose a map location first." }) : Results.Ok(item);
+        });
+
+        app.MapDelete("/api/map-notes/{id}", (string id, MapNoteStore notes) =>
+            notes.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
         // ---- optional UEX feeds, each switched on by itself ----
 
@@ -2115,7 +2144,11 @@ static int Holes(IEnumerable<ShipSlot> slots)
         Tracked = from is null && trip.Tracked,
         Stops = from is null
             ? trip.Stops
-            : [.. trip.Stops.Select(s => s with { Id = SharedId(from, s.Id) })],
+            : [.. trip.Stops.Select(s => s with
+            {
+                Id = SharedId(from, s.Id),
+                Actions = [.. (s.Actions ?? []).Select(action => action with { Id = SharedId(from, action.Id) })],
+            })],
         trip.Next,
         trip.Done,
         imported = from is null ? null : Marker(from),
@@ -2472,6 +2505,17 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+
+/// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
+public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit);
+
+/// <summary>Body of POST /api/map-notes.</summary>
+public sealed record MapNoteRequest(
+    string? PlaceId,
+    string? Place,
+    string? Title,
+    string? Note,
+    List<string>? Tags);
 
 /// <summary>
 /// Body of POST /api/export: what to share, and how far back.

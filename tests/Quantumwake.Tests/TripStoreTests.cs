@@ -208,6 +208,42 @@ public class TripStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_stop_can_keep_checkable_manual_run_actions()
+    {
+        var store = NewStore();
+        var trip = store.Add("Cargo run", [Stop("Stanton1_Lorville", "Lorville")]);
+        var stop = Assert.Single(trip.Stops);
+
+        Assert.True(store.AddAction(trip.Id, stop.Id, "load", "Agricium", 96, "scu"));
+        var action = Assert.Single(store.All().Single().Stops.Single().Actions!);
+
+        Assert.Equal("load", action.Kind);
+        Assert.Equal("Agricium", action.Text);
+        Assert.Equal(96, action.Quantity);
+        Assert.Equal("SCU", action.Unit);
+        Assert.True(store.ToggleAction(trip.Id, stop.Id, action.Id));
+        Assert.True(store.All().Single().Stops.Single().Actions!.Single().Done);
+    }
+
+    [Fact]
+    public void Arrival_keeps_the_current_stop_active_until_its_run_sheet_is_done()
+    {
+        var store = NewStore();
+        var trip = store.Add("Cargo run", [Stop("Stanton1_Lorville", "Lorville")]);
+        var stop = Assert.Single(trip.Stops);
+        store.AddAction(trip.Id, stop.Id, "load", "Agricium", 96, "SCU");
+
+        Assert.True(store.Arrived("Stanton1_Lorville"));
+        var arrived = store.All().Single();
+        var action = Assert.Single(arrived.Stops.Single().Actions!);
+        Assert.Equal("Lorville", arrived.Next?.Place);
+        Assert.False(arrived.Done);
+
+        store.ToggleAction(arrived.Id, arrived.Stops.Single().Id, action.Id);
+        Assert.True(store.All().Single().Done);
+    }
+
+    [Fact]
     public void An_unreadable_file_leaves_the_player_with_no_plans()
     {
         Directory.CreateDirectory(_directory);
