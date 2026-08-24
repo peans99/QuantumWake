@@ -2694,7 +2694,14 @@ onInput('#crew-period', loadCrew);
  * page the button next to it opens.
  */
 async function drawDetailSpark(strip, commodity) {
-  const trend = await getJson(`/api/uex/history?commodity=${encodeURIComponent(commodity)}`);
+  // One counter per side, not the page's four. Every counter is a separate
+  // request to UEX, and expanding a row is the ordinary way to read this table
+  // - somebody comparing twenty commodities should not cost a volunteer-run
+  // API a hundred and sixty requests to draw twenty thumbnails. Opening the
+  // full page later widens the sample; opening it first makes this free.
+  const trend = await getJson(
+    `/api/uex/history?commodity=${encodeURIComponent(commodity)}&perSide=1`);
+
   const daily = dailyMarket(trend).filter((d) => d.bestSell > 0);
 
   if (daily.length < 2) {
@@ -2722,8 +2729,16 @@ async function drawDetailSpark(strip, commodity) {
   }));
 
   strip.append(svg);
+
+  // What it says depends on what came back, not on what was asked for: this
+  // asks for one counter per side, but a wider sample already cached by the
+  // commodity page is reused, and then the line really is a best-of.
+  const from = trend.sampled > 1
+    ? `best of ${trend.sampled} counters each day`
+    : 'the busiest counter';
+
   strip.append(el('span', 'muted',
-    `${money(low)} – ${money(high)} over ${days} days, best counter each day`));
+    `${money(low)} – ${money(high)} over ${days} days, ${from}`));
 }
 
 /**

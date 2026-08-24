@@ -72,7 +72,15 @@ public sealed class TradeDataRefresh(
             preference.Checked();
 
             var count = await uex.EnableAsync(factory.CreateClient("community"), token);
-            logger.LogInformation("Refreshed {Count} UEX prices automatically.", count);
+
+            // Zero means the fetch stood down because UEX was disabled while it
+            // was in flight - EnableAsync throws rather than returning zero for
+            // an empty feed. Logging it as a refresh of nothing reads as a
+            // failure; it is the guard doing its job.
+            if (count == 0)
+                logger.LogInformation("Automatic UEX refresh stood down: the integration was turned off.");
+            else
+                logger.LogInformation("Refreshed {Count} UEX prices automatically.", count);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {

@@ -151,17 +151,40 @@ public sealed class UexData
     /// </summary>
     public static readonly TimeSpan HistoryFreshFor = TimeSpan.FromHours(6);
 
-    private readonly Dictionary<string, (DateTimeOffset At, UexHistory History)> _historyCache =
+    /// <summary>
+    /// Fetched histories, with the sample size each was taken at.
+    /// </summary>
+    /// <remarks>
+    /// The size is kept because two callers want different ones: the Market
+    /// panel's strip asks for a counter or two, the commodity page asks for
+    /// eight. Without it the strip would poison the page's cache with a thinner
+    /// answer than it asked for. A cached sample serves any request no larger
+    /// than itself, so opening the page first makes the strip free.
+    /// </remarks>
+    private readonly Dictionary<string, (DateTimeOffset At, int PerSide, UexHistory History)> _historyCache =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Guards the swap between a fetched table and the one in use.
     /// </summary>
     /// <remarks>
-    /// Held only around the commit and around Disable, never across a network
-    /// call. Everything it protects - the dictionaries, FetchedAt, the history
-    /// cache - is replaced wholesale rather than edited, so readers outside the
-    /// lock see one table or the other and never a half-written one.
+    /// <para>
+    /// Held around the commit and around Disable, never across a network call.
+    /// The tables are replaced wholesale rather than edited, so a reader taking
+    /// one of them without the lock gets a whole table rather than a
+    /// half-written one - reference assignment is atomic.
+    /// </para>
+    /// <para>
+    /// What that does <em>not</em> buy, and it is worth being straight about:
+    /// the query methods read these fields without the lock, so one that
+    /// touches two of them - <see cref="ItemMarket"/> reads both the item map
+    /// and the price matrix - can pair a table from before a refresh with one
+    /// from after. There is no read barrier either. The consequence is a list
+    /// that briefly mixes two snapshots taken hours apart, which is within the
+    /// error a crowd-sourced price already carries; locking every read to avoid
+    /// it would cost more than it is worth. Anything where that would matter
+    /// belongs inside the lock, as the history cache is.
+    /// </para>
     /// </remarks>
     private readonly Lock _gate = new();
 
@@ -589,10 +612,15 @@ public sealed class UexData
         // under the lock rather than read from a dictionary being swapped.
         int commodityId;
         List<UexMarketRow> rows;
+        int began;
 
         lock (_gate)
         {
+            began = _generation;
+
+            // A wider sample answers a narrower question; the reverse does not.
             if (_historyCache.TryGetValue(commodity, out var cached)
+                && cached.PerSide >= perSide
                 && DateTimeOffset.UtcNow - cached.At < HistoryFreshFor)
                 return cached.History;
 
@@ -625,7 +653,13 @@ public sealed class UexData
         var history = new UexHistory(commodity, series.Count, rows.Count, series);
 
         lock (_gate)
-            _historyCache[commodity] = (DateTimeOffset.UtcNow, history);
+        {
+            // Disable landed while this was fetching. Caching now would leave a
+            // price history behind for an integration that has been turned off,
+            // which is the same mistake EnableAsync guards against.
+            if (began == _generation)
+                _historyCache[commodity] = (DateTimeOffset.UtcNow, perSide, history);
+        }
 
         return history;
     }
