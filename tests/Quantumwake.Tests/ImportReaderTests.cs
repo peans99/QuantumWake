@@ -257,6 +257,22 @@ public class ImportReaderTests
         Assert.False(Assert.Single(reading.Document.Authored!.Jobs).Pinned);
     }
 
+    [Fact]
+    public void A_shared_run_sheet_keeps_safe_manual_actions()
+    {
+        var reading = Read(Wrap("\"authored\"",
+            "\"authored\":{\"jobs\":[],\"checklists\":[],\"trips\":[{\"id\":\"t1\",\"title\":\"Cargo run\","
+            + "\"createdAt\":\"2026-08-20T09:00:00+00:00\",\"stops\":[{\"id\":\"s1\",\"placeId\":\"RR_MIC_LEO\","
+            + "\"place\":\"Port Tressler\",\"done\":true,\"actions\":[{\"id\":\"a1\",\"kind\":\"load\","
+            + "\"text\":\"Agricium\",\"quantity\":96,\"unit\":\"SCU\",\"done\":false}]}]}]}"));
+
+        var action = Assert.Single(Assert.Single(Assert.Single(reading.Document.Authored!.Trips).Stops).Actions!);
+        Assert.Equal("load", action.Kind);
+        Assert.Equal("Agricium", action.Text);
+        Assert.Equal(96, action.Quantity);
+        Assert.Equal("SCU", action.Unit);
+    }
+
     /* ---------- the ordinary case ---------- */
 
     [Fact]

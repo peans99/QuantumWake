@@ -62,9 +62,10 @@ public static class ExportDocument
     /// </para>
     /// <para>
     /// 1 — first release.
+    /// 2 — flight-plan stops gained manual run-sheet actions.
     /// </para>
     /// </remarks>
-    public const int ContentVersion = 1;
+    public const int ContentVersion = 2;
 
     /// <summary>
     /// How a document is written and read, owned here rather than borrowed.

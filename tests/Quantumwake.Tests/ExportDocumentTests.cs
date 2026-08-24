@@ -140,6 +140,22 @@ public class ExportDocumentTests : IDisposable
     }
 
     [Fact]
+    public void An_authored_run_sheet_travels_with_its_flight_plan()
+    {
+        var trip = _trips.Add("Cargo run", [
+            new TripStop(string.Empty, "RR_MIC_LEO", "Port Tressler", null, false, null)
+        ]);
+        var stop = Assert.Single(trip.Stops);
+        _trips.AddAction(trip.Id, stop.Id, "load", "Agricium", 96, "SCU");
+
+        var action = Assert.Single(Build(new ExportChoice(Authored: true)).Authored!.Trips.Single().Stops.Single().Actions!);
+
+        Assert.Equal("load", action.Kind);
+        Assert.Equal("Agricium", action.Text);
+        Assert.Equal(96, action.Quantity);
+    }
+
+    [Fact]
     public void Blueprints_are_a_name_and_a_date_and_say_which_date_it_is()
     {
         var now = DateTimeOffset.UtcNow;
@@ -169,7 +185,7 @@ public class ExportDocumentTests : IDisposable
             Build(new ExportChoice(Receipts: true)), ExportDocument.Json);
 
         Assert.Contains("\"formatVersion\": 1", json);
-        Assert.Contains("\"contentVersion\": 1", json);
+        Assert.Contains("\"contentVersion\": 2", json);
         Assert.Contains("\"exportedAt\"", json);
         Assert.Contains("\"observedTo\"", json);
         Assert.Contains("\"resourceId\": \"guid-a\"", json);

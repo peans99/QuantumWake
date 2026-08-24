@@ -77,6 +77,7 @@ public static class ImportReader
     public const int MaxItems = 200;
     public const int MaxChecklistItems = 500;
     public const int MaxStops = 200;
+    public const int MaxRunActions = 200;
 
     /// <summary>Attachments per line, matching what the authoring path allows.</summary>
     private const int MaxAttachments = 6;
@@ -412,7 +413,33 @@ public static class ImportReader
             Sanitise.Clean(Printable(stop.Place), "Somewhere"),
             Sanitise.CleanOptional(Printable(stop.Note, breaks: true)),
             stop.Done,
-            Dated(stop.DoneAt, now) ? stop.DoneAt!.Value.ToUniversalTime() : null);
+            Dated(stop.DoneAt, now) ? stop.DoneAt!.Value.ToUniversalTime() : null,
+            [.. (stop.Actions ?? []).Take(MaxRunActions)
+                .Where(action => action is not null && !string.IsNullOrWhiteSpace(action.Text))
+                .Select(action => CleanRunAction(action, now))]);
+
+    private static RunAction CleanRunAction(RunAction action, DateTimeOffset now) =>
+        new(Identifier(action.Id) ?? string.Empty,
+            RunKind(action.Kind),
+            Sanitise.Clean(Printable(action.Text), "Action"),
+            action.Quantity is >= 0 and <= 1_000_000 ? action.Quantity : null,
+            RunUnit(action.Unit),
+            action.Done,
+            Dated(action.DoneAt, now) ? action.DoneAt!.Value.ToUniversalTime() : null);
+
+    private static string RunKind(string? value) => value?.ToLowerInvariant() switch
+    {
+        "load" or "unload" or "buy" or "sell" or "collect" or "refuel" or "repair" => value.ToLowerInvariant(),
+        _ => "do",
+    };
+
+    private static string? RunUnit(string? value) => value?.ToUpperInvariant() switch
+    {
+        "SCU" => "SCU",
+        "AUEC" => "aUEC",
+        "UNIT" or "UNITS" => "units",
+        _ => null,
+    };
 
     /// <summary>
     /// A date the reader's own lists can be sorted by without being hijacked.

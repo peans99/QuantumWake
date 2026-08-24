@@ -15,6 +15,21 @@ public sealed record TripStop(
     string Place,
     string? Note,
     bool Done,
+    DateTimeOffset? DoneAt,
+    IReadOnlyList<RunAction>? Actions = null);
+
+/// <summary>One manual instruction at a planned stop.</summary>
+/// <remarks>
+/// Game.log does not carry a cargo manifest, so action lines deliberately say
+/// what the pilot intends or confirms themselves; they are not inferred cargo.
+/// </remarks>
+public sealed record RunAction(
+    string Id,
+    string Kind,
+    string Text,
+    decimal? Quantity,
+    string? Unit,
+    bool Done,
     DateTimeOffset? DoneAt);
 
 /// <summary>
@@ -32,10 +47,12 @@ public sealed record Trip(
     IReadOnlyList<TripStop> Stops,
     bool Tracked = false)
 {
-    /// <summary>Where to go now: the first stop not yet crossed off.</summary>
-    public TripStop? Next => Stops.FirstOrDefault(s => !s.Done);
+    /// <summary>Where to go now, or what remains to do at the stop just reached.</summary>
+    public TripStop? Next => Stops.FirstOrDefault(s =>
+        !s.Done || (s.Actions ?? []).Any(action => !action.Done));
 
-    public bool Done => Stops.Count > 0 && Stops.All(s => s.Done);
+    public bool Done => Stops.Count > 0 && Stops.All(s =>
+        s.Done && (s.Actions ?? []).All(action => action.Done));
 }
 
 /// <summary>
@@ -139,6 +156,75 @@ public sealed class TripStore
             stops[at] = stops[at] with { Done = done, DoneAt = done ? DateTimeOffset.UtcNow : null };
 
             _trips[index] = _trips[index] with { Stops = stops };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>Adds a manual load, unload, collection, or service instruction to one stop.</summary>
+    public bool AddAction(string tripId, string stopId, string? kind, string? text,
+        decimal? quantity, string? unit)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var stopIndex = stops.FindIndex(stop => stop.Id == stopId);
+            if (stopIndex < 0) return false;
+
+            var action = new RunAction(NewId(), ActionKind(kind), Sanitise.Clean(text, "Action"),
+                CleanQuantity(quantity), CleanUnit(unit), Done: false, DoneAt: null);
+            stops[stopIndex] = stops[stopIndex] with { Actions = [.. (stops[stopIndex].Actions ?? []), action] };
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
+            Save();
+            return true;
+        }
+    }
+
+    public bool ToggleAction(string tripId, string stopId, string actionId)
+    {
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var stopIndex = stops.FindIndex(stop => stop.Id == stopId);
+            if (stopIndex < 0) return false;
+
+            var actions = (stops[stopIndex].Actions ?? []).ToList();
+            var actionIndex = actions.FindIndex(action => action.Id == actionId);
+            if (actionIndex < 0) return false;
+
+            var done = !actions[actionIndex].Done;
+            actions[actionIndex] = actions[actionIndex] with { Done = done, DoneAt = done ? DateTimeOffset.UtcNow : null };
+            stops[stopIndex] = stops[stopIndex] with { Actions = actions };
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
+            Save();
+            return true;
+        }
+    }
+
+    public bool RemoveAction(string tripId, string stopId, string actionId)
+    {
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var stopIndex = stops.FindIndex(stop => stop.Id == stopId);
+            if (stopIndex < 0) return false;
+
+            var actions = (stops[stopIndex].Actions ?? []).Where(action => action.Id != actionId).ToList();
+            if (actions.Count == (stops[stopIndex].Actions ?? []).Count) return false;
+
+            stops[stopIndex] = stops[stopIndex] with { Actions = actions };
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
             Save();
             return true;
         }
@@ -294,7 +380,29 @@ public sealed class TripStore
         string.IsNullOrWhiteSpace(stop.Place) ? "Unknown place" : stop.Place.Trim(),
         string.IsNullOrWhiteSpace(stop.Note) ? null : stop.Note.Trim(),
         Done: false,
-        DoneAt: null);
+        DoneAt: null,
+        Actions: []);
+
+    private static string ActionKind(string? value) => value?.ToLowerInvariant() switch
+    {
+        "load" or "unload" or "buy" or "sell" or "collect" or "refuel" or "repair" => value.ToLowerInvariant(),
+        _ => "do",
+    };
+
+    private static decimal? CleanQuantity(decimal? value) =>
+        value is >= 0 and <= 1_000_000 ? value : null;
+
+    private static string? CleanUnit(string? value)
+    {
+        var unit = Sanitise.CleanOptional(value, 16);
+        return unit?.ToUpperInvariant() switch
+        {
+            "SCU" => "SCU",
+            "AUEC" => "aUEC",
+            "UNIT" or "UNITS" => "units",
+            _ => null,
+        };
+    }
 
     /// <summary>Tracks one plan and only that one. Caller holds the lock.</summary>
     private void Follow(string id)

@@ -2734,6 +2734,38 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .trip-place:hover { color: var(--cyan-hot); }
 .trip-note { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
 
+/* A run sheet stays inside the stop it belongs to: the pilot reads an action
+   against a landing, not as an unanchored task elsewhere on the page. */
+.run-action {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+.run-action input { margin: 0; accent-color: var(--cyan); }
+.run-action.done { opacity: .58; }
+.run-action.done .run-action-text { text-decoration: line-through; }
+.run-action-text { min-width: 0; overflow-wrap: anywhere; }
+.run-action-text b { color: var(--cyan-hot); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.run-action-quantity { color: var(--dim); margin-left: 5px; white-space: nowrap; }
+.run-action-form {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: 76px minmax(120px, 1fr) 58px 72px auto;
+  gap: 4px;
+  margin-top: 4px;
+}
+.run-action-form .search, .run-action-form .select { min-width: 0; padding: 4px 6px; font-size: 10px; }
+.run-action-amount { width: 58px; }
+@media (max-width: 560px) {
+  .run-action-form { grid-template-columns: 1fr 1fr; }
+  .run-action-form .search:first-of-type { grid-column: 1 / -1; }
+}
+
 .trip-tools { display: flex; gap: 3px; }
 .trip-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 
@@ -2800,6 +2832,19 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
   padding: 3px 6px;
 }
 .map-service-chip:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+
+/* Personal POIs look intentionally quieter than game or community facts.
+   Amber distinguishes something the pilot wrote from the cyan map language. */
+.map-note-badge path { fill: rgba(216, 160, 61, .9); stroke: #ffe0a1; stroke-width: .7; }
+.map-info-notes { border-top: 1px solid var(--rule); margin-top: 9px; padding-top: 8px; }
+.map-note-heading { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
+.map-note { border-left: 2px solid var(--amber, #d8a03d); padding: 4px 0 4px 7px; margin: 5px 0; }
+.map-note-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; color: var(--text); font-size: 11px; }
+.map-note-text { color: var(--muted); font-size: 10.5px; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
+.map-note-tags, .map-note-age { color: var(--dim); font-size: 9.5px; margin-top: 2px; }
+.map-note-form { display: grid; gap: 4px; margin-top: 8px; }
+.map-note-form .search { min-width: 0; padding: 4px 6px; font-size: 10px; }
+.map-note-form .ghost { justify-self: start; }
 
 body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
 body.overlay .briefing-head { margin-bottom: 6px; }
