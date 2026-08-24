@@ -29,6 +29,7 @@
       <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="jobs">Shopping</button>
+        <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="routes">Routes</button>
       </div>
@@ -163,6 +164,43 @@
         </div>
       </article>
 
+      <article class="card span2 now-briefing" id="now-briefing-card" data-card="briefing" hidden>
+        <div class="card-label">What to do next</div>
+        <div class="briefing-head">
+          <div>
+            <div class="briefing-title" id="briefing-title"></div>
+            <div class="briefing-sub" id="briefing-sub"></div>
+          </div>
+          <div class="briefing-actions">
+            <button class="ghost tiny" id="briefing-add-stop">Add this stop</button>
+            <button class="ghost tiny" id="briefing-map">Show on map</button>
+            <button class="ghost tiny" id="briefing-overlay">Pin to overlay</button>
+          </div>
+        </div>
+        <div class="briefing-grid">
+          <section class="briefing-section" id="briefing-stops-section">
+            <div class="briefing-label">Next stops</div>
+            <div class="briefing-list" id="briefing-stops"></div>
+          </section>
+          <section class="briefing-section" id="briefing-shopping-section">
+            <div class="briefing-label">Available to collect here</div>
+            <div class="briefing-list" id="briefing-shopping"></div>
+          </section>
+          <section class="briefing-section" id="briefing-trade-section">
+            <div class="briefing-label">Trade leads</div>
+            <div class="briefing-list" id="briefing-trade"></div>
+          </section>
+          <section class="briefing-section" id="briefing-services-section">
+            <div class="briefing-label">Services here</div>
+            <div class="briefing-services" id="briefing-services"></div>
+          </section>
+          <section class="briefing-section" id="briefing-stash-section">
+            <div class="briefing-label">Stashed here</div>
+            <div class="briefing-list" id="briefing-stash"></div>
+          </section>
+        </div>
+      </article>
+
       <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
         <div class="value" id="now-ship">—</div>
@@ -208,6 +246,16 @@
         <ul class="now-job-items" id="now-job-items"></ul>
       </article>
 
+      <article class="card span2" id="now-checklist-card" data-card="checklist" hidden>
+        <div class="card-label">Checklist</div>
+        <div class="now-checklist-head">
+          <div class="now-job-title" id="now-checklist-title"></div>
+          <button class="ghost tiny" id="now-checklist-open">Open</button>
+        </div>
+        <div id="now-checklist-progress"></div>
+        <ul class="now-checklist-items" id="now-checklist-items"></ul>
+      </article>
+
       <article class="card span2" id="now-trip-card" data-card="trip" hidden>
         <div class="card-label">Flight plan</div>
         <div class="now-trip-head">
@@ -246,6 +294,12 @@
         <input type="checkbox" id="map-goods">
         <span>Goods on hover</span>
       </label>
+      <div class="map-service-filter" id="map-service-filter" role="group" aria-label="Filter places by service">
+        <button type="button" class="active" data-service="" title="Show every place">All</button>
+        <button type="button" data-service="shop" title="UEX-listed counters and shops">▦ Shops</button>
+        <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
+        <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
+      </div>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
         <div class="map-results" id="map-results" hidden></div>
@@ -289,6 +343,7 @@
           <span class="map-info-kind" id="map-info-kind"></span>
           <span id="map-info-visits"></span>
         </div>
+        <div class="map-info-services" id="map-info-services" hidden></div>
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
         <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
@@ -306,18 +361,26 @@
       <div class="controls">
         <select id="routes-ship" class="select" title="Whose hold to fill"></select>
         <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <select id="routes-ranking" class="select" title="How to rank trade routes">
+          <option value="reliable">Reliable first</option>
+          <option value="profit">Highest estimated profit</option>
+        </select>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
         </label>
+        <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
+          <input type="checkbox" id="routes-fresh-only">
+          <span>Fresh only</span>
+        </label>
       </div>
     </div>
     <p class="muted caption">
-      The best hauls UEX knows, sized to a real hold and a real wallet — pick
-      one of your ships and the money you can spend, and the ranking becomes
-      what <em>this</em> run earns rather than a margin in the abstract. Each
-      row says what capped it: your hold, your capital, or the shop's own
-      stock. Needs UEX prices, and ship capacities from the community dataset.
+      Estimated UEX hauls, sized to a real hold and wallet. Reliable first
+      favours recent reports and enough reported stock and demand; highest
+      estimated profit remains available when you want the optimistic view.
+      A price report is not live inventory — each row shows what limits it and
+      how old its two quotes are.
     </p>
     <div class="table-wrap">
       <table id="routes-table">
@@ -326,12 +389,29 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Capped by</th><th></th>
+            <th class="num">Outlay</th><th class="num">Profit</th><th>Report</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- CHECKLISTS -->
+  <section id="view-checklists" class="view">
+    <div class="section-bar">
+      <h2>Checklists</h2>
+    </div>
+    <p class="muted caption">
+      Your own preparation notes, not game telemetry. Pin one list to Now and
+      the overlay; locations, items and links stay as references you can open.
+    </p>
+    <div class="checklist-new">
+      <input type="text" id="checklist-title" class="search" placeholder="New checklist, e.g. Pyro departure" autocomplete="off">
+      <button class="ghost" id="checklist-create">Create checklist</button>
+    </div>
+    <datalist id="checklist-catalogue"></datalist>
+    <div id="checklists-list"></div>
   </section>
 
   <!-- CASUALTIES -->

@@ -72,7 +72,21 @@ public sealed record UexRoute(
     decimal Units,
     decimal Profit,
     decimal Outlay,
-    string LimitedBy);
+    string LimitedBy,
+    decimal? BuyStockScu,
+    decimal? SellDemandScu,
+    DateTimeOffset? BuySeenAt,
+    DateTimeOffset? SellSeenAt,
+    string Freshness,
+    IReadOnlyList<UexRouteFallback> FallbackSells);
+
+/// <summary>A less lucrative buyer for the same load when the first choice fails.</summary>
+public sealed record UexRouteFallback(
+    string Terminal,
+    decimal SellPrice,
+    decimal? DemandScu,
+    DateTimeOffset? SeenAt,
+    string Freshness);
 
 /// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
 public sealed record UexOpportunity(
@@ -267,6 +281,23 @@ public sealed class UexData
     public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
 
     /// <summary>
+    /// Every counter named by the enabled price tables.
+    /// </summary>
+    /// <remarks>
+    /// The map needs locations rather than prices when answering "where can I
+    /// shop?". Exposing only the terminal names keeps that answer honest: it
+    /// says a UEX-listed counter is present, not that any particular item is
+    /// currently in stock.
+    /// </remarks>
+    public IReadOnlyList<string> KnownTerminals() =>
+    [
+        .. _terminals.Select(t => t.Name)
+            .Concat(_matrix.Values.SelectMany(rows => rows.Select(row => row.Terminal)))
+            .Concat(_itemMarket.Values.SelectMany(rows => rows.Select(row => row.Terminal)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+    ];
+
+    /// <summary>
     /// The best hauls in the price table: for each commodity, the cheapest
     /// place to buy against the dearest place to sell.
     /// </summary>
@@ -278,7 +309,13 @@ public sealed class UexData
     /// money rather than by space says so, which is the difference between a
     /// route and a daydream.
     /// </remarks>
-    public List<UexRoute> Routes(double scu, decimal capital, string? from = null, int limit = 25)
+    public List<UexRoute> Routes(
+        double scu,
+        decimal capital,
+        string? from = null,
+        int limit = 25,
+        bool reliableFirst = true,
+        bool freshOnly = false)
     {
         var origin = from is { Length: > 0 } ? MatchTerminal(from) : null;
         var routes = new List<UexRoute>();
@@ -326,8 +363,35 @@ public sealed class UexData
                 limiter = "stock";
             }
 
+            var byDemand = sell.SellScu > 0 ? sell.SellScu : decimal.MaxValue;
+            if (byDemand < units)
+            {
+                units = byDemand;
+                limiter = "demand";
+            }
+
             if (units <= 0)
                 continue;
+
+            var freshness = Freshness(buy.Seen, sell.Seen);
+            if (freshOnly && freshness != "fresh")
+                continue;
+
+            // The backup is deliberately a different counter, not a second
+            // price from the same shop. It is useful only when a player can
+            // actually divert after finding the first buyer empty.
+            var fallbacks = rows
+                .Where(r => r.TerminalId != buy.TerminalId && r.TerminalId != sell.TerminalId && r.Sell > 0)
+                .OrderByDescending(r => FreshnessRank(Freshness(buy.Seen, r.Seen)))
+                .ThenByDescending(r => r.Sell)
+                .Take(2)
+                .Select(r => new UexRouteFallback(
+                    r.Terminal,
+                    r.Sell,
+                    KnownCapacity(r.SellScu),
+                    SeenAt(r.Seen),
+                    Freshness(buy.Seen, r.Seen)))
+                .ToList();
 
             routes.Add(new UexRoute(
                 commodity,
@@ -337,11 +401,56 @@ public sealed class UexData
                 units,
                 margin * units,
                 buy.Buy * units,
-                limiter));
+                limiter,
+                KnownCapacity(buy.BuyScu),
+                KnownCapacity(sell.SellScu),
+                SeenAt(buy.Seen),
+                SeenAt(sell.Seen),
+                freshness,
+                fallbacks));
         }
 
-        return [.. routes.OrderByDescending(r => r.Profit).Take(limit)];
+        return reliableFirst
+            ? [.. routes.OrderByDescending(ReliabilityRank).ThenByDescending(r => r.Profit).Take(limit)]
+            : [.. routes.OrderByDescending(r => r.Profit).ThenByDescending(ReliabilityRank).Take(limit)];
     }
+
+    /// <summary>
+    /// The older end of a run decides its confidence. A fresh sale quote cannot
+    /// make an unobserved buy counter trustworthy, and an old cache carries no
+    /// timestamp at all, so it stays unknown instead of pretending to be fresh.
+    /// </summary>
+    private static string Freshness(long buySeen, long sellSeen)
+    {
+        if (buySeen <= 0 || sellSeen <= 0)
+            return "unknown";
+
+        var seen = Math.Min(buySeen, sellSeen);
+        var age = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(seen);
+        return age <= TimeSpan.FromHours(24) ? "fresh"
+            : age <= TimeSpan.FromDays(3) ? "aging"
+            : "stale";
+    }
+
+    private static int FreshnessRank(string freshness) => freshness switch
+    {
+        "fresh" => 3,
+        "aging" => 2,
+        "stale" => 1,
+        _ => 0,
+    };
+
+    private static int ReliabilityRank(UexRoute route) =>
+        FreshnessRank(route.Freshness) * 2
+        + (route.LimitedBy is "stock" or "demand" ? 0 : 1);
+
+    // Zero predates the availability fields in this cache format; presenting
+    // it as no stock would hide a route on every older install.
+    private static decimal? KnownCapacity(decimal scu) => scu > 0 ? scu : null;
+
+    private static DateTimeOffset? SeenAt(long unixSeconds) => unixSeconds > 0
+        ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds)
+        : null;
 
     /// <summary>
     /// Every terminal row for one commodity - the map's price shading reads

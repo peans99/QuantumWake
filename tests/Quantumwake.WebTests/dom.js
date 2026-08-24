@@ -156,6 +156,11 @@ function node(selector) {
 const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
+  '#view-now .card[data-card]': [
+    '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
+    '#now-handle-card', '#now-feed-card', '#now-stats-card', '#now-respawn-card',
+    '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
+  ],
 };
 
 globalThis.__dom = {
@@ -198,6 +203,14 @@ globalThis.document = {
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';
+
+for (const [selector, card] of [
+  ['#now-location-card', 'location'], ['#now-briefing-card', 'briefing'],
+  ['#now-ship-card', 'ship'], ['#now-session-card', 'session'],
+  ['#now-handle-card', 'handle'], ['#now-feed-card', 'feed'],
+  ['#now-stats-card', 'stats'], ['#now-respawn-card', 'respawn'],
+  ['#now-job-card', 'job'], ['#now-checklist-card', 'checklist'], ['#now-trip-card', 'trip'], ['#trade-advice-card', 'trade'],
+]) node(selector).dataset.card = card;
 
 /* Network: a routing table the test fills in, and a record of what was asked. */
 globalThis.__fetch = { routes: {}, calls: [] };

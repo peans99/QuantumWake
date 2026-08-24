@@ -164,6 +164,7 @@ function showView(name) {
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
+  if (name === 'checklists') loadChecklists().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
@@ -269,6 +270,45 @@ window.scOverlayExpanded = (on) => {
   if (isOverlay) applyOverlayLayout().catch(() => {});
 };
 
+/* ---------- Now card collapse ---------- */
+
+const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
+let collapsedNowCards = new Set();
+
+try {
+  const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
+  if (Array.isArray(saved)) collapsedNowCards = new Set(saved);
+} catch { /* a bad preference must not hide the dashboard */ }
+
+function saveCollapsedNowCards() {
+  try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
+}
+
+function initNowCardCollapsers() {
+  for (const card of $$('#view-now .card[data-card]')) {
+    const name = card.dataset.card;
+    if (!name || card.querySelector('.now-collapse')) continue;
+
+    const button = el('button', 'now-collapse');
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      const collapsed = !card.classList.contains('collapsed');
+      card.classList.toggle('collapsed', collapsed);
+      button.textContent = collapsed ? 'Expand' : 'Collapse';
+      button.setAttribute('aria-expanded', String(!collapsed));
+      if (collapsed) collapsedNowCards.add(name);
+      else collapsedNowCards.delete(name);
+      saveCollapsedNowCards();
+    });
+
+    const collapsed = collapsedNowCards.has(name);
+    card.classList.toggle('collapsed', collapsed);
+    button.textContent = collapsed ? 'Expand' : 'Collapse';
+    button.setAttribute('aria-expanded', String(!collapsed));
+    card.append(button);
+  }
+}
+
 document.addEventListener('keydown', (event) => {
   if (!event.ctrlKey || !event.altKey) return;
 
@@ -279,8 +319,11 @@ document.addEventListener('keydown', (event) => {
 /* ---------- live view ---------- */
 
 let sessionStarted = null;
+let nowState = null;
+let briefingFor = null;
 
 function renderNow(state) {
+  nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
   $('#link').title = state.connected ? 'live' : 'disconnected';
 
@@ -295,6 +338,7 @@ function renderNow(state) {
 
   // The trade card follows too, refreshing only when the place changes.
   refreshTradeAdvice(state.location).catch(() => {});
+  refreshPilotBriefing(state).catch(() => {});
 
   const confidence = $('#now-confidence');
   confidence.textContent = state.location ? `${state.confidence.toLowerCase()} confidence` : '';
@@ -340,6 +384,193 @@ function renderNow(state) {
       feed.append(li);
     }
   }
+}
+
+/**
+ * The briefing answers the decisions that depend on a live location. It only
+ * re-fetches when that location changes; actions explicitly invalidate it.
+ */
+async function refreshPilotBriefing(state) {
+  const card = $('#now-briefing-card');
+  const key = state?.inGame && state.location
+    ? `${state.locationId || ''}|${state.location}`
+    : null;
+
+  if (!key) {
+    card.hidden = true;
+    briefingFor = null;
+    return;
+  }
+
+  if (key === briefingFor) return;
+  briefingFor = key;
+
+  const briefing = await getJson('/api/briefing');
+  if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}`) return;
+
+  renderPilotBriefing(briefing);
+}
+
+async function reloadPilotBriefing() {
+  briefingFor = null;
+  if (nowState) await refreshPilotBriefing(nowState);
+}
+
+function briefingMap(placeId, place) {
+  showView('map');
+  if (placeId) centreOn(placeId);
+  else if (place) jumpToPlace(place);
+}
+
+async function addBriefingStop() {
+  if (!nowState?.location) return;
+
+  const button = $('#briefing-add-stop');
+  button.disabled = true;
+  try {
+    await fetch('/api/trips/stops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placeId: nowState.locationId || '', place: nowState.location, note: null }),
+    });
+    await loadTrips();
+    await reloadPilotBriefing();
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function pinBriefingToOverlay() {
+  const button = $('#briefing-overlay');
+  button.disabled = true;
+  try {
+    await fetch('/api/overlay', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible: true }) });
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function briefingStopRow(briefing, stop) {
+  const row = el('div', 'briefing-row');
+  const main = el('div', 'briefing-main');
+  const name = el('button', 'briefing-link', stop.place);
+  name.title = 'Show this stop on the map';
+  name.addEventListener('click', () => briefingMap(stop.placeId, stop.place));
+  main.append(name);
+  if (stop.note) main.append(el('div', 'briefing-detail', stop.note));
+  row.append(main);
+
+  const done = el('button', 'ghost tiny', 'Mark collected');
+  done.title = 'Cross this stop off';
+  done.addEventListener('click', async () => {
+    done.disabled = true;
+    try {
+      await tripCall(`/api/trips/${briefing.tripId}/stops/${stop.id}/toggle`);
+      await reloadPilotBriefing();
+    } finally {
+      done.disabled = false;
+    }
+  });
+  row.append(done);
+  return row;
+}
+
+function briefingShoppingRow(item) {
+  const row = el('div', 'briefing-row');
+  const main = el('div', 'briefing-main');
+  main.append(el('b', null, item.name));
+  main.append(el('div', 'briefing-detail', `${item.needed} ${item.unit || 'needed'} · ${item.terminal} · ${money(item.price)}`));
+  row.append(main);
+
+  const map = el('button', 'ghost tiny', 'Map');
+  map.title = 'Show this seller on the map';
+  map.addEventListener('click', () => {
+    showView('map');
+    centreOnTerminal(item.terminal, null);
+  });
+  row.append(map);
+  return row;
+}
+
+function renderPilotBriefing(briefing) {
+  const card = $('#now-briefing-card');
+  if (!briefing?.location) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#briefing-title').textContent = briefing.location;
+  $('#briefing-sub').textContent = briefing.tripTitle
+    ? `Active flight plan · ${briefing.tripTitle}`
+    : 'No active flight plan';
+
+  const stops = $('#briefing-stops');
+  stops.textContent = '';
+  for (const stop of briefing.stops || []) stops.append(briefingStopRow(briefing, stop));
+  $('#briefing-stops-section').hidden = !(briefing.stops || []).length;
+
+  const shopping = $('#briefing-shopping');
+  shopping.textContent = '';
+  for (const item of briefing.shopping || []) shopping.append(briefingShoppingRow(item));
+  $('#briefing-shopping-section').hidden = !(briefing.shopping || []).length;
+
+  const trade = $('#briefing-trade');
+  trade.textContent = '';
+  for (const lead of briefing.trade || []) {
+    const row = el('div', 'briefing-row');
+    const main = el('div', 'briefing-main');
+    const commodity = el('button', 'briefing-link', lead.commodity);
+    commodity.title = 'Open this commodity in Market';
+    commodity.addEventListener('click', () => openCommodity(lead.commodity));
+    main.append(commodity);
+    main.append(el('div', 'briefing-detail',
+      `buy ${money(lead.buyHere)} → sell ${money(lead.sellThere)} at ${lead.sellTerminal}`));
+    row.append(main);
+    row.append(el('span', 'inward', `+${money(lead.marginPerScu)}/SCU`));
+    trade.append(row);
+  }
+  if ((briefing.trade || []).length)
+    trade.append(el('div', 'briefing-caveat', 'Leads only — cargo in your hold is not recorded by Game.log.'));
+  $('#briefing-trade-section').hidden = !(briefing.trade || []).length;
+
+  const services = $('#briefing-services');
+  services.textContent = '';
+  for (const service of briefing.services || []) {
+    const key = serviceKey(service.name);
+    const canMap = key && key !== 'repair' && service.dataEnabled;
+    const chip = el(canMap ? 'button' : 'span',
+      `briefing-service ${service.status.replaceAll(' ', '-')}`);
+    if (canMap) {
+      chip.type = 'button';
+      chip.addEventListener('click', () => selectMapService(key, true));
+    }
+    chip.append(el('span', 'service-icon', SERVICE_META[key]?.icon || '•'));
+    chip.append(el('span', 'service-text', `${service.name}: ${service.status}`));
+    chip.title = canMap
+      ? `Show ${SERVICE_META[key].label.toLowerCase()} on the map`
+      : service.dataEnabled ? 'No map location is known for this service' : 'No installed data reports this service';
+    services.append(chip);
+  }
+  $('#briefing-services-section').hidden = !(briefing.services || []).length;
+
+  const stash = $('#briefing-stash');
+  stash.textContent = '';
+  for (const item of briefing.stash || []) {
+    const row = el('div', 'briefing-row');
+    const main = el('div', 'briefing-main');
+    main.append(el('b', null, item.name));
+    main.append(el('div', 'briefing-detail', item.category));
+    row.append(main);
+    stash.append(row);
+  }
+  $('#briefing-stash-section').hidden = !(briefing.stash || []).length;
+
+  $('#briefing-map').onclick = () => briefingMap(briefing.locationId, briefing.location);
+  $('#briefing-add-stop').onclick = addBriefingStop;
+  $('#briefing-overlay').onclick = pinBriefingToOverlay;
+  $('#briefing-overlay').hidden = isOverlay;
+  card.hidden = false;
 }
 
 setInterval(() => { $('#now-clock').textContent = clock(sessionStarted); }, 1000);
@@ -460,6 +691,7 @@ async function loadHistory() {
   loadMiningRef().catch((e) => console.error('mining', e));
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
+  loadChecklists().catch((e) => console.error('checklists', e));
   loadCasualties().catch((e) => console.error('casualties', e));
   loadCrew().catch((e) => console.error('crew', e));
   loadRespawn().catch((e) => console.error('respawn', e));
@@ -1964,6 +2196,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
+  checklist: 'Checklist',
 };
 
 /**
@@ -2148,6 +2381,8 @@ async function loadRoutes() {
 
   const scu = Number(select.value) || 0;
   const capital = Number($('#routes-capital').value) || 0;
+  const ranking = $('#routes-ranking').value || 'reliable';
+  const freshOnly = $('#routes-fresh-only').checked;
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
   const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
@@ -2160,7 +2395,8 @@ async function loadRoutes() {
   let rows = [];
   try {
     rows = await getJson(
-      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`);
+      `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
+      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`);
   } catch { /* UEX off */ }
 
   if (!rows.length) {
@@ -2168,7 +2404,7 @@ async function loadRoutes() {
     const td = el('td', 'muted', from
       ? 'No route starts from where you are - or UEX has no terminal here.'
       : 'Nothing to show. Enable UEX prices on the Settings page.');
-    td.colSpan = 11;
+    td.colSpan = 12;
     tr.append(td);
     body.append(tr);
     return;
@@ -2185,6 +2421,24 @@ async function loadRoutes() {
     tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
     tr.append(el('td', 'num outward', money(route.outlay)));
     tr.append(el('td', 'num inward', money(route.profit)));
+
+    const report = el('td', 'route-report');
+    const reportWord = route.freshness === 'fresh' ? 'Fresh reports'
+      : route.freshness === 'aging' ? 'Aging reports'
+        : route.freshness === 'stale' ? 'Stale reports' : 'Report age unknown';
+    report.append(el('div', `route-freshness ${route.freshness || 'unknown'}`, reportWord));
+    const age = (at) => at ? ago(at) : 'unknown';
+    report.append(el('div', 'muted route-age', `Buy ${age(route.buySeenAt)} · sell ${age(route.sellSeenAt)}`));
+    const capacity = [];
+    capacity.push(route.buyStockScu > 0 ? `stock ${Math.floor(route.buyStockScu)} SCU` : 'stock unknown');
+    capacity.push(route.sellDemandScu > 0 ? `demand ${Math.floor(route.sellDemandScu)} SCU` : 'demand unknown');
+    report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
+    if ((route.freshness !== 'fresh' || route.limitedBy === 'demand') && route.fallbackSells?.length) {
+      const choices = route.fallbackSells.map((fallback) =>
+        `${fallback.terminal} ${money(fallback.sellPrice)} (${fallback.freshness || 'unknown'})`).join(' · ');
+      report.append(el('div', 'route-fallback', `Fallback: ${choices}`));
+    }
+    tr.append(report);
 
     // One click turns a haul into a plan: buy there, sell there, in order.
     const plan = el('td');
@@ -2209,6 +2463,8 @@ async function loadRoutes() {
       ? 'Your capital runs out before the hold does'
       : route.limitedBy === 'stock'
         ? 'The shop does not stock enough to fill the hold'
+        : route.limitedBy === 'demand'
+          ? 'The buyer does not report enough demand to take the full run'
         : 'The hold is the limit - the good case';
     tr.append(capped);
     tr.append(plan);
@@ -2220,6 +2476,8 @@ async function loadRoutes() {
 onInput('#routes-capital', loadRoutes);
 $('#routes-ship')?.addEventListener('change', loadRoutes);
 $('#routes-here')?.addEventListener('change', loadRoutes);
+$('#routes-ranking')?.addEventListener('change', loadRoutes);
+$('#routes-fresh-only')?.addEventListener('change', loadRoutes);
 
 /**
  * "Wake up at" on the dashboard: where the last death put you, which is as
@@ -3102,6 +3360,7 @@ async function loadJobList() {
   } catch { /* server down; the page still shows contracts */ }
 
   renderPinnedJob(jobs);
+  reloadPilotBriefing().catch(() => {});
 
   // Shopping and crafting are different work, so they live on different
   // pages; the cards themselves are identical.
@@ -3420,6 +3679,254 @@ $('#job-form')?.addEventListener('submit', async (e) => {
   $('#job-place').value = '';
   $('#job-form').hidden = true;
   loadJobList();
+});
+
+/* ---------- checklists ---------- */
+
+// These are authored preparation, deliberately separate from a shopping list:
+// "set a med bed" is useful on Now even though no shop, inventory event or log
+// parser can prove it has happened.
+let checklists = [];
+
+const checklistDue = (dueAt) => dueAt
+  ? new Date(dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  : '';
+
+async function checklistCall(url, method = 'POST', body = null) {
+  await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  await loadChecklists();
+}
+
+function showChecklistAttachment(attachment) {
+  if (attachment.kind === 'location') {
+    const button = el('button', 'checklist-attachment place-link', `⌖ ${attachment.label}`);
+    button.title = 'Show this place on the map';
+    button.addEventListener('click', () => briefingMap(attachment.placeId, attachment.target || attachment.label));
+    return button;
+  }
+
+  if (attachment.kind === 'commodity') {
+    const button = el('button', 'checklist-attachment', `◇ ${attachment.label}`);
+    button.title = 'Open this commodity';
+    button.addEventListener('click', () => openCommodity(attachment.target || attachment.label));
+    return button;
+  }
+
+  if (attachment.kind === 'item') {
+    const button = el('button', 'checklist-attachment', `▦ ${attachment.label}`);
+    button.title = 'Find this item in Parts';
+    button.addEventListener('click', () => {
+      showView('parts');
+      $('#parts-search').value = attachment.target || attachment.label;
+      renderPartsRef();
+    });
+    return button;
+  }
+
+  if (attachment.kind === 'url' && /^https?:\/\//i.test(attachment.target || '')) {
+    const link = el('a', 'checklist-attachment', `↗ ${attachment.label}`);
+    link.href = attachment.target;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    return link;
+  }
+
+  return el('span', 'checklist-attachment', `• ${attachment.label}`);
+}
+
+function checklistItemRow(list, item, compact = false) {
+  const row = el('li', `checklist-item${item.done ? ' done' : ''}`);
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = item.done;
+  check.title = item.done ? 'Reopen task' : 'Mark task done';
+  check.addEventListener('change', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}/toggle`));
+  row.append(check);
+
+  const main = el('div', 'checklist-item-main');
+  main.append(el('div', 'checklist-item-text', item.text));
+  if (!compact && item.note) main.append(el('div', 'muted checklist-note', item.note));
+  if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
+
+  const attachments = item.attachments || [];
+  if (attachments.length) {
+    const links = el('div', 'checklist-attachments');
+    for (const attachment of attachments) links.append(showChecklistAttachment(attachment));
+    main.append(links);
+  }
+  row.append(main);
+
+  if (!compact) {
+    const remove = el('button', 'ghost tiny', '×');
+    remove.title = 'Remove task';
+    remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}`, 'DELETE'));
+    row.append(remove);
+  }
+  return row;
+}
+
+function renderPinnedChecklist(lists = checklists) {
+  const card = $('#now-checklist-card');
+  const list = lists.find((entry) => entry.pinned);
+  if (!card) return;
+
+  if (!list) {
+    card.hidden = true;
+    return;
+  }
+
+  $('#now-checklist-title').textContent = list.title;
+  const done = list.items.filter((item) => item.done).length;
+  const progress = $('#now-checklist-progress');
+  progress.textContent = '';
+  progress.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+
+  const host = $('#now-checklist-items');
+  host.textContent = '';
+  const open = list.items.filter((item) => !item.done);
+  for (const item of open.slice(0, 5)) host.append(checklistItemRow(list, item, true));
+  if (open.length > 5) host.append(el('li', 'muted', `+${open.length - 5} more`));
+  if (!open.length) host.append(el('li', 'inward', 'Everything is checked off.'));
+
+  $('#now-checklist-open').onclick = () => showView('checklists');
+  card.hidden = false;
+}
+
+function checklistComposer(list) {
+  const form = el('form', 'checklist-composer');
+  const task = document.createElement('input');
+  task.type = 'text';
+  task.placeholder = 'Add a task, e.g. bring tractor beam';
+  task.required = true;
+  form.append(task);
+
+  const fields = el('div', 'checklist-fields');
+  const place = document.createElement('select');
+  place.className = 'select';
+  place.title = 'Optional map location';
+  fillPlaceOptions(place, '');
+  fields.append(place);
+
+  const item = document.createElement('input');
+  item.type = 'search';
+  item.className = 'search';
+  item.setAttribute('list', 'checklist-catalogue');
+  item.placeholder = 'Optional commodity, part or gear';
+  item.title = 'Optional commodity, part or gear reference';
+  fields.append(item);
+  fillChecklistReferenceOptions();
+
+  const due = document.createElement('input');
+  due.type = 'datetime-local';
+  due.className = 'search';
+  due.title = 'Optional date and time';
+  fields.append(due);
+  form.append(fields);
+
+  const detail = el('div', 'checklist-fields');
+  const note = document.createElement('input');
+  note.type = 'text';
+  note.className = 'search';
+  note.placeholder = 'Optional note';
+  detail.append(note);
+  const url = document.createElement('input');
+  url.type = 'url';
+  url.className = 'search';
+  url.placeholder = 'Optional https:// link';
+  detail.append(url);
+  form.append(detail);
+
+  const add = el('button', 'ghost', 'Add task');
+  form.append(add);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const where = pickedPlace(place);
+    const attachments = [];
+    if (where.name) attachments.push({ kind: 'location', label: where.name, target: where.name, placeId: where.id });
+    if (item.value.trim()) {
+      const commodity = catalogue?.commodities?.some((name) => name === item.value);
+      attachments.push({ kind: commodity ? 'commodity' : 'item', label: item.value, target: item.value });
+    }
+    if (url.value.trim()) attachments.push({ kind: 'url', label: url.value.trim(), target: url.value.trim() });
+
+    add.disabled = true;
+    await checklistCall(`/api/checklists/${list.id}/items`, 'POST', {
+      text: task.value,
+      dueAt: due.value ? new Date(due.value).toISOString() : null,
+      note: note.value,
+      attachments,
+    });
+  });
+  return form;
+}
+
+/** One shared searchable catalogue: duplicating thousands of options per list makes adding a task sluggish. */
+async function fillChecklistReferenceOptions() {
+  const list = $('#checklist-catalogue');
+  if (!list || list.childElementCount) return;
+
+  catalogue ??= await getJson('/api/shopping/catalogue').catch(() => ({ commodities: [], items: [] }));
+  for (const name of [...(catalogue.commodities || []), ...(catalogue.items || [])]) {
+    const option = document.createElement('option');
+    option.value = name;
+    list.append(option);
+  }
+}
+
+function renderChecklists(lists) {
+  const host = $('#checklists-list');
+  if (!host) return;
+  host.textContent = '';
+
+  if (!lists.length) {
+    host.append(el('p', 'muted', 'No checklists yet. Make one for a departure, an operation, or anything you do not want to forget.'));
+    return;
+  }
+
+  for (const list of lists) {
+    const card = el('article', 'checklist-card');
+    const head = el('div', 'job-head');
+    head.append(el('b', null, list.title));
+    if (list.pinned) head.append(el('span', 'job-kind owned', 'on Now'));
+    head.append(el('span', 'spacer'));
+
+    const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? 'On Now' : 'Pin to Now');
+    pin.title = 'Only one checklist is shown on Now and in the overlay';
+    pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
+    head.append(pin);
+    const remove = el('button', 'ghost danger', 'Delete');
+    remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}`, 'DELETE'));
+    head.append(remove);
+    card.append(head);
+
+    const done = list.items.filter((item) => item.done).length;
+    card.append(jobProgress(done, list.items.length, `${done} of ${list.items.length} done`));
+    const items = el('ul', 'checklist-items');
+    for (const entry of list.items) items.append(checklistItemRow(list, entry));
+    if (!list.items.length) items.append(el('li', 'muted', 'No tasks yet — add the first thing you want to remember.'));
+    card.append(items, checklistComposer(list));
+    host.append(card);
+  }
+}
+
+async function loadChecklists() {
+  checklists = await getJson('/api/checklists').catch(() => []);
+  renderChecklists(checklists);
+  renderPinnedChecklist(checklists);
+}
+
+$('#checklist-create')?.addEventListener('click', async () => {
+  const title = $('#checklist-title');
+  if (!title.value.trim()) {
+    title.focus();
+    return;
+  }
+  await checklistCall('/api/checklists', 'POST', { title: title.value });
+  title.value = '';
 });
 
 /* ---------- StarStrings ---------- */
@@ -4973,6 +5480,38 @@ const svgEl = (tag, attrs = {}) => {
 let atlas = [];
 const nodeAt = new Map();
 
+// Service data is intentionally a set of place ids, not a claim about every
+// facility at a location. UEX can identify counters, fuel prices and clinics;
+// it cannot identify repair pads, so repair never becomes a reassuringly empty
+// map filter.
+const SERVICE_META = {
+  shop: { icon: '▦', label: 'Shops' },
+  refuel: { icon: '⛽', label: 'Refuel' },
+  clinic: { icon: '✚', label: 'Clinic' },
+  repair: { icon: '⚙', label: 'Repair' },
+};
+const mapServicesByPlace = new Map();
+let mapServiceFilter = '';
+
+const serviceKey = (name) => ({
+  Shops: 'shop',
+  'Trade counter': 'shop',
+  Refuel: 'refuel',
+  Clinic: 'clinic',
+  Repair: 'repair',
+}[name] || '');
+
+const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
+
+function selectMapService(service, openMap = false) {
+  mapServiceFilter = service || '';
+  for (const button of $$('#map-service-filter button'))
+    button.classList.toggle('active', button.dataset.service === mapServiceFilter);
+
+  if (openMap) showView('map');
+  drawMap();
+}
+
 /** Non-null while a commodity search is active: the rawIds to light up. */
 let highlightIds = null;
 
@@ -5082,10 +5621,20 @@ let view = { ...HOME_VIEW };
 const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
-  const data = await getJson('/api/map');
+  const [data, servicePlaces] = await Promise.all([
+    getJson('/api/map'),
+    getJson('/api/map/services').catch(() => []),
+  ]);
   atlas = data.nodes || [];
   bodyPositions = data.positions || {};
+  mapServicesByPlace.clear();
+  for (const place of servicePlaces)
+    mapServicesByPlace.set(place.placeId, place.services || []);
   drawMap();
+
+  // A detail card can stay open while the history refreshes. Its facts should
+  // catch up when the supporting service map does.
+  if (mapInfoLocation) renderMapInfoServices(mapInfoLocation);
 }
 
 /** Real body coordinates per system, when the community dataset supplies them. */
@@ -5605,6 +6154,8 @@ function initMap() {
   $('#map-here').addEventListener('click', () => centreOn(hereId));
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
+  for (const button of $$('#map-service-filter button'))
+    button.addEventListener('click', () => selectMapService(button.dataset.service));
   initCargoPanel();
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
@@ -6391,6 +6942,7 @@ const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
 async function loadTrips() {
   trips = await getJson('/api/trips');
   renderTripCard();
+  reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
   drawTripPath();
 }
@@ -7196,6 +7748,12 @@ function showMapTip(location) {
 
   if ($('#map-goods').checked) appendTipGoods(tip, commoditiesSoldAt(location));
 
+  const services = servicesAt(location);
+  if (services.length)
+    tip.append(el('span', 'service-tip', services
+      .map((service) => `${SERVICE_META[service]?.icon || '•'} ${SERVICE_META[service]?.label || service}`)
+      .join(' · ')));
+
   tip.hidden = false;
 }
 
@@ -7340,6 +7898,8 @@ function showMapInfo(location) {
     ? `last there ${relative(location.lastVisit)}`
     : '';
 
+  renderMapInfoServices(location);
+
   // In commodity mode, say which side of the search this place is on.
   const trade = $('#map-info-trade');
   if (highlightIds) {
@@ -7375,6 +7935,27 @@ function showMapInfo(location) {
   info.hidden = false;
 }
 
+/** Service facts on a place card use the same map-id join as the filter. */
+function renderMapInfoServices(location) {
+  const host = $('#map-info-services');
+  const services = servicesAt(location);
+  host.textContent = '';
+
+  for (const service of services) {
+    const meta = SERVICE_META[service];
+    if (!meta) continue;
+    const chip = el('button', 'map-service-chip');
+    chip.type = 'button';
+    chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
+    chip.append(el('span', 'service-icon', meta.icon));
+    chip.append(el('span', 'service-text', meta.label));
+    chip.addEventListener('click', () => selectMapService(service));
+    host.append(chip);
+  }
+
+  host.hidden = host.children.length === 0;
+}
+
 /** Lore paragraphs already asked for, name to promise of text-or-null. */
 const loreCache = new Map();
 
@@ -7389,6 +7970,10 @@ function drawMap() {
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
+  const serviceIds = mapServiceFilter
+    ? new Set(atlas.filter((location) => servicesAt(location).includes(mapServiceFilter))
+      .map((location) => location.rawId))
+    : null;
 
   // Any search HIGHLIGHTS rather than filters. Filtering removed the context:
   // the remaining nodes re-clustered into what looked like the whole map with
@@ -7421,12 +8006,15 @@ function drawMap() {
   prepareShading(term, sites);
   syncCargoPanel(term, sites);
 
-  const locations = atlas.filter((l) => term || !visitedOnly || l.visits > 0);
+  const locations = atlas.filter((l) =>
+    (!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0));
 
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
-    if (term && !highlightIds) count.textContent = 'no match';
+    if (mapServiceFilter && serviceIds?.size === 0)
+      count.textContent = `no ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} locations known`;
+    else if (term && !highlightIds) count.textContent = 'no match';
     else if (sites) {
       // Name what was matched: the term may have been a fragment, and the
       // user should see which commodity the map decided they meant.
@@ -7438,6 +8026,8 @@ function drawMap() {
         : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else if (mapServiceFilter)
+      count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
@@ -8867,6 +9457,8 @@ async function maybeShowSetup() {
 }
 
 async function boot() {
+  initNowCardCollapsers();
+
   if (isOverlay) {
     document.body.classList.add('overlay');
 
