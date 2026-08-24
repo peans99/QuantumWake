@@ -151,6 +151,10 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <div class="now-card-visibility" id="now-card-visibility" hidden>
+      <span class="muted">Hidden cards</span>
+      <div id="now-hidden-card-list"></div>
+    </div>
     <div class="now-grid">
 
       <article class="card hero" data-card="location">
@@ -203,7 +207,10 @@
 
       <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
-        <div class="value" id="now-ship">—</div>
+        <div class="now-ship-summary">
+          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
+          <div class="value" id="now-ship">—</div>
+        </div>
       </article>
 
       <article class="card" data-card="session">

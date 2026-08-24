@@ -273,15 +273,50 @@ window.scOverlayExpanded = (on) => {
 /* ---------- Now card collapse ---------- */
 
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
+const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
 let collapsedNowCards = new Set();
+let hiddenNowCards = new Set();
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
   if (Array.isArray(saved)) collapsedNowCards = new Set(saved);
 } catch { /* a bad preference must not hide the dashboard */ }
 
+try {
+  const saved = JSON.parse(localStorage.getItem(NOW_HIDDEN_KEY) || '[]');
+  if (Array.isArray(saved)) hiddenNowCards = new Set(saved);
+} catch { /* a bad preference must not remove a dashboard card */ }
+
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
+}
+
+function saveHiddenNowCards() {
+  try { localStorage.setItem(NOW_HIDDEN_KEY, JSON.stringify([...hiddenNowCards])); } catch { /* optional */ }
+}
+
+function renderHiddenNowCards() {
+  const tray = $('#now-card-visibility');
+  const list = $('#now-hidden-card-list');
+  if (!tray || !list) return;
+
+  list.textContent = '';
+  for (const card of $$('#view-now .card[data-card]')) {
+    const name = card.dataset.card;
+    if (!hiddenNowCards.has(name)) continue;
+
+    const label = card.querySelector('.card-label')?.textContent.trim() || name;
+    const show = el('button', 'ghost tiny', `Show ${label}`);
+    show.type = 'button';
+    show.addEventListener('click', () => {
+      hiddenNowCards.delete(name);
+      card.classList.remove('user-hidden');
+      saveHiddenNowCards();
+      renderHiddenNowCards();
+    });
+    list.append(show);
+  }
+  tray.hidden = !list.children.length;
 }
 
 function initNowCardCollapsers() {
@@ -306,7 +341,22 @@ function initNowCardCollapsers() {
     button.textContent = collapsed ? 'Expand' : 'Collapse';
     button.setAttribute('aria-expanded', String(!collapsed));
     card.append(button);
+
+    const hide = el('button', 'now-hide', 'Hide');
+    hide.type = 'button';
+    hide.title = 'Hide this card from the Now page';
+    hide.addEventListener('click', () => {
+      hiddenNowCards.add(name);
+      card.classList.add('user-hidden');
+      saveHiddenNowCards();
+      renderHiddenNowCards();
+    });
+    card.append(hide);
+
+    card.classList.toggle('user-hidden', !isOverlay && hiddenNowCards.has(name));
   }
+
+  renderHiddenNowCards();
 }
 
 document.addEventListener('keydown', (event) => {
@@ -348,7 +398,7 @@ function renderNow(state) {
   travel.hidden = !state.travelling;
   if (state.travelling) $('#now-travel-to').textContent = state.travellingTo || '';
 
-  $('#now-ship').textContent = state.ship || '—';
+  renderNowShip(state.ship);
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
   $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
@@ -4736,6 +4786,24 @@ function makerOf(shipName) {
   }
 
   return { code: null, name: words[0], model: words.slice(1).join(' ') || shipName };
+}
+
+/** The active ship deserves the same manufacturer mark as the Fleet page. */
+function renderNowShip(shipName) {
+  $('#now-ship').textContent = shipName || '—';
+
+  const badge = $('#now-ship-logo');
+  badge.textContent = '';
+  const maker = shipName && makerOf(shipName);
+  const hasLogo = maker?.code && MANUFACTURER_LOGOS.has(maker.code);
+  badge.hidden = !hasLogo;
+  if (!hasLogo) return;
+
+  const image = document.createElement('img');
+  image.src = `assets/manufacturers/${maker.code}.png`;
+  image.alt = maker.name;
+  image.title = maker.name;
+  badge.append(image);
 }
 
 async function loadManufacturers() {

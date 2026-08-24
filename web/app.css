@@ -519,6 +519,14 @@ h2.spaced { margin-top: 32px; }
   cursor: pointer;
 }
 .now-collapse:hover { color: var(--cyan-hot); }
+.now-hide { position: absolute; top: 9px; right: 72px; border: 0; background: transparent; color: var(--dim); font: inherit; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+.now-hide:hover { color: var(--amber); }
+.card.user-hidden { display: none !important; }
+.now-card-visibility { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--gap); font-size: 11px; }
+#now-hidden-card-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.now-ship-summary { display: flex; align-items: center; gap: 10px; }
+.now-ship-logo { flex: 0 0 44px; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; }
+.now-ship-logo img { max-width: 100%; max-height: 100%; opacity: .9; }
 .card.collapsed { min-height: 0; padding-top: 10px; padding-bottom: 10px; }
 .card.collapsed > :not(.card-label):not(.now-collapse) { display: none !important; }
 
@@ -2712,6 +2720,7 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 .map-service-chip:hover { border-color: var(--cyan); color: var(--cyan-hot); }
 
 body.overlay .now-collapse { display: none; }
+body.overlay .now-hide, body.overlay .now-card-visibility { display: none; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
