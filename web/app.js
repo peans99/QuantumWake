@@ -681,6 +681,9 @@ async function loadHistory() {
   loadAtlas().catch((e) => console.error('map', e));
   safeRender('Contracts', () => renderContracts(stats));
   safeRender('Places', () => renderPlaces(stats));
+  // Routes can start before the ledger returns; rerun once the owned holds are
+  // known so a selected ship cannot leave the table priced as one SCU.
+  loadRoutes().catch((e) => console.error('routes after history', e));
 
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
@@ -2359,6 +2362,8 @@ async function applyOverlayLayout() {
  * The route planner. UEX ranks margins; this ranks runs - the difference is
  * a hold and a wallet, which are the two things only your own logs know.
  */
+let routeRequest = 0;
+
 async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
@@ -2383,27 +2388,43 @@ async function loadRoutes() {
   const capital = Number($('#routes-capital').value) || 0;
   const ranking = $('#routes-ranking').value || 'reliable';
   const freshOnly = $('#routes-fresh-only').checked;
+  const evidence = $('#routes-evidence').value || 'reported';
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
   const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
     ? here
     : '';
+  const originNote = $('#routes-origin-note');
+  originNote.textContent = from
+    ? ` Origin: ${from}; results require UEX to match this terminal.`
+    : '';
 
   const body = $('#routes-table tbody');
   body.textContent = '';
+  const request = ++routeRequest;
 
   let rows = [];
   try {
     rows = await getJson(
       `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
-      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`);
+      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`
+      + `&evidence=${encodeURIComponent(evidence)}`);
   } catch { /* UEX off */ }
+
+  // The initial per-SCU request often leaves before the fleet has loaded. It
+  // must not win the race back and overwrite the later request for the ship
+  // now shown in the selector.
+  if (request !== routeRequest) return;
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', from
       ? 'No route starts from where you are - or UEX has no terminal here.'
-      : 'Nothing to show. Enable UEX prices on the Settings page.');
+      : evidence === 'full'
+        ? 'No route has both sides reporting enough capacity for this load. Try Reported capacity or Include unknown capacity.'
+        : evidence === 'reported'
+          ? 'No route has stock and demand reported on both sides. Try Include unknown capacity to see price-only estimates.'
+          : 'Nothing to show. Enable UEX prices on the Settings page.');
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
@@ -2420,9 +2441,17 @@ async function loadRoutes() {
     tr.append(el('td', 'num', `+${money(route.marginPerScu)}`));
     tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
     tr.append(el('td', 'num outward', money(route.outlay)));
-    tr.append(el('td', 'num inward', money(route.profit)));
+    const projected = el('td', 'num inward', `~${money(route.profit)}`);
+    projected.title = 'Arithmetic from the two UEX prices, not a promise of live availability.';
+    tr.append(projected);
 
     const report = el('td', 'route-report');
+    const availabilityWord = route.availability === 'reported-full'
+      ? `Reported full load · ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
+      : route.availability === 'reported-partial'
+        ? `Reported partial · ${Math.floor(route.units).toLocaleString()} / ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
+        : `Capacity unknown · projected ${Math.floor(route.units).toLocaleString()} SCU`;
+    report.append(el('div', `route-feasibility ${route.availability || 'capacity-unknown'}`, availabilityWord));
     const reportWord = route.freshness === 'fresh' ? 'Fresh reports'
       : route.freshness === 'aging' ? 'Aging reports'
         : route.freshness === 'stale' ? 'Stale reports' : 'Report age unknown';
@@ -2430,8 +2459,12 @@ async function loadRoutes() {
     const age = (at) => at ? ago(at) : 'unknown';
     report.append(el('div', 'muted route-age', `Buy ${age(route.buySeenAt)} · sell ${age(route.sellSeenAt)}`));
     const capacity = [];
-    capacity.push(route.buyStockScu > 0 ? `stock ${Math.floor(route.buyStockScu)} SCU` : 'stock unknown');
-    capacity.push(route.sellDemandScu > 0 ? `demand ${Math.floor(route.sellDemandScu)} SCU` : 'demand unknown');
+    capacity.push(route.buyStockScu > 0
+      ? `buy stock ${Math.floor(route.buyStockScu)} SCU (${route.buyAvailability})`
+      : 'buy stock unknown');
+    capacity.push(route.sellDemandScu > 0
+      ? `sell demand ${Math.floor(route.sellDemandScu)} SCU (${route.sellAvailability})`
+      : 'sell demand unknown');
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
     if ((route.freshness !== 'fresh' || route.limitedBy === 'demand') && route.fallbackSells?.length) {
       const choices = route.fallbackSells.map((fallback) =>
@@ -2442,8 +2475,10 @@ async function loadRoutes() {
 
     // One click turns a haul into a plan: buy there, sell there, in order.
     const plan = el('td');
-    const button = el('button', 'ghost tiny', 'Plan');
-    button.title = 'Start a flight plan for this run';
+    const button = el('button', 'ghost tiny', route.mapReady ? 'Plan' : 'Text plan');
+    button.title = route.mapReady
+      ? 'Start a flight plan for this run and draw both stops on the map'
+      : 'Add the stops to a flight plan without claiming both can be drawn on the map';
     button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
       {
         placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
@@ -2477,6 +2512,7 @@ onInput('#routes-capital', loadRoutes);
 $('#routes-ship')?.addEventListener('change', loadRoutes);
 $('#routes-here')?.addEventListener('change', loadRoutes);
 $('#routes-ranking')?.addEventListener('change', loadRoutes);
+$('#routes-evidence')?.addEventListener('change', loadRoutes);
 $('#routes-fresh-only')?.addEventListener('change', loadRoutes);
 
 /**
