@@ -353,7 +353,12 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.15
+### 0.7.16
+
+- **Commodity history now says what is actually missing.** When live UEX
+  counters exist but their sampled price history cannot be drawn, the commodity
+  page keeps the current counter report and explains that the chart data did
+  not load instead of claiming UEX is off.
 
 - **Every session has a debrief.** Select a Play History row to review its
   chronological route, ship and sortie summary, contracts, recorded economy,
