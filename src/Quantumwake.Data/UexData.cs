@@ -30,15 +30,39 @@ public sealed record UexMarketRow(
     int TerminalId, string Terminal, decimal Buy, decimal Sell, decimal BuyScu = 0, decimal SellScu = 0,
     long Seen = 0);
 
+/// <summary>One commodity's price and stock at one counter, at one moment.</summary>
+/// <param name="Sell">What the counter pays you per SCU; 0 when it does not buy.</param>
+/// <param name="Buy">What it charges you per SCU; 0 when it does not sell.</param>
+/// <param name="Demand">SCU it will still take off you.</param>
+/// <param name="Stock">SCU it has on the shelf.</param>
+public sealed record UexHistoryPoint(
+    DateTimeOffset At, decimal Sell, decimal Buy, decimal Demand, decimal Stock);
+
+/// <summary>One counter's history for one commodity, oldest first.</summary>
+public sealed record UexTerminalHistory(
+    int TerminalId, string Terminal, IReadOnlyList<UexHistoryPoint> Points);
+
+/// <summary>
+/// What a commodity has been doing lately, across a sample of its counters.
+/// </summary>
+/// <param name="Sampled">Counters actually fetched.</param>
+/// <param name="Terminals">Counters trading it at all - the sample's denominator.</param>
+public sealed record UexHistory(
+    string Commodity,
+    int Sampled,
+    int Terminals,
+    IReadOnlyList<UexTerminalHistory> Series);
+
 /// <summary>Cheapest in-game purchase of a vehicle.</summary>
 public sealed record UexVehiclePrice(decimal Price, string Terminal);
 
 /// <summary>One item's buy price at one terminal - where a part is stocked.</summary>
 public sealed record UexItemRow(string Terminal, decimal Buy);
 
-/// <summary>One haul worth flying, sized to a real hold and a real wallet.</summary>
-/// <param name="Units">SCU this run can actually carry, after every cap.</param>
-/// <param name="LimitedBy">"hold", "capital" or "stock" - what caps this run.</param>
+/// <summary>One UEX-priced haul, with its reported availability kept separate from its estimate.</summary>
+/// <param name="Units">SCU used for the estimated outlay and profit, after every known cap.</param>
+/// <param name="DesiredUnits">SCU the hold and wallet would target before market availability.</param>
+/// <param name="Availability">Whether both sides reported a full load, a partial load, or an unknown capacity.</param>
 public sealed record UexRoute(
     string Commodity,
     string BuyAt,
@@ -49,7 +73,25 @@ public sealed record UexRoute(
     decimal Units,
     decimal Profit,
     decimal Outlay,
-    string LimitedBy);
+    string LimitedBy,
+    decimal DesiredUnits,
+    decimal? BuyStockScu,
+    decimal? SellDemandScu,
+    string BuyAvailability,
+    string SellAvailability,
+    string Availability,
+    DateTimeOffset? BuySeenAt,
+    DateTimeOffset? SellSeenAt,
+    string Freshness,
+    IReadOnlyList<UexRouteFallback> FallbackSells);
+
+/// <summary>A less lucrative buyer for the same load when the first choice fails.</summary>
+public sealed record UexRouteFallback(
+    string Terminal,
+    decimal SellPrice,
+    decimal? DemandScu,
+    DateTimeOffset? SeenAt,
+    string Freshness);
 
 /// <summary>A buy-here, sell-there margin from one starting terminal.</summary>
 public sealed record UexOpportunity(
@@ -99,6 +141,60 @@ public sealed class UexData
     public const string SubmitUrl = "https://api.uexcorp.space/2.0/data_submit";
     public const string VehiclePricesUrl = "https://api.uexcorp.space/2.0/vehicles_purchases_prices_all";
     public const string ItemPricesUrl = "https://api.uexcorp.space/2.0/items_prices_all";
+
+    /// <summary>
+    /// Per-counter price and stock history. Takes id_terminal and id_commodity
+    /// and serves nothing without the first, which is why a commodity-wide
+    /// trend has to be sampled rather than simply asked for.
+    /// </summary>
+    public const string PriceHistoryUrl = "https://api.uexcorp.space/2.0/commodities_prices_history";
+
+    /// <summary>
+    /// How long a fetched history is reused. Long, because these move on the
+    /// scale of days and the alternative is a burst of requests every time
+    /// somebody clicks back into a commodity.
+    /// </summary>
+    public static readonly TimeSpan HistoryFreshFor = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// Fetched histories, with the sample size each was taken at.
+    /// </summary>
+    /// <remarks>
+    /// The size is kept because two callers want different ones: the Market
+    /// panel's strip asks for a counter or two, the commodity page asks for
+    /// eight. Without it the strip would poison the page's cache with a thinner
+    /// answer than it asked for. A cached sample serves any request no larger
+    /// than itself, so opening the page first makes the strip free.
+    /// </remarks>
+    private readonly Dictionary<string, (DateTimeOffset At, int PerSide, UexHistory History)> _historyCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Guards the swap between a fetched table and the one in use.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Held around the commit and around Disable, never across a network call.
+    /// The tables are replaced wholesale rather than edited, so a reader taking
+    /// one of them without the lock gets a whole table rather than a
+    /// half-written one - reference assignment is atomic.
+    /// </para>
+    /// <para>
+    /// What that does <em>not</em> buy, and it is worth being straight about:
+    /// the query methods read these fields without the lock, so one that
+    /// touches two of them - <see cref="ItemMarket"/> reads both the item map
+    /// and the price matrix - can pair a table from before a refresh with one
+    /// from after. There is no read barrier either. The consequence is a list
+    /// that briefly mixes two snapshots taken hours apart, which is within the
+    /// error a crowd-sourced price already carries; locking every read to avoid
+    /// it would cost more than it is worth. Anything where that would matter
+    /// belongs inside the lock, as the history cache is.
+    /// </para>
+    /// </remarks>
+    private readonly Lock _gate = new();
+
+    /// <summary>Bumped by Disable, so a fetch begun before it stands down.</summary>
+    private int _generation;
 
     private readonly string _directory;
 
@@ -213,6 +309,23 @@ public sealed class UexData
     public string? TerminalFor(string place) => MatchTerminal(place)?.Name;
 
     /// <summary>
+    /// Every counter named by the enabled price tables.
+    /// </summary>
+    /// <remarks>
+    /// The map needs locations rather than prices when answering "where can I
+    /// shop?". Exposing only the terminal names keeps that answer honest: it
+    /// says a UEX-listed counter is present, not that any particular item is
+    /// currently in stock.
+    /// </remarks>
+    public IReadOnlyList<string> KnownTerminals() =>
+    [
+        .. _terminals.Select(t => t.Name)
+            .Concat(_matrix.Values.SelectMany(rows => rows.Select(row => row.Terminal)))
+            .Concat(_itemMarket.Values.SelectMany(rows => rows.Select(row => row.Terminal)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+    ];
+
+    /// <summary>
     /// The best hauls in the price table: for each commodity, the cheapest
     /// place to buy against the dearest place to sell.
     /// </summary>
@@ -224,10 +337,24 @@ public sealed class UexData
     /// money rather than by space says so, which is the difference between a
     /// route and a daydream.
     /// </remarks>
-    public List<UexRoute> Routes(double scu, decimal capital, string? from = null, int limit = 25)
+    public List<UexRoute> Routes(
+        double scu,
+        decimal capital,
+        string? from = null,
+        int limit = 25,
+        bool reliableFirst = true,
+        bool freshOnly = false,
+        string evidence = "any")
     {
         var origin = from is { Length: > 0 } ? MatchTerminal(from) : null;
         var routes = new List<UexRoute>();
+
+        // A cache written before UEX's date_modified was stored carries Seen = 0
+        // on every row, so every route reads "unknown" and the filter would drop
+        // all of them - an empty table on exactly the installs with the longest
+        // history, blaming the location for a question the cache cannot answer.
+        // Honour the filter only where there is a timestamp to honour it with.
+        freshOnly &= _matrix.Values.Any(rows => rows.Any(r => r.Seen > 0));
 
         foreach (var (commodity, rows) in _matrix)
         {
@@ -266,14 +393,52 @@ public sealed class UexData
                 limiter = "capital";
             }
 
+            // Keep the intended load before the market caps it. A zero in this
+            // feed predates capacity reporting, so it is unknown rather than a
+            // reason to call an uncapped projection a full-load opportunity.
+            var desiredUnits = units;
+
             if (byStock < units)
             {
                 units = byStock;
                 limiter = "stock";
             }
 
+            var byDemand = sell.SellScu > 0 ? sell.SellScu : decimal.MaxValue;
+            if (byDemand < units)
+            {
+                units = byDemand;
+                limiter = "demand";
+            }
+
             if (units <= 0)
                 continue;
+
+            var buyAvailability = CapacityState(buy.BuyScu, desiredUnits);
+            var sellAvailability = CapacityState(sell.SellScu, desiredUnits);
+            var availability = RouteAvailability(buyAvailability, sellAvailability);
+            if (!IncludesEvidence(evidence, availability))
+                continue;
+
+            var freshness = Freshness(buy.Seen, sell.Seen);
+            if (freshOnly && freshness != "fresh")
+                continue;
+
+            // The backup is deliberately a different counter, not a second
+            // price from the same shop. It is useful only when a player can
+            // actually divert after finding the first buyer empty.
+            var fallbacks = rows
+                .Where(r => r.TerminalId != buy.TerminalId && r.TerminalId != sell.TerminalId && r.Sell > 0)
+                .OrderByDescending(r => FreshnessRank(Freshness(buy.Seen, r.Seen)))
+                .ThenByDescending(r => r.Sell)
+                .Take(2)
+                .Select(r => new UexRouteFallback(
+                    r.Terminal,
+                    r.Sell,
+                    KnownCapacity(r.SellScu),
+                    SeenAt(r.Seen),
+                    Freshness(buy.Seen, r.Seen)))
+                .ToList();
 
             routes.Add(new UexRoute(
                 commodity,
@@ -283,11 +448,81 @@ public sealed class UexData
                 units,
                 margin * units,
                 buy.Buy * units,
-                limiter));
+                limiter,
+                desiredUnits,
+                KnownCapacity(buy.BuyScu),
+                KnownCapacity(sell.SellScu),
+                buyAvailability,
+                sellAvailability,
+                availability,
+                SeenAt(buy.Seen),
+                SeenAt(sell.Seen),
+                freshness,
+                fallbacks));
         }
 
-        return [.. routes.OrderByDescending(r => r.Profit).Take(limit)];
+        return reliableFirst
+            ? [.. routes.OrderByDescending(ReliabilityRank).ThenByDescending(r => r.Profit).Take(limit)]
+            : [.. routes.OrderByDescending(r => r.Profit).ThenByDescending(ReliabilityRank).Take(limit)];
     }
+
+    /// <summary>
+    /// The older end of a run decides its confidence. A fresh sale quote cannot
+    /// make an unobserved buy counter trustworthy, and an old cache carries no
+    /// timestamp at all, so it stays unknown instead of pretending to be fresh.
+    /// </summary>
+    private static string Freshness(long buySeen, long sellSeen)
+    {
+        if (buySeen <= 0 || sellSeen <= 0)
+            return "unknown";
+
+        var seen = Math.Min(buySeen, sellSeen);
+        var age = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(seen);
+        return age <= TimeSpan.FromHours(24) ? "fresh"
+            : age <= TimeSpan.FromDays(3) ? "aging"
+            : "stale";
+    }
+
+    private static int FreshnessRank(string freshness) => freshness switch
+    {
+        "fresh" => 3,
+        "aging" => 2,
+        "stale" => 1,
+        _ => 0,
+    };
+
+    private static int ReliabilityRank(UexRoute route) =>
+        FreshnessRank(route.Freshness) * 3 + AvailabilityRank(route.Availability);
+
+    private static int AvailabilityRank(string availability) => availability switch
+    {
+        "reported-full" => 2,
+        "reported-partial" => 1,
+        _ => 0,
+    };
+
+    private static string CapacityState(decimal reported, decimal desired) => reported <= 0
+        ? "unknown"
+        : reported >= desired ? "enough" : "limited";
+
+    private static string RouteAvailability(string buy, string sell) => buy == "unknown" || sell == "unknown"
+        ? "capacity-unknown"
+        : buy == "enough" && sell == "enough" ? "reported-full" : "reported-partial";
+
+    private static bool IncludesEvidence(string evidence, string availability) => evidence.ToLowerInvariant() switch
+    {
+        "full" => availability == "reported-full",
+        "reported" => availability != "capacity-unknown",
+        _ => true,
+    };
+
+    // Zero predates the availability fields in this cache format; presenting
+    // it as no stock would hide a route on every older install.
+    private static decimal? KnownCapacity(decimal scu) => scu > 0 ? scu : null;
+
+    private static DateTimeOffset? SeenAt(long unixSeconds) => unixSeconds > 0
+        ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds)
+        : null;
 
     /// <summary>
     /// Every terminal row for one commodity - the map's price shading reads
@@ -301,8 +536,20 @@ public sealed class UexData
     /// Fetches current prices, the terminal list, vehicle purchase prices and
     /// item prices. Anonymous endpoints, on the user's click only.
     /// </summary>
+    /// <remarks>
+    /// The fetch happens outside the lock and the commit inside it, with a
+    /// generation taken at the start. Since 0.7.0 this can be running on the
+    /// background refresher when the player presses Disable, and a fetch that
+    /// finished afterwards used to rewrite every file it had just deleted -
+    /// turning UEX back on behind them, and re-arming the automatic refresh,
+    /// which only runs while UEX is enabled. A stale generation stands down.
+    /// </remarks>
     public async Task<int> EnableAsync(HttpClient http, CancellationToken token = default)
     {
+        int began;
+        lock (_gate)
+            began = _generation;
+
         var priceDoc = await http.GetFromJsonAsync<JsonElement>(PricesUrl, token);
         var terminalDoc = await http.GetFromJsonAsync<JsonElement>(TerminalsUrl, token);
         var vehicleDoc = await http.GetFromJsonAsync<JsonElement>(VehiclePricesUrl, token);
@@ -316,30 +563,212 @@ public sealed class UexData
         var vehicles = DigestVehicles(vehicleDoc);
         var (itemPrices, itemMarket) = DigestItemPrices(itemDoc);
 
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
-        File.WriteAllText(IdsPath, JsonSerializer.Serialize(ids));
-        File.WriteAllText(TerminalsPath, JsonSerializer.Serialize(terminals.Select(t => new[] { (object)t.Id, t.Name })));
-        File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
-        File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
-        File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
-        File.WriteAllText(ItemMarketPath, JsonSerializer.Serialize(itemMarket));
-        File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
+        lock (_gate)
+        {
+            // Disable landed while this was in flight, so the player has since
+            // said no. Writing now would answer a question nobody asked twice.
+            if (began != _generation)
+                return 0;
 
-        _prices = prices;
-        _commodityIds = ids;
-        _terminals = terminals;
-        _matrix = matrix;
-        _vehicles = vehicles;
-        _itemPrices = itemPrices;
-        _itemMarket = itemMarket;
-        FetchedAt = DateTimeOffset.UtcNow;
-        return _prices.Count;
+            Directory.CreateDirectory(_directory);
+            File.WriteAllText(PricesPath, JsonSerializer.Serialize(prices));
+            File.WriteAllText(IdsPath, JsonSerializer.Serialize(ids));
+            File.WriteAllText(TerminalsPath, JsonSerializer.Serialize(terminals.Select(t => new[] { (object)t.Id, t.Name })));
+            File.WriteAllText(MatrixPath, JsonSerializer.Serialize(matrix));
+            File.WriteAllText(VehiclesPath, JsonSerializer.Serialize(vehicles));
+            File.WriteAllText(ItemPricesPath, JsonSerializer.Serialize(itemPrices));
+            File.WriteAllText(ItemMarketPath, JsonSerializer.Serialize(itemMarket));
+            File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
+
+            _prices = prices;
+            _commodityIds = ids;
+            _terminals = terminals;
+            _matrix = matrix;
+            _vehicles = vehicles;
+            _itemPrices = itemPrices;
+            _itemMarket = itemMarket;
+            FetchedAt = DateTimeOffset.UtcNow;
+
+            // A price table that has just been replaced makes every cached
+            // history a description of the previous one.
+            _historyCache.Clear();
+
+            return _prices.Count;
+        }
     }
 
+    /// <summary>
+    /// Which counters to ask about, when a commodity has more than anyone wants
+    /// to make requests for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UEX serves history one counter at a time, so a commodity trading at
+    /// thirty-five of them would be thirty-five requests to draw one line. The
+    /// sample is taken from both ends of the trade instead: the counters with
+    /// the most demand, which is where a full hold goes, and the ones with the
+    /// most stock, which is where it comes from. A counter that leads both lists
+    /// is asked about once.
+    /// </para>
+    /// <para>
+    /// Deliberately not "the best price". Best price is one number and often a
+    /// bad plan - it can be a counter wanting nine SCU - and a trend drawn only
+    /// from the top of the market describes a market nobody trades in.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<UexMarketRow> SampleTerminals(
+        IEnumerable<UexMarketRow> rows, int perSide)
+    {
+        var all = rows.ToList();
+
+        var demanded = all.Where(r => r.Sell > 0)
+            .OrderByDescending(r => r.SellScu)
+            .Take(perSide);
+
+        var stocked = all.Where(r => r.Buy > 0)
+            .OrderByDescending(r => r.BuyScu)
+            .Take(perSide);
+
+        return
+        [
+            .. demanded.Concat(stocked)
+                .DistinctBy(r => r.TerminalId)
+                .OrderByDescending(r => Math.Max(r.SellScu, r.BuyScu))
+        ];
+    }
+
+    /// <summary>
+    /// What a commodity has been doing at a sample of its counters.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On a click, never on a timer: this is a fetch per counter, and the app
+    /// does not spend somebody else's bandwidth speculatively. Kept for
+    /// <see cref="HistoryFreshFor"/> afterwards, because reopening a commodity
+    /// to look at the other chart should not re-fetch anything.
+    /// </para>
+    /// <para>
+    /// A counter that fails or returns nothing is dropped rather than failing
+    /// the request: a chart from six counters is worth having when the seventh
+    /// times out.
+    /// </para>
+    /// </remarks>
+    public async Task<UexHistory> HistoryAsync(
+        string commodity, HttpClient http, int perSide = 4, CancellationToken token = default)
+    {
+        // Two readers can open the same commodity at once, and a refresh can
+        // replace the tables underneath both, so the lookups are taken together
+        // under the lock rather than read from a dictionary being swapped.
+        int commodityId;
+        List<UexMarketRow> rows;
+        int began;
+
+        lock (_gate)
+        {
+            began = _generation;
+
+            // A wider sample answers a narrower question; the reverse does not.
+            if (_historyCache.TryGetValue(commodity, out var cached)
+                && cached.PerSide >= perSide
+                && DateTimeOffset.UtcNow - cached.At < HistoryFreshFor)
+                return cached.History;
+
+            if (!_commodityIds.TryGetValue(commodity, out commodityId)
+                || !_matrix.TryGetValue(commodity, out rows!))
+                return new UexHistory(commodity, 0, 0, []);
+        }
+
+        var sample = SampleTerminals(rows, perSide);
+
+        var fetched = await Task.WhenAll(sample.Select(async row =>
+        {
+            try
+            {
+                var url = $"{PriceHistoryUrl}?id_terminal={row.TerminalId}&id_commodity={commodityId}";
+                var doc = await http.GetFromJsonAsync<JsonElement>(url, token);
+                var points = DigestHistory(doc);
+
+                return points.Count > 0
+                    ? new UexTerminalHistory(row.TerminalId, row.Terminal, points)
+                    : null;
+            }
+            catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
+            {
+                return null;
+            }
+        }));
+
+        var series = fetched.Where(s => s is not null).Select(s => s!).ToList();
+        var history = new UexHistory(commodity, series.Count, rows.Count, series);
+
+        lock (_gate)
+        {
+            // Disable landed while this was fetching. Caching now would leave a
+            // price history behind for an integration that has been turned off,
+            // which is the same mistake EnableAsync guards against.
+            if (began == _generation)
+                _historyCache[commodity] = (DateTimeOffset.UtcNow, perSide, history);
+        }
+
+        return history;
+    }
+
+    /// <summary>Turns one counter's history response into points, oldest first.</summary>
+    private static List<UexHistoryPoint> DigestHistory(JsonElement doc)
+    {
+        var points = new List<UexHistoryPoint>();
+
+        if (!doc.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return points;
+
+        foreach (var row in data.EnumerateArray())
+        {
+            var added = Number(row, "date_added");
+            if (added <= 0)
+                continue;
+
+            points.Add(new UexHistoryPoint(
+                DateTimeOffset.FromUnixTimeSeconds((long)added),
+                Number(row, "price_sell"),
+                Number(row, "price_buy"),
+                Number(row, "scu_sell"),
+                Number(row, "scu_buy")));
+        }
+
+        // UEX returns newest first; a chart reads left to right.
+        points.Sort((a, b) => a.At.CompareTo(b.At));
+        return points;
+    }
+
+    /// <summary>A numeric field, however the feed chose to encode it.</summary>
+    private static decimal Number(JsonElement row, string name) =>
+        row.TryGetProperty(name, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.Number => value.GetDecimal(),
+                JsonValueKind.String => decimal.TryParse(
+                    value.GetString(), System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0,
+                _ => 0
+            }
+            : 0;
+
     /// <summary>Deletes the price cache. Credentials are removed separately.</summary>
+    /// <remarks>
+    /// Bumps the generation first, so a refresh already fetching stands down
+    /// instead of putting everything back. See <see cref="EnableAsync"/>.
+    /// </remarks>
     public void Disable()
     {
+        lock (_gate)
+            DisableCore();
+    }
+
+    private void DisableCore()
+    {
+        _generation++;
+        _historyCache.Clear();
+
         foreach (var path in new[]
         {
             PricesPath, IdsPath, TerminalsPath, MetaPath, MatrixPath, VehiclesPath,

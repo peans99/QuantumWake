@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![350 tests](https://img.shields.io/badge/tests-350%20passing-4fd48a)
+![473 tests](https://img.shields.io/badge/tests-473%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -18,8 +18,11 @@ it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
 of the whole 'verse with your own trail across it.
 
 It is read-only and never touches the game. It connects to the internet only
-when you ask it to - the optional integrations on the Settings page - and never
-on its own.
+where you have said it may - the optional integrations on the Settings page -
+and the only two that can go out unattended, the version check and the
+market-price refresh, are off until you turn them on.
+
+![Quantum Wake at a glance](docs/images/quantum-wake-at-a-glance.png)
 
 > **Pre-1.0.** Until version 1.0 this product will keep changing significantly:
 > pages appear and move, data formats shift, and an update may re-read your logs
@@ -68,10 +71,12 @@ events, not a radar.*
 | **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on. **Upgrades** opens the game's own port list for that ship: what fits each hole, what it costs, and the counter that stocks it |
 | **Places** | Most-visited locations and quantum destinations |
 | **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
+| **Crew** | The people you fly with, from the only lines in a 4.9 log that name anyone — sessions shared, arrivals and drops seen, and who has led the party. A floor rather than a total: someone already online when you grouped up produces no line at all |
 | **Spending** | Confirmed purchases by shop, item and category |
 | **Ledger** | Every transaction, back-tracked to the place it happened |
 | **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
 | **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on. Click a commodity for every counter that trades it — price, what it costs you against the best, stock or demand, and whether it sits in policed or lawless space |
+| **Commodity** | One good in full, opened from Market: what it has been worth day by day, demand against supply over the same weeks, every counter that buys it and every counter that stocks it, and your own receipts for it. Deep-linkable — `#commodity/Aluminum` |
 | **Loot** | When each item first appeared in your inventories, with the place |
 | **Loadout** | The kit you are wearing, by slot, with size, grade and maker |
 | **Stash** | What is in your inventory and where you left it |
@@ -162,8 +167,9 @@ running Easy Anti-Cheat:
 - Reads log files only; nothing is ever written to the game directory
 - No memory access, no DLL injection, no DirectX or WinAPI hooking
 - No CDN, no telemetry, no phoning home. The app connects to the internet only
-  at your request, from the Settings page - the optional community dataset - and
-  never on its own
+  where you have said it may, from the Settings page - the optional datasets,
+  and the two things that can go out unattended: the version check and the
+  market-price refresh, both off until you turn them on
 - The overlay is an ordinary top-most window using documented Win32 styles
 
 The trade-off of doing it safely: an always-on-top window is **not** composited
@@ -257,7 +263,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 350 tests
+dotnet test Quantumwake.slnx      # 473 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -346,6 +352,181 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.7.17
+
+- **Commodity history now says what is actually missing.** When live UEX
+  counters exist but their sampled price history cannot be drawn, the commodity
+  page keeps the current counter report and explains that the chart data did
+  not load instead of claiming UEX is off.
+
+- **Every session has a debrief.** Select a Play History row to review its
+  chronological route, ship and sortie summary, contracts, recorded economy,
+  crew-notification floor and latest highlights. Places open on the map, and
+  the previous route can become a new flight plan with one click; cargo money
+  remains marked as requested rather than confirmed.
+
+- **A map that does not invent geography.** System Positions now shows one
+  system at a time with community-starmap bearings and relative orbital
+  distances; a body without a matching coordinate is amber and named as such.
+  Jump Network is a separate, explicitly not-to-scale diagram of jump links,
+  so Nyx and Delamar cannot look like a microTech neighbourhood.
+- **Your location is always findable.** The map names the live location in its
+  toolbar, keeps it visible through filters, and switches to the correct
+  system when selected. Its cyan reticle has an offset callout so it does not
+  cover the place label; the jump network marks the current system while
+  remaining honest about not knowing an in-system position.
+- **A map for the run in front of you.** Focus it on the active plan, shopping
+  destinations and known sellers, or recorded stash locations; these layers
+  compose with service filters. Body hovers now summarise those signals and
+  listed services. Label density can be quiet, automatic or full, controls can
+  be saved as a reusable view, and commodity searches show the UEX report age
+  without mislabelling visits or services as stale.
+- **Cleaner map symbols.** Rest stops and asteroids now have distinct compact
+  silhouettes. When a service, work, or commodity focus gives them enough
+  room, places carry small shop, refuel, and clinic badges outside their base
+  icon, with the map legend explaining the badges.
+
+- **The Market panel stopped being expensive to open.** Its price strip was
+  asking UEX about eight counters every time a row was expanded, which is the
+  ordinary way to read that table - comparing twenty commodities would have cost
+  a volunteer-run API a hundred and sixty requests to draw twenty thumbnails. It
+  asks about one counter now, says which counter the line came from, and reuses
+  the wider sample when the commodity's own page has already fetched one.
+
+- **Trade routes that admit uncertainty.** The planner now ranks recent,
+  capacity-backed reports first, can limit itself to fresh quotes, and shows
+  the reported stock, buyer demand, quote age and alternate buyers beside each
+  estimated profit. Choose routes with reported capacity, only routes whose
+  reports cover the whole target load, or include price-only estimates; the
+  evidence column says which case applies. An unrecognised UEX terminal makes
+  a clearly-labelled text plan instead of pretending both stops will appear on
+  the map. Prices remain community reports, not live inventory or a travel-time
+  estimate.
+
+- **A checklist that travels with you.** Make ordinary preparation lists for
+  departures and operations, then pin one to Now and, if wanted, the overlay.
+  Tick tasks off there or on the new Checklists page. A task can keep a map
+  location, commodity or part reference, date, note and HTTPS link attached;
+  those are your own reminders, never claims inferred from Game.log.
+
+- **Services lead somewhere.** The map can now filter to UEX-listed shops,
+  refuel counters or clinics, with compact icons on the filter, a place card
+  and the Now briefing. Clicking a supported service on Now opens that filter;
+  repair remains explicitly unlisted because neither installed feed identifies
+  repair pads.
+
+- **Now is a launch checklist.** At a live location it joins the active flight
+  plan, the next three stops, shopping-list items sold there, local stash,
+  available services and up to three buy-here/sell-there trade leads. Its map,
+  stop and overlay controls act directly from the card; it never invents a
+  cargo manifest the game did not log. Every Now card can also be collapsed,
+  hidden, and restored from a compact hidden-cards tray; those choices are
+  remembered in the browser. The active ship also carries its local
+  manufacturer mark when its maker is known.
+
+- **An accurate overview, at a glance.** The README now leads with a visual
+  guide to what Quantum Wake reads, what it can show, the limits of the logs,
+  and the optional integrations that add live market data or local reference
+  names. It distinguishes `Game.log` from `Data.p4k`, avoids promising a wallet,
+  radar, or complete inventory history, and names UEX, StarCitizenWiki's
+  scunpacked-data, StarStrings and GitHub rather than integrations the app does
+  not use.
+
+- **Read-only over the network.** `-Lan` puts the dashboard on a tablet, and put
+  the API there with it - including the endpoints that store UEX keys, write into
+  your game folder and move the line your history is counted from, none of which
+  ask who is calling. From any machine but this one it is now reads and the live
+  feed only; everything else gets a refusal, and the app says so at startup when
+  the switch is on.
+- **Graphs, on all three places a commodity shows up.** The drill-down gains
+  two more: the margin a buy-here-sell-there run would have earned per SCU, day
+  by day, and the same weeks drawn counter by counter, because the best-of line
+  hides which counter it was and they do not move together - one holding a price
+  while the rest slide is the thing worth knowing. Expanding a row on Market now
+  carries a sparkline with the range and the span it covers, and a button
+  through to the full page. And the Cargo page finally has a shape: what hauling
+  has earned you against what it cost, as running totals rather than per-week
+  takings, since a hold is sold a few times a month and a weekly line would be
+  mostly floor with spikes - a business collapsing between runs rather than one
+  being run occasionally.
+- **A page that says when the game stopped telling us something.** Star Citizen
+  has logged less with every patch - quantum detail went in 4.0.1, inter-system
+  jumps in 4.1.0, combat entirely by 4.9 - and from inside this app every one of
+  those removals looked exactly like a quiet evening. Settings now lists each
+  kind of thing the app reads, how much of it this install has, and *when it
+  last arrived*, with anything that has gone quiet for three weeks marked. The
+  window is measured against your own last session rather than today, so coming
+  back from a month away does not report that everything broke while you were
+  gone. Read from the stored sessions rather than from the parser, because a
+  scan skips unchanged backups and parser counters would only describe whatever
+  happened to be re-read.
+- **A commodity, in full.** Market answered "where does this sell" and stopped
+  there. Clicking through from a row now opens the good's own page: what it has
+  been worth day by day, demand against supply over the same weeks, every
+  counter that buys it and every counter that stocks it - each against the best
+  price and dated - and your own receipts underneath, from your logs rather than
+  anybody's price table. UEX turns out to serve per-counter history, which is
+  where the two charts come from. It serves it one counter at a time, though, so
+  a good trading at thirty-five of them would be thirty-five requests to draw one
+  line: the app asks the busiest few instead, taken from both ends of the trade -
+  where a hold empties and where it fills - and says on the page how many of how
+  many it sampled. Ranked by volume, never by price, because the best price is
+  often a counter wanting nine SCU and a trend drawn from those describes a
+  market nobody trades in. Each counter carries its last reported figure forward
+  until it reports again, so a day nobody reported reads as quiet rather than as
+  a collapse. Fetched on the click that opens the page, never on a page load and
+  never while UEX is off, and the page has a link of its own -
+  `#commodity/Aluminum`.
+- **The people you fly with.** A 4.9 log names another player in exactly one
+  place: the toasts announcing that somebody in your party came online or
+  dropped. There is no roster event, no join event carrying a member list, and
+  no player id anywhere - so that channel is the whole of what can be known,
+  and the new *Crew* page is built from it. 27 people on this install, ranked by
+  sessions shared rather than by toast count, since a player with a poor
+  connection would otherwise outrank everyone who quietly flew a whole night
+  with you. The page states plainly that every figure is a floor: a friend
+  already online when you grouped up, who stayed until you logged off, produces
+  no line at all. Arrivals and drops also reach the live feed as they happen.
+  Of 291 party notifications, 273 are read and the remaining 18 name nobody -
+  join-queue and matchmaking chatter, left unread rather than guessed at.
+- **Prices can keep themselves current.** The price table is the one thing here
+  with a shelf life: pulled a fortnight ago it looks exactly like one pulled this
+  morning, and every margin on the page is quietly wrong. It can now be given
+  standing leave to refetch itself every six hours while the app is open -
+  offered during first-flight setup under the UEX option, and switchable any time
+  in Settings. It is off unless you turn it on, it does nothing while UEX itself
+  is off, and turning it on never enables UEX by the back door. This is the only
+  thing in the app that goes out without a click, which is why it is asked for
+  rather than assumed, and why the About page now names it. The startup offer to
+  refresh a day-old table stays for everyone who leaves this off.
+- **What the cargo cost you.** Buying a commodity was never read. The tag was
+  routed, but the pattern behind it only fitted a sale, so every purchase fell
+  through as an unrecognised line - the last unmatched tag in 418 MB of logs.
+  Cargo could be watched leaving and never arriving, and no run could be priced.
+  Buying is the same transaction written differently: the total is `price`
+  rather than `amount`, there is no `transactionMode`, and the quantity is
+  counted in centi-SCU - so a 320 SCU hold reads as 32,000 unless it is
+  converted. Both shapes parse now, quantities are SCU on either side, and the
+  13 purchases on this install come out at prices per SCU that agree with the
+  figure the game printed beside them. *Cargo bought* on the Commodities page
+  stops reading zero, and every counter you have bought from says what it
+  charged. Sessions you have already got were summarised by a build that dropped
+  the buy, so the first launch after this update re-reads your backups once to
+  fill them in - slower than usual, and only that once.
+
+- **Charts, filters and the launch card say the right thing.** The key under
+  a chart now names the line it is drawn beside rather than the one above it,
+  which showed up whenever a line was too short to draw. *Fresh only* no
+  longer empties the route table on installs whose price cache predates the
+  quote timestamps, and an empty table names the tickbox that emptied it
+  instead of blaming your location. A briefing that cannot be fetched hides
+  itself and tries again, rather than leaving the last place you were at on
+  screen labelled with the one you are at now. Demand and supply on a
+  commodity are reported per counter reporting them, so the line follows the
+  market rather than the number of volunteers who filed a report that day.
+  Checklists stop filing a commodity as a part when the catalogue is still
+  loading, and the *Add task* button comes back if the request fails.
 
 ### 0.6.17
 

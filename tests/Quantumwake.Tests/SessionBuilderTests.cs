@@ -104,6 +104,55 @@ public class SessionBuilderTests
         Assert.Equal(TimeSpan.FromMinutes(80), summary.Duration);
     }
 
+    /// <summary>
+    /// Build must not bank the interval that is still open.
+    /// </summary>
+    /// <remarks>
+    /// The live feed rebuilds on every event and again on every two-second
+    /// broadcast, and archives the result when the log rotates. While Build
+    /// closed the open stretch by accruing it, nothing advanced the marker it
+    /// measured from - so every rebuild added the whole span again, and an
+    /// evening's session was saved with a playtime measured in weeks.
+    /// </remarks>
+    [Fact]
+    public void Building_repeatedly_does_not_inflate_playtime()
+    {
+        var builder = Build(
+            new LoadingScreenEvent(T0, "Frontend_Main", "SC_Frontend", 3.4),
+            new LoadingScreenEvent(T0.AddMinutes(10), "PU", "SC_Default", 20.0),
+            new ClientSpawnedEvent(T0.AddMinutes(70)));
+
+        var first = builder.Build();
+
+        for (var i = 0; i < 100; i++)
+            builder.Build();
+
+        var last = builder.Build();
+
+        Assert.Equal(first.InGameDuration, last.InGameDuration);
+        Assert.Equal(first.MenuDuration, last.MenuDuration);
+        Assert.Equal(TimeSpan.FromMinutes(60), last.InGameDuration);
+        Assert.Equal(TimeSpan.FromMinutes(10), last.MenuDuration);
+    }
+
+    /// <summary>
+    /// Events after a Build must still count. The fix makes Build read-only; it
+    /// must not make it stop closing the open stretch.
+    /// </summary>
+    [Fact]
+    public void Building_early_does_not_stop_time_accruing()
+    {
+        var builder = Build(
+            new LoadingScreenEvent(T0, "PU", "SC_Default", 20.0),
+            new ClientSpawnedEvent(T0.AddMinutes(30)));
+
+        Assert.Equal(TimeSpan.FromMinutes(30), builder.Build().InGameDuration);
+
+        builder.Add(new ClientSpawnedEvent(T0.AddMinutes(90)));
+
+        Assert.Equal(TimeSpan.FromMinutes(90), builder.Build().InGameDuration);
+    }
+
     /// <summary>Retained for the day CIG restores a boarding event.</summary>
     [Fact]
     public void Uses_exact_time_when_a_boarding_event_is_present()

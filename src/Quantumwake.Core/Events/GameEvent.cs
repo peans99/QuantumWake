@@ -161,6 +161,13 @@ public sealed record NotificationEvent(
     /// </summary>
     public bool IsMedicalBed =>
         Text.StartsWith("Medical Bed", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when this came off the party channel - the only notification that
+    /// names another player. See <see cref="State.Party"/> for what can and
+    /// cannot be read out of one.
+    /// </summary>
+    public bool IsParty => State.Party.IsParty(Text);
 }
 
 /// <summary>

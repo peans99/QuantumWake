@@ -334,15 +334,67 @@ way to get this wrong, which is why the parameter is not optional.
 
 ## Prices only get stale when nobody is looking
 
-UEX is fetched on a click and never on a timer. That is the right default and it
-has one cost: a table pulled a fortnight ago looks exactly like one pulled this
-morning, while every margin computed from it is quietly wrong.
+UEX is fetched on a click by default. That is the right default and it has one
+cost: a table pulled a fortnight ago looks exactly like one pulled this morning,
+while every margin computed from it is quietly wrong.
 
 So the app looks once at startup, and if the snapshot has turned a day old it
 says so and offers the single click that fixes it - prices and any enabled feeds
 together, since renewing half of it leaves the same problem. It is an offer, not
-an alert: nothing is blocked, "not now" lasts until tomorrow rather than for
-ever, and the check still never runs on a schedule.
+an alert: nothing is blocked, and "not now" lasts until tomorrow rather than for
+ever.
+
+Since 0.7.0 that click can be delegated. `TradeDataStore` holds a standing
+answer to "may prices refresh themselves", and `TradeDataRefresh` acts on it -
+the only thing in the app that reaches the network unattended. Two conditions
+guard every fetch and both are re-read on each tick, so revoking either in
+Settings takes effect without a restart: the preference must be on, and UEX must
+already be enabled.
+
+That second guard matters more than it looks. A null fetch time means UEX is
+off, and reading "never fetched" as "infinitely stale" would turn a switch
+labelled *keep my prices current* into one that quietly enables an integration
+the player had declined.
+
+The refresher ticks far more often than prices go stale, because a tick only
+asks a local question and `IsDue` answers it. The six-hour window is a judgement
+about someone else's volunteer-run server, so it lives in one place and is
+served to the page rather than repeated in it. A failed attempt still records
+the attempt, which is why the timestamp means *last tried* rather than *last
+fetched* - without that, stale prices plus an unreachable feed is a fetch every
+tick for as long as the app stays open.
+
+The startup offer stays for everyone who leaves the refresh off. With it on the
+table never reaches a day old, so the offer simply never fires - two paths to
+the same freshness, neither needing to know about the other.
+
+## A trend has to be sampled, because UEX sells it by the counter
+
+`commodities_prices_history` takes an `id_terminal` and refuses to answer
+without one. A commodity trading at thirty-five counters is therefore
+thirty-five requests to draw one line, which is not a reasonable thing to do to
+a volunteer-run API on somebody clicking a row.
+
+`UexData.SampleTerminals` picks a few instead, and picks them from both ends of
+the trade: the counters with the most demand, where a full hold goes, and the
+ones with the most stock, where it comes from. **Ranked by volume, never by
+price.** The best price is one number and frequently a bad plan - it can be a
+counter wanting nine SCU - and a trend drawn only from the top of the market
+describes a market nobody trades in. A counter leading both lists is asked about
+once, since bounding the request count is the entire point.
+
+The page says how many of how many it sampled, because "the price of Aluminum"
+and "the price at the six busiest counters for Aluminum" are different claims.
+
+The other half is the carry-forward in `dailyMarket`. Counters report when their
+contributors happen to look, so summing only the counters that reported on a
+given day makes demand appear to collapse and recover on the rhythm of UEX's
+volunteers rather than the game's economy. Each counter holds its last reported
+figure until it reports again, and the days are combined after that.
+
+Fetched on the click that opens the page - never on a page load, never while UEX
+is off - and then cached for six hours, because clicking back into a commodity
+to look at the other chart should not spend the requests again.
 
 ## The map is a control surface, not a picture
 
