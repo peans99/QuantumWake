@@ -68,6 +68,7 @@ function clock(fromIso) {
 }
 
 const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const shortTimeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
 
 /**
@@ -982,6 +983,8 @@ function toSeconds(timespan) {
 const SESSIONS_PER_PAGE = 25;
 let allSessions = [];
 let sessionPage = 0;
+let expandedSessionId = null;
+const sessionDetails = new Map();
 
 /** Applies the period and search filters. */
 function filteredSessions() {
@@ -999,6 +1002,215 @@ function filteredSessions() {
 
     return true;
   });
+}
+
+async function toggleSessionDebrief(id) {
+  if (expandedSessionId === id) {
+    expandedSessionId = null;
+    renderSessions();
+    return;
+  }
+
+  expandedSessionId = id;
+  renderSessions();
+
+  if (!sessionDetails.has(id)) {
+    try {
+      sessionDetails.set(id, await getJson(`/api/sessions/${encodeURIComponent(id)}`));
+    } catch {
+      sessionDetails.set(id, { error: true });
+    }
+  }
+
+  if (expandedSessionId === id) renderSessions();
+}
+
+function sessionRoute(detail) {
+  const usefulQuantumTarget = (name) => name
+    && !/^(PartyMemberMarker_|MISSION_)/i.test(name)
+    && !/\.socpak$/i.test(name)
+    && !['Nav Point', 'Rest Stop', 'Mission Beacon'].includes(name);
+
+  const points = [
+    ...(detail.locations || []).map((place) => ({ ...place, routeKind: 'arrival' })),
+    ...(detail.jumps || []).filter((jump) => usefulQuantumTarget(jump.toName)).map((jump) => ({
+      at: jump.at,
+      rawId: jump.toId,
+      displayName: jump.toName,
+      system: null,
+      body: null,
+      routeKind: 'quantum',
+    })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at));
+
+  return points.filter((place, index) => {
+    if (index === 0) return true;
+    const previous = points[index - 1];
+    return place.rawId !== previous.rawId
+      && place.displayName.toLowerCase() !== previous.displayName.toLowerCase();
+  });
+}
+
+async function repeatSessionRoute(detail) {
+  const route = sessionRoute(detail);
+  if (!route.length) return;
+
+  await planTrip(`Repeat ${dateOf(detail.startedAt)} route`, route.map((place) => ({
+    placeId: place.rawId || '',
+    place: place.displayName,
+    note: `${place.routeKind === 'quantum' ? 'Quantum target' : 'Arrival'} logged at ${shortTimeOf(place.at)}`,
+  })));
+}
+
+function sessionMetric(label, value, cls = '') {
+  const metric = el('div', `session-metric ${cls}`.trim());
+  metric.append(el('div', 'session-metric-value', value));
+  metric.append(el('div', 'session-metric-label', label));
+  return metric;
+}
+
+function renderSessionDebrief(summary) {
+  const row = el('tr', 'session-detail-row');
+  const cell = el('td');
+  cell.colSpan = 9;
+  row.append(cell);
+
+  const detail = sessionDetails.get(summary.id);
+  if (!detail) {
+    cell.append(el('div', 'session-debrief-loading muted', 'Building session debrief…'));
+    return row;
+  }
+
+  if (detail.error) {
+    cell.append(el('div', 'session-debrief-loading outward', 'This session detail could not be read.'));
+    return row;
+  }
+
+  const debrief = el('article', 'session-debrief');
+  const head = el('div', 'session-debrief-head');
+  const title = el('div');
+  title.append(el('div', 'session-debrief-title', `${dateOf(detail.startedAt)} debrief`));
+  title.append(el('div', 'muted', `${shortTimeOf(detail.startedAt)} → ${shortTimeOf(detail.endedAt)} · ${detail.gameVersion || 'version unknown'}`));
+  head.append(title);
+
+  const route = sessionRoute(detail);
+  const repeat = el('button', 'ghost tiny', 'Repeat these stops');
+  repeat.type = 'button';
+  repeat.disabled = route.length === 0;
+  repeat.title = route.length
+    ? 'Create a new flight plan from the places reached in this session'
+    : 'No named locations were recorded in this session';
+  repeat.addEventListener('click', () => repeatSessionRoute(detail));
+  head.append(repeat);
+  debrief.append(head);
+
+  const ships = (detail.ships || []).map((ship) =>
+    `${ship.displayName || ship.model}${ship.sorties ? ` · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}` : ''}`);
+  const contracts = detail.contracts || [];
+  const completed = contracts.filter((contract) => contract.outcome === 'Completed').length;
+  const party = new Set((detail.partyNotes || []).map((note) => note.handle).filter(Boolean));
+  const tradeCount = (detail.trades || []).length;
+  const movementCount = (detail.purchases || []).length + tradeCount;
+  const net = Number(detail.income || 0) - Number(detail.spend || 0) - Number(detail.commoditySpend || 0);
+
+  const metrics = el('div', 'session-debrief-metrics');
+  metrics.append(
+    sessionMetric('In game', duration(summary.inGame)),
+    sessionMetric('Ship', ships.join(' · ') || 'On foot'),
+    sessionMetric('Recorded route', `${route.length} point${route.length === 1 ? '' : 's'} · ${(detail.jumps || []).length} jump${(detail.jumps || []).length === 1 ? '' : 's'}`),
+    sessionMetric('Contracts', contracts.length ? `${completed} / ${contracts.length} completed` : 'None recorded'),
+    sessionMetric(tradeCount ? 'Recorded net*' : 'Recorded net', movementCount
+      ? `${net < 0 ? '−' : '+'}${tradeCount ? '~' : ''}${money(Math.abs(net))}`
+      : 'No movements recorded', movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
+    sessionMetric('Crew observed*', party.size ? `${party.size} named` : 'None named'),
+  );
+  debrief.append(metrics);
+
+  const content = el('div', 'session-debrief-grid');
+
+  const routeSection = el('section', 'session-debrief-section session-route-section');
+  routeSection.append(el('h3', null, 'Chronological route'));
+  const routeList = el('ol', 'session-route');
+  route.forEach((place) => {
+    const item = el('li');
+    item.append(el('span', 'session-route-time', shortTimeOf(place.at)));
+    item.append(placeLink(place.displayName));
+    const context = place.routeKind === 'quantum'
+      ? 'quantum destination'
+      : [place.body, place.system].filter(Boolean).join(' · ');
+    if (context) item.append(el('span', 'muted', context));
+    routeList.append(item);
+  });
+  if (!route.length) routeList.append(el('li', 'muted', 'No named locations were written in this session.'));
+  routeSection.append(routeList);
+  content.append(routeSection);
+
+  const commerceSection = el('section', 'session-debrief-section');
+  commerceSection.append(el('h3', null, 'Recorded economy'));
+  const commerce = [
+    ...(detail.purchases || []).map((purchase) => ({
+      at: purchase.at,
+      label: `${prettyItem(purchase.item)}${purchase.quantity > 1 ? ` ×${purchase.quantity}` : ''}`,
+      amount: -Number(purchase.total ?? purchase.price ?? 0),
+      approximate: !purchase.confirmed,
+    })),
+    ...(detail.trades || []).map((trade) => ({
+      at: trade.at,
+      label: `${trade.isSell ? 'Cargo sold' : 'Cargo bought'} · ${trade.quantity} SCU`,
+      amount: (trade.isSell ? 1 : -1) * Number(trade.amount || 0),
+      approximate: true,
+    })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at));
+  const commerceList = el('ul', 'session-debrief-list');
+  commerce.slice(-8).forEach((entry) => {
+    const item = el('li');
+    item.append(el('span', 'muted', shortTimeOf(entry.at)));
+    item.append(el('span', null, entry.label));
+    item.append(el('span', entry.amount >= 0 ? 'inward' : 'outward',
+      `${entry.amount >= 0 ? '+' : '−'}${entry.approximate ? '~' : ''}${money(Math.abs(entry.amount))}`));
+    commerceList.append(item);
+  });
+  if (!commerce.length) commerceList.append(el('li', 'muted', 'No purchases or cargo trades recorded.'));
+  commerceSection.append(commerceList);
+  content.append(commerceSection);
+
+  const contractSection = el('section', 'session-debrief-section');
+  contractSection.append(el('h3', null, 'Contracts'));
+  const contractList = el('ul', 'session-debrief-list');
+  contracts.slice(0, 8).forEach((contract) => {
+    const item = el('li');
+    item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', contract.outcome || 'Unknown'));
+    item.append(el('span', null, contract.displayName || contract.raw || 'Unnamed contract'));
+    if (contract.steps > 0) item.append(el('span', 'muted', `${contract.stepsDone} / ${contract.steps} steps`));
+    contractList.append(item);
+  });
+  if (!contracts.length) contractList.append(el('li', 'muted', 'No contracts recorded.'));
+  contractSection.append(contractList);
+  content.append(contractSection);
+
+  const highlightSection = el('section', 'session-debrief-section');
+  highlightSection.append(el('h3', null, 'Latest highlights'));
+  const highlights = (detail.timeline || [])
+    .filter((entry) => !['party', 'location', 'quantum', 'login'].includes(entry.kind))
+    .slice(-10);
+  const highlightList = el('ul', 'session-debrief-list');
+  highlights.forEach((entry) => {
+    const item = el('li');
+    item.append(el('span', 'muted', shortTimeOf(entry.at)));
+    item.append(el('span', null, entry.text));
+    if (entry.detail) item.append(el('span', 'muted', entry.detail));
+    highlightList.append(item);
+  });
+  if (!highlights.length) highlightList.append(el('li', 'muted', 'No additional highlights recorded.'));
+  highlightSection.append(highlightList);
+  content.append(highlightSection);
+
+  debrief.append(content);
+  const limits = el('p', 'session-debrief-note muted',
+    '* Cargo amounts are kiosk requests, not confirmed settlements. Crew observed is a floor from party notifications, not a roster.');
+  debrief.append(limits);
+  cell.append(debrief);
+  return row;
 }
 
 /** Paged because a real library runs to well over a hundred sessions. */
@@ -1027,18 +1239,34 @@ function renderSessions() {
   }
 
   for (const session of page) {
-    const tr = el('tr');
+    const tr = el('tr', 'session-row');
+    const open = expandedSessionId === session.id;
+    tr.classList.toggle('open', open);
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', String(open));
+    tr.title = open ? 'Close session debrief' : 'Open session debrief';
+    tr.addEventListener('click', () => toggleSessionDebrief(session.id));
+    tr.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleSessionDebrief(session.id);
+      }
+    });
     const cells = [
-      dateOf(session.startedAt),
       duration(session.inGame),
       duration(session.menu),
       session.primaryShip || '—',
       session.lastLocation || '—',
     ];
+    const date = el('td');
+    date.append(el('span', 'session-row-toggle', open ? '⌄' : '›'));
+    date.append(el('span', null, dateOf(session.startedAt)));
+    tr.append(date);
     cells.forEach((text) => tr.append(el('td', null, text)));
     [session.jumps, session.contracts, session.deaths ?? 0, session.incapacitations]
       .forEach((n) => tr.append(el('td', 'num', String(n))));
     body.append(tr);
+    if (open) body.append(renderSessionDebrief(session));
   }
 
   renderPager(pages, start, page.length, sessions.length);

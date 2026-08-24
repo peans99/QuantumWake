@@ -353,7 +353,13 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.14
+### 0.7.15
+
+- **Every session has a debrief.** Select a Play History row to review its
+  chronological route, ship and sortie summary, contracts, recorded economy,
+  crew-notification floor and latest highlights. Places open on the map, and
+  the previous route can become a new flight plan with one click; cargo money
+  remains marked as requested rather than confirmed.
 
 - **A map that does not invent geography.** System Positions now shows one
   system at a time with community-starmap bearings and relative orbital
