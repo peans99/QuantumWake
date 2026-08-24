@@ -62,6 +62,22 @@ public class PilotBriefingTests
     }
 
     [Fact]
+    public void A_now_card_can_be_hidden_and_restored_from_the_hidden_cards_tray()
+    {
+        var page = new Page();
+
+        page.Do("initNowCardCollapsers(); __dom.node('#now-briefing-card').byClass('now-hide')[0].fire('click');");
+
+        Assert.True(page.Truth("__dom.node('#now-briefing-card').classList.contains('user-hidden')"));
+        Assert.Contains("Show briefing", page.NodeText("#now-hidden-card-list"));
+        Assert.Contains("briefing", page.Text("localStorage.getItem('qw-now-hidden-cards')"));
+
+        page.Do("__dom.node('#now-hidden-card-list').byClass('ghost')[0].fire('click');");
+
+        Assert.False(page.Truth("__dom.node('#now-briefing-card').classList.contains('user-hidden')"));
+    }
+
+    [Fact]
     public void A_service_filter_keeps_only_matching_places_and_marks_the_place_card()
     {
         var page = new Page();

@@ -68,6 +68,7 @@ function clock(fromIso) {
 }
 
 const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const shortTimeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const dateOf = (iso) => new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
 
 /**
@@ -279,15 +280,50 @@ window.scOverlayExpanded = (on) => {
 /* ---------- Now card collapse ---------- */
 
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
+const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
 let collapsedNowCards = new Set();
+let hiddenNowCards = new Set();
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
   if (Array.isArray(saved)) collapsedNowCards = new Set(saved);
 } catch { /* a bad preference must not hide the dashboard */ }
 
+try {
+  const saved = JSON.parse(localStorage.getItem(NOW_HIDDEN_KEY) || '[]');
+  if (Array.isArray(saved)) hiddenNowCards = new Set(saved);
+} catch { /* a bad preference must not remove a dashboard card */ }
+
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
+}
+
+function saveHiddenNowCards() {
+  try { localStorage.setItem(NOW_HIDDEN_KEY, JSON.stringify([...hiddenNowCards])); } catch { /* optional */ }
+}
+
+function renderHiddenNowCards() {
+  const tray = $('#now-card-visibility');
+  const list = $('#now-hidden-card-list');
+  if (!tray || !list) return;
+
+  list.textContent = '';
+  for (const card of $$('#view-now .card[data-card]')) {
+    const name = card.dataset.card;
+    if (!hiddenNowCards.has(name)) continue;
+
+    const label = card.querySelector('.card-label')?.textContent.trim() || name;
+    const show = el('button', 'ghost tiny', `Show ${label}`);
+    show.type = 'button';
+    show.addEventListener('click', () => {
+      hiddenNowCards.delete(name);
+      card.classList.remove('user-hidden');
+      saveHiddenNowCards();
+      renderHiddenNowCards();
+    });
+    list.append(show);
+  }
+  tray.hidden = !list.children.length;
 }
 
 function initNowCardCollapsers() {
@@ -295,12 +331,17 @@ function initNowCardCollapsers() {
     const name = card.dataset.card;
     if (!name || card.querySelector('.now-collapse')) continue;
 
-    const button = el('button', 'now-collapse');
+    const actions = el('div', 'now-card-actions');
+    const button = el('button', 'now-collapse now-card-action');
     button.type = 'button';
+    button.title = 'Collapse this card';
+    button.setAttribute('aria-label', 'Collapse this card');
     button.addEventListener('click', () => {
       const collapsed = !card.classList.contains('collapsed');
       card.classList.toggle('collapsed', collapsed);
-      button.textContent = collapsed ? 'Expand' : 'Collapse';
+      button.textContent = collapsed ? '⌄' : '⌃';
+      button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+      button.setAttribute('aria-label', button.title);
       button.setAttribute('aria-expanded', String(!collapsed));
       if (collapsed) collapsedNowCards.add(name);
       else collapsedNowCards.delete(name);
@@ -309,10 +350,28 @@ function initNowCardCollapsers() {
 
     const collapsed = collapsedNowCards.has(name);
     card.classList.toggle('collapsed', collapsed);
-    button.textContent = collapsed ? 'Expand' : 'Collapse';
+    button.textContent = collapsed ? '⌄' : '⌃';
+    button.title = collapsed ? 'Expand this card' : 'Collapse this card';
+    button.setAttribute('aria-label', button.title);
     button.setAttribute('aria-expanded', String(!collapsed));
-    card.append(button);
+
+    const hide = el('button', 'now-hide now-card-action', '×');
+    hide.type = 'button';
+    hide.title = 'Hide this card from the Now page';
+    hide.setAttribute('aria-label', hide.title);
+    hide.addEventListener('click', () => {
+      hiddenNowCards.add(name);
+      card.classList.add('user-hidden');
+      saveHiddenNowCards();
+      renderHiddenNowCards();
+    });
+    actions.append(hide, button);
+    card.append(actions);
+
+    card.classList.toggle('user-hidden', !isOverlay && hiddenNowCards.has(name));
   }
+
+  renderHiddenNowCards();
 }
 
 document.addEventListener('keydown', (event) => {
@@ -354,7 +413,7 @@ function renderNow(state) {
   travel.hidden = !state.travelling;
   if (state.travelling) $('#now-travel-to').textContent = state.travellingTo || '';
 
-  $('#now-ship').textContent = state.ship || '—';
+  renderNowShip(state.ship);
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
   $('#now-mode').textContent = state.inGame ? (state.gameRules || 'in game') : 'frontend / menus';
@@ -703,6 +762,9 @@ async function loadHistory() {
   loadAtlas().catch((e) => console.error('map', e));
   safeRender('Contracts', () => renderContracts(stats));
   safeRender('Places', () => renderPlaces(stats));
+  // Routes can start before the ledger returns; rerun once the owned holds are
+  // known so a selected ship cannot leave the table priced as one SCU.
+  loadRoutes().catch((e) => console.error('routes after history', e));
 
   // These fetch their own data, so they are kicked off rather than awaited.
   loadLedger().catch((e) => console.error('ledger', e));
@@ -943,6 +1005,8 @@ function toSeconds(timespan) {
 const SESSIONS_PER_PAGE = 25;
 let allSessions = [];
 let sessionPage = 0;
+let expandedSessionId = null;
+const sessionDetails = new Map();
 
 /** Applies the period and search filters. */
 function filteredSessions() {
@@ -960,6 +1024,215 @@ function filteredSessions() {
 
     return true;
   });
+}
+
+async function toggleSessionDebrief(id) {
+  if (expandedSessionId === id) {
+    expandedSessionId = null;
+    renderSessions();
+    return;
+  }
+
+  expandedSessionId = id;
+  renderSessions();
+
+  if (!sessionDetails.has(id)) {
+    try {
+      sessionDetails.set(id, await getJson(`/api/sessions/${encodeURIComponent(id)}`));
+    } catch {
+      sessionDetails.set(id, { error: true });
+    }
+  }
+
+  if (expandedSessionId === id) renderSessions();
+}
+
+function sessionRoute(detail) {
+  const usefulQuantumTarget = (name) => name
+    && !/^(PartyMemberMarker_|MISSION_)/i.test(name)
+    && !/\.socpak$/i.test(name)
+    && !['Nav Point', 'Rest Stop', 'Mission Beacon'].includes(name);
+
+  const points = [
+    ...(detail.locations || []).map((place) => ({ ...place, routeKind: 'arrival' })),
+    ...(detail.jumps || []).filter((jump) => usefulQuantumTarget(jump.toName)).map((jump) => ({
+      at: jump.at,
+      rawId: jump.toId,
+      displayName: jump.toName,
+      system: null,
+      body: null,
+      routeKind: 'quantum',
+    })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at));
+
+  return points.filter((place, index) => {
+    if (index === 0) return true;
+    const previous = points[index - 1];
+    return place.rawId !== previous.rawId
+      && place.displayName.toLowerCase() !== previous.displayName.toLowerCase();
+  });
+}
+
+async function repeatSessionRoute(detail) {
+  const route = sessionRoute(detail);
+  if (!route.length) return;
+
+  await planTrip(`Repeat ${dateOf(detail.startedAt)} route`, route.map((place) => ({
+    placeId: place.rawId || '',
+    place: place.displayName,
+    note: `${place.routeKind === 'quantum' ? 'Quantum target' : 'Arrival'} logged at ${shortTimeOf(place.at)}`,
+  })));
+}
+
+function sessionMetric(label, value, cls = '') {
+  const metric = el('div', `session-metric ${cls}`.trim());
+  metric.append(el('div', 'session-metric-value', value));
+  metric.append(el('div', 'session-metric-label', label));
+  return metric;
+}
+
+function renderSessionDebrief(summary) {
+  const row = el('tr', 'session-detail-row');
+  const cell = el('td');
+  cell.colSpan = 9;
+  row.append(cell);
+
+  const detail = sessionDetails.get(summary.id);
+  if (!detail) {
+    cell.append(el('div', 'session-debrief-loading muted', 'Building session debrief…'));
+    return row;
+  }
+
+  if (detail.error) {
+    cell.append(el('div', 'session-debrief-loading outward', 'This session detail could not be read.'));
+    return row;
+  }
+
+  const debrief = el('article', 'session-debrief');
+  const head = el('div', 'session-debrief-head');
+  const title = el('div');
+  title.append(el('div', 'session-debrief-title', `${dateOf(detail.startedAt)} debrief`));
+  title.append(el('div', 'muted', `${shortTimeOf(detail.startedAt)} → ${shortTimeOf(detail.endedAt)} · ${detail.gameVersion || 'version unknown'}`));
+  head.append(title);
+
+  const route = sessionRoute(detail);
+  const repeat = el('button', 'ghost tiny', 'Repeat these stops');
+  repeat.type = 'button';
+  repeat.disabled = route.length === 0;
+  repeat.title = route.length
+    ? 'Create a new flight plan from the places reached in this session'
+    : 'No named locations were recorded in this session';
+  repeat.addEventListener('click', () => repeatSessionRoute(detail));
+  head.append(repeat);
+  debrief.append(head);
+
+  const ships = (detail.ships || []).map((ship) =>
+    `${ship.displayName || ship.model}${ship.sorties ? ` · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}` : ''}`);
+  const contracts = detail.contracts || [];
+  const completed = contracts.filter((contract) => contract.outcome === 'Completed').length;
+  const party = new Set((detail.partyNotes || []).map((note) => note.handle).filter(Boolean));
+  const tradeCount = (detail.trades || []).length;
+  const movementCount = (detail.purchases || []).length + tradeCount;
+  const net = Number(detail.income || 0) - Number(detail.spend || 0) - Number(detail.commoditySpend || 0);
+
+  const metrics = el('div', 'session-debrief-metrics');
+  metrics.append(
+    sessionMetric('In game', duration(summary.inGame)),
+    sessionMetric('Ship', ships.join(' · ') || 'On foot'),
+    sessionMetric('Recorded route', `${route.length} point${route.length === 1 ? '' : 's'} · ${(detail.jumps || []).length} jump${(detail.jumps || []).length === 1 ? '' : 's'}`),
+    sessionMetric('Contracts', contracts.length ? `${completed} / ${contracts.length} completed` : 'None recorded'),
+    sessionMetric(tradeCount ? 'Recorded net*' : 'Recorded net', movementCount
+      ? `${net < 0 ? '−' : '+'}${tradeCount ? '~' : ''}${money(Math.abs(net))}`
+      : 'No movements recorded', movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
+    sessionMetric('Crew observed*', party.size ? `${party.size} named` : 'None named'),
+  );
+  debrief.append(metrics);
+
+  const content = el('div', 'session-debrief-grid');
+
+  const routeSection = el('section', 'session-debrief-section session-route-section');
+  routeSection.append(el('h3', null, 'Chronological route'));
+  const routeList = el('ol', 'session-route');
+  route.forEach((place) => {
+    const item = el('li');
+    item.append(el('span', 'session-route-time', shortTimeOf(place.at)));
+    item.append(placeLink(place.displayName));
+    const context = place.routeKind === 'quantum'
+      ? 'quantum destination'
+      : [place.body, place.system].filter(Boolean).join(' · ');
+    if (context) item.append(el('span', 'muted', context));
+    routeList.append(item);
+  });
+  if (!route.length) routeList.append(el('li', 'muted', 'No named locations were written in this session.'));
+  routeSection.append(routeList);
+  content.append(routeSection);
+
+  const commerceSection = el('section', 'session-debrief-section');
+  commerceSection.append(el('h3', null, 'Recorded economy'));
+  const commerce = [
+    ...(detail.purchases || []).map((purchase) => ({
+      at: purchase.at,
+      label: `${prettyItem(purchase.item)}${purchase.quantity > 1 ? ` ×${purchase.quantity}` : ''}`,
+      amount: -Number(purchase.total ?? purchase.price ?? 0),
+      approximate: !purchase.confirmed,
+    })),
+    ...(detail.trades || []).map((trade) => ({
+      at: trade.at,
+      label: `${trade.isSell ? 'Cargo sold' : 'Cargo bought'} · ${trade.quantity} SCU`,
+      amount: (trade.isSell ? 1 : -1) * Number(trade.amount || 0),
+      approximate: true,
+    })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at));
+  const commerceList = el('ul', 'session-debrief-list');
+  commerce.slice(-8).forEach((entry) => {
+    const item = el('li');
+    item.append(el('span', 'muted', shortTimeOf(entry.at)));
+    item.append(el('span', null, entry.label));
+    item.append(el('span', entry.amount >= 0 ? 'inward' : 'outward',
+      `${entry.amount >= 0 ? '+' : '−'}${entry.approximate ? '~' : ''}${money(Math.abs(entry.amount))}`));
+    commerceList.append(item);
+  });
+  if (!commerce.length) commerceList.append(el('li', 'muted', 'No purchases or cargo trades recorded.'));
+  commerceSection.append(commerceList);
+  content.append(commerceSection);
+
+  const contractSection = el('section', 'session-debrief-section');
+  contractSection.append(el('h3', null, 'Contracts'));
+  const contractList = el('ul', 'session-debrief-list');
+  contracts.slice(0, 8).forEach((contract) => {
+    const item = el('li');
+    item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', contract.outcome || 'Unknown'));
+    item.append(el('span', null, contract.displayName || contract.raw || 'Unnamed contract'));
+    if (contract.steps > 0) item.append(el('span', 'muted', `${contract.stepsDone} / ${contract.steps} steps`));
+    contractList.append(item);
+  });
+  if (!contracts.length) contractList.append(el('li', 'muted', 'No contracts recorded.'));
+  contractSection.append(contractList);
+  content.append(contractSection);
+
+  const highlightSection = el('section', 'session-debrief-section');
+  highlightSection.append(el('h3', null, 'Latest highlights'));
+  const highlights = (detail.timeline || [])
+    .filter((entry) => !['party', 'location', 'quantum', 'login'].includes(entry.kind))
+    .slice(-10);
+  const highlightList = el('ul', 'session-debrief-list');
+  highlights.forEach((entry) => {
+    const item = el('li');
+    item.append(el('span', 'muted', shortTimeOf(entry.at)));
+    item.append(el('span', null, entry.text));
+    if (entry.detail) item.append(el('span', 'muted', entry.detail));
+    highlightList.append(item);
+  });
+  if (!highlights.length) highlightList.append(el('li', 'muted', 'No additional highlights recorded.'));
+  highlightSection.append(highlightList);
+  content.append(highlightSection);
+
+  debrief.append(content);
+  const limits = el('p', 'session-debrief-note muted',
+    '* Cargo amounts are kiosk requests, not confirmed settlements. Crew observed is a floor from party notifications, not a roster.');
+  debrief.append(limits);
+  cell.append(debrief);
+  return row;
 }
 
 /** Paged because a real library runs to well over a hundred sessions. */
@@ -988,18 +1261,34 @@ function renderSessions() {
   }
 
   for (const session of page) {
-    const tr = el('tr');
+    const tr = el('tr', 'session-row');
+    const open = expandedSessionId === session.id;
+    tr.classList.toggle('open', open);
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-expanded', String(open));
+    tr.title = open ? 'Close session debrief' : 'Open session debrief';
+    tr.addEventListener('click', () => toggleSessionDebrief(session.id));
+    tr.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleSessionDebrief(session.id);
+      }
+    });
     const cells = [
-      dateOf(session.startedAt),
       duration(session.inGame),
       duration(session.menu),
       session.primaryShip || '—',
       session.lastLocation || '—',
     ];
+    const date = el('td');
+    date.append(el('span', 'session-row-toggle', open ? '⌄' : '›'));
+    date.append(el('span', null, dateOf(session.startedAt)));
+    tr.append(date);
     cells.forEach((text) => tr.append(el('td', null, text)));
     [session.jumps, session.contracts, session.deaths ?? 0, session.incapacitations]
       .forEach((n) => tr.append(el('td', 'num', String(n))));
     body.append(tr);
+    if (open) body.append(renderSessionDebrief(session));
   }
 
   renderPager(pages, start, page.length, sessions.length);
@@ -2381,6 +2670,8 @@ async function applyOverlayLayout() {
  * The route planner. UEX ranks margins; this ranks runs - the difference is
  * a hold and a wallet, which are the two things only your own logs know.
  */
+let routeRequest = 0;
+
 async function loadRoutes() {
   const select = $('#routes-ship');
   if (!select) return;
@@ -2405,31 +2696,48 @@ async function loadRoutes() {
   const capital = Number($('#routes-capital').value) || 0;
   const ranking = $('#routes-ranking').value || 'reliable';
   const freshOnly = $('#routes-fresh-only').checked;
+  const evidence = $('#routes-evidence').value || 'reported';
   // "From here" reads the live location the Now page is already showing.
   const here = $('#now-location').textContent.trim();
   const from = $('#routes-here').checked && here && here !== '—' && !here.startsWith('In menus')
     ? here
     : '';
+  const originNote = $('#routes-origin-note');
+  originNote.textContent = from
+    ? ` Origin: ${from}; results require UEX to match this terminal.`
+    : '';
 
   const body = $('#routes-table tbody');
   body.textContent = '';
+  const request = ++routeRequest;
 
   let rows = [];
   try {
     rows = await getJson(
       `/api/routes?scu=${scu}&capital=${capital}&from=${encodeURIComponent(from)}`
-      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`);
+      + `&ranking=${encodeURIComponent(ranking)}&freshOnly=${freshOnly}`
+      + `&evidence=${encodeURIComponent(evidence)}`);
   } catch { /* UEX off */ }
+
+  // The initial per-SCU request often leaves before the fleet has loaded. It
+  // must not win the race back and overwrite the later request for the ship
+  // now shown in the selector.
+  if (request !== routeRequest) return;
 
   if (!rows.length) {
     const tr = el('tr');
-    // Name the filter when one is on: "no route from here" is the wrong
-    // explanation for a table that only every stale quote was hidden from.
+    // Name the filter that emptied the table. "No route from here" is the
+    // wrong explanation for a table that a tickbox hid every row from, and
+    // there are now two tickboxes that can do it.
     const td = el('td', 'muted', freshOnly
       ? 'Nothing quoted in the last day. Untick "Fresh only" to see older prices.'
       : from
         ? 'No route starts from where you are - or UEX has no terminal here.'
-        : 'Nothing to show. Enable UEX prices on the Settings page.');
+        : evidence === 'full'
+          ? 'No route has both sides reporting enough capacity for this load. Try Reported capacity or Include unknown capacity.'
+          : evidence === 'reported'
+            ? 'No route has stock and demand reported on both sides. Try Include unknown capacity to see price-only estimates.'
+            : 'Nothing to show. Enable UEX prices on the Settings page.');
     td.colSpan = 12;
     tr.append(td);
     body.append(tr);
@@ -2446,9 +2754,17 @@ async function loadRoutes() {
     tr.append(el('td', 'num', `+${money(route.marginPerScu)}`));
     tr.append(el('td', 'num', Math.floor(route.units).toLocaleString()));
     tr.append(el('td', 'num outward', money(route.outlay)));
-    tr.append(el('td', 'num inward', money(route.profit)));
+    const projected = el('td', 'num inward', `~${money(route.profit)}`);
+    projected.title = 'Arithmetic from the two UEX prices, not a promise of live availability.';
+    tr.append(projected);
 
     const report = el('td', 'route-report');
+    const availabilityWord = route.availability === 'reported-full'
+      ? `Reported full load · ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
+      : route.availability === 'reported-partial'
+        ? `Reported partial · ${Math.floor(route.units).toLocaleString()} / ${Math.floor(route.desiredUnits).toLocaleString()} SCU`
+        : `Capacity unknown · projected ${Math.floor(route.units).toLocaleString()} SCU`;
+    report.append(el('div', `route-feasibility ${route.availability || 'capacity-unknown'}`, availabilityWord));
     const reportWord = route.freshness === 'fresh' ? 'Fresh reports'
       : route.freshness === 'aging' ? 'Aging reports'
         : route.freshness === 'stale' ? 'Stale reports' : 'Report age unknown';
@@ -2456,8 +2772,12 @@ async function loadRoutes() {
     const age = (at) => at ? ago(at) : 'unknown';
     report.append(el('div', 'muted route-age', `Buy ${age(route.buySeenAt)} · sell ${age(route.sellSeenAt)}`));
     const capacity = [];
-    capacity.push(route.buyStockScu > 0 ? `stock ${Math.floor(route.buyStockScu)} SCU` : 'stock unknown');
-    capacity.push(route.sellDemandScu > 0 ? `demand ${Math.floor(route.sellDemandScu)} SCU` : 'demand unknown');
+    capacity.push(route.buyStockScu > 0
+      ? `buy stock ${Math.floor(route.buyStockScu)} SCU (${route.buyAvailability})`
+      : 'buy stock unknown');
+    capacity.push(route.sellDemandScu > 0
+      ? `sell demand ${Math.floor(route.sellDemandScu)} SCU (${route.sellAvailability})`
+      : 'sell demand unknown');
     report.append(el('div', 'muted route-capacity', capacity.join(' · ')));
     if ((route.freshness !== 'fresh' || route.limitedBy === 'demand') && route.fallbackSells?.length) {
       const choices = route.fallbackSells.map((fallback) =>
@@ -2468,8 +2788,10 @@ async function loadRoutes() {
 
     // One click turns a haul into a plan: buy there, sell there, in order.
     const plan = el('td');
-    const button = el('button', 'ghost tiny', 'Plan');
-    button.title = 'Start a flight plan for this run';
+    const button = el('button', 'ghost tiny', route.mapReady ? 'Plan' : 'Text plan');
+    button.title = route.mapReady
+      ? 'Start a flight plan for this run and draw both stops on the map'
+      : 'Add the stops to a flight plan without claiming both can be drawn on the map';
     button.addEventListener('click', () => planTrip(`${route.commodity} run`, [
       {
         placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
@@ -2503,6 +2825,7 @@ onInput('#routes-capital', loadRoutes);
 $('#routes-ship')?.addEventListener('change', loadRoutes);
 $('#routes-here')?.addEventListener('change', loadRoutes);
 $('#routes-ranking')?.addEventListener('change', loadRoutes);
+$('#routes-evidence')?.addEventListener('change', loadRoutes);
 $('#routes-fresh-only')?.addEventListener('change', loadRoutes);
 
 /**
@@ -3009,7 +3332,10 @@ async function openCommodity(name) {
   $('#commodity-sub').textContent = trend.sampled
     ? `${entry?.groups?.join(', ') || 'Commodity'} · history from the ${trend.sampled} busiest `
       + `of ${trend.terminals} counters that trade it, by demand and by stock.`
-    : 'No history available — UEX is off, or nobody has reported this one.';
+    : trend.terminals
+      ? `Live UEX quotes are available at ${trend.terminals} counters, but no price-history samples loaded. `
+        + 'The counter tables above are still the current report.'
+      : 'No UEX market counters are currently reported for this commodity.';
 
   const priceSeries = [
     { label: 'Best price paid to you', points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
@@ -3426,6 +3752,7 @@ async function loadJobList() {
   } catch { /* server down; the page still shows contracts */ }
 
   renderPinnedJob(jobs);
+  refreshMapFocusContext(mapFocusFilter === 'shopping' || mapFocusFilter === 'stash').catch(() => {});
   reloadPilotBriefing().catch(() => {});
 
   // Shopping and crafting are different work, so they live on different
@@ -4781,6 +5108,24 @@ function makerOf(shipName) {
   return { code: null, name: words[0], model: words.slice(1).join(' ') || shipName };
 }
 
+/** The active ship deserves the same manufacturer mark as the Fleet page. */
+function renderNowShip(shipName) {
+  $('#now-ship').textContent = shipName || '—';
+
+  const badge = $('#now-ship-logo');
+  badge.textContent = '';
+  const maker = shipName && makerOf(shipName);
+  const hasLogo = maker?.code && MANUFACTURER_LOGOS.has(maker.code);
+  badge.hidden = !hasLogo;
+  if (!hasLogo) return;
+
+  const image = document.createElement('img');
+  image.src = `assets/manufacturers/${maker.code}.png`;
+  image.alt = maker.name;
+  image.title = maker.name;
+  badge.append(image);
+}
+
 async function loadManufacturers() {
   try {
     const table = await getJson('/api/manufacturers');
@@ -5575,6 +5920,87 @@ const svgEl = (tag, attrs = {}) => {
 let atlas = [];
 const nodeAt = new Map();
 
+// A system view is the honest default: its bodies preserve the bearings and
+// relative distances supplied by the community starmap. The network is useful
+// for planning jump legs, but says out loud that its triangle has no scale.
+const MAP_MODE_KEY = 'qw-map-mode';
+const MAP_SYSTEM_KEY = 'qw-map-system';
+
+function mapMode() { return $('#map-mode')?.value || 'system'; }
+function mapSystem() { return $('#map-system')?.value || ''; }
+
+function preferredMapSystem() {
+  const here = hereId && atlas.find((location) => location.rawId === hereId)?.system;
+  return here && SYSTEM_COLOURS[here] ? here : 'Stanton';
+}
+
+function currentMapLocation() {
+  return hereId ? atlas.find((location) => location.rawId === hereId) || null : null;
+}
+
+// This remains visible even when the selected system is not the player's. A
+// one-system map is less misleading than a whole-system schematic, but should
+// never turn "where am I?" into a hidden state.
+function updateHereControl() {
+  const control = $('#map-here');
+  const label = $('#map-here-label');
+  if (!control || !label) return;
+
+  const here = currentMapLocation();
+  control.disabled = !here;
+  control.classList.toggle('located', !!here);
+  label.textContent = here ? `You · ${here.name}` : 'Location unknown';
+
+  if (!here) control.title = 'The live log has not named your location yet';
+  else if (mapMode() === 'network') control.title = `Show ${here.name} in ${here.system}`;
+  else if (mapSystem() !== here.system) control.title = `Show ${here.name} in ${here.system}`;
+  else control.title = `Centre on ${here.name}`;
+}
+
+/** Makes the player's system and place visible without changing filters. */
+function focusHere() {
+  const here = currentMapLocation();
+  if (!here) return false;
+
+  if (here.system && SYSTEM_COLOURS[here.system]
+    && (mapMode() !== 'system' || mapSystem() !== here.system)) {
+    $('#map-mode').value = 'system';
+    $('#map-system').value = here.system;
+    syncMapModeControls();
+    try {
+      localStorage.setItem(MAP_MODE_KEY, 'system');
+      localStorage.setItem(MAP_SYSTEM_KEY, here.system);
+    } catch { /* private mode */ }
+    drawMap();
+  }
+
+  return centreOn(here.rawId);
+}
+
+function syncMapModeControls() {
+  const mode = $('#map-mode');
+  const system = $('#map-system');
+  if (!mode || !system) return;
+
+  const systems = [...new Set(atlas.map((location) => location.system)
+    .filter((name) => SYSTEM_COLOURS[name]))].sort();
+
+  if (!system.dataset.filled || [...system.options].map((option) => option.value).join('|') !== systems.join('|')) {
+    const selected = system.value || preferredMapSystem();
+    system.textContent = '';
+    for (const name of systems) system.append(new Option(name, name));
+    system.value = systems.includes(selected) ? selected : (systems[0] || '');
+    system.dataset.filled = '1';
+  }
+
+  system.hidden = mode.value !== 'system';
+  const note = $('#map-mode-note');
+  if (note) note.textContent = mode.value === 'system'
+    ? `${system.value || 'This system'}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.`
+    : 'Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.';
+  updateHereControl();
+}
+
 // Service data is intentionally a set of place ids, not a claim about every
 // facility at a location. UEX can identify counters, fuel prices and clinics;
 // it cannot identify repair pads, so repair never becomes a reassuringly empty
@@ -5587,6 +6013,11 @@ const SERVICE_META = {
 };
 const mapServicesByPlace = new Map();
 let mapServiceFilter = '';
+let mapFocusFilter = '';
+const mapShoppingIds = new Set();
+const mapStashIds = new Set();
+const MAP_SAVED_VIEW_KEY = 'qw-map-saved-view';
+const MAP_LABEL_DENSITY_KEY = 'qw-map-label-density';
 
 const serviceKey = (name) => ({
   Shops: 'shop',
@@ -5598,13 +6029,166 @@ const serviceKey = (name) => ({
 
 const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
 
-function selectMapService(service, openMap = false) {
+// Service is a property of a place, not its identity. Badges sit outside the
+// location glyph so a clinic at a station still reads as a station first.
+function drawServiceBadges(group, x, y, radius, services) {
+  const badges = svgEl('g', { class: 'map-service-badges' });
+  const badgeRadius = Math.max(3.2, radius * .42);
+  const orbit = radius + badgeRadius + 3;
+
+  services.forEach((service, index) => {
+    const angle = -Math.PI / 2 + (index - (services.length - 1) / 2) * .76;
+    const bx = x + Math.cos(angle) * orbit;
+    const by = y + Math.sin(angle) * orbit;
+    const badge = svgEl('g', { class: `map-service-badge ${service}` });
+    badge.append(svgEl('circle', { cx: bx, cy: by, r: badgeRadius }));
+
+    if (service === 'shop') {
+      badge.append(svgEl('rect', {
+        x: bx - badgeRadius * .52, y: by - badgeRadius * .52,
+        width: badgeRadius * 1.04, height: badgeRadius * 1.04, class: 'service-glyph',
+      }));
+      badge.append(svgEl('line', { x1: bx, y1: by - badgeRadius * .52, x2: bx, y2: by + badgeRadius * .52, class: 'service-glyph' }));
+    } else if (service === 'refuel') {
+      badge.append(svgEl('path', {
+        d: `M ${bx} ${by - badgeRadius * .68} C ${bx + badgeRadius * .56} ${by - badgeRadius * .14}, ${bx + badgeRadius * .42} ${by + badgeRadius * .56}, ${bx} ${by + badgeRadius * .62} C ${bx - badgeRadius * .42} ${by + badgeRadius * .56}, ${bx - badgeRadius * .56} ${by - badgeRadius * .14}, ${bx} ${by - badgeRadius * .68} Z`,
+        class: 'service-glyph',
+      }));
+    } else if (service === 'clinic') {
+      badge.append(svgEl('path', {
+        d: `M ${bx - badgeRadius * .22} ${by - badgeRadius * .64} H ${bx + badgeRadius * .22} V ${by - badgeRadius * .22} H ${bx + badgeRadius * .64} V ${by + badgeRadius * .22} H ${bx + badgeRadius * .22} V ${by + badgeRadius * .64} H ${bx - badgeRadius * .22} V ${by + badgeRadius * .22} H ${bx - badgeRadius * .64} V ${by - badgeRadius * .22} H ${bx - badgeRadius * .22} Z`,
+        class: 'service-glyph',
+      }));
+    } else {
+      badge.append(svgEl('path', {
+        d: `M ${bx - badgeRadius * .58} ${by} H ${bx + badgeRadius * .58} M ${bx} ${by - badgeRadius * .58} V ${by + badgeRadius * .58}`,
+        class: 'service-glyph',
+      }));
+    }
+
+    const title = svgEl('title');
+    title.textContent = SERVICE_META[service]?.label || service;
+    badge.append(title);
+    badges.append(badge);
+  });
+
+  group.append(badges);
+}
+
+function showServiceBadges(location, highlighted) {
+  return servicesAt(location).length > 0
+    && (isDetailed() || highlighted || !!mapServiceFilter || !!mapFocusFilter);
+}
+
+function selectMapService(service, openMap = false, redraw = true) {
   mapServiceFilter = service || '';
   for (const button of $$('#map-service-filter button'))
     button.classList.toggle('active', button.dataset.service === mapServiceFilter);
 
   if (openMap) showView('map');
+  if (redraw) drawMap();
+}
+
+function planPlaceIds() {
+  return new Set((tracked()?.stops || []).map((stop) => stop.placeId).filter(Boolean));
+}
+
+function mapFocusIds() {
+  if (mapFocusFilter === 'plan') return planPlaceIds();
+  if (mapFocusFilter === 'shopping') return mapShoppingIds;
+  if (mapFocusFilter === 'stash') return mapStashIds;
+  return null;
+}
+
+function selectMapFocus(focus, redraw = true) {
+  mapFocusFilter = focus || '';
+  for (const button of $$('#map-focus-filter button'))
+    button.classList.toggle('active', button.dataset.focus === mapFocusFilter);
+  if (redraw) drawMap();
+}
+
+function mapLabelDensity() { return $('#map-label-density')?.value || 'auto'; }
+
+function saveMapView() {
+  const saved = {
+    mode: mapMode(), system: mapSystem(), service: mapServiceFilter, focus: mapFocusFilter,
+    visited: $('#map-visited-only').checked, goods: $('#map-goods').checked,
+    labels: mapLabelDensity(), search: $('#map-search').value,
+  };
+  try { localStorage.setItem(MAP_SAVED_VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ }
+
+  const button = $('#map-save-preset');
+  button.textContent = 'Saved';
+  button.title = 'Saved view updated';
+}
+
+function applyMapPreset(name) {
+  let preset = null;
+  if (name === 'saved') {
+    try { preset = JSON.parse(localStorage.getItem(MAP_SAVED_VIEW_KEY) || 'null'); } catch { /* private mode */ }
+    if (!preset) return;
+  } else if (name === 'plan') {
+    preset = { focus: 'plan' };
+  } else if (name === 'shopping') {
+    preset = { focus: 'shopping', goods: true };
+  } else if (name === 'services') {
+    preset = { service: 'refuel', goods: false };
+  } else if (name === 'visited') {
+    preset = { visited: true, focus: '' };
+  } else return;
+
+  if (preset.mode) $('#map-mode').value = preset.mode;
+  if (preset.system) $('#map-system').value = preset.system;
+  if (typeof preset.visited === 'boolean') $('#map-visited-only').checked = preset.visited;
+  if (typeof preset.goods === 'boolean') $('#map-goods').checked = preset.goods;
+  if (preset.labels) $('#map-label-density').value = preset.labels;
+  if (typeof preset.search === 'string') $('#map-search').value = preset.search;
+  selectMapService(preset.service || '', false, false);
+  selectMapFocus(preset.focus || '', false);
+  syncMapModeControls();
   drawMap();
+}
+
+function atlasPlaceId(name) {
+  if (!name) return null;
+  const clean = String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (clean.length < 4) return null;
+  return atlas.find((place) => {
+    const candidate = `${place.name} ${place.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return candidate === clean || candidate.includes(clean) || clean.includes(candidate);
+  })?.rawId || null;
+}
+
+// Jobs give us destinations and sellers; stash remembers presence by place.
+// Both are useful focus layers, but neither is a live inventory or stock claim.
+async function refreshMapFocusContext(redraw = false) {
+  const [jobs, stats] = await Promise.all([
+    getJson('/api/jobs').catch(() => []),
+    getJson('/api/stats').catch(() => null),
+  ]);
+
+  mapShoppingIds.clear();
+  for (const job of jobs.filter((job) => !job.done)) {
+    if (job.destinationId) mapShoppingIds.add(job.destinationId);
+    else if (job.destination) {
+      const destination = atlasPlaceId(job.destination);
+      if (destination) mapShoppingIds.add(destination);
+    }
+
+    for (const item of job.items || []) {
+      if (item.have) continue;
+      const seller = atlasPlaceId(item.buyAt);
+      if (seller) mapShoppingIds.add(seller);
+    }
+  }
+
+  mapStashIds.clear();
+  for (const place of stats?.stash || []) {
+    const id = atlasPlaceId(place.name);
+    if (id) mapStashIds.add(id);
+  }
+
+  if (redraw && atlas.length) drawMap();
 }
 
 /** Non-null while a commodity search is active: the rawIds to light up. */
@@ -5725,6 +6309,8 @@ async function loadAtlas() {
   mapServicesByPlace.clear();
   for (const place of servicePlaces)
     mapServicesByPlace.set(place.placeId, place.services || []);
+  await refreshMapFocusContext();
+  syncMapModeControls();
   drawMap();
 
   // A detail card can stay open while the history refreshes. Its facts should
@@ -5763,6 +6349,7 @@ function bodyLayout(system, present, centre, sizeOf) {
   // redraw so the spread happens around what the eye is on.
   const spread = isDetailed() ? 1.6 : 1;
   const orbit = centre.orbit * spread;
+  const physical = mapMode() === 'system';
 
   if (!present.some((name) => lookup(name))) {
     present.forEach((bodyName, index) => {
@@ -5770,7 +6357,7 @@ function bodyLayout(system, present, centre, sizeOf) {
       placements.set(bodyName, {
         x: centre.x + Math.cos(angle) * orbit,
         y: centre.y + Math.sin(angle) * orbit,
-        angle,
+        angle, positioned: false,
         from: { x: centre.x, y: centre.y },
       });
     });
@@ -5803,8 +6390,11 @@ function bodyLayout(system, present, centre, sizeOf) {
 
     if (group.pos) {
       angle = Math.atan2(group.pos.y, group.pos.x);
-      const radius = orbit
-        * (0.3 + 0.7 * Math.sqrt(Math.hypot(group.pos.x, group.pos.y) / maxR));
+      const fraction = Math.hypot(group.pos.x, group.pos.y) / maxR;
+      // A local system map can retain the actual radial relationship. The
+      // older all-systems view compresses it because it has to fit several
+      // dense systems in one frame without pretending their frames share scale.
+      const radius = orbit * (physical ? fraction : 0.3 + 0.7 * Math.sqrt(fraction));
       gx = centre.x + Math.cos(angle) * radius;
       gy = centre.y + Math.sin(angle) * radius;
     } else {
@@ -5818,7 +6408,7 @@ function bodyLayout(system, present, centre, sizeOf) {
     group.members.forEach((bodyName, index) => {
       if (index === 0) {
         placements.set(bodyName, {
-          x: gx, y: gy, angle, from: { x: centre.x, y: centre.y },
+          x: gx, y: gy, angle, positioned: Boolean(group.pos), from: { x: centre.x, y: centre.y },
         });
         return;
       }
@@ -5831,7 +6421,7 @@ function bodyLayout(system, present, centre, sizeOf) {
       placements.set(bodyName, {
         x: gx + Math.cos(arc) * gap,
         y: gy + Math.sin(arc) * gap,
-        angle: arc,
+        angle: arc, positioned: Boolean(group.pos),
         from: { x: gx, y: gy },
       });
     });
@@ -6038,6 +6628,8 @@ function setHere(rawId) {
   if (changed || !$('#starmap').querySelector('.map-here'))
     drawHere();
 
+  updateHereControl();
+
   // Follow mode: the map pans itself as the player moves, so a second monitor
   // shows the journey without being touched.
   if (followHere && changed && hereId)
@@ -6123,12 +6715,51 @@ function drawTravel() {
   map.append(group);
 }
 
+// The jump map has deliberately no place nodes. It can still locate the player
+// honestly at system level, which makes its otherwise abstract graph useful
+// without pretending it knows a position inside that system.
+function drawNetworkHere(map) {
+  const here = currentMapLocation();
+  const point = here?.system && SYSTEM_LAYOUT[here.system];
+  if (!point) return;
+
+  const group = svgEl('g', { class: 'map-here' });
+  group.append(svgEl('circle', {
+    cx: point.x, cy: point.y, r: point.radius + 15, class: 'here-ring', 'stroke-width': '2',
+  }));
+  group.append(svgEl('circle', { cx: point.x, cy: point.y, r: 6, class: 'here-dot', 'stroke-width': '1.4' }));
+
+  const pulse = svgEl('circle', {
+    cx: point.x, cy: point.y, r: point.radius + 12, class: 'here-pulse', 'stroke-width': '1.2',
+  });
+  pulse.append(svgEl('animate', {
+    attributeName: 'r', values: `${point.radius + 10};${point.radius + 30}`, dur: '2.2s', repeatCount: 'indefinite',
+  }));
+  pulse.append(svgEl('animate', {
+    attributeName: 'opacity', values: '.65;0', dur: '2.2s', repeatCount: 'indefinite',
+  }));
+  group.append(pulse);
+
+  const label = svgEl('text', {
+    x: point.x, y: point.y - point.radius - 26, 'text-anchor': 'middle',
+    class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
+  });
+  label.textContent = `YOU · ${here.name}`;
+  group.append(label);
+  map.append(group);
+}
+
 function drawHere() {
   const map = $('#starmap');
   map.querySelectorAll('.map-here').forEach((n) => n.remove());
 
+  if (mapMode() === 'network') {
+    drawNetworkHere(map);
+    return;
+  }
+
   const point = hereId && nodeAt.get(hereId);
-  $('#map-here').disabled = !point;
+  updateHereControl();
   if (!point) return;
 
   // Two rings: a steady one to read against the dot, and an expanding pulse.
@@ -6140,6 +6771,17 @@ function drawHere() {
 
   group.append(svgEl('circle', {
     cx: point.x, cy: point.y, r: ring, class: 'here-ring', 'stroke-width': 1.6 * zoom,
+  }));
+  group.append(svgEl('line', {
+    x1: point.x - ring - 5 * zoom, y1: point.y, x2: point.x + ring + 5 * zoom, y2: point.y,
+    class: 'here-tick', 'stroke-width': zoom,
+  }));
+  group.append(svgEl('line', {
+    x1: point.x, y1: point.y - ring - 5 * zoom, x2: point.x, y2: point.y + ring + 5 * zoom,
+    class: 'here-tick', 'stroke-width': zoom,
+  }));
+  group.append(svgEl('circle', {
+    cx: point.x, cy: point.y, r: 4 * zoom, class: 'here-dot', 'stroke-width': zoom,
   }));
 
   const pulse = svgEl('circle', {
@@ -6154,10 +6796,18 @@ function drawHere() {
   group.append(pulse);
 
   const label = svgEl('text', {
-    x: point.x, y: point.y - ring - 7 * zoom, 'text-anchor': 'middle',
+    x: point.x + ring + 16 * zoom, y: point.y - ring - 15 * zoom, 'text-anchor': 'start',
     class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
   });
+  // The place already owns the node's usual label. A short, offset callout
+  // makes the live marker legible without printing the same place name twice
+  // on top of itself.
   label.textContent = 'YOU ARE HERE';
+  group.append(svgEl('line', {
+    x1: point.x + ring * .62, y1: point.y - ring * .62,
+    x2: point.x + ring + 10 * zoom, y2: point.y - ring - 11 * zoom,
+    class: 'here-leader', 'stroke-width': zoom,
+  }));
   group.append(label);
 
   map.append(group);
@@ -6246,11 +6896,38 @@ function initMap() {
 
   $('#map-reset').addEventListener('click', () => animateViewTo(HOME_VIEW));
 
-  $('#map-here').addEventListener('click', () => centreOn(hereId));
+  $('#map-here').addEventListener('click', focusHere);
   $('#map-visited-only').addEventListener('change', () => drawMap());
   $('#map-shade').addEventListener('change', () => drawMap());
+  const mode = $('#map-mode');
+  const system = $('#map-system');
+  try {
+    mode.value = localStorage.getItem(MAP_MODE_KEY) || 'system';
+    system.value = localStorage.getItem(MAP_SYSTEM_KEY) || '';
+  } catch { /* private mode */ }
+  mode.addEventListener('change', () => {
+    syncMapModeControls();
+    try { localStorage.setItem(MAP_MODE_KEY, mode.value); } catch { /* fine */ }
+    drawMap();
+  });
+  system.addEventListener('change', () => {
+    try { localStorage.setItem(MAP_SYSTEM_KEY, system.value); } catch { /* fine */ }
+    drawMap();
+  });
   for (const button of $$('#map-service-filter button'))
     button.addEventListener('click', () => selectMapService(button.dataset.service));
+  for (const button of $$('#map-focus-filter button'))
+    button.addEventListener('click', () => selectMapFocus(button.dataset.focus));
+
+  const labelDensity = $('#map-label-density');
+  try { labelDensity.value = localStorage.getItem(MAP_LABEL_DENSITY_KEY) || 'auto'; } catch { /* private mode */ }
+  labelDensity.addEventListener('change', () => {
+    try { localStorage.setItem(MAP_LABEL_DENSITY_KEY, labelDensity.value); } catch { /* private mode */ }
+    drawMap();
+  });
+
+  $('#map-preset').addEventListener('change', (event) => applyMapPreset(event.target.value));
+  $('#map-save-preset').addEventListener('click', saveMapView);
   initCargoPanel();
   onInput('#map-search', () => { drawMap(); renderSearchResults(); });
 
@@ -6323,6 +7000,11 @@ function jumpToPlace(name) {
 
   $('#map-search').value = entry ? '' : wanted;
   $('#map-results').hidden = true;
+  if (entry?.system && SYSTEM_COLOURS[entry.system]) {
+    $('#map-mode').value = 'system';
+    $('#map-system').value = entry.system;
+    syncMapModeControls();
+  }
   showView('map');
   drawMap();
 
@@ -6437,6 +7119,18 @@ function renderSearchResults() {
 let shadeRows = { name: null, rows: null };
 let shadeScale = null;
 const nodeShade = new Map();
+let mapPriceFreshness = null;
+
+function priceFreshness(seenAt) {
+  const at = Date.parse(seenAt || '');
+  if (!Number.isFinite(at)) return null;
+  const hours = Math.max(0, (Date.now() - at) / 3600000);
+  return hours > 14 * 24
+    ? { state: 'stale', label: `UEX report ${Math.floor(hours / 24)}d old` }
+    : hours > 72
+      ? { state: 'aging', label: `UEX report ${Math.floor(hours / 24)}d old` }
+      : { state: 'fresh', label: `UEX report ${Math.max(1, Math.round(hours))}h old` };
+}
 
 const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
 
@@ -6479,6 +7173,7 @@ function terminalMatchesPlace(terminal, place) {
 function prepareShading(term, sites) {
   nodeShade.clear();
   shadeScale = null;
+  mapPriceFreshness = null;
 
   const shadeSelect = $('#map-shade');
   shadeSelect.hidden = !sites;
@@ -6488,6 +7183,8 @@ function prepareShading(term, sites) {
   const name = (buying ? term.slice(4) : term).trim();
   const entry = marketEntries.find((e) => e.name.toLowerCase() === name);
   if (!entry) return;
+
+  if (shadeSelect.value !== 'mine') mapPriceFreshness = priceFreshness(entry.uex?.seenAt);
 
   // Shading by your own receipts needs no fetch and works with UEX off: the
   // question it answers is "where did I do best with this", not "what is it
@@ -7039,7 +7736,10 @@ async function loadTrips() {
   renderTripCard();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
-  drawTripPath();
+  // A plan can itself be the active map layer; rebuild then so adding,
+  // reordering, or crossing off a stop never leaves a ghost destination.
+  if (mapFocusFilter === 'plan') drawMap();
+  else drawTripPath();
 }
 
 /** POST/DELETE against the trip API, then re-read: plans are small. */
@@ -7841,6 +8541,9 @@ function showMapTip(location) {
       `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`));
   }
 
+  if (highlightIds?.has(location.rawId) && mapPriceFreshness)
+    tip.append(el('span', `price-age ${mapPriceFreshness.state}`, mapPriceFreshness.label));
+
   if ($('#map-goods').checked) appendTipGoods(tip, commoditiesSoldAt(location));
 
   const services = servicesAt(location);
@@ -7877,6 +8580,27 @@ function showBodyTip(bodyName, system, sites) {
 
   if (visits > 0)
     tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
+
+  const plan = sites.filter((site) => planPlaceIds().has(site.rawId)).length;
+  const shopping = sites.filter((site) => mapShoppingIds.has(site.rawId)).length;
+  const stash = sites.filter((site) => mapStashIds.has(site.rawId)).length;
+  const work = [
+    plan && `${plan} plan stop${plan === 1 ? '' : 's'}`,
+    shopping && `${shopping} shopping place${shopping === 1 ? '' : 's'}`,
+    stash && `${stash} stash place${stash === 1 ? '' : 's'}`,
+  ].filter(Boolean);
+  if (work.length) tip.append(el('span', 'service-tip', work.join(' · ')));
+
+  const serviceCounts = new Map();
+  for (const site of sites)
+    for (const service of servicesAt(site))
+      serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
+  if (serviceCounts.size) {
+    const summary = [...serviceCounts.entries()]
+      .map(([service, count]) => `${SERVICE_META[service]?.icon || '•'} ${count} ${SERVICE_META[service]?.label || service}`)
+      .join(' · ');
+    tip.append(el('span', 'service-tip', summary));
+  }
 
   if ($('#map-goods').checked) {
     if (!bodyGoodsCache.has(tipKey)) {
@@ -8054,6 +8778,80 @@ function renderMapInfoServices(location) {
 /** Lore paragraphs already asked for, name to promise of text-or-null. */
 const loreCache = new Map();
 
+/**
+ * Systems have no shared coordinate frame in the installed game data. Showing
+ * only the jump graph makes that limitation legible instead of turning an
+ * arbitrary triangle into a false atlas of planetary distances.
+ */
+function drawJumpNetwork(map, locations) {
+  const systems = Object.keys(SYSTEM_COLOURS)
+    .filter((system) => locations.some((location) => location.system === system));
+  const home = { x: 0, y: 0, w: 1200, h: 760 };
+  const wasHome = view.w === HOME_VIEW.w && view.h === HOME_VIEW.h
+    && view.x === HOME_VIEW.x && view.y === HOME_VIEW.y;
+
+  HOME_VIEW = home;
+  if (wasHome) view = { ...home };
+  SYSTEM_LAYOUT = {};
+
+  const anchors = {
+    Stanton: { x: 255, y: 240 },
+    Pyro: { x: 945, y: 240 },
+    Nyx: { x: 600, y: 560 },
+  };
+
+  for (const system of systems) {
+    const point = anchors[system] || { x: 600, y: 380 };
+    SYSTEM_LAYOUT[system] = { ...point, radius: 46, colour: SYSTEM_COLOURS[system] };
+  }
+
+  for (const [fromName, toName] of JUMP_LANES) {
+    const from = SYSTEM_LAYOUT[fromName];
+    const to = SYSTEM_LAYOUT[toName];
+    if (!from || !to) continue;
+
+    map.append(svgEl('line', {
+      x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+      class: 'map-edge', 'stroke-width': '2.2', 'stroke-dasharray': '7 8', filter: 'url(#glow)',
+    }));
+  }
+
+  for (const [system, point] of Object.entries(SYSTEM_LAYOUT)) {
+    const group = svgEl('g', { class: 'map-network-system', tabindex: '0' });
+    group.append(svgEl('circle', {
+      cx: point.x, cy: point.y, r: point.radius, fill: point.colour,
+      'fill-opacity': '.13', stroke: point.colour, 'stroke-width': '2', filter: 'url(#glow)',
+    }));
+    group.append(svgEl('circle', { cx: point.x, cy: point.y, r: 9, fill: point.colour, filter: 'url(#glow)' }));
+    const label = svgEl('text', {
+      x: point.x, y: point.y + 72, 'text-anchor': 'middle', class: 'map-sys-label',
+      style: `font-size:${labelSize(1.6)}px`,
+    });
+    label.textContent = system;
+    group.append(label);
+    group.addEventListener('click', () => {
+      $('#map-mode').value = 'system';
+      $('#map-system').value = system;
+      syncMapModeControls();
+      drawMap();
+    });
+    map.append(group);
+  }
+
+  const title = svgEl('text', {
+    x: home.w / 2, y: 92, 'text-anchor': 'middle', class: 'map-label',
+    style: `font-size:${labelSize(1.35)}px;fill:#7796b0;letter-spacing:.18em`,
+  });
+  title.textContent = 'JUMP NETWORK · SCHEMATIC · NOT TO SCALE';
+  map.append(title);
+
+  $('#map-count').textContent = `${systems.length} systems · jump network`;
+  drawNetworkHere(map);
+  updateHereControl();
+  drawLegend([]);
+  applyView();
+}
+
 function drawMap() {
   const map = $('#starmap');
   map.textContent = '';
@@ -8065,6 +8863,7 @@ function drawMap() {
 
   const visitedOnly = $('#map-visited-only')?.checked;
   const term = ($('#map-search')?.value || '').trim().toLowerCase();
+  const focusIds = mapFocusIds();
   const serviceIds = mapServiceFilter
     ? new Set(atlas.filter((location) => servicesAt(location).includes(mapServiceFilter))
       .map((location) => location.rawId))
@@ -8101,8 +8900,18 @@ function drawMap() {
   prepareShading(term, sites);
   syncCargoPanel(term, sites);
 
-  const locations = atlas.filter((l) =>
-    (!serviceIds || serviceIds.has(l.rawId)) && (term || !visitedOnly || l.visits > 0));
+  const allLocations = atlas.filter((l) =>
+    // Service and visit filters answer a different question from position. The
+    // player never vanishes merely because their current place lacks the
+    // selected service or has not been recorded as a visit yet.
+    l.rawId === hereId ||
+    (!focusIds || focusIds.has(l.rawId)) &&
+    (!serviceIds || serviceIds.has(l.rawId)) &&
+    (term || !visitedOnly || l.visits > 0));
+  const selectedSystem = mapSystem();
+  const locations = mapMode() === 'system' && selectedSystem
+    ? allLocations.filter((location) => location.system === selectedSystem)
+    : allLocations;
 
   const count = $('#map-count');
   if (count) {
@@ -8121,8 +8930,14 @@ function drawMap() {
         : `${what} — sells at ${highlightIds.size} places the map can name`;
     }
     else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else if (mapFocusFilter && focusIds?.size === 0)
+      count.textContent = `no ${mapFocusFilter} locations can be placed yet`;
+    else if (mapFocusFilter)
+      count.textContent = `${locations.length} ${mapFocusFilter} location${locations.length === 1 ? '' : 's'} shown`;
     else if (mapServiceFilter)
       count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
+    else if (mapMode() === 'system')
+      count.textContent = `${locations.length} shown in ${selectedSystem} · ${seen} of ${atlas.length} visited`;
     else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
   }
 
@@ -8136,6 +8951,11 @@ function drawMap() {
   glow.append(merge);
   defs.append(glow);
   map.append(defs);
+
+  if (mapMode() === 'network') {
+    drawJumpNetwork(map, allLocations);
+    return;
+  }
 
   // A sparse starfield behind everything. Deterministic - a hash of the index,
   // not Math.random - so redraws do not make the sky shimmer.
@@ -8323,9 +9143,10 @@ function drawMap() {
       const bodyLabel = svgEl('text', {
         x: bodyLabelX, y: bodyLabelY,
         'text-anchor': 'middle', class: 'map-label',
-        style: `fill:#7796b0;font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
+        style: `fill:${!place.positioned && mapMode() === 'system' ? '#ffab3d' : '#7796b0'};font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
       });
-      bodyLabel.textContent = bodyName === '—' ? '' : bodyName;
+      bodyLabel.textContent = bodyName === '—' ? ''
+        : `${bodyName}${!place.positioned && mapMode() === 'system' ? ' · position unavailable' : ''}`;
       map.append(bodyLabel);
 
       if (bodyLabel.textContent) {
@@ -8454,8 +9275,9 @@ const KIND_SHAPES = {
   // A ring - the one shape that reads as "you dock inside it".
   Station: [{ tag: 'path', attrs: { d: 'M0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z M0 -.42 A .42 .42 0 1 0 0 .42 A .42 .42 0 1 0 0 -.42 Z' }, evenodd: 1 }],
 
-  // A plain disc: the commonest stop, and the quietest mark.
-  RestStop: [{ tag: 'circle', attrs: { cx: 0, cy: 0, r: .92 } }],
+  // A horizontal berth: it stays distinct from an asteroid's uneven rock
+  // silhouette even when a map icon is only a handful of pixels across.
+  RestStop: [{ tag: 'rect', attrs: { x: -1, y: -.62, width: 2, height: 1.24, rx: .34 } }],
 
   // A dome on the ground.
   Outpost: [{ tag: 'path', attrs: { d: 'M-1 .55 A 1 1 0 0 1 1 .55 L1 .8 L-1 .8 Z' } }],
@@ -8464,8 +9286,9 @@ const KIND_SHAPES = {
   // to mush at map size, which is the size it is always drawn at.
   Mine: [{ tag: 'polygon', attrs: { points: '0,-1 1,.85 -1,.85' } }],
 
-  // An angular rock.
-  Asteroid: [{ tag: 'polygon', attrs: { points: '-.55,-.85 .55,-.85 1,0 .55,.85 -.55,.85 -1,0' } }],
+  // An uneven rock: the lopsided outline is intentional, otherwise it reads
+  // too much like a rest-stop berth at a glance.
+  Asteroid: [{ tag: 'polygon', attrs: { points: '-.72,-.92 .5,-.72 1,.02 .42,.9 -.74,.62 -1,-.18' } }],
 
   // A cross: legible at any size, and nothing else on the map is one.
   Research: [{ tag: 'path', attrs: { d: 'M-.32 -1 L.32 -1 L.32 -.32 L1 -.32 L1 .32 L.32 .32 L.32 1 L-.32 1 L-.32 .32 L-1 .32 L-1 -.32 L-.32 -.32 Z' } }],
@@ -8621,6 +9444,15 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
       cx: x, cy: y, r: radius + 5, fill: 'none',
       stroke: shade?.colour ?? '#4fd48a', 'stroke-width': '1.6', class: 'hl-ring', filter: 'url(#glow)',
     }));
+
+    // The report age belongs to the commodity source, not the place itself.
+    // Keep it on a commodity result only, so a stale UEX quote cannot make a
+    // reliable visit or service fact look stale as well.
+    if (mapPriceFreshness && mapPriceFreshness.state !== 'fresh') {
+      group.append(svgEl('circle', {
+        cx: x, cy: y, r: radius + 8, class: `map-price-age ${mapPriceFreshness.state}`,
+      }));
+    }
   }
 
   // Somewhere never visited is drawn as an outline, so the places that carry
@@ -8635,6 +9467,9 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
   // A price shade means the colour IS the price, so the mark keeps its shape
   // and takes the graded colour: a mine is still a mine at 1,872 aUEC.
   group.append(kindMark(location.kind, x, y, radius, dotColour, been || !!shade));
+
+  if (showServiceBadges(location, highlighted))
+    drawServiceBadges(group, x, y, radius, servicesAt(location));
 
   // A styled tooltip that appears instantly - the native <title> takes a
   // second to show and cannot be read against the game-HUD styling.
@@ -8722,6 +9557,8 @@ function boxesCollide(a, b) {
  * to put it. Past the detail threshold every label that fits is drawn.
  */
 const labelBudget = () => {
+  if (mapLabelDensity() === 'all') return Infinity;
+  if (mapLabelDensity() === 'quiet') return isDetailed() ? 28 : 8;
   if (isDetailed()) return Infinity;
 
   const zoom = HOME_VIEW.w / view.w;
@@ -8791,6 +9628,32 @@ function drawLegend(locations) {
   const legend = $('#map-legend');
   legend.textContent = '';
 
+  const appendPriceFreshness = () => {
+    if (!mapPriceFreshness) return;
+    const item = el('div', `item price-age ${mapPriceFreshness.state}`);
+    const swatch = el('span', 'swatch');
+    swatch.style.background = mapPriceFreshness.state === 'stale' ? '#e85d75'
+      : mapPriceFreshness.state === 'aging' ? '#ffab3d' : '#4fd48a';
+    item.append(swatch, el('span', null, mapPriceFreshness.label));
+    legend.append(item);
+  };
+
+  const appendServiceLegend = () => {
+    const shown = new Set();
+    for (const location of locations) {
+      const highlighted = highlightIds?.has(location.rawId) ?? false;
+      if (!showServiceBadges(location, highlighted)) continue;
+      for (const service of servicesAt(location)) shown.add(service);
+    }
+
+    for (const service of shown) {
+      const item = el('div', 'item');
+      item.append(el('span', 'service-tip', SERVICE_META[service]?.icon || '•'));
+      item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
+      legend.append(item);
+    }
+  };
+
   // Shaded commodity mode swaps the kind legend for the price gradient: in
   // that mode colour means price, so the legend must say so.
   if (shadeScale) {
@@ -8813,6 +9676,8 @@ function drawLegend(locations) {
     plain.append(swatch);
     plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
     legend.append(plain);
+    appendPriceFreshness();
+    appendServiceLegend();
     return;
   }
 
@@ -8831,6 +9696,9 @@ function drawLegend(locations) {
     item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
     legend.append(item);
   }
+
+  appendPriceFreshness();
+  appendServiceLegend();
 }
 
 /* ---------- filters ---------- */

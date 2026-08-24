@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="app.css?v=0.7.16">
 </head>
 <body>
 
@@ -151,6 +151,10 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <div class="now-card-visibility" id="now-card-visibility" hidden>
+      <span class="muted">Hidden cards</span>
+      <div id="now-hidden-card-list"></div>
+    </div>
     <div class="now-grid">
 
       <article class="card hero" data-card="location">
@@ -203,7 +207,10 @@
 
       <article class="card" data-card="ship">
         <div class="card-label">Ship</div>
-        <div class="value" id="now-ship">—</div>
+        <div class="now-ship-summary">
+          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
+          <div class="value" id="now-ship">—</div>
+        </div>
       </article>
 
       <article class="card" data-card="session">
@@ -290,6 +297,11 @@
         <input type="checkbox" id="map-visited-only">
         <span>Visited only</span>
       </label>
+      <select id="map-mode" class="select" title="Choose an accurate system view or a schematic jump network">
+        <option value="system">System positions</option>
+        <option value="network">Jump network</option>
+      </select>
+      <select id="map-system" class="select" title="System to draw with relative body positions"></select>
       <label class="toggle" title="List the commodities sold at a place on its hover tip and detail card">
         <input type="checkbox" id="map-goods">
         <span>Goods on hover</span>
@@ -299,6 +311,12 @@
         <button type="button" data-service="shop" title="UEX-listed counters and shops">▦ Shops</button>
         <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
         <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
+      </div>
+      <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
+        <button type="button" class="active" data-focus="" title="Show every place">All</button>
+        <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
+        <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
+        <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
       </div>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
@@ -315,13 +333,30 @@
       </div>
       <select id="map-window" class="select period" data-all="All time" hidden
               title="How far back your own receipts count"></select>
+      <select id="map-label-density" class="select" title="How many place labels to show as you zoom">
+        <option value="auto">Labels: auto</option>
+        <option value="quiet">Labels: quiet</option>
+        <option value="all">Labels: all</option>
+      </select>
+      <select id="map-preset" class="select" title="Apply or restore a saved map view">
+        <option value="">Map preset</option>
+        <option value="plan">Current plan</option>
+        <option value="shopping">Shopping run</option>
+        <option value="services">Service scan</option>
+        <option value="visited">My places</option>
+        <option value="saved">Saved view</option>
+      </select>
+      <button class="ghost" id="map-save-preset" title="Save the current map controls as Saved view">Save view</button>
       <span class="spacer"></span>
       <span class="muted" id="map-count"></span>
       <button class="ghost" id="map-plan" title="The flight plan: where to go, in order">Plan</button>
       <button class="ghost" id="map-follow" title="Keep the map centred on you as you move">Follow</button>
-      <button class="ghost" id="map-here">Centre on me</button>
+      <button class="ghost map-player" id="map-here" title="Show your current location on the map">
+        <span aria-hidden="true">⌖</span> <span id="map-here-label">Your location</span>
+      </button>
       <button class="ghost" id="map-reset">Reset view</button>
     </div>
+    <p class="muted map-mode-note" id="map-mode-note"></p>
 
     <div class="map-wrap">
       <svg id="starmap" preserveAspectRatio="xMidYMid meet"></svg>
@@ -365,6 +400,11 @@
           <option value="reliable">Reliable first</option>
           <option value="profit">Highest estimated profit</option>
         </select>
+        <select id="routes-evidence" class="select" title="How much reported availability a route needs">
+          <option value="reported">Reported capacity</option>
+          <option value="full">Reported full load</option>
+          <option value="any">Include unknown capacity</option>
+        </select>
         <label class="toggle" title="Only routes starting where you are now">
           <input type="checkbox" id="routes-here">
           <span>From here</span>
@@ -376,11 +416,12 @@
       </div>
     </div>
     <p class="muted caption">
-      Estimated UEX hauls, sized to a real hold and wallet. Reliable first
-      favours recent reports and enough reported stock and demand; highest
-      estimated profit remains available when you want the optimistic view.
-      A price report is not live inventory — each row shows what limits it and
-      how old its two quotes are.
+      Estimated UEX hauls, sized to a real hold and wallet. “Reported capacity”
+      requires a stock and demand report on both ends; “full load” also requires
+      those reports to cover your target SCU. A price report is not live
+      inventory, terminal access, or travel time — each row shows the evidence
+      behind its estimate and the age of its two quotes.
+      <span id="routes-origin-note"></span>
     </p>
     <div class="table-wrap">
       <table id="routes-table">
@@ -389,7 +430,7 @@
             <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
             <th>Sell at</th><th class="num">Sell</th>
             <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Profit</th><th>Report</th><th>Capped by</th><th></th>
+            <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -600,6 +641,7 @@
         <select id="sessions-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
+    <p class="muted caption">Select a session to open its route, activity and recorded economy debrief.</p>
     <div class="summary-strip" id="lib-summary"></div>
     <div class="table-wrap">
       <table id="sessions-table">
@@ -1800,6 +1842,6 @@
       </div>
     </div>
   </div>
-<script src="app.js"></script>
+<script src="app.js?v=0.7.16"></script>
 </body>
 </html>
