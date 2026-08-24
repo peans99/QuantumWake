@@ -90,6 +90,6 @@ public class MapModeTests
         Assert.True(page.Truth("__focused"));
         Assert.Equal("system", page.Text("__dom.node('#map-mode').value"));
         Assert.Equal("Pyro", page.Text("__dom.node('#map-system').value"));
-        Assert.Contains("YOU · Gaslight", page.NodeText("#starmap"));
+        Assert.Contains("YOU ARE HERE", page.NodeText("#starmap"));
     }
 }

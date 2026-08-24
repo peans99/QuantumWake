@@ -6212,10 +6212,18 @@ function drawHere() {
   group.append(pulse);
 
   const label = svgEl('text', {
-    x: point.x, y: point.y - ring - 7 * zoom, 'text-anchor': 'middle',
+    x: point.x + ring + 16 * zoom, y: point.y - ring - 15 * zoom, 'text-anchor': 'start',
     class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
   });
-  label.textContent = `YOU · ${currentMapLocation()?.name || 'HERE'}`;
+  // The place already owns the node's usual label. A short, offset callout
+  // makes the live marker legible without printing the same place name twice
+  // on top of itself.
+  label.textContent = 'YOU ARE HERE';
+  group.append(svgEl('line', {
+    x1: point.x + ring * .62, y1: point.y - ring * .62,
+    x2: point.x + ring + 10 * zoom, y2: point.y - ring - 11 * zoom,
+    class: 'here-leader', 'stroke-width': zoom,
+  }));
   group.append(label);
 
   map.append(group);
