@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![468 tests](https://img.shields.io/badge/tests-468%20passing-4fd48a)
+![473 tests](https://img.shields.io/badge/tests-473%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -263,7 +263,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 428 tests
+dotnet test Quantumwake.slnx      # 473 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -353,7 +353,14 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.5
+### 0.7.6
+
+- **The Market panel stopped being expensive to open.** Its price strip was
+  asking UEX about eight counters every time a row was expanded, which is the
+  ordinary way to read that table - comparing twenty commodities would have cost
+  a volunteer-run API a hundred and sixty requests to draw twenty thumbnails. It
+  asks about one counter now, says which counter the line came from, and reuses
+  the wider sample when the commodity's own page has already fetched one.
 
 - **Trade routes that admit uncertainty.** The planner now ranks recent,
   capacity-backed reports first, can limit itself to fresh quotes, and shows

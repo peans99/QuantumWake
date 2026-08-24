@@ -1644,7 +1644,12 @@ public static class ServerHost
             try
             {
                 var count = await uex.EnableAsync(httpFactory.CreateClient("community"));
-                return Results.Ok(new { enabled = true, prices = count });
+
+                // Not "enabled = true". A fetch that finished after somebody
+                // pressed Disable stands down and applies nothing, and saying
+                // otherwise would leave the page showing an integration that is
+                // off as though it were on.
+                return Results.Ok(new { enabled = uex.IsEnabled, prices = count });
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidDataException or JsonException)
             {
@@ -1662,15 +1667,22 @@ public static class ServerHost
         // happens on the click that opens the page and is then cached - never
         // as part of a page load, and never at all while UEX is off.
         app.MapGet("/api/uex/history", async (
-            UexData uex, IHttpClientFactory httpFactory, string commodity, CancellationToken token) =>
+            UexData uex, IHttpClientFactory httpFactory, string commodity,
+            int? perSide, CancellationToken token) =>
         {
             if (!uex.IsEnabled)
                 return Results.Ok(new UexHistory(commodity, 0, 0, []));
 
+            // Each counter is a separate request to UEX, so the caller says how
+            // many it needs and the number is clamped here rather than trusted.
+            // The Market panel's strip asks for one per side; the commodity page,
+            // which is a deliberate drill-down, asks for the default four.
+            var sample = Math.Clamp(perSide ?? 4, 1, 8);
+
             try
             {
-                return Results.Ok(
-                    await uex.HistoryAsync(commodity, httpFactory.CreateClient("community"), token: token));
+                return Results.Ok(await uex.HistoryAsync(
+                    commodity, httpFactory.CreateClient("community"), sample, token));
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
             {
