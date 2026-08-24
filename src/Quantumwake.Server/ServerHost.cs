@@ -96,6 +96,7 @@ public static class ServerHost
         builder.Services.AddSingleton<JobStore>();
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
+        builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
 
@@ -1334,6 +1335,48 @@ public static class ServerHost
         app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists) =>
             checklists.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
+        // ---- sharing: a file of the pilot's own, for a pilot they fly with ----
+
+        // POST, not GET, and that is the whole security story for this feature.
+        //
+        // LanGuard whitelists by method, so a GET here would hand every receipt,
+        // blueprint, job and the pilot's handle to anyone on the same wifi the
+        // moment -Lan is on - in one request, in a form built for keeping. The
+        // existing reads let somebody look at a page; this one lets them take
+        // the lot. As a POST it is refused off-machine by the rule that already
+        // exists, with no deny-list for anyone to remember to update.
+        app.MapPost("/api/export", (ExportRequest body, ExportBuilder exports) =>
+        {
+            var choice = body.Choice();
+
+            if (choice.AskedForNothing)
+                return Results.BadRequest(new { message = "Choose at least one thing to export." });
+
+            var document = exports.Build(choice, Producer(), DateTimeOffset.UtcNow);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(document, ExportDocument.Json);
+
+            return Results.File(bytes, "application/json", ExportFileName(document));
+        });
+
+        // Counts and the window, never rows: nothing leaves without a click, and
+        // a click is worth more when it follows seeing what would go.
+        app.MapGet("/api/export/preview", (ExportBuilder exports,
+            bool? receipts, bool? blueprints, bool? authored, int? days) =>
+        {
+            var choice = new ExportChoice(
+                receipts == true, blueprints == true, authored == true,
+                days ?? ExportBuilder.DefaultDays);
+
+            var counts = exports.Preview(choice);
+
+            return Results.Ok(new
+            {
+                counts.Receipts, counts.Blueprints, counts.Jobs, counts.Checklists, counts.Trips,
+                days = choice.Days,
+                defaultDays = ExportBuilder.DefaultDays,
+            });
+        });
+
         // ---- flight plans: where to go next, in order ----
 
         // ---- the wipe: where the player's countable history begins ----
@@ -1932,6 +1975,42 @@ static int Holes(IEnumerable<ShipSlot> slots)
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
+    /// <summary>What this build stamps on a file it writes.</summary>
+    /// <remarks>
+    /// Reflection rather than a constant, for the same reason /api/version uses
+    /// it: a number written by hand is one that can disagree with the assembly
+    /// that wrote the file, and the file outlives the build.
+    /// </remarks>
+    static ExportProducer Producer()
+    {
+        var assembly = typeof(ServerHost).Assembly;
+
+        return new ExportProducer(
+            "Quantum Wake",
+            assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+            assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion);
+    }
+
+    /// <summary>
+    /// What the browser saves it as: the handle, the date, and nothing a file
+    /// system will argue about.
+    /// </summary>
+    static string ExportFileName(ExportFile document)
+    {
+        var who = new string((document.Handle ?? "export")
+            .ToLowerInvariant()
+            .Where(c => char.IsAsciiLetterOrDigit(c) || c == '-')
+            .ToArray());
+
+        if (who.Length == 0)
+            who = "export";
+
+        return $"quantumwake-{who}-{document.ExportedAt:yyyyMMdd-HHmm}.json";
+    }
+
     /// <summary>
     /// The sales a UEX push draws from: named commodity sells inside UEX's
     /// 30-day submission window, with the unit price the kiosk actually showed.
@@ -2190,6 +2269,26 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+
+/// <summary>
+/// Body of POST /api/export: what to share, and how far back.
+/// </summary>
+/// <remarks>
+/// Every class is false unless asked for, even though the page's boxes start
+/// ticked. The failure direction of a stale client or a typo has to be sharing
+/// nothing rather than sharing everything.
+/// </remarks>
+public sealed record ExportRequest(
+    bool Receipts = false,
+    bool Blueprints = false,
+    bool Authored = false,
+    int? Days = null,
+    bool Handle = true,
+    string? Note = null)
+{
+    public ExportChoice Choice() =>
+        new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note);
+}
 
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);

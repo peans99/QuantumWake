@@ -119,6 +119,17 @@ class El {
   releasePointerCapture() {}
   scrollIntoView() {}
   focus() {}
+
+  /* A synthetic click, as the download path does to an anchor it never adds to
+     the document. Recorded so a test can assert what would have been saved -
+     there is no downloads folder here, and the assertion worth making is about
+     the name and the href, not about the file system. */
+  click() {
+    if (this.tagName === 'a' && this.download) {
+      globalThis.__downloads.push({ name: this.download, href: this.href });
+    }
+    this.fire('click');
+  }
   closest() { return null; }
   matches() { return false; }
 
@@ -189,6 +200,8 @@ globalThis.__dom = {
     globalThis.__fetch.routes = {};
     globalThis.__fetch.calls = [];
     globalThis.__fetch.unreachable = [];
+    globalThis.__fetch.headers = {};
+    globalThis.__downloads = [];
   },
 };
 
@@ -238,7 +251,7 @@ for (const [selector, card] of [
 ]) node(selector).dataset.card = card;
 
 /* Network: a routing table the test fills in, and a record of what was asked. */
-globalThis.__fetch = { routes: {}, calls: [], unreachable: [] };
+globalThis.__fetch = { routes: {}, calls: [], unreachable: [], headers: {} };
 
 globalThis.fetch = (url, options) => {
   globalThis.__fetch.calls.push({ url, method: (options && options.method) || 'GET', body: options && options.body });
@@ -252,11 +265,18 @@ globalThis.fetch = (url, options) => {
     ? globalThis.__fetch.routes[url]
     : null;
 
+  /* Headers a test asked for, keyed lowercase as a browser does. Only the ones
+     a route was given: a response nobody described carries none. */
+  const headers = globalThis.__fetch.headers[url] || {};
+  const serialized = JSON.stringify(body);
+
   return Promise.resolve({
     ok: body !== null,
     status: body !== null ? 200 : 404,
+    headers: { get: (name) => headers[String(name).toLowerCase()] ?? null },
     json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
+    text: () => Promise.resolve(serialized),
+    blob: () => Promise.resolve(new Blob([serialized], { type: 'application/json' })),
   });
 };
 
@@ -265,6 +285,41 @@ globalThis.self = globalThis;
 globalThis.location = { search: '', hash: '', href: 'http://localhost/', reload() {} };
 globalThis.history = { replaceState() {} };
 globalThis.navigator = { userAgent: 'quantumwake-tests', clipboard: { writeText: () => Promise.resolve() } };
+
+/* Saving a file: enough of Blob and URL for the download path to run.
+   Blob keeps its own text so a test can read what would have been written. */
+globalThis.__downloads = [];
+
+globalThis.Blob = class {
+  constructor(parts = [], options = {}) {
+    this.parts = parts;
+    this.type = options.type || '';
+    this.text = parts.map((p) => String(p)).join('');
+    this.size = this.text.length;
+  }
+};
+
+globalThis.URL = {
+  objects: new Map(),
+  next: 0,
+
+  createObjectURL(blob) {
+    const url = `blob:quantumwake/${globalThis.URL.next++}`;
+    globalThis.URL.objects.set(url, blob);
+    return url;
+  },
+
+  revokeObjectURL(url) { globalThis.URL.objects.delete(url); },
+};
+
+/* Reading a file the user picked. onload is called synchronously because the
+   engine settles awaits where they stand anyway - see the note at the top. */
+globalThis.FileReader = class {
+  readAsText(file) {
+    this.result = typeof file === 'string' ? file : (file && file.text) || '';
+    if (this.onload) this.onload({ target: this });
+  }
+};
 
 globalThis.localStorage = {
   store: {},

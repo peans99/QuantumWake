@@ -1526,6 +1526,59 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>Share what you have</h3>
+        <button class="ghost" id="export-save">Save a file</button>
+      </div>
+      <p class="muted">
+        A file of your own for a pilot you fly with &mdash; what your logs
+        recorded and what you typed. Market prices from UEX are not in it: those
+        are a third party's, not yours to pass on.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="export-receipts" checked>
+        <span>
+          What you paid and were paid
+          <em class="muted">Your own commodity trades, at the terminal and time they happened.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-blueprints" checked>
+        <span>
+          Blueprints you hold
+          <em class="muted">The name and date the game announced &mdash; never the recipe.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-authored" checked>
+        <span>
+          Jobs, checklists and flight plans
+          <em class="muted">The things you typed rather than the things your logs saw.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-handle" checked>
+        <span>
+          Put your handle on it
+          <em class="muted">So whoever opens it knows whose it is.</em>
+        </span>
+      </label>
+      <div class="export-row">
+        <label class="muted" for="export-days">Trades from the last</label>
+        <select class="select" id="export-days">
+          <option value="1">day</option>
+          <option value="3">3 days</option>
+          <option value="7" selected>7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="0">all time</option>
+        </select>
+      </div>
+      <span class="muted" id="export-preview"></span>
+      <span class="muted" id="export-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Log cache</h3>
         <button class="ghost" id="settings-rescan">Re-read every log</button>
       </div>
