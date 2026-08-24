@@ -1191,7 +1191,8 @@ public static class ServerHost
 
         // ---- jobs: the player's own plans, checked against what they hold ----
 
-        app.MapGet("/api/jobs", (JobStore jobs, LogLibrary lib, UexData uex) =>
+        app.MapGet("/api/jobs", (JobStore jobs, LogLibrary lib, UexData uex,
+            ImportStore imports, string? imported) =>
         {
             var stats = lib.Stats();
 
@@ -1216,7 +1217,7 @@ public static class ServerHost
                 .Select(i => i.Name)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            return jobs.All().Select(job =>
+            object Project(Job job, ImportBatch? from)
             {
                 var lines = job.Items.Select(item =>
                 {
@@ -1262,7 +1263,8 @@ public static class ServerHost
 
                 return new
                 {
-                    job.Id,
+                    // Never the id the file carried - see SharedId.
+                    Id = from is null ? job.Id : SharedId(from, job.Id),
                     job.Title,
                     job.Destination,
                     job.DestinationId,
@@ -1270,12 +1272,24 @@ public static class ServerHost
                     job.Source,
                     job.CreatedAt,
                     job.Done,
-                    job.Pinned,
+
+                    // Pinning is this machine's business whatever a file says.
+                    Pinned = from is null && job.Pinned,
+                    imported = from is null ? null : Marker(from),
                     items = lines,
                     haveCount = lines.Count(l => l.have),
                     totalCount = lines.Count
                 };
-            });
+            }
+
+            // The reader's own first, then whatever they asked to see beside it.
+            // The stash and loadout joins apply to imported rows too, and that is
+            // the point: "Bob needs four Agricium" is worth much more next to
+            // "and you have some at Port Tressler".
+            return jobs.All().Select(job => Project(job, null))
+                .Concat(Shared(imports, imported)
+                    .SelectMany(batch => (batch.Authored?.Jobs ?? [])
+                        .Select(job => Project(job, batch))));
         });
 
         app.MapPost("/api/jobs", (JobStore jobs, JobRequest body) =>
@@ -1313,7 +1327,11 @@ public static class ServerHost
 
         // ---- checklists: authored preparation, never guessed from the log ----
 
-        app.MapGet("/api/checklists", (ChecklistStore checklists) => checklists.All());
+        app.MapGet("/api/checklists", (ChecklistStore checklists, ImportStore imports, string? imported) =>
+            checklists.All().Select(list => Draw(list, null))
+                .Concat(Shared(imports, imported)
+                    .SelectMany(batch => (batch.Authored?.Checklists ?? [])
+                        .Select(list => Draw(list, batch)))));
 
         app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
             Results.Ok(checklists.Add(body.Title)));
@@ -1441,7 +1459,11 @@ public static class ServerHost
             return Results.Ok(Describe(wipe, lib));
         });
 
-        app.MapGet("/api/trips", (TripStore trips) => trips.All());
+        app.MapGet("/api/trips", (TripStore trips, ImportStore imports, string? imported) =>
+            trips.All().Select(trip => Draw(trip, null))
+                .Concat(Shared(imports, imported)
+                    .SelectMany(batch => (batch.Authored?.Trips ?? [])
+                        .Select(trip => Draw(trip, batch)))));
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
             Results.Ok(trips.Add(body.Title, body.Stops)));
@@ -2024,6 +2046,83 @@ static int Holes(IEnumerable<ShipSlot> slots)
 
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
+
+    /// <summary>
+    /// The shared files a page should draw beside the reader's own work.
+    /// </summary>
+    /// <remarks>
+    /// None unless asked for. Importing a friend's forty jobs and finding your
+    /// own page now has forty-three cards on it is an ambush by a feature
+    /// somebody used once, so this answers nothing until a page says otherwise.
+    /// </remarks>
+    static IEnumerable<ImportBatch> Shared(ImportStore imports, string? imported)
+    {
+        if (string.IsNullOrWhiteSpace(imported) || imported == "none")
+            return [];
+
+        var batches = imports.All().Where(b => b.Readable && !b.Hidden);
+
+        return imported == "all" ? batches : batches.Where(b => b.Id == imported);
+    }
+
+    /// <summary>A checklist as a page sees it, with whose it is when it is not the reader's.</summary>
+    static object Draw(Checklist list, ImportBatch? from) => new
+    {
+        Id = from is null ? list.Id : SharedId(from, list.Id),
+        list.Title,
+        list.CreatedAt,
+        Pinned = from is null && list.Pinned,
+        Items = from is null
+            ? list.Items
+            : [.. list.Items.Select(i => i with { Id = SharedId(from, i.Id) })],
+        imported = from is null ? null : Marker(from),
+    };
+
+    /// <summary>A flight plan as a page sees it.</summary>
+    static object Draw(Trip trip, ImportBatch? from) => new
+    {
+        Id = from is null ? trip.Id : SharedId(from, trip.Id),
+        trip.Title,
+        trip.CreatedAt,
+        Tracked = from is null && trip.Tracked,
+        Stops = from is null
+            ? trip.Stops
+            : [.. trip.Stops.Select(s => s with { Id = SharedId(from, s.Id) })],
+        trip.Next,
+        trip.Done,
+        imported = from is null ? null : Marker(from),
+    };
+
+    /// <summary>Whose a row is, for a page that has to say so.</summary>
+    /// <remarks>
+    /// An object rather than a flag, because the card needs the handle to name
+    /// them and the batch id to offer hiding the file inline. A boolean would
+    /// have to be widened later across every endpoint at once.
+    /// </remarks>
+    static object Marker(ImportBatch batch) => new
+    {
+        batchId = batch.Id,
+        batch.Handle,
+        batch.ImportedAt,
+        batch.Note,
+    };
+
+    /// <summary>
+    /// An imported row's id on the wire, which is never the id the file carried.
+    /// </summary>
+    /// <remarks>
+    /// Job, checklist and trip ids are eight hex characters minted locally with
+    /// no namespace, so a file exported from this very machine and read back
+    /// carries ids identical to the reader's own by construction - not by bad
+    /// luck. The page builds /api/jobs/{id}/pin and DELETE /api/jobs/{id}
+    /// straight out of them, so a collision would mean clicking Delete on
+    /// somebody else's card deleting your own job.
+    ///
+    /// Prefixed, those routes simply miss and answer 404. Safe because the id
+    /// cannot address anything, rather than safe because every future caller
+    /// remembers to check.
+    /// </remarks>
+    static string SharedId(ImportBatch batch, string id) => $"imp:{batch.Id}:{id}";
 
     /// <summary>
     /// A batch without its contents: what the imports list draws.

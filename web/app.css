@@ -2590,6 +2590,11 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
 .wipe-row .search { font-size: 12px; }
+/* A row that came out of somebody else's file. Readable exactly like the
+   reader's own - the point is to compare them - but never mistakable for it. */
+.job-card.from-a-file, .checklist-card.from-a-file { border-left: 3px solid var(--amber, #d8a03d); }
+.job-kind.from-a-file { background: rgba(216, 160, 61, 0.16); color: var(--amber, #d8a03d); }
+
 /* Shared files: a card per import, shaped like the job cards it sits near so a
    file somebody else wrote does not get a visual language of its own. */
 .import-card {
