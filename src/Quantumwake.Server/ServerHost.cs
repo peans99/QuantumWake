@@ -1937,14 +1937,10 @@ static int Holes(IEnumerable<ShipSlot> slots)
     /// 30-day submission window, with the unit price the kiosk actually showed.
     /// </summary>
     static IEnumerable<(DateTimeOffset At, string Commodity, string Place, decimal UnitPrice, int Scu)>
-        RecentSales(LogLibrary lib)
-    {
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
-
-        return lib.Trades(31)
-            .Where(t => t.IsSell && t.Commodity is not null && t.At >= cutoff && t.Scu > 0)
+        RecentSales(LogLibrary lib) =>
+        lib.TradesWithin(30)
+            .Where(t => t.IsSell && t.Commodity is not null && t.Scu > 0)
             .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
-    }
 
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
     /// <remarks>
