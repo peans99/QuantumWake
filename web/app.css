@@ -1919,6 +1919,24 @@ td.with-track .track:focus-visible { opacity: 1; }
 .price-age.old { color: var(--amber); }
 .price-age.stale { color: var(--red); }
 
+/* Routes keep the price's uncertainty beside the profit: a number reported at
+   two counters at different times is useful context, not a verdict on stock. */
+.route-report { min-width: 190px; }
+.route-freshness { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.route-freshness.fresh { color: var(--green); }
+.route-freshness.aging { color: var(--amber); }
+.route-freshness.stale { color: var(--red); }
+.route-age, .route-capacity, .route-fallback { margin-top: 3px; font-size: 11px; line-height: 1.2; }
+.route-fallback { color: var(--cyan); }
+
+/* On a laptop the route's evidence is more useful than repeating two derived
+   amounts: margin and outlay can be recovered from buy, sell and profit. */
+@media (max-width: 1450px) {
+  #routes-table th:nth-child(6), #routes-table td:nth-child(6),
+  #routes-table th:nth-child(8), #routes-table td:nth-child(8) { display: none; }
+  .route-report { min-width: 165px; }
+}
+
 .uex-age-row { display: flex; margin-top: 9px; font-size: 12px; }
 
 /* ---------- place links: any location jumps to the map ---------- */
