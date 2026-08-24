@@ -59,9 +59,10 @@ public sealed record UexVehiclePrice(decimal Price, string Terminal);
 /// <summary>One item's buy price at one terminal - where a part is stocked.</summary>
 public sealed record UexItemRow(string Terminal, decimal Buy);
 
-/// <summary>One haul worth flying, sized to a real hold and a real wallet.</summary>
-/// <param name="Units">SCU this run can actually carry, after every cap.</param>
-/// <param name="LimitedBy">"hold", "capital" or "stock" - what caps this run.</param>
+/// <summary>One UEX-priced haul, with its reported availability kept separate from its estimate.</summary>
+/// <param name="Units">SCU used for the estimated outlay and profit, after every known cap.</param>
+/// <param name="DesiredUnits">SCU the hold and wallet would target before market availability.</param>
+/// <param name="Availability">Whether both sides reported a full load, a partial load, or an unknown capacity.</param>
 public sealed record UexRoute(
     string Commodity,
     string BuyAt,
@@ -73,8 +74,12 @@ public sealed record UexRoute(
     decimal Profit,
     decimal Outlay,
     string LimitedBy,
+    decimal DesiredUnits,
     decimal? BuyStockScu,
     decimal? SellDemandScu,
+    string BuyAvailability,
+    string SellAvailability,
+    string Availability,
     DateTimeOffset? BuySeenAt,
     DateTimeOffset? SellSeenAt,
     string Freshness,
@@ -338,7 +343,8 @@ public sealed class UexData
         string? from = null,
         int limit = 25,
         bool reliableFirst = true,
-        bool freshOnly = false)
+        bool freshOnly = false,
+        string evidence = "any")
     {
         var origin = from is { Length: > 0 } ? MatchTerminal(from) : null;
         var routes = new List<UexRoute>();
@@ -387,6 +393,11 @@ public sealed class UexData
                 limiter = "capital";
             }
 
+            // Keep the intended load before the market caps it. A zero in this
+            // feed predates capacity reporting, so it is unknown rather than a
+            // reason to call an uncapped projection a full-load opportunity.
+            var desiredUnits = units;
+
             if (byStock < units)
             {
                 units = byStock;
@@ -401,6 +412,12 @@ public sealed class UexData
             }
 
             if (units <= 0)
+                continue;
+
+            var buyAvailability = CapacityState(buy.BuyScu, desiredUnits);
+            var sellAvailability = CapacityState(sell.SellScu, desiredUnits);
+            var availability = RouteAvailability(buyAvailability, sellAvailability);
+            if (!IncludesEvidence(evidence, availability))
                 continue;
 
             var freshness = Freshness(buy.Seen, sell.Seen);
@@ -432,8 +449,12 @@ public sealed class UexData
                 margin * units,
                 buy.Buy * units,
                 limiter,
+                desiredUnits,
                 KnownCapacity(buy.BuyScu),
                 KnownCapacity(sell.SellScu),
+                buyAvailability,
+                sellAvailability,
+                availability,
                 SeenAt(buy.Seen),
                 SeenAt(sell.Seen),
                 freshness,
@@ -471,8 +492,29 @@ public sealed class UexData
     };
 
     private static int ReliabilityRank(UexRoute route) =>
-        FreshnessRank(route.Freshness) * 2
-        + (route.LimitedBy is "stock" or "demand" ? 0 : 1);
+        FreshnessRank(route.Freshness) * 3 + AvailabilityRank(route.Availability);
+
+    private static int AvailabilityRank(string availability) => availability switch
+    {
+        "reported-full" => 2,
+        "reported-partial" => 1,
+        _ => 0,
+    };
+
+    private static string CapacityState(decimal reported, decimal desired) => reported <= 0
+        ? "unknown"
+        : reported >= desired ? "enough" : "limited";
+
+    private static string RouteAvailability(string buy, string sell) => buy == "unknown" || sell == "unknown"
+        ? "capacity-unknown"
+        : buy == "enough" && sell == "enough" ? "reported-full" : "reported-partial";
+
+    private static bool IncludesEvidence(string evidence, string availability) => evidence.ToLowerInvariant() switch
+    {
+        "full" => availability == "reported-full",
+        "reported" => availability != "capacity-unknown",
+        _ => true,
+    };
 
     // Zero predates the availability fields in this cache format; presenting
     // it as no stock would hide a route on every older install.

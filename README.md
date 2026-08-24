@@ -353,7 +353,39 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.7.7
+### 0.7.17
+
+- **Commodity history now says what is actually missing.** When live UEX
+  counters exist but their sampled price history cannot be drawn, the commodity
+  page keeps the current counter report and explains that the chart data did
+  not load instead of claiming UEX is off.
+
+- **Every session has a debrief.** Select a Play History row to review its
+  chronological route, ship and sortie summary, contracts, recorded economy,
+  crew-notification floor and latest highlights. Places open on the map, and
+  the previous route can become a new flight plan with one click; cargo money
+  remains marked as requested rather than confirmed.
+
+- **A map that does not invent geography.** System Positions now shows one
+  system at a time with community-starmap bearings and relative orbital
+  distances; a body without a matching coordinate is amber and named as such.
+  Jump Network is a separate, explicitly not-to-scale diagram of jump links,
+  so Nyx and Delamar cannot look like a microTech neighbourhood.
+- **Your location is always findable.** The map names the live location in its
+  toolbar, keeps it visible through filters, and switches to the correct
+  system when selected. Its cyan reticle has an offset callout so it does not
+  cover the place label; the jump network marks the current system while
+  remaining honest about not knowing an in-system position.
+- **A map for the run in front of you.** Focus it on the active plan, shopping
+  destinations and known sellers, or recorded stash locations; these layers
+  compose with service filters. Body hovers now summarise those signals and
+  listed services. Label density can be quiet, automatic or full, controls can
+  be saved as a reusable view, and commodity searches show the UEX report age
+  without mislabelling visits or services as stale.
+- **Cleaner map symbols.** Rest stops and asteroids now have distinct compact
+  silhouettes. When a service, work, or commodity focus gives them enough
+  room, places carry small shop, refuel, and clinic badges outside their base
+  icon, with the map legend explaining the badges.
 
 - **The Market panel stopped being expensive to open.** Its price strip was
   asking UEX about eight counters every time a row was expanded, which is the
@@ -365,8 +397,12 @@ release workflow lifts it from here, so it is written once.
 - **Trade routes that admit uncertainty.** The planner now ranks recent,
   capacity-backed reports first, can limit itself to fresh quotes, and shows
   the reported stock, buyer demand, quote age and alternate buyers beside each
-  estimated profit. A route can be capped by buyer demand as well as the hold,
-  wallet and seller stock; prices remain community reports, not live inventory.
+  estimated profit. Choose routes with reported capacity, only routes whose
+  reports cover the whole target load, or include price-only estimates; the
+  evidence column says which case applies. An unrecognised UEX terminal makes
+  a clearly-labelled text plan instead of pretending both stops will appear on
+  the map. Prices remain community reports, not live inventory or a travel-time
+  estimate.
 
 - **A checklist that travels with you.** Make ordinary preparation lists for
   departures and operations, then pin one to Now and, if wanted, the overlay.
@@ -385,7 +421,9 @@ release workflow lifts it from here, so it is written once.
   available services and up to three buy-here/sell-there trade leads. Its map,
   stop and overlay controls act directly from the card; it never invents a
   cargo manifest the game did not log. Every Now card can also be collapsed,
-  and that choice is remembered in the browser.
+  hidden, and restored from a compact hidden-cards tray; those choices are
+  remembered in the browser. The active ship also carries its local
+  manufacturer mark when its maker is known.
 
 - **An accurate overview, at a glance.** The README now leads with a visual
   guide to what Quantum Wake reads, what it can show, the limits of the logs,
@@ -476,6 +514,19 @@ release workflow lifts it from here, so it is written once.
   charged. Sessions you have already got were summarised by a build that dropped
   the buy, so the first launch after this update re-reads your backups once to
   fill them in - slower than usual, and only that once.
+
+- **Charts, filters and the launch card say the right thing.** The key under
+  a chart now names the line it is drawn beside rather than the one above it,
+  which showed up whenever a line was too short to draw. *Fresh only* no
+  longer empties the route table on installs whose price cache predates the
+  quote timestamps, and an empty table names the tickbox that emptied it
+  instead of blaming your location. A briefing that cannot be fetched hides
+  itself and tries again, rather than leaving the last place you were at on
+  screen labelled with the one you are at now. Demand and supply on a
+  commodity are reported per counter reporting them, so the line follows the
+  market rather than the number of volunteers who filed a report that day.
+  Checklists stop filing a commodity as a part when the catalogue is still
+  loading, and the *Add task* button comes back if the request fails.
 
 ### 0.6.17
 

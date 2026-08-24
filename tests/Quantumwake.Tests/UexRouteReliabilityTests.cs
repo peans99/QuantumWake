@@ -59,9 +59,15 @@ public class UexRouteReliabilityTests : IDisposable
         Assert.Equal("demand", fresh.LimitedBy);
         Assert.Equal("fresh", fresh.Freshness);
         Assert.Equal(18, fresh.SellDemandScu);
+        Assert.Equal(64, fresh.DesiredUnits);
+        Assert.Equal("reported-partial", fresh.Availability);
+        Assert.Equal("enough", fresh.BuyAvailability);
+        Assert.Equal("limited", fresh.SellAvailability);
         Assert.Contains(fresh.FallbackSells, f => f.Terminal == "Backup buyer" && f.Freshness == "fresh");
 
         Assert.All(uex.Routes(64, 10_000, freshOnly: true), r => Assert.Equal("fresh", r.Freshness));
+        Assert.All(uex.Routes(64, 10_000, evidence: "reported"), r => Assert.NotEqual("capacity-unknown", r.Availability));
+        Assert.All(uex.Routes(64, 10_000, evidence: "full"), r => Assert.Equal("reported-full", r.Availability));
         Assert.Equal("Stale gold", uex.Routes(64, 10_000, reliableFirst: false)[0].Commodity);
     }
 
