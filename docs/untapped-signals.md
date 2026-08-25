@@ -189,15 +189,30 @@ Member Left  X has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.
 So the body has to be read rather than the title trusted, or a passenger
 stepping out of a hired ship is recorded as leaving a party they were never in.
 
-### Still untapped: who was aboard whose ship
+### Taken in 0.8: who was aboard whose ship
 
-Those channel lines are themselves a signal nothing reads. They name the ship
-**and its owner** — `'RSI Ursa Medivac : DeathStrokeo1'`, `'MISC Starlancer
-MAX : nekron'` — with a matching `You have joined channel '...'` on the way in:
-410 joins and 27 departures here, across 29 distinct ship-and-owner pairs.
-That is a crew manifest per flight, which no other line in the log carries.
-Unproven and unbuilt; written down so the next sweep starts from here rather
-than rediscovering it.
+Those channel lines are read now. They name the ship **and its owner** —
+`'RSI Ursa Medivac : DeathStrokeo1'` — which is the only thing in a 4.9 log
+that puts a person inside a particular vehicle.
+
+**Count the queue entries, not the log lines.** Each notification is written
+four or five times as it is queued, faded and removed, and grepping naively
+inflates this signal by roughly seven times — which is exactly what happened
+when it was first proposed. The honest figures for this install:
+
+| | Count |
+|---|---|
+| Boardings of your own ships | 388 |
+| Boardings of somebody else’s | 21 |
+| Other people boarding | 22 |
+| Departures | 24 |
+| Distinct ship-and-owner berths | 28 |
+| Other pilots named | 5 |
+
+Small, and worth having anyway: five people you actually crewed with, which
+no other line records. The Crew page shows it as boardings rather than hours,
+because there is no leave line for you, a channel opens on boarding rather
+than on flying, and a parked ship reads the same as a crossing.
 
 The limit is worth restating wherever this gets used: there is **no roster
 event**, and **no line records you yourself joining a party** — your own handle

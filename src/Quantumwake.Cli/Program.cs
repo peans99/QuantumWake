@@ -87,6 +87,8 @@ internal sealed class Report
     private readonly Dictionary<string, int> _contracts = [];
     private readonly Dictionary<string, int> _quantumDestinations = [];
     private readonly Dictionary<string, int> _partyMoments = [];
+    private readonly Dictionary<string, int> _channelMoments = [];
+    private readonly Dictionary<string, int> _berths = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _partyHandles = [];
     private readonly Dictionary<string, int> _eventKinds = [];
     private readonly HashSet<string> _handles = [];
@@ -100,6 +102,7 @@ internal sealed class Report
     private int _sessionHeaders;
     private int _incapacitations;
     private int _partyNotifications;
+    private int _channelNotifications;
     private int _unmatchedKnownTags;
     private int _corpseDeaths;
     private int _shipRetrievals;
@@ -180,6 +183,20 @@ internal sealed class Report
                 // between notifications seen and notes read is the number of
                 // lines the reader declined to guess at, and that number should
                 // stay small without ever being forced to zero.
+                if (ShipChannel.IsChannel(notification.Text))
+                {
+                    _channelNotifications++;
+
+                    if (ShipChannel.Read(notification.Timestamp, notification.Text) is { } berth)
+                    {
+                        var moment = berth.Moment.ToString();
+                        _channelMoments[moment] = _channelMoments.GetValueOrDefault(moment) + 1;
+
+                        var berthName = $"{berth.Ship} : {berth.Owner}";
+                        _berths[berthName] = _berths.GetValueOrDefault(berthName) + 1;
+                    }
+                }
+
                 if (notification.IsParty)
                 {
                     _partyNotifications++;
@@ -245,6 +262,16 @@ internal sealed class Report
             Console.WriteLine($"  -> {unread} named nobody (join queue, broadcasts), left unread.");
 
         Top("Flown with", _partyHandles, 10);
+
+        Section("Ship comms");
+        Console.WriteLine($"  notifications : {_channelNotifications}");
+        Console.WriteLine($"  read as notes : {_channelMoments.Values.Sum()}");
+        Console.WriteLine($"  ships named   : {_berths.Count}");
+
+        foreach (var (moment, count) in _channelMoments.OrderByDescending(p => p.Value))
+            Console.WriteLine($"    {moment,-14}{count,6}");
+
+        Top("Berths", _berths, 8);
 
         Section("Combat");
         Console.WriteLine($"  incapacitations   : {_incapacitations} across {_incapacitationFiles.Count} sessions");

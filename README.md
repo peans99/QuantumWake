@@ -353,7 +353,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.14
+### 0.8.15
+
+- **Crew now knows who was in the ship, not just who was online.** Every
+  vehicle opens a comms channel naming itself *and its owner*, which is the
+  only thing in the logs that puts a person inside a particular ship. The
+  Crew page lists the ships you and somebody else were both aboard, and
+  whether it was theirs or yours. Counted in boardings rather than hours,
+  because nothing records how long anyone stayed and a parked ship looks the
+  same as a crossing. Your sessions are re-read once after this update.
 
 - **A flight plan is now a run sheet.** Each stop can hold checkable manual
   load, unload, buy, sell, collect, refuel, repair or free-form instructions,

@@ -769,6 +769,11 @@ public static class ServerHost
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));
 
+        // Its own route rather than a field on the crew rows: a pilot appears
+        // once per ship here, so folding it in would either repeat every other
+        // count or need the page to flatten it back out.
+        app.MapGet("/api/crew/ships", (LogLibrary lib, int? days) => lib.SharedShips(days ?? 0));
+
         // What the logs are still carrying. Unscoped by wipe on purpose - see
         // LogLibrary.Signals.
         app.MapGet("/api/signals", (LogLibrary lib) => lib.Signals());

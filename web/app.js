@@ -2980,6 +2980,76 @@ onInput('#casualties-period', loadCasualties);
 /* ---------- crew ---------- */
 
 /**
+ * The ships you and somebody else were both aboard.
+ *
+ * The party channel says who was online while grouped with you; this says who
+ * was actually in the vehicle, and whose it was. It is the only thing in these
+ * logs that ties a person to a ship.
+ *
+ * Deliberately counted in boardings rather than hours. There is no leave line
+ * for you, a channel opens when somebody gets in rather than when the ship
+ * flies, and a parked Cyclone reads the same as a crossing - so the caption
+ * says so instead of letting a number imply time spent together.
+ */
+async function renderSharedShips(days) {
+  const host = $('#crew-ships');
+  if (!host) return;
+
+  host.textContent = '';
+
+  let ships;
+  try {
+    ships = await getJson(`/api/crew/ships?days=${days}`);
+  } catch {
+    return;
+  }
+
+  if (!ships.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Ships you have shared'));
+  card.append(el('p', 'muted', 'Who was aboard which ship, from its comms channel — the only '
+    + 'lines that put a person in a vehicle. Counted in boardings, not hours: nothing records '
+    + 'how long anyone stayed, and a parked ship looks the same as a crossing.'));
+
+  const table = el('table', 'data');
+  const head = el('thead');
+  const headRow = el('tr');
+  for (const label of ['Pilot', 'Ship', 'Whose', 'Boardings', 'First', 'Last']) {
+    headRow.append(el('th', label === 'Boardings' ? 'num' : null, label));
+  }
+  head.append(headRow);
+  table.append(head);
+
+  const body = el('tbody');
+  const mine = ships.filter((s) => s.owner === s.handle).length;
+
+  for (const ship of ships) {
+    const tr = el('tr');
+    tr.append(el('td', null, ship.handle));
+    tr.append(el('td', null, ship.ship));
+
+    // Whose ship it was is the interesting half: crewing for somebody is a
+    // different evening from having them aboard yours.
+    tr.append(el('td', 'muted', ship.owner === ship.handle ? 'theirs' : 'yours'));
+
+    tr.append(el('td', 'num', String(ship.times)));
+    tr.append(el('td', 'muted', dateOf(ship.first)));
+    tr.append(el('td', 'muted', dateOf(ship.last)));
+    body.append(tr);
+  }
+
+  table.append(body);
+  card.append(table);
+
+  card.append(el('p', 'muted', `${ships.length} pairing${ships.length === 1 ? '' : 's'}`
+    + `${mine ? `, ${mine} of them in a ship that was not yours` : ''}.`));
+
+  host.append(card);
+}
+
+
+/**
  * The people the party channel has named.
  *
  * The counts are arrivals and departures, not time together, and the page says
@@ -3000,6 +3070,8 @@ async function loadCrew() {
   } catch {
     return;
   }
+
+  renderSharedShips(days).catch(() => {});
 
   const joins = rows.reduce((total, r) => total + (r.joined || 0), 0);
   const arrivals = rows.reduce((total, r) => total + r.connected, 0);
