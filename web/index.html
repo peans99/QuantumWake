@@ -77,6 +77,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
+        <button data-view="imports">Shared files</button>
       </div>
     </div>
     <button data-view="about">About</button>
@@ -168,6 +169,20 @@
         </div>
       </article>
 
+      <article class="card" data-card="ship">
+        <div class="card-label">Ship</div>
+        <div class="now-ship-summary">
+          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
+          <div class="value" id="now-ship">—</div>
+        </div>
+      </article>
+
+      <article class="card" data-card="session">
+        <div class="card-label">Session</div>
+        <div class="value" id="now-clock">—</div>
+        <div class="sub" id="now-mode"></div>
+      </article>
+
       <article class="card span2 now-briefing" id="now-briefing-card" data-card="briefing" hidden>
         <div class="card-label">What to do next</div>
         <div class="briefing-head">
@@ -203,20 +218,6 @@
             <div class="briefing-list" id="briefing-stash"></div>
           </section>
         </div>
-      </article>
-
-      <article class="card" data-card="ship">
-        <div class="card-label">Ship</div>
-        <div class="now-ship-summary">
-          <div class="now-ship-logo" id="now-ship-logo" hidden></div>
-          <div class="value" id="now-ship">—</div>
-        </div>
-      </article>
-
-      <article class="card" data-card="session">
-        <div class="card-label">Session</div>
-        <div class="value" id="now-clock">—</div>
-        <div class="sub" id="now-mode"></div>
       </article>
 
       <article class="card" data-card="handle">
@@ -317,6 +318,7 @@
         <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
         <button type="button" data-focus="shopping" title="Shopping-list destinations and known sellers">Shopping</button>
         <button type="button" data-focus="stash" title="Places where your stash was last recorded">Stash</button>
+        <button type="button" data-focus="notes" title="Places with one of your personal map notes">Notes</button>
       </div>
       <span class="map-search-box">
         <input type="search" id="map-search" placeholder="Find a place or commodity…" autocomplete="off">
@@ -382,6 +384,7 @@
         <div class="muted" id="map-info-last"></div>
         <div id="map-info-trade" hidden></div>
         <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
+        <div class="map-info-notes" id="map-info-notes"></div>
         <div class="map-info-lore muted" id="map-info-lore" hidden></div>
         <div class="map-info-sold" id="map-info-sold" hidden></div>
       </aside>
@@ -439,6 +442,24 @@
   </section>
 
   <!-- CHECKLISTS -->
+  <section id="view-imports" class="view">
+    <div class="section-bar">
+      <h2>Shared files</h2>
+      <span class="spacer"></span>
+      <button class="ghost" id="imports-pick">Open a file</button>
+      <button class="ghost danger" id="imports-clear">Remove all</button>
+    </div>
+    <p class="muted caption">
+      Files other pilots have shared with you. Nothing here is mixed into your
+      own jobs, checklists or history &mdash; it is kept separately so removing
+      an import takes it away completely and leaves your work untouched.
+    </p>
+    <input type="file" id="imports-file" accept="application/json,.json" hidden>
+    <div class="export-row" id="imports-filter"></div>
+    <span class="muted" id="imports-status"></span>
+    <div id="imports-list"></div>
+  </section>
+
   <section id="view-checklists" class="view">
     <div class="section-bar">
       <h2>Checklists</h2>
@@ -484,14 +505,20 @@
     <p class="muted caption">
       Ranked by sessions rather than by toasts: a player with a poor connection
       would otherwise outrank the people who quietly flew whole nights with you.
+      <em>Joined</em> and <em>Left</em> are the party actually changing;
+      <em>Came online</em> and <em>Dropped</em> are their client, which a member
+      who logs out and back in does all evening without going anywhere.
       <em>Led</em> counts the times party lead passed to them.
     </p>
+    <div id="crew-ships"></div>
+
     <div class="table-wrap">
       <table id="crew-table">
         <thead>
           <tr>
             <th>Handle</th>
-            <th class="num">Sessions</th><th class="num">Came online</th>
+            <th class="num">Sessions</th><th class="num">Joined</th>
+            <th class="num">Left</th><th class="num">Came online</th>
             <th class="num">Dropped</th><th class="num">Led</th>
             <th>First</th><th>Last</th>
           </tr>
@@ -609,6 +636,7 @@
       given — and it becomes a tracked build with its materials checked against
       your stashes. The full catalogue lives under Reference → Crafting.
     </p>
+    <div id="blueprints-shared"></div>
 
     <div id="blueprint-jobs"></div>
   </section>
@@ -777,6 +805,7 @@
       does not: the log names the commodity only by an internal id that nothing
       in the local install can resolve.
     </p>
+    <div id="cargo-shared"></div>
 
     <div class="community-offer" id="community-offer" hidden>
       <div>
@@ -1522,6 +1551,59 @@
           <span class="muted" id="uex-push-status"></span>
         </div>
       </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Share what you have</h3>
+        <button class="ghost" id="export-save">Save a file</button>
+      </div>
+      <p class="muted">
+        A file of your own for a pilot you fly with &mdash; what your logs
+        recorded and what you typed. Market prices from UEX are not in it: those
+        are a third party's, not yours to pass on.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="export-receipts" checked>
+        <span>
+          What you paid and were paid
+          <em class="muted">Your own commodity trades, at the terminal and time they happened.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-blueprints" checked>
+        <span>
+          Blueprints you hold
+          <em class="muted">The name and date the game announced &mdash; never the recipe.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-authored" checked>
+        <span>
+          Jobs, checklists and flight plans
+          <em class="muted">The things you typed rather than the things your logs saw.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-handle" checked>
+        <span>
+          Put your handle on it
+          <em class="muted">So whoever opens it knows whose it is.</em>
+        </span>
+      </label>
+      <div class="export-row">
+        <label class="muted" for="export-days">Trades from the last</label>
+        <select class="select" id="export-days">
+          <option value="1">day</option>
+          <option value="3">3 days</option>
+          <option value="7" selected>7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="0">all time</option>
+        </select>
+      </div>
+      <span class="muted" id="export-preview"></span>
+      <span class="muted" id="export-status"></span>
     </div>
 
     <div class="option-block">

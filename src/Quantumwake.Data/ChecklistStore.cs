@@ -148,11 +148,10 @@ public sealed class ChecklistStore
                 CleanOptional(a.Target), CleanOptional(a.PlaceId)))
             .ToList();
 
-    private static string Clean(string? value, string fallback) =>
-        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim()[..Math.Min(240, value.Trim().Length)];
+    // Shared with the import path, which faces text somebody else wrote.
+    private static string Clean(string? value, string fallback) => Sanitise.Clean(value, fallback);
 
-    private static string? CleanOptional(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(1000, value.Trim().Length)];
+    private static string? CleanOptional(string? value) => Sanitise.CleanOptional(value);
 
     private static string NewId() => Guid.NewGuid().ToString("N")[..8];
 

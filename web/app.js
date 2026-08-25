@@ -172,6 +172,9 @@ function showView(name) {
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
+  if (name === 'imports') loadImports().catch(() => {});
+  if (name === 'commodities') renderSharedReceipts().catch(() => {});
+  if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
   if (name === 'routes') loadRoutes().catch(() => {});
@@ -540,6 +543,17 @@ function briefingStopRow(briefing, stop) {
   name.addEventListener('click', () => briefingMap(stop.placeId, stop.place));
   main.append(name);
   if (stop.note) main.append(el('div', 'briefing-detail', stop.note));
+
+  // What is still owed here. Without this the card keeps a landed stop on
+  // screen and never says why it is keeping it, which reads as a stop that
+  // will not cross off rather than as work outstanding.
+  for (const action of stop.actions || []) {
+    const quantity = action.quantity
+      ? ` ${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`
+      : '';
+    main.append(el('div', 'briefing-detail', `${action.kind}${quantity} · ${action.text}`));
+  }
+
   row.append(main);
 
   const done = el('button', 'ghost tiny', 'Mark collected');
@@ -783,6 +797,7 @@ async function loadHistory() {
   loadRoutes().catch((e) => console.error('routes', e));
   loadCargoReceipts().catch((e) => console.error('cargo receipts', e));
   loadTrips().catch((e) => console.error('trips', e));
+  loadMapNotes().catch((e) => console.error('map notes', e));
   loadCommodities().catch((e) => console.error('cargo', e));
   loadMarket().catch((e) => console.error('market', e));
   loadLoot().catch((e) => console.error('loot', e));
@@ -2950,7 +2965,9 @@ async function loadCasualties() {
   const body = $('#casualties-fees tbody');
   body.textContent = '';
 
-  for (const fee of data.fees) {
+  // Guarded like every other read on this page: one absent array should not
+  // take the whole page down when the rest of the answer arrived intact.
+  for (const fee of data.fees || []) {
     const tr = el('tr');
     tr.append(el('td', null, fee.name));
     tr.append(el('td', 'num outward', money(fee.fee)));
@@ -2961,6 +2978,76 @@ async function loadCasualties() {
 onInput('#casualties-period', loadCasualties);
 
 /* ---------- crew ---------- */
+
+/**
+ * The ships you and somebody else were both aboard.
+ *
+ * The party channel says who was online while grouped with you; this says who
+ * was actually in the vehicle, and whose it was. It is the only thing in these
+ * logs that ties a person to a ship.
+ *
+ * Deliberately counted in boardings rather than hours. There is no leave line
+ * for you, a channel opens when somebody gets in rather than when the ship
+ * flies, and a parked Cyclone reads the same as a crossing - so the caption
+ * says so instead of letting a number imply time spent together.
+ */
+async function renderSharedShips(days) {
+  const host = $('#crew-ships');
+  if (!host) return;
+
+  host.textContent = '';
+
+  let ships;
+  try {
+    ships = await getJson(`/api/crew/ships?days=${days}`);
+  } catch {
+    return;
+  }
+
+  if (!ships.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Ships you have shared'));
+  card.append(el('p', 'muted', 'Who was aboard which ship, from its comms channel — the only '
+    + 'lines that put a person in a vehicle. Counted in boardings, not hours: nothing records '
+    + 'how long anyone stayed, and a parked ship looks the same as a crossing.'));
+
+  const table = el('table', 'data');
+  const head = el('thead');
+  const headRow = el('tr');
+  for (const label of ['Pilot', 'Ship', 'Whose', 'Boardings', 'First', 'Last']) {
+    headRow.append(el('th', label === 'Boardings' ? 'num' : null, label));
+  }
+  head.append(headRow);
+  table.append(head);
+
+  const body = el('tbody');
+  const mine = ships.filter((s) => s.owner === s.handle).length;
+
+  for (const ship of ships) {
+    const tr = el('tr');
+    tr.append(el('td', null, ship.handle));
+    tr.append(el('td', null, ship.ship));
+
+    // Whose ship it was is the interesting half: crewing for somebody is a
+    // different evening from having them aboard yours.
+    tr.append(el('td', 'muted', ship.owner === ship.handle ? 'theirs' : 'yours'));
+
+    tr.append(el('td', 'num', String(ship.times)));
+    tr.append(el('td', 'muted', dateOf(ship.first)));
+    tr.append(el('td', 'muted', dateOf(ship.last)));
+    body.append(tr);
+  }
+
+  table.append(body);
+  card.append(table);
+
+  card.append(el('p', 'muted', `${ships.length} pairing${ships.length === 1 ? '' : 's'}`
+    + `${mine ? `, ${mine} of them in a ship that was not yours` : ''}.`));
+
+  host.append(card);
+}
+
 
 /**
  * The people the party channel has named.
@@ -2984,13 +3071,18 @@ async function loadCrew() {
     return;
   }
 
+  renderSharedShips(days).catch(() => {});
+
+  const joins = rows.reduce((total, r) => total + (r.joined || 0), 0);
   const arrivals = rows.reduce((total, r) => total + r.connected, 0);
-  const drops = rows.reduce((total, r) => total + r.dropped, 0);
 
   tiles('#crew-summary', [
     ['People named', rows.length],
-    ['Arrivals seen', arrivals],
-    ['Drops seen', drops],
+
+    // Joins rather than arrivals: this is the one that counts somebody who was
+    // not there a moment before, which is what "flew with" means.
+    ['Joined your party', joins],
+    ['Came online', arrivals],
     ['Most flown with', rows.length ? rows[0].handle : '—'],
   ]);
 
@@ -3008,9 +3100,9 @@ async function loadCrew() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted',
-      'Nobody named in that range — the game only says so when someone joins or '
-      + 'drops while you are partied with them.');
-    td.colSpan = 7;
+      'Nobody named in that range — the game only says so when someone joins, '
+      + 'leaves, or connects while you are partied with them.');
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -3020,10 +3112,14 @@ async function loadCrew() {
     const tr = el('tr');
     tr.append(el('td', null, row.handle));
     tr.append(el('td', 'num', String(row.sessions)));
+
+    // Blank rather than zero throughout: these are four different facts and a
+    // zero in one of them is usually "the game did not say", not "never".
+    tr.append(el('td', row.joined ? 'num' : 'num muted', row.joined || '—'));
+    tr.append(el('td', row.left ? 'num' : 'num muted', row.left || '—'));
     tr.append(el('td', 'num', String(row.connected)));
     tr.append(el('td', 'num', String(row.dropped)));
 
-    // Blank rather than zero: never having taken lead is not a score.
     tr.append(el('td', row.ledParty ? 'num' : 'num muted', row.ledParty || '—'));
 
     tr.append(el('td', 'muted', dateOf(row.first)));
@@ -3726,6 +3822,110 @@ function trackButton(name, needed = 1, unit = '') {
 }
 
 /** The shared progress bar: done over total, with its own wording. */
+/**
+ * What a job needs, and where each of it is.
+ *
+ * Shared by the reader's own cards and by imported ones. The stash and loadout
+ * columns are about the reader either way, which is the whole value of seeing
+ * somebody else's list: "Bob needs four Agricium" reads very differently beside
+ * "and you have some at Port Tressler".
+ */
+function jobLines(job) {
+  const table = el('table', 'job-items');
+  const body = el('tbody');
+
+  for (const item of job.items) {
+    const tr = el('tr', item.have ? 'have' : null);
+
+    const need = item.needed > 0
+      ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
+      : '';
+    tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
+    tr.append(el('td', null, item.name));
+    tr.append(el('td', 'num muted', need));
+
+    // Where it is, or where to buy what is missing.
+    const whereCell = el('td', 'muted');
+
+    if (item.wornNow) {
+      whereCell.textContent = 'worn now';
+    } else if (item.where.length) {
+      whereCell.append(placeLink(item.where[0]));
+      if (item.where.length > 1) {
+        const more = el('span', 'note-inline', ` +${item.where.length - 1}`);
+        more.title = item.where.slice(1).join('\n');
+        whereCell.append(more);
+      }
+    } else if (item.buyAt) {
+      whereCell.append(el('span', 'note-inline', 'buy at '));
+      whereCell.append(placeLink(item.buyAt));
+    } else {
+      whereCell.textContent = '—';
+    }
+    tr.append(whereCell);
+
+    tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
+      item.buyPrice ? money(item.buyPrice) : '—'));
+
+    body.append(tr);
+  }
+
+  table.append(body);
+  return table;
+}
+
+/**
+ * The mark on anything that came out of somebody else's file.
+ *
+ * Names them rather than saying "imported": the reader knows the difference
+ * between a list from the friend they fly with and one from a stranger, and
+ * the app does not.
+ */
+function importedChip(from) {
+  const chip = el('span', 'job-kind from-a-file', `from ${from.handle || 'a file'}`);
+  chip.title = `Imported ${dateOf(from.importedAt)} from a shared file. Not your data.`
+    + (from.note ? `\n${from.note}` : '');
+  return chip;
+}
+
+/**
+ * The one thing an imported card can do.
+ *
+ * It posts to the ordinary authoring endpoint, so the copy is minted a fresh
+ * local id through the normal path with the normal checks - the only route by
+ * which somebody else's data becomes yours, and a deliberate one.
+ *
+ * A new list rather than merged into one you have: adding another person's 96
+ * SCU to a line you already had produces a number you never chose.
+ */
+function copyToMine(job) {
+  const copy = el('button', 'ghost tiny', 'Copy to my lists');
+  copy.title = 'Makes your own copy. Theirs stays where it is.';
+
+  copy.addEventListener('click', async () => {
+    copy.disabled = true;
+
+    try {
+      await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: job.title,
+          kind: job.kind,
+          source: `copied from ${job.imported.handle || 'a shared file'}`,
+          items: job.items.map((i) => ({ name: i.name, needed: i.needed, unit: i.unit })),
+        }),
+      });
+    } finally {
+      copy.disabled = false;
+    }
+
+    loadJobList();
+  });
+
+  return copy;
+}
+
 function jobProgress(done, total, label) {
   const wrap = el('div', 'job-progress');
   const track = el('div', 'job-track');
@@ -3748,7 +3948,7 @@ async function loadJobList() {
 
   let jobs = [];
   try {
-    jobs = await getJson('/api/jobs');
+    jobs = await getJson(`/api/jobs${importedQuery()}`);
   } catch { /* server down; the page still shows contracts */ }
 
   renderPinnedJob(jobs);
@@ -3772,10 +3972,34 @@ async function loadJobList() {
 
   for (const job of jobs) {
     const card = el('article', job.done ? 'job-card done' : 'job-card');
+    if (job.imported) card.classList.add('from-a-file');
 
     const head = el('div', 'job-head');
     head.append(el('b', null, job.title));
     head.append(el('span', 'job-kind', job.kind === 'craft' ? 'craft' : 'list'));
+    if (job.imported) head.append(importedChip(job.imported));
+
+    // An imported card carries no control that changes anything.
+    //
+    // Not only because it is somebody else's: the id it arrives under would
+    // address one of yours. Ids are minted per install with no namespace, so a
+    // file exported from this machine and read back holds ids identical to your
+    // own, and every button here builds its URL out of one. The server prefixes
+    // them so those routes miss, and this leaves them undrawn as well - a
+    // button that 404s is still a button somebody pressed expecting something.
+    if (job.imported) {
+      head.append(el('span', 'spacer'));
+      head.append(copyToMine(job));
+      card.append(head);
+      card.append(jobProgress(job.haveCount, job.totalCount,
+        `you have ${job.haveCount} of the ${job.totalCount} things this needs`));
+      card.append(jobLines(job));
+
+      // The same split as any other card: a build belongs on Crafting whoever
+      // wrote it.
+      (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
+      continue;
+    }
 
     // Where this list is for, changeable here because it is a plan rather than
     // a fact: the run you meant on Tuesday is not the run you fly on Friday.
@@ -3839,47 +4063,7 @@ async function loadJobList() {
     card.append(jobProgress(job.haveCount, job.totalCount,
       `${job.haveCount} of ${job.totalCount} in hand`));
 
-    const table = el('table', 'job-items');
-    const body = el('tbody');
-
-    for (const item of job.items) {
-      const tr = el('tr', item.have ? 'have' : null);
-
-      const need = item.needed > 0
-        ? `${item.needed}${item.unit ? ` ${item.unit}` : ''}`
-        : '';
-      tr.append(el('td', 'job-mark', item.have ? '✓' : '·'));
-      tr.append(el('td', null, item.name));
-      tr.append(el('td', 'num muted', need));
-
-      // Where it is, or where to buy what is missing.
-      const whereCell = el('td', 'muted');
-
-      if (item.wornNow) {
-        whereCell.textContent = 'worn now';
-      } else if (item.where.length) {
-        whereCell.append(placeLink(item.where[0]));
-        if (item.where.length > 1) {
-          const more = el('span', 'note-inline', ` +${item.where.length - 1}`);
-          more.title = item.where.slice(1).join('\n');
-          whereCell.append(more);
-        }
-      } else if (item.buyAt) {
-        whereCell.append(el('span', 'note-inline', 'buy at '));
-        whereCell.append(placeLink(item.buyAt));
-      } else {
-        whereCell.textContent = '—';
-      }
-      tr.append(whereCell);
-
-      tr.append(el('td', item.buyPrice ? 'num' : 'num muted',
-        item.buyPrice ? money(item.buyPrice) : '—'));
-
-      body.append(tr);
-    }
-
-    table.append(body);
-    card.append(table);
+    card.append(jobLines(job));
     (job.kind === 'craft' && craftHost ? craftHost : host).append(card);
   }
 }
@@ -4164,7 +4348,10 @@ function checklistItemRow(list, item, compact = false) {
 
 function renderPinnedChecklist(lists = checklists) {
   const card = $('#now-checklist-card');
-  const list = lists.find((entry) => entry.pinned);
+
+  // Imported rows arrive with pinned forced false, so this cannot pick one up -
+  // but Now is the one card where being wrong would be loudest, so it says so.
+  const list = lists.find((entry) => entry.pinned && !entry.imported);
   if (!card) return;
 
   if (!list) {
@@ -4336,7 +4523,7 @@ function renderChecklists(lists) {
 }
 
 async function loadChecklists() {
-  checklists = await getJson('/api/checklists').catch(() => []);
+  checklists = await getJson(`/api/checklists${importedQuery()}`).catch(() => []);
   renderChecklists(checklists);
   renderPinnedChecklist(checklists);
 }
@@ -4602,7 +4789,502 @@ async function renderSettings() {
   await renderUexAuto();
   await renderUexFeeds();
   await renderSignals();
+  await renderExportPreview();
 }
+
+/* ---------- files other pilots have shared ---------- */
+
+let importBatches = [];
+
+/**
+ * Whether pages show imported rows beside the reader's own, and whose.
+ *
+ * One switch for the whole app rather than one per page: the question somebody
+ * asks is "am I looking at Bob's things or mine", never "am I looking at Bob's
+ * jobs but my own checklists". Off by default, because importing a friend's
+ * forty jobs and finding your own page now has forty-three cards on it is an
+ * ambush by a feature used once.
+ */
+let showImported = 'none';
+
+try {
+  showImported = localStorage.getItem('qw-show-imported') || 'none';
+} catch { /* private browsing; the default is the safe one anyway */ }
+
+/**
+ * The suffix every list endpoint takes, so no page has to remember the name.
+ *
+ * Empty when nothing is being shown, which is the ordinary case: the request
+ * then goes out exactly as it did before this feature existed, and the server
+ * default and the client default cannot drift apart.
+ */
+function importedQuery() {
+  return showImported === 'none' ? '' : `?imported=${encodeURIComponent(showImported)}`;
+}
+
+function setShowImported(value) {
+  showImported = value || 'none';
+
+  try {
+    localStorage.setItem('qw-show-imported', showImported);
+  } catch { /* as above */ }
+
+  // Everything that can carry an imported row re-reads itself.
+  loadJobs().catch(() => {});
+  loadChecklists().catch(() => {});
+  loadTrips?.().catch(() => {});
+  renderSharedReceipts().catch(() => {});
+  renderSharedBlueprints().catch(() => {});
+}
+
+/**
+ * The control that turns other people's rows on.
+ *
+ * Drawn only when there is something to show. An empty dropdown offering to
+ * filter by nobody is a worse answer than no dropdown.
+ */
+function renderImportedFilter() {
+  const host = $('#imports-filter');
+  if (!host) return;
+
+  host.textContent = '';
+
+  const usable = importBatches.filter((b) => b.readable && !b.hidden && b.classes.length);
+  if (!usable.length) return;
+
+  host.append(el('label', 'muted', 'Show shared rows on my pages: '));
+
+  const select = el('select', 'select');
+  const options = [['none', 'no'], ['all', 'from everyone']];
+  for (const batch of usable) options.push([batch.id, `only ${batch.handle || batch.sourceName}`]);
+
+  for (const [value, label] of options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  }
+
+  select.value = options.some(([v]) => v === showImported) ? showImported : 'none';
+  select.addEventListener('change', () => setShowImported(select.value));
+  host.append(select);
+}
+
+/** A tally, with the zeroes left out. */
+function countLine(counts) {
+  const parts = [];
+  if (counts.receipts) parts.push(`${counts.receipts.toLocaleString()} trades`);
+  if (counts.blueprints) parts.push(`${counts.blueprints} blueprints`);
+  if (counts.jobs) parts.push(`${counts.jobs} jobs`);
+  if (counts.checklists) parts.push(`${counts.checklists} checklists`);
+  if (counts.trips) parts.push(`${counts.trips} flight plans`);
+  if (counts.runActions) parts.push(`${counts.runActions} run-sheet lines`);
+  return parts.join(' · ');
+}
+
+/**
+ * One imported file.
+ *
+ * Says when it was written as well as when it was imported, because a file
+ * taken this morning can hold a price from March and the older date is the one
+ * that decides whether the numbers are worth anything.
+ */
+function importCard(batch) {
+  const card = el('article', 'import-card');
+
+  const head = el('div', 'job-head');
+  head.append(el('b', null, batch.handle || 'Someone'));
+  if (batch.note) head.append(el('span', 'job-kind', batch.note));
+  if (!batch.readable) head.append(el('span', 'job-kind danger', 'cannot be read'));
+  if (batch.hidden) head.append(el('span', 'job-kind', 'hidden'));
+  head.append(el('span', 'spacer'));
+
+  const hide = el('button', 'ghost tiny', batch.hidden ? 'Show' : 'Hide');
+  hide.title = 'Hiding keeps the file. Removing does not.';
+  hide.addEventListener('click', () => importCall(`/api/imports/${batch.id}/hide`));
+  head.append(hide);
+
+  const remove = el('button', 'ghost danger tiny', 'Remove');
+  remove.title = 'Takes this file away completely. Your own work is not touched.';
+  remove.addEventListener('click', () => importCall(`/api/imports/${batch.id}`, 'DELETE'));
+  head.append(remove);
+  card.append(head);
+
+  card.append(el('div', 'muted', `${batch.sourceName} — imported ${dateOf(batch.importedAt)}, `
+    + `written ${dateOf(batch.exportedAt)} by Quantum Wake ${batch.producerVersion}`));
+
+  const held = countLine(batch.counts);
+  card.append(el('div', 'import-counts', held || 'Nothing left in this file.'));
+
+  // Kept for ever and said plainly: "why does this show 41 when his file said
+  // 43" has to be answerable a month later.
+  const dropped = countLine(batch.rejected);
+  if (dropped) card.append(el('div', 'muted', `Could not be read: ${dropped}.`));
+
+  const cut = countLine(batch.truncated);
+  if (cut) card.append(el('div', 'muted', `Too many to keep, so left out: ${cut}.`));
+
+  if (!batch.readable) {
+    card.append(el('div', 'muted', `This file is in format ${batch.formatVersion}, which this `
+      + 'build does not read. It is kept rather than dropped, since the copy you were sent may '
+      + 'be the only one. Update Quantum Wake, or remove it.'));
+  }
+
+  if (batch.classes.length) {
+    const row = el('div', 'import-classes');
+    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists']];
+
+    for (const [key, label] of named) {
+      if (!batch.classes.includes(key)) continue;
+      const drop = el('button', 'ghost tiny', `Remove the ${label}`);
+      drop.addEventListener('click', () => importCall(`/api/imports/${batch.id}/${key}`, 'DELETE'));
+      row.append(drop);
+    }
+
+    card.append(row);
+  }
+
+  return card;
+}
+
+function renderImports(payload) {
+  const host = $('#imports-list');
+  if (!host) return;
+
+  importBatches = payload.batches || [];
+  host.textContent = '';
+
+  if (payload.quarantined) {
+    host.append(el('p', 'muted', 'An earlier imports file could not be read. It was kept as '
+      + `${payload.quarantined} rather than overwritten, because the files it held came from `
+      + 'other people.'));
+  }
+
+  if (!importBatches.length) {
+    host.append(el('p', 'muted', 'No shared files yet. Open one a friend sent you — it stays '
+      + 'separate from your own history, and you can remove it whenever you like.'));
+    return;
+  }
+
+  for (const batch of importBatches) host.append(importCard(batch));
+  renderImportedFilter();
+}
+
+async function loadImports() {
+  renderImports(await getJson('/api/imports').catch(() => ({ batches: [] })));
+}
+
+async function importCall(url, method = 'POST') {
+  try {
+    await fetch(url, { method });
+  } finally {
+    await loadImports();
+  }
+}
+
+/**
+ * Reads a file the user picked and offers it to the server.
+ *
+ * The text travels in a JSON body rather than as multipart: nothing else here
+ * posts multipart, FileReader hands back the string for nothing, and the size
+ * check stays one question about how many bytes arrived.
+ */
+async function importFile(file) {
+  $('#imports-status').textContent = `Reading ${file.name}…`;
+
+  const text = await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target.result);
+    reader.readAsText(file);
+  });
+
+  await sendImport(text, file.name, false);
+}
+
+async function sendImport(text, sourceName, force) {
+  const status = $('#imports-status');
+
+  const response = await fetch(`/api/imports${force ? '?force=true' : ''}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: text, sourceName }),
+  });
+
+  const answer = await response.json().catch(() => null);
+
+  // Already held. Asked rather than duplicated, because a double-clicked picker
+  // and a deliberate re-import after a purge look identical from here.
+  if (response.status === 409 && answer && answer.batch) {
+    const already = answer.batch;
+    status.textContent = `You imported this on ${dateOf(already.importedAt)} — `
+      + `${countLine(already.counts) || 'nothing left in it'}. `;
+
+    const again = el('button', 'ghost tiny', 'Import it again anyway');
+    again.addEventListener('click', () => sendImport(text, sourceName, true).catch(() => {}));
+    status.append(again);
+    return;
+  }
+
+  if (!response.ok) {
+    status.textContent = (answer && answer.message) || 'That file could not be read.';
+    return;
+  }
+
+  status.textContent = `Imported ${countLine(answer.batch.counts) || 'nothing'} from `
+    + `${answer.batch.handle || 'someone'}.`;
+
+  await loadImports();
+}
+
+$('#imports-pick')?.addEventListener('click', () => $('#imports-file')?.click());
+
+$('#imports-file')?.addEventListener('change', (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  importFile(file)
+    .catch(() => { $('#imports-status').textContent = 'That file could not be read.'; })
+    // Cleared so that picking the same file twice still fires a change.
+    .finally(() => { event.target.value = ''; });
+});
+
+$('#imports-clear')?.addEventListener('click', () => {
+  $('#imports-status').textContent = '';
+  importCall('/api/imports', 'DELETE').catch(() => {});
+});
+
+/**
+ * Trades and blueprints from other people's files, in their own sections.
+ *
+ * Kept out of the pages' own payloads on purpose. Cargo computes four totals
+ * from /api/commodities and the Blueprints picker feeds "Set as goal" from
+ * /api/blueprints/owned; mixing imported rows into either would mean
+ * remembering to filter in five places, and the one that gets forgotten
+ * produces lifetime earnings counting somebody else's sales, or a build plan
+ * for a blueprint the reader does not hold.
+ */
+async function renderSharedReceipts() {
+  const host = $('#cargo-shared');
+  if (!host) return;
+
+  host.textContent = '';
+  if (showImported === 'none') return;
+
+  const rows = await getJson(`/api/imports/receipts${importedQuery()}`).catch(() => []);
+  if (!rows.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Trades from shared files'));
+  card.append(el('p', 'muted', 'Other people’s receipts, kept out of your own totals '
+    + 'above. Prices are what they were quoted, where and when they say.'));
+
+  const table = el('table', 'data');
+  const head = el('thead');
+  const headRow = el('tr');
+  for (const label of ['When', 'Who', 'Commodity', 'Place', 'SCU', 'Per SCU']) {
+    headRow.append(el('th', label === 'SCU' || label === 'Per SCU' ? 'num' : null, label));
+  }
+  head.append(headRow);
+  table.append(head);
+
+  const body = el('tbody');
+
+  for (const row of rows.slice(0, 200)) {
+    const tr = el('tr');
+    tr.append(el('td', 'muted', dateOf(row.at)));
+    tr.append(el('td', null, row.imported.handle || 'someone'));
+
+    // A name this install cannot resolve is not an error: their dataset knew
+    // something ours does not, or the other way round.
+    tr.append(el('td', row.commodity ? null : 'muted', row.commodity || 'unnamed'));
+    tr.append(el('td', 'muted', row.place));
+    tr.append(el('td', 'num', row.scu.toLocaleString()));
+    tr.append(el('td', 'num', money(row.unitPrice)));
+    body.append(tr);
+  }
+
+  table.append(body);
+  card.append(table);
+
+  if (rows.length > 200) {
+    card.append(el('p', 'muted', `Showing the newest 200 of ${rows.length.toLocaleString()}.`));
+  }
+
+  host.append(card);
+}
+
+async function renderSharedBlueprints() {
+  const host = $('#blueprints-shared');
+  if (!host) return;
+
+  host.textContent = '';
+  if (showImported === 'none') return;
+
+  const rows = await getJson(`/api/imports/blueprints${importedQuery()}`).catch(() => []);
+  if (!rows.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Held by others'));
+  card.append(el('p', 'muted', 'Blueprints the files you have been sent say somebody holds. '
+    + 'They are not in the picker above, because you cannot craft from someone else’s '
+    + 'library — this answers who to ask.'));
+
+  const list = el('ul', 'shared-blueprints');
+
+  // Grouped by name, so "who can craft this" is one line rather than a list to
+  // read across. That is the question the section exists to answer.
+  const byName = new Map();
+
+  for (const row of rows) {
+    const holders = byName.get(row.name) || [];
+    const who = row.imported.handle || 'someone';
+    if (!holders.includes(who)) holders.push(who);
+    byName.set(row.name, holders);
+  }
+
+  for (const [name, holders] of [...byName.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const line = el('li');
+    line.append(el('b', null, name));
+    line.append(el('span', 'muted', ` — ${holders.join(', ')}`));
+    list.append(line);
+  }
+
+  card.append(list);
+  host.append(card);
+}
+
+/* ---------- sharing a file of your own ---------- */
+
+/**
+ * The chosen window in days, where zero legitimately means all time.
+ *
+ * Read carefully because the two failure values are far apart: an empty select
+ * through Number() is zero, which would quietly turn "the last week" into every
+ * trade ever made and send a hundred times what was asked for.
+ */
+function exportDays() {
+  // Empty string through Number() is zero, not NaN, so the absent case has to
+  // be caught before the conversion rather than after it.
+  const raw = $('#export-days')?.value;
+  if (raw === undefined || raw === null || raw === '') return 7;
+
+  const chosen = Number(raw);
+  return Number.isFinite(chosen) && chosen >= 0 ? chosen : 7;
+}
+
+/** What the boxes currently say, in the shape the API takes. */
+function exportChoice() {
+  return {
+    receipts: Boolean($('#export-receipts')?.checked),
+    blueprints: Boolean($('#export-blueprints')?.checked),
+    authored: Boolean($('#export-authored')?.checked),
+    handle: Boolean($('#export-handle')?.checked),
+    days: exportDays(),
+  };
+}
+
+/**
+ * What would go, before it goes.
+ *
+ * Counts only - the preview endpoint never returns rows. The point is that a
+ * click to share follows seeing what sharing means, not that the page gets a
+ * second copy of the data.
+ */
+async function renderExportPreview() {
+  const line = $('#export-preview');
+  if (!line) return;
+
+  const choice = exportChoice();
+
+  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+    line.textContent = 'Nothing ticked, so there is nothing to save.';
+    return;
+  }
+
+  try {
+    const counts = await getJson(
+      `/api/export/preview?receipts=${choice.receipts}&blueprints=${choice.blueprints}`
+      + `&authored=${choice.authored}&days=${choice.days}`);
+
+    const parts = [];
+    if (choice.receipts) {
+      parts.push(`${counts.receipts.toLocaleString()} ${counts.receipts === 1 ? 'trade' : 'trades'}`
+        + (choice.days ? ` from the last ${choice.days === 1 ? 'day' : `${choice.days} days`}` : ', all time'));
+    }
+    if (choice.blueprints) parts.push(`${counts.blueprints} blueprints`);
+    if (choice.authored) {
+      parts.push(`${counts.jobs} jobs, ${counts.checklists} checklists, ${counts.trips} flight plans`);
+    }
+
+    line.textContent = `Would save ${parts.join(' · ')}.`;
+  } catch {
+    line.textContent = '';
+  }
+}
+
+/**
+ * Saves the document the server built.
+ *
+ * A POST rather than a link, because export must not be a GET: the LAN rule
+ * lets reads through, and this is the one response that hands over the whole
+ * history at once. So the blob comes back from fetch and is clicked into the
+ * downloads folder here.
+ */
+async function saveExport() {
+  const button = $('#export-save');
+  const status = $('#export-status');
+  const choice = exportChoice();
+
+  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+    status.textContent = 'Tick at least one thing first.';
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent = 'Building the file…';
+
+  let url = null;
+
+  try {
+    const response = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(choice),
+    });
+
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      status.textContent = problem?.message || 'The file could not be built.';
+      return;
+    }
+
+    // The server names it; the header is where that name is.
+    const name = /filename="?([^";]+)"?/i.exec(
+      response.headers.get('content-disposition') || '')?.[1] || 'quantumwake-export.json';
+
+    const blob = await response.blob();
+    url = URL.createObjectURL(blob);
+
+    const link = el('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+
+    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+  } catch {
+    status.textContent = 'The file could not be built.';
+  } finally {
+    // Revoking frees the blob; doing it before the click lands cancels the save.
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
+    button.disabled = false;
+  }
+}
+
+for (const id of ['#export-receipts', '#export-blueprints', '#export-authored', '#export-days']) {
+  $(id)?.addEventListener('change', () => renderExportPreview().catch(() => {}));
+}
+
+$('#export-save')?.addEventListener('click', () => saveExport().catch(() => {}));
 
 /**
  * Which signals are still arriving, and when each last did.
@@ -6016,6 +6698,8 @@ let mapServiceFilter = '';
 let mapFocusFilter = '';
 const mapShoppingIds = new Set();
 const mapStashIds = new Set();
+let mapNotes = [];
+const mapNoteIds = new Set();
 const MAP_SAVED_VIEW_KEY = 'qw-map-saved-view';
 const MAP_LABEL_DENSITY_KEY = 'qw-map-label-density';
 
@@ -6075,6 +6759,22 @@ function drawServiceBadges(group, x, y, radius, services) {
   group.append(badges);
 }
 
+// A small bookmark sits outside the location glyph: a personal note changes
+// neither the place kind nor the UEX service facts already drawn around it.
+function drawMapNoteBadge(group, x, y, radius) {
+  const badge = svgEl('g', { class: 'map-note-badge', 'pointer-events': 'none' });
+  const size = Math.max(3.2, radius * .48);
+  const bx = x + radius + size + 2;
+  const by = y + radius + size + 1;
+  badge.append(svgEl('path', {
+    d: `M ${bx} ${by - size} L ${bx + size} ${by} L ${bx} ${by + size} L ${bx - size} ${by} Z`,
+  }));
+  const title = svgEl('title');
+  title.textContent = 'Personal map note';
+  badge.append(title);
+  group.append(badge);
+}
+
 function showServiceBadges(location, highlighted) {
   return servicesAt(location).length > 0
     && (isDetailed() || highlighted || !!mapServiceFilter || !!mapFocusFilter);
@@ -6097,6 +6797,7 @@ function mapFocusIds() {
   if (mapFocusFilter === 'plan') return planPlaceIds();
   if (mapFocusFilter === 'shopping') return mapShoppingIds;
   if (mapFocusFilter === 'stash') return mapStashIds;
+  if (mapFocusFilter === 'notes') return mapNoteIds;
   return null;
 }
 
@@ -7728,11 +8429,12 @@ let trips = [];
 /** The plan the Now card and the map are following. */
 const tracked = () => trips.find((t) => t.tracked) || null;
 
-/** Where to go now: the first stop not yet crossed off. */
-const nextStop = (trip) => trip?.stops.find((s) => !s.done) || null;
+/** Where to go now, or what remains to do after reaching the current stop. */
+const nextStop = (trip) => trip?.stops.find((s) =>
+  !s.done || (s.actions || []).some((action) => !action.done)) || null;
 
 async function loadTrips() {
-  trips = await getJson('/api/trips');
+  trips = await getJson(`/api/trips${importedQuery()}`);
   renderTripCard();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
@@ -7746,6 +8448,96 @@ async function loadTrips() {
 async function tripCall(url, method = 'POST') {
   await fetch(url, { method });
   await loadTrips();
+}
+
+/** A run sheet is authored work, so checks and edits use the same small trip API. */
+async function runActionCall(url, method = 'POST', body = null) {
+  const options = { method };
+  if (body) {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify(body);
+  }
+  await fetch(url, options);
+  await loadTrips();
+}
+
+const runActionLabel = (kind) => ({
+  load: 'Load', unload: 'Unload', buy: 'Buy', sell: 'Sell', collect: 'Collect',
+  refuel: 'Refuel', repair: 'Repair', do: 'Do',
+}[kind] || 'Do');
+
+function runActionRow(trip, stop, action, editable = false) {
+  const row = el('div', `run-action${action.done ? ' done' : ''}`);
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = !!action.done;
+  check.title = action.done ? 'Mark as still to do' : 'Mark action complete';
+  check.addEventListener('change', () =>
+    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`));
+  row.append(check);
+
+  const text = el('span', 'run-action-text');
+  text.append(el('b', null, runActionLabel(action.kind)));
+  text.append(document.createTextNode(` · ${action.text}`));
+  if (action.quantity !== null && action.quantity !== undefined) {
+    const quantity = Number(action.quantity).toLocaleString();
+    text.append(el('span', 'run-action-quantity', `${quantity}${action.unit ? ` ${action.unit}` : ''}`));
+  }
+  row.append(text);
+
+  if (editable) {
+    const remove = el('button', 'ghost tiny', '×');
+    remove.title = 'Remove this action';
+    remove.addEventListener('click', () =>
+      runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
+    row.append(remove);
+  }
+
+  return row;
+}
+
+function runActionForm(trip, stop) {
+  const form = el('div', 'run-action-form');
+  const kind = document.createElement('select');
+  kind.className = 'select';
+  for (const value of ['load', 'unload', 'buy', 'sell', 'collect', 'refuel', 'repair', 'do'])
+    kind.append(new Option(runActionLabel(value), value));
+
+  const text = document.createElement('input');
+  text.type = 'text';
+  text.className = 'search';
+  text.placeholder = 'What needs doing?';
+
+  const quantity = document.createElement('input');
+  quantity.type = 'number';
+  quantity.className = 'search run-action-amount';
+  quantity.placeholder = 'Qty';
+  quantity.min = '0';
+  quantity.step = 'any';
+
+  const unit = document.createElement('select');
+  unit.className = 'select';
+  unit.append(new Option('No unit', ''));
+  unit.append(new Option('SCU', 'SCU'));
+  unit.append(new Option('units', 'units'));
+  unit.append(new Option('aUEC', 'aUEC'));
+
+  const save = el('button', 'ghost tiny', 'Add');
+  save.addEventListener('click', () => {
+    if (!text.value.trim()) {
+      text.focus();
+      return;
+    }
+    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions`, 'POST', {
+      kind: kind.value,
+      text: text.value,
+      quantity: quantity.value === '' ? null : Number(quantity.value),
+      unit: unit.value || null,
+    });
+  });
+
+  form.append(kind, text, quantity, unit, save);
+  return form;
 }
 
 /**
@@ -7810,7 +8602,7 @@ function renderTripCard() {
   jump.textContent = '';
 
   if (next) {
-    jump.append(el('div', 'now-trip-label', 'Jump next'));
+    jump.append(el('div', 'now-trip-label', next.done ? 'At this stop' : 'Jump next'));
     jump.append(el('div', 'now-trip-where', next.place));
     if (next.note) jump.append(el('div', 'now-trip-note', next.note));
   } else {
@@ -7832,7 +8624,7 @@ function renderTripCard() {
  * One stop, wherever it is shown. Clicking the number crosses it off; clicking
  * the name flies the map to it.
  */
-function tripStopRow(trip, stop, index, isNext) {
+function tripStopRow(trip, stop, index, isNext, editable = false) {
   const row = el('div', `trip-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
 
   const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
@@ -7852,6 +8644,8 @@ function tripStopRow(trip, stop, index, isNext) {
 
   main.append(name);
   if (stop.note) main.append(el('div', 'trip-note', stop.note));
+  for (const action of (stop.actions || []))
+    main.append(runActionRow(trip, stop, action, editable));
   row.append(main);
 
   return row;
@@ -7883,7 +8677,7 @@ function renderTripPanel() {
   const next = nextStop(trip);
 
   trip.stops.forEach((stop, index) => {
-    const row = tripStopRow(trip, stop, index, stop === next);
+    const row = tripStopRow(trip, stop, index, stop === next, true);
 
     // The panel is where a plan is edited; the Now card only reads it.
     const tools = el('div', 'trip-tools');
@@ -7905,7 +8699,15 @@ function renderTripPanel() {
     drop.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
 
-    tools.append(up, down, drop);
+    const addAction = el('button', 'ghost tiny', '+');
+    addAction.title = 'Add a run-sheet action at this stop';
+    addAction.addEventListener('click', () => {
+      const existing = row.querySelector('.run-action-form');
+      if (existing) existing.remove();
+      else row.append(runActionForm(trip, stop));
+    });
+
+    tools.append(addAction, up, down, drop);
     row.append(tools);
     body.append(row);
   });
@@ -8656,6 +9458,85 @@ function commoditiesSoldAt(location) {
     .sort();
 }
 
+/** Personal POIs are local notes, never an assertion about the map's telemetry. */
+async function loadMapNotes() {
+  mapNotes = await getJson('/api/map-notes');
+  mapNoteIds.clear();
+  for (const note of mapNotes) if (note.placeId) mapNoteIds.add(note.placeId);
+  if (mapInfoLocation) renderMapInfoNotes(mapInfoLocation);
+  if (atlas.length) drawMap();
+}
+
+async function saveMapNote(body) {
+  const response = await fetch('/api/map-notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error('Could not save note');
+  await loadMapNotes();
+}
+
+async function removeMapNote(id) {
+  await fetch(`/api/map-notes/${id}`, { method: 'DELETE' });
+  await loadMapNotes();
+}
+
+function renderMapInfoNotes(location) {
+  const host = $('#map-info-notes');
+  if (!host) return;
+  host.textContent = '';
+
+  const notes = mapNotes.filter((note) => note.placeId === location.rawId);
+  host.append(el('div', 'map-note-heading', notes.length ? `Your notes · ${notes.length}` : 'Personal map note'));
+
+  for (const note of notes) {
+    const card = el('div', 'map-note');
+    const top = el('div', 'map-note-top');
+    top.append(el('b', null, note.title));
+    const remove = el('button', 'ghost tiny', '×');
+    remove.title = 'Remove this map note';
+    remove.addEventListener('click', () => removeMapNote(note.id));
+    top.append(remove);
+    card.append(top);
+    if (note.note) card.append(el('div', 'map-note-text', note.note));
+    if (note.tags?.length) card.append(el('div', 'map-note-tags', note.tags.join(' · ')));
+    card.append(el('div', 'map-note-age', `written ${relative(note.updatedAt)}`));
+    host.append(card);
+  }
+
+  const form = el('div', 'map-note-form');
+  const title = document.createElement('input');
+  title.type = 'text';
+  title.className = 'search';
+  title.placeholder = 'Title, e.g. cargo entrance';
+  const detail = document.createElement('input');
+  detail.type = 'text';
+  detail.className = 'search';
+  detail.placeholder = 'Optional note';
+  const tags = document.createElement('input');
+  tags.type = 'text';
+  tags.className = 'search';
+  tags.placeholder = 'Tags, comma separated';
+  const save = el('button', 'ghost tiny', 'Save note');
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      await saveMapNote({
+        placeId: location.rawId,
+        place: location.name,
+        title: title.value,
+        note: detail.value || null,
+        tags: tags.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+      });
+    } finally {
+      save.disabled = false;
+    }
+  });
+  form.append(title, detail, tags, save);
+  host.append(form);
+}
+
 /** The place the detail card currently shows, for re-rendering on toggle. */
 let mapInfoLocation = null;
 
@@ -8718,6 +9599,7 @@ function showMapInfo(location) {
     : '';
 
   renderMapInfoServices(location);
+  renderMapInfoNotes(location);
 
   // In commodity mode, say which side of the search this place is on.
   const trade = $('#map-info-trade');
@@ -9470,6 +10352,9 @@ function drawNode(map, x, y, location, radius, anchor = null, room = Infinity) {
 
   if (showServiceBadges(location, highlighted))
     drawServiceBadges(group, x, y, radius, servicesAt(location));
+
+  if (mapNoteIds.has(location.rawId))
+    drawMapNoteBadge(group, x, y, radius);
 
   // A styled tooltip that appears instantly - the native <title> takes a
   // second to show and cannot be read against the game-HUD styling.

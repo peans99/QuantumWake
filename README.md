@@ -353,6 +353,93 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.15
+
+- **Crew now knows who was in the ship, not just who was online.** Every
+  vehicle opens a comms channel naming itself *and its owner*, which is the
+  only thing in the logs that puts a person inside a particular ship. The
+  Crew page lists the ships you and somebody else were both aboard, and
+  whether it was theirs or yours. Counted in boardings rather than hours,
+  because nothing records how long anyone stayed and a parked ship looks the
+  same as a crossing. Your sessions are re-read once after this update.
+
+- **A flight plan is now a run sheet.** Each stop can hold checkable manual
+  load, unload, buy, sell, collect, refuel, repair or free-form instructions,
+  with an optional quantity and unit. Arriving records the landing but keeps
+  that stop active until its run work is crossed off — the log cannot supply a
+  cargo manifest, so these are always visibly your own instructions.
+
+- **The map remembers your places.** Save personal POIs directly on an atlas
+  place with a title, note and tags. They appear as amber diamonds, can be
+  focused with the new Notes filter, and stay clearly separate from services,
+  visits and other game-derived map facts.
+
+- **The Now page no longer turns Location into an empty wall.** Compact status
+  cards share the first row, while the actionable briefing uses the full width
+  below them. Location stays only as tall as its actual information.
+
+- **Build the exact log story you need to test.** The simulator now has named,
+  deterministic scenarios for 19 focused cases: single and multi-stop trading,
+  tricky purchase confirmation, medical and death recovery, full party
+  lifecycle, completed and abandoned contracts, loadout and stash changes,
+  fleet and ship retrieval, location correction, disconnects, and archived
+  combat. `--scenario all` combines them, while `--list-scenarios` explains the
+  focused choices. Every scenario is parsed back through the production reader
+  in tests, including a check that no known tag went unmatched.
+
+- **Cargo buys now reproduce the real hundredfold unit trap.** The game writes
+  sales as SCU under `amount`, but purchases as centi-SCU under `price`. The
+  simulator now preserves that difference so a generated 32 SCU purchase proves
+  the production parser returns 32, rather than quietly accepting 3,200.
+
+- **The Crew page had been missing half the party channel.** The game
+  announces a party changing under two titles that do not begin with the word
+  *Party* &mdash; `New Member Joined` and `Member Left` &mdash; and neither was
+  being read. On this install that was 22 joins and 33 departures dropped, and
+  **seven people who were never named at all**. Crew now separates the party
+  changing from a member’s client coming and going, because somebody who logs
+  out and back in has not left, and one number for both makes a friend with a
+  poor connection look like one who walked off. Your sessions are re-read once
+  after this update to fill them in.
+
+- **Share what your logs know, as a file.** Settings can now save a JSON file
+  of your own data for another pilot: what you paid and were paid at a named
+  terminal, which blueprints you hold, and the jobs, checklists and flight
+  plans you have written. Each is a separate tick and the trade window
+  defaults to the last seven days, since a price older than that is a rumour
+  rather than a lead. You see the counts before anything is written.
+
+- **What is deliberately not in it.** Market prices from UEX are a third
+  party's, crowd-sourced by their datarunners, and are not ours to pass on;
+  the crafting catalogue is game data this project has never redistributed.
+  A blueprint in a shared file is the name and date the game announced you
+  were given it, never a recipe. Your UEX keys are never in it.
+
+- **Open a file somebody sent you, and take it away again.** Shared files get
+  their own page under Settings. Each one says whose it is, when the data in
+  it was observed rather than merely when it arrived, and what could not be
+  read. Nothing is mixed into your own jobs, checklists or history: removing
+  an import takes the whole thing away and leaves your work untouched, and
+  you can drop one part of a file while keeping the rest, or hide it without
+  deleting it.
+
+- **Their rows beside yours, when you ask for it.** One switch shows imported
+  jobs, checklists and plans alongside your own, marked with whose they are
+  and checked against your stashes &mdash; so "Bob needs four Agricium" reads
+  beside "and you have some at Port Tressler". It starts off. Their cards
+  carry no buttons that change anything; the one thing you can do is copy a
+  list into your own, which makes your copy and leaves theirs alone.
+
+- **Their trades and blueprints stay out of your totals.** Imported receipts
+  appear in their own block on Cargo rather than in your earnings, and
+  imported blueprints answer "who can craft this" without entering the picker
+  that builds a plan you could not carry out.
+
+- **A trade window now means the trades.** Asking for "the last seven days"
+  used to be measured against when each play session began, so an evening
+  that started just outside the window took every trade made inside it out of
+  the answer.
+
 ### 0.7.18
 
 - **A clearer overview at the top of this page.** The at-a-glance graphic is

@@ -471,6 +471,7 @@ h2.spaced { margin-top: 32px; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: var(--gap);
+  align-items: start;
 }
 
 .card {
@@ -494,6 +495,11 @@ h2.spaced { margin-top: 32px; }
 
 .card.hero, .card.span2 { grid-column: span 2; }
 @media (max-width: 780px) { .card.hero, .card.span2 { grid-column: span 1; } }
+
+/* The briefing can be much taller than the place summary. Giving it a whole
+   row lets the compact status cards fill the first row instead of stretching
+   Location into a large empty panel beside it. */
+.card.now-briefing { grid-column: 1 / -1; }
 
 .card-label {
   font-size: 9.5px;
@@ -2590,6 +2596,45 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
 .wipe-row .search { font-size: 12px; }
+/* Trades and blueprints from other people, in a block of their own so nothing
+   here can be mistaken for one of the reader's totals. */
+.shared-block {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber, #d8a03d);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.shared-block h3 { margin: 0 0 4px; font-size: 13px; }
+.shared-block p { font-size: 12px; margin: 0 0 8px; max-width: 72ch; }
+.shared-blueprints { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+
+/* A row that came out of somebody else's file. Readable exactly like the
+   reader's own - the point is to compare them - but never mistakable for it. */
+.job-card.from-a-file, .checklist-card.from-a-file { border-left: 3px solid var(--amber, #d8a03d); }
+.job-kind.from-a-file { background: rgba(216, 160, 61, 0.16); color: var(--amber, #d8a03d); }
+
+/* Shared files: a card per import, shaped like the job cards it sits near so a
+   file somebody else wrote does not get a visual language of its own. */
+.import-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--panel);
+}
+.import-card .muted { font-size: 12px; line-height: 1.6; }
+.import-counts { font-size: 13px; margin: 4px 0; }
+.import-classes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#imports-status { display: inline-block; font-size: 12px; margin-bottom: 8px; }
+
+/* The export block's one non-toggle control, laid out like the wipe row it
+   sits near so the Settings page keeps a single shape for "a field and a word". */
+.export-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 6px; }
+.export-row .select { font-size: 12px; }
+#export-preview, #export-status { display: block; font-size: 12px; margin-top: 4px; }
+
 .wipe-caption { margin: 10px 0 6px; padding-left: 0; }
 .wipe-scope { display: flex; flex-direction: column; gap: 6px; }
 .wipe-scope .toggle { font-size: 12px; }
@@ -2689,6 +2734,38 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .trip-place:hover { color: var(--cyan-hot); }
 .trip-note { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
 
+/* A run sheet stays inside the stop it belongs to: the pilot reads an action
+   against a landing, not as an unanchored task elsewhere on the page. */
+.run-action {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+.run-action input { margin: 0; accent-color: var(--cyan); }
+.run-action.done { opacity: .58; }
+.run-action.done .run-action-text { text-decoration: line-through; }
+.run-action-text { min-width: 0; overflow-wrap: anywhere; }
+.run-action-text b { color: var(--cyan-hot); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.run-action-quantity { color: var(--dim); margin-left: 5px; white-space: nowrap; }
+.run-action-form {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: 76px minmax(120px, 1fr) 58px 72px auto;
+  gap: 4px;
+  margin-top: 4px;
+}
+.run-action-form .search, .run-action-form .select { min-width: 0; padding: 4px 6px; font-size: 10px; }
+.run-action-amount { width: 58px; }
+@media (max-width: 560px) {
+  .run-action-form { grid-template-columns: 1fr 1fr; }
+  .run-action-form .search:first-of-type { grid-column: 1 / -1; }
+}
+
 .trip-tools { display: flex; gap: 3px; }
 .trip-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 
@@ -2755,6 +2832,19 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
   padding: 3px 6px;
 }
 .map-service-chip:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+
+/* Personal POIs look intentionally quieter than game or community facts.
+   Amber distinguishes something the pilot wrote from the cyan map language. */
+.map-note-badge path { fill: rgba(216, 160, 61, .9); stroke: #ffe0a1; stroke-width: .7; }
+.map-info-notes { border-top: 1px solid var(--rule); margin-top: 9px; padding-top: 8px; }
+.map-note-heading { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
+.map-note { border-left: 2px solid var(--amber, #d8a03d); padding: 4px 0 4px 7px; margin: 5px 0; }
+.map-note-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; color: var(--text); font-size: 11px; }
+.map-note-text { color: var(--muted); font-size: 10.5px; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
+.map-note-tags, .map-note-age { color: var(--dim); font-size: 9.5px; margin-top: 2px; }
+.map-note-form { display: grid; gap: 4px; margin-top: 8px; }
+.map-note-form .search { min-width: 0; padding: 4px 6px; font-size: 10px; }
+.map-note-form .ghost { justify-self: start; }
 
 body.overlay .now-card-actions, body.overlay .now-card-visibility { display: none; }
 body.overlay .briefing-head { margin-bottom: 6px; }

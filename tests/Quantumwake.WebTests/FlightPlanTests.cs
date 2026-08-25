@@ -190,4 +190,21 @@ public class FlightPlanTests
         Assert.Contains("\"placeId\":\"GrimHEX\"", body);
         Assert.Contains("\"note\":\"Pick up armour\"", body);
     }
+
+    [Fact]
+    public void A_run_action_is_visible_on_now_and_toggles_from_there()
+    {
+        var page = new Page();
+        page.Serve("/api/trips", """
+            [{"id":"t1","title":"Cargo run","createdAt":"2026-08-22T09:00:00Z","tracked":true,
+              "stops":[{"id":"s1","placeId":"Stanton1_Lorville","place":"Lorville","note":null,"done":false,
+                "actions":[{"id":"a1","kind":"load","text":"Agricium","quantity":96,"unit":"SCU","done":false}]}]}]
+            """);
+        page.Do("await loadTrips();");
+
+        Assert.Contains("Load", page.NodeText("#now-trip-stops"));
+        Assert.Contains("Agricium", page.NodeText("#now-trip-stops"));
+        page.Do("__dom.node('#now-trip-stops').byClass('run-action')[0].children[0].fire('change');");
+        Assert.Contains("POST /api/trips/t1/stops/s1/actions/a1/toggle", page.Fetched());
+    }
 }
