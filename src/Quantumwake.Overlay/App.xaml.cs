@@ -30,6 +30,7 @@ public partial class App : System.Windows.Application
     private const string DashboardUrl = "http://127.0.0.1:31337/";
 
     private WebApplication? _server;
+    private string[] _arguments = [];
     private TrayPresence? _tray;
     private MainWindow? _overlay;
     private Settings _settings = new();
@@ -45,6 +46,10 @@ public partial class App : System.Windows.Application
 
         // Before Settings.Load, so --data moves the whole app - overlay
         // preferences and WebView2 profile included - and not just the server.
+        // Kept for Restart: an update replaces the file and starts it again,
+        // and it has to come back as the same copy rather than the default one.
+        _arguments = e.Args;
+
         Core.AppPaths.UseFromArguments(e.Args);
 
         _settings = Settings.Load();
@@ -170,11 +175,29 @@ public partial class App : System.Windows.Application
             Restart();
     }
 
+    /// <summary>
+    /// Starts this application again and stands down.
+    /// </summary>
+    /// <remarks>
+    /// The arguments come too. Dropping them looks harmless because most people
+    /// pass none, but --data moves every store and --path names the install, so
+    /// a restart without them silently points a second copy at the default
+    /// folder - somebody else's real data, if this one was deliberately kept
+    /// away from it. Found by updating a copy running on --data and watching the
+    /// new process come back with none.
+    /// </remarks>
     private void Restart()
     {
         var exe = Environment.ProcessPath;
+
         if (exe is not null)
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        {
+            var start = new ProcessStartInfo(exe) { UseShellExecute = true };
+            foreach (var argument in _arguments)
+                start.ArgumentList.Add(argument);
+
+            Process.Start(start);
+        }
 
         Quit();
     }
