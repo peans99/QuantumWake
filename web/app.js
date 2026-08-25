@@ -11008,10 +11008,15 @@ async function runUpdateCheck({ quiet }) {
   const actions = $('#update-actions');
   actions.textContent = '';
 
-  const open = el('button', 'ghost', 'Open the release page');
+  // Only offered when the server says this copy can actually replace itself: a
+  // source build cannot, and a button that explains itself only after being
+  // pressed is worse than one that was never there.
+  if (result.canInstall) actions.append(updateNowButton(result));
+
+  const open = el('button', 'ghost', result.canInstall ? 'Read the notes' : 'Open the release page');
   open.addEventListener('click', () => {
     window.open(result.url, '_blank', 'noreferrer');
-    notice.hidden = true;
+    if (!result.canInstall) notice.hidden = true;
   });
 
   const later = el('button', 'ghost', 'Later');
@@ -11019,6 +11024,58 @@ async function runUpdateCheck({ quiet }) {
 
   actions.append(open, later);
   notice.hidden = false;
+}
+
+/**
+ * The one-click update.
+ *
+ * The whole thing happens on the server - fetch, check the hash GitHub
+ * published, move the running file aside, put the new one in place - so this
+ * only has to say what is happening and stay honest when it does not work.
+ *
+ * Ninety megabytes takes a while on a slow line, and a button that looks
+ * unresponsive for a minute gets pressed again, so it disables itself and says
+ * so rather than leaving the reader guessing.
+ */
+function updateNowButton(result) {
+  const install = el('button', 'ghost on', `Update to ${result.latest}`);
+  install.title = 'Downloads it, checks it, and restarts into the new version';
+
+  install.addEventListener('click', async () => {
+    install.disabled = true;
+    install.textContent = 'Downloading…';
+    $('#update-detail').textContent = 'Fetching the new version and checking it against '
+      + 'what GitHub published. This can take a minute.';
+
+    let answer;
+    try {
+      const response = await fetch('/api/updates/install', { method: 'POST' });
+      answer = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        // The server's own words: it knows whether the folder was writable,
+        // the download was short, or something had the file open.
+        $('#update-detail').textContent = answer?.message || 'The update could not be applied.';
+        install.textContent = 'Try again';
+        install.disabled = false;
+        return;
+      }
+    } catch {
+      $('#update-detail').textContent = 'The download did not finish, so nothing was replaced.';
+      install.textContent = 'Try again';
+      install.disabled = false;
+      return;
+    }
+
+    // Two endings, and they are different promises. One restarts itself; the
+    // other has already swapped the file and needs a hand.
+    install.textContent = answer.restarting ? 'Restarting…' : 'Installed';
+    $('#update-detail').textContent = answer.restarting
+      ? `Quantum Wake ${answer.version} is installed. Restarting now.`
+      : `Quantum Wake ${answer.version} is installed. Close this and start it again to use it.`;
+  });
+
+  return install;
 }
 
 /** The Settings block: the toggle, and what the last look found. */

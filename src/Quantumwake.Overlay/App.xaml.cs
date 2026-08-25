@@ -109,12 +109,26 @@ public partial class App : System.Windows.Application
             _server = ServerHost.Build(args);
             await _server.StartAsync();
 
+            // Whatever the last update left behind. Done here rather than at the
+            // moment of the swap, because then it was still the file this
+            // process was running from and Windows would not part with it.
+            SelfUpdate.TidyPreviousVersion();
+
             // Let the dashboard's Settings page show and hide the overlay. The
             // callback arrives on a request thread; everything WPF happens on
             // the dispatcher.
             _server.Services.GetRequiredService<OverlayBridge>().Attach(
                 _settings.ShowOverlay,
                 visible => Dispatcher.Invoke(() => SetOverlayVisible(visible)));
+
+            // An update has already replaced the file on disk by the time this
+            // is called, so the restart is what makes it take effect. Queued on
+            // the dispatcher like the overlay callback, and deferred so the
+            // request that asked for it can finish answering first - the page
+            // needs to hear "installed" before the server stops.
+            _server.Services.GetRequiredService<ShellBridge>().AttachRestart(
+                () => Dispatcher.InvokeAsync(
+                    Restart, System.Windows.Threading.DispatcherPriority.ApplicationIdle));
         }
         catch (Exception ex)
         {
