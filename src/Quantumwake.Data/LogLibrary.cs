@@ -109,11 +109,16 @@ public sealed record TradeRecord(
 /// pages in an item it has not shown before, which covers looting but also
 /// buying and receiving, and only while the inventory is open.
 /// </remarks>
+/// <param name="Category">
+/// What kind of thing it is, from the same reading of the item class the Stash
+/// page groups by - so a filter here and a heading there cannot disagree.
+/// </param>
 public sealed record PickupRecord(
     DateTimeOffset At,
     string Item,
     string ItemClass,
-    string Place);
+    string Place,
+    string Category = ItemCategories.Other);
 
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
@@ -1561,7 +1566,8 @@ public sealed class LogLibrary : IDisposable
                     pickup.At,
                     Names.Item(pickup.ItemClass),
                     pickup.ItemClass,
-                    PlaceAt(session, pickup.At)));
+                    PlaceAt(session, pickup.At),
+                    ItemCategories.Of(pickup.ItemClass)));
             }
         }
 
