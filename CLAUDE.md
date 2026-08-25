@@ -149,10 +149,22 @@ no Node here. What works:
      --virtual-time-budget=12000 --screenshot=out.png <url>
    ```
 
-Two traps. The server serves `bin\Release\net10.0\web`, **not** the repo's
-`web/` — rebuild after every asset edit, and stop the server first or the copy
-is locked. And stub `window.EventSource` in any throwaway page you drive, or it
-never settles.
+Two traps about the screenshot itself, and both cost an afternoon each.
+
+**The PNG lands seconds after Chrome exits zero.** Checking for the file
+immediately afterwards reports nothing, and reports it convincingly — a whole
+session was written off as "headless Chrome is broken on this machine" when
+several of the shots had in fact been taken. Wait for the file, or retry until
+it exists, rather than trusting the exit code and an `ls`.
+
+**A `MutationObserver` left connected stops the virtual clock settling**, so no
+screenshot is produced at all. To drive a page, wrap the render function once
+and stand down; observing the document keeps it alive for ever.
+
+Two more about the setup. The server serves `bin\Release\net10.0\web`, **not**
+the repo's `web/` — rebuild after every asset edit, and stop the server
+first or the copy is locked. And stub `window.EventSource` in any throwaway
+page you drive, or it never settles.
 
 Two more traps once a page has to be *driven* rather than merely loaded. Chrome's
 virtual clock stalls while the live stream holds a request open, so `setTimeout`
