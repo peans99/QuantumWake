@@ -543,6 +543,17 @@ function briefingStopRow(briefing, stop) {
   name.addEventListener('click', () => briefingMap(stop.placeId, stop.place));
   main.append(name);
   if (stop.note) main.append(el('div', 'briefing-detail', stop.note));
+
+  // What is still owed here. Without this the card keeps a landed stop on
+  // screen and never says why it is keeping it, which reads as a stop that
+  // will not cross off rather than as work outstanding.
+  for (const action of stop.actions || []) {
+    const quantity = action.quantity
+      ? ` ${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`
+      : '';
+    main.append(el('div', 'briefing-detail', `${action.kind}${quantity} · ${action.text}`));
+  }
+
   row.append(main);
 
   const done = el('button', 'ghost tiny', 'Mark collected');
@@ -4786,6 +4797,7 @@ function countLine(counts) {
   if (counts.jobs) parts.push(`${counts.jobs} jobs`);
   if (counts.checklists) parts.push(`${counts.checklists} checklists`);
   if (counts.trips) parts.push(`${counts.trips} flight plans`);
+  if (counts.runActions) parts.push(`${counts.runActions} run-sheet lines`);
   return parts.join(' · ');
 }
 

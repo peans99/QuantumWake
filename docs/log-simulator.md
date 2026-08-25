@@ -78,10 +78,13 @@ show. They write one completed `LIVE\Game.log` and print their expected facts.
 | `combat` | One player kill, one death, and a destroyed vehicle |
 | `all` | Every focused story composed into one session |
 
-For a stable file timestamp as well as stable event content, pass an explicit
-start such as `--start 2026-08-24T20:00:00Z`. Automated tests generate every
-scenario, feed it back through `LogFileReader` and `SessionBuilder`, assert the
-claimed session facts, and require zero unmatched known tags.
+Scenario events are stable for a given `--start` and seed. The file’s own
+timestamp is not: only the backups loop sets it, so a scenario `Game.log` is
+always stamped with the moment it was written.
+
+Automated tests generate every scenario, feed it back through `LogFileReader`
+and `SessionBuilder`, assert the claimed session facts, and require zero
+unmatched known tags.
 
 ## Why it reproduces the ugly parts
 
