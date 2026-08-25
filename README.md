@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.16
+### 0.8.17
 
 - **New items can be narrowed by kind and by place.** Two dropdowns beside the
   search: what kind of thing it is — weapons, armour, ammo, medical and the
