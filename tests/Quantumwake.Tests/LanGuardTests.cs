@@ -43,6 +43,11 @@ public class LanGuardTests
     // over the whole history at once, in a file built for keeping, so it must
     // not be reachable from the tablet the read-only rule exists to serve.
     [InlineData("POST", "/api/export")]
+
+    // Replacing somebody's application over the wifi is precisely the shape of
+    // thing this rule exists for, so it is pinned rather than left to the
+    // general method check nobody would notice loosening.
+    [InlineData("POST", "/api/updates/install")]
     [InlineData("POST", "/api/imports")]
     public void Changing_anything_is_refused(string method, string path)
     {
