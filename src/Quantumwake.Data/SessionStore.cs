@@ -143,7 +143,10 @@ public sealed class SessionStore : IDisposable
     //    Member Left. 55 membership events on this install were being dropped
     //    for not starting with the word "Party", and without this every one of
     //    them stays dropped in sessions already summarised.
-    private const int PayloadVersion = 6;
+    // 7: ship comms channels are kept, so sessions summarised before them know
+    //    nobody was ever aboard anything and the Crew page's ships would be
+    //    empty for every install except a brand new one.
+    private const int PayloadVersion = 7;
 
 
     /// <summary>

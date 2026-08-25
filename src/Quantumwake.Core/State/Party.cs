@@ -90,18 +90,20 @@ public static class Party
 {
     /// <summary>True when a notification came from the party channel at all.</summary>
     /// <remarks>
-    /// <c>Member Left</c> is asked about its body rather than taken on its
-    /// title, because most of its lines are a ship's comms channel emptying.
-    /// Counting those here would not misread anybody - <see cref="Read"/>
-    /// refuses them either way - but it would inflate "party notifications" with
-    /// 27 lines that were never about a party, and the gap between that number
-    /// and the notes read is the only measure of what the reader is declining
-    /// to guess at.
+    /// Both shared titles are asked about their body rather than taken on their
+    /// title, because a ship's comms channel uses the same two. On this install
+    /// <c>New Member Joined</c> carries 22 party joins and 22 ship boardings,
+    /// and <c>Member Left</c> 33 departures against 27 channel exits. Counting
+    /// the other reader's lines here would not misread anybody -
+    /// <see cref="Read"/> refuses them either way - but it would inflate "party
+    /// notifications", and the gap between that number and the notes read is the
+    /// only measure of what this reader is declining to guess at.
     /// </remarks>
     public static bool IsParty(string text) =>
         text.StartsWith("Party ", StringComparison.OrdinalIgnoreCase)
         || text.StartsWith("New Party Leader ", StringComparison.OrdinalIgnoreCase)
-        || text.StartsWith("New Member Joined", StringComparison.OrdinalIgnoreCase)
+        || (text.StartsWith("New Member Joined", StringComparison.OrdinalIgnoreCase)
+            && text.Contains(" has joined the party.", StringComparison.OrdinalIgnoreCase))
         || (text.StartsWith("Member Left", StringComparison.OrdinalIgnoreCase)
             && text.Contains(" has left the party.", StringComparison.OrdinalIgnoreCase));
 
