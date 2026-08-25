@@ -2048,11 +2048,52 @@ async function loadLoot() {
   renderLoot(await getJson(`/api/loot?days=${days}`));
 }
 
+/**
+ * Fills a filter with what the rows actually contain.
+ *
+ * Only what is there, rather than every category the classifier knows: a
+ * dropdown offering "Containers" on an install that has never seen one is a
+ * filter that can only disappoint. The chosen value is kept across a redraw
+ * when it still exists, and quietly falls back to everything when it does not -
+ * which happens when the date window moves and takes the last of something
+ * with it.
+ */
+function fillLootFilter(select, all, label) {
+  if (!select) return '';
+
+  const chosen = select.value;
+  const values = [...new Set(all.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  select.textContent = '';
+
+  const any = document.createElement('option');
+  any.value = '';
+  any.textContent = label;
+  select.append(any);
+
+  for (const value of values) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+
+  select.value = values.includes(chosen) ? chosen : '';
+  return select.value;
+}
+
 function renderLoot(pickups) {
   const term = ($('#loot-search').value || '').trim().toLowerCase();
 
+  // Built from everything the window holds, not from what survives the other
+  // filters - or choosing a kind would empty the place list and strand you.
+  const kind = fillLootFilter($('#loot-kind'), pickups.map((p) => p.category), 'Any kind');
+  const place = fillLootFilter($('#loot-place'), pickups.map((p) => p.place), 'Anywhere');
+
   const rows = pickups.filter((p) =>
-    !term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term));
+    (!term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term))
+    && (!kind || p.category === kind)
+    && (!place || p.place === place));
 
   tiles('#loot-summary', [
     ['New items', rows.length],
@@ -2065,10 +2106,17 @@ function renderLoot(pickups) {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'Nothing in that range.');
-    td.colSpan = 3;
+
+    // Name the filter that emptied it. "Nothing in that range" is the wrong
+    // explanation for a table a dropdown hid every row from.
+    const td = el('td', 'muted', kind || place
+      ? `Nothing matching ${[kind, place].filter(Boolean).join(' at ')} in that range.`
+      : 'Nothing in that range.');
+
+    td.colSpan = 4;
     tr.append(td);
     body.append(tr);
+    lastLootRows = pickups;
     return;
   }
 
@@ -2076,6 +2124,7 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
+    tr.append(el('td', 'muted', pickup.category));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
@@ -2087,6 +2136,10 @@ let lastLootRows = [];
 
 onInput('#loot-search', () => renderLoot(lastLootRows));
 onInput('#loot-period', loadLoot);
+
+// The two filters redraw what is already loaded; only the date window refetches.
+$('#loot-kind')?.addEventListener('change', () => renderLoot(lastLootRows));
+$('#loot-place')?.addEventListener('change', () => renderLoot(lastLootRows));
 
 /* ---------- reference catalogues: ships, parts ---------- */
 
