@@ -1,10 +1,10 @@
 name: CI
 
-# Windows only, and not by preference: Quantumwake.Overlay targets
-# net10.0-windows for WPF, so the solution cannot restore on a Linux runner.
-# Core, Data, Server and the tests are all plain net10.0 and would build
-# anywhere - if a Linux-hosted server mode ever lands, split the solution and
-# add an ubuntu job for those four.
+# The main build is Windows-only, and not by preference: Quantumwake.Overlay
+# targets net10.0-windows for WPF, so the solution cannot restore on a Linux
+# runner. The org server is the Linux-hosted mode this comment used to
+# anticipate, so it gets the ubuntu job below - by project path, never the
+# slnx, which drags the WPF project in.
 
 on:
   push:
@@ -129,3 +129,19 @@ jobs:
           echo "::error::"
           echo "::error::    No-payload-bump: renamed a private field, nothing new is read"
           exit 1
+
+  # The org server deploys to Linux (container, Azure), so it is built and
+  # tested where it runs. Project paths only: restoring the slnx here would
+  # fail on the WPF overlay.
+  orgserver:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test the org server
+        run: dotnet test tests/Quantumwake.OrgServer.Tests -c Release

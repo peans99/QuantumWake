@@ -6,6 +6,14 @@
     <Nullable>enable</Nullable>
     <!-- The published name people type; the assembly keeps the project name. -->
     <AssemblyName>Quantumwake.OrgServer</AssemblyName>
+    <!-- A published server is one file. Nothing here is ever hosted in IIS,
+         and the sqlite native library rides inside the single file the same
+         way the main app carries its own. -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <PublishIISAssets>false</PublishIISAssets>
+    <!-- Pages are served by hand from web-org; the SDK pipeline has nothing to add. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

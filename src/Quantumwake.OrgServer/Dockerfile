@@ -11,6 +11,8 @@
 # OrgServer__BehindProxy=true there so redirects and cookies know.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# The props file carries the version; without it the image claims 1.0.0.
+COPY Directory.Build.props /src/Directory.Build.props
 COPY src/Quantumwake.OrgShared /src/src/Quantumwake.OrgShared
 COPY src/Quantumwake.OrgServer /src/src/Quantumwake.OrgServer
 RUN dotnet publish /src/src/Quantumwake.OrgServer -c Release -o /out

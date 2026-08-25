@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.0
+### 0.9.1
 
 The first piece of the org network: a separate, entirely optional server that
 an org can run - or have run for it - so members can pool what their own

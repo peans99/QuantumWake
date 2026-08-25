@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
@@ -89,6 +90,21 @@ jobs:
             -p:Version=${{ steps.version.outputs.version }} -o dist/cli
           if ($LASTEXITCODE -ne 0) { throw 'cli publish failed' }
 
+      # The org server ships for both places people run servers. Its own output
+      # directories, on purpose: the one-file assertion above watches dist/app
+      # and must stay watching exactly one file.
+      - name: Publish the org server
+        shell: pwsh
+        run: |
+          foreach ($rid in 'linux-x64', 'win-x64') {
+            dotnet publish src/Quantumwake.OrgServer -c Release -r $rid `
+              --self-contained true -p:PublishSingleFile=true `
+              -p:EnableCompressionInSingleFile=true -p:IsTransformWebConfigDisabled=true `
+              -p:DebugType=embedded `
+              -p:Version=${{ steps.version.outputs.version }} -o "dist/orgserver-$rid"
+            if ($LASTEXITCODE -ne 0) { throw "org server publish failed for $rid" }
+          }
+
       - name: Archive
         id: archive
         shell: pwsh
@@ -108,6 +124,13 @@ jobs:
           $zip = "QuantumWake-$version-win-x64.zip"
           Compress-Archive -Path $staging -DestinationPath $zip
           "asset=$zip" | Out-File $env:GITHUB_OUTPUT -Append
+
+          foreach ($rid in 'linux-x64', 'win-x64') {
+            Compress-Archive -Path "dist/orgserver-$rid/*" `
+              -DestinationPath "QuantumWake-OrgServer-$version-$rid.zip"
+          }
+          "orglinux=QuantumWake-OrgServer-$version-linux-x64.zip" | Out-File $env:GITHUB_OUTPUT -Append
+          "orgwin=QuantumWake-OrgServer-$version-win-x64.zip" | Out-File $env:GITHUB_OUTPUT -Append
 
       - name: Release
         shell: pwsh
@@ -174,5 +197,34 @@ jobs:
           "@
           gh release create '${{ steps.version.outputs.tag }}' `
             'QuantumWake.exe' '${{ steps.archive.outputs.asset }}' `
+            '${{ steps.archive.outputs.orglinux }}' '${{ steps.archive.outputs.orgwin }}' `
             --title 'Quantum Wake ${{ steps.version.outputs.version }}' `
             --notes $notes
+
+  # The container is the Azure deployment story: App Service pulls this image
+  # from GHCR. A separate ubuntu job because the Windows runner cannot build
+  # Linux images.
+  container:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Version from the tag
+        id: version
+        run: |
+          tag='${{ github.event.inputs.tag || github.ref_name }}'
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Build and push
+        run: |
+          image='ghcr.io/${{ github.repository_owner }}/quantumwake-orgserver'
+          image=$(echo "$image" | tr '[:upper:]' '[:lower:]')
+          docker build -f src/Quantumwake.OrgServer/Dockerfile             -t "$image:${{ steps.version.outputs.version }}" -t "$image:latest" .
+          docker push "$image:${{ steps.version.outputs.version }}"
+          docker push "$image:latest"
