@@ -146,9 +146,9 @@ commodity. Hangar size is legible from the kiosk name (`HangarSmall`,
 `HangarLarge`), which is worth something to §5, but cargo hauling cannot be
 reconstructed from this. Do not re-investigate without a new line shape.
 
-## 6b. The party channel — taken in 0.7.0
+## 6b. The party channel — taken in 0.7.0, widened in 0.8
 
-Missed by the original sweep, and the best of what was left: the HUD's party
+Missed by the original sweep, and the best of what was left: the HUD’s party
 notifications are the **only** lines in a 4.9 log that name another player.
 
 ```
@@ -156,17 +156,55 @@ notifications are the **only** lines in a 4.9 log that name another player.
 D-Rud disconnected.: " [94] to queue. ...
 ```
 
-Five titles appear - `Party`, `New Party Leader`, `Party Disbanded`, and the
-matchmaking pair `Party Launch` / `Party Launch Accepted` - and they are not
-interchangeable: disbanding has to be recognised by its title, because its body
-names nobody. Across this install 291 notifications yield 273 readable notes
-naming 27 people; the remaining 18 are queue chatter and one line the game
-garbled.
+**Six titles, not five.** 0.7.0 read `Party`, `New Party Leader` and
+`Party Disbanded`, and dismissed the matchmaking pair `Party Launch` /
+`Party Launch Accepted` as chatter. It missed two more, because neither begins
+with the word *Party*: **`New Member Joined`** (`X has joined the party.`) and
+**`Member Left`** (`X has left the party.`). Fifty-five membership events on
+this install were being dropped, and dropped invisibly — they never entered the
+party-notification tally at all, so the accounting looked clean at 273 of 291
+read.
+
+They are a different fact from the connect and disconnect toasts, and a more
+valuable one. Connecting is a client coming online while already partied; a
+member who logs out and back in produces that pair all evening. Joining and
+leaving are the ones that mean somebody was not there a moment before, or is
+not coming back. Reading only the first makes a friend with a poor connection
+look like one who walked off.
+
+Current figures on this install: 365 notifications, 324 read, **32 people
+named** — seven of whom (`Craven`, `IanH1194`, `Krios`, `Ronus`,
+`SuperAtomic`, `Sybreed`, `drudz`) appear *only* in join or leave lines and
+were unnameable before. 187 connects, 64 drops, 33 departures, 22 joins, 13
+leader handovers, 5 disbands. The remaining 41 are queue chatter and one line
+the game garbled.
+
+**`Member Left` is shared with ship comms**, and this is the trap. Twenty-seven
+of its lines are a ship channel emptying rather than a party changing:
+
+```
+Member Left  X has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.
+```
+
+So the body has to be read rather than the title trusted, or a passenger
+stepping out of a hired ship is recorded as leaving a party they were never in.
+
+### Still untapped: who was aboard whose ship
+
+Those channel lines are themselves a signal nothing reads. They name the ship
+**and its owner** — `'RSI Ursa Medivac : DeathStrokeo1'`, `'MISC Starlancer
+MAX : nekron'` — with a matching `You have joined channel '...'` on the way in:
+410 joins and 27 departures here, across 29 distinct ship-and-owner pairs.
+That is a crew manifest per flight, which no other line in the log carries.
+Unproven and unbuilt; written down so the next sweep starts from here rather
+than rediscovering it.
 
 The limit is worth restating wherever this gets used: there is **no roster
-event**. Presence is inferred from arrival and departure toasts alone, so
-somebody already online when you group up, who stays until you log off, produces
-nothing whatever. Every figure built on this is a floor, never a total.
+event**, and **no line records you yourself joining a party** — your own handle
+never appears as a joiner or a leaver. Presence is inferred from toasts about
+other people alone, so somebody already online when you group up, who stays
+until you log off, produces nothing whatever. Every figure built on this is a
+floor, never a total.
 
 ## 7. Lower value
 

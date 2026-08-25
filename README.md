@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.13
+### 0.8.14
 
 - **A flight plan is now a run sheet.** Each stop can hold checkable manual
   load, unload, buy, sell, collect, refuel, repair or free-form instructions,
@@ -383,6 +383,16 @@ release workflow lifts it from here, so it is written once.
   sales as SCU under `amount`, but purchases as centi-SCU under `price`. The
   simulator now preserves that difference so a generated 32 SCU purchase proves
   the production parser returns 32, rather than quietly accepting 3,200.
+
+- **The Crew page had been missing half the party channel.** The game
+  announces a party changing under two titles that do not begin with the word
+  *Party* &mdash; `New Member Joined` and `Member Left` &mdash; and neither was
+  being read. On this install that was 22 joins and 33 departures dropped, and
+  **seven people who were never named at all**. Crew now separates the party
+  changing from a member’s client coming and going, because somebody who logs
+  out and back in has not left, and one number for both makes a friend with a
+  poor connection look like one who walked off. Your sessions are re-read once
+  after this update to fill them in.
 
 - **Share what your logs know, as a file.** Settings can now save a JSON file
   of your own data for another pilot: what you paid and were paid at a named
