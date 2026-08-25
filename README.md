@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.1
+### 0.9.2
 
 The first piece of the org network: a separate, entirely optional server that
 an org can run - or have run for it - so members can pool what their own
@@ -363,6 +363,13 @@ invite people with a code, and manage members and roles. Nothing about the
 dashboard changes yet, and nothing leaves your machine unless you link it.
 The server ships as a plain executable, a Docker container, or that container
 on Azure - one build, three deployments.
+
+The app grows an **Org** tab and a Settings block to match: point the app at
+your org's server, link it (the sign-in happens in your browser - the app only
+ever holds its own key, which you can revoke from the server's account page),
+join with an invite code, and see who else has linked up. The member list says
+what it cannot know: handles are self-declared, and the roster only shows
+members who linked the app.
 
 ### 0.8.21
 

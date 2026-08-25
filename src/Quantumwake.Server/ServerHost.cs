@@ -104,6 +104,18 @@ public static class ServerHost
         builder.Services.AddSingleton<ShellBridge>();
         builder.Services.AddSingleton<SelfUpdate>();
 
+        // The org network, the fourth opt-in integration. Its own named HTTP
+        // client on purpose: the "community" client's registration promises
+        // that none of its requests carry an identifier, and every org call
+        // carries a bearer token.
+        builder.Services.AddSingleton<OrgLink>();
+        builder.Services.AddSingleton<OrgClient>();
+        builder.Services.AddHttpClient("org", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("QuantumWake");
+        });
+
         // Prices are the one dataset here with a shelf life, so they are the one
         // thing allowed to refetch themselves - and only once asked.
         builder.Services.AddSingleton<TradeDataStore>();
@@ -512,6 +524,72 @@ public static class ServerHost
             return refused is not null
                 ? Results.Json(new { message = refused.Message }, statusCode: refused.Status)
                 : Results.Ok(installed);
+        });
+
+        /* ---------- the org network, all proxied through here ----------
+           The page never talks to the org server: the token stays in this
+           process, every mutation is a POST to the local server so LanGuard
+           refuses it off-machine, and outbound calls only happen on a click. */
+
+        app.MapGet("/api/org", (OrgClient org) => Results.Ok(org.Snapshot()));
+
+        // The one GET that goes out over the network - it is a read, so a LAN
+        // tablet may cause it, and it changes nothing anywhere.
+        app.MapGet("/api/org/remote", async (OrgClient org) =>
+        {
+            await org.RefreshAsync();
+            return Results.Ok(org.Snapshot());
+        });
+
+        app.MapPost("/api/org/configure", (OrgLink orgLink, OrgClient org, OrgConfigureRequest request) =>
+        {
+            var problem = orgLink.Configure(request.ServerAddress);
+            return problem is null
+                ? Results.Ok(org.Snapshot())
+                : Results.BadRequest(new { message = problem });
+        });
+
+        app.MapPost("/api/org/link/start", async (OrgClient org) =>
+        {
+            var version = typeof(ServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            var problem = await org.StartLinkAsync(version);
+            return problem is null
+                ? Results.Ok(org.Snapshot())
+                : Results.BadRequest(new { message = problem });
+        });
+
+        app.MapPost("/api/org/link/check", async (OrgClient org) =>
+        {
+            var status = await org.CheckLinkAsync();
+            return Results.Ok(new { status, snapshot = org.Snapshot() });
+        });
+
+        app.MapPost("/api/org/unlink", (OrgClient org) =>
+        {
+            org.Unlink();
+            return Results.Ok(org.Snapshot());
+        });
+
+        app.MapPost("/api/org/join", async (OrgClient org, OrgJoinCodeRequest request) =>
+        {
+            var problem = await org.JoinAsync(request.Code);
+            return problem is null
+                ? Results.Ok(org.Snapshot())
+                : Results.BadRequest(new { message = problem });
+        });
+
+        app.MapPost("/api/org/active", (OrgLink orgLink, OrgClient org, OrgActiveRequest request) =>
+        {
+            orgLink.SetActiveOrg(request.OrgId is { Length: > 0 } id ? id : null);
+            return Results.Ok(org.Snapshot());
+        });
+
+        app.MapGet("/api/org/members", async (OrgClient org) =>
+        {
+            var (members, problem) = await org.MembersAsync();
+            return members is null
+                ? Results.Json(new { message = problem }, statusCode: 502)
+                : Results.Ok(members);
         });
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
@@ -2603,6 +2681,12 @@ public sealed record ExportRequest(
 /// a single question about how many bytes arrived.
 /// </remarks>
 public sealed record ImportRequest(string? Document, string? SourceName = null);
+
+public sealed record OrgConfigureRequest(string? ServerAddress);
+
+public sealed record OrgJoinCodeRequest(string? Code);
+
+public sealed record OrgActiveRequest(string? OrgId);
 
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);

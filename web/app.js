@@ -173,6 +173,7 @@ function showView(name) {
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
+  if (name === 'org') loadOrg().catch(() => {});
   if (name === 'commodities') renderSharedReceipts().catch(() => {});
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
@@ -4843,6 +4844,7 @@ async function renderSettings() {
   await renderUexFeeds();
   await renderSignals();
   await renderExportPreview();
+  await renderOrgSettings();
 }
 
 /* ---------- files other pilots have shared ---------- */
@@ -5618,6 +5620,262 @@ $('#settings-rescan').addEventListener('click', async (e) => {
 });
 
 /** POST that expects JSON back; getJson is GET-only. */
+/* ---------- the org network ---------- */
+
+// One snapshot feeds the settings block and the Org tab: /api/org is local
+// state only, /api/org/remote is the same shape after asking the org server.
+// The page never holds the token and never sees the device secret - both stay
+// in the local server's own file, which is also what keeps them off a LAN
+// viewer's screen.
+
+let orgLinkTimer = null;
+
+function orgStopLinkTimer() {
+  if (orgLinkTimer) { clearInterval(orgLinkTimer); orgLinkTimer = null; }
+}
+
+function orgActive(org) {
+  return (org.orgs || []).find((o) => o.id === org.activeOrgId) || null;
+}
+
+function orgStatusLine(org) {
+  if (!org.configured) return 'not set up';
+  if (!org.linked) return org.linking ? 'waiting for your approval in the browser' : 'not linked';
+
+  const parts = [`linked as ${org.displayName || 'someone'}`];
+  const active = orgActive(org);
+
+  if (active) {
+    parts.push(active.status === 'pending'
+      ? `${active.name} — waiting for the server admin`
+      : `${active.name} (${active.role})`);
+  } else if (!(org.orgs || []).length) {
+    parts.push('no org yet — join with an invite code');
+  }
+
+  // Last heard, never "online": the app does not probe to keep a dot green.
+  if (org.lastContactAt) parts.push(`last heard from the server ${ago(org.lastContactAt)}`);
+  if (org.lastError) parts.push(org.lastError);
+  return parts.join(' · ');
+}
+
+async function postOrg(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = (await response.json().catch(() => null)) || {};
+  if (!response.ok) throw new Error(data.message || `${url} -> ${response.status}`);
+  return data;
+}
+
+function renderOrgLinkFlow(org) {
+  const linking = org.linking || null;
+  $('#org-linking').hidden = !linking;
+
+  if (!linking) {
+    orgStopLinkTimer();
+    return;
+  }
+
+  $('#org-link-code').textContent = linking.code;
+  $('#org-link-open').href = linking.verifyUrl;
+
+  // The one sanctioned poll in the app: user-started, only while a code is
+  // pending, at the interval the server stated, and never past the code's own
+  // ten-minute expiry. The manual check button is the fallback either way.
+  orgStopLinkTimer();
+  const until = new Date(linking.expiresAt).getTime();
+  orgLinkTimer = setInterval(async () => {
+    if (Date.now() > until) {
+      orgStopLinkTimer();
+      renderOrgSettings().catch(() => {});
+      return;
+    }
+    try {
+      const result = await postOrg('/api/org/link/check');
+      if (result.status !== 'pending') {
+        orgStopLinkTimer();
+        await renderOrgSettings();
+      }
+    } catch { /* the manual check button still works */ }
+  }, Math.max(2, linking.pollSeconds || 3) * 1000);
+}
+
+async function renderOrgSettings() {
+  let org;
+  try { org = await getJson('/api/org'); } catch { return; }
+
+  const server = $('#org-server');
+  if (document.activeElement !== server) server.value = org.serverAddress || '';
+
+  $('#org-link-start').hidden = !org.configured || org.linked || Boolean(org.linking);
+  $('#org-unlink').hidden = !org.linked;
+  $('#org-join-row').hidden = !org.linked;
+  renderOrgLinkFlow(org);
+  $('#org-settings-status').textContent = orgStatusLine(org);
+}
+
+function renderOrgMembers(members) {
+  const host = $('#org-members');
+  host.textContent = '';
+
+  const table = el('table', 'plain');
+  const head = el('tr');
+  // "self-declared" is the honest label: nothing verifies a handle in 0.9.
+  for (const title of ['Handle (self-declared)', 'Signed in as', 'Role', 'Joined']) {
+    head.append(el('th', 'muted', title));
+  }
+  table.append(head);
+
+  for (const member of members) {
+    const row = el('tr');
+    row.append(el('td', member.handle ? '' : 'muted', member.handle || 'no handle set'));
+    row.append(el('td', '', member.displayName));
+    row.append(el('td', 'muted', member.role));
+    row.append(el('td', 'muted', dateOf(member.joinedAt)));
+    table.append(row);
+  }
+
+  host.append(table);
+}
+
+async function loadOrg() {
+  let org;
+  try { org = await getJson('/api/org'); } catch { return; }
+
+  const ready = org.configured && org.linked;
+  $('#org-offer').hidden = ready;
+  $('#org-refresh').hidden = !ready;
+  $('#org-pending').hidden = true;
+  $('#org-unreachable').hidden = true;
+  $('#org-members-panel').hidden = true;
+  $('#org-floor').hidden = true;
+  $('#org-switch').hidden = true;
+
+  if (!ready) {
+    $('#org-status-line').textContent = '';
+    return;
+  }
+
+  // Entering the tab is the click that asks the server for fresh answers.
+  try { org = await getJson('/api/org/remote'); } catch { /* local snapshot still renders */ }
+
+  $('#org-status-line').textContent = orgStatusLine(org);
+
+  const orgs = org.orgs || [];
+  if (orgs.length > 1) {
+    const switcher = $('#org-switch');
+    switcher.hidden = false;
+    switcher.textContent = '';
+    for (const o of orgs) {
+      const option = el('option', '', o.name);
+      option.value = o.id;
+      option.selected = o.id === org.activeOrgId;
+      switcher.append(option);
+    }
+  }
+
+  if (org.lastError) {
+    $('#org-unreachable').hidden = false;
+    $('#org-unreachable-copy').textContent =
+      `${org.lastError} Nothing is shown rather than a stale guess.`;
+    return;
+  }
+
+  if (!orgs.length) {
+    $('#org-pending').hidden = false;
+    $('#org-pending-copy').textContent =
+      'You are not in an org here yet. Join one with an invite code on the Settings page.';
+    return;
+  }
+
+  const active = orgActive(org);
+  if (!active) {
+    $('#org-pending').hidden = false;
+    $('#org-pending-copy').textContent = 'Pick an org above to see it.';
+    return;
+  }
+
+  if (active.status !== 'active') {
+    $('#org-pending').hidden = false;
+    $('#org-pending-copy').textContent = active.status === 'pending'
+      ? `${active.name} is waiting for the server admin's approval. Invites and sharing open up once it is approved.`
+      : `${active.name} has been suspended by the server admin.`;
+    return;
+  }
+
+  try {
+    const members = await getJson('/api/org/members');
+    renderOrgMembers(members);
+    $('#org-members-panel').hidden = false;
+    $('#org-floor').hidden = false;
+  } catch (e) {
+    $('#org-unreachable').hidden = false;
+    $('#org-unreachable-copy').textContent = String(e.message || e);
+  }
+}
+
+$('#org-server-save').addEventListener('click', async () => {
+  try {
+    await postOrg('/api/org/configure', { serverAddress: $('#org-server').value });
+    await renderOrgSettings();
+  } catch (e) {
+    $('#org-settings-status').textContent = String(e.message || e);
+  }
+});
+
+$('#org-link-start').addEventListener('click', async () => {
+  try {
+    await postOrg('/api/org/link/start');
+    await renderOrgSettings();
+  } catch (e) {
+    $('#org-settings-status').textContent = String(e.message || e);
+  }
+});
+
+$('#org-link-check').addEventListener('click', async () => {
+  try {
+    const result = await postOrg('/api/org/link/check');
+    await renderOrgSettings();
+    if (result.status === 'pending') {
+      $('#org-settings-status').textContent =
+        'Not approved yet — finish in the browser, then check again.';
+    }
+  } catch (e) {
+    $('#org-settings-status').textContent = String(e.message || e);
+  }
+});
+
+$('#org-unlink').addEventListener('click', async () => {
+  try {
+    await postOrg('/api/org/unlink');
+    await renderOrgSettings();
+  } catch (e) {
+    $('#org-settings-status').textContent = String(e.message || e);
+  }
+});
+
+$('#org-join').addEventListener('click', async () => {
+  try {
+    await postOrg('/api/org/join', { code: $('#org-join-code').value });
+    $('#org-join-code').value = '';
+    await renderOrgSettings();
+  } catch (e) {
+    $('#org-settings-status').textContent = String(e.message || e);
+  }
+});
+
+$('#org-refresh').addEventListener('click', () => loadOrg().catch(() => {}));
+
+$('#org-switch').addEventListener('change', async () => {
+  try {
+    await postOrg('/api/org/active', { orgId: $('#org-switch').value });
+    await loadOrg();
+  } catch { /* the next refresh re-reads it */ }
+});
+
 async function getJson2(url) {
   const response = await fetch(url, { method: 'POST' });
   if (!response.ok) throw new Error(`${url} -> ${response.status}`);

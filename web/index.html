@@ -72,6 +72,7 @@
         <button data-view="loot">Loot</button>
       </div>
     </div>
+    <button data-view="org">Org</button>
     <div class="tab-group">
       <button type="button" class="group-btn">Settings<span class="caret">▾</span></button>
       <div class="group-menu">
@@ -1383,6 +1384,54 @@
     </div>
   </section>
 
+  <!-- ORGANISATION -->
+  <section id="view-org" class="view">
+    <div class="section-bar">
+      <h2>Organisation</h2>
+      <span class="spacer"></span>
+      <select id="org-switch" class="select" hidden></select>
+      <button class="ghost" id="org-refresh" hidden>Refresh</button>
+    </div>
+    <p class="muted caption" id="org-floor" hidden>
+      Members shown are members who linked Quantum Wake &mdash; the org's real
+      roster is bigger. Everything here carries when it was observed.
+    </p>
+
+    <div class="option-block" id="org-offer" hidden>
+      <h3>An org space, off by default</h3>
+      <p class="muted">
+        Your org can run a small server &mdash; or have one run for it &mdash;
+        where members pool what their own installs already know: who holds
+        which blueprint, what a commodity really fetched, who needs what.
+        Nothing is contacted until you link this app, and nothing is ever sent
+        without a click.
+      </p>
+      <p class="muted">
+        Set the server address and link the app on the
+        <a href="#settings">Settings page</a>.
+      </p>
+    </div>
+
+    <div class="option-block" id="org-pending" hidden>
+      <h3>Waiting for approval</h3>
+      <p class="muted" id="org-pending-copy"></p>
+    </div>
+
+    <div class="option-block" id="org-unreachable" hidden>
+      <h3>Could not reach the server</h3>
+      <p class="muted" id="org-unreachable-copy"></p>
+    </div>
+
+    <div class="option-block" id="org-members-panel" hidden>
+      <div class="option-head">
+        <h3>Members</h3>
+      </div>
+      <div id="org-members"></div>
+    </div>
+
+    <span class="muted" id="org-status-line"></span>
+  </section>
+
   <section id="view-settings" class="view">
     <h2>Settings</h2>
 
@@ -1606,6 +1655,40 @@
       </div>
       <span class="muted" id="export-preview"></span>
       <span class="muted" id="export-status"></span>
+    </div>
+
+    <div class="option-block" id="option-org">
+      <div class="option-head">
+        <h3>Org network</h3>
+        <button class="ghost" id="org-link-start" hidden>Link this app</button>
+        <button class="ghost" id="org-unlink" hidden>Unlink</button>
+      </div>
+      <p class="muted">
+        An optional server your org runs &mdash; or has run for it &mdash;
+        where members pool what their installs know. Off until you link, and
+        even then nothing leaves this machine without a click. Sign-in happens
+        in your browser, with Discord; this app only ever holds its own key.
+      </p>
+      <div class="export-row">
+        <label class="muted" for="org-server">Server</label>
+        <input type="text" id="org-server" class="search"
+               placeholder="https://org.example &mdash; ask your org" autocomplete="off">
+        <button class="ghost" id="org-server-save">Save</button>
+      </div>
+      <div id="org-linking" hidden>
+        <p>
+          Approve this code in your browser:
+          <strong id="org-link-code"></strong>
+          &mdash; <a id="org-link-open" href="#" target="_blank" rel="noopener">open the approval page</a>
+        </p>
+        <button class="ghost" id="org-link-check">I've approved it &mdash; check now</button>
+      </div>
+      <div class="export-row" id="org-join-row" hidden>
+        <label class="muted" for="org-join-code">Invite code</label>
+        <input type="text" id="org-join-code" class="search" placeholder="AAAAA-AAAAA" autocomplete="off">
+        <button class="ghost" id="org-join">Join</button>
+      </div>
+      <span class="muted" id="org-settings-status"></span>
     </div>
 
     <div class="option-block">
