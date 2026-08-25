@@ -1298,6 +1298,8 @@
       <div class="controls">
         <input type="search" id="loot-search" class="search" placeholder="Search items…"
                autocomplete="off" spellcheck="false">
+        <select id="loot-kind" class="select" title="Filter by what kind of thing it is"></select>
+        <select id="loot-place" class="select" title="Filter by where you were"></select>
         <select id="loot-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
@@ -1314,7 +1316,7 @@
       <table id="loot-table">
         <thead>
           <tr>
-            <th>First seen</th><th>Item</th><th>Where you were</th>
+            <th>First seen</th><th>Item</th><th>Kind</th><th>Where you were</th>
           </tr>
         </thead>
         <tbody></tbody>

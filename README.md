@@ -353,6 +353,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.17
+
+- **New items can be narrowed by kind and by place.** Two dropdowns beside the
+  search: what kind of thing it is — weapons, armour, ammo, medical and the
+  rest, read the same way the Stash page groups them — and where you were when
+  it first appeared. Each offers only what your own logs actually contain, and
+  an empty table names the filter that emptied it rather than blaming the date
+  range.
+
 ### 0.8.15
 
 - **Crew now knows who was in the ship, not just who was online.** Every

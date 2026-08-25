@@ -2614,6 +2614,13 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 .job-card.from-a-file, .checklist-card.from-a-file { border-left: 3px solid var(--amber, #d8a03d); }
 .job-kind.from-a-file { background: rgba(216, 160, 61, 0.16); color: var(--amber, #d8a03d); }
 
+/* A select sizes itself to its widest option, and one place here is called
+   "Stanton - Terra Jump Point Rest Stop" - which stretched the filter across
+   half the toolbar and made the two beside it look like an afterthought. Capped
+   so the row stays even; the full name is still on the option when opened. */
+#loot-kind { max-width: 150px; }
+#loot-place { max-width: 190px; }
+
 /* Shared files: a card per import, shaped like the job cards it sits near so a
    file somebody else wrote does not get a visual language of its own. */
 .import-card {
