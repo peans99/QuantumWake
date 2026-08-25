@@ -117,6 +117,24 @@ public static class OrgServerHost
         app.UseAuthentication();
         app.UseRateLimiter();
 
+        // Said once, loudly, where an operator looks first. The banner covers
+        // the person in the browser; this covers the person who started it and
+        // will not open a page at all.
+        if (options.LanMode)
+        {
+            app.Logger.LogWarning(
+                "LAN MODE: authentication is off. Everyone who can reach {Bind}:{Port} is signed in "
+                + "as the same account and is a server admin. Only run this where the network itself "
+                + "is the door - never behind a public address.", options.Bind, options.Port);
+
+            if (options.OAuth.Count > 0)
+            {
+                app.Logger.LogWarning(
+                    "LAN MODE also has {Count} sign-in provider(s) configured. They are ignored while "
+                    + "LAN mode is on.", options.OAuth.Count);
+            }
+        }
+
         app.MapGet("/healthz", (OrgDb db) =>
         {
             using var connection = db.Open();

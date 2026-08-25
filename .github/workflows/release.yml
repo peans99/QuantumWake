@@ -226,5 +226,29 @@ jobs:
           image='ghcr.io/${{ github.repository_owner }}/quantumwake-orgserver'
           image=$(echo "$image" | tr '[:upper:]' '[:lower:]')
           docker build -f src/Quantumwake.OrgServer/Dockerfile             -t "$image:${{ steps.version.outputs.version }}" -t "$image:latest" .
+
+          # Start it before publishing it. The image is the one artifact CI
+          # built without ever running, and it shipped unable to create org.db
+          # on a fresh volume: the chiseled base runs as uid 1654 and VOLUME
+          # /data is root-owned. A container that boots is the assertion.
+          docker run -d --name smoke -p 8080:8080 -v smokedata:/data "$image:latest"
+          for i in $(seq 1 30); do
+            body=$(curl -fsS http://127.0.0.1:8080/healthz 2>/dev/null) && break
+            sleep 1
+          done
+          if [ -z "${body:-}" ]; then
+            echo "::error::The image does not serve /healthz. Refusing to push it."
+            docker logs smoke 2>&1 | tail -30
+            exit 1
+          fi
+          echo "healthz: $body"
+          # The version is the first thing a bug report needs, and the props
+          # file reaching the build stage is easy to break.
+          case "$body" in
+            *'"version":"${{ steps.version.outputs.version }}"'*) ;;
+            *) echo "::error::Image reports the wrong version: $body"; exit 1 ;;
+          esac
+          docker rm -f smoke
+
           docker push "$image:${{ steps.version.outputs.version }}"
           docker push "$image:latest"

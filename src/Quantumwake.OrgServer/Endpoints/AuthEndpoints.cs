@@ -27,22 +27,66 @@ public static class AuthEndpoints
     {
         /* ---------- browser sign-in ---------- */
 
-        app.MapGet("/auth/login", (HttpContext context, OrgServerOptions options, string? @return) =>
+        // What the pages need before they can draw a sign-in button, and the
+        // one honest way for a browser to discover it is a LAN server. Open
+        // deliberately: it states configuration, never who is signed in.
+        app.MapGet("/api/auth/providers", (OrgServerOptions options) =>
         {
-            if (options.OAuth is not { } oauth || options.PublicBaseUrl is not { Length: > 0 } baseUrl)
+            // LAN mode offers none, whatever is configured: two ways in would
+            // mean two identities for one person.
+            var offered = options.LanMode ? Array.Empty<IOAuthProvider>() : options.OAuth;
+
+            return Results.Ok(new
+            {
+                lanMode = options.LanMode,
+                providers = offered.Select(p => new { key = p.Key, name = p.Name }).ToArray(),
+            });
+        }).RequireRateLimiting("api");
+
+        app.MapGet("/auth/login", (HttpContext context, OrgServerOptions options,
+            string? provider, string? @return) =>
+        {
+            if (options.LanMode)
             {
                 return Results.Text(
-                    "Sign-in is not configured on this server. It needs a public base URL and "
-                    + "OAuth credentials - see the deployment notes.", statusCode: 503);
+                    "This server runs in LAN mode: everyone who can reach it is already signed in, "
+                    + "and there is nothing to sign in to.", statusCode: 409);
             }
 
-            // The state ties the callback to this browser; the return path
-            // rides along so /link can resume. Only local paths are honoured -
-            // an open redirect is a phishing kit.
+            if (options.PublicBaseUrl is not { Length: > 0 } baseUrl)
+            {
+                return Results.Text(
+                    "Sign-in is not configured on this server: it has no public base URL, so the "
+                    + "provider has no redirect to come back to - see the deployment notes.",
+                    statusCode: 503);
+            }
+
+            // A named provider is that one or nothing - falling back to
+            // another when the name is wrong would sign somebody in somewhere
+            // they did not choose. Unnamed, a lone provider needs no choosing,
+            // which keeps every existing /auth/login link working now that
+            // there can be three.
+            var oauth = provider is { Length: > 0 }
+                ? options.Provider(provider)
+                : options.OAuth.Count == 1 ? options.OAuth[0] : null;
+            if (oauth is null)
+            {
+                return Results.Text(options.OAuth.Count == 0
+                    ? "Sign-in is not configured on this server: no provider has credentials - "
+                      + "see the deployment notes."
+                    : "Choose a sign-in provider: " + string.Join(", ", options.OAuth.Select(p => p.Key)),
+                    statusCode: 503);
+            }
+
+            // The state ties the callback to this browser; the provider and the
+            // return path ride along so the callback knows who answered and
+            // /link can resume. Only local paths are honoured - an open
+            // redirect is a phishing kit. The destination goes last because it
+            // is the only part that can itself contain a separator.
             var state = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
             var destination = @return is ['/', ..] && !@return.StartsWith("//") ? @return : "/";
 
-            context.Response.Cookies.Append(StateCookie, $"{state}|{destination}", new CookieOptions
+            context.Response.Cookies.Append(StateCookie, $"{state}|{oauth.Key}|{destination}", new CookieOptions
             {
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax,
@@ -58,9 +102,10 @@ public static class AuthEndpoints
             var expected = context.Request.Cookies[StateCookie];
             context.Response.Cookies.Delete(StateCookie);
 
-            if (options.OAuth is not { } oauth || options.PublicBaseUrl is not { Length: > 0 } baseUrl
+            if (options.LanMode || options.PublicBaseUrl is not { Length: > 0 } baseUrl
                 || code is not { Length: > 0 } || state is not { Length: > 0 }
-                || expected?.Split('|', 2) is not [var wanted, var destination]
+                || expected?.Split('|', 3) is not [var wanted, var providerKey, var destination]
+                || options.Provider(providerKey) is not { } oauth
                 || !CryptographicOperations.FixedTimeEquals(
                     System.Text.Encoding.UTF8.GetBytes(wanted), System.Text.Encoding.UTF8.GetBytes(state)))
             {
@@ -91,10 +136,19 @@ public static class AuthEndpoints
             AccountStore accounts, OrgLinkStartRequest request) =>
         {
             // The verify URL must be reachable from the person's browser. The
-            // public base is the honest answer when there is one; the local
-            // binding serves a self-hosted box being tried out on localhost.
+            // public base is the honest answer when there is one; failing that,
+            // the Host this very request arrived on - because the app reached
+            // the server at the address its owner typed into Settings, which is
+            // by definition an address that works from their machine.
+            //
+            // The binding is NOT a usable fallback: it is 127.0.0.1 for anyone
+            // not sitting at the server, and inside a container it is the port
+            // before the mapping, so it was wrong for every LAN server and
+            // every container that had no public base configured.
             var baseUrl = options.PublicBaseUrl
-                ?? $"http://{(options.Bind == "0.0.0.0" ? "127.0.0.1" : options.Bind)}:{options.Port}";
+                ?? (context.Request.Host.HasValue
+                    ? $"{context.Request.Scheme}://{context.Request.Host}"
+                    : $"http://{(options.Bind == "0.0.0.0" ? "127.0.0.1" : options.Bind)}:{options.Port}");
 
             return Results.Ok(accounts.StartLink(request.ClientName, baseUrl, DateTimeOffset.UtcNow));
         }).RequireRateLimiting("link-start");

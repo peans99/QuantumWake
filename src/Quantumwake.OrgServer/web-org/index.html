@@ -33,10 +33,7 @@
   if (me.ok) {
     who.textContent = 'signed in as ' + me.data.account.displayName;
   } else {
-    const a = document.createElement('a');
-    a.href = signInLink('/');
-    a.textContent = 'Sign in with Discord';
-    who.appendChild(a);
+    await signInChoices(who, '/');
   }
 })();
 </script>

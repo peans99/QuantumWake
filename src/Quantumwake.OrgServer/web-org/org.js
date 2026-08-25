@@ -27,8 +27,44 @@ function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
-function signInLink(returnTo) {
-  return '/auth/login?return=' + encodeURIComponent(returnTo);
+function signInLink(returnTo, provider) {
+  const which = provider ? 'provider=' + encodeURIComponent(provider) + '&' : '';
+  return '/auth/login?' + which + 'return=' + encodeURIComponent(returnTo);
+}
+
+// Which doors this server has. Asked once and shared: four pages each wanting
+// the answer is still one request.
+let authAsked = null;
+function authConfig() {
+  if (!authAsked) {
+    authAsked = api('/api/auth/providers')
+      .then(r => (r.ok && r.data) ? r.data : { lanMode: false, providers: [] })
+      .catch(() => ({ lanMode: false, providers: [] }));
+  }
+  return authAsked;
+}
+
+// One button per provider the server actually configured, so a page never
+// offers a door that is not there. The LAN-mode banner is spliced in by the
+// server; this only draws the choice of door, and in LAN mode there is none.
+async function signInChoices(container, returnTo) {
+  const config = await authConfig();
+  if (config.lanMode) return false;
+
+  if (!config.providers.length) {
+    container.appendChild(el('p', 'No sign-in provider is configured on this server.', 'muted'));
+    return false;
+  }
+
+  const row = el('div', null, 'row');
+  for (const provider of config.providers) {
+    const a = document.createElement('a');
+    a.href = signInLink(returnTo, provider.key);
+    a.appendChild(el('button', 'Sign in with ' + provider.name, 'primary'));
+    row.appendChild(a);
+  }
+  container.appendChild(row);
+  return true;
 }
 
 function ago(iso) {

@@ -18,9 +18,10 @@ namespace Quantumwake.OrgServer.Tests;
 /// reach it. Most tests never touch it - they mint accounts and tokens through
 /// the store and speak plain bearer tokens.
 /// </remarks>
-public sealed class FakeOAuth : IOAuthProvider
+public sealed class FakeOAuth(string key = "fake", string name = "Fake") : IOAuthProvider
 {
-    public string Name => "Fake";
+    public string Key => key;
+    public string Name => name;
 
     /// <summary>Code → identity; the test scripts who each code proves.</summary>
     public Dictionary<string, OAuthIdentity> People { get; } = [];
@@ -57,7 +58,7 @@ public sealed class OrgServerUnderTest : IAsyncLifetime
         {
             DataDirectory = _directory,
             Port = 0,
-            OAuth = OAuth,
+            OAuth = [OAuth],
             PublicBaseUrl = null,
             // "admin" signing in through Person() is the server admin by
             // configuration; the first-account fallback is exercised by its

@@ -11,6 +11,18 @@
   <h1>Admin</h1>
   <div class="panel" id="card"><p class="muted">One moment&hellip;</p></div>
   <div id="desk" hidden>
+    <h2>Start an org</h2>
+    <div class="panel">
+      <p class="muted">An org you create is approved by the act of creating it
+      &mdash; there is nobody above a server admin to ask.</p>
+      <div class="row">
+        <input type="text" id="new-org-name" placeholder="Name" autocomplete="off">
+        <input type="text" id="new-org-note" placeholder="Note (optional)" autocomplete="off">
+        <button class="primary" id="new-org-create">Create</button>
+      </div>
+      <p class="muted" id="new-org-said"></p>
+    </div>
+
     <h2>Waiting for approval</h2>
     <div class="panel"><table id="pending"></table></div>
     <h2>Active orgs</h2>
@@ -62,10 +74,7 @@
     if (!shown) {
       clear(card);
       card.appendChild(el('p', 'There is nothing here.'));
-      const a = document.createElement('a');
-      a.href = signInLink('/admin');
-      a.appendChild(el('button', 'Sign in', 'primary'));
-      card.appendChild(a);
+      await signInChoices(card, '/admin');
       return;
     }
     clear(card);
@@ -76,6 +85,34 @@
         confirm: 'Suspend this org? Members keep their data but the space goes quiet.' },
     ]);
   }
+
+  // Wired once, outside draw(): draw() runs again after every action, and a
+  // listener added each time would create one org per press per redraw.
+  const said = document.getElementById('new-org-said');
+  const name = document.getElementById('new-org-name');
+  const note = document.getElementById('new-org-note');
+
+  document.getElementById('new-org-create').addEventListener('click', async () => {
+    said.textContent = '';
+    if (!name.value.trim()) { said.textContent = 'An org needs a name.'; return; }
+
+    const result = await api('/api/orgs', {
+      method: 'POST',
+      body: { name: name.value.trim(), note: note.value.trim() || null },
+    });
+
+    if (!result.ok) {
+      said.textContent = (result.data && result.data.message) || 'That did not work.';
+      return;
+    }
+
+    // Says the status rather than assuming it: a server admin's org is active
+    // at once, and the same button pressed by anyone else would not be.
+    said.textContent = 'Created "' + result.data.name + '" (' + result.data.status + ').';
+    name.value = '';
+    note.value = '';
+    draw();
+  });
 
   draw();
 })();

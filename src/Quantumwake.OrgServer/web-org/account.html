@@ -64,10 +64,7 @@
 
   if (!me.ok) {
     card.appendChild(el('p', 'Sign in to see your account.'));
-    const a = document.createElement('a');
-    a.href = signInLink('/account');
-    a.appendChild(el('button', 'Sign in with Discord', 'primary'));
-    card.appendChild(a);
+    await signInChoices(card, '/account');
     return;
   }
 

@@ -29,11 +29,7 @@
 
   if (info.status === 401) {
     card.appendChild(el('p', 'Sign in first, then this page will show what is asking to be linked.'));
-    const a = document.createElement('a');
-    a.href = signInLink('/link?code=' + encodeURIComponent(code));
-    const button = el('button', 'Sign in with Discord', 'primary');
-    a.appendChild(button);
-    card.appendChild(a);
+    await signInChoices(card, '/link?code=' + encodeURIComponent(code));
     return;
   }
 

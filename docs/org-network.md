@@ -32,8 +32,9 @@ These survived the redesign untouched, because they are the product.
    consent that resets on every restart — enforced by never writing it to
    disk, not by remembering to clear a flag.
 5. **The handle is self-declared and the wire says so.** Sign-in proves a
-   person (their Discord account); nothing verifies that `nekron` in the
-   member list is the `nekron` you fly with. `handleVerified: false` travels
+   person (whichever account they signed in with); nothing verifies that
+   `nekron` in the member list is the `nekron` you fly with, whichever door
+   they came through. `handleVerified: false` travels
    on every account so no client can forget to admit it. A later RSI-bio
    verification can flip the flag without a migration.
 6. **The server is a courier, not an oracle.** It stores and forwards what
@@ -70,9 +71,17 @@ both ends.
 ### Identity
 
 - **A person is a provider identity.** Accounts hang off an `identities`
-  table keyed by provider and subject — Discord first (scope `identify` only:
-  the snowflake and a display name, never the email), Google or Microsoft
-  later as new rows, not a migration.
+  table keyed by provider and subject. All three doors are built — Discord
+  (scope `identify`), Google and Microsoft (both `openid profile`) — and every
+  one of them asks for a subject and a display name and **never an email**,
+  because a member is a game handle, not an inbox. A deployment offers only
+  the providers it has credentials for, so a server can be Discord-only
+  without pretending the others are unavailable. A fourth is new rows, not a
+  migration.
+- **The same human on two providers is two accounts**, and the server says so
+  by not saying otherwise. Nothing it is allowed to ask for could prove that
+  a Google subject and a Discord snowflake are one person, so it does not
+  guess; joining them is an account-page feature for whoever holds both.
 - **A desktop app is a device token.** The app cannot receive an OAuth
   redirect, so linking is a device code: the app asks the org server for a
   code, the person approves it in a signed-in browser, and the app polls its
@@ -81,10 +90,13 @@ both ends.
   device secret, which never leaves the machine that asked. Tokens are
   SHA-256-hashed at rest, listed by device on the account page, revocable and
   each revocation immediate.
-- **A server admin is configuration.** `OrgServer__Admins` lists Discord ids,
-  checked live. When nothing is configured and the database is empty, the
-  first account to sign in becomes admin — loudly logged, because on a public
-  server that is the window someone forgot to close.
+- **A server admin is configuration.** `OrgServer__Admins` lists provider
+  subjects, checked live — either bare (`1234…`, matching whichever provider
+  it came from, which is what existing deployments have written down) or
+  qualified (`google:1234…`), which is the form worth using now there are
+  three. When nothing is configured and the database is empty, the first
+  account to sign in becomes admin — loudly logged, because on a public server
+  that is the window someone forgot to close.
 
 ### Tenancy
 
@@ -133,13 +145,58 @@ Quantumwake.OrgServer.exe --Data C:\orgdata --Port 8321
 Binds loopback by default; `--Bind 0.0.0.0` opens it up, the same
 safe-by-default posture as the app's `-Lan`. Configuration is arguments, then
 `OrgServer__` environment variables, then defaults in code — no config file
-ships. Sign-in needs `--PublicBaseUrl` plus `--Discord:ClientId` and
-`--Discord:ClientSecret` from a (free) Discord application whose redirect URI
-is `<PublicBaseUrl>/auth/callback`.
+ships. Sign-in needs `--PublicBaseUrl` plus a client id and secret for at
+least one provider — `--Discord:ClientId` and `--Discord:ClientSecret`,
+`--Google:…`, `--Microsoft:…` — each from a free application registration
+whose redirect URI is `<PublicBaseUrl>/auth/callback`. Microsoft also takes
+`--Microsoft:Tenant`, which defaults to `common` so both personal and work
+accounts are accepted; a deployment that is a company can name its own tenant
+and stop being a door for everyone else.
+
+The provider that answered is carried through the sign-in in the state cookie,
+so a code minted by one is never spent at another, and a `?provider=` naming
+one that is not configured is refused rather than quietly served by a
+different one.
 
 The one thing self-hosting cannot solve is reachability: a server on a home
 network needs a forwarded port or a tunnel, and TLS in front. Said here
 rather than discovered after setting one up.
+
+### LAN mode
+
+```
+Quantumwake.OrgServer.exe --Data C:\orgdata --Bind 0.0.0.0 --LanMode true
+```
+
+**No authentication at all.** Everyone who can reach the port is the same
+account, and that account is a server admin. It exists for the case the
+provider flow makes absurd: three people on one network who should not each
+have to register an application with Discord to share a blueprint list.
+
+It is off unless asked for, the same posture as the app's `-Lan`, and when it
+is on it wins outright — sign-in is refused rather than offered alongside,
+because two ways in would mean two identities for one person and a member list
+that cannot say which one is sharing. Configured providers are ignored and the
+log says they are.
+
+Because the mode cannot be made safe, it says so instead, twice:
+
+- a warning logged at startup naming the address it is open on, for whoever
+  started it and will never open a page;
+- a red banner across every page, spliced in **by the server** rather than
+  drawn by the page's script. A warning fetched by JavaScript is absent on a
+  blocked request, a script error or a stale cached asset, and absent is
+  exactly wrong; server-side it either arrives with the HTML or the HTML does
+  not arrive either.
+
+The cross-site header check still applies to every mutation. There is no
+credential left to steal, but a page on another origin can still make a
+browser POST here, and on a network where everyone is an admin that is the
+last door worth shutting.
+
+The LAN account is deliberately not counted as the "first account" that claims
+an unconfigured server, so turning LAN mode off later leaves a database in
+which a real sign-in can still become the admin.
 
 ### Docker
 
@@ -152,7 +209,7 @@ non-root, one volume on `/data`, port 8080. Releases push it to
 
 The GHCR image on a Linux plan. **B1 is the honest minimum** (~US$13/month):
 the free tier cold-starts and idles out, which breaks link-code polling and
-makes the org page feel dead. App settings: the Discord pair,
+makes the org page feel dead. App settings: a provider's id and secret pair,
 `OrgServer__PublicBaseUrl`, `OrgServer__Admins`, `OrgServer__BehindProxy=true`,
 `OrgServer__Data=/home/data` with `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`,
 and — **this one is load-bearing** — `OrgServer__Journal=delete`. App

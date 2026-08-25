@@ -27,7 +27,7 @@ public sealed record Actor(AccountRow Account, bool ViaCookie);
 /// such proof; no other origin holds one.
 /// </para>
 /// </remarks>
-public sealed class OrgActors(AccountStore accounts)
+public sealed class OrgActors(AccountStore accounts, OrgServerOptions options)
 {
     public const string CsrfHeader = "X-Qw-Org";
 
@@ -45,9 +45,19 @@ public sealed class OrgActors(AccountStore accounts)
         }
 
         var id = context.User.FindFirstValue("account");
-        if (id is null || accounts.Get(id) is not { } fromCookie)
+        var signedIn = id is null ? null : accounts.Get(id);
+
+        // LAN mode has no sign-in, so a browser with no cookie is the one
+        // shared account rather than a refusal.
+        signedIn ??= options.LanMode ? accounts.LanAccount() : null;
+
+        if (signedIn is null)
             return (null, Results.Json(new OrgProblem("Sign in first."), OrgWire.Json, statusCode: 401));
 
+        // The header is still required in LAN mode. There is no credential
+        // left to steal, but a page on another origin can still make this
+        // browser POST, and on a network where everyone is an admin that is
+        // the only cross-site door left worth shutting.
         if (!HttpMethods.IsGet(context.Request.Method)
             && !HttpMethods.IsHead(context.Request.Method)
             && !context.Request.Headers.ContainsKey(CsrfHeader))
@@ -56,7 +66,7 @@ public sealed class OrgActors(AccountStore accounts)
                 OrgWire.Json, statusCode: 403));
         }
 
-        return (new Actor(fromCookie, ViaCookie: true), null);
+        return (new Actor(signedIn, ViaCookie: true), null);
     }
 
     /// <summary>Same, but only the browser will do - token holders are turned away.</summary>

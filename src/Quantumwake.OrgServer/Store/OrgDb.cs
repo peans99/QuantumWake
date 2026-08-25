@@ -35,7 +35,7 @@ public sealed class OrgDb
 
     public OrgDb(string directory, string journal = "wal")
     {
-        Directory.CreateDirectory(directory);
+        EnsureWritable(directory);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = Path.Combine(directory, "org.db"),
@@ -43,6 +43,42 @@ public sealed class OrgDb
         _journal = journal.Equals("delete", StringComparison.OrdinalIgnoreCase) ? "delete" : "wal";
 
         Initialise();
+    }
+
+    /// <summary>
+    /// Fail here, naming the fix, rather than deep inside SQLite.
+    /// </summary>
+    /// <remarks>
+    /// The container runs as a non-root user and a mounted data directory
+    /// arrives owned by whoever mounted it - on App Service that is the
+    /// platform, and /home's ownership is not ours to set. Without this the
+    /// symptom is "SQLite Error 14: unable to open database file", or a bare
+    /// UnauthorizedAccessException from Directory.CreateDirectory, and a
+    /// container that restarts for ever without saying why.
+    /// </remarks>
+    private static void EnsureWritable(string directory)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+
+            // Creating the directory can succeed where writing into it cannot,
+            // so prove the write rather than inferring it.
+            var probe = Path.Combine(directory, ".write-probe");
+            File.WriteAllBytes(probe, []);
+            File.Delete(probe);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            throw new InvalidOperationException(
+                $"The data directory '{directory}' is not writable by the server "
+                + $"(running as '{Environment.UserName}'). In a container the server "
+                + "runs as a non-root user and a mounted directory keeps the ownership "
+                + "of whatever mounted it: chown it to uid 1654, or point --Data at a "
+                + "directory the server owns. On Azure App Service use "
+                + "OrgServer__Data=/home/data with WEBSITES_ENABLE_APP_SERVICE_STORAGE=true.",
+                ex);
+        }
     }
 
     public SqliteConnection Open()

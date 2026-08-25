@@ -73,3 +73,16 @@ code.big {
 }
 
 .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
+
+/* Full-bleed against the body's own padding, so it reads as the page's
+   condition rather than one more panel on it. */
+.lan-banner {
+  margin: -2rem -1rem 1.5rem;
+  padding: 0.7rem 1.25rem;
+  background: #3a1c1a;
+  border-bottom: 1px solid var(--danger);
+  color: #f2d5d2;
+  text-align: center;
+}
+
+.lan-banner strong { color: var(--danger); }

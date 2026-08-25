@@ -55,13 +55,42 @@ public sealed class OrgServerOptions
     public bool BehindProxy { get; init; }
 
     /// <summary>
-    /// How people sign in. Null when no provider is configured - the server
-    /// still runs, and the sign-in page says what is missing instead of
-    /// erroring. Tests inject a fake here; production wires Discord from
+    /// How people sign in - every provider this deployment configured, in the
+    /// order the sign-in page offers them. Empty when none is configured: the
+    /// server still runs, and the pages say what is missing instead of
+    /// erroring. Tests inject a fake here; production wires the real ones from
     /// configuration. A seam rather than a flag, because a dev-mode flag ships
     /// in the binary and is one environment variable away from an open server.
     /// </summary>
-    public IOAuthProvider? OAuth { get; init; }
+    public IReadOnlyList<IOAuthProvider> OAuth { get; init; } = [];
+
+    /// <summary>
+    /// Everyone who can reach the port is the same signed-in person, and that
+    /// person is a server admin. For a server on a home network that nobody
+    /// outside it can reach, where three flatmates should not each need a
+    /// Discord application to share a blueprint list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off unless asked for, the same posture as the app's <c>-Lan</c>: opening
+    /// a server is a decision, not an accident of running it. When it is on it
+    /// wins outright - sign-in is refused rather than offered alongside, because
+    /// two ways in would mean two identities for one person and a page that
+    /// cannot say which one is sharing.
+    /// </para>
+    /// <para>
+    /// This is the one mode the server cannot make safe, so it does the next
+    /// best thing: it says so, in the log at startup and on a banner across
+    /// every page, and it never becomes the default by omission.
+    /// </para>
+    /// </remarks>
+    public bool LanMode { get; init; }
+
+    /// <summary>The configured provider with that key, or null.</summary>
+    public IOAuthProvider? Provider(string? key) =>
+        key is { Length: > 0 }
+            ? OAuth.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase))
+            : null;
 
     public static OrgServerOptions FromArguments(string[] args)
     {
@@ -70,8 +99,22 @@ public sealed class OrgServerOptions
             .AddCommandLine(args)
             .Build();
 
-        var discordId = configuration["Discord:ClientId"];
-        var discordSecret = configuration["Discord:ClientSecret"];
+        // Each provider appears only when its pair is present, so a server
+        // offers exactly the buttons it can actually honour.
+        var providers = new List<IOAuthProvider>();
+        Add("Discord", (id, secret) => new DiscordOAuth(id, secret));
+        Add("Google", (id, secret) => new GoogleOAuth(id, secret));
+        Add("Microsoft", (id, secret) => new MicrosoftOAuth(
+            id, secret, configuration["Microsoft:Tenant"] is { Length: > 0 } t ? t : "common"));
+
+        void Add(string section, Func<string, string, IOAuthProvider> make)
+        {
+            if (configuration[$"{section}:ClientId"] is { Length: > 0 } id
+                && configuration[$"{section}:ClientSecret"] is { Length: > 0 } secret)
+            {
+                providers.Add(make(id, secret));
+            }
+        }
 
         return new OrgServerOptions
         {
@@ -85,9 +128,8 @@ public sealed class OrgServerOptions
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             Journal = configuration["Journal"] ?? "wal",
             BehindProxy = configuration.GetValue<bool>("BehindProxy"),
-            OAuth = discordId is { Length: > 0 } && discordSecret is { Length: > 0 }
-                ? new DiscordOAuth(discordId, discordSecret)
-                : null,
+            LanMode = configuration.GetValue<bool>("LanMode"),
+            OAuth = providers,
         };
     }
 }

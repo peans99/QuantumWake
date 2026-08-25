@@ -26,6 +26,21 @@ public class LinkFlowTests(OrgServerUnderTest server) : IClassFixture<OrgServerU
     }
 
     [Fact]
+    public async Task With_no_public_base_the_verify_url_is_the_address_the_app_reached()
+    {
+        // The fixture configures no PublicBaseUrl, which is the normal case for
+        // a LAN server: nothing needs one because there is no OAuth redirect.
+        // The binding is not a usable answer there - 127.0.0.1 is wrong for
+        // everyone not sitting at the server, and inside a container it is the
+        // port before the mapping.
+        var response = await server.Client.PostAsJsonAsync("/api/link/start",
+            new { clientName = "TEST-PC" });
+        var verify = (await server.Json(response)).GetProperty("verifyUrl").GetString()!;
+
+        Assert.StartsWith(server.Client.BaseAddress!.ToString().TrimEnd('/'), verify);
+    }
+
+    [Fact]
     public async Task An_unapproved_code_polls_as_pending_and_yields_nothing()
     {
         var (code, secret) = await Started();

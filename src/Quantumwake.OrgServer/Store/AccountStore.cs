@@ -29,6 +29,12 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
 {
     private const string CodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
+    /// <summary>
+    /// The provider key LAN mode's single shared account hangs off, so it is
+    /// an identity like any other and needs no table of its own.
+    /// </summary>
+    public const string LanProvider = "lan";
+
     /* ---------- accounts and identities ---------- */
 
     /// <summary>Sign-in: the identity's account, created on first sight.</summary>
@@ -52,9 +58,16 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
             // org. Narrowed to the literal first account ever, and logged,
             // because on a public server this is the window someone forgot to
             // close - the log line is how they find out.
-            var first = Convert.ToInt64(Scalar(connection, transaction,
-                "SELECT COUNT(*) FROM accounts")) == 0;
-            var admin = first && configuredAdmins.Count == 0;
+            // The LAN account is always the admin - it is the only account
+            // there is - and it must not count as the "first account" that
+            // claims the server, or turning LAN mode off later would leave a
+            // populated database in which nobody can ever become an admin.
+            var lan = provider == LanProvider;
+            var first = !lan && Convert.ToInt64(Scalar(connection, transaction,
+                "SELECT COUNT(*) FROM accounts a WHERE EXISTS "
+                + "(SELECT 1 FROM identities i WHERE i.account_id = a.id AND i.provider <> $lan)",
+                ("$lan", LanProvider))) == 0;
+            var admin = lan || (first && configuredAdmins.Count == 0);
 
             id = Guid.NewGuid().ToString("N")[..12];
             Run(connection, transaction,
@@ -66,7 +79,7 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
                 + "VALUES ($p, $s, $id, $name, $now)",
                 ("$p", provider), ("$s", subject), ("$id", id), ("$name", display), ("$now", now));
 
-            if (admin)
+            if (admin && !lan)
                 logger.LogWarning(
                     "No admins are configured; the first account to sign in ({Display}) is now the server admin.",
                     display);
@@ -82,6 +95,18 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
         transaction.Commit();
         return Get(id)!;
     }
+
+    /// <summary>
+    /// The single account LAN mode signs everybody in as, made on first need.
+    /// </summary>
+    /// <remarks>
+    /// One row rather than one per browser: with no sign-in there is nothing
+    /// to tell two people apart, and inventing a per-browser identity would
+    /// put a name on a member list that means nothing. The Org page's floor -
+    /// handles are self-declared - becomes the whole truth here.
+    /// </remarks>
+    public AccountRow LanAccount() =>
+        UpsertIdentity(LanProvider, LanProvider, "Everyone on this network");
 
     public AccountRow? Get(string accountId)
     {
@@ -117,10 +142,17 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
         if (configuredAdmins.Count == 0)
             return false;
 
-        var subjects = Many(connection,
-            "SELECT subject FROM identities WHERE account_id=$id",
-            [("$id", accountId)], r => r.GetString(0));
-        return subjects.Any(s => configuredAdmins.Contains(s, StringComparer.Ordinal));
+        // A bare subject matches whichever provider it came from, which was
+        // the whole configuration when Discord was the only door. With three,
+        // "google:1234" says which one is meant - and both forms are accepted,
+        // because the short one is what existing deployments have written down.
+        var identities = Many(connection,
+            "SELECT provider, subject FROM identities WHERE account_id=$id",
+            [("$id", accountId)], r => (Provider: r.GetString(0), Subject: r.GetString(1)));
+
+        return identities.Any(i =>
+            configuredAdmins.Contains(i.Subject, StringComparer.Ordinal)
+            || configuredAdmins.Contains($"{i.Provider}:{i.Subject}", StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>Everything about them, gone. Cascades take the rest.</summary>

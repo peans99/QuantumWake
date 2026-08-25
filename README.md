@@ -353,16 +353,26 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.3
+### 0.9.4
 
 The first piece of the org network: a separate, entirely optional server that
 an org can run - or have run for it - so members can pool what their own
-installs already know. This release is the spine: sign in with Discord, link
-your app from its Settings page, register an org (a server admin approves it),
-invite people with a code, and manage members and roles. Nothing about the
+installs already know. This release is the spine: sign in with **Discord,
+Google or Microsoft**, link your app from its Settings page, register an org (a
+server admin approves it), invite people with a code, and manage members and
+roles. A server offers whichever of the three it has been given credentials
+for, so an org that lives on Discord never has to care that the others exist. Nothing about the
 dashboard changes yet, and nothing leaves your machine unless you link it.
 The server ships as a plain executable, a Docker container, or that container
-on Azure - one build, three deployments.
+on Azure — one build, three deployments.
+
+For a server nobody outside the house can reach, there is **LAN mode**: start it
+with `--LanMode true` and there is no sign-in at all — everyone who can reach
+the address is the same account, and that account can change everything. It
+exists so three flatmates on one network do not each need to register an
+application with Discord to share a blueprint list. Every page then carries a
+red banner saying exactly that, because the mode cannot be made safe and the
+next best thing is that nobody is in it by accident.
 
 The app grows an **Org** tab and a Settings block to match: point the app at
 your org's server, link it (the sign-in happens in your browser - the app only
