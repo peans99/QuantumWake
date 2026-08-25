@@ -482,6 +482,10 @@ public static class ServerHost
                 result.Newer, result.Current, result.Latest, result.Url,
                 result.Notes, result.PublishedAt,
                 canInstall = selfUpdate.Possible && result.Asset is not null,
+
+                // Ninety megabytes is worth knowing before agreeing to it, not
+                // after: a metered connection is somebody's actual money.
+                downloadBytes = result.Asset?.Size,
             });
         });
 
