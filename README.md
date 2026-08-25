@@ -353,6 +353,10 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.21
+
+- Nothing you can see: notes for whoever works on this next.
+
 ### 0.8.20
 
 - **An update keeps the settings it was started with.** Restarting after an
