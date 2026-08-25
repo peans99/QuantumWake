@@ -11038,7 +11038,14 @@ async function runUpdateCheck({ quiet }) {
  * so rather than leaving the reader guessing.
  */
 function updateNowButton(result) {
-  const install = el('button', 'ghost on', `Update to ${result.latest}`);
+  // The size is on the button rather than in the detail line, because it is
+  // part of what is being agreed to: on a metered connection ninety megabytes
+  // is somebody's actual money, and finding out afterwards is too late.
+  const size = result.downloadBytes
+    ? ` · ${Math.round(result.downloadBytes / 1048576)} MB`
+    : '';
+
+  const install = el('button', 'ghost on', `Update to ${result.latest}${size}`);
   install.title = 'Downloads it, checks it, and restarts into the new version';
 
   install.addEventListener('click', async () => {

@@ -353,6 +353,12 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.19
+
+- **The update button says what the download costs.** Ninety megabytes is
+  worth knowing before agreeing to it rather than after, and on a metered
+  connection it is somebody’s actual money.
+
 ### 0.8.18
 
 - **Updating is one click.** When a new version is out, Quantum Wake can
