@@ -2965,7 +2965,9 @@ async function loadCasualties() {
   const body = $('#casualties-fees tbody');
   body.textContent = '';
 
-  for (const fee of data.fees) {
+  // Guarded like every other read on this page: one absent array should not
+  // take the whole page down when the rest of the answer arrived intact.
+  for (const fee of data.fees || []) {
     const tr = el('tr');
     tr.append(el('td', null, fee.name));
     tr.append(el('td', 'num outward', money(fee.fee)));
@@ -2999,13 +3001,16 @@ async function loadCrew() {
     return;
   }
 
+  const joins = rows.reduce((total, r) => total + (r.joined || 0), 0);
   const arrivals = rows.reduce((total, r) => total + r.connected, 0);
-  const drops = rows.reduce((total, r) => total + r.dropped, 0);
 
   tiles('#crew-summary', [
     ['People named', rows.length],
-    ['Arrivals seen', arrivals],
-    ['Drops seen', drops],
+
+    // Joins rather than arrivals: this is the one that counts somebody who was
+    // not there a moment before, which is what "flew with" means.
+    ['Joined your party', joins],
+    ['Came online', arrivals],
     ['Most flown with', rows.length ? rows[0].handle : '—'],
   ]);
 
@@ -3023,9 +3028,9 @@ async function loadCrew() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted',
-      'Nobody named in that range — the game only says so when someone joins or '
-      + 'drops while you are partied with them.');
-    td.colSpan = 7;
+      'Nobody named in that range — the game only says so when someone joins, '
+      + 'leaves, or connects while you are partied with them.');
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -3035,10 +3040,14 @@ async function loadCrew() {
     const tr = el('tr');
     tr.append(el('td', null, row.handle));
     tr.append(el('td', 'num', String(row.sessions)));
+
+    // Blank rather than zero throughout: these are four different facts and a
+    // zero in one of them is usually "the game did not say", not "never".
+    tr.append(el('td', row.joined ? 'num' : 'num muted', row.joined || '—'));
+    tr.append(el('td', row.left ? 'num' : 'num muted', row.left || '—'));
     tr.append(el('td', 'num', String(row.connected)));
     tr.append(el('td', 'num', String(row.dropped)));
 
-    // Blank rather than zero: never having taken lead is not a score.
     tr.append(el('td', row.ledParty ? 'num' : 'num muted', row.ledParty || '—'));
 
     tr.append(el('td', 'muted', dateOf(row.first)));
