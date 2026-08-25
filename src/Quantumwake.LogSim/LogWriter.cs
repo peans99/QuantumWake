@@ -149,22 +149,137 @@ public sealed class LogWriter : IDisposable
         string mode)
     {
         var verb = isSell ? "Sell" : "Buy";
+        var total = amount.ToString("F6", CultureInfo.InvariantCulture);
+
+        // Invariant for the same reason as the total above, and it is easy to
+        // lose here: the game writes a dot, the parser's quantity pattern only
+        // accepts digits and dots, and a machine with a comma decimal separator
+        // would emit "1600,000000" - which does not match, so every simulated
+        // purchase would vanish. That is exactly the centi-SCU conversion these
+        // scenarios exist to prove, so it would fail silently in the one place
+        // built to catch it.
+        var centi = (quantity * 100).ToString("F6", CultureInfo.InvariantCulture);
+
+        // The live game uses different fields and units on each side. In
+        // particular, buy quantity is centi-SCU; smoothing both into the sell
+        // shape would leave the parser's hundredfold conversion untested.
+        var transaction = isSell
+            ? $"amount[{total}] resourceGUID[{resourceGuid}] autoLoading[0] " +
+              $"quantity[{quantity}] transactionMode[{mode}]"
+            : $"price[{total}] resourceGUID[{resourceGuid}] autoLoading[0] " +
+              $"quantity[{centi} cSCU]";
 
         Line(at, $"[Notice] <CEntityComponentCommodityUIProvider::SendCommodity{verb}Request> " +
                  $"Sending SShopCommodity{verb}Request - playerId[{geid}] shopId[730090005328] " +
                  $"shopName[SCShop_Admin_lt_base_g] kioskId[730090005327] " +
-                 $"amount[{amount.ToString("F6", CultureInfo.InvariantCulture)}] " +
-                 $"resourceGUID[{resourceGuid}] autoLoading[0] quantity[{quantity}] " +
-                 $"transactionMode[{mode}] [Team_ActorFeatures][Shops]");
+                 $"{transaction} [Team_ActorFeatures][Shops]");
 
         Raw($"Cargo Box Data:  [boxSize[16] | unitAmount[{Math.Max(1, quantity / 16)}]]");
     }
 
-    public void ContractMarker(DateTimeOffset at, string missionId, string generator, string contract, string definitionId) =>
+    /// <summary>An item attached to a player slot, as emitted on spawn and refresh.</summary>
+    public void Attachment(
+        DateTimeOffset at,
+        string handle,
+        string itemClass,
+        string entityId,
+        string port,
+        string status = "persistent") =>
+        Line(at, $"[Notice] <AttachmentReceived> Player[{handle}] " +
+                 $"Attachment[{itemClass}_{entityId}, {itemClass}, {entityId}] " +
+                 $"Status[{status}] Port[{port}] Elapsed[22.216066] [Team_ActorFeatures][Inventory]");
+
+    /// <summary>Binds an opaque inventory scope to the location most recently named.</summary>
+    public void InventoryQuery(DateTimeOffset at, string geid, string scope, string key) =>
+        Line(at, $"[Notice] <Query Inventory> Query Inventory[{geid}:{scope}:{key}] " +
+                 "[Team_ActorFeatures][Inventory]");
+
+    /// <summary>An item observed while one inventory page is being browsed.</summary>
+    public void InventoryItem(
+        DateTimeOffset at,
+        string geid,
+        string scope,
+        string key,
+        string itemClass) =>
+        Line(at, $"[Notice] <Update Container Items Add New Item> End Page " +
+                 $"Entity Class[{itemClass}] Rank[simulated] " +
+                 $"SourceInventory[{geid}:{scope}:{key}] [Team_ActorFeatures][Inventory]");
+
+    /// <summary>The owned-vehicle totals returned by an ASOP entitlement query.</summary>
+    public void FleetQuery(DateTimeOffset at, int entitlements, int vehicles) =>
+        Line(at, $"[Notice] <VehicleListQuery> Fetching vehicle list completed. " +
+                 $"Retrieved {entitlements} entitlements out of {vehicles} vehicules. " +
+                 "[Team_GameServices][ASOP][Entitlement][Insurance]");
+
+    /// <summary>A ship elevator reports a retrieved entity before its model is known.</summary>
+    public void VehicleSpawn(DateTimeOffset at, string entityId, string landingArea) =>
+        Line(at, "[Notice] <CEntityComponentShipListProvider::SetVehicleSpawnedInformations> " +
+                 $"VehicleEntityId: [{entityId}] LandingArea: {landingArea} " +
+                 "[Team_GameServices][ASOP]");
+
+    /// <summary>An incidental line that ties a retrieved entity id to a ship model.</summary>
+    public void VehicleIdentity(DateTimeOffset at, string vehicleId, string entityId) =>
+        Line(at, $"[Notice] <Vehicle Initialization> Registered {vehicleId}[{entityId}] " +
+                 "with ItemNavigation and local navigation [Team_VehicleFeatures][Vehicle]");
+
+    /// <summary>One item in the tight burst produced when a corpse is created.</summary>
+    public void CorpseItem(DateTimeOffset at, string itemClass, string port) =>
+        Line(at, "[Notice] <Adding non kept item " +
+                 "[CSCActorCorpseUtils::PopulateItemPortForItemRecoveryEntitlement]> " +
+                 $"Item '{itemClass}_200000000218 - Class({itemClass}) - simulated', " +
+                 $"Recorded data is: Port Name '{port}', Class {itemClass} [Team_ActorFeatures][Actor]");
+
+    public void ContractMarker(
+        DateTimeOffset at,
+        string missionId,
+        string generator,
+        string contract,
+        string definitionId,
+        string? markerId = null) =>
         Line(at, $"[Notice] <SMarkerHandler_Base::CreateMissionObjectiveMarker> Creating objective marker: " +
                  $"missionId [{missionId}], generator name [{generator}], " +
-                 $"contract [{contract}][{Guid.NewGuid()}], contractDefinitionId[{definitionId}] " +
+                 $"contract [{contract}][{markerId ?? Guid.NewGuid().ToString()}], contractDefinitionId[{definitionId}] " +
                  $"[Team_Missions]");
+
+    /// <summary>A non-commodity kiosk purchase request, pending a server answer.</summary>
+    public void ShopRequest(
+        DateTimeOffset at,
+        string geid,
+        string shopName,
+        string shopId,
+        string kioskId,
+        decimal price,
+        string itemName,
+        int quantity) =>
+        Line(at, $"[Notice] <CEntityComponentShopUIProvider::SendShopBuyRequest> " +
+                 $"Sending SShopBuyRequest - playerId[{geid}] shopId[{shopId}] " +
+                 $"shopName[{shopName}] kioskId[{kioskId}] " +
+                 $"client_price[{price.ToString("F6", CultureInfo.InvariantCulture)}] " +
+                 $"itemClassGUID[00000000-0000-0000-0000-000000000001] " +
+                 $"itemName[{itemName}] quantity[{quantity}] [Team_ActorFeatures][Shops]");
+
+    /// <summary>The server outcome paired with the latest request at this kiosk.</summary>
+    public void ShopResponse(
+        DateTimeOffset at,
+        string shopName,
+        string kioskId,
+        string result,
+        string type = "Buying",
+        string kioskState = "Idle") =>
+        Line(at, $"[Notice] <CEntityComponentShopUIProvider::RmShopFlowResponse> " +
+                 $"shopName[{shopName}] kioskId[{kioskId}] kioskState[{kioskState}] " +
+                 $"result[{result}] type[{type}] [Team_ActorFeatures][Shops]");
+
+    /// <summary>A mission journal objective changing state.</summary>
+    public void MissionObjective(
+        DateTimeOffset at,
+        string missionId,
+        string objectiveId,
+        string state,
+        bool shownInLog = true) =>
+        Line(at, $"[Notice] <ObjectiveUpserted> Received ObjectiveUpserted push message for: " +
+                 $"mission_id {missionId} - objective_id {objectiveId} - state {state} " +
+                 $"- created 0 - flags={(shownInLog ? "ShowInLog|" : "Internal|")} [Team_Missions]");
 
     /// <summary>
     /// A notification and its follow-up Action lines. The repeats are the point:
@@ -205,9 +320,9 @@ public sealed class LogWriter : IDisposable
             "rescue service beacons to revive you before the 'Time to Death' timer expires.",
             id);
 
-    public void Disconnect(DateTimeOffset at, string reason, string gameRules) =>
+    public void Disconnect(DateTimeOffset at, string reason, string gameRules, bool remote = false) =>
         Line(at, $"[Notice] <Channel Disconnected> cause=30010 reason=\"{reason}\" frame=10136 " +
-                 $"isRemote=0 viewState=eCVS_InGame map=\"megamap\" gamerules=\"{gameRules}\" " +
+                 $"isRemote={(remote ? 1 : 0)} viewState=eCVS_InGame map=\"megamap\" gamerules=\"{gameRules}\" " +
                  $"hostType=\"Replicant\" remoteAddr=<local>:12300 localAddr=<local>:16");
 
     // ---------------- dormant combat ----------------
@@ -218,16 +333,18 @@ public sealed class LogWriter : IDisposable
     /// exercise the dormant combat parser end to end.
     /// </summary>
     public void ActorDeath(
-        DateTimeOffset at, string victim, string killer, string weapon, string damageType, string zone) =>
-        Line(at, $"[Notice] <Actor Death> CActor::Kill: '{victim}' [{Random.Shared.Next(10000, 99999)}] " +
-                 $"in zone '{zone}' killed by '{killer}' [{Random.Shared.Next(10000, 99999)}] " +
+        DateTimeOffset at, string victim, string killer, string weapon, string damageType, string zone,
+        string? victimId = null, string? killerId = null) =>
+        Line(at, $"[Notice] <Actor Death> CActor::Kill: '{victim}' [{victimId ?? Random.Shared.Next(10000, 99999).ToString()}] " +
+                 $"in zone '{zone}' killed by '{killer}' [{killerId ?? Random.Shared.Next(10000, 99999).ToString()}] " +
                  $"using '{weapon}' [Class {weapon}] with damage type '{damageType}' " +
                  $"from direction x: 0.512, y: -0.234, z: 0.100 [Team_ActorFeatures][Actor]");
 
     public void VehicleDestruction(
-        DateTimeOffset at, string vehicle, string driver, string attacker, int from, int to, string cause) =>
+        DateTimeOffset at, string vehicle, string driver, string attacker, int from, int to, string cause,
+        string? entityId = null) =>
         Line(at, $"[Notice] <Vehicle Destruction> CVehicle::OnAdvanceDestroyLevel: Vehicle '{vehicle}' " +
-                 $"[{Random.Shared.Next(1000000, 9999999)}] in zone 'Stanton_Yela' " +
+                 $"[{entityId ?? Random.Shared.Next(1000000, 9999999).ToString()}] in zone 'Stanton_Yela' " +
                  $"[pos x: 1.0, y: 2.0, z: 3.0 vel x: 0.0, y: 0.0, z: 0.0] " +
                  $"driven by '{driver}' [999] advanced from destroy level {from} to {to} " +
                  $"caused by '{attacker}' [888] with '{cause}' [Team_VehicleFeatures][Vehicle]");

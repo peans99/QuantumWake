@@ -14,6 +14,12 @@ dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12
 # Include kill and vehicle-destruction events
 dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
 
+# Write one exact, repeatable story to LIVE\Game.log
+dotnet run --project src\Quantumwake.LogSim -c Release -- --scenario cargo-run
+
+# See every focused story and what it is meant to prove
+dotnet run --project src\Quantumwake.LogSim -c Release -- --list-scenarios
+
 # Append to Game.log in real time, 120 simulated seconds per real second
 dotnet run --project src\Quantumwake.LogSim -c Release -- --live --speed 120
 ```
@@ -37,8 +43,48 @@ real LIVE totals.
 | `--speed <x>` | 60 | Live mode: simulated seconds per real second |
 | `--legs <n>` | 6 | Trips per session |
 | `--combat` | off | Emit `<Actor Death>` and `<Vehicle Destruction>` |
+| `--list-scenarios` | off | List the focused deterministic stories |
+| `--scenario <name>` | none | Write one focused story instead of random sessions |
+| `--start <date>` | today at 20:00 | ISO 8601 timestamp for deterministic scenario entries |
 | `--handle <name>` | `testpilot` | Player handle |
 | `--seed <n>` | 1337 | Deterministic output |
+
+## Focused scenarios
+
+The random simulator remains useful for load and variety. Named scenarios fill
+the other gap: reproducing one state exactly, then knowing what the app ought to
+show. They write one completed `LIVE\Game.log` and print their expected facts.
+
+| Scenario | Story |
+|---|---|
+| `cargo-run` | Buy 16 SCU at Port Tressler, fly, then sell it at New Babbage |
+| `multi-stop-trader` | Move two commodities through three locations and two jumps |
+| `spending` | One confirmed equipment purchase and one rejected purchase |
+| `purchase-pairing` | Ignore the wrong kiosk and intermediate response before confirmation |
+| `medical-respawn` | Incapacitation, inferred respawn, and an after-death medical bed |
+| `medical-kinds` | Login wake, after-casualty treatment, and ordinary healing beds |
+| `death-recovery` | Collapse a corpse-item burst into one death and recovery location |
+| `revived-in-place` | Incapacitation followed by revival without inventing a respawn |
+| `crew-flight` | Party arrivals, leader change, quantum flight, and a departure |
+| `party-lifecycle` | Connect, lead, disconnect, reconnect, ignore chatter, then disband |
+| `contract-complete` | Two visible mission steps completed, followed by a blueprint |
+| `contract-abandoned` | One visible objective progresses and is then withdrawn |
+| `loadout-swap` | Repeat an armour sighting and change the weapon in one slot |
+| `stash-browse` | Browse two location inventories and one personal inventory |
+| `fleet-growth` | Observe changing entitlement counts and retain the largest fleet |
+| `ship-retrieval` | Join a duplicate spawn line to a ship model learned later |
+| `location-resolution` | Replace a generic Rest Stop target with the actual arrival |
+| `unexpected-disconnect` | Distinguish timeout, player request, and routine teardown |
+| `combat` | One player kill, one death, and a destroyed vehicle |
+| `all` | Every focused story composed into one session |
+
+Scenario events are stable for a given `--start` and seed. The file’s own
+timestamp is not: only the backups loop sets it, so a scenario `Game.log` is
+always stamped with the moment it was written.
+
+Automated tests generate every scenario, feed it back through `LogFileReader`
+and `SessionBuilder`, assert the claimed session facts, and require zero
+unmatched known tags.
 
 ## Why it reproduces the ugly parts
 
@@ -89,8 +135,9 @@ the game's doing, not a defect.
 
 ## Limitations
 
-The simulator writes plausible content, not a faithful replay. Quantum origins
-and destinations are drawn from observed pools rather than following a coherent
-route graph, so a jump may "start" somewhere the previous leg did not end.
-Session pacing is randomised within bounds. It is a parser and UI exercise, not
-a flight recorder.
+The random simulator writes plausible content, not a faithful replay. Quantum
+origins and destinations are drawn from observed pools rather than following a
+coherent route graph, so a jump may "start" somewhere the previous leg did not
+end. Session pacing is randomised within bounds. Named scenarios are coherent
+and repeatable, but still synthetic parser and UI exercises rather than flight
+recordings.

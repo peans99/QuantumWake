@@ -85,6 +85,12 @@ public sealed record SpendTotal(string Name, decimal Total, int Quantity);
 /// What was in the boxes — resolved from the opt-in community dataset, null
 /// when it is disabled or the id is unknown to it.
 /// </param>
+/// <param name="ResourceId">
+/// The <c>resourceGUID</c> the log actually carried. <see cref="Commodity"/> is
+/// this id run through a dataset that may be off, may be a different version, or
+/// may not know the id; the id itself is the part the game wrote down. Kept so a
+/// reader with a different catalogue can resolve a name this install could not.
+/// </param>
 public sealed record TradeRecord(
     DateTimeOffset At,
     bool IsSell,
@@ -94,7 +100,8 @@ public sealed record TradeRecord(
     decimal Amount,
     decimal UnitPrice,
     string? Mode,
-    string? Commodity = null);
+    string? Commodity = null,
+    string? ResourceId = null);
 
 /// <summary>An item observed entering the player's inventories.</summary>
 /// <remarks>
@@ -185,9 +192,31 @@ public sealed record SignalHealth(
 /// there - never that nobody else was.
 /// </remarks>
 /// <param name="Sessions">Sessions in which they were named at least once.</param>
+/// <summary>
+/// A ship you and somebody else were both aboard.
+/// </summary>
+/// <param name="Owner">Whose it is - possibly you, possibly them, possibly neither.</param>
+/// <param name="Times">
+/// Boardings seen, not hours flown. There is no leave line for the reader, so
+/// time aboard is not recoverable; a channel opens on boarding rather than on
+/// flying, so a parked ship counts the same as a crossing.
+/// </param>
+public sealed record SharedShip(
+    string Handle,
+    string Ship,
+    string Owner,
+    int Times,
+    DateTimeOffset First,
+    DateTimeOffset Last);
+
 /// <param name="Connected">Times they came online while partied with you.</param>
 /// <param name="Dropped">Times they went offline the same way.</param>
 /// <param name="LedParty">Times party lead passed to them.</param>
+/// <param name="Joined">
+/// Times they joined the party - a different fact from coming online, and the
+/// only one of these that means somebody was not there a moment before.
+/// </param>
+/// <param name="Left">Times they left it, as opposed to merely dropping.</param>
 public sealed record Wingman(
     string Handle,
     int Sessions,
@@ -195,7 +224,9 @@ public sealed record Wingman(
     int Dropped,
     int LedParty,
     DateTimeOffset First,
-    DateTimeOffset Last);
+    DateTimeOffset Last,
+    int Joined = 0,
+    int Left = 0);
 
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
@@ -1081,9 +1112,45 @@ public sealed class LogLibrary : IDisposable
                     t.Amount,
                     t.Quantity > 0 ? t.Amount / t.Quantity : 0,
                     t.Mode,
-                    Community.Commodity(t.ResourceId));
+                    Community.Commodity(t.ResourceId),
+                    t.ResourceId);
             }))
             .OrderByDescending(t => t.At)];
+    }
+
+    /// <summary>
+    /// The handle this install last played under, or null when no session names one.
+    /// </summary>
+    /// <remarks>
+    /// The newest rather than the most frequent: a pilot who renamed wants the
+    /// name they answer to now, and the older one is still in the logs for
+    /// <see cref="Wingmen"/> to keep out of their own friends list.
+    /// </remarks>
+    public string? Handle() =>
+        Counted(WipeScope.History)
+            .OrderByDescending(s => s.StartedAt)
+            .Select(s => s.Handle)
+            .FirstOrDefault(h => !string.IsNullOrWhiteSpace(h));
+
+    /// <summary>Cargo trades whose own timestamp falls inside the last <paramref name="days"/> days.</summary>
+    /// <remarks>
+    /// <see cref="Trades(int)"/> takes its window off <see cref="SessionSummary.StartedAt"/>,
+    /// which is the right filter for "sessions from this week" and the wrong one
+    /// for "trades from this week": a session that began eight days ago and ran
+    /// past midnight is dropped whole, taking trades made well inside the window
+    /// with it. So fetch two days wider than asked and filter on the trade.
+    ///
+    /// Two rather than one because a single day only covers a session shorter
+    /// than 24 hours, and this is a filter over summaries already in memory - the
+    /// wider fetch costs nothing, while the narrower one loses rows in silence.
+    /// </remarks>
+    public IReadOnlyList<TradeRecord> TradesWithin(int days)
+    {
+        if (days <= 0)
+            return Trades(0);
+
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+        return [.. Trades(days + 2).Where(t => t.At >= cutoff)];
     }
 
     public IReadOnlyList<SessionSummary> Sessions() => Counted(WipeScope.History);
@@ -1297,7 +1364,9 @@ public sealed class LogLibrary : IDisposable
                     g.Count(x => x.Note.Moment == PartyMoment.Disconnected),
                     g.Count(x => x.Note.Moment == PartyMoment.BecameLeader),
                     g.Min(x => x.Note.At),
-                    g.Max(x => x.Note.At)))
+                    g.Max(x => x.Note.At),
+                    g.Count(x => x.Note.Moment == PartyMoment.Joined),
+                    g.Count(x => x.Note.Moment == PartyMoment.Left)))
                 .OrderByDescending(w => w.Sessions)
                 .ThenByDescending(w => w.Connected)
                 .ThenBy(w => w.Handle, StringComparer.OrdinalIgnoreCase)
@@ -1309,6 +1378,72 @@ public sealed class LogLibrary : IDisposable
     /// announces them once and never mentions them again, so this is the whole
     /// record of what can be crafted.
     /// </summary>
+    /// <summary>
+    /// The ships you and other people were aboard together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Built from the ship comms channels, which are the only lines that put a
+    /// person inside a vehicle. A pairing is recorded when the reader and
+    /// somebody else were both in the same channel: either they boarded a ship
+    /// while the reader was in it, or the reader boarded one they own.
+    /// </para>
+    /// <para>
+    /// A floor, like everything else here. The reader sees only channels they
+    /// were in themselves, boarding is not flying, and nothing records how long
+    /// anybody stayed - so this answers "we were both in this ship" and refuses
+    /// the question it looks like it answers, which is how much you flew
+    /// together.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<SharedShip> SharedShips(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+        var sessions = Counted(WipeScope.History);
+
+        var mine = sessions
+            .Select(s => s.Handle)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+
+        var pairings = new List<(string Handle, string Ship, string Owner, DateTimeOffset At)>();
+
+        foreach (var note in sessions.SelectMany(s => s.ChannelNotes).Where(n => n.At >= cutoff))
+        {
+            switch (note.Moment)
+            {
+                // Somebody came aboard a channel the reader was already in.
+                case ChannelMoment.TheyBoarded when note.Handle is { } who && !mine.Contains(who):
+                    pairings.Add((who, note.Ship, note.Owner, note.At));
+                    break;
+
+                // The reader boarded a ship somebody else owns. Their name is on
+                // the berth even when no arrival line ever named them.
+                case ChannelMoment.YouBoarded when !mine.Contains(note.Owner):
+                    pairings.Add((note.Owner, note.Ship, note.Owner, note.At));
+                    break;
+            }
+        }
+
+        return
+        [
+            .. pairings
+                // One key rather than a tuple comparer: handles and ship names
+                // are both matched without regard to case, and the newest
+                // spelling of each is taken from the group below.
+                .GroupBy(p => $"{p.Handle}|{p.Ship}|{p.Owner}".ToLowerInvariant())
+                .Select(g => new SharedShip(
+                    g.OrderByDescending(p => p.At).First().Handle,
+                    g.OrderByDescending(p => p.At).First().Ship,
+                    g.OrderByDescending(p => p.At).First().Owner,
+                    g.Count(),
+                    g.Min(p => p.At),
+                    g.Max(p => p.At)))
+                .OrderByDescending(s => s.Times)
+                .ThenByDescending(s => s.Last)
+        ];
+    }
+
     public IReadOnlyList<BlueprintReceipt> Blueprints()
     {
         return

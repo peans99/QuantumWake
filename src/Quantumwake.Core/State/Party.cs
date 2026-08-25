@@ -13,7 +13,18 @@ public enum PartyMoment
     BecameLeader,
 
     /// <summary>The party ended.</summary>
-    Disbanded
+    Disbanded,
+
+    /// <summary>Someone joined the party you were in.</summary>
+    /// <remarks>
+    /// Membership, not presence: <see cref="Connected"/> is a client coming
+    /// online while already partied, which is a different fact and far more
+    /// common. Never you - see the class remarks.
+    /// </remarks>
+    Joined,
+
+    /// <summary>Someone left the party you were in.</summary>
+    Left
 }
 
 /// <summary>One party notification, read.</summary>
@@ -42,13 +53,28 @@ public sealed record PartyNote(DateTimeOffset At, string? Handle, PartyMoment Mo
 /// the notification's own trailing colon still attached.
 /// </para>
 /// <para>
-/// Five titles appear on this channel, and they are not interchangeable:
-/// <c>Party</c> carries arrivals and departures, <c>New Party Leader</c> carries
-/// the handover, <c>Party Disbanded</c> announces the end, and
-/// <c>Party Launch</c> / <c>Party Launch Accepted</c> are matchmaking queue
-/// chatter that names a leader but says nothing about who is present. Only the
-/// first three are read. Disbanding is recognised by its title rather than its
-/// body, because the body names nobody.
+/// The titles on this channel are not interchangeable. <c>Party</c> carries
+/// clients coming online and dropping, <c>New Party Leader</c> the handover,
+/// <c>Party Disbanded</c> the end, <c>New Member Joined</c> and
+/// <c>Member Left</c> the membership changes, and <c>Party Launch</c> /
+/// <c>Party Launch Accepted</c> are matchmaking queue chatter that names a
+/// leader but says nothing about who is present. Disbanding is recognised by
+/// its title rather than its body, because the body names nobody.
+/// </para>
+/// <para>
+/// Joining and leaving are a different fact from connecting and disconnecting,
+/// and both are worth having: on this install 187 clients came online and 64
+/// dropped, against 22 joins and 33 departures. A member who logs out and back
+/// in produces the first pair; one who actually left the group produces the
+/// second, and reading only the first makes somebody who walked away look like
+/// somebody with a poor connection.
+/// </para>
+/// <para>
+/// <c>Member Left</c> is the one title that does not belong to one channel.
+/// Most of its lines are ship comms - "X has left the channel 'RSI Ursa
+/// Medivac : DeathStrokeo1'" - so the body has to be read rather than the
+/// title trusted, or a passenger stepping out of a hired ship is recorded as
+/// leaving a party they were never in.
 /// </para>
 /// <para>
 /// Handles are matched as a single run of non-space characters because that is
@@ -63,9 +89,23 @@ public sealed record PartyNote(DateTimeOffset At, string? Handle, PartyMoment Mo
 public static class Party
 {
     /// <summary>True when a notification came from the party channel at all.</summary>
+    /// <remarks>
+    /// Both shared titles are asked about their body rather than taken on their
+    /// title, because a ship's comms channel uses the same two. On this install
+    /// <c>New Member Joined</c> carries 22 party joins and 22 ship boardings,
+    /// and <c>Member Left</c> 33 departures against 27 channel exits. Counting
+    /// the other reader's lines here would not misread anybody -
+    /// <see cref="Read"/> refuses them either way - but it would inflate "party
+    /// notifications", and the gap between that number and the notes read is the
+    /// only measure of what this reader is declining to guess at.
+    /// </remarks>
     public static bool IsParty(string text) =>
         text.StartsWith("Party ", StringComparison.OrdinalIgnoreCase)
-        || text.StartsWith("New Party Leader ", StringComparison.OrdinalIgnoreCase);
+        || text.StartsWith("New Party Leader ", StringComparison.OrdinalIgnoreCase)
+        || (text.StartsWith("New Member Joined", StringComparison.OrdinalIgnoreCase)
+            && text.Contains(" has joined the party.", StringComparison.OrdinalIgnoreCase))
+        || (text.StartsWith("Member Left", StringComparison.OrdinalIgnoreCase)
+            && text.Contains(" has left the party.", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The note this notification carries, or null when it says nothing about
@@ -85,6 +125,19 @@ public static class Party
         // word in front of a verb finds "The".
         if (text.StartsWith("Party Disbanded", StringComparison.OrdinalIgnoreCase))
             return new PartyNote(at, null, PartyMoment.Disbanded);
+
+        if (Tail(text, "New Member Joined ") is { } arrival)
+            return Ending(arrival, " has joined the party.") is { } came
+                ? new PartyNote(at, came, PartyMoment.Joined)
+                : null;
+
+        // Read for the ending rather than the title: most Member Left lines are
+        // a ship's comms channel emptying, which says who was aboard whose ship
+        // and nothing at all about a party.
+        if (Tail(text, "Member Left ") is { } departure)
+            return Ending(departure, " has left the party.") is { } went
+                ? new PartyNote(at, went, PartyMoment.Left)
+                : null;
 
         if (Tail(text, "Party ") is not { } body)
             return null;

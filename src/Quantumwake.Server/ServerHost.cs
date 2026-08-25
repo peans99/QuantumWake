@@ -96,6 +96,9 @@ public static class ServerHost
         builder.Services.AddSingleton<JobStore>();
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
+        builder.Services.AddSingleton<MapNoteStore>();
+        builder.Services.AddSingleton<ExportBuilder>();
+        builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
 
@@ -766,6 +769,11 @@ public static class ServerHost
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));
 
+        // Its own route rather than a field on the crew rows: a pilot appears
+        // once per ship here, so folding it in would either repeat every other
+        // count or need the page to flatten it back out.
+        app.MapGet("/api/crew/ships", (LogLibrary lib, int? days) => lib.SharedShips(days ?? 0));
+
         // What the logs are still carrying. Unscoped by wipe on purpose - see
         // LogLibrary.Signals.
         app.MapGet("/api/signals", (LogLibrary lib) => lib.Signals());
@@ -1189,7 +1197,8 @@ public static class ServerHost
 
         // ---- jobs: the player's own plans, checked against what they hold ----
 
-        app.MapGet("/api/jobs", (JobStore jobs, LogLibrary lib, UexData uex) =>
+        app.MapGet("/api/jobs", (JobStore jobs, LogLibrary lib, UexData uex,
+            ImportStore imports, string? imported) =>
         {
             var stats = lib.Stats();
 
@@ -1214,7 +1223,7 @@ public static class ServerHost
                 .Select(i => i.Name)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            return jobs.All().Select(job =>
+            object Project(Job job, ImportBatch? from)
             {
                 var lines = job.Items.Select(item =>
                 {
@@ -1260,7 +1269,8 @@ public static class ServerHost
 
                 return new
                 {
-                    job.Id,
+                    // Never the id the file carried - see SharedId.
+                    Id = from is null ? job.Id : SharedId(from, job.Id),
                     job.Title,
                     job.Destination,
                     job.DestinationId,
@@ -1268,12 +1278,24 @@ public static class ServerHost
                     job.Source,
                     job.CreatedAt,
                     job.Done,
-                    job.Pinned,
+
+                    // Pinning is this machine's business whatever a file says.
+                    Pinned = from is null && job.Pinned,
+                    imported = from is null ? null : Marker(from),
                     items = lines,
                     haveCount = lines.Count(l => l.have),
                     totalCount = lines.Count
                 };
-            });
+            }
+
+            // The reader's own first, then whatever they asked to see beside it.
+            // The stash and loadout joins apply to imported rows too, and that is
+            // the point: "Bob needs four Agricium" is worth much more next to
+            // "and you have some at Port Tressler".
+            return jobs.All().Select(job => Project(job, null))
+                .Concat(Shared(imports, imported)
+                    .SelectMany(batch => (batch.Authored?.Jobs ?? [])
+                        .Select(job => Project(job, batch))));
         });
 
         app.MapPost("/api/jobs", (JobStore jobs, JobRequest body) =>
@@ -1311,7 +1333,11 @@ public static class ServerHost
 
         // ---- checklists: authored preparation, never guessed from the log ----
 
-        app.MapGet("/api/checklists", (ChecklistStore checklists) => checklists.All());
+        app.MapGet("/api/checklists", (ChecklistStore checklists, ImportStore imports, string? imported) =>
+            checklists.All().Select(list => Draw(list, null))
+                .Concat(Shared(imports, imported)
+                    .SelectMany(batch => (batch.Authored?.Checklists ?? [])
+                        .Select(list => Draw(list, batch)))));
 
         app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
             Results.Ok(checklists.Add(body.Title)));
@@ -1334,6 +1360,125 @@ public static class ServerHost
         app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists) =>
             checklists.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
+        // ---- sharing: a file of the pilot's own, for a pilot they fly with ----
+
+        // POST, not GET, and that is the whole security story for this feature.
+        //
+        // LanGuard whitelists by method, so a GET here would hand every receipt,
+        // blueprint, job and the pilot's handle to anyone on the same wifi the
+        // moment -Lan is on - in one request, in a form built for keeping. The
+        // existing reads let somebody look at a page; this one lets them take
+        // the lot. As a POST it is refused off-machine by the rule that already
+        // exists, with no deny-list for anyone to remember to update.
+        app.MapPost("/api/export", (ExportRequest body, ExportBuilder exports) =>
+        {
+            var choice = body.Choice();
+
+            if (choice.AskedForNothing)
+                return Results.BadRequest(new { message = "Choose at least one thing to export." });
+
+            var document = exports.Build(choice, Producer(), DateTimeOffset.UtcNow);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(document, ExportDocument.Json);
+
+            return Results.File(bytes, "application/json", ExportFileName(document));
+        });
+
+        // Counts and the window, never rows: nothing leaves without a click, and
+        // a click is worth more when it follows seeing what would go.
+        app.MapGet("/api/export/preview", (ExportBuilder exports,
+            bool? receipts, bool? blueprints, bool? authored, int? days) =>
+        {
+            var choice = new ExportChoice(
+                receipts == true, blueprints == true, authored == true,
+                days ?? ExportBuilder.DefaultDays);
+
+            var counts = exports.Preview(choice);
+
+            return Results.Ok(new
+            {
+                counts.Receipts, counts.Blueprints, counts.Jobs, counts.Checklists, counts.Trips,
+                days = choice.Days,
+                defaultDays = ExportBuilder.DefaultDays,
+            });
+        });
+
+        // Imports live in their own store and are never folded into the
+        // authored files. Removing one has to leave the pilot's own work
+        // untouched, and that is only cheap if it was never mixed in.
+        app.MapGet("/api/imports", (ImportStore imports) => new
+        {
+            batches = imports.All().Select(Summarise),
+            quarantined = imports.Quarantined,
+        });
+
+        app.MapGet("/api/imports/{id}", (string id, ImportStore imports) =>
+        {
+            var batch = imports.Find(id);
+            return batch is null ? Results.NotFound() : Results.Ok(batch);
+        });
+
+        app.MapPost("/api/imports", (ImportRequest body, ImportStore imports, bool? force) =>
+        {
+            var text = body.Document ?? string.Empty;
+
+            if (ImportReader.TooBig(System.Text.Encoding.UTF8.GetByteCount(text)) is { } tooBig)
+                return Results.Json(new { message = tooBig.Message }, statusCode: tooBig.Status);
+
+            var fingerprint = ImportStore.FingerprintOf(text);
+
+            // The common way to arrive here twice is a double-clicked picker, so
+            // ask rather than refuse: re-importing something purged on purpose
+            // is just as legitimate, and only the reader knows which this is.
+            if (force != true && imports.Matching(fingerprint) is { } already)
+                return Results.Conflict(new { duplicate = true, batch = Summarise(already) });
+
+            var (reading, problem) = ImportReader.Read(text, DateTimeOffset.UtcNow);
+
+            if (problem is not null)
+                return Results.Json(new { message = problem.Message }, statusCode: problem.Status);
+
+            return Results.Ok(new { batch = Summarise(imports.Add(reading!, fingerprint, body.SourceName, DateTimeOffset.UtcNow)) });
+        });
+
+        // Receipts and blueprints keep their own doors, and this is deliberate.
+        //
+        // /api/commodities feeds four separate aggregates on the Cargo page and
+        // /api/blueprints/owned feeds the "Set as goal" picker. Concatenating
+        // would mean remembering to filter in five places, which is how one gets
+        // forgotten - and the one that gets forgotten produces a lifetime
+        // earnings figure counting somebody else's sales, or a build plan for a
+        // blueprint the reader does not hold. Arriving in a different payload
+        // makes that impossible rather than merely unlikely.
+        app.MapGet("/api/imports/receipts", (ImportStore imports, string? imported) =>
+            Shared(imports, imported ?? "all").SelectMany(batch =>
+                (batch.Receipts?.Rows ?? []).Select(row => new
+                {
+                    row.At, row.IsSell, row.Place, row.PlaceId, row.Scu,
+                    row.Amount, row.UnitPrice, row.Commodity, row.ResourceId,
+                    observedTo = batch.Receipts!.ObservedTo,
+                    imported = Marker(batch),
+                })));
+
+        app.MapGet("/api/imports/blueprints", (ImportStore imports, string? imported) =>
+            Shared(imports, imported ?? "all").SelectMany(batch =>
+                (batch.Blueprints?.Rows ?? []).Select(row => new
+                {
+                    row.At,
+                    row.Name,
+                    imported = Marker(batch),
+                })));
+
+        app.MapPost("/api/imports/{id}/hide", (string id, ImportStore imports) =>
+            imports.ToggleHidden(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/imports/{id}/{cls}", (string id, string cls, ImportStore imports) =>
+            imports.RemoveClass(id, cls) ? Results.Ok(new { id, cls }) : Results.NotFound());
+
+        app.MapDelete("/api/imports/{id}", (string id, ImportStore imports) =>
+            imports.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/imports", (ImportStore imports) => Results.Ok(new { removed = imports.Clear() }));
+
         // ---- flight plans: where to go next, in order ----
 
         // ---- the wipe: where the player's countable history begins ----
@@ -1348,7 +1493,11 @@ public static class ServerHost
             return Results.Ok(Describe(wipe, lib));
         });
 
-        app.MapGet("/api/trips", (TripStore trips) => trips.All());
+        app.MapGet("/api/trips", (TripStore trips, ImportStore imports, string? imported) =>
+            trips.All().Select(trip => Draw(trip, null))
+                .Concat(Shared(imports, imported)
+                    .SelectMany(batch => (batch.Authored?.Trips ?? [])
+                        .Select(trip => Draw(trip, batch)))));
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
             Results.Ok(trips.Add(body.Title, body.Stops)));
@@ -1370,11 +1519,39 @@ public static class ServerHost
         app.MapPost("/api/trips/{id}/stops/{stopId}/move", (string id, string stopId, int delta, TripStore trips) =>
             trips.MoveStop(id, stopId, delta) ? Results.Ok(new { id }) : Results.NotFound());
 
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions", (string id, string stopId,
+            TripStore trips, RunActionRequest body) =>
+            trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit)
+                ? Results.Ok(new { id, stopId }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/toggle", (string id,
+            string stopId, string actionId, TripStore trips) =>
+            trips.ToggleAction(id, stopId, actionId)
+                ? Results.Ok(new { id, stopId, actionId }) : Results.NotFound());
+
+        app.MapDelete("/api/trips/{id}/stops/{stopId}/actions/{actionId}", (string id,
+            string stopId, string actionId, TripStore trips) =>
+            trips.RemoveAction(id, stopId, actionId)
+                ? Results.Ok(new { id, stopId, actionId }) : Results.NotFound());
+
         app.MapDelete("/api/trips/{id}/stops/{stopId}", (string id, string stopId, TripStore trips) =>
             trips.RemoveStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
 
         app.MapDelete("/api/trips/{id}", (string id, TripStore trips) =>
             trips.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        // ---- map notes: personal POIs, deliberately not telemetry ----
+
+        app.MapGet("/api/map-notes", (MapNoteStore notes) => notes.All());
+
+        app.MapPost("/api/map-notes", (MapNoteStore notes, MapNoteRequest body) =>
+        {
+            var item = notes.Add(body.PlaceId, body.Place, body.Title, body.Note, body.Tags);
+            return item is null ? Results.BadRequest(new { message = "Choose a map location first." }) : Results.Ok(item);
+        });
+
+        app.MapDelete("/api/map-notes/{id}", (string id, MapNoteStore notes) =>
+            notes.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
 
         // ---- optional UEX feeds, each switched on by itself ----
 
@@ -1933,18 +2110,157 @@ static int Holes(IEnumerable<ShipSlot> slots)
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
 
     /// <summary>
+    /// The shared files a page should draw beside the reader's own work.
+    /// </summary>
+    /// <remarks>
+    /// None unless asked for. Importing a friend's forty jobs and finding your
+    /// own page now has forty-three cards on it is an ambush by a feature
+    /// somebody used once, so this answers nothing until a page says otherwise.
+    /// </remarks>
+    static IEnumerable<ImportBatch> Shared(ImportStore imports, string? imported)
+    {
+        if (string.IsNullOrWhiteSpace(imported) || imported == "none")
+            return [];
+
+        var batches = imports.All().Where(b => b.Readable && !b.Hidden);
+
+        return imported == "all" ? batches : batches.Where(b => b.Id == imported);
+    }
+
+    /// <summary>A checklist as a page sees it, with whose it is when it is not the reader's.</summary>
+    static object Draw(Checklist list, ImportBatch? from) => new
+    {
+        Id = from is null ? list.Id : SharedId(from, list.Id),
+        list.Title,
+        list.CreatedAt,
+        Pinned = from is null && list.Pinned,
+        Items = from is null
+            ? list.Items
+            : [.. list.Items.Select(i => i with { Id = SharedId(from, i.Id) })],
+        imported = from is null ? null : Marker(from),
+    };
+
+    /// <summary>A flight plan as a page sees it.</summary>
+    static object Draw(Trip trip, ImportBatch? from) => new
+    {
+        Id = from is null ? trip.Id : SharedId(from, trip.Id),
+        trip.Title,
+        trip.CreatedAt,
+        Tracked = from is null && trip.Tracked,
+        Stops = from is null
+            ? trip.Stops
+            : [.. trip.Stops.Select(s => s with
+            {
+                Id = SharedId(from, s.Id),
+                Actions = [.. (s.Actions ?? []).Select(action => action with { Id = SharedId(from, action.Id) })],
+            })],
+        trip.Next,
+        trip.Done,
+        imported = from is null ? null : Marker(from),
+    };
+
+    /// <summary>Whose a row is, for a page that has to say so.</summary>
+    /// <remarks>
+    /// An object rather than a flag, because the card needs the handle to name
+    /// them and the batch id to offer hiding the file inline. A boolean would
+    /// have to be widened later across every endpoint at once.
+    /// </remarks>
+    static object Marker(ImportBatch batch) => new
+    {
+        batchId = batch.Id,
+        batch.Handle,
+        batch.ImportedAt,
+        batch.Note,
+    };
+
+    /// <summary>
+    /// An imported row's id on the wire, which is never the id the file carried.
+    /// </summary>
+    /// <remarks>
+    /// Job, checklist and trip ids are eight hex characters minted locally with
+    /// no namespace, so a file exported from this very machine and read back
+    /// carries ids identical to the reader's own by construction - not by bad
+    /// luck. The page builds /api/jobs/{id}/pin and DELETE /api/jobs/{id}
+    /// straight out of them, so a collision would mean clicking Delete on
+    /// somebody else's card deleting your own job.
+    ///
+    /// Prefixed, those routes simply miss and answer 404. Safe because the id
+    /// cannot address anything, rather than safe because every future caller
+    /// remembers to check.
+    /// </remarks>
+    static string SharedId(ImportBatch batch, string id) => $"imp:{batch.Id}:{id}";
+
+    /// <summary>
+    /// A batch without its contents: what the imports list draws.
+    /// </summary>
+    /// <remarks>
+    /// The rows stay behind deliberately. This endpoint is asked for on every
+    /// visit to the page, and a batch can hold twenty thousand receipts.
+    /// </remarks>
+    static object Summarise(ImportBatch batch) => new
+    {
+        batch.Id,
+        batch.ImportedAt,
+        batch.ExportedAt,
+        batch.Handle,
+        batch.Note,
+        batch.SourceName,
+        batch.FormatVersion,
+        batch.ContentVersion,
+        batch.ProducerVersion,
+        batch.Classes,
+        batch.Counts,
+        batch.Rejected,
+        batch.Truncated,
+        batch.Hidden,
+        batch.Readable,
+    };
+
+    /// <summary>What this build stamps on a file it writes.</summary>
+    /// <remarks>
+    /// Reflection rather than a constant, for the same reason /api/version uses
+    /// it: a number written by hand is one that can disagree with the assembly
+    /// that wrote the file, and the file outlives the build.
+    /// </remarks>
+    static ExportProducer Producer()
+    {
+        var assembly = typeof(ServerHost).Assembly;
+
+        return new ExportProducer(
+            "Quantum Wake",
+            assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+            assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion);
+    }
+
+    /// <summary>
+    /// What the browser saves it as: the handle, the date, and nothing a file
+    /// system will argue about.
+    /// </summary>
+    static string ExportFileName(ExportFile document)
+    {
+        var who = new string((document.Handle ?? "export")
+            .ToLowerInvariant()
+            .Where(c => char.IsAsciiLetterOrDigit(c) || c == '-')
+            .ToArray());
+
+        if (who.Length == 0)
+            who = "export";
+
+        return $"quantumwake-{who}-{document.ExportedAt:yyyyMMdd-HHmm}.json";
+    }
+
+    /// <summary>
     /// The sales a UEX push draws from: named commodity sells inside UEX's
     /// 30-day submission window, with the unit price the kiosk actually showed.
     /// </summary>
     static IEnumerable<(DateTimeOffset At, string Commodity, string Place, decimal UnitPrice, int Scu)>
-        RecentSales(LogLibrary lib)
-    {
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
-
-        return lib.Trades(31)
-            .Where(t => t.IsSell && t.Commodity is not null && t.At >= cutoff && t.Scu > 0)
+        RecentSales(LogLibrary lib) =>
+        lib.TradesWithin(30)
+            .Where(t => t.IsSell && t.Commodity is not null && t.Scu > 0)
             .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
-    }
 
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
     /// <remarks>
@@ -1957,8 +2273,15 @@ static int Holes(IEnumerable<ShipSlot> slots)
         NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds)
     {
         var trip = trips.Tracked();
-        var stops = trip?.Stops.Where(s => !s.Done).Take(3)
-            .Select(s => new BriefingStop(s.Id, s.PlaceId, s.Place, s.Note))
+
+        // The same rule as Trip.Next, and it has to be: arriving ticks the stop,
+        // so selecting on Done alone drops it from the briefing at the exact
+        // moment its run sheet starts to matter. That was the third copy of this
+        // condition and the one nobody updated, which is the argument for
+        // asking the trip rather than re-deciding it here.
+        var stops = trip?.Stops.Where(Trip.Outstanding).Take(3)
+            .Select(s => new BriefingStop(s.Id, s.PlaceId, s.Place, s.Note,
+                [.. (s.Actions ?? []).Where(a => !a.Done)]))
             .ToList() ?? [];
 
         if (!now.InGame || string.IsNullOrWhiteSpace(now.Location))
@@ -2164,7 +2487,13 @@ public sealed record PilotBriefing(
     IReadOnlyList<BriefingStash> Stash);
 
 /// <summary>One outstanding flight-plan stop, in the order it will be flown.</summary>
-public sealed record BriefingStop(string Id, string PlaceId, string Place, string? Note);
+/// <param name="Actions">
+/// What is still to be done at this stop, so a card that keeps a landed stop
+/// alive can say why it is keeping it.
+/// </param>
+public sealed record BriefingStop(
+    string Id, string PlaceId, string Place, string? Note,
+    IReadOnlyList<RunAction> Actions);
 
 /// <summary>One missing shopping-list item stocked at the live place.</summary>
 public sealed record BriefingShopping(
@@ -2194,6 +2523,47 @@ public sealed record WipeRequest(DateTimeOffset? At, string? Patch, List<string>
 
 /// <summary>Body of POST /api/trips.</summary>
 public sealed record TripRequest(string? Title, List<TripStop>? Stops);
+
+/// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
+public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit);
+
+/// <summary>Body of POST /api/map-notes.</summary>
+public sealed record MapNoteRequest(
+    string? PlaceId,
+    string? Place,
+    string? Title,
+    string? Note,
+    List<string>? Tags);
+
+/// <summary>
+/// Body of POST /api/export: what to share, and how far back.
+/// </summary>
+/// <remarks>
+/// Every class is false unless asked for, even though the page's boxes start
+/// ticked. The failure direction of a stale client or a typo has to be sharing
+/// nothing rather than sharing everything.
+/// </remarks>
+public sealed record ExportRequest(
+    bool Receipts = false,
+    bool Blueprints = false,
+    bool Authored = false,
+    int? Days = null,
+    bool Handle = true,
+    string? Note = null)
+{
+    public ExportChoice Choice() =>
+        new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note);
+}
+
+/// <summary>
+/// Body of POST /api/imports: the file's text, as the picker read it.
+/// </summary>
+/// <remarks>
+/// A JSON body rather than multipart. Nothing else in the app posts multipart,
+/// FileReader hands back the string for nothing, and a body keeps the size check
+/// a single question about how many bytes arrived.
+/// </remarks>
+public sealed record ImportRequest(string? Document, string? SourceName = null);
 
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);

@@ -19,16 +19,46 @@ if (options.ShowHelp)
     return 0;
 }
 
+if (options.ListScenarios)
+{
+    Console.WriteLine("Available deterministic scenarios:");
+    Console.WriteLine();
+
+    foreach (var scenario in ScenarioCatalogue.All)
+        Console.WriteLine($"  {scenario.Name,-22} {scenario.Description}");
+
+    return 0;
+}
+
+var selectedScenario = options.Scenario is null
+    ? null
+    : ScenarioCatalogue.Find(options.Scenario);
+
+if (options.Scenario is not null && selectedScenario is null)
+{
+    Console.Error.WriteLine($"Unknown scenario '{options.Scenario}'. Use --list-scenarios to see the available names.");
+    return 2;
+}
+
+if (selectedScenario is not null && options.Live)
+{
+    Console.Error.WriteLine("A named scenario is a completed deterministic log and cannot be combined with --live.");
+    return 2;
+}
+
 var liveDirectory = Path.Combine(options.InstallRoot, "LIVE");
 var backupsDirectory = Path.Combine(liveDirectory, "logbackups");
 
-Directory.CreateDirectory(backupsDirectory);
+Directory.CreateDirectory(selectedScenario is null ? backupsDirectory : liveDirectory);
 
 Console.WriteLine("Quantum Wake log simulator  ·  by nekron");
 Console.WriteLine();
 Console.WriteLine($"Fake install : {liveDirectory}");
 Console.WriteLine($"Handle       : {options.Handle}");
-Console.WriteLine($"Combat       : {(options.Combat ? "enabled (exercises the dormant parser)" : "off, matching real 4.9 logs")}");
+if (selectedScenario is null)
+    Console.WriteLine($"Combat       : {(options.Combat ? "enabled (exercises the dormant parser)" : "off, matching real 4.9 logs")}");
+else
+    Console.WriteLine($"Scenario     : {selectedScenario.Name} - {selectedScenario.Description}");
 Console.WriteLine();
 
 var simOptions = new SimOptions
@@ -40,7 +70,7 @@ var simOptions = new SimOptions
 
 // ---- historical backups ----
 
-if (options.Backups > 0)
+if (selectedScenario is null && options.Backups > 0)
 {
     Console.WriteLine($"Generating {options.Backups} backup sessions…");
 
@@ -76,7 +106,31 @@ if (options.Backups > 0)
 
 var gameLog = Path.Combine(liveDirectory, "Game.log");
 
-if (options.Live)
+if (selectedScenario is not null)
+{
+    Console.WriteLine($"Writing deterministic scenario to {gameLog}");
+
+    using (var writer = new LogWriter(gameLog))
+    {
+        ScenarioRunner.Run(
+            writer,
+            selectedScenario,
+            options.Start ?? DateTimeOffset.Now.Date.AddHours(20),
+            options.Handle,
+            simOptions.Geid);
+    }
+
+    var info = new FileInfo(gameLog);
+    Console.WriteLine($"  {info.Length / 1024.0:F0} KB");
+    Console.WriteLine();
+    Console.WriteLine("Expected parser facts:");
+    foreach (var fact in selectedScenario.ExpectedFacts)
+        Console.WriteLine($"  - {fact}");
+    Console.WriteLine();
+    Console.WriteLine("Open it in Quantum Wake:");
+    Console.WriteLine($"  .\\start.ps1 -Path \"{liveDirectory}\"");
+}
+else if (options.Live)
 {
     Console.WriteLine();
     Console.WriteLine($"Writing live session to {gameLog}");
@@ -145,6 +199,9 @@ internal sealed record Args
     public double Speed { get; init; } = 60;
     public bool Live { get; init; }
     public bool Combat { get; init; }
+    public string? Scenario { get; init; }
+    public bool ListScenarios { get; init; }
+    public DateTimeOffset? Start { get; init; }
     public bool ShowHelp { get; init; }
 
     public static Args Parse(string[] args)
@@ -195,6 +252,26 @@ internal sealed record Args
                     result = result with { Combat = true };
                     break;
 
+                case "--scenario" when next is not null:
+                    result = result with { Scenario = next };
+                    i++;
+                    break;
+
+                case "--list-scenarios":
+                    result = result with { ListScenarios = true };
+                    break;
+
+                case "--start" when next is not null:
+                    result = result with
+                    {
+                        Start = DateTimeOffset.Parse(
+                            next,
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.AssumeUniversal)
+                    };
+                    i++;
+                    break;
+
                 case "-h":
                 case "--help":
                     result = result with { ShowHelp = true };
@@ -217,6 +294,9 @@ internal sealed record Args
               --legs <n>        Trips per session (default: 6)
               --combat          Emit kill and vehicle-destruction events.
                                 Real 4.9 logs contain none; this exercises the dormant parser.
+              --list-scenarios  List focused, deterministic test stories
+              --scenario <name> Write one focused scenario instead of random sessions
+              --start <date>    Scenario timestamp (ISO 8601; default: today at 20:00)
               --handle <name>   Player handle (default: testpilot)
               --seed <n>        Deterministic output (default: 1337)
 
@@ -224,6 +304,8 @@ internal sealed record Args
               dotnet run --project src\Quantumwake.LogSim -- --backups 20
               dotnet run --project src\Quantumwake.LogSim -- --backups 20 --combat
               dotnet run --project src\Quantumwake.LogSim -- --live --speed 120
+              dotnet run --project src\Quantumwake.LogSim -- --scenario cargo-run
+              dotnet run --project src\Quantumwake.LogSim -- --scenario all --start 2026-08-24T20:00:00Z
 
             Then point the app at the generated install:
               .\start.ps1 -Path "%TEMP%\QuantumwakeFakeInstall\LIVE"
