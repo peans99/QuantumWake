@@ -353,6 +353,20 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.18
+
+- **Updating is one click.** When a new version is out, Quantum Wake can
+  fetch it, check it against the fingerprint GitHub publishes for the file,
+  put it in place and restart into it — no browser, no download folder, no
+  quitting and swapping files by hand. It also skips the "Windows protected
+  your PC" screen, which is a mark browsers put on files they download and
+  which an update fetched by the app itself never carries.
+
+  Nothing is replaced unless the download is byte-for-byte what GitHub says
+  it published, and if the swap cannot finish the version you were running is
+  put straight back. Running from source still updates the old way, and says
+  so rather than offering a button that cannot work.
+
 ### 0.8.17
 
 - **New items can be narrowed by kind and by place.** Two dropdowns beside the
