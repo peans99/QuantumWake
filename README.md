@@ -224,6 +224,9 @@ dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
 `--combat` emits kill and vehicle-destruction events, which is the only way to
 see the dormant killboard populate — real 4.9 logs never will. `--live` appends
 to `Game.log` in real time so the Now view and overlay update as you watch.
+`--scenario org-activity --step` creates three isolated clients and pauses
+through a shared flight checkpoint by checkpoint, so three dashboards can be
+inspected together.
 
 The cache is scoped per install, so a simulated install never blends into your
 real totals. Full options in [docs/log-simulator.md](docs/log-simulator.md).
@@ -353,7 +356,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.4
+### 0.9.5
 
 The first piece of the org network: a separate, entirely optional server that
 an org can run - or have run for it - so members can pool what their own
@@ -380,6 +383,15 @@ ever holds its own key, which you can revoke from the server's account page),
 join with an invite code, and see who else has linked up. The member list says
 what it cannot know: handles are self-declared, and the roster only shows
 members who linked the app.
+
+The log simulator adds a three-client **org activity walkthrough** for testing
+several dashboards without three game installs. D-Rud, astro_ice and
+Patchwork form a party, prepare a contract and cargo run, launch and jump,
+fight, recover, deliver and stand down across eight manual checkpoints. Each
+client gets its own fake install, data directory and suggested dashboard port;
+the simulator prints the launch commands. The same story runs without pauses
+for automated tests, where all three logs independently round-trip through the
+production parser with zero unmatched known tags.
 
 ### 0.8.21
 

@@ -27,23 +27,122 @@ if (options.ListScenarios)
     foreach (var scenario in ScenarioCatalogue.All)
         Console.WriteLine($"  {scenario.Name,-22} {scenario.Description}");
 
+    foreach (var scenario in MultiClientScenarioCatalogue.All)
+        Console.WriteLine($"  {scenario.Name,-22} {scenario.Description}  [multi-client]");
+
     return 0;
 }
 
 var selectedScenario = options.Scenario is null
     ? null
     : ScenarioCatalogue.Find(options.Scenario);
+var selectedMultiClientScenario = options.Scenario is null
+    ? null
+    : MultiClientScenarioCatalogue.Find(options.Scenario);
 
-if (options.Scenario is not null && selectedScenario is null)
+if (options.Scenario is not null && selectedScenario is null && selectedMultiClientScenario is null)
 {
     Console.Error.WriteLine($"Unknown scenario '{options.Scenario}'. Use --list-scenarios to see the available names.");
     return 2;
 }
 
-if (selectedScenario is not null && options.Live)
+if ((selectedScenario is not null || selectedMultiClientScenario is not null) && options.Live)
 {
-    Console.Error.WriteLine("A named scenario is a completed deterministic log and cannot be combined with --live.");
+    Console.Error.WriteLine("A named scenario cannot be combined with --live. Use --step with a multi-client scenario.");
     return 2;
+}
+
+if (options.Step && selectedMultiClientScenario is null)
+{
+    Console.Error.WriteLine("--step is available for multi-client scenarios such as org-activity.");
+    return 2;
+}
+
+if (selectedMultiClientScenario is not null)
+{
+    var root = Path.Combine(options.InstallRoot, selectedMultiClientScenario.Name);
+    var paths = selectedMultiClientScenario.Pilots.ToDictionary(
+        pilot => pilot.Key,
+        pilot => Path.Combine(root, pilot.Key, "LIVE"),
+        StringComparer.OrdinalIgnoreCase);
+    var writers = new Dictionary<string, LogWriter>(StringComparer.OrdinalIgnoreCase);
+
+    Console.WriteLine("Quantum Wake log simulator  ·  by nekron");
+    Console.WriteLine();
+    Console.WriteLine($"Scenario     : {selectedMultiClientScenario.Name} - {selectedMultiClientScenario.Description}");
+    Console.WriteLine($"Playback     : {(options.Step ? "manual, one visual checkpoint at a time" : "complete")}");
+    Console.WriteLine($"Scenario root: {root}");
+    Console.WriteLine();
+    Console.WriteLine("Client installs:");
+
+    try
+    {
+        foreach (var pilot in selectedMultiClientScenario.Pilots)
+        {
+            var live = paths[pilot.Key];
+            var clientLogPath = Path.Combine(live, "Game.log");
+            Directory.CreateDirectory(live);
+            writers.Add(pilot.Key, new LogWriter(clientLogPath));
+            Console.WriteLine($"  {pilot.Handle,-12} {pilot.Role,-27} {live}");
+        }
+
+        if (options.Step)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Before starting stage 1, build once and run each client command in its own PowerShell window:");
+            Console.WriteLine("  dotnet build src\\Quantumwake.Server\\Quantumwake.Server.csproj -c Release");
+
+            foreach (var pilot in selectedMultiClientScenario.Pilots)
+            {
+                var data = Path.Combine(root, pilot.Key, "data");
+                Console.WriteLine();
+                Console.WriteLine($"  # {pilot.Handle} · http://127.0.0.1:{pilot.SuggestedPort}");
+                Console.WriteLine($"  $env:QUANTUMWAKE_DATA = \"{data}\"");
+                Console.WriteLine($"  .\\src\\Quantumwake.Server\\bin\\Release\\net10.0\\Quantumwake.Server.exe --path \"{paths[pilot.Key]}\" --Port {pilot.SuggestedPort}");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("Open the three dashboard addresses, complete First Flight Setup, and press Start Flying on each.");
+            Console.WriteLine("Then return here to advance the logs.");
+        }
+
+        MultiClientScenarioRunner.Run(
+            selectedMultiClientScenario,
+            writers,
+            options.Start ?? DateTimeOffset.Now.Date.AddHours(20),
+            beforeStage: stage =>
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Stage {stage.Number}/{selectedMultiClientScenario.Stages.Count} · {stage.Name}");
+                Console.WriteLine($"  {stage.Description}");
+                if (options.Step)
+                {
+                    Console.Write("  Press Enter to write this stage... ");
+                    Console.ReadLine();
+                }
+            },
+            afterStage: stage =>
+            {
+                Console.WriteLine("  Look for:");
+                foreach (var fact in stage.ExpectedFacts)
+                    Console.WriteLine($"    - {fact}");
+            });
+    }
+    finally
+    {
+        foreach (var writer in writers.Values)
+            writer.Dispose();
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Scenario complete. Generated logs:");
+    foreach (var pilot in selectedMultiClientScenario.Pilots)
+    {
+        var clientLogPath = Path.Combine(paths[pilot.Key], "Game.log");
+        Console.WriteLine($"  {pilot.Handle,-12} {new FileInfo(clientLogPath).Length / 1024.0,6:F0} KB  {clientLogPath}");
+    }
+
+    return 0;
 }
 
 var liveDirectory = Path.Combine(options.InstallRoot, "LIVE");
@@ -200,6 +299,7 @@ internal sealed record Args
     public bool Live { get; init; }
     public bool Combat { get; init; }
     public string? Scenario { get; init; }
+    public bool Step { get; init; }
     public bool ListScenarios { get; init; }
     public DateTimeOffset? Start { get; init; }
     public bool ShowHelp { get; init; }
@@ -257,6 +357,10 @@ internal sealed record Args
                     i++;
                     break;
 
+                case "--step":
+                    result = result with { Step = true };
+                    break;
+
                 case "--list-scenarios":
                     result = result with { ListScenarios = true };
                     break;
@@ -296,6 +400,7 @@ internal sealed record Args
                                 Real 4.9 logs contain none; this exercises the dormant parser.
               --list-scenarios  List focused, deterministic test stories
               --scenario <name> Write one focused scenario instead of random sessions
+              --step            Pause before each stage of a multi-client scenario
               --start <date>    Scenario timestamp (ISO 8601; default: today at 20:00)
               --handle <name>   Player handle (default: testpilot)
               --seed <n>        Deterministic output (default: 1337)
@@ -305,6 +410,7 @@ internal sealed record Args
               dotnet run --project src\Quantumwake.LogSim -- --backups 20 --combat
               dotnet run --project src\Quantumwake.LogSim -- --live --speed 120
               dotnet run --project src\Quantumwake.LogSim -- --scenario cargo-run
+              dotnet run --project src\Quantumwake.LogSim -- --scenario org-activity --step
               dotnet run --project src\Quantumwake.LogSim -- --scenario all --start 2026-08-24T20:00:00Z
 
             Then point the app at the generated install:

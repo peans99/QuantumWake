@@ -47,6 +47,19 @@ public sealed class LogScenarioTests
             ScenarioCatalogue.All.Select(s => s.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
+    [Fact]
+    public void Multi_client_scenario_has_distinct_clients_and_ordered_visual_stages()
+    {
+        var scenario = Assert.Single(MultiClientScenarioCatalogue.All);
+
+        Assert.Equal("org-activity", scenario.Name);
+        Assert.Equal(3, scenario.Pilots.Select(p => p.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(3, scenario.Pilots.Select(p => p.Handle).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(3, scenario.Pilots.Select(p => p.Geid).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(3, scenario.Pilots.Select(p => p.SuggestedPort).Distinct().Count());
+        Assert.Equal(Enumerable.Range(1, scenario.Stages.Count), scenario.Stages.Select(s => s.Number));
+    }
+
     [Theory]
     [MemberData(nameof(ScenarioNames))]
     public void Every_scenario_is_a_complete_log_with_no_broken_known_tags(string name)
@@ -292,6 +305,60 @@ public sealed class LogScenarioTests
         });
     }
 
+    [Fact]
+    public void Org_activity_scenario_survives_three_independent_production_parse_paths()
+    {
+        WithMultiClientScenario((sessions, unmatched) =>
+        {
+            Assert.All(unmatched.Values, count => Assert.Equal(0, count));
+
+            var captain = sessions["captain"];
+            Assert.Equal("D-Rud", captain.Handle);
+            Assert.Equal(9, captain.FleetSize);
+            Assert.Equal(2, captain.Loadout.Count);
+            Assert.Equal(6, captain.PartyNotes.Count);
+            Assert.Single(captain.Jumps);
+            Assert.Single(captain.Ships);
+            Assert.Equal(1, captain.Kills);
+            Assert.Equal(0, captain.Deaths);
+            Assert.Single(captain.Timeline, entry => entry.Kind == "vehicle-destroyed");
+            var contract = Assert.Single(captain.Contracts);
+            Assert.Equal(ContractOutcome.Completed, contract.Outcome);
+            Assert.Equal((2, 2), (contract.Steps, contract.StepsDone));
+            Assert.Single(captain.Blueprints);
+
+            var trader = sessions["trader"];
+            Assert.Equal("astro_ice", trader.Handle);
+            Assert.Equal(14, trader.FleetSize);
+            Assert.Equal(3, trader.PartyNotes.Count);
+            Assert.Equal(2, trader.Trades.Count);
+            Assert.Equal([32, 32], trader.Trades.Select(t => t.Quantity));
+            Assert.Equal([false, true], trader.Trades.Select(t => t.IsSell));
+            Assert.Single(trader.Purchases);
+            Assert.Equal(2_400m, trader.Spend);
+            Assert.Single(trader.Jumps);
+            Assert.Equal(2, trader.Disconnects);
+
+            var medic = sessions["medic"];
+            Assert.Equal("Patchwork", medic.Handle);
+            Assert.Equal(6, medic.FleetSize);
+            Assert.Equal(2, medic.Loadout.Count);
+            Assert.Equal(3, medic.PartyNotes.Count);
+            Assert.Equal(2, medic.Stash.Count);
+            Assert.Equal(3, medic.Pickups.Count);
+            Assert.Single(medic.Jumps);
+            Assert.Equal(1, medic.Incapacitations);
+            Assert.Equal(1, medic.Deaths);
+            Assert.Single(medic.Respawns);
+            Assert.Equal(["after-death", "heal"], medic.MedicalBeds.Select(b => b.Kind));
+
+            Assert.Equal(3, sessions.Count);
+            Assert.Equal(3, sessions.Values.Sum(s => s.Jumps.Count));
+            Assert.Equal(12, sessions.Values.Sum(s => s.PartyNotes.Count));
+            Assert.Equal(29, sessions.Values.Sum(s => s.FleetSize));
+        });
+    }
+
     private static void WithScenario(string name, Action<string, SessionSummary> assert)
     {
         var path = Path.Combine(Path.GetTempPath(), $"qw-scenario-{Guid.NewGuid():N}.log");
@@ -308,6 +375,49 @@ public sealed class LogScenarioTests
         finally
         {
             File.Delete(path);
+        }
+    }
+
+    private static void WithMultiClientScenario(
+        Action<IReadOnlyDictionary<string, SessionSummary>, IReadOnlyDictionary<string, int>> assert)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"qw-multi-scenario-{Guid.NewGuid():N}");
+        var scenario = Assert.IsType<MultiClientScenarioDefinition>(
+            MultiClientScenarioCatalogue.Find("org-activity"));
+        var logs = scenario.Pilots.ToDictionary(
+            pilot => pilot.Key,
+            pilot => Path.Combine(root, pilot.Key, "Game.log"),
+            StringComparer.OrdinalIgnoreCase);
+        var writers = logs.ToDictionary(
+            pair => pair.Key,
+            pair => new LogWriter(pair.Value),
+            StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            MultiClientScenarioRunner.Run(scenario, writers, Start);
+            foreach (var writer in writers.Values)
+                writer.Dispose();
+
+            var sessions = new Dictionary<string, SessionSummary>(StringComparer.OrdinalIgnoreCase);
+            var unmatched = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pair in logs)
+            {
+                var parser = new LogEventParser();
+                Assert.NotEmpty(LogFileReader.ReadEvents(pair.Value, parser));
+                sessions.Add(pair.Key, LogLibrary.BuildSession(pair.Value));
+                unmatched.Add(pair.Key, parser.UnmatchedKnownTags);
+            }
+
+            assert(sessions, unmatched);
+        }
+        finally
+        {
+            foreach (var writer in writers.Values)
+                writer.Dispose();
+
+            Directory.Delete(root, recursive: true);
         }
     }
 }

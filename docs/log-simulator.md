@@ -22,6 +22,9 @@ dotnet run --project src\Quantumwake.LogSim -c Release -- --list-scenarios
 
 # Append to Game.log in real time, 120 simulated seconds per real second
 dotnet run --project src\Quantumwake.LogSim -c Release -- --live --speed 120
+
+# Create three clients and advance a coordinated org activity one checkpoint at a time
+dotnet run --project src\Quantumwake.LogSim -c Release -- --scenario org-activity --step
 ```
 
 Then point the app at it:
@@ -45,6 +48,7 @@ real LIVE totals.
 | `--combat` | off | Emit `<Actor Death>` and `<Vehicle Destruction>` |
 | `--list-scenarios` | off | List the focused deterministic stories |
 | `--scenario <name>` | none | Write one focused story instead of random sessions |
+| `--step` | off | Pause before every checkpoint in a multi-client scenario |
 | `--start <date>` | today at 20:00 | ISO 8601 timestamp for deterministic scenario entries |
 | `--handle <name>` | `testpilot` | Player handle |
 | `--seed <n>` | 1337 | Deterministic output |
@@ -77,6 +81,7 @@ show. They write one completed `LIVE\Game.log` and print their expected facts.
 | `unexpected-disconnect` | Distinguish timeout, player request, and routine teardown |
 | `combat` | One player kill, one death, and a destroyed vehicle |
 | `all` | Every focused story composed into one session |
+| `org-activity` | Three clients form a crew, trade, fight, recover, finish a contract, and stand down |
 
 Scenario events are stable for a given `--start` and seed. The file’s own
 timestamp is not: only the backups loop sets it, so a scenario `Game.log` is
@@ -85,6 +90,54 @@ always stamped with the moment it was written.
 Automated tests generate every scenario, feed it back through `LogFileReader`
 and `SessionBuilder`, assert the claimed session facts, and require zero
 unmatched known tags.
+
+## Walk three clients through one activity
+
+`org-activity` is both a batch fixture and a visual walkthrough. It creates
+three independent fake installs and handles:
+
+| Client | Handle | What its log exercises | Dashboard |
+|---|---|---|---|
+| `captain` | `D-Rud` | Party, contract, blueprint, ship retrieval, quantum and combat | `http://127.0.0.1:31401` |
+| `trader` | `astro_ice` | Cargo buy/sell, confirmed spend, fleet, ship and remote timeout | `http://127.0.0.1:31402` |
+| `medic` | `Patchwork` | Loadout, stash, casualty, death, respawn and medical visits | `http://127.0.0.1:31403` |
+
+Start the simulator in its own terminal:
+
+```powershell
+dotnet run --project src\Quantumwake.LogSim -c Release -- --scenario org-activity --step
+```
+
+It creates the three empty `Game.log` files first, prints one launch command
+per client, and then waits before stage 1. Build the server once, run each
+printed command in a separate PowerShell window, and open the three addresses.
+Because each client has a fresh data directory, complete First Flight Setup and
+press **Start Flying** on every dashboard before advancing stage 1.
+Each command sets a different `QUANTUMWAKE_DATA` directory as well as a
+different install and port, so caches and local settings cannot leak from one
+simulated pilot to another.
+
+Do not use `start.ps1` for this walkthrough: by design it stops an already
+running Quantum Wake process before starting another. The printed commands run
+the built server executable directly, allowing all three to stay up together.
+
+Back in the simulator terminal, press Enter to write each checkpoint. After
+every write it prints the exact facts to inspect before moving on:
+
+1. all clients wake and expose fleet/loadout state;
+2. the party forms and names its leader;
+3. contract, cargo, spending and stash activity appears;
+4. three ships launch and jump;
+5. combat and a casualty land in separate clients;
+6. the casualty recovers while the cargo sells;
+7. the contract completes and awards a blueprint;
+8. the party stands down and the sessions close.
+
+For a complete fixture without pauses, omit `--step`. This is the form used by
+the automated round-trip test: each file takes its own production parser and
+session-builder path, then the aggregate assertions prove 3 jumps, 12 party
+moments, fleet observations totalling 29 vehicles, and zero unmatched known
+tags in all three logs.
 
 ## Why it reproduces the ugly parts
 
