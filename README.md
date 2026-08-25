@@ -353,6 +353,13 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.20
+
+- **An update keeps the settings it was started with.** Restarting after an
+  update dropped any `--data`, `--path` or `-Lan` given on the command line,
+  so a copy deliberately pointed at its own folder came back pointed at the
+  default one. It now comes back as the same copy it was.
+
 ### 0.8.19
 
 - **The update button says what the download costs.** Ninety megabytes is
