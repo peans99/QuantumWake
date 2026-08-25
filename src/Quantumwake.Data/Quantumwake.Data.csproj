@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Quantumwake.Core\Quantumwake.Core.csproj" />
+    <ProjectReference Include="..\Quantumwake.OrgShared\Quantumwake.OrgShared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

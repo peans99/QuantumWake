@@ -1,6 +1,7 @@
 using Quantumwake.Core.State;
 using Quantumwake.Data;
 using System.Text.Json;
+using Quantumwake.OrgShared;
 
 namespace Quantumwake.Tests;
 

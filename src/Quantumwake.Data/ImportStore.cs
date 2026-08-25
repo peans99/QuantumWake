@@ -2,6 +2,7 @@ using Quantumwake.Core;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Quantumwake.OrgShared;
 
 namespace Quantumwake.Data;
 

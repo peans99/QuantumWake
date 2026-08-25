@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quantum Wake org server</title>
+  <link rel="stylesheet" href="/org.css">
+</head>
+<body>
+<main>
+  <h1>Quantum Wake org server</h1>
+  <div class="panel">
+    <p>This is an org space for <strong>Quantum Wake</strong>, the Star Citizen
+    log-reading dashboard. Members link their own app here and choose, class by
+    class, what to share with their org. Nothing arrives that somebody did not
+    click to send, and everything a member shared can be deleted by that member.</p>
+    <p class="muted">To join: install Quantum Wake, put this server's address in
+    its Settings page, link the app, and paste the invite code your org gave you.</p>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <a href="/account"><button>Your account</button></a>
+      <a href="/admin"><button>Admin</button></a>
+      <span id="who" class="muted"></span>
+    </div>
+  </div>
+</main>
+<script src="/org.js"></script>
+<script>
+(async () => {
+  const me = await api('/api/me');
+  const who = document.getElementById('who');
+  if (me.ok) {
+    who.textContent = 'signed in as ' + me.data.account.displayName;
+  } else {
+    const a = document.createElement('a');
+    a.href = signInLink('/');
+    a.textContent = 'Sign in with Discord';
+    who.appendChild(a);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Link Quantum Wake</title>
+  <link rel="stylesheet" href="/org.css">
+</head>
+<body>
+<main>
+  <h1>Link Quantum Wake</h1>
+  <div class="panel" id="card">
+    <p class="muted">One moment&hellip;</p>
+  </div>
+</main>
+<script src="/org.js"></script>
+<script>
+(async () => {
+  const card = document.getElementById('card');
+  const code = new URLSearchParams(location.search).get('code') || '';
+  clear(card);
+
+  if (!code) {
+    card.appendChild(el('p', 'No link code in this address. Start again from the app.'));
+    return;
+  }
+
+  const info = await api('/api/link/' + encodeURIComponent(code));
+
+  if (info.status === 401) {
+    card.appendChild(el('p', 'Sign in first, then this page will show what is asking to be linked.'));
+    const a = document.createElement('a');
+    a.href = signInLink('/link?code=' + encodeURIComponent(code));
+    const button = el('button', 'Sign in with Discord', 'primary');
+    a.appendChild(button);
+    card.appendChild(a);
+    return;
+  }
+
+  if (!info.ok) {
+    card.appendChild(el('p', (info.data && info.data.message) || 'That link code has expired. Start again from the app.'));
+    return;
+  }
+
+  card.appendChild(el('p', 'A copy of Quantum Wake wants to act as you on this server:'));
+  card.appendChild(el('code', info.data.clientName, 'big'));
+  card.appendChild(el('p', 'Only approve this if you just pressed Link in your own app. ' +
+    'Approving hands that machine a key to your account here.', 'muted'));
+
+  const row = el('div', null, 'row');
+  const approve = el('button', 'Approve', 'primary');
+  const deny = el('button', 'Deny', 'warn');
+  const outcome = el('span', '', 'muted');
+  row.appendChild(approve); row.appendChild(deny); row.appendChild(outcome);
+  card.appendChild(row);
+
+  async function decide(path, said) {
+    approve.disabled = deny.disabled = true;
+    const result = await api('/api/link/' + encodeURIComponent(code) + '/' + path, { method: 'POST' });
+    outcome.textContent = result.ok ? said : ((result.data && result.data.message) || 'That did not work.');
+  }
+  approve.addEventListener('click', () => decide('approve', 'Approved. You can close this tab; the app finishes on its own.'));
+  deny.addEventListener('click', () => decide('deny', 'Denied. The app will be told.'));
+})();
+</script>
+</body>
+</html>

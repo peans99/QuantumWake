@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin</title>
+  <link rel="stylesheet" href="/org.css">
+</head>
+<body>
+<main>
+  <h1>Admin</h1>
+  <div class="panel" id="card"><p class="muted">One moment&hellip;</p></div>
+  <div id="desk" hidden>
+    <h2>Waiting for approval</h2>
+    <div class="panel"><table id="pending"></table></div>
+    <h2>Active orgs</h2>
+    <div class="panel"><table id="active"></table></div>
+  </div>
+</main>
+<script src="/org.js"></script>
+<script>
+(async () => {
+  const card = document.getElementById('card');
+
+  async function drawStatus(status, tableId, actions) {
+    const result = await api('/api/admin/orgs?status=' + status);
+    if (!result.ok) return false;
+    const table = document.getElementById(tableId);
+    clear(table);
+    if (!result.data.length) {
+      table.appendChild(el('caption', 'Nothing here.'));
+      return true;
+    }
+    for (const org of result.data) {
+      const tr = el('tr');
+      tr.appendChild(el('td', org.name));
+      tr.appendChild(el('td', org.createdBy, 'muted'));
+      tr.appendChild(el('td', org.members + ' member' + (org.members === 1 ? '' : 's'), 'muted'));
+      const cell = el('td');
+      for (const action of actions) {
+        const button = el('button', action.label, action.className);
+        button.addEventListener('click', async () => {
+          if (action.confirm && !confirm(action.confirm)) return;
+          await api('/api/admin/orgs/' + org.id + action.path, { method: action.method });
+          draw();
+        });
+        cell.appendChild(button);
+        cell.appendChild(document.createTextNode(' '));
+      }
+      tr.appendChild(cell);
+      table.appendChild(tr);
+    }
+    return true;
+  }
+
+  async function draw() {
+    const shown = await drawStatus('pending', 'pending', [
+      { label: 'Approve', className: 'primary', path: '/activate', method: 'POST' },
+      { label: 'Delete', className: 'warn', path: '', method: 'DELETE',
+        confirm: 'Delete this org and everything in it?' },
+    ]);
+    if (!shown) {
+      clear(card);
+      card.appendChild(el('p', 'There is nothing here.'));
+      const a = document.createElement('a');
+      a.href = signInLink('/admin');
+      a.appendChild(el('button', 'Sign in', 'primary'));
+      card.appendChild(a);
+      return;
+    }
+    clear(card);
+    card.appendChild(el('p', 'Approving an org lets its owner start inviting people.', 'muted'));
+    document.getElementById('desk').hidden = false;
+    await drawStatus('active', 'active', [
+      { label: 'Suspend', className: 'warn', path: '/suspend', method: 'POST',
+        confirm: 'Suspend this org? Members keep their data but the space goes quiet.' },
+    ]);
+  }
+
+  draw();
+})();
+</script>
+</body>
+</html>

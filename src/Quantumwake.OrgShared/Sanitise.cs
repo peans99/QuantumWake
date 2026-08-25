@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Quantumwake.Data;
+namespace Quantumwake.OrgShared;
 
 /// <summary>
 /// Length caps for text that gets stored and drawn.

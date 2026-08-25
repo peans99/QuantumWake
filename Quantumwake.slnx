@@ -5,10 +5,13 @@
     <Project Path="src/Quantumwake.Data/Quantumwake.Data.csproj" />
     <Project Path="src/Quantumwake.LogSim/Quantumwake.LogSim.csproj" />
     <Project Path="src/Quantumwake.Overlay/Quantumwake.Overlay.csproj" />
+    <Project Path="src/Quantumwake.OrgServer/Quantumwake.OrgServer.csproj" />
+    <Project Path="src/Quantumwake.OrgShared/Quantumwake.OrgShared.csproj" />
     <Project Path="src/Quantumwake.Server/Quantumwake.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quantumwake.Tests/Quantumwake.Tests.csproj" />
+    <Project Path="tests/Quantumwake.OrgServer.Tests/Quantumwake.OrgServer.Tests.csproj" />
     <Project Path="tests/Quantumwake.WebTests/Quantumwake.WebTests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The published name people type; the assembly keeps the project name. -->
+    <AssemblyName>Quantumwake.OrgServer</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantumwake.OrgShared\Quantumwake.OrgShared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Quantumwake.OrgServer.Tests" />
+  </ItemGroup>
+
+  <!-- Same dual shipping as the main server's web/: loose files beside a dev
+       build so edits are picked up, embedded in a published binary so the exe
+       is the whole deployment. -->
+  <ItemGroup>
+    <Content Include="web-org\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <EmbeddedResource Include="web-org\**" LogicalName="web-org/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Every default lives in code; a published build needs no file beside it. -->
+  <ItemGroup>
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+</Project>

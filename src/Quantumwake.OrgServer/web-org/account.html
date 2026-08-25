@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your account</title>
+  <link rel="stylesheet" href="/org.css">
+</head>
+<body>
+<main>
+  <h1>Your account</h1>
+  <div class="panel" id="card"><p class="muted">One moment&hellip;</p></div>
+
+  <div id="signed-in" hidden>
+    <h2>Star Citizen handle</h2>
+    <div class="panel">
+      <p class="muted">Self-declared: nothing here verifies it, and other members
+      see it labelled that way. Use the handle you actually fly under.</p>
+      <div class="row">
+        <input id="handle" placeholder="your in-game handle" maxlength="60">
+        <button id="handle-save">Save</button>
+        <span id="handle-status" class="muted"></span>
+      </div>
+    </div>
+
+    <h2>Your orgs</h2>
+    <div class="panel"><table id="orgs"></table></div>
+
+    <h2>Register an org</h2>
+    <div class="panel">
+      <p class="muted">New orgs wait for the server admin's approval before
+      invites can go out.</p>
+      <div class="row">
+        <input id="org-name" placeholder="org name" maxlength="240">
+        <button id="org-register">Register</button>
+        <span id="org-status" class="muted"></span>
+      </div>
+    </div>
+
+    <h2>Linked devices</h2>
+    <div class="panel">
+      <p class="muted">Every copy of Quantum Wake you approved. Revoking one
+      signs that machine out immediately.</p>
+      <table id="tokens"></table>
+    </div>
+
+    <h2>Forget me</h2>
+    <div class="panel">
+      <p class="muted">Removes your account, your memberships, everything you
+      have shared, and every device key. There is no undo.</p>
+      <div class="row">
+        <button id="forget" class="warn">Delete my account and everything I shared</button>
+        <span id="forget-status" class="muted"></span>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="/org.js"></script>
+<script>
+(async () => {
+  const card = document.getElementById('card');
+  const me = await api('/api/me');
+  clear(card);
+
+  if (!me.ok) {
+    card.appendChild(el('p', 'Sign in to see your account.'));
+    const a = document.createElement('a');
+    a.href = signInLink('/account');
+    a.appendChild(el('button', 'Sign in with Discord', 'primary'));
+    card.appendChild(a);
+    return;
+  }
+
+  const account = me.data.account;
+  card.appendChild(el('p', 'Signed in as ' + account.displayName +
+    (account.serverAdmin ? ' (server admin)' : '')));
+  document.getElementById('signed-in').hidden = false;
+
+  const handle = document.getElementById('handle');
+  handle.value = account.handle || '';
+  document.getElementById('handle-save').addEventListener('click', async () => {
+    const result = await api('/api/me/handle', { method: 'POST', body: { handle: handle.value } });
+    document.getElementById('handle-status').textContent = result.ok ? 'saved' : 'failed';
+  });
+
+  const orgs = document.getElementById('orgs');
+  clear(orgs);
+  if (!me.data.orgs.length) {
+    orgs.appendChild(el('caption', 'No orgs yet. Join one from the app with an invite code.'));
+  }
+  for (const org of me.data.orgs) {
+    const tr = el('tr');
+    tr.appendChild(el('td', org.name));
+    tr.appendChild(el('td', org.role));
+    tr.appendChild(el('td', org.status === 'pending' ? 'waiting for approval' : org.status, 'muted'));
+    orgs.appendChild(tr);
+  }
+
+  document.getElementById('org-register').addEventListener('click', async () => {
+    const name = document.getElementById('org-name').value;
+    const result = await api('/api/orgs', { method: 'POST', body: { name } });
+    document.getElementById('org-status').textContent = result.ok
+      ? (result.data.status === 'active' ? 'created and active' : 'registered - waiting for the admin')
+      : ((result.data && result.data.message) || 'failed');
+  });
+
+  async function drawTokens() {
+    const tokens = await api('/api/me/tokens');
+    const table = document.getElementById('tokens');
+    clear(table);
+    const head = el('tr');
+    for (const title of ['Device', 'Key', 'Created', 'Last used', '']) head.appendChild(el('th', title));
+    table.appendChild(head);
+    for (const token of (tokens.data || [])) {
+      if (token.revoked) continue;
+      const tr = el('tr');
+      tr.appendChild(el('td', token.name));
+      tr.appendChild(el('td', token.prefix + '…'));
+      tr.appendChild(el('td', ago(token.createdAt), 'muted'));
+      tr.appendChild(el('td', ago(token.lastUsedAt), 'muted'));
+      const cell = el('td');
+      const revoke = el('button', 'Revoke', 'warn');
+      revoke.addEventListener('click', async () => {
+        await api('/api/me/tokens/' + token.id, { method: 'DELETE' });
+        drawTokens();
+      });
+      cell.appendChild(revoke);
+      tr.appendChild(cell);
+      table.appendChild(tr);
+    }
+  }
+  drawTokens();
+
+  document.getElementById('forget').addEventListener('click', async () => {
+    if (!confirm('Delete your account and everything you shared on this server?')) return;
+    const result = await api('/api/me', { method: 'DELETE' });
+    document.getElementById('forget-status').textContent = result.ok
+      ? 'Gone. This page will not know you any more.'
+      : ((result.data && result.data.message) || 'failed');
+  });
+})();
+</script>
+</body>
+</html>

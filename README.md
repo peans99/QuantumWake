@@ -353,6 +353,17 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.9.0
+
+The first piece of the org network: a separate, entirely optional server that
+an org can run - or have run for it - so members can pool what their own
+installs already know. This release is the spine: sign in with Discord, link
+your app from its Settings page, register an org (a server admin approves it),
+invite people with a code, and manage members and roles. Nothing about the
+dashboard changes yet, and nothing leaves your machine unless you link it.
+The server ships as a plain executable, a Docker container, or that container
+on Azure - one build, three deployments.
+
 ### 0.8.21
 
 - Nothing you can see: notes for whoever works on this next.
