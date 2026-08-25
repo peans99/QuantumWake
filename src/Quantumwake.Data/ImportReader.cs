@@ -12,7 +12,8 @@ public sealed record ImportProblem(string Message, int Status = 400);
 
 /// <summary>How many of each thing came in, were dropped, or were cut short.</summary>
 public sealed record ImportCounts(
-    int Receipts = 0, int Blueprints = 0, int Jobs = 0, int Checklists = 0, int Trips = 0)
+    int Receipts = 0, int Blueprints = 0, int Jobs = 0, int Checklists = 0, int Trips = 0,
+    int RunActions = 0)
 {
     /// <summary>Whether anything at all landed in this tally.</summary>
     /// <remarks>
@@ -21,7 +22,8 @@ public sealed record ImportCounts(
     /// beside it.
     /// </remarks>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool Any => Receipts > 0 || Blueprints > 0 || Jobs > 0 || Checklists > 0 || Trips > 0;
+    public bool Any =>
+        Receipts > 0 || Blueprints > 0 || Jobs > 0 || Checklists > 0 || Trips > 0 || RunActions > 0;
 }
 
 /// <summary>What a file turned into, before anything is stored.</summary>
@@ -335,13 +337,26 @@ public static class ImportReader
                 Tracked: false));
         }
 
-        counts = counts with { Jobs = jobs.Count, Checklists = lists.Count, Trips = trips.Count };
+        counts = counts with
+        {
+            Jobs = jobs.Count,
+            Checklists = lists.Count,
+            Trips = trips.Count,
+            RunActions = trips.Sum(t => t.Stops.Sum(s => (s.Actions ?? []).Count)),
+        };
         rejected = rejected with { Jobs = jobsDropped, Checklists = listsDropped, Trips = tripsDropped };
         truncated = truncated with
         {
             Jobs = Over(block.Jobs?.Count, MaxAuthored),
             Checklists = Over(block.Checklists?.Count, MaxAuthored),
             Trips = Over(block.Trips?.Count, MaxAuthored),
+
+            // A run sheet trimmed in silence breaks the rule the rest of this
+            // file keeps: every drop is counted, so "why does his stop show
+            // twelve when he wrote fourteen" stays answerable a month later.
+            RunActions = (block.Trips ?? []).Take(MaxAuthored)
+                .Sum(t => (t?.Stops ?? []).Take(MaxStops)
+                    .Sum(s => Over(s?.Actions?.Count, MaxRunActions))),
         };
 
         var stamps = jobs.Select(j => j.CreatedAt)
@@ -418,28 +433,16 @@ public static class ImportReader
                 .Where(action => action is not null && !string.IsNullOrWhiteSpace(action.Text))
                 .Select(action => CleanRunAction(action, now))]);
 
+    // The same three rules the authoring path uses, so a kind added there
+    // cannot silently arrive as "do" from somebody's file.
     private static RunAction CleanRunAction(RunAction action, DateTimeOffset now) =>
         new(Identifier(action.Id) ?? string.Empty,
-            RunKind(action.Kind),
+            RunAction.CleanKind(action.Kind),
             Sanitise.Clean(Printable(action.Text), "Action"),
-            action.Quantity is >= 0 and <= 1_000_000 ? action.Quantity : null,
-            RunUnit(action.Unit),
+            RunAction.CleanQuantity(action.Quantity),
+            RunAction.CleanUnit(action.Unit),
             action.Done,
             Dated(action.DoneAt, now) ? action.DoneAt!.Value.ToUniversalTime() : null);
-
-    private static string RunKind(string? value) => value?.ToLowerInvariant() switch
-    {
-        "load" or "unload" or "buy" or "sell" or "collect" or "refuel" or "repair" => value.ToLowerInvariant(),
-        _ => "do",
-    };
-
-    private static string? RunUnit(string? value) => value?.ToUpperInvariant() switch
-    {
-        "SCU" => "SCU",
-        "AUEC" => "aUEC",
-        "UNIT" or "UNITS" => "units",
-        _ => null,
-    };
 
     /// <summary>
     /// A date the reader's own lists can be sorted by without being hijacked.

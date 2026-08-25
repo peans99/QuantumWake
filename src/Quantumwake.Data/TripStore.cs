@@ -30,7 +30,43 @@ public sealed record RunAction(
     decimal? Quantity,
     string? Unit,
     bool Done,
-    DateTimeOffset? DoneAt);
+    DateTimeOffset? DoneAt)
+{
+    /// <summary>
+    /// The kinds a run sheet may use, with anything else read as a plain "do".
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in each caller because there are two: the page authoring
+    /// a stop, and a run sheet arriving in somebody else's file. Sanitise names
+    /// this hazard for exactly this shape - two copies of a rule drift, and the
+    /// one that drifts is never the one being read carefully. Split, a kind
+    /// added to the authoring side would silently arrive as "do" from a file.
+    /// </remarks>
+    public static string CleanKind(string? value) => value?.ToLowerInvariant() switch
+    {
+        "load" or "unload" or "buy" or "sell" or "collect" or "refuel" or "repair" => value.ToLowerInvariant(),
+        _ => "do",
+    };
+
+    /// <summary>The units a quantity may carry, spelled the way the page draws them.</summary>
+    public static string? CleanUnit(string? value) => Sanitise.CleanOptional(value, 16)?.ToUpperInvariant() switch
+    {
+        "SCU" => "SCU",
+        "AUEC" => "aUEC",
+        "UNIT" or "UNITS" => "units",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A quantity arithmetic can survive; null when there is no sane one.
+    /// </summary>
+    /// <remarks>
+    /// The comparisons reject a non-number as well as an out-of-range one, since
+    /// nothing compares true against NaN.
+    /// </remarks>
+    public static decimal? CleanQuantity(decimal? value) =>
+        value is >= 0 and <= 1_000_000 ? value : null;
+}
 
 /// <summary>
 /// A run the player intends to fly, in the order they mean to fly it.
@@ -47,12 +83,23 @@ public sealed record Trip(
     IReadOnlyList<TripStop> Stops,
     bool Tracked = false)
 {
-    /// <summary>Where to go now, or what remains to do at the stop just reached.</summary>
-    public TripStop? Next => Stops.FirstOrDefault(s =>
-        !s.Done || (s.Actions ?? []).Any(action => !action.Done));
+    /// <summary>
+    /// A stop that still wants something: not yet reached, or reached with run
+    /// work outstanding.
+    /// </summary>
+    /// <remarks>
+    /// Named and shared because three places ask this question - Next below,
+    /// the Now briefing, and the page - and the briefing was left behind when
+    /// the rule grew its second half. Landing ticks the stop, so anything
+    /// selecting on Done alone drops it exactly when its run sheet applies.
+    /// </remarks>
+    public static bool Outstanding(TripStop stop) =>
+        !stop.Done || (stop.Actions ?? []).Any(action => !action.Done);
 
-    public bool Done => Stops.Count > 0 && Stops.All(s =>
-        s.Done && (s.Actions ?? []).All(action => action.Done));
+    /// <summary>Where to go now, or what remains to do at the stop just reached.</summary>
+    public TripStop? Next => Stops.FirstOrDefault(Outstanding);
+
+    public bool Done => Stops.Count > 0 && !Stops.Any(Outstanding);
 }
 
 /// <summary>
@@ -176,8 +223,8 @@ public sealed class TripStore
             var stopIndex = stops.FindIndex(stop => stop.Id == stopId);
             if (stopIndex < 0) return false;
 
-            var action = new RunAction(NewId(), ActionKind(kind), Sanitise.Clean(text, "Action"),
-                CleanQuantity(quantity), CleanUnit(unit), Done: false, DoneAt: null);
+            var action = new RunAction(NewId(), RunAction.CleanKind(kind), Sanitise.Clean(text, "Action"),
+                RunAction.CleanQuantity(quantity), RunAction.CleanUnit(unit), Done: false, DoneAt: null);
             stops[stopIndex] = stops[stopIndex] with { Actions = [.. (stops[stopIndex].Actions ?? []), action] };
             _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
             Save();
@@ -382,27 +429,6 @@ public sealed class TripStore
         Done: false,
         DoneAt: null,
         Actions: []);
-
-    private static string ActionKind(string? value) => value?.ToLowerInvariant() switch
-    {
-        "load" or "unload" or "buy" or "sell" or "collect" or "refuel" or "repair" => value.ToLowerInvariant(),
-        _ => "do",
-    };
-
-    private static decimal? CleanQuantity(decimal? value) =>
-        value is >= 0 and <= 1_000_000 ? value : null;
-
-    private static string? CleanUnit(string? value)
-    {
-        var unit = Sanitise.CleanOptional(value, 16);
-        return unit?.ToUpperInvariant() switch
-        {
-            "SCU" => "SCU",
-            "AUEC" => "aUEC",
-            "UNIT" or "UNITS" => "units",
-            _ => null,
-        };
-    }
 
     /// <summary>Tracks one plan and only that one. Caller holds the lock.</summary>
     private void Follow(string id)

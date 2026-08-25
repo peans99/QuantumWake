@@ -2268,8 +2268,15 @@ static int Holes(IEnumerable<ShipSlot> slots)
         NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds)
     {
         var trip = trips.Tracked();
-        var stops = trip?.Stops.Where(s => !s.Done).Take(3)
-            .Select(s => new BriefingStop(s.Id, s.PlaceId, s.Place, s.Note))
+
+        // The same rule as Trip.Next, and it has to be: arriving ticks the stop,
+        // so selecting on Done alone drops it from the briefing at the exact
+        // moment its run sheet starts to matter. That was the third copy of this
+        // condition and the one nobody updated, which is the argument for
+        // asking the trip rather than re-deciding it here.
+        var stops = trip?.Stops.Where(Trip.Outstanding).Take(3)
+            .Select(s => new BriefingStop(s.Id, s.PlaceId, s.Place, s.Note,
+                [.. (s.Actions ?? []).Where(a => !a.Done)]))
             .ToList() ?? [];
 
         if (!now.InGame || string.IsNullOrWhiteSpace(now.Location))
@@ -2475,7 +2482,13 @@ public sealed record PilotBriefing(
     IReadOnlyList<BriefingStash> Stash);
 
 /// <summary>One outstanding flight-plan stop, in the order it will be flown.</summary>
-public sealed record BriefingStop(string Id, string PlaceId, string Place, string? Note);
+/// <param name="Actions">
+/// What is still to be done at this stop, so a card that keeps a landed stop
+/// alive can say why it is keeping it.
+/// </param>
+public sealed record BriefingStop(
+    string Id, string PlaceId, string Place, string? Note,
+    IReadOnlyList<RunAction> Actions);
 
 /// <summary>One missing shopping-list item stocked at the live place.</summary>
 public sealed record BriefingShopping(

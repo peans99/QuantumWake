@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.12
+### 0.8.13
 
 - **A flight plan is now a run sheet.** Each stop can hold checkable manual
   load, unload, buy, sell, collect, refuel, repair or free-form instructions,

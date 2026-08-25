@@ -151,6 +151,15 @@ public sealed class LogWriter : IDisposable
         var verb = isSell ? "Sell" : "Buy";
         var total = amount.ToString("F6", CultureInfo.InvariantCulture);
 
+        // Invariant for the same reason as the total above, and it is easy to
+        // lose here: the game writes a dot, the parser's quantity pattern only
+        // accepts digits and dots, and a machine with a comma decimal separator
+        // would emit "1600,000000" - which does not match, so every simulated
+        // purchase would vanish. That is exactly the centi-SCU conversion these
+        // scenarios exist to prove, so it would fail silently in the one place
+        // built to catch it.
+        var centi = (quantity * 100).ToString("F6", CultureInfo.InvariantCulture);
+
         // The live game uses different fields and units on each side. In
         // particular, buy quantity is centi-SCU; smoothing both into the sell
         // shape would leave the parser's hundredfold conversion untested.
@@ -158,7 +167,7 @@ public sealed class LogWriter : IDisposable
             ? $"amount[{total}] resourceGUID[{resourceGuid}] autoLoading[0] " +
               $"quantity[{quantity}] transactionMode[{mode}]"
             : $"price[{total}] resourceGUID[{resourceGuid}] autoLoading[0] " +
-              $"quantity[{quantity * 100:F6} cSCU]";
+              $"quantity[{centi} cSCU]";
 
         Line(at, $"[Notice] <CEntityComponentCommodityUIProvider::SendCommodity{verb}Request> " +
                  $"Sending SShopCommodity{verb}Request - playerId[{geid}] shopId[730090005328] " +
