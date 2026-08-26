@@ -135,6 +135,62 @@ public class UpdateCheckTests
         Assert.Contains("up to date", page.NodeText("#update-status"));
     }
 
+    /// <summary>
+    /// The toolbar item is an action, not a view. The strip's wiring binds
+    /// button[data-view]; carrying one here would make "Check for updates"
+    /// a tab that shows an empty page.
+    /// </summary>
+    [Fact]
+    public void The_toolbar_item_is_not_a_view()
+    {
+        var page = Started(Declined, UpToDate);
+
+        Assert.True(page.Truth(
+            "__dom.node('#menu-update-check').getAttribute('data-view') === null"));
+    }
+
+    /// <summary>
+    /// Pressed from the toolbar the reader can be on any view, and Settings'
+    /// status line is on exactly one of them. An answer written where nobody is
+    /// looking is the same as no answer.
+    /// </summary>
+    [Fact]
+    public void Checking_from_the_toolbar_answers_where_the_reader_is()
+    {
+        var page = Started(Declined, UpToDate);
+
+        page.Do("__dom.node('#menu-update-check').fire('click');");
+
+        Assert.True(Shown(page));
+        Assert.Contains("0.6.0 is the newest", page.NodeText("#update-title"));
+    }
+
+    /// <summary>The same check from Settings has a status line, and uses it.</summary>
+    [Fact]
+    public void Checking_from_settings_leaves_the_banner_shut()
+    {
+        var page = Started(Declined, UpToDate);
+
+        page.Do("__dom.node('#update-check').fire('click', { currentTarget: __dom.node('#update-check') });");
+
+        Assert.False(Shown(page));
+        Assert.Contains("up to date", page.NodeText("#update-status"));
+    }
+
+    /// <summary>A question that could not be asked is still owed an answer.</summary>
+    [Fact]
+    public void A_toolbar_check_that_cannot_reach_github_says_so()
+    {
+        // No route for /api/updates/check: the fetch fails the way an offline
+        // machine fails.
+        var page = Started(Declined);
+
+        page.Do("__dom.node('#menu-update-check').fire('click');");
+
+        Assert.True(Shown(page));
+        Assert.Contains("Could not reach GitHub", page.NodeText("#update-title"));
+    }
+
     [Fact]
     public void The_download_is_a_link_not_an_install()
     {

@@ -284,8 +284,11 @@ window.scOverlayExpanded = (on) => {
 
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
 const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
+const NOW_ORDER_KEY = 'qw-now-card-order';
 let collapsedNowCards = new Set();
 let hiddenNowCards = new Set();
+let nowCardOrder = [];
+let draggedNowCard = null;
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
@@ -297,12 +300,117 @@ try {
   if (Array.isArray(saved)) hiddenNowCards = new Set(saved);
 } catch { /* a bad preference must not remove a dashboard card */ }
 
+try {
+  const saved = JSON.parse(localStorage.getItem(NOW_ORDER_KEY) || '[]');
+  if (Array.isArray(saved)) nowCardOrder = saved.filter((n) => typeof n === 'string');
+} catch { /* a bad preference must not scramble the dashboard */ }
+
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
 }
 
 function saveHiddenNowCards() {
   try { localStorage.setItem(NOW_HIDDEN_KEY, JSON.stringify([...hiddenNowCards])); } catch { /* optional */ }
+}
+
+function saveNowCardOrder() {
+  try { localStorage.setItem(NOW_ORDER_KEY, JSON.stringify(nowCardOrder)); } catch { /* optional */ }
+}
+
+/**
+ * The order to draw the cards in: the saved one, reconciled with the markup.
+ *
+ * A card the saved order never saw goes back where the markup puts it - beside
+ * the neighbour it was designed to sit next to - rather than to the end. The
+ * overlay's layout store makes the same promise for the same reason: a card
+ * added in a later version must not read as one the reader arranged away, or
+ * anyone who ever touched these controls would quietly stop seeing new work.
+ */
+function resolveNowOrder(natural, saved) {
+  const seen = new Set(saved);
+  const order = saved.filter((name) => natural.includes(name));
+
+  natural.forEach((name, index) => {
+    if (seen.has(name)) return;
+
+    let at = order.length;
+    for (let before = index - 1; before >= 0; before--) {
+      const found = order.indexOf(natural[before]);
+      if (found !== -1) { at = found + 1; break; }
+    }
+    order.splice(at, 0, name);
+  });
+
+  return order;
+}
+
+/** Moves one card so it sits before another, and answers with the new order. */
+function moveNowCard(order, name, beforeName) {
+  const without = order.filter((n) => n !== name);
+  const at = beforeName === null ? without.length : without.indexOf(beforeName);
+  if (at === -1) return order;
+
+  without.splice(at, 0, name);
+  return without;
+}
+
+/**
+ * Moves a card one place, for the keyboard.
+ *
+ * Dragging is the obvious gesture and the only one some people cannot make, so
+ * the grip is a real button that answers the arrow keys too.
+ */
+function nudgeNowCard(name, delta) {
+  const order = [...nowCardOrder];
+  const at = order.indexOf(name);
+  if (at === -1) return;
+
+  const to = at + delta;
+  if (to < 0 || to >= order.length) return;
+
+  nowCardOrder = moveNowCard(order, name, delta > 0 ? (order[to + 1] ?? null) : order[to]);
+  saveNowCardOrder();
+  applyNowCardOrder();
+}
+
+/** The card after this one, or null when it is the last. */
+function nextNowCard(name) {
+  const at = nowCardOrder.indexOf(name);
+  return at === -1 ? null : (nowCardOrder[at + 1] ?? null);
+}
+
+/**
+ * Puts a card in a position now, redrawing only if that is a change.
+ *
+ * Called from dragover, which fires continuously, so the guard is what keeps
+ * the grid from being rebuilt hundreds of times a second - and what stops the
+ * dragged card flickering under its own pointer.
+ */
+function placeNowCard(name, beforeName) {
+  if (name === beforeName) return;
+
+  const wanted = moveNowCard(nowCardOrder, name, beforeName);
+  if (wanted.join() === nowCardOrder.join()) return;
+
+  nowCardOrder = wanted;
+  applyNowCardOrder();
+}
+
+/** Puts the grid in the saved order. Re-appending a card moves it. */
+function applyNowCardOrder() {
+  const grid = $('#view-now .now-grid');
+  if (!grid) return;
+
+  const cards = $$('#view-now .now-grid .card[data-card]');
+  const natural = cards.map((card) => card.dataset.card);
+  const byName = new Map(cards.map((card) => [card.dataset.card, card]));
+
+  nowCardOrder = resolveNowOrder(natural, nowCardOrder);
+
+  for (const name of nowCardOrder) {
+    const card = byName.get(name);
+    if (card) grid.append(card);
+  }
 }
 
 function renderHiddenNowCards() {
@@ -368,12 +476,94 @@ function initNowCardCollapsers() {
       saveHiddenNowCards();
       renderHiddenNowCards();
     });
-    actions.append(hide, button);
+    const grip = el('button', 'now-grip now-card-action', '⠿');
+    grip.type = 'button';
+    grip.title = 'Drag to move this card; the arrow keys move it too';
+    grip.setAttribute('aria-label', grip.title);
+
+    // The card is the thing that drags, but only while the grip is held:
+    // draggable on the card itself would make every stretch of text in it
+    // un-selectable.
+    grip.addEventListener('mousedown', () => { card.draggable = true; });
+    grip.addEventListener('mouseup', () => { card.draggable = false; });
+
+    grip.addEventListener('keydown', (event) => {
+      const delta = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+      if (delta === undefined) return;
+
+      event.preventDefault();
+      nudgeNowCard(name, delta);
+      // The grid was rebuilt around this button; it keeps the focus so the
+      // next press carries on from where the last one left off.
+      grip.focus();
+    });
+
+    card.addEventListener('dragstart', (event) => {
+      draggedNowCard = name;
+      card.classList.add('dragging');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        // Firefox starts no drag at all unless something is carried.
+        try { event.dataTransfer.setData('text/plain', name); } catch { /* not fatal */ }
+      }
+    });
+
+    card.addEventListener('dragend', () => {
+      draggedNowCard = null;
+      card.draggable = false;
+      card.classList.remove('dragging');
+      // The order was kept true while dragging; this is where it is written
+      // down, once, rather than on every twitch of the pointer.
+      saveNowCardOrder();
+    });
+
+    // The cards move under the pointer rather than waiting for the drop. A
+    // preview that only appears at the end is one the reader has to guess at,
+    // and in a grid - where "after" can mean the next column or the next row -
+    // guessing is exactly what goes wrong.
+    card.addEventListener('dragover', (event) => {
+      if (!draggedNowCard || draggedNowCard === name) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+
+      const box = card.getBoundingClientRect();
+      const past = (event.clientX - box.left) > box.width / 2;
+
+      placeNowCard(draggedNowCard, past ? nextNowCard(name) : name);
+    });
+
+    card.addEventListener('drop', (event) => {
+      if (!draggedNowCard) return;
+      // Already in place; this only stops the browser treating it as a
+      // navigation.
+      event.preventDefault();
+    });
+
+    actions.append(grip, hide, button);
     card.append(actions);
 
     card.classList.toggle('user-hidden', !isOverlay && hiddenNowCards.has(name));
   }
 
+  // The gaps between cards, and the empty space at the end of the grid. Without
+  // this the one place a card could not be dropped was the space after the last
+  // one - which is exactly where a hand goes to send a card to the bottom.
+  const grid = $('#view-now .now-grid');
+  if (grid && !grid.dataset.reorderWired) {
+    grid.dataset.reorderWired = '1';
+
+    grid.addEventListener('dragover', (event) => {
+      if (!draggedNowCard || event.target !== grid) return;
+      event.preventDefault();
+      placeNowCard(draggedNowCard, null);
+    });
+
+    grid.addEventListener('drop', (event) => {
+      if (draggedNowCard) event.preventDefault();
+    });
+  }
+
+  applyNowCardOrder();
   renderHiddenNowCards();
 }
 
@@ -6397,6 +6587,164 @@ function slotIconSvg(slot) {
     + `aria-hidden="true"><path d="${path}"/></svg>`;
 }
 
+/**
+ * A character screen needs a stable centre, not a wall of interchangeable
+ * cards. Slots still come from the log and may grow in future game patches,
+ * so the figure is a visual anchor only: every observed slot remains a real,
+ * named card on one of its two sides.
+ */
+function loadoutPlacement(slot) {
+  const name = `${slot.port || ''} ${slot.label || ''} ${slot.category || ''}`.toLowerCase();
+
+  if (/helmet/.test(name)) return 'head';
+  if (/undersuit/.test(name)) return 'base';
+  if (/(core|torso|chest)/.test(name)) return 'core';
+  if (/backpack/.test(name)) return 'back';
+  if (/(arm|glove|shoulder)/.test(name)) return 'arms';
+  if (/(leg|shoe|boot)/.test(name)) return 'legs';
+  return null;
+}
+
+/* The core is the player's main armour signal.  The log does not promise an
+   armour tier, so only an explicit catalogue/type name changes the profile. */
+function loadoutArmorProfile(equipped) {
+  const core = equipped.find((slot) => loadoutPlacement(slot) === 'core');
+  const hasUndersuit = equipped.some((slot) => loadoutPlacement(slot) === 'base');
+  const signal = core
+    ? [core.port, core.label, ...core.items.flatMap((item) => [
+      item.name, item.reference?.name, item.reference?.type, item.reference?.subType,
+    ])].filter(Boolean).join(' ').toLowerCase()
+    : '';
+
+  if (/super[ _-]*heavy/.test(signal))
+    return { id: 'super-heavy', label: 'Super-heavy', art: 'assets/loadout-pilot-super-heavy-v1.png' };
+  if (/\bheavy\b/.test(signal))
+    return { id: 'heavy', label: 'Heavy', art: 'assets/loadout-pilot-heavy-v1.png' };
+  if (/\bmedium\b/.test(signal))
+    return { id: 'medium', label: 'Medium', art: 'assets/loadout-pilot-v1.png' };
+  if (/\blight\b/.test(signal))
+    return { id: 'light', label: 'Light', art: 'assets/loadout-pilot-light-v1.png' };
+
+  // An undersuit is the base layer, not the lightest armour tier. It remains
+  // visible until the log can actually classify a core as light or heavier.
+  if (hasUndersuit)
+    return { id: 'undersuit', label: 'Undersuit', art: 'assets/loadout-pilot-undersuit-v1.png' };
+
+  return { id: 'neutral', label: 'Unclassified', art: 'assets/loadout-pilot-v1.png' };
+}
+
+function loadoutFigure(equipped) {
+  const observed = new Set(equipped.map(loadoutPlacement));
+  const profile = loadoutArmorProfile(equipped);
+  const observedParts = ['head', 'core', 'base', 'back', 'arms', 'legs']
+    .filter((part) => observed.has(part))
+    .map((part) => `loadout-has-${part}`)
+    .join(' ');
+  const figure = el('div', `loadout-figure loadout-profile-${profile.id} ${observedParts}`);
+  figure.innerHTML = `
+    <div class="loadout-figure-tag">${profile.label.toUpperCase()} ARMOUR PROFILE</div>
+    <div class="loadout-pilot-frame">
+      <img class="loadout-pilot-art" src="${profile.art}" alt="" />
+      <span class="loadout-pilot-zone loadout-pilot-zone-head"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-core"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-base"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-back"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-arms"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-legs"></span>
+    </div>
+    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>INSPECT MARKERS</span></div>`;
+  return figure;
+}
+
+/** The community catalogue is optional, so every detail has an honest fallback. */
+function loadoutItemName(item) {
+  return item.reference?.name || prettyItem(item.name);
+}
+
+function loadoutItemFacts(item) {
+  const ref = item.reference;
+  if (!ref)
+    return { text: 'Game-log item class only', known: false };
+
+  const facts = [];
+  if (ref.manufacturer) facts.push(ref.manufacturer);
+  const kind = [ref.type, ref.subType].filter(Boolean).join(' / ');
+  if (kind) facts.push(kind);
+  if (ref.size > 0) facts.push(`S${ref.size}`);
+  if (ref.grade > 0) facts.push(`Grade ${ref.grade}`);
+  return { text: facts.join(' · ') || 'Catalogue entry has no extra specification', known: true };
+}
+
+function loadoutSlotContents(slot, compact = false) {
+  const body = el('div', 'slot-body');
+  body.append(el('div', 'slot-category', slot.category || 'Other'));
+
+  const label = slot.slotCount > 1
+    ? `${slot.label || slot.port} · ${slot.slotCount} slots`
+    : slot.label || slot.port;
+  body.append(el('div', 'card-label', label));
+
+  for (const item of slot.items) {
+    const line = el('div', 'slot-current');
+    line.append(el('span', null, loadoutItemName(item)));
+    if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
+    body.append(line);
+
+    const facts = loadoutItemFacts(item);
+    body.append(el('div', facts.known ? 'slot-spec' : 'slot-spec slot-spec-unknown', facts.text));
+  }
+
+  if (!compact && slot.currentSeen)
+    body.append(el('div', 'slot-when', `last observed ${relative(slot.currentSeen)}`));
+  return body;
+}
+
+function loadoutItemInspect(slot) {
+  const inspect = el('div', 'loadout-item-inspect');
+  inspect.setAttribute('role', 'tooltip');
+  inspect.append(el('div', 'loadout-inspect-eyebrow', `Inspect · ${slot.label || slot.port}`));
+
+  for (const item of slot.items) {
+    const entry = el('div', 'loadout-inspect-entry');
+    entry.append(el('strong', null, loadoutItemName(item)));
+    if (item.count > 1) entry.append(el('span', 'slot-multi', ` ×${item.count}`));
+    const facts = loadoutItemFacts(item);
+    entry.append(el('div', facts.known ? 'slot-spec' : 'slot-spec slot-spec-unknown', facts.text));
+    inspect.append(entry);
+  }
+
+  if (slot.currentSeen)
+    inspect.append(el('div', 'loadout-inspect-seen', `Last observed ${relative(slot.currentSeen)}`));
+  return inspect;
+}
+
+function loadoutEquipSlot(slot, placement) {
+  const card = el('article', `loadout-slot loadout-equip-slot loadout-equip-${placement}`);
+  card.dataset.category = slot.category || 'Other';
+  card.tabIndex = 0;
+  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+
+  const icon = el('div', 'slot-icon');
+  icon.innerHTML = slotIconSvg(slot);
+  card.append(icon);
+  card.append(loadoutSlotContents(slot, true));
+  card.append(loadoutItemInspect(slot));
+  return card;
+}
+
+function loadoutInventorySlot(slot) {
+  const card = el('article', 'loadout-slot loadout-inventory-slot');
+  card.dataset.category = slot.category || 'Other';
+  card.tabIndex = 0;
+  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+  const icon = el('div', 'slot-icon');
+  icon.innerHTML = slotIconSvg(slot);
+  card.append(icon);
+  card.append(loadoutSlotContents(slot));
+  card.append(loadoutItemInspect(slot));
+  return card;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -6410,74 +6758,63 @@ function renderLoadout(stats) {
 
   const term = ($('#loadout-search').value || '').trim().toLowerCase();
 
-  // Match on the slot name, what is currently in it, or anything it has held.
-  const slots = stats.loadout.filter((slot) => {
-    if (!term) return true;
-
-    return (slot.label || slot.port).toLowerCase().includes(term)
-      || slot.items.some((i) => i.name.toLowerCase().includes(term));
-  });
+  // Match on the slot name or what currently occupies it. There is no hidden
+  // history in this view: this is the kit the log most recently saw, not an
+  // inventory the game never exposed to us.
+  const slots = stats.loadout.filter((slot) => !term
+    || (slot.label || slot.port).toLowerCase().includes(term)
+    || slot.items.some((item) => item.name.toLowerCase().includes(term)));
 
   if (!slots.length) {
     host.append(el('p', 'muted', 'Nothing matches that search.'));
     return;
   }
 
-  // The server already orders slots by category; preserve that grouping.
-  const byCategory = new Map();
-  for (const slot of slots) {
-    if (!byCategory.has(slot.category)) byCategory.set(slot.category, []);
-    byCategory.get(slot.category).push(slot);
-  }
+  const screen = el('section', 'loadout-character');
+  const head = el('div', 'loadout-character-head');
+  const meta = stats.loadoutAsOf
+    ? `Last complete sighting ${relative(stats.loadoutAsOf)}`
+    : 'Each card says when the log last saw it.';
+  head.append(el('div', 'loadout-eyebrow', term ? `${slots.length} matching slots` : `${slots.length} observed slots`));
+  head.append(el('p', 'muted', meta));
+  screen.append(head);
+  screen.append(el('p', 'loadout-overview',
+    'Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. '
+    + 'Everything here is the latest equipment the log observed, not a live game inventory.'));
 
-  for (const [category, slots] of byCategory) {
-    host.append(sectionHeading(category, `${slots.length} slots`));
+  const sheet = el('div', 'loadout-sheet');
+  const avatarRig = el('div', 'loadout-avatar-rig');
+  const left = el('div', 'loadout-equipment loadout-equipment-left');
+  const right = el('div', 'loadout-equipment loadout-equipment-right');
+  const field = el('aside', 'loadout-field-kit');
+  const fieldHead = el('div', 'loadout-field-head');
+  fieldHead.append(el('div', 'loadout-eyebrow', 'Field kit'));
+  fieldHead.append(el('span', 'group-meta', 'stowed & supplies'));
+  field.append(fieldHead);
+  const inventory = el('div', 'loadout-inventory-grid');
 
-    const grid = el('div', 'card-grid');
+  const equipped = slots.filter((slot) => loadoutPlacement(slot));
+  const leftSlots = equipped.filter((slot) => ['head', 'base', 'arms'].includes(loadoutPlacement(slot)));
+  const rightSlots = equipped.filter((slot) => !leftSlots.includes(slot));
 
-    for (const slot of slots) {
-      const card = el('article', 'card slot-card');
+  for (const slot of leftSlots)
+    left.append(loadoutEquipSlot(slot, loadoutPlacement(slot)));
+  for (const slot of rightSlots)
+    right.append(loadoutEquipSlot(slot, loadoutPlacement(slot)));
+  for (const slot of slots.filter((slot) => !loadoutPlacement(slot)))
+    inventory.append(loadoutInventorySlot(slot));
 
-      const icon = el('div', 'slot-icon');
-      icon.innerHTML = slotIconSvg(slot);
-      card.append(icon);
+  // A sparse log is normal. Keep both sides balanced rather than making a
+  // character frame lean just because one attachment type was never logged.
+  if (!left.childElementCount) left.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
+  if (!right.childElementCount) right.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
+  if (!inventory.childElementCount) inventory.append(el('p', 'muted', 'No stowed kit observed.'));
 
-      const body = el('div', 'slot-body');
-
-      const label = slot.slotCount > 1
-        ? `${slot.label} · ${slot.slotCount} slots`
-        : slot.label || slot.port;
-
-      body.append(el('div', 'card-label', label));
-
-      // What is in the family now; the churn goes behind a toggle.
-      for (const item of slot.items) {
-        const line = el('div', 'slot-current');
-        line.append(el('span', null, prettyItem(item.name)));
-        if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
-
-        // Community reference: size, grade, maker - when enabled and matched.
-        if (item.reference) {
-          const r = item.reference;
-          const bits = [];
-          if (r.size > 0) bits.push(`S${r.size}`);
-          if (r.grade > 0) bits.push(`grade ${r.grade}`);
-          if (r.manufacturer) bits.push(r.manufacturer);
-          if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
-        }
-
-        body.append(line);
-      }
-
-      if (slot.currentSeen)
-        body.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
-
-      card.append(body);
-      grid.append(card);
-    }
-
-    host.append(grid);
-  }
+  avatarRig.append(left, loadoutFigure(equipped), right);
+  field.append(inventory);
+  sheet.append(avatarRig, field);
+  screen.append(sheet);
+  host.append(screen);
 }
 
 /**
@@ -10958,7 +11295,7 @@ function askAboutUpdates(state) {
     await fetch(`/api/updates/answer?automatic=${automatic}`, { method: 'POST' });
     notice.hidden = true;
     renderUpdateSettings().catch(() => { /* Settings redraws on its next visit */ });
-    if (thenCheck) await runUpdateCheck({ quiet: false });
+    if (thenCheck) await runUpdateCheck({ quiet: false, announce: true });
   };
 
   const every = el('button', 'ghost', 'Yes, every start');
@@ -10980,16 +11317,30 @@ function askAboutUpdates(state) {
  * @param quiet Say nothing when this copy is current - true for a startup
  *   check, which nobody asked a question of, and false for a click, which is a
  *   question and deserves an answer either way.
+ * @param announce Put the answer in the notice, which every view carries,
+ *   rather than only in Settings' status line. A check started from the
+ *   toolbar or from the notice itself can be pressed from anywhere, and
+ *   "up to date" written into a panel the reader is not looking at is the
+ *   same as no answer at all - which is the half of the promise above that
+ *   the status line alone could not keep.
  */
-async function runUpdateCheck({ quiet }) {
+async function runUpdateCheck({ quiet, announce = false }) {
   const notice = $('#update');
 
   let result;
   try {
     const response = await fetch('/api/updates/check', { method: 'POST' });
+
+    // A dropped connection rejects, but a server whose own call to GitHub threw
+    // answers 500 - and reading that as JSON yields null, which used to fall
+    // through to result.newer and take the whole handler down with it. Both
+    // failures are the same failure to the reader, so both take the same path.
+    if (!response.ok) throw new Error(`the check answered ${response.status}`);
+
     result = await response.json();
   } catch {
     if (!quiet) $('#update-status').textContent = 'could not reach GitHub just now';
+    if (announce) tellUpdateNotice('Could not reach GitHub', 'The check did not get through. Try again in a moment.');
     return;
   }
 
@@ -10997,7 +11348,8 @@ async function runUpdateCheck({ quiet }) {
 
   if (!result.newer) {
     if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
-    notice.hidden = true;
+    if (announce) tellUpdateNotice(`Quantum Wake ${result.current} is the newest`, 'Nothing to update.');
+    else notice.hidden = true;
     return;
   }
 
@@ -11023,6 +11375,26 @@ async function runUpdateCheck({ quiet }) {
   later.addEventListener('click', () => { notice.hidden = true; });
 
   actions.append(open, later);
+  notice.hidden = false;
+}
+
+/**
+ * An answer with no newer version behind it: says its piece and offers only a
+ * way to dismiss itself, because there is nothing else to do about it.
+ */
+function tellUpdateNotice(title, detail) {
+  const notice = $('#update');
+
+  $('#update-title').textContent = title;
+  $('#update-detail').textContent = detail;
+
+  const actions = $('#update-actions');
+  actions.textContent = '';
+
+  const close = el('button', 'ghost', 'Close');
+  close.addEventListener('click', () => { notice.hidden = true; });
+  actions.append(close);
+
   notice.hidden = false;
 }
 
@@ -11102,6 +11474,25 @@ async function renderUpdateSettings() {
 }
 
 function initUpdates() {
+  // Bound before the Settings guard: the toolbar item is on the page whether
+  // or not the Settings block is, and it is the whole point of this one.
+  const fromMenu = $('#menu-update-check');
+  if (fromMenu) {
+    fromMenu.addEventListener('click', async () => {
+      // The group menu is held open by :focus-within, and this item does not
+      // change view - so without letting go of the focus the menu stays hanging
+      // over the answer it just asked for.
+      fromMenu.blur();
+      fromMenu.disabled = true;
+
+      try {
+        await runUpdateCheck({ quiet: false, announce: true });
+      } finally {
+        fromMenu.disabled = false;
+      }
+    });
+  }
+
   const toggle = $('#update-auto');
   if (!toggle) return;
 
