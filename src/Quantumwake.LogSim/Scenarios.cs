@@ -48,8 +48,8 @@ public static class ScenarioCatalogue
             "Accept a contract, begin its visible objective, and withdraw it.",
             ["1 abandoned contract", "1 visible step", "0 completed steps"]),
         new("loadout-swap",
-            "Refresh the same armour and swap the weapon occupying one slot.",
-            ["3 distinct loadout sightings", "repeat armour collapsed", "latest weapon identifiable"]),
+            "Equip a full kit, refresh the undersuit, and swap a held weapon.",
+            ["11 attachment records", "8 current equipment cards", "repeat armour collapsed"]),
         new("stash-browse",
             "Browse two location inventories plus the player's personal inventory.",
             ["2 stashed items at 2 locations", "3 distinct first-seen pickups"]),
@@ -372,6 +372,22 @@ public static class ScenarioRunner
         c.Log.Attachment(c.Now, c.Handle, "rsi_odyssey_undersuit_01_01_01", "200000000219", "Armor_Undersuit");
         c.Advance(2);
         c.Log.Attachment(c.Now, c.Handle, "rsi_odyssey_undersuit_01_01_01", "200000000219", "Armor_Undersuit");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "rsi_odyssey_helmet_01", "200000000222", "helmet_attach");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "rsi_odyssey_armor_core_01", "200000000223", "armor_core");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "rsi_backpack_01", "200000000224", "backpack_attach");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "frag_grenade", "200000000225", "grenade_attach_1");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "frag_grenade", "200000000226", "grenade_attach_2");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "medpen_hemozal", "200000000227", "medpen_attach");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "multitool_utility", "200000000228", "utility_tool_attach");
+        c.Advance(2);
+        c.Log.Attachment(c.Now, c.Handle, "behr_rifle_ballistic_01", "200000000229", "weapon_attach_back");
         c.Advance(2);
         c.Log.Attachment(c.Now, c.Handle, "behr_rifle_ballistic_01", "200000000220", "weapon_attach_hand_right");
         c.Advance(20);

@@ -85,15 +85,25 @@ class El {
     this.own = value === undefined || value === null ? '' : String(value);
   }
 
+  /* Appending a node that already has a parent MOVES it, as a browser does.
+     Pushing without detaching left the node in two places at once, so code
+     that reorders by re-appending appeared to duplicate every card - a test
+     failing about the stub rather than about the app. */
   append(...nodes) {
     for (const node of nodes) {
-      if (node instanceof El) node.parentElement = this;
+      if (node instanceof El) {
+        node.remove();
+        node.parentElement = this;
+      }
       this.children.push(node);
     }
   }
 
   prepend(node) {
-    if (node instanceof El) node.parentElement = this;
+    if (node instanceof El) {
+      node.remove();
+      node.parentElement = this;
+    }
     this.children.unshift(node);
   }
 
@@ -123,6 +133,7 @@ class El {
   releasePointerCapture() {}
   scrollIntoView() {}
   focus() {}
+  blur() {}
 
   /* A synthetic click, as the download path does to an anchor it never adds to
      the document. Recorded so a test can assert what would have been saved -
