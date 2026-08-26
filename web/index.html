@@ -78,6 +78,11 @@
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
         <button data-view="imports">Shared files</button>
+        <!-- An action, not a view. The strip's handler binds only
+             button[data-view], so this is ignored by the view switcher and
+             runs its own click instead; menu-action keeps it out of the
+             overlay, whose every button rule is scoped to [data-view]. -->
+        <button type="button" class="menu-action" id="menu-update-check">Check for updates</button>
       </div>
     </div>
     <button data-view="about">About</button>
@@ -1394,8 +1399,9 @@
       <p class="muted">
         Asks GitHub which release is newest and says so if it is ahead of this
         one. One request, carrying nothing but the request — no identifier, no
-        version, no count of anything. Downloading and installing stays yours to
-        do: the button opens the release page in your browser.
+        version, no count of anything. When there is a newer one you are offered
+        it, with its size, and nothing is fetched until you say so. The same
+        check sits on the toolbar, under Settings.
       </p>
       <label class="toggle">
         <input type="checkbox" id="update-auto">
