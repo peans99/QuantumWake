@@ -69,7 +69,7 @@ show. They write one completed `LIVE\Game.log` and print their expected facts.
 | `party-lifecycle` | Connect, lead, disconnect, reconnect, ignore chatter, then disband |
 | `contract-complete` | Two visible mission steps completed, followed by a blueprint |
 | `contract-abandoned` | One visible objective progresses and is then withdrawn |
-| `loadout-swap` | Repeat an armour sighting and change the weapon in one slot |
+| `loadout-swap` | Equip a complete character kit, repeat armour, and change a held weapon |
 | `stash-browse` | Browse two location inventories and one personal inventory |
 | `fleet-growth` | Observe changing entitlement counts and retain the largest fleet |
 | `ship-retrieval` | Join a duplicate spawn line to a ship model learned later |

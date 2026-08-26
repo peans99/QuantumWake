@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.14
+### 0.8.15
 
 - **Loadout now reads like a character inventory screen.** Your last observed
   equipment is arranged around a central character frame, so head, core, hands,
@@ -361,6 +361,12 @@ release workflow lifts it from here, so it is written once.
   unrelated cards. Search still narrows the actual slots, and every card keeps
   the time it was last seen. It remains explicit that this is log evidence, not
   a live game inventory.
+
+- **The Loadout simulator tells a useful visual story.** `loadout-swap` now
+  equips a full kit across head, core, pack, grenades, medical, utility and a
+  stowed weapon before it exercises the repeated undersuit and transient
+  hand-weapon cases. It makes an intentional distinction between durable kit
+  and what the character happened to hold.
 
 - **A flight plan is now a run sheet.** Each stop can hold checkable manual
   load, unload, buy, sell, collect, refuel, repair or free-form instructions,
