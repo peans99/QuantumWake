@@ -218,7 +218,7 @@ public sealed class LogScenarioTests
     {
         WithScenario("loadout-swap", (_, session) =>
         {
-            Assert.Equal(3, session.Loadout.Count);
+            Assert.Equal(11, session.Loadout.Count);
             Assert.Equal(2, session.Loadout.Count(i => i.Port == "weapon_attach_hand_right"));
             var repeated = Assert.Single(session.Loadout, i => i.Port == "Armor_Undersuit");
             Assert.True(repeated.LastSeen > repeated.FirstSeen);
@@ -282,7 +282,7 @@ public sealed class LogScenarioTests
             Assert.Equal(1, session.ContractsCompleted);
             Assert.Single(session.Contracts, c => c.Outcome == ContractOutcome.Abandoned);
             Assert.Single(session.Blueprints);
-            Assert.Equal(3, session.Loadout.Count);
+            Assert.Equal(11, session.Loadout.Count);
             Assert.Equal(2, session.Stash.Count);
             Assert.Equal(14, session.FleetSize);
             Assert.Equal(2, session.Disconnects);

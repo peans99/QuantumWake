@@ -6269,39 +6269,89 @@ function slotIconSvg(slot) {
  * so the figure is a visual anchor only: every observed slot remains a real,
  * named card on one of its two sides.
  */
-function loadoutSide(slot) {
+function loadoutPlacement(slot) {
   const name = `${slot.port || ''} ${slot.label || ''} ${slot.category || ''}`.toLowerCase();
 
-  if (/(helmet|undersuit|arm|leg|glove|shoe|medical|medpen|oxypen|grenade|utility|mobi)/.test(name))
-    return 'left';
-  return 'right';
+  if (/helmet/.test(name)) return 'head';
+  if (/undersuit/.test(name)) return 'base';
+  if (/(core|torso|chest)/.test(name)) return 'core';
+  if (/backpack/.test(name)) return 'back';
+  if (/(arm|glove|shoulder)/.test(name)) return 'arms';
+  if (/(leg|shoe|boot)/.test(name)) return 'legs';
+  return null;
 }
 
-function loadoutFigure() {
-  const figure = el('div', 'loadout-figure');
+/* The core is the player's main armour signal.  The log does not promise an
+   armour tier, so only an explicit catalogue/type name changes the profile. */
+function loadoutArmorProfile(equipped) {
+  const core = equipped.find((slot) => loadoutPlacement(slot) === 'core');
+  const hasUndersuit = equipped.some((slot) => loadoutPlacement(slot) === 'base');
+  const signal = core
+    ? [core.port, core.label, ...core.items.flatMap((item) => [
+      item.name, item.reference?.name, item.reference?.type, item.reference?.subType,
+    ])].filter(Boolean).join(' ').toLowerCase()
+    : '';
+
+  if (/super[ _-]*heavy/.test(signal))
+    return { id: 'super-heavy', label: 'Super-heavy', art: 'assets/loadout-pilot-super-heavy-v1.png' };
+  if (/\bheavy\b/.test(signal))
+    return { id: 'heavy', label: 'Heavy', art: 'assets/loadout-pilot-heavy-v1.png' };
+  if (/\bmedium\b/.test(signal))
+    return { id: 'medium', label: 'Medium', art: 'assets/loadout-pilot-v1.png' };
+  if (/\blight\b/.test(signal))
+    return { id: 'light', label: 'Light', art: 'assets/loadout-pilot-light-v1.png' };
+
+  // An undersuit is the base layer, not the lightest armour tier. It remains
+  // visible until the log can actually classify a core as light or heavier.
+  if (hasUndersuit)
+    return { id: 'undersuit', label: 'Undersuit', art: 'assets/loadout-pilot-undersuit-v1.png' };
+
+  return { id: 'neutral', label: 'Unclassified', art: 'assets/loadout-pilot-v1.png' };
+}
+
+function loadoutFigure(equipped) {
+  const observed = new Set(equipped.map(loadoutPlacement));
+  const profile = loadoutArmorProfile(equipped);
+  const observedParts = ['head', 'core', 'base', 'back', 'arms', 'legs']
+    .filter((part) => observed.has(part))
+    .map((part) => `loadout-has-${part}`)
+    .join(' ');
+  const figure = el('div', `loadout-figure loadout-profile-${profile.id} ${observedParts}`);
   figure.innerHTML = `
-    <div class="loadout-figure-tag">CURRENT KIT</div>
-    <svg viewBox="0 0 180 350" fill="none" aria-hidden="true">
-      <circle cx="90" cy="38" r="22" />
-      <path d="M64 73 48 112l18 70 24 20 24-20 18-70-16-39z" />
-      <path d="M64 78 31 145l13 13 31-38M116 78l33 67-13 13-31-38" />
-      <path d="M76 198 61 309l23 22 6-88M104 198l15 111-23 22-6-88" />
-      <path d="M61 309 45 337h42M119 309l16 28H93" />
-      <path class="loadout-weapon-line" d="M133 144h33l-7 8h-17l-9 29h-8l8-29h-8z" />
-      <path class="loadout-core-line" d="M72 99h36v55H72z M78 111h24M78 125h24M78 139h24" />
-    </svg>
-    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>HANDS</span><span>PACK</span></div>`;
+    <div class="loadout-figure-tag">${profile.label.toUpperCase()} ARMOUR PROFILE</div>
+    <div class="loadout-pilot-frame">
+      <img class="loadout-pilot-art" src="${profile.art}" alt="" />
+      <span class="loadout-pilot-zone loadout-pilot-zone-head"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-core"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-base"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-back"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-arms"></span>
+      <span class="loadout-pilot-zone loadout-pilot-zone-legs"></span>
+    </div>
+    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>INSPECT MARKERS</span></div>`;
   return figure;
 }
 
-function loadoutSlotCard(slot) {
-  const card = el('article', 'loadout-slot');
-  card.dataset.category = slot.category || 'Other';
+/** The community catalogue is optional, so every detail has an honest fallback. */
+function loadoutItemName(item) {
+  return item.reference?.name || prettyItem(item.name);
+}
 
-  const icon = el('div', 'slot-icon');
-  icon.innerHTML = slotIconSvg(slot);
-  card.append(icon);
+function loadoutItemFacts(item) {
+  const ref = item.reference;
+  if (!ref)
+    return { text: 'Game-log item class only', known: false };
 
+  const facts = [];
+  if (ref.manufacturer) facts.push(ref.manufacturer);
+  const kind = [ref.type, ref.subType].filter(Boolean).join(' / ');
+  if (kind) facts.push(kind);
+  if (ref.size > 0) facts.push(`S${ref.size}`);
+  if (ref.grade > 0) facts.push(`Grade ${ref.grade}`);
+  return { text: facts.join(' · ') || 'Catalogue entry has no extra specification', known: true };
+}
+
+function loadoutSlotContents(slot, compact = false) {
   const body = el('div', 'slot-body');
   body.append(el('div', 'slot-category', slot.category || 'Other'));
 
@@ -6312,26 +6362,62 @@ function loadoutSlotCard(slot) {
 
   for (const item of slot.items) {
     const line = el('div', 'slot-current');
-    line.append(el('span', null, prettyItem(item.name)));
+    line.append(el('span', null, loadoutItemName(item)));
     if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
-
-    // Community reference: size, grade, maker - when enabled and matched.
-    if (item.reference) {
-      const r = item.reference;
-      const bits = [];
-      if (r.size > 0) bits.push(`S${r.size}`);
-      if (r.grade > 0) bits.push(`grade ${r.grade}`);
-      if (r.manufacturer) bits.push(r.manufacturer);
-      if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
-    }
-
     body.append(line);
+
+    const facts = loadoutItemFacts(item);
+    body.append(el('div', facts.known ? 'slot-spec' : 'slot-spec slot-spec-unknown', facts.text));
+  }
+
+  if (!compact && slot.currentSeen)
+    body.append(el('div', 'slot-when', `last observed ${relative(slot.currentSeen)}`));
+  return body;
+}
+
+function loadoutItemInspect(slot) {
+  const inspect = el('div', 'loadout-item-inspect');
+  inspect.setAttribute('role', 'tooltip');
+  inspect.append(el('div', 'loadout-inspect-eyebrow', `Inspect · ${slot.label || slot.port}`));
+
+  for (const item of slot.items) {
+    const entry = el('div', 'loadout-inspect-entry');
+    entry.append(el('strong', null, loadoutItemName(item)));
+    if (item.count > 1) entry.append(el('span', 'slot-multi', ` ×${item.count}`));
+    const facts = loadoutItemFacts(item);
+    entry.append(el('div', facts.known ? 'slot-spec' : 'slot-spec slot-spec-unknown', facts.text));
+    inspect.append(entry);
   }
 
   if (slot.currentSeen)
-    body.append(el('div', 'slot-when', `last observed ${relative(slot.currentSeen)}`));
+    inspect.append(el('div', 'loadout-inspect-seen', `Last observed ${relative(slot.currentSeen)}`));
+  return inspect;
+}
 
-  card.append(body);
+function loadoutEquipSlot(slot, placement) {
+  const card = el('article', `loadout-slot loadout-equip-slot loadout-equip-${placement}`);
+  card.dataset.category = slot.category || 'Other';
+  card.tabIndex = 0;
+  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+
+  const icon = el('div', 'slot-icon');
+  icon.innerHTML = slotIconSvg(slot);
+  card.append(icon);
+  card.append(loadoutSlotContents(slot, true));
+  card.append(loadoutItemInspect(slot));
+  return card;
+}
+
+function loadoutInventorySlot(slot) {
+  const card = el('article', 'loadout-slot loadout-inventory-slot');
+  card.dataset.category = slot.category || 'Other';
+  card.tabIndex = 0;
+  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+  const icon = el('div', 'slot-icon');
+  icon.innerHTML = slotIconSvg(slot);
+  card.append(icon);
+  card.append(loadoutSlotContents(slot));
+  card.append(loadoutItemInspect(slot));
   return card;
 }
 
@@ -6368,16 +6454,42 @@ function renderLoadout(stats) {
   head.append(el('div', 'loadout-eyebrow', term ? `${slots.length} matching slots` : `${slots.length} observed slots`));
   head.append(el('p', 'muted', meta));
   screen.append(head);
+  screen.append(el('p', 'loadout-overview',
+    'Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. '
+    + 'Everything here is the latest equipment the log observed, not a live game inventory.'));
 
-  const rig = el('div', 'loadout-rig');
-  const left = el('div', 'loadout-slots loadout-slots-left');
-  const right = el('div', 'loadout-slots loadout-slots-right');
+  const sheet = el('div', 'loadout-sheet');
+  const avatarRig = el('div', 'loadout-avatar-rig');
+  const left = el('div', 'loadout-equipment loadout-equipment-left');
+  const right = el('div', 'loadout-equipment loadout-equipment-right');
+  const field = el('aside', 'loadout-field-kit');
+  const fieldHead = el('div', 'loadout-field-head');
+  fieldHead.append(el('div', 'loadout-eyebrow', 'Field kit'));
+  fieldHead.append(el('span', 'group-meta', 'stowed & supplies'));
+  field.append(fieldHead);
+  const inventory = el('div', 'loadout-inventory-grid');
 
-  for (const slot of slots)
-    (loadoutSide(slot) === 'left' ? left : right).append(loadoutSlotCard(slot));
+  const equipped = slots.filter((slot) => loadoutPlacement(slot));
+  const leftSlots = equipped.filter((slot) => ['head', 'base', 'arms'].includes(loadoutPlacement(slot)));
+  const rightSlots = equipped.filter((slot) => !leftSlots.includes(slot));
 
-  rig.append(left, loadoutFigure(), right);
-  screen.append(rig);
+  for (const slot of leftSlots)
+    left.append(loadoutEquipSlot(slot, loadoutPlacement(slot)));
+  for (const slot of rightSlots)
+    right.append(loadoutEquipSlot(slot, loadoutPlacement(slot)));
+  for (const slot of slots.filter((slot) => !loadoutPlacement(slot)))
+    inventory.append(loadoutInventorySlot(slot));
+
+  // A sparse log is normal. Keep both sides balanced rather than making a
+  // character frame lean just because one attachment type was never logged.
+  if (!left.childElementCount) left.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
+  if (!right.childElementCount) right.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
+  if (!inventory.childElementCount) inventory.append(el('p', 'muted', 'No stowed kit observed.'));
+
+  avatarRig.append(left, loadoutFigure(equipped), right);
+  field.append(inventory);
+  sheet.append(avatarRig, field);
+  screen.append(sheet);
   host.append(screen);
 }
 

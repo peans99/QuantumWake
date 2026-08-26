@@ -1875,18 +1875,38 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   text-transform: uppercase;
   white-space: nowrap;
 }
-.loadout-rig {
-  display: grid;
-  grid-template-columns: minmax(230px, 1fr) minmax(190px, .7fr) minmax(230px, 1fr);
-  gap: 18px;
-  align-items: stretch;
-  padding: 16px;
+.loadout-overview {
+  max-width: 92ch;
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(4, 10, 17, .22);
 }
-.loadout-slots {
+.loadout-sheet {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.45fr) minmax(290px, .8fr);
+  gap: 0;
+  align-items: stretch;
+}
+.loadout-avatar-rig {
+  position: relative;
+  display: grid;
+  grid-template-columns: 132px minmax(290px, 1fr) 132px;
+  gap: 0;
+  min-width: 0;
+  padding: 17px;
+  border-right: 1px solid var(--rule);
+}
+.loadout-equipment {
+  position: relative;
+  z-index: 3;
   display: flex;
   min-width: 0;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-around;
   gap: 8px;
 }
 .loadout-slot {
@@ -1900,16 +1920,6 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   background: rgba(5, 13, 22, .7);
   clip-path: var(--chamfer);
 }
-.loadout-slot::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 14px;
-  border-top: 1px solid var(--cyan-deep);
-  opacity: .7;
-}
-.loadout-slots-left .loadout-slot::after { right: -14px; }
-.loadout-slots-right .loadout-slot::after { left: -14px; }
 .loadout-slot:hover { border-color: var(--rule-hot); background: rgba(12, 31, 45, .78); }
 .loadout-slot .slot-icon { flex-basis: 36px; width: 36px; height: 36px; }
 .loadout-slot .slot-icon svg { width: 21px; height: 21px; }
@@ -1925,16 +1935,128 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
 .loadout-slot .card-label { font-size: 10px; margin-bottom: 4px; }
 .loadout-slot .slot-current { font-size: 12.5px; line-height: 1.4; }
 .loadout-slot .slot-when { margin-top: 5px; color: var(--dim); font-family: var(--mono); font-size: 9.5px; }
+.slot-spec {
+  margin-top: 2px;
+  color: var(--cyan-hot);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.slot-spec-unknown { color: var(--dim); }
+.loadout-equip-slot {
+  min-height: 78px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 6px;
+  /* The generic card's clip-path also clipped the inspection panel. These
+     interactive markers need an escape path for the hover readout. */
+  clip-path: none;
+  background:
+    linear-gradient(145deg, rgba(53, 200, 240, .09), rgba(5, 13, 22, .86) 58%),
+    rgba(5, 13, 22, .7);
+}
+.loadout-equipment-left .loadout-equip-slot {
+  flex-direction: row-reverse;
+  text-align: right;
+  border-right-color: var(--cyan-deep);
+}
+.loadout-equipment-right .loadout-equip-slot {
+  flex-direction: row;
+  text-align: left;
+  border-left-color: var(--cyan-deep);
+}
+.loadout-equip-slot::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 1px;
+  background: var(--cyan-deep);
+  box-shadow: 0 0 8px rgba(53, 200, 240, .28);
+}
+.loadout-equipment-left .loadout-equip-slot::after { right: -12px; }
+.loadout-equipment-right .loadout-equip-slot::after { left: -12px; }
+.loadout-equip-slot:hover::after,
+.loadout-equip-slot:focus-visible::after { background: var(--cyan-hot); box-shadow: 0 0 10px var(--cyan); }
+.loadout-equip-slot:hover,
+.loadout-equip-slot:focus-visible { z-index: 5; }
+.loadout-equip-slot .slot-icon {
+  flex-basis: 42px;
+  width: 42px;
+  height: 42px;
+}
+.loadout-equip-slot .slot-icon svg { width: 25px; height: 25px; }
+.loadout-equip-slot .slot-body { width: auto; min-width: 0; }
+.loadout-equip-slot .slot-category { margin-bottom: 2px; font-size: 8px; }
+.loadout-equip-slot .card-label { font-size: 9.5px; }
+.loadout-equip-slot .slot-current {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.loadout-equip-slot > .slot-body .slot-spec { display: none; }
+.loadout-item-inspect {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  width: min(218px, 66vw);
+  padding: 11px 12px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(4, 13, 22, .98);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .5), 0 0 18px rgba(53, 200, 240, .12);
+  color: var(--text);
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .12s ease, transform .12s ease, visibility .12s step-end;
+}
+.loadout-equipment-left .loadout-item-inspect { left: calc(100% + 12px); transform: translate(8px, -50%); }
+.loadout-equipment-right .loadout-item-inspect { right: calc(100% + 12px); transform: translate(-8px, -50%); }
+.loadout-equip-slot:hover .loadout-item-inspect,
+.loadout-equip-slot:focus-visible .loadout-item-inspect {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.loadout-equipment-left .loadout-equip-slot:hover .loadout-item-inspect,
+.loadout-equipment-left .loadout-equip-slot:focus-visible .loadout-item-inspect { transform: translate(0, -50%); }
+.loadout-equipment-right .loadout-equip-slot:hover .loadout-item-inspect,
+.loadout-equipment-right .loadout-equip-slot:focus-visible .loadout-item-inspect { transform: translate(0, -50%); }
+.loadout-inspect-eyebrow {
+  margin-bottom: 8px;
+  color: var(--cyan-hot);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.loadout-inspect-entry + .loadout-inspect-entry { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.loadout-inspect-entry strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.loadout-inspect-entry .slot-spec { margin-top: 3px; font-size: 9px; }
+.loadout-inspect-seen { margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--rule); color: var(--dim); font-family: var(--mono); font-size: 8.5px; }
+.loadout-empty-slot {
+  padding: 10px 4px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: center;
+  border: 1px dashed var(--rule);
+}
 .loadout-figure {
   position: relative;
+  z-index: 1;
   display: grid;
   align-content: center;
   justify-items: center;
-  min-height: 390px;
+  min-height: 492px;
   border-inline: 1px solid rgba(53, 200, 240, .16);
   background:
     linear-gradient(90deg, transparent 49.6%, rgba(53, 200, 240, .10) 50%, transparent 50.4%),
-    repeating-linear-gradient(0deg, transparent 0 25px, rgba(53, 200, 240, .045) 25px 26px);
+    repeating-linear-gradient(0deg, transparent 0 28px, rgba(53, 200, 240, .045) 28px 29px);
 }
 .loadout-figure::before,
 .loadout-figure::after {
@@ -1957,10 +2079,60 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   font-size: 9px;
   letter-spacing: .16em;
 }
-.loadout-figure svg { width: min(180px, 92%); height: 330px; color: rgba(92, 215, 244, .72); }
-.loadout-figure svg > * { stroke: currentColor; stroke-width: 1.25; stroke-linejoin: round; }
-.loadout-figure .loadout-weapon-line { stroke: var(--amber); }
-.loadout-figure .loadout-core-line { stroke: var(--cyan-hot); stroke-dasharray: 2 3; }
+.loadout-pilot-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(278px, 98%);
+  height: 420px;
+  margin-top: 10px;
+}
+.loadout-pilot-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: saturate(.86) contrast(1.05) drop-shadow(0 0 14px rgba(48, 205, 244, .16));
+}
+/* The scan brackets are deliberately only an overlay: the art is an original
+   display asset, while these still say which broad body regions the log saw. */
+.loadout-pilot-zone {
+  position: absolute;
+  opacity: .16;
+  border: 1px solid var(--cyan-deep);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(53, 200, 240, .04), inset 0 0 14px rgba(53, 200, 240, .08);
+}
+.loadout-pilot-zone::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: var(--cyan-hot);
+  box-shadow: 0 0 8px var(--cyan);
+}
+.loadout-pilot-zone-head { top: 7%; width: 28%; height: 16%; }
+.loadout-pilot-zone-head::after { left: -3px; top: 50%; }
+.loadout-pilot-zone-core { top: 25%; width: 43%; height: 26%; }
+.loadout-pilot-zone-core::after { right: -3px; top: 50%; }
+.loadout-pilot-zone-base { top: 48%; width: 37%; height: 20%; }
+.loadout-pilot-zone-base::after { left: -3px; top: 50%; }
+.loadout-pilot-zone-back { top: 24%; width: 60%; height: 26%; }
+.loadout-pilot-zone-back::after { right: -3px; top: 18%; }
+.loadout-pilot-zone-arms { top: 29%; width: 91%; height: 31%; }
+.loadout-pilot-zone-arms::after { left: -3px; top: 50%; }
+.loadout-pilot-zone-legs { top: 63%; width: 52%; height: 34%; }
+.loadout-pilot-zone-legs::after { right: -3px; top: 50%; }
+.loadout-has-head .loadout-pilot-zone-head,
+.loadout-has-core .loadout-pilot-zone-core,
+.loadout-has-base .loadout-pilot-zone-base,
+.loadout-has-back .loadout-pilot-zone-back,
+.loadout-has-arms .loadout-pilot-zone-arms,
+.loadout-has-legs .loadout-pilot-zone-legs {
+  opacity: .86;
+  border-color: var(--cyan-hot);
+  box-shadow: 0 0 12px rgba(53, 200, 240, .24), inset 0 0 16px rgba(53, 200, 240, .12);
+}
 .loadout-figure-key {
   position: absolute;
   bottom: 25px;
@@ -1975,34 +2147,112 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   letter-spacing: .1em;
 }
 .loadout-figure-key span { border-bottom: 1px solid var(--rule); }
+.loadout-field-kit {
+  position: relative;
+  z-index: 3;
+  min-width: 0;
+  padding: 17px;
+  background: rgba(3, 8, 14, .34);
+}
+.loadout-field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.loadout-inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 10px;
+}
+.loadout-inventory-slot {
+  display: grid;
+  grid-template-columns: 39px minmax(0, 1fr);
+  min-height: 108px;
+  align-content: start;
+  gap: 8px;
+  padding: 9px;
+  /* Field-kit cards also carry a hover panel, so do not clip it to the tile. */
+  clip-path: none;
+}
+.loadout-inventory-slot:hover,
+.loadout-inventory-slot:focus-visible { z-index: 5; }
+.loadout-inventory-slot .loadout-item-inspect {
+  top: calc(100% + 7px);
+  width: min(218px, calc(100vw - 34px));
+  transform: translateY(8px);
+}
+.loadout-inventory-slot:nth-child(odd) .loadout-item-inspect { left: 0; right: auto; }
+.loadout-inventory-slot:nth-child(even) .loadout-item-inspect { right: 0; left: auto; }
+.loadout-inventory-slot:hover .loadout-item-inspect,
+.loadout-inventory-slot:focus-visible .loadout-item-inspect { transform: translateY(0); }
+.loadout-inventory-slot .slot-icon { flex-basis: 39px; width: 39px; height: 39px; }
+.loadout-inventory-slot .slot-icon svg { width: 22px; height: 22px; }
+.loadout-inventory-slot .slot-category { grid-column: 1 / -1; order: 2; margin: 0; }
+.loadout-inventory-slot .slot-body { display: contents; }
+.loadout-inventory-slot .card-label { font-size: 10px; margin: 0; align-self: center; }
+.loadout-inventory-slot .slot-current { grid-column: 1 / -1; font-size: 11px; overflow-wrap: anywhere; }
+.loadout-inventory-slot .slot-spec { grid-column: 1 / -1; margin-top: -5px; }
+.loadout-inventory-slot .slot-when { grid-column: 1 / -1; margin-top: 0; }
 
-@media (max-width: 860px) {
-  .loadout-rig { grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
-  .loadout-figure { grid-column: 1 / -1; grid-row: 1; min-height: 260px; border-block: 1px solid rgba(53, 200, 240, .16); }
-  .loadout-figure svg { height: 235px; }
-  .loadout-slots-left { grid-column: 1; grid-row: 2; }
-  .loadout-slots-right { grid-column: 2; grid-row: 2; }
-  .loadout-slot::after { display: none; }
+@media (max-width: 1050px) {
+  .loadout-sheet { grid-template-columns: 1fr; }
+  .loadout-avatar-rig { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .loadout-field-kit { padding: 14px; }
+  .loadout-inventory-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 680px) {
   .loadout-character-head { align-items: flex-start; flex-direction: column; gap: 4px; }
-  .loadout-rig { display: flex; flex-direction: column; }
-  .loadout-figure { min-height: 210px; order: -1; }
-  .loadout-figure svg { height: 190px; }
-  .loadout-slots { gap: 6px; }
+  .loadout-avatar-rig { grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; }
+  .loadout-figure { grid-column: 1 / -1; grid-row: 1; min-height: 280px; border-block: 1px solid rgba(53, 200, 240, .16); }
+  .loadout-pilot-frame { height: 245px; margin-top: 12px; }
+  .loadout-equipment-left { grid-column: 1; grid-row: 2; }
+  .loadout-equipment-right { grid-column: 2; grid-row: 2; }
+  .loadout-equip-slot { min-height: 84px; }
+  /* The compact character rig is still interactive. Keep the inspector in
+     the card's column instead of dropping the only detailed readout. */
+  .loadout-item-inspect { width: min(218px, calc(100vw - 34px)); }
+  .loadout-equipment-left .loadout-item-inspect {
+    left: 0;
+    right: auto;
+    top: calc(100% + 7px);
+    transform: translateY(8px);
+  }
+  .loadout-equipment-right .loadout-item-inspect {
+    right: 0;
+    left: auto;
+    top: calc(100% + 7px);
+    transform: translateY(8px);
+  }
+  .loadout-equipment-left .loadout-equip-slot:hover .loadout-item-inspect,
+  .loadout-equipment-left .loadout-equip-slot:focus-visible .loadout-item-inspect,
+  .loadout-equipment-right .loadout-equip-slot:hover .loadout-item-inspect,
+  .loadout-equipment-right .loadout-equip-slot:focus-visible .loadout-item-inspect { transform: translateY(0); }
+  .loadout-inventory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 body.overlay .loadout-character { border: 0; background: transparent; clip-path: none; }
 body.overlay .loadout-character-head,
-body.overlay .loadout-figure { display: none; }
-body.overlay .loadout-rig { display: block; padding: 0; }
-body.overlay .loadout-slots { gap: 6px; }
+body.overlay .loadout-figure,
+body.overlay .loadout-field-head,
+body.overlay .loadout-overview { display: none; }
+body.overlay .loadout-sheet { display: block; }
+body.overlay .loadout-avatar-rig { display: block; padding: 0; border: 0; }
+body.overlay .loadout-equipment { gap: 6px; }
+body.overlay .loadout-field-kit { padding: 0; background: transparent; }
+body.overlay .loadout-inventory-grid { display: block; padding: 0; }
 body.overlay .loadout-slot { padding: 6px 8px; gap: 8px; clip-path: none; }
 body.overlay .loadout-slot .slot-icon { flex-basis: 28px; width: 28px; height: 28px; }
 body.overlay .loadout-slot .slot-icon svg { width: 17px; height: 17px; }
 body.overlay .slot-category,
-body.overlay .loadout-slot .slot-when { display: none; }
+body.overlay .loadout-slot .slot-when,
+body.overlay .slot-spec,
+body.overlay .loadout-empty-slot,
+body.overlay .loadout-item-inspect { display: none; }
 
 /* ---------- map: search, highlight, follow, detail card ---------- */
 
