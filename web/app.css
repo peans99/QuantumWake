@@ -231,6 +231,12 @@ body.overlay .tab-group,
 body.overlay .group-menu { display: contents; }
 body.overlay .group-btn { display: none; }
 
+/* Actions in a group menu are dashboard-only. Every button rule below is
+   scoped to [data-view], so one of these would arrive in the widget at full
+   desktop size - and checkForUpdate() returns early in the overlay anyway,
+   so the button would do nothing even if it fitted. */
+body.overlay .tabs .menu-action { display: none; }
+
 /*
  * And they stay dissolved while hovered. `.tab-group:hover .group-menu` is a
  * class, a pseudo-class and a class - it outranks `body.overlay .group-menu`,
@@ -532,8 +538,23 @@ h2.spaced { margin-top: 32px; }
 }
 .now-collapse:hover { color: var(--cyan-hot); }
 .now-hide:hover { color: var(--amber); }
+
+/* The grip is a handle, so it says so with the cursor before it is touched.
+   body.overlay hides .now-card-actions outright, so none of this reaches the
+   widget - which has its own layout and no room to rearrange one. */
+.now-grip { font-size: 13px; cursor: grab; }
+.now-grip:hover { color: var(--cyan-hot); }
+.now-grip:active { cursor: grabbing; }
+
+/* The card being carried. There is no separate drop marker: the cards move
+   under the pointer as it goes, so the gap that opens is the marker. */
+.card.dragging { opacity: .45; }
 .card.user-hidden { display: none !important; }
 .now-card-visibility { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--gap); font-size: 11px; }
+/* Said again, as elsewhere: display on the class outranks the UA sheet's
+   [hidden] rule, so the tray sat there labelling an empty row on every
+   Now page that had nothing hidden. */
+.now-card-visibility[hidden] { display: none; }
 #now-hidden-card-list { display: flex; flex-wrap: wrap; gap: 5px; }
 .now-ship-summary { display: flex; align-items: center; gap: 10px; }
 .now-ship-logo { flex: 0 0 44px; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; }

@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Quantumwake.Core.Logging;
+using Quantumwake.Data;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -59,6 +61,7 @@ public partial class App : System.Windows.Application
         _tray.OverlayToggled += SetOverlayVisible;
         _tray.OverlayPinned += pinned => _overlay?.SetPinned(pinned);
         _tray.SetInstallFolderRequested += PickInstallFolder;
+        _tray.CheckForUpdatesRequested += CheckForUpdates;
         _tray.QuitRequested += Quit;
 
         await StartServerAsync(e.Args);
@@ -200,6 +203,67 @@ public partial class App : System.Windows.Application
         }
 
         Quit();
+    }
+
+    /// <summary>
+    /// The tray's own update check.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Calls the check directly rather than posting to its own HTTP endpoint:
+    /// the server is in this process, and going out through a socket to reach
+    /// an object already in memory would only add a way for it to fail.
+    /// </para>
+    /// <para>
+    /// The store is stamped exactly as the endpoint stamps it, so the Settings
+    /// page's "last checked" stays true about a check that never touched it.
+    /// Installing stays where it was - the dashboard shows the notes and the
+    /// size first, and a balloon is no place to agree to ninety megabytes.
+    /// </para>
+    /// </remarks>
+    private async void CheckForUpdates()
+    {
+        if (_server is null)
+        {
+            _tray?.Notify("The dashboard has not started yet, so there is nothing to ask with.");
+            return;
+        }
+
+        _tray?.SetCheckingForUpdates(true);
+
+        try
+        {
+            var check = _server.Services.GetRequiredService<UpdateCheck>();
+            var updates = _server.Services.GetRequiredService<UpdateStore>();
+
+            // The same assembly the endpoint reads, so the two can never
+            // disagree about what "this version" means.
+            var current = typeof(ServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+            var result = await check.LookAsync(current);
+            updates.Checked(result.Latest);
+
+            if (result.Newer)
+            {
+                _tray?.Notify(
+                    $"Quantum Wake {result.Latest} is out. You have {result.Current} - "
+                    + "click here to open the dashboard and read what changed.",
+                    OpenDashboard);
+            }
+            else
+            {
+                _tray?.Notify($"Up to date - {result.Current} is the newest there is.");
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            // A machine that is offline is the ordinary case, not a fault.
+            _tray?.Notify("Could not reach GitHub just now. Nothing has changed.");
+        }
+        finally
+        {
+            _tray?.SetCheckingForUpdates(false);
+        }
     }
 
     private void OpenDashboard()

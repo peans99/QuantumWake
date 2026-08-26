@@ -353,6 +353,33 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.22
+
+- **Check for updates from the tray.** Right-click the Quantum Wake icon
+  by the clock and there is a *Check for updates* beside the other
+  controls. It answers in a notification: up to date, or the new version
+  and what you are on — click that one and the dashboard opens so you can
+  read what changed before deciding. Nothing downloads from the tray;
+  ninety megabytes is not something to agree to in a balloon.
+- **The same check is on the dashboard toolbar**, under Settings, so it no
+  longer means opening the Settings page and finding the right block.
+- **And it answers wherever you are.** Checking by hand used to write “up to
+  date” into the Settings page, which was invisible if you were on any
+  other page. The answer now appears at the top of whatever you are
+  looking at.
+- **A check that fails says so.** If the machine is offline, or the check
+  itself goes wrong, that is reported instead of passing in silence.
+- **The Now page can be rearranged.** Every card has a grip beside its other
+  controls: drag a card where you want it and the page keeps that order.
+  The arrow keys move it too, for anyone who would rather not drag. This
+  joins the hide (×) and collapse (⌃) controls that were already on each
+  card — the arrangement is remembered per browser, alongside those.
+- **A card added in a later version arrives beside its neighbours**, not at
+  the end and not switched off, so rearranging the page once does not mean
+  quietly missing everything added afterwards.
+- **The “Hidden cards” row no longer labels an empty space.** It was showing
+  on every Now page whether anything was hidden or not.
+
 ### 0.8.21
 
 - Nothing you can see: notes for whoever works on this next.
