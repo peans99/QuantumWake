@@ -101,6 +101,8 @@ public static class ServerHost
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
         builder.Services.AddSingleton<UpdateCheck>();
+        builder.Services.AddSingleton<ShellBridge>();
+        builder.Services.AddSingleton<SelfUpdate>();
 
         // Prices are the one dataset here with a shelf life, so they are the one
         // thing allowed to refetch themselves - and only once asked.
@@ -463,7 +465,7 @@ public static class ServerHost
         app.MapPost("/api/starstrings/remove", (StarStrings mod) =>
             Results.Ok(new { removed = mod.Remove() }));
 
-        app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check) =>
+        app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check, SelfUpdate selfUpdate) =>
 
         {
             var assembly = typeof(ServerHost).Assembly;
@@ -472,7 +474,44 @@ public static class ServerHost
             var result = await check.LookAsync(current);
             updates.Checked(result.Latest);
 
-            return Results.Ok(result);
+            // The page needs to know whether to offer one click or a trip to the
+            // browser, and only the server can tell: it depends on how this copy
+            // was started, not on what the release carries.
+            return Results.Ok(new
+            {
+                result.Newer, result.Current, result.Latest, result.Url,
+                result.Notes, result.PublishedAt,
+                canInstall = selfUpdate.Possible && result.Asset is not null,
+
+                // Ninety megabytes is worth knowing before agreeing to it, not
+                // after: a metered connection is somebody's actual money.
+                downloadBytes = result.Asset?.Size,
+            });
+        });
+
+        // The whole of the update, from one click: fetch the published file,
+        // check it against the hash GitHub published for it, move the running
+        // executable aside, put the new one in its place, and restart.
+        //
+        // A POST, so the LAN rule refuses it from another machine without
+        // anything here having to say so - replacing somebody's application over
+        // the wifi is exactly the kind of thing that rule exists for.
+        app.MapPost("/api/updates/install", async (UpdateStore updates, UpdateCheck check, SelfUpdate selfUpdate) =>
+        {
+            var assembly = typeof(ServerHost).Assembly;
+            var current = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+            // Looked up again rather than taken from the page: what gets
+            // installed is decided here, from the feed, not from whatever a
+            // request body claims is the newest version.
+            var result = await check.LookAsync(current);
+            updates.Checked(result.Latest);
+
+            var (installed, refused) = await selfUpdate.InstallAsync(result);
+
+            return refused is not null
+                ? Results.Json(new { message = refused.Message }, statusCode: refused.Status)
+                : Results.Ok(installed);
         });
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
@@ -768,6 +807,11 @@ public static class ServerHost
         // Who the party channel has named. See LogLibrary.Wingmen for why these
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));
+
+        // Its own route rather than a field on the crew rows: a pilot appears
+        // once per ship here, so folding it in would either repeat every other
+        // count or need the page to flatten it back out.
+        app.MapGet("/api/crew/ships", (LogLibrary lib, int? days) => lib.SharedShips(days ?? 0));
 
         // What the logs are still carrying. Unscoped by wipe on purpose - see
         // LogLibrary.Signals.

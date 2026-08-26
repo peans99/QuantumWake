@@ -52,6 +52,7 @@ public sealed class SessionBuilder
     private readonly List<RespawnRecord> _respawns = [];
     private readonly List<MedicalBedVisit> _medicalBeds = [];
     private readonly List<PartyNote> _partyNotes = [];
+    private readonly List<ChannelNote> _channelNotes = [];
 
     /// <summary>Set by a death or incapacitation, cleared by the location that answers it.</summary>
     private DateTimeOffset? _awaitingRespawn;
@@ -636,24 +637,51 @@ public sealed class SessionBuilder
         // these are kept whole rather than counted: who, when, and what happened.
         // Lines naming nobody - a join queue opening, a broadcast, the one
         // garbled string in this corpus - read as null and stop here.
+        // Boarding is a different fact from grouping, and the two channels share
+        // two of their titles - so this is asked first, on the body, and returns
+        // rather than falling through to a reader that would decline it anyway.
+        if (ShipChannel.IsChannel(notification.Text))
+        {
+            if (ShipChannel.Read(notification.Timestamp, notification.Text) is { } berth)
+            {
+                _channelNotes.Add(berth);
+
+                // Only other people reach the timeline. "You have joined channel"
+                // fires on every ship the reader boards - 410 times here - and a
+                // feed saying you got into your own Cyclone buries the flight.
+                if (berth.Moment is ChannelMoment.TheyBoarded)
+                    Timeline(berth.At, "party", $"{berth.Handle} came aboard", berth.Ship);
+            }
+
+            return;
+        }
+
         if (notification.IsParty)
         {
             if (Party.Read(notification.Timestamp, notification.Text) is { } note)
             {
                 _partyNotes.Add(note);
 
-                // Only arrivals and departures reach the timeline. Lead changing
-                // hands is real, but it happens in flurries while a party
-                // re-forms, and a feed saying "X is now leader" five times in a
-                // minute buries the flight it is meant to describe.
-                if (note.Moment is PartyMoment.Connected or PartyMoment.Disconnected)
-                    Timeline(
-                        note.At,
-                        "party",
-                        note.Moment == PartyMoment.Connected
-                            ? $"{note.Handle} came online"
-                            : $"{note.Handle} dropped",
-                        "in your party");
+                // Lead changing hands does not reach the timeline. It is real,
+                // but it happens in flurries while a party re-forms, and a feed
+                // saying "X is now leader" five times in a minute buries the
+                // flight it is meant to describe.
+                //
+                // Joining and leaving are worded apart from coming online and
+                // dropping on purpose: somebody who logs out and back in did not
+                // leave, and a feed that says the same thing for both makes a
+                // friend with a poor connection look like one who walked off.
+                var said = note.Moment switch
+                {
+                    PartyMoment.Connected => $"{note.Handle} came online",
+                    PartyMoment.Disconnected => $"{note.Handle} dropped",
+                    PartyMoment.Joined => $"{note.Handle} joined the party",
+                    PartyMoment.Left => $"{note.Handle} left the party",
+                    _ => null,
+                };
+
+                if (said is not null)
+                    Timeline(note.At, "party", said, "in your party");
             }
 
             return;
@@ -1030,6 +1058,7 @@ public sealed class SessionBuilder
             Respawns = _respawns,
             MedicalBeds = _medicalBeds,
             PartyNotes = _partyNotes,
+            ChannelNotes = _channelNotes,
             Loadout = [.. _loadoutSeen.Values.OrderBy(l => l.Port, StringComparer.Ordinal)],
             Stash = BuildStash(),
             FleetSize = _fleetSize,
