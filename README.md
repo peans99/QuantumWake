@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![473 tests](https://img.shields.io/badge/tests-473%20passing-4fd48a)
+![795 tests](https://img.shields.io/badge/tests-795%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -35,11 +35,11 @@ install, nothing to unpack or configure. It finds your Star Citizen install
 itself, across every fixed drive.
 
 It then sits in the notification area. Right-click to open the dashboard, show
-or hide the overlay, or quit. The in-game overlay is off until you turn it on -
-from the Settings page or the tray - and the choice is remembered. The overlay
-arrives ready to move; its **📌 pin** button puts it out of the way so clicks
-reach the game, and the tray icon (or `Ctrl+Alt+O`) brings it back. The
-dashboard is on <http://127.0.0.1:31337>.
+or hide the overlay, check for a new version, or quit. The in-game overlay is
+off until you turn it on - from the Settings page or the tray - and the choice
+is remembered. The overlay arrives ready to move; its **📌 pin** button puts it
+out of the way so clicks reach the game, and the tray icon (or `Ctrl+Alt+O`)
+brings it back. The dashboard is on <http://127.0.0.1:31337>.
 
 Windows will warn that the publisher is unknown — the binary is not code signed,
 which costs money a free fan tool does not have. **More info → Run anyway**.
@@ -65,7 +65,7 @@ events, not a radar.*
 |---|---|
 | **Flight plan** | Where to go next and the rest of the run, on the Now page and drawn over the map as numbered stops. Built from a trade route, a shopping list, or by hand — and stops cross themselves off as you land |
 | **Shopping** | Lists that hold cargo and ship parts alike, checked against your stashes. Pick what to add and where you mean to shop, then read the list as a set of landings: every counter that carries any of it, ranked by how much one stop covers, with *fewest stops* to pack the run |
-| **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed |
+| **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed. Every card can be hidden, collapsed, or dragged where you want it — the arrangement is remembered |
 | **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells. Picking one opens its cargo panel: best terminals now, your own prices over the last day, three days or seven, and a selling/buying toggle. Double-click a place for what it takes and offers |
 | **Sessions** | Every session you have played, in-game time separated from menu time |
 | **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on. **Upgrades** opens the game's own port list for that ship: what fits each hole, what it costs, and the counter that stocks it |
@@ -263,7 +263,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 473 tests
+dotnet test Quantumwake.slnx      # 795 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -353,7 +353,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.22
+### 0.8.23
 
 - **Check for updates from the tray.** Right-click the Quantum Wake icon
   by the clock and there is a *Check for updates* beside the other
@@ -379,6 +379,9 @@ release workflow lifts it from here, so it is written once.
   quietly missing everything added afterwards.
 - **The “Hidden cards” row no longer labels an empty space.** It was showing
   on every Now page whether anything was hidden or not.
+- Nothing you can see: the README's test count said 473 when 795 run, the
+  tray's description predated its own new item, and the Now screenshot was
+  still showing 0.6.12.
 
 ### 0.8.21
 
