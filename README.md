@@ -353,7 +353,14 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.13
+### 0.8.14
+
+- **Loadout now reads like a character inventory screen.** Your last observed
+  equipment is arranged around a central character frame, so head, core, hands,
+  weapons, consumables and pack kit read as one outfit rather than a wall of
+  unrelated cards. Search still narrows the actual slots, and every card keeps
+  the time it was last seen. It remains explicit that this is log evidence, not
+  a live game inventory.
 
 - **A flight plan is now a run sheet.** Each stop can hold checkable manual
   load, unload, buy, sell, collect, refuel, repair or free-form instructions,
