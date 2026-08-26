@@ -426,6 +426,17 @@ body.overlay .feed .d { display: none; }
 
 .status { display: flex; align-items: center; gap: 13px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 
+/* Grouping bought room, but the status still collided with Settings around a
+   1280px window. Tighten the same strip before it overlaps; mobile layout is
+   deliberately not invented here. */
+@media (max-width: 1350px) {
+  .topbar { gap: 10px; padding-inline: 14px; }
+  .brand .by { display: none; }
+  .tabs { gap: 1px; }
+  .tabs button { padding-inline: 8px; font-size: 10.5px; letter-spacing: .11em; }
+  .status { gap: 7px; font-size: 9.5px; white-space: nowrap; }
+}
+
 .dot {
   width: 8px; height: 8px;
   background: var(--dim);
@@ -1809,6 +1820,14 @@ body.overlay .foot { display: none; }
   text-transform: uppercase;
   color: var(--text);
   flex: 1;
+}
+
+.link-button {
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 5px 10px;
+  color: var(--muted);
+  text-decoration: none;
 }
 .option-block p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.65; max-width: 72ch; }
 .option-block code { font-family: var(--mono); color: var(--muted); }

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Quantumwake.OrgServer\Quantumwake.OrgServer.csproj" />
+    <ProjectReference Include="..\..\src\Quantumwake.Server\Quantumwake.Server.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5640,7 +5640,13 @@ function orgActive(org) {
 
 function orgStatusLine(org) {
   if (!org.configured) return 'not set up';
-  if (!org.linked) return org.linking ? 'waiting for your approval in the browser' : 'not linked';
+  if (!org.linked) {
+    const base = org.linking ? 'waiting for your approval in the browser' : 'not linked';
+    if (!org.server) return base;
+    const providers = (org.server.providers || []).map((p) => p.name).join(', ');
+    return `${base} · verified server ${org.server.version} · org format ${org.server.formatVersion}` +
+      (providers ? ` · sign-in: ${providers}` : (org.server.lanMode ? ' · LAN mode' : ' · no sign-in configured'));
+  }
 
   const parts = [`linked as ${org.displayName || 'someone'}`];
   const active = orgActive(org);
@@ -5724,7 +5730,7 @@ function renderOrgMembers(members) {
   const table = el('table', 'plain');
   const head = el('tr');
   // "self-declared" is the honest label: nothing verifies a handle in 0.9.
-  for (const title of ['Handle (self-declared)', 'Signed in as', 'Role', 'Joined']) {
+  for (const title of ['Handle (self-declared)', 'Signed in as', 'App', 'Role', 'Joined']) {
     head.append(el('th', 'muted', title));
   }
   table.append(head);
@@ -5733,11 +5739,28 @@ function renderOrgMembers(members) {
     const row = el('tr');
     row.append(el('td', member.handle ? '' : 'muted', member.handle || 'no handle set'));
     row.append(el('td', '', member.displayName));
+    row.append(el('td', 'muted', member.appLinked ? 'linked' : 'not linked'));
     row.append(el('td', 'muted', member.role));
     row.append(el('td', 'muted', dateOf(member.joinedAt)));
     table.append(row);
   }
 
+  host.append(table);
+}
+
+function renderOrgBlueprints(rows, host) {
+  host.textContent = '';
+  const table = el('table', 'plain');
+  const head = el('tr');
+  for (const title of ['Blueprint', 'Held by', 'First observed']) head.append(el('th', 'muted', title));
+  table.append(head);
+  for (const row of rows) {
+    const tr = el('tr');
+    tr.append(el('td', '', row.name));
+    tr.append(el('td', '', row.handle || row.displayName || 'this install'));
+    tr.append(el('td', 'muted', dateOf(row.observedAt)));
+    table.append(tr);
+  }
   host.append(table);
 }
 
@@ -5751,8 +5774,10 @@ async function loadOrg() {
   $('#org-pending').hidden = true;
   $('#org-unreachable').hidden = true;
   $('#org-members-panel').hidden = true;
+  $('#org-blueprints-panel').hidden = true;
   $('#org-floor').hidden = true;
   $('#org-switch').hidden = true;
+  $('#org-manage').hidden = true;
 
   if (!ready) {
     $('#org-status-line').textContent = '';
@@ -5806,11 +5831,21 @@ async function loadOrg() {
     return;
   }
 
+  if (org.managementUrl) {
+    $('#org-manage').href = org.managementUrl;
+    $('#org-manage').hidden = false;
+  }
+
   try {
     const members = await getJson('/api/org/members');
     renderOrgMembers(members);
     $('#org-members-panel').hidden = false;
     $('#org-floor').hidden = false;
+    if ((active.modules || []).includes('blueprints')) {
+      $('#org-blueprints-panel').hidden = false;
+      const shared = await getJson('/api/org/blueprints');
+      renderOrgBlueprints(shared, $('#org-blueprints'));
+    }
   } catch (e) {
     $('#org-unreachable').hidden = false;
     $('#org-unreachable-copy').textContent = String(e.message || e);
@@ -5819,11 +5854,44 @@ async function loadOrg() {
 
 $('#org-server-save').addEventListener('click', async () => {
   try {
-    await postOrg('/api/org/configure', { serverAddress: $('#org-server').value });
+    await postOrg('/api/org/configure', {
+      serverAddress: $('#org-server').value,
+      allowInsecureHttp: $('#org-server-insecure').checked,
+    });
     await renderOrgSettings();
   } catch (e) {
     $('#org-settings-status').textContent = String(e.message || e);
   }
+});
+
+$('#org-blueprints-preview').addEventListener('click', async () => {
+  const status = $('#org-blueprints-status');
+  try {
+    const rows = await getJson('/api/org/blueprints/preview');
+    renderOrgBlueprints(rows, $('#org-blueprints-preview-list'));
+    $('#org-blueprints-preview-list').hidden = false;
+    $('#org-blueprints-share').hidden = false;
+    status.textContent = `${rows.length} local blueprint${rows.length === 1 ? '' : 's'}; nothing sent yet.`;
+  } catch (e) { status.textContent = String(e.message || e); }
+});
+
+$('#org-blueprints-share').addEventListener('click', async () => {
+  const status = $('#org-blueprints-status');
+  try {
+    const result = await postOrg('/api/org/blueprints/share');
+    status.textContent = `Shared ${result.rows} blueprint${result.rows === 1 ? '' : 's'}.`;
+    $('#org-blueprints-share').hidden = true;
+    await loadOrg();
+  } catch (e) { status.textContent = String(e.message || e); }
+});
+
+$('#org-blueprints-remove').addEventListener('click', async () => {
+  if (!confirm('Remove your blueprint snapshot from this org?')) return;
+  try {
+    await postOrg('/api/org/blueprints/remove');
+    $('#org-blueprints-status').textContent = 'Your blueprint share was removed.';
+    await loadOrg();
+  } catch (e) { $('#org-blueprints-status').textContent = String(e.message || e); }
 });
 
 $('#org-link-start').addEventListener('click', async () => {

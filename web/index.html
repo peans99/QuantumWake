@@ -1390,11 +1390,12 @@
       <h2>Organisation</h2>
       <span class="spacer"></span>
       <select id="org-switch" class="select" hidden></select>
+      <a id="org-manage" class="link-button" href="#" target="_blank" rel="noopener" hidden>Manage org</a>
       <button class="ghost" id="org-refresh" hidden>Refresh</button>
     </div>
     <p class="muted caption" id="org-floor" hidden>
-      Members shown are members who linked Quantum Wake &mdash; the org's real
-      roster is bigger. Everything here carries when it was observed.
+      This is the server membership list, not the org's RSI roster. The App
+      column says who currently has a linked Quantum Wake device.
     </p>
 
     <div class="option-block" id="org-offer" hidden>
@@ -1427,6 +1428,19 @@
         <h3>Members</h3>
       </div>
       <div id="org-members"></div>
+    </div>
+
+    <div class="option-block" id="org-blueprints-panel" hidden>
+      <div class="option-head">
+        <h3>Blueprints</h3>
+        <button class="ghost" id="org-blueprints-preview">Preview mine</button>
+        <button class="ghost" id="org-blueprints-remove">Remove my share</button>
+      </div>
+      <p class="muted">Nothing is sent by opening this page. Preview shows the exact local rows first; Share is a separate click that replaces only your snapshot.</p>
+      <div id="org-blueprints-preview-list" hidden></div>
+      <button class="ghost" id="org-blueprints-share" hidden>Share this snapshot</button>
+      <span class="muted" id="org-blueprints-status"></span>
+      <div id="org-blueprints"></div>
     </div>
 
     <span class="muted" id="org-status-line"></span>
@@ -1667,7 +1681,8 @@
         An optional server your org runs &mdash; or has run for it &mdash;
         where members pool what their installs know. Off until you link, and
         even then nothing leaves this machine without a click. Sign-in happens
-        in your browser, with Discord; this app only ever holds its own key.
+        in your browser using whichever providers that server offers; this app
+        only ever holds its own key.
       </p>
       <div class="export-row">
         <label class="muted" for="org-server">Server</label>
@@ -1675,6 +1690,10 @@
                placeholder="https://org.example &mdash; ask your org" autocomplete="off">
         <button class="ghost" id="org-server-save">Save</button>
       </div>
+      <label class="toggle">
+        <input type="checkbox" id="org-server-insecure">
+        <span>Allow unencrypted HTTP for a private LAN server</span>
+      </label>
       <div id="org-linking" hidden>
         <p>
           Approve this code in your browser:

@@ -79,7 +79,33 @@ public sealed record OrgMembershipRow(
 public sealed record OrgMeResponse(OrgAccount Account, IReadOnlyList<OrgMembershipRow> Orgs);
 
 public sealed record OrgMemberRow(
-    string? Handle, bool HandleVerified, string DisplayName, string Role, DateTimeOffset JoinedAt);
+    string Id, string? Handle, bool HandleVerified, string DisplayName, string Role,
+    DateTimeOffset JoinedAt, bool AppLinked);
+
+public sealed record OrgProviderInfo(string Key, string Name);
+
+public sealed record OrgServerMetadata(
+    string Version, int FormatVersion, bool LanMode,
+    IReadOnlyList<OrgProviderInfo> Providers, IReadOnlyList<string> Capabilities);
+
+/* ---------- blueprint sharing ---------- */
+
+public sealed record OrgBlueprintUploadRow(DateTimeOffset ObservedAt, string Name);
+
+public sealed record OrgBlueprintUpload(
+    int FormatVersion, IReadOnlyList<OrgBlueprintUploadRow> Blueprints);
+
+public sealed record OrgBlueprintRow(
+    string AccountId, string? Handle, bool HandleVerified, string DisplayName,
+    DateTimeOffset ObservedAt, string Name, DateTimeOffset SharedAt);
+
+public sealed record OrgBlueprintReceipt(int Rows, DateTimeOffset SharedAt);
+
+public sealed record OrgModuleRequest(bool Enabled);
+
+public sealed record OrgAuditRow(
+    long Id, string? OrgId, string? AccountId, string Action, string? Target, string? Detail,
+    DateTimeOffset At);
 
 /* ---------- orgs, invites, admin ---------- */
 

@@ -142,4 +142,36 @@ public class OrgTabTests
         Assert.Contains("POST /api/org/active", page.Fetched());
         Assert.Contains("org2", page.BodyOf("/api/org/active"));
     }
+
+    [Fact]
+    public void Blueprint_sharing_previews_exact_rows_before_the_separate_send_click()
+    {
+        var page = new Page();
+        var snapshot = """
+            {"configured":true,"serverAddress":"https://org.example","linked":true,
+             "displayName":"Nekron","handle":"nekron","linking":null,
+             "orgs":[{"id":"org1","name":"Night Freight","status":"active","role":"owner","modules":["blueprints"]}],
+             "activeOrgId":"org1","managementUrl":"https://org.example/org?id=org1",
+             "lastContactAt":"2026-08-25T14:00:00+00:00","lastError":null}
+            """;
+        page.Serve("/api/org", snapshot);
+        page.Serve("/api/org/remote", snapshot);
+        page.Serve("/api/org/members", "[]");
+        page.Serve("/api/org/blueprints", "[]");
+        page.Serve("/api/org/blueprints/preview", """
+            [{"name":"Atlas Powerplant Mk I","observedAt":"2026-08-24T20:00:00Z"},
+             {"name":"Mirage Shield Mk II","observedAt":"2026-08-24T20:05:00Z"}]
+            """);
+        page.Serve("/api/org/blueprints/share", "{\"rows\":2}");
+
+        page.Do("await loadOrg(); __dom.node('#org-blueprints-preview').fire('click');");
+
+        Assert.False(page.Truth("__dom.node('#org-blueprints-panel').hidden"));
+        Assert.False(page.Truth("__dom.node('#org-manage').hidden"));
+        Assert.Contains("Atlas Powerplant Mk I", page.NodeText("#org-blueprints-preview-list"));
+        Assert.DoesNotContain("POST /api/org/blueprints/share", page.Fetched());
+
+        page.Do("__dom.node('#org-blueprints-share').fire('click');");
+        Assert.Contains("POST /api/org/blueprints/share", page.Fetched());
+    }
 }

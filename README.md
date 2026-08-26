@@ -356,7 +356,34 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.5
+### 0.9.6
+
+The org network is now usable from end to end. Owners and managers have a
+proper management page for invites, roles, ownership transfer, removal and
+module switches; members can leave, owners can delete, server admins can see
+and restore suspended orgs, and the recent-change trail records approvals,
+invites, roles, device revocations and deletion actions.
+
+**Blueprint sharing is the first data module.** It starts off for every org,
+shows the exact local names and observation dates before sending anything,
+requires a separate Share click, replaces only that member's snapshot, and
+can be removed again at any time. Leaving or being removed deletes that
+member's shared rows. The member view now says exactly what it is: server
+membership rather than an RSI roster, with an App column showing who currently
+has a linked device.
+
+The server address is verified for a compatible org format before it is
+saved. Public servers require HTTPS; unencrypted private-LAN addresses need an
+explicit exception. Desktop keys use Windows DPAPI when the running identity
+supports it, server browser-cookie keys persist across container restarts,
+rate limits no longer use raw bearer strings, and forwarded headers are only
+accepted from configured proxy addresses. Operators also get consistent
+SQLite backup and checked restore commands, including a safety copy before a
+restore replaces an existing database.
+
+The visual three-client walkthrough now includes a matching org-server track,
+and an automated test drives three independent shipped desktop clients through
+join, share, cross-client read and removal against one real org server.
 
 The first piece of the org network: a separate, entirely optional server that
 an org can run - or have run for it - so members can pool what their own

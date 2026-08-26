@@ -8,7 +8,8 @@
 #     -e OrgServer__Admins=<discord-id> \
 #     quantumwake-orgserver
 # TLS terminates in front (a proxy, a tunnel, or App Service); set
-# OrgServer__BehindProxy=true there so redirects and cookies know.
+# Set OrgServer__BehindProxy=true and OrgServer__TrustedProxies to the proxy's
+# address there so redirects and cookies know without trusting arbitrary peers.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 # The props file carries the version; without it the image claims 1.0.0.

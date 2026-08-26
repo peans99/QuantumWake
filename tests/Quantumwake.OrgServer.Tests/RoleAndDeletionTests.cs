@@ -122,6 +122,25 @@ public class RoleAndDeletionTests(OrgServerUnderTest server) : IClassFixture<Org
     }
 
     [Fact]
+    public async Task Forget_me_deletes_an_org_the_account_owns_alone()
+    {
+        var (_, admin) = server.Person("admin");
+        var owner = server.Person("solo-owner");
+        var created = await server.Json(await server.Send(HttpMethod.Post, "/api/orgs", owner.Token,
+            new { name = "Solo Space" }));
+        var orgId = created.GetProperty("id").GetString()!;
+        await server.Send(HttpMethod.Post, $"/api/admin/orgs/{orgId}/activate", admin);
+
+        Assert.True((await server.Send(HttpMethod.Delete, "/api/me", owner.Token)).IsSuccessStatusCode);
+        Assert.Null(server.Orgs.Get(orgId));
+
+        var audit = await server.Json(await server.Send(HttpMethod.Get, "/api/admin/audit", admin));
+        Assert.Contains(audit.EnumerateArray(), row =>
+            row.TryGetProperty("orgId", out var auditOrg) && auditOrg.GetString() == orgId
+            && row.GetProperty("action").GetString() == "org.deleted.by_account");
+    }
+
+    [Fact]
     public async Task A_revoked_device_key_stops_working_immediately()
     {
         var person = server.Person("revoked");
@@ -131,5 +150,28 @@ public class RoleAndDeletionTests(OrgServerUnderTest server) : IClassFixture<Org
         Assert.True((await server.Send(HttpMethod.Delete, $"/api/me/tokens/{id}", person.Token)).IsSuccessStatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await server.Send(HttpMethod.Get, "/api/me", person.Token)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Reusing_an_invite_does_not_claim_the_member_joined_twice()
+    {
+        var (_, admin) = server.Person("admin");
+        var owner = server.Person("audit-owner");
+        var member = server.Person("audit-member");
+        var created = await server.Json(await server.Send(HttpMethod.Post, "/api/orgs", owner.Token,
+            new { name = "Exact Audit" }));
+        var orgId = created.GetProperty("id").GetString()!;
+        await server.Send(HttpMethod.Post, $"/api/admin/orgs/{orgId}/activate", admin);
+        var invite = await server.Json(await server.Send(HttpMethod.Post, $"/api/orgs/{orgId}/invites",
+            owner.Token, new { expiresInDays = 1, maxUses = 2 }));
+        var code = invite.GetProperty("code").GetString();
+
+        Assert.True((await server.Send(HttpMethod.Post, "/api/orgs/join", member.Token, new { code })).IsSuccessStatusCode);
+        Assert.True((await server.Send(HttpMethod.Post, "/api/orgs/join", member.Token, new { code })).IsSuccessStatusCode);
+
+        var audit = await server.Json(await server.Send(HttpMethod.Get, $"/api/orgs/{orgId}/audit", owner.Token));
+        Assert.Single(audit.EnumerateArray(), row =>
+            row.GetProperty("action").GetString() == "member.joined"
+            && row.GetProperty("target").GetString() == member.AccountId);
     }
 }

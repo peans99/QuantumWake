@@ -90,6 +90,7 @@ public static class AuthEndpoints
             {
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax,
+                Secure = context.Request.IsHttps,
                 MaxAge = TimeSpan.FromMinutes(10),
             });
 

@@ -1,4 +1,5 @@
 using Quantumwake.OrgServer.Auth;
+using System.Net;
 
 namespace Quantumwake.OrgServer;
 
@@ -53,6 +54,9 @@ public sealed class OrgServerOptions
 
     /// <summary>Honour X-Forwarded-* from a TLS-terminating front.</summary>
     public bool BehindProxy { get; init; }
+
+    /// <summary>Only these addresses may supply forwarded client/protocol headers.</summary>
+    public IReadOnlyList<IPAddress> TrustedProxies { get; init; } = [];
 
     /// <summary>
     /// How people sign in - every provider this deployment configured, in the
@@ -128,6 +132,9 @@ public sealed class OrgServerOptions
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             Journal = configuration["Journal"] ?? "wal",
             BehindProxy = configuration.GetValue<bool>("BehindProxy"),
+            TrustedProxies = (configuration["TrustedProxies"] ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(IPAddress.Parse).ToArray(),
             LanMode = configuration.GetValue<bool>("LanMode"),
             OAuth = providers,
         };

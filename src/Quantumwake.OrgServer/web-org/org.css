@@ -19,7 +19,7 @@ body {
   font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
 }
 
-main { max-width: 40rem; margin: 0 auto; }
+main { max-width: 64rem; margin: 0 auto; }
 
 h1 { font-size: 1.3rem; }
 h2 { font-size: 1.05rem; margin-top: 2rem; }
@@ -57,6 +57,17 @@ input {
   padding: 0.4rem 0.6rem;
   font: inherit;
 }
+
+select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+a { color: var(--accent); }
+.right { margin-left: auto; }
 
 table { width: 100%; border-collapse: collapse; }
 td, th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); }

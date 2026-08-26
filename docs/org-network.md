@@ -4,9 +4,10 @@ Pooling what members' own installs already know — who holds which blueprint,
 what a commodity really fetched at a named terminal, who needs what — across
 an org that chooses to run a small server.
 
-As of 0.9 the **spine is built and shipping**: the server exists, people sign
-in, orgs form and get approved, apps link, and the dashboard has an Org tab.
-The data classes arrive module by module on top of it. An earlier version of
+As of 0.9 the **spine and blueprint module are built**: the server exists,
+people sign in, orgs form and get approved, apps link, and each member can
+preview, publish, replace or remove their own blueprint snapshot. Other data
+classes arrive module by module. An earlier version of
 this document designed the network around Azure Functions, Cosmos DB and
 per-member keys; what was actually built supersedes all three, and this
 document describes the thing that exists plus the parts still to come.
@@ -87,7 +88,9 @@ both ends.
   code, the person approves it in a signed-in browser, and the app polls its
   way to a long-lived `qwo_` token, stored beside the UEX credentials. The
   code is visible in a URL; the token is only released to the holder of the
-  device secret, which never leaves the machine that asked. Tokens are
+  device secret, which never leaves the machine that asked. The desktop token
+  is protected with Windows DPAPI where available and otherwise kept in an
+  owner-readable local file. Tokens are
   SHA-256-hashed at rest, listed by device on the account page, revocable and
   each revocation immediate.
 - **A server admin is configuration.** `OrgServer__Admins` lists provider
@@ -119,7 +122,13 @@ An **Org** tab, always in the strip — a switch that vanishes reads as a
 feature that does not exist — rendering an offer when unconfigured, a
 waiting-room card while an org is pending, a named unreachable state with a
 time on it, and the member roster with its floor stated: handles are
-self-declared, and the list only shows members who linked the app.
+self-declared. The list is explicitly the server membership, not an RSI
+roster, and marks which accounts currently have at least one linked app.
+
+Owners and managers use the server's org page to create and revoke invites,
+change roles, transfer ownership, remove members, switch blueprint sharing,
+and inspect the change trail. Owners can delete the org; every member can
+leave, which removes that member's shared rows in the same transaction.
 
 A Settings block holds the doorway: server address (nothing is contacted
 until Link is pressed), the link-code flow, and the invite-code join. The
@@ -159,7 +168,9 @@ one that is not configured is refused rather than quietly served by a
 different one.
 
 The one thing self-hosting cannot solve is reachability: a server on a home
-network needs a forwarded port or a tunnel, and TLS in front. Said here
+network needs a forwarded port or a tunnel, and TLS in front. The desktop
+refuses public HTTP addresses; private-LAN HTTP needs an explicit warning
+checkbox. Said here
 rather than discovered after setting one up.
 
 ### LAN mode
@@ -203,7 +214,9 @@ which a real sign-in can still become the admin.
 The `Dockerfile` beside the project builds a chiseled image — no shell,
 non-root, one volume on `/data`, port 8080. Releases push it to
 `ghcr.io/peans99/quantumwake-orgserver`. TLS terminates in front; set
-`OrgServer__BehindProxy=true` there so redirects and cookies know.
+`OrgServer__BehindProxy=true` and list the proxy addresses in
+`OrgServer__TrustedProxies` so redirects and secure cookies know without
+trusting forged forwarded headers.
 
 ### Azure App Service
 
@@ -211,6 +224,7 @@ The GHCR image on a Linux plan. **B1 is the honest minimum** (~US$13/month):
 the free tier cold-starts and idles out, which breaks link-code polling and
 makes the org page feel dead. App settings: a provider's id and secret pair,
 `OrgServer__PublicBaseUrl`, `OrgServer__Admins`, `OrgServer__BehindProxy=true`,
+`OrgServer__TrustedProxies=<proxy-ip>`,
 `OrgServer__Data=/home/data` with `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`,
 and — **this one is load-bearing** — `OrgServer__Journal=delete`. App
 Service's `/home` is SMB-backed Azure Files, and SQLite's WAL mode depends on
@@ -222,7 +236,29 @@ At the scale this serves — orgs of tens to a few hundred, human-paced writes �
 one instance has an order of magnitude of headroom, and the day that stops
 being true is the day this grows a storage interface, not a second instance.
 
-## The data classes still to come
+### Backup and restore
+
+Run maintenance from the same server build:
+
+```
+Quantumwake.OrgServer.exe --Data C:\orgdata --Backup C:\backups\org-20260825.db
+```
+
+The destination must not already exist. SQLite's online backup API produces a
+consistent file even in WAL mode. Test a restore in a separate directory:
+
+```
+Quantumwake.OrgServer.exe --Data C:\restore-test --Restore C:\backups\org-20260825.db
+Quantumwake.OrgServer.exe --Data C:\restore-test --Port 8322
+```
+
+Restore runs SQLite `quick_check`, refuses a schema newer than the binary, and
+copies an existing database to `org.before-restore-*.db` first. Data-protection
+keys live under the same data directory, so back up the whole directory when
+browser sessions must survive a host move; a database-only backup preserves
+accounts and shares but browsers sign in again without those keys.
+
+## The remaining data classes
 
 Unchanged in intent from the original plan; each is a separate org-side
 module toggle, a separate client-side consent, and separately deletable — all
@@ -230,7 +266,7 @@ off by default. In build order:
 
 | Module | What is shared | The honesty rule it must keep |
 |---|---|---|
-| `blueprints` | Names and dates held | Name and date only — never a recipe |
+| `blueprints` (built) | Names and dates held | Name and date only — never a recipe |
 | `prices` | Own trades: commodity, terminal, price, time | Carries the export caveats: place inferred, requested not confirmed |
 | `requests` | "I need this", with org-set expiry | Claims are advisory — this coordinates people, it does not police them |
 | `commissionOrders` / `commissionServices` | Craft orders and offered services, for a fee | Two separate toggles; a noticeboard, never an escrow |

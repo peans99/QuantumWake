@@ -211,6 +211,18 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
         return found.Account;
     }
 
+    /// <summary>
+    /// Stable limiter identity without retaining the bearer value or stamping
+    /// last-used. Invalid tokens deliberately fall back to the caller IP.
+    /// </summary>
+    public string? RateLimitIdentity(string token)
+    {
+        using var connection = db.Open();
+        return One(connection, null,
+            "SELECT account_id, id FROM api_tokens WHERE token_hash=$hash AND revoked_at IS NULL",
+            [("$hash", Hash(token))], r => $"account:{r.GetString(0)}:token:{r.GetString(1)}");
+    }
+
     public IReadOnlyList<TokenRow> Tokens(string accountId)
     {
         using var connection = db.Open();
@@ -390,8 +402,13 @@ public sealed class AccountStore(OrgDb db, IReadOnlyList<string> configuredAdmin
 
     internal static IReadOnlyList<T> Many<T>(SqliteConnection connection,
         string sql, (string Name, object Value)[] parameters, Func<SqliteDataReader, T> read)
+        => Many(connection, null, sql, parameters, read);
+
+    internal static IReadOnlyList<T> Many<T>(SqliteConnection connection, SqliteTransaction? transaction,
+        string sql, (string Name, object Value)[] parameters, Func<SqliteDataReader, T> read)
     {
         using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = sql;
         foreach (var (name, value) in parameters)
             command.Parameters.AddWithValue(name, value);

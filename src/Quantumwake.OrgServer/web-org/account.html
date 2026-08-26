@@ -87,7 +87,12 @@
   }
   for (const org of me.data.orgs) {
     const tr = el('tr');
-    tr.appendChild(el('td', org.name));
+    const name = el('td');
+    const link = document.createElement('a');
+    link.href = '/org?id=' + encodeURIComponent(org.id);
+    link.textContent = org.name;
+    name.appendChild(link);
+    tr.appendChild(name);
     tr.appendChild(el('td', org.role));
     tr.appendChild(el('td', org.status === 'pending' ? 'waiting for approval' : org.status, 'muted'));
     orgs.appendChild(tr);

@@ -72,6 +72,7 @@ public sealed class OrgServerUnderTest : IAsyncLifetime
 
     public AccountStore Accounts => _app!.Services.GetRequiredService<AccountStore>();
     public OrgStore Orgs => _app!.Services.GetRequiredService<OrgStore>();
+    public OrgDb Db => _app!.Services.GetRequiredService<OrgDb>();
 
     /// <summary>A signed-up person with a device token, minted through the store.</summary>
     public (string AccountId, string Token) Person(string name, string? handle = null)

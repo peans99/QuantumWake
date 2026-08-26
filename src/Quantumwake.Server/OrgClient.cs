@@ -37,6 +37,7 @@ public sealed class OrgClient(IHttpClientFactory factory, OrgLink link, ILogger<
     private OrgLinkStartResponse? _pending;
 
     private IReadOnlyList<OrgMembershipRow> _orgs = [];
+    private OrgServerMetadata? _metadata;
     private DateTimeOffset? _lastContactAt;
     private string? _lastError;
 
@@ -50,6 +51,7 @@ public sealed class OrgClient(IHttpClientFactory factory, OrgLink link, ILogger<
             {
                 configured = link.Configured,
                 serverAddress = state.ServerAddress,
+                server = _metadata,
                 linked = link.Linked,
                 displayName = state.DisplayName,
                 handle = state.Handle,
@@ -64,9 +66,49 @@ public sealed class OrgClient(IHttpClientFactory factory, OrgLink link, ILogger<
                     },
                 orgs = _orgs,
                 activeOrgId = state.ActiveOrgId,
+                managementUrl = state.ServerAddress is { Length: > 0 } server
+                    && state.ActiveOrgId is { Length: > 0 } orgId
+                    ? $"{server}/org?id={Uri.EscapeDataString(orgId)}" : null,
                 lastContactAt = _lastContactAt,
                 lastError = _lastError,
             };
+        }
+    }
+
+    /// <summary>Proves the address is a compatible org server before saving it.</summary>
+    public async Task<string?> ConfigureAsync(string? address, bool allowInsecureHttp,
+        CancellationToken token = default)
+    {
+        var validation = OrgLink.ValidateAddress(address, allowInsecureHttp);
+        if (validation is not null)
+            return validation;
+
+        address = address!.Trim().TrimEnd('/');
+        try
+        {
+            using var client = Client();
+            var metadata = await client.GetFromJsonAsync<OrgServerMetadata>(
+                $"{address}/api/meta", OrgWire.Json, token);
+            if (metadata is null)
+                return "That address did not return org-server metadata.";
+            if (metadata.FormatVersion > OrgWire.FormatVersion)
+                return $"That server uses org format {metadata.FormatVersion}; this app reads {OrgWire.FormatVersion}. Update Quantum Wake first.";
+
+            var problem = link.Configure(address, allowInsecureHttp);
+            if (problem is not null)
+                return problem;
+            lock (_gate)
+            {
+                _metadata = metadata;
+                _orgs = [];
+                Reached();
+            }
+            return null;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogDebug(e, "Org server verification failed.");
+            return $"Could not verify an org server at {address}. Nothing was saved.";
         }
     }
 
@@ -250,6 +292,82 @@ public sealed class OrgClient(IHttpClientFactory factory, OrgLink link, ILogger<
         }
     }
 
+    public async Task<(IReadOnlyList<OrgBlueprintRow>? Rows, string? Problem)> BlueprintsAsync(
+        CancellationToken token = default)
+    {
+        var state = link.Current;
+        if (state.ServerAddress is not { Length: > 0 } address || state.Token is not { Length: > 0 })
+            return (null, "Not linked.");
+        if (state.ActiveOrgId is not { Length: > 0 } org)
+            return (null, "No org chosen.");
+        try
+        {
+            using var client = Client(state.Token);
+            using var response = await client.GetAsync(
+                $"{address}/api/orgs/{Uri.EscapeDataString(org)}/blueprints", token);
+            if (!response.IsSuccessStatusCode)
+                return (null, await Problem(response, "The blueprint module is not available.", token));
+            var rows = await response.Content.ReadFromJsonAsync<IReadOnlyList<OrgBlueprintRow>>(OrgWire.Json, token);
+            lock (_gate) Reached();
+            return (rows ?? [], null);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogDebug(e, "Org blueprints fetch failed.");
+            return (null, Trouble(address, "showing no shared blueprints"));
+        }
+    }
+
+    public async Task<string?> ShareBlueprintsAsync(IReadOnlyList<OrgBlueprintUploadRow> rows,
+        CancellationToken token = default)
+    {
+        var state = link.Current;
+        if (state.ServerAddress is not { Length: > 0 } address || state.Token is not { Length: > 0 })
+            return "Not linked.";
+        if (state.ActiveOrgId is not { Length: > 0 } org)
+            return "No org chosen.";
+        try
+        {
+            using var client = Client(state.Token);
+            using var response = await client.PutAsJsonAsync(
+                $"{address}/api/orgs/{Uri.EscapeDataString(org)}/blueprints",
+                new OrgBlueprintUpload(OrgWire.FormatVersion, rows), OrgWire.Json, token);
+            if (!response.IsSuccessStatusCode)
+                return await Problem(response, "The server refused the blueprint share.", token);
+            lock (_gate) Reached();
+            return null;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogDebug(e, "Org blueprint share failed.");
+            return Trouble(address, "nothing was shared");
+        }
+    }
+
+    public async Task<string?> RemoveBlueprintsAsync(CancellationToken token = default)
+    {
+        var state = link.Current;
+        if (state.ServerAddress is not { Length: > 0 } address || state.Token is not { Length: > 0 })
+            return "Not linked.";
+        if (state.ActiveOrgId is not { Length: > 0 } org)
+            return "No org chosen.";
+        try
+        {
+            using var client = Client(state.Token);
+            using var response = await client.DeleteAsync(
+                $"{address}/api/orgs/{Uri.EscapeDataString(org)}/blueprints", token);
+            if (!response.IsSuccessStatusCode)
+                return await Problem(response, "The server refused to remove the share.", token);
+            lock (_gate) Reached();
+            return null;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogDebug(e, "Org blueprint removal failed.");
+            return Trouble(address, "the previous share may still be present");
+        }
+    }
+
     public void Unlink()
     {
         link.Unlink();
@@ -269,6 +387,17 @@ public sealed class OrgClient(IHttpClientFactory factory, OrgLink link, ILogger<
         if (bearer is not null)
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
         return client;
+    }
+
+    private static async Task<string> Problem(HttpResponseMessage response, string fallback,
+        CancellationToken token)
+    {
+        try
+        {
+            return (await response.Content.ReadFromJsonAsync<OrgProblem>(OrgWire.Json, token))?.Message
+                ?? fallback;
+        }
+        catch (JsonException) { return fallback; }
     }
 
     private void Reached()

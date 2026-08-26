@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.DataProtection;
 using Quantumwake.OrgServer.Auth;
 using Quantumwake.OrgServer.Endpoints;
 using Quantumwake.OrgServer.Store;
@@ -29,7 +30,12 @@ public static class OrgServerHost
 {
     public static WebApplication Build(OrgServerOptions options)
     {
+        Validate(options);
         var builder = WebApplication.CreateBuilder();
+        // WebApplication's Windows defaults include Event Log, which can turn
+        // a warning into a startup failure for an unprivileged service account.
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole();
         builder.WebHost.UseUrls($"http://{options.Bind}:{options.Port}");
 
         // The global cap; the share endpoints of later slices stay under it
@@ -43,7 +49,11 @@ public static class OrgServerHost
             provider.GetRequiredService<OrgDb>(), options.Admins,
             provider.GetRequiredService<ILogger<AccountStore>>()));
         builder.Services.AddSingleton<OrgStore>();
+        builder.Services.AddSingleton<AuditStore>();
         builder.Services.AddSingleton<OrgActors>();
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(options.DataDirectory, "keys")))
+            .SetApplicationName("Quantumwake.OrgServer");
 
         builder.Services.ConfigureHttpJsonOptions(json =>
         {
@@ -60,7 +70,9 @@ public static class OrgServerHost
             cookie.Cookie.Name = "qw-org-session";
             cookie.Cookie.HttpOnly = true;
             cookie.Cookie.SameSite = SameSiteMode.Strict;
-            cookie.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            cookie.Cookie.SecurePolicy = options.BehindProxy
+                && options.PublicBaseUrl?.StartsWith("https://", StringComparison.OrdinalIgnoreCase) == true
+                ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
             cookie.ExpireTimeSpan = TimeSpan.FromDays(30);
             cookie.SlidingExpiration = true;
 
@@ -95,8 +107,7 @@ public static class OrgServerHost
                 }));
 
             limiter.AddPolicy("api", context => RateLimitPartition.GetFixedWindowLimiter(
-                context.Request.Headers.Authorization.ToString() is { Length: > 0 } bearer
-                    ? bearer : ClientIp(context),
+                ApiPartition(context),
                 _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 240,
@@ -108,10 +119,13 @@ public static class OrgServerHost
 
         if (options.BehindProxy)
         {
-            app.UseForwardedHeaders(new ForwardedHeadersOptions
+            var forwarded = new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-            });
+            };
+            foreach (var proxy in options.TrustedProxies)
+                forwarded.KnownProxies.Add(proxy);
+            app.UseForwardedHeaders(forwarded);
         }
 
         app.UseAuthentication();
@@ -141,6 +155,12 @@ public static class OrgServerHost
             return Results.Ok(new { status = "ok", version = ServerVersion() });
         });
 
+        app.MapGet("/api/meta", () => Results.Ok(new OrgServerMetadata(
+            ServerVersion(), OrgWire.FormatVersion, options.LanMode,
+            (options.LanMode ? [] : options.OAuth.Select(p => new OrgProviderInfo(p.Key, p.Name)).ToArray()),
+            ["org-management", "blueprints", "audit"])))
+            .RequireRateLimiting("link-start");
+
         OrgWeb.Map(app);
         AuthEndpoints.Map(app);
         AccountEndpoints.Map(app);
@@ -154,4 +174,35 @@ public static class OrgServerHost
 
     private static string ClientIp(HttpContext context) =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    private static string ApiPartition(HttpContext context)
+    {
+        var header = context.Request.Headers.Authorization.ToString();
+        if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = header[7..].Trim();
+            var identity = context.RequestServices.GetRequiredService<AccountStore>()
+                .RateLimitIdentity(token);
+            if (identity is not null)
+                return identity;
+        }
+        return "ip:" + ClientIp(context);
+    }
+
+    private static void Validate(OrgServerOptions options)
+    {
+        if (options.BehindProxy && options.TrustedProxies.Count == 0)
+            throw new InvalidOperationException(
+                "--BehindProxy requires --TrustedProxies so forwarded headers cannot be forged.");
+
+        if (options.PublicBaseUrl is { Length: > 0 } text
+            && (!Uri.TryCreate(text, UriKind.Absolute, out var uri)
+                || uri.Scheme is not ("http" or "https")))
+            throw new InvalidOperationException("--PublicBaseUrl must be an absolute http(s) address.");
+
+        if (options.PublicBaseUrl is { Length: > 0 } publicText
+            && Uri.TryCreate(publicText, UriKind.Absolute, out var publicUri)
+            && publicUri.Scheme == "http" && !publicUri.IsLoopback && !options.LanMode)
+            throw new InvalidOperationException("A public --PublicBaseUrl must use HTTPS.");
+    }
 }

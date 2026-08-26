@@ -29,4 +29,10 @@ public static class OrgLimits
 
     /// <summary>A Star Citizen handle; RSI itself stops well short of this.</summary>
     public const int Handle = 60;
+
+    /// <summary>A member's complete blueprint snapshot.</summary>
+    public const int MaxBlueprints = 5000;
+
+    /// <summary>A blueprint name after trimming control characters.</summary>
+    public const int BlueprintName = 240;
 }

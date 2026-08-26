@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
+using Quantumwake.OrgShared;
 
 namespace Quantumwake.Server;
 
@@ -541,9 +542,9 @@ public static class ServerHost
             return Results.Ok(org.Snapshot());
         });
 
-        app.MapPost("/api/org/configure", (OrgLink orgLink, OrgClient org, OrgConfigureRequest request) =>
+        app.MapPost("/api/org/configure", async (OrgClient org, OrgConfigureRequest request) =>
         {
-            var problem = orgLink.Configure(request.ServerAddress);
+            var problem = await org.ConfigureAsync(request.ServerAddress, request.AllowInsecureHttp);
             return problem is null
                 ? Results.Ok(org.Snapshot())
                 : Results.BadRequest(new { message = problem });
@@ -590,6 +591,37 @@ public static class ServerHost
             return members is null
                 ? Results.Json(new { message = problem }, statusCode: 502)
                 : Results.Ok(members);
+        });
+
+        // Preview is local-only data. The following POST is the consent: the
+        // same rows are rebuilt from the library so a browser cannot smuggle
+        // arbitrary names into somebody else's org identity.
+        app.MapGet("/api/org/blueprints/preview", (LogLibrary lib) =>
+            Results.Ok(lib.Blueprints().Take(OrgLimits.MaxBlueprints)
+                .Select(b => new OrgBlueprintUploadRow(b.At, b.Name))));
+
+        app.MapGet("/api/org/blueprints", async (OrgClient org) =>
+        {
+            var (rows, problem) = await org.BlueprintsAsync();
+            return rows is null
+                ? Results.Json(new { message = problem }, statusCode: 502)
+                : Results.Ok(rows);
+        });
+
+        app.MapPost("/api/org/blueprints/share", async (OrgClient org, LogLibrary lib) =>
+        {
+            var rows = lib.Blueprints().Take(OrgLimits.MaxBlueprints)
+                .Select(b => new OrgBlueprintUploadRow(b.At, b.Name)).ToArray();
+            var problem = await org.ShareBlueprintsAsync(rows);
+            return problem is null ? Results.Ok(new { rows = rows.Length })
+                : Results.BadRequest(new { message = problem });
+        });
+
+        app.MapPost("/api/org/blueprints/remove", async (OrgClient org) =>
+        {
+            var problem = await org.RemoveBlueprintsAsync();
+            return problem is null ? Results.Ok()
+                : Results.BadRequest(new { message = problem });
         });
 
         app.MapGet("/api/scan/status", (ScanStatus status) => status.Snapshot());
@@ -2682,7 +2714,7 @@ public sealed record ExportRequest(
 /// </remarks>
 public sealed record ImportRequest(string? Document, string? SourceName = null);
 
-public sealed record OrgConfigureRequest(string? ServerAddress);
+public sealed record OrgConfigureRequest(string? ServerAddress, bool AllowInsecureHttp = false);
 
 public sealed record OrgJoinCodeRequest(string? Code);
 

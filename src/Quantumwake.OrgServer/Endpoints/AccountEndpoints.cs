@@ -21,7 +21,7 @@ public static class AccountEndpoints
                 Account(actor, actors), orgs.MyOrgs(actor.Account.Id)));
         });
 
-        api.MapPost("/handle", (HttpContext context, OrgActors actors, AccountStore accounts,
+        api.MapPost("/handle", (HttpContext context, OrgActors actors, AccountStore accounts, AuditStore audit,
             HandleRequest request) =>
         {
             var (actor, refusal) = actors.Resolve(context);
@@ -29,6 +29,7 @@ public static class AccountEndpoints
                 return refusal!;
 
             accounts.SetHandle(actor.Account.Id, request.Handle);
+            audit.Write(actor.Account.Id, null, "account.handle");
             return Results.Ok();
         });
 
@@ -49,21 +50,22 @@ public static class AccountEndpoints
             }));
         });
 
-        api.MapDelete("/tokens/{id}", (HttpContext context, OrgActors actors, AccountStore accounts, string id) =>
+        api.MapDelete("/tokens/{id}", (HttpContext context, OrgActors actors, AccountStore accounts, AuditStore audit, string id) =>
         {
             var (actor, refusal) = actors.Resolve(context);
             if (actor is null)
                 return refusal!;
 
-            return accounts.RevokeToken(actor.Account.Id, id)
-                ? Results.Ok()
-                : Results.NotFound(new OrgProblem("No such token."));
+            if (!accounts.RevokeToken(actor.Account.Id, id))
+                return Results.NotFound(new OrgProblem("No such token."));
+            audit.Write(actor.Account.Id, null, "token.revoked", id);
+            return Results.Ok();
         });
 
         // Forget me. Refused while orgs would be left ownerless - the sentence
         // says exactly what to do about it, because a refusal without a way
         // forward is a support request.
-        api.MapDelete("", (HttpContext context, OrgActors actors, AccountStore accounts, OrgStore orgs) =>
+        api.MapDelete("", (HttpContext context, OrgActors actors, AccountStore accounts, OrgStore orgs, AuditStore audit) =>
         {
             var (actor, refusal) = actors.Resolve(context);
             if (actor is null)
@@ -78,6 +80,9 @@ public static class AccountEndpoints
                     OrgWire.Json, statusCode: 409);
             }
 
+            foreach (var org in orgs.DeleteSoleOwned(actor.Account.Id))
+                audit.Write(actor.Account.Id, org.Id, "org.deleted.by_account", org.Name);
+            audit.Write(actor.Account.Id, null, "account.deleted", actor.Account.Id);
             accounts.Forget(actor.Account.Id);
             return Results.Ok();
         });

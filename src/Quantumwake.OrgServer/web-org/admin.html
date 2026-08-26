@@ -27,6 +27,10 @@
     <div class="panel"><table id="pending"></table></div>
     <h2>Active orgs</h2>
     <div class="panel"><table id="active"></table></div>
+    <h2>Suspended orgs</h2>
+    <div class="panel"><table id="suspended"></table></div>
+    <h2>Recent changes</h2>
+    <div class="panel"><table id="audit"></table></div>
   </div>
 </main>
 <script src="/org.js"></script>
@@ -84,6 +88,19 @@
       { label: 'Suspend', className: 'warn', path: '/suspend', method: 'POST',
         confirm: 'Suspend this org? Members keep their data but the space goes quiet.' },
     ]);
+    await drawStatus('suspended', 'suspended', [
+      { label: 'Restore', className: 'primary', path: '/activate', method: 'POST' },
+      { label: 'Delete', className: 'warn', path: '', method: 'DELETE',
+        confirm: 'Permanently delete this suspended org and everything in it?' },
+    ]);
+    const events = await api('/api/admin/audit');
+    const audit = document.getElementById('audit'); clear(audit);
+    for (const event of (events.data || [])) {
+      const tr = el('tr'); tr.appendChild(el('td', ago(event.at), 'muted'));
+      tr.appendChild(el('td', event.orgId || 'account', 'muted'));
+      tr.appendChild(el('td', event.action)); tr.appendChild(el('td', event.target || '', 'muted'));
+      tr.appendChild(el('td', event.detail || '', 'muted')); audit.appendChild(tr);
+    }
   }
 
   // Wired once, outside draw(): draw() runs again after every action, and a

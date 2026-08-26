@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage org</title>
+  <link rel="stylesheet" href="/org.css">
+</head>
+<body>
+<main>
+  <p><a href="/account">&larr; Your account</a></p>
+  <h1 id="title">Org</h1>
+  <div class="panel" id="card"><p class="muted">One moment&hellip;</p></div>
+
+  <div id="space" hidden>
+    <h2>Members</h2>
+    <div class="panel"><table id="members"></table></div>
+
+    <div id="manage" hidden>
+      <h2>Modules</h2>
+      <div class="panel">
+        <label class="row"><input type="checkbox" id="module-blueprints">
+          Blueprint sharing &mdash; members still choose when to send their own snapshot
+        </label>
+        <span class="muted" id="module-status"></span>
+      </div>
+
+      <h2>Invites</h2>
+      <div class="panel">
+        <div class="row">
+          <label>Expires <input id="invite-days" type="number" min="1" max="90" value="14"></label>
+          <label>Uses <input id="invite-uses" type="number" min="0" value="1"></label>
+          <button id="invite-create" class="primary">Create invite</button>
+          <span class="muted" id="invite-status"></span>
+        </div>
+        <table id="invites"></table>
+      </div>
+
+      <h2>Recent changes</h2>
+      <div class="panel"><table id="audit"></table></div>
+    </div>
+
+    <h2>Leave or delete</h2>
+    <div class="panel row">
+      <button id="leave" class="warn">Leave this org</button>
+      <button id="delete" class="warn" hidden>Delete this org and all shared data</button>
+      <span id="danger-status" class="muted"></span>
+    </div>
+  </div>
+</main>
+<script src="/org.js"></script>
+<script>
+(async () => {
+  const id = new URLSearchParams(location.search).get('id');
+  const card = document.getElementById('card');
+  if (!id) { card.textContent = 'No org was chosen.'; return; }
+
+  let me, detail;
+  async function load() {
+    [me, detail] = await Promise.all([api('/api/me'), api('/api/orgs/' + encodeURIComponent(id))]);
+    clear(card);
+    if (!me.ok || !detail.ok) {
+      card.appendChild(el('p', 'There is nothing here, or you need to sign in.'));
+      await signInChoices(card, '/org?id=' + encodeURIComponent(id));
+      return;
+    }
+    document.getElementById('title').textContent = detail.data.name;
+    card.appendChild(el('p', (detail.data.note ? detail.data.note + ' · ' : '') +
+      detail.data.status + ' · ' + detail.data.members + ' member' +
+      (detail.data.members === 1 ? '' : 's'), 'muted'));
+    document.getElementById('space').hidden = false;
+    const manages = detail.data.role === 'owner' || detail.data.role === 'manager';
+    document.getElementById('manage').hidden = !manages;
+    document.getElementById('delete').hidden = detail.data.role !== 'owner';
+    document.getElementById('leave').hidden = detail.data.role === 'owner';
+    document.getElementById('module-blueprints').checked = detail.data.modules.includes('blueprints');
+    await drawMembers();
+    if (manages) await Promise.all([drawInvites(), drawAudit()]);
+  }
+
+  async function drawMembers() {
+    const result = await api('/api/orgs/' + encodeURIComponent(id) + '/members');
+    const table = document.getElementById('members'); clear(table);
+    const head = el('tr');
+    for (const h of ['Handle (self-declared)', 'Signed in as', 'App', 'Role', 'Joined', '']) head.appendChild(el('th', h));
+    table.appendChild(head);
+    for (const member of (result.data || [])) {
+      const tr = el('tr');
+      tr.appendChild(el('td', member.handle || 'not set', member.handle ? '' : 'muted'));
+      tr.appendChild(el('td', member.displayName));
+      tr.appendChild(el('td', member.appLinked ? 'linked' : 'not linked', 'muted'));
+      const roleCell = el('td');
+      if (detail.data.role === 'owner' && member.id !== me.data.account.id && member.role !== 'owner') {
+        const select = document.createElement('select');
+        for (const role of ['member', 'manager', 'owner']) {
+          const option = el('option', role); option.value = role; option.selected = member.role === role; select.appendChild(option);
+        }
+        select.addEventListener('change', async () => {
+          if (select.value === 'owner' && !confirm('Transfer ownership? You will become a manager.')) { drawMembers(); return; }
+          await api('/api/orgs/' + id + '/members/' + member.id + '/role', { method: 'POST', body: { role: select.value } });
+          await load();
+        });
+        roleCell.appendChild(select);
+      } else roleCell.textContent = member.role;
+      tr.appendChild(roleCell);
+      tr.appendChild(el('td', ago(member.joinedAt), 'muted'));
+      const actions = el('td');
+      const canRemove = member.id !== me.data.account.id && member.role !== 'owner' &&
+        (detail.data.role === 'owner' || (detail.data.role === 'manager' && member.role === 'member'));
+      if (canRemove) {
+        const remove = el('button', 'Remove', 'warn');
+        remove.addEventListener('click', async () => {
+          if (!confirm('Remove ' + member.displayName + ' and their shared data?')) return;
+          await api('/api/orgs/' + id + '/members/' + member.id, { method: 'DELETE' }); await load();
+        });
+        actions.appendChild(remove);
+      }
+      tr.appendChild(actions); table.appendChild(tr);
+    }
+  }
+
+  async function drawInvites() {
+    const result = await api('/api/orgs/' + id + '/invites');
+    const table = document.getElementById('invites'); clear(table);
+    for (const invite of (result.data || [])) {
+      const tr = el('tr'); tr.appendChild(el('td', invite.code));
+      tr.appendChild(el('td', invite.uses + (invite.maxUses ? '/' + invite.maxUses : '') + ' uses', 'muted'));
+      tr.appendChild(el('td', invite.revoked ? 'revoked' : 'expires ' + ago(invite.expiresAt), 'muted'));
+      const cell = el('td');
+      if (!invite.revoked) { const b = el('button', 'Revoke', 'warn'); b.addEventListener('click', async () => {
+        await api('/api/orgs/' + id + '/invites/' + invite.code, { method: 'DELETE' }); drawInvites(); drawAudit();
+      }); cell.appendChild(b); }
+      tr.appendChild(cell); table.appendChild(tr);
+    }
+  }
+
+  async function drawAudit() {
+    const result = await api('/api/orgs/' + id + '/audit');
+    const table = document.getElementById('audit'); clear(table);
+    for (const event of (result.data || [])) {
+      const tr = el('tr'); tr.appendChild(el('td', ago(event.at), 'muted'));
+      tr.appendChild(el('td', event.action)); tr.appendChild(el('td', event.target || '', 'muted'));
+      tr.appendChild(el('td', event.detail || '', 'muted')); table.appendChild(tr);
+    }
+  }
+
+  document.getElementById('module-blueprints').addEventListener('change', async (e) => {
+    const result = await api('/api/orgs/' + id + '/modules/blueprints', { method: 'POST', body: { enabled: e.target.checked } });
+    document.getElementById('module-status').textContent = result.ok ? 'saved' : 'failed'; await load();
+  });
+  document.getElementById('invite-create').addEventListener('click', async () => {
+    const result = await api('/api/orgs/' + id + '/invites', { method: 'POST', body: {
+      expiresInDays: Number(document.getElementById('invite-days').value), maxUses: Number(document.getElementById('invite-uses').value) } });
+    document.getElementById('invite-status').textContent = result.ok ? 'created ' + result.data.code : ((result.data && result.data.message) || 'failed');
+    await drawInvites(); await drawAudit();
+  });
+  document.getElementById('leave').addEventListener('click', async () => {
+    if (!confirm('Leave this org? Your shared data in it is removed too.')) return;
+    const result = await api('/api/orgs/' + id + '/leave', { method: 'POST' });
+    if (result.ok) location.href = '/account'; else document.getElementById('danger-status').textContent = (result.data && result.data.message) || 'failed';
+  });
+  document.getElementById('delete').addEventListener('click', async () => {
+    if (!confirm('Permanently delete this org, its invites, and every member share? There is no undo.')) return;
+    const result = await api('/api/orgs/' + id, { method: 'DELETE' });
+    if (result.ok) location.href = '/account'; else document.getElementById('danger-status').textContent = 'failed';
+  });
+  await load();
+})();
+</script>
+</body>
+</html>

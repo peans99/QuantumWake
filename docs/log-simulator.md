@@ -133,6 +133,39 @@ every write it prints the exact facts to inspect before moving on:
 7. the contract completes and awards a blueprint;
 8. the party stands down and the sessions close.
 
+To exercise the org server rather than only compare three local dashboards,
+use a server configured with a real sign-in provider (the production binary
+has no test-auth switch), then walk this second track alongside the stages:
+
+1. In each client's Settings, enter the same org-server HTTPS address. Saving
+   verifies `/api/meta` and shows the server version, wire version and offered
+   sign-in doors before it stores the address.
+2. Link each app and approve each code while signed in as a different test
+   account. On an empty server with no configured admin, the first account is
+   the bootstrap admin; on a shared server, use its configured admin.
+3. From the first account page, register **Org Activity Exercise**. Approve it
+   from `/admin` if it is pending, open its management page, create a two-use
+   invite, and enable **Blueprint sharing**.
+4. Join the other two clients with that code. The Org page should show three
+   server memberships and mark all three App rows **linked**. This is not
+   presented as an RSI roster.
+5. Advance the log scenario through stage 6. Each client's **Preview mine**
+   shows exactly what its own log has produced, and no network share happens.
+6. At stage 7 the captain preview contains the awarded blueprint. Click
+   **Share this snapshot** on each client; all three then read the combined
+   server view, while only the captain contributes that awarded row.
+7. Click **Remove my share** on one client and verify its rows disappear for
+   all three. Re-share, transfer that member to manager, revoke an unused
+   invite, and inspect the management page's change trail.
+8. Suspend the org from `/admin`: it remains visible under **Suspended orgs**
+   and clients explain why sharing is unavailable. Restore it and verify the
+   same data returns.
+
+The automated counterpart uses three separate `OrgLink` stores and three
+shipped `OrgClient` instances against one real in-process org server. It joins
+all three accounts, shares distinct snapshots, reads the three-account result,
+removes one snapshot, and proves only that account's rows disappear.
+
 For a complete fixture without pauses, omit `--step`. This is the form used by
 the automated round-trip test: each file takes its own production parser and
 session-builder path, then the aggregate assertions prove 3 jumps, 12 party

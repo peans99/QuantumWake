@@ -27,8 +27,9 @@ public sealed class OrgDb
     /// <summary>
     /// 1: 0.9.0 - accounts, identities, api_tokens, link_codes, orgs,
     ///    memberships, invites, org_modules.
+    /// 2: 0.9.6 - shared blueprints and durable audit events.
     /// </summary>
-    private const int SchemaVersion = 1;
+    internal const int SchemaVersion = 2;
 
     private readonly string _connectionString;
     private readonly string _journal;
@@ -91,6 +92,60 @@ public sealed class OrgDb
         pragmas.ExecuteNonQuery();
 
         return connection;
+    }
+
+    public void Backup(string destination)
+    {
+        var full = Path.GetFullPath(destination);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        if (File.Exists(full))
+            throw new IOException($"Backup destination already exists: {full}");
+        using var source = Open();
+        using var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = full }.ToString());
+        target.Open();
+        source.BackupDatabase(target);
+    }
+
+    public static void Restore(string directory, string source)
+    {
+        source = Path.GetFullPath(source);
+        if (!File.Exists(source))
+            throw new FileNotFoundException("The backup file does not exist.", source);
+
+        using (var check = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = source,
+            Mode = SqliteOpenMode.ReadOnly,
+        }.ToString()))
+        {
+            check.Open();
+            using var command = check.CreateCommand();
+            command.CommandText = "PRAGMA user_version";
+            var version = Convert.ToInt32(command.ExecuteScalar());
+            command.CommandText = "PRAGMA quick_check";
+            if (!string.Equals(Convert.ToString(command.ExecuteScalar()), "ok", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The backup did not pass SQLite quick_check.");
+            if (version > SchemaVersion)
+                throw new InvalidDataException(
+                    $"The backup uses schema {version}; this build only reads {SchemaVersion}.");
+        }
+
+        EnsureWritable(directory);
+        var destination = Path.Combine(directory, "org.db");
+        if (string.Equals(source, Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
+            throw new IOException("Restore source and destination are the same file.");
+        if (File.Exists(destination))
+        {
+            var safety = Path.Combine(directory,
+                $"org.before-restore-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.db");
+            new OrgDb(directory).Backup(safety);
+        }
+        File.Copy(source, destination, overwrite: true);
+        foreach (var suffix in new[] { "-wal", "-shm" })
+        {
+            var sidecar = destination + suffix;
+            if (File.Exists(sidecar)) File.Delete(sidecar);
+        }
     }
 
     private void Initialise()
@@ -215,5 +270,26 @@ public sealed class OrgDb
             updated_by TEXT NOT NULL,
             PRIMARY KEY (org_id, module)
         );
+
+        CREATE TABLE IF NOT EXISTS shared_blueprints (
+            org_id      TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+            account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+            name        TEXT NOT NULL,
+            observed_at TEXT NOT NULL,
+            shared_at   TEXT NOT NULL,
+            PRIMARY KEY (org_id, account_id, name)
+        );
+        CREATE INDEX IF NOT EXISTS ix_blueprints_org ON shared_blueprints(org_id, name);
+
+        CREATE TABLE IF NOT EXISTS audit_events (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id     TEXT,
+            account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+            action     TEXT NOT NULL,
+            target     TEXT,
+            detail     TEXT,
+            at         TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_audit_org ON audit_events(org_id, id DESC);
         """;
 }

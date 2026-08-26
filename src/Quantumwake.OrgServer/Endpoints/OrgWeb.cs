@@ -34,6 +34,7 @@ public static class OrgWeb
         MapPage(app, "/", "index.html");
         MapPage(app, "/link", "link.html");
         MapPage(app, "/account", "account.html");
+        MapPage(app, "/org", "org.html");
         MapPage(app, "/admin", "admin.html");
         MapAsset(app, "/org.css", "org.css", "text/css");
         MapAsset(app, "/org.js", "org.js", "text/javascript");

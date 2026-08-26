@@ -112,13 +112,15 @@ public sealed class OrgStore(OrgDb db)
     {
         using var connection = db.Open();
         return AccountStore.Many(connection,
-            "SELECT a.sc_handle, a.handle_verified, a.display_name, m.role, m.joined_at "
+            "SELECT a.id, a.sc_handle, a.handle_verified, a.display_name, m.role, m.joined_at, "
+            + "EXISTS (SELECT 1 FROM api_tokens t WHERE t.account_id=a.id AND t.revoked_at IS NULL) "
             + "FROM memberships m JOIN accounts a ON a.id = m.account_id "
             + "WHERE m.org_id=$org ORDER BY m.joined_at",
             [("$org", orgId)],
             r => new OrgMemberRow(
-                r.IsDBNull(0) ? null : r.GetString(0), r.GetInt64(1) != 0,
-                r.GetString(2), r.GetString(3), DateTimeOffset.Parse(r.GetString(4))));
+                r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetInt64(2) != 0,
+                r.GetString(3), r.GetString(4), DateTimeOffset.Parse(r.GetString(5)),
+                r.GetInt64(6) != 0));
     }
 
     public int MemberCount(string orgId)
@@ -237,6 +239,25 @@ public sealed class OrgStore(OrgDb db)
             [("$account", accountId)], r => r.GetString(0));
     }
 
+    /// <summary>Delete orgs this account owns alone so forget-me cannot strand them.</summary>
+    public IReadOnlyList<(string Id, string Name)> DeleteSoleOwned(string accountId)
+    {
+        using var connection = db.Open();
+        using var transaction = connection.BeginTransaction();
+        var deleted = AccountStore.Many(connection, transaction,
+            "SELECT o.id, o.name FROM orgs o JOIN memberships m ON m.org_id=o.id "
+            + "WHERE m.account_id=$account AND m.role='owner' AND NOT EXISTS "
+            + "(SELECT 1 FROM memberships x WHERE x.org_id=m.org_id AND x.account_id<>$account)",
+            [("$account", accountId)], r => (r.GetString(0), r.GetString(1)));
+        AccountStore.Run(connection, transaction,
+            "DELETE FROM orgs WHERE id IN (SELECT m.org_id FROM memberships m "
+            + "WHERE m.account_id=$account AND m.role='owner' AND NOT EXISTS "
+            + "(SELECT 1 FROM memberships x WHERE x.org_id=m.org_id AND x.account_id<>$account))",
+            ("$account", accountId));
+        transaction.Commit();
+        return deleted;
+    }
+
     /* ---------- invites ---------- */
 
     public OrgInviteRow CreateInvite(string orgId, string createdBy, int expiresInDays, int maxUses)
@@ -280,10 +301,10 @@ public sealed class OrgStore(OrgDb db)
     }
 
     /// <summary>Joins by invite code. The sentence explains any refusal.</summary>
-    public (OrgRow? Org, string? Problem) Join(string? code, string accountId)
+    public (OrgRow? Org, string? Problem, bool Joined) Join(string? code, string accountId)
     {
         if (code is not { Length: > 0 })
-            return (null, "An invite code is needed to join an org.");
+            return (null, "An invite code is needed to join an org.", false);
 
         var now = DateTimeOffset.UtcNow;
 
@@ -298,20 +319,20 @@ public sealed class OrgStore(OrgDb db)
 
         if (invite == default || invite.Revoked || invite.Expires <= now
             || (invite.Max > 0 && invite.Uses >= invite.Max))
-            return (null, "That invite code is not valid any more. Ask for a fresh one.");
+            return (null, "That invite code is not valid any more. Ask for a fresh one.", false);
 
         var org = One(connection,
             "SELECT id, name, note, status, request_expiry_days, created_by, created_at FROM orgs WHERE id=$id",
             [("$id", invite.OrgId)], ReadOrg, transaction);
 
         if (org is null || org.Status != "active")
-            return (null, "That org is waiting for the server admin's approval. Try again once it is approved.");
+            return (null, "That org is waiting for the server admin's approval. Try again once it is approved.", false);
 
         var already = Convert.ToInt64(AccountStore.Scalar(connection, transaction,
             "SELECT COUNT(*) FROM memberships WHERE org_id=$org AND account_id=$account",
             ("$org", org.Id), ("$account", accountId)));
         if (already > 0)
-            return (org, null);
+            return (org, null, false);
 
         AccountStore.Run(connection, transaction,
             "INSERT INTO memberships (org_id, account_id, role, joined_at, invited_by) "
@@ -321,7 +342,7 @@ public sealed class OrgStore(OrgDb db)
             "UPDATE invites SET uses = uses + 1 WHERE code=$code", ("$code", code));
 
         transaction.Commit();
-        return (org, null);
+        return (org, null, true);
     }
 
     /* ---------- modules ---------- */
@@ -332,6 +353,76 @@ public sealed class OrgStore(OrgDb db)
         return AccountStore.Many(connection,
             "SELECT module FROM org_modules WHERE org_id=$org AND enabled=1 ORDER BY module",
             [("$org", orgId)], r => r.GetString(0));
+    }
+
+    public bool SetModule(string orgId, string module, bool enabled, string accountId)
+    {
+        if (module != "blueprints")
+            return false;
+
+        using var connection = db.Open();
+        AccountStore.Run(connection, null,
+            "INSERT INTO org_modules (org_id, module, enabled, updated_at, updated_by) "
+            + "VALUES ($org, $module, $enabled, $at, $by) "
+            + "ON CONFLICT(org_id, module) DO UPDATE SET enabled=$enabled, updated_at=$at, updated_by=$by",
+            ("$org", orgId), ("$module", module), ("$enabled", enabled ? 1 : 0),
+            ("$at", DateTimeOffset.UtcNow.ToString("O")), ("$by", accountId));
+        return true;
+    }
+
+    public OrgBlueprintReceipt ReplaceBlueprints(string orgId, string accountId,
+        IReadOnlyList<OrgBlueprintUploadRow> rows)
+    {
+        var sharedAt = DateTimeOffset.UtcNow;
+        var clean = rows
+            .Select(r => new OrgBlueprintUploadRow(r.ObservedAt,
+                Sanitise.Clean(r.Name, "an unnamed blueprint", OrgLimits.BlueprintName)))
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderBy(r => r.ObservedAt).First())
+            .ToArray();
+        using var connection = db.Open();
+        using var transaction = connection.BeginTransaction();
+
+        AccountStore.Run(connection, transaction,
+            "DELETE FROM shared_blueprints WHERE org_id=$org AND account_id=$account",
+            ("$org", orgId), ("$account", accountId));
+
+        foreach (var row in clean)
+        {
+            AccountStore.Run(connection, transaction,
+                "INSERT INTO shared_blueprints (org_id, account_id, name, observed_at, shared_at) "
+                + "VALUES ($org, $account, $name, $observed, $shared)",
+                ("$org", orgId), ("$account", accountId), ("$name", row.Name),
+                ("$observed", row.ObservedAt.ToUniversalTime().ToString("O")),
+                ("$shared", sharedAt.ToString("O")));
+        }
+
+        transaction.Commit();
+        return new OrgBlueprintReceipt(clean.Length, sharedAt);
+    }
+
+    public IReadOnlyList<OrgBlueprintRow> Blueprints(string orgId)
+    {
+        using var connection = db.Open();
+        return AccountStore.Many(connection,
+            "SELECT b.account_id, a.sc_handle, a.handle_verified, a.display_name, "
+            + "b.observed_at, b.name, b.shared_at FROM shared_blueprints b "
+            + "JOIN accounts a ON a.id=b.account_id WHERE b.org_id=$org "
+            + "ORDER BY b.name, a.display_name",
+            [("$org", orgId)],
+            r => new OrgBlueprintRow(r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1),
+                r.GetInt64(2) != 0, r.GetString(3), DateTimeOffset.Parse(r.GetString(4)),
+                r.GetString(5), DateTimeOffset.Parse(r.GetString(6))));
+    }
+
+    public bool DeleteBlueprints(string orgId, string accountId)
+    {
+        using var connection = db.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM shared_blueprints WHERE org_id=$org AND account_id=$account";
+        command.Parameters.AddWithValue("$org", orgId);
+        command.Parameters.AddWithValue("$account", accountId);
+        return command.ExecuteNonQuery() > 0;
     }
 
     /* ---------- the server admin's view ---------- */
@@ -377,12 +468,12 @@ public sealed class OrgStore(OrgDb db)
 
     /* ---------- plumbing ---------- */
 
-    // Membership rows cascade nothing yet; the data classes that arrive in
-    // later slices delete their member's rows here, in the same transaction,
-    // so leaving and kicking stay one atomic promise.
     private static void RemoveMemberData(SqliteConnection connection, SqliteTransaction transaction,
         string orgId, string accountId)
     {
+        AccountStore.Run(connection, transaction,
+            "DELETE FROM shared_blueprints WHERE org_id=$org AND account_id=$account",
+            ("$org", orgId), ("$account", accountId));
         AccountStore.Run(connection, transaction,
             "DELETE FROM memberships WHERE org_id=$org AND account_id=$account",
             ("$org", orgId), ("$account", accountId));
