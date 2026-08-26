@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Quantumwake.Core.Logging;
+using Quantumwake.Data;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -30,6 +32,7 @@ public partial class App : System.Windows.Application
     private const string DashboardUrl = "http://127.0.0.1:31337/";
 
     private WebApplication? _server;
+    private string[] _arguments = [];
     private TrayPresence? _tray;
     private MainWindow? _overlay;
     private Settings _settings = new();
@@ -45,6 +48,10 @@ public partial class App : System.Windows.Application
 
         // Before Settings.Load, so --data moves the whole app - overlay
         // preferences and WebView2 profile included - and not just the server.
+        // Kept for Restart: an update replaces the file and starts it again,
+        // and it has to come back as the same copy rather than the default one.
+        _arguments = e.Args;
+
         Core.AppPaths.UseFromArguments(e.Args);
 
         _settings = Settings.Load();
@@ -54,6 +61,7 @@ public partial class App : System.Windows.Application
         _tray.OverlayToggled += SetOverlayVisible;
         _tray.OverlayPinned += pinned => _overlay?.SetPinned(pinned);
         _tray.SetInstallFolderRequested += PickInstallFolder;
+        _tray.CheckForUpdatesRequested += CheckForUpdates;
         _tray.QuitRequested += Quit;
 
         await StartServerAsync(e.Args);
@@ -109,12 +117,26 @@ public partial class App : System.Windows.Application
             _server = ServerHost.Build(args);
             await _server.StartAsync();
 
+            // Whatever the last update left behind. Done here rather than at the
+            // moment of the swap, because then it was still the file this
+            // process was running from and Windows would not part with it.
+            SelfUpdate.TidyPreviousVersion();
+
             // Let the dashboard's Settings page show and hide the overlay. The
             // callback arrives on a request thread; everything WPF happens on
             // the dispatcher.
             _server.Services.GetRequiredService<OverlayBridge>().Attach(
                 _settings.ShowOverlay,
                 visible => Dispatcher.Invoke(() => SetOverlayVisible(visible)));
+
+            // An update has already replaced the file on disk by the time this
+            // is called, so the restart is what makes it take effect. Queued on
+            // the dispatcher like the overlay callback, and deferred so the
+            // request that asked for it can finish answering first - the page
+            // needs to hear "installed" before the server stops.
+            _server.Services.GetRequiredService<ShellBridge>().AttachRestart(
+                () => Dispatcher.InvokeAsync(
+                    Restart, System.Windows.Threading.DispatcherPriority.ApplicationIdle));
         }
         catch (Exception ex)
         {
@@ -156,13 +178,92 @@ public partial class App : System.Windows.Application
             Restart();
     }
 
+    /// <summary>
+    /// Starts this application again and stands down.
+    /// </summary>
+    /// <remarks>
+    /// The arguments come too. Dropping them looks harmless because most people
+    /// pass none, but --data moves every store and --path names the install, so
+    /// a restart without them silently points a second copy at the default
+    /// folder - somebody else's real data, if this one was deliberately kept
+    /// away from it. Found by updating a copy running on --data and watching the
+    /// new process come back with none.
+    /// </remarks>
     private void Restart()
     {
         var exe = Environment.ProcessPath;
+
         if (exe is not null)
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        {
+            var start = new ProcessStartInfo(exe) { UseShellExecute = true };
+            foreach (var argument in _arguments)
+                start.ArgumentList.Add(argument);
+
+            Process.Start(start);
+        }
 
         Quit();
+    }
+
+    /// <summary>
+    /// The tray's own update check.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Calls the check directly rather than posting to its own HTTP endpoint:
+    /// the server is in this process, and going out through a socket to reach
+    /// an object already in memory would only add a way for it to fail.
+    /// </para>
+    /// <para>
+    /// The store is stamped exactly as the endpoint stamps it, so the Settings
+    /// page's "last checked" stays true about a check that never touched it.
+    /// Installing stays where it was - the dashboard shows the notes and the
+    /// size first, and a balloon is no place to agree to ninety megabytes.
+    /// </para>
+    /// </remarks>
+    private async void CheckForUpdates()
+    {
+        if (_server is null)
+        {
+            _tray?.Notify("The dashboard has not started yet, so there is nothing to ask with.");
+            return;
+        }
+
+        _tray?.SetCheckingForUpdates(true);
+
+        try
+        {
+            var check = _server.Services.GetRequiredService<UpdateCheck>();
+            var updates = _server.Services.GetRequiredService<UpdateStore>();
+
+            // The same assembly the endpoint reads, so the two can never
+            // disagree about what "this version" means.
+            var current = typeof(ServerHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+            var result = await check.LookAsync(current);
+            updates.Checked(result.Latest);
+
+            if (result.Newer)
+            {
+                _tray?.Notify(
+                    $"Quantum Wake {result.Latest} is out. You have {result.Current} - "
+                    + "click here to open the dashboard and read what changed.",
+                    OpenDashboard);
+            }
+            else
+            {
+                _tray?.Notify($"Up to date - {result.Current} is the newest there is.");
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            // A machine that is offline is the ordinary case, not a fault.
+            _tray?.Notify("Could not reach GitHub just now. Nothing has changed.");
+        }
+        finally
+        {
+            _tray?.SetCheckingForUpdates(false);
+        }
     }
 
     private void OpenDashboard()

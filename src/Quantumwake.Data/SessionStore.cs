@@ -139,7 +139,14 @@ public sealed class SessionStore : IDisposable
     //    have stayed at zero on exactly the installs with the most history.
     // 5: party notifications are kept, so sessions summarised before them name
     //    nobody and the Crew page would be empty for everyone but new installs.
-    private const int PayloadVersion = 5;
+    // 6: the party channel's other two titles are read - New Member Joined and
+    //    Member Left. 55 membership events on this install were being dropped
+    //    for not starting with the word "Party", and without this every one of
+    //    them stays dropped in sessions already summarised.
+    // 7: ship comms channels are kept, so sessions summarised before them know
+    //    nobody was ever aboard anything and the Crew page's ships would be
+    //    empty for every install except a brand new one.
+    private const int PayloadVersion = 7;
 
 
     /// <summary>

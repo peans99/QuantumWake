@@ -85,15 +85,25 @@ class El {
     this.own = value === undefined || value === null ? '' : String(value);
   }
 
+  /* Appending a node that already has a parent MOVES it, as a browser does.
+     Pushing without detaching left the node in two places at once, so code
+     that reorders by re-appending appeared to duplicate every card - a test
+     failing about the stub rather than about the app. */
   append(...nodes) {
     for (const node of nodes) {
-      if (node instanceof El) node.parentElement = this;
+      if (node instanceof El) {
+        node.remove();
+        node.parentElement = this;
+      }
       this.children.push(node);
     }
   }
 
   prepend(node) {
-    if (node instanceof El) node.parentElement = this;
+    if (node instanceof El) {
+      node.remove();
+      node.parentElement = this;
+    }
     this.children.unshift(node);
   }
 
@@ -123,6 +133,7 @@ class El {
   releasePointerCapture() {}
   scrollIntoView() {}
   focus() {}
+  blur() {}
 
   /* A synthetic click, as the download path does to an anchor it never adds to
      the document. Recorded so a test can assert what would have been saved -
@@ -168,11 +179,33 @@ class El {
   }
 
   querySelectorAll(selector) {
-    if (typeof selector === 'string' && selector.startsWith('.')) return this.byClass(selector.slice(1));
+    if (typeof selector !== 'string') return [];
+    if (selector.startsWith('.')) return this.byClass(selector.slice(1));
+
+    // A bare tag name, for the tables the app reaches into: table.querySelector('tbody').
+    if (/^[a-z]+$/.test(selector)) {
+      return this.descendants().filter((n) => n.tagName === selector);
+    }
+
     return [];
   }
 
-  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+  /* Conjures a missing tag the same way node() conjures a missing id, and for
+     the same reason: the markup really does contain a tbody inside every table
+     the app writes to, and a stub that returns null there fails where a browser
+     would not - which is a test failing about the stub rather than the app. */
+  querySelector(selector) {
+    const found = this.querySelectorAll(selector)[0];
+    if (found) return found;
+
+    if (typeof selector === 'string' && /^(tbody|thead|tfoot)$/.test(selector)) {
+      const made = new El(selector);
+      this.append(made);
+      return made;
+    }
+
+    return null;
+  }
 }
 
 /* One element per selector, made on demand: the app asks for ids the tests do

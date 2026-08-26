@@ -25,6 +25,11 @@ public class PartyTests
     [InlineData("Party astro_ice connected.:", "astro_ice", PartyMoment.Connected)]
     [InlineData("Party KR105 disconnected.:", "KR105", PartyMoment.Disconnected)]
     [InlineData("New Party Leader Craven is now party leader.:", "Craven", PartyMoment.BecameLeader)]
+    [InlineData("New Member Joined Vhailor-5 has joined the party.:", "Vhailor-5", PartyMoment.Joined)]
+    [InlineData("New Member Joined LeonardCharette-SQsfKwqo has joined the party.:",
+        "LeonardCharette-SQsfKwqo", PartyMoment.Joined)]
+    [InlineData("Member Left Sylosis has left the party.:", "Sylosis", PartyMoment.Left)]
+    [InlineData("Member Left drudz has left the party.:", "drudz", PartyMoment.Left)]
     public void Reads_who_and_what_happened(string text, string handle, PartyMoment moment)
     {
         var note = Party.Read(At, text);
@@ -62,6 +67,9 @@ public class PartyTests
     [InlineData("Party Launch Join queue canceled by party leader KR105.:")]
     [InlineData("Party Launch Accepted Initiated by party leader KR105.:")]
     [InlineData("Party Notifications sent to party members.:")]
+
+    [InlineData("New Member Joined")]
+    [InlineData("Member Left")]
     [InlineData("Party ��潍楳s���:")]
     [InlineData("Party :")]
     [InlineData("Party")]
@@ -104,4 +112,41 @@ public class PartyTests
             "Incapacitated: While incapacitated, ask others in your party, in chat, "
             + "or through rescue service beacons to revive you."));
     }
+    /// <summary>
+    /// A ship's comms channel emptying is not a party event, and must not even
+    /// be counted as one.
+    /// </summary>
+    /// <remarks>
+    /// The game gives it the same "Member Left" title, and 27 of this install's
+    /// lines under that title are channels rather than parties. Read refuses
+    /// them on their body either way; IsParty refuses them too, so the count of
+    /// party notifications keeps meaning what it says and the gap between it and
+    /// the notes read stays a measure of what the reader declined to guess at.
+    /// </remarks>
+    [Theory]
+    [InlineData("Member Left Sylosis has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.:")]
+    [InlineData("Member Left D-Rud has left the channel 'MISC Starlancer MAX : nekron'.:")]
+    [InlineData("Member Left  has left the channel 'RSI Ursa Medivac : DeathStrokeo1'.:")]
+    public void A_ship_channel_emptying_is_not_a_party_event(string text)
+    {
+        Assert.False(Party.IsParty(text));
+        Assert.Null(Party.Read(At, text));
+    }
+
+    /// <summary>
+    /// Leaving and dropping are different facts, and the one that matters is
+    /// the one that means somebody is not coming back.
+    /// </summary>
+    [Fact]
+    public void Leaving_is_not_the_same_as_dropping()
+    {
+        var left = Party.Read(At, "Member Left Sylosis has left the party.:");
+        var dropped = Party.Read(At, "Party Sylosis disconnected.:");
+
+        Assert.Equal(PartyMoment.Left, left!.Moment);
+        Assert.Equal(PartyMoment.Disconnected, dropped!.Moment);
+        Assert.Equal("Sylosis", left.Handle);
+        Assert.Equal(left.Handle, dropped.Handle);
+    }
+
 }

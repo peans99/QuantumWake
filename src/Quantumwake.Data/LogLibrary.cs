@@ -109,11 +109,16 @@ public sealed record TradeRecord(
 /// pages in an item it has not shown before, which covers looting but also
 /// buying and receiving, and only while the inventory is open.
 /// </remarks>
+/// <param name="Category">
+/// What kind of thing it is, from the same reading of the item class the Stash
+/// page groups by - so a filter here and a heading there cannot disagree.
+/// </param>
 public sealed record PickupRecord(
     DateTimeOffset At,
     string Item,
     string ItemClass,
-    string Place);
+    string Place,
+    string Category = ItemCategories.Other);
 
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
@@ -192,9 +197,31 @@ public sealed record SignalHealth(
 /// there - never that nobody else was.
 /// </remarks>
 /// <param name="Sessions">Sessions in which they were named at least once.</param>
+/// <summary>
+/// A ship you and somebody else were both aboard.
+/// </summary>
+/// <param name="Owner">Whose it is - possibly you, possibly them, possibly neither.</param>
+/// <param name="Times">
+/// Boardings seen, not hours flown. There is no leave line for the reader, so
+/// time aboard is not recoverable; a channel opens on boarding rather than on
+/// flying, so a parked ship counts the same as a crossing.
+/// </param>
+public sealed record SharedShip(
+    string Handle,
+    string Ship,
+    string Owner,
+    int Times,
+    DateTimeOffset First,
+    DateTimeOffset Last);
+
 /// <param name="Connected">Times they came online while partied with you.</param>
 /// <param name="Dropped">Times they went offline the same way.</param>
 /// <param name="LedParty">Times party lead passed to them.</param>
+/// <param name="Joined">
+/// Times they joined the party - a different fact from coming online, and the
+/// only one of these that means somebody was not there a moment before.
+/// </param>
+/// <param name="Left">Times they left it, as opposed to merely dropping.</param>
 public sealed record Wingman(
     string Handle,
     int Sessions,
@@ -202,7 +229,9 @@ public sealed record Wingman(
     int Dropped,
     int LedParty,
     DateTimeOffset First,
-    DateTimeOffset Last);
+    DateTimeOffset Last,
+    int Joined = 0,
+    int Left = 0);
 
 /// <summary>One commodity in the community catalogue, with this install's own trade record against it.</summary>
 /// <param name="Sold">Facility keys where kiosks accept it.</param>
@@ -1340,7 +1369,9 @@ public sealed class LogLibrary : IDisposable
                     g.Count(x => x.Note.Moment == PartyMoment.Disconnected),
                     g.Count(x => x.Note.Moment == PartyMoment.BecameLeader),
                     g.Min(x => x.Note.At),
-                    g.Max(x => x.Note.At)))
+                    g.Max(x => x.Note.At),
+                    g.Count(x => x.Note.Moment == PartyMoment.Joined),
+                    g.Count(x => x.Note.Moment == PartyMoment.Left)))
                 .OrderByDescending(w => w.Sessions)
                 .ThenByDescending(w => w.Connected)
                 .ThenBy(w => w.Handle, StringComparer.OrdinalIgnoreCase)
@@ -1352,6 +1383,72 @@ public sealed class LogLibrary : IDisposable
     /// announces them once and never mentions them again, so this is the whole
     /// record of what can be crafted.
     /// </summary>
+    /// <summary>
+    /// The ships you and other people were aboard together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Built from the ship comms channels, which are the only lines that put a
+    /// person inside a vehicle. A pairing is recorded when the reader and
+    /// somebody else were both in the same channel: either they boarded a ship
+    /// while the reader was in it, or the reader boarded one they own.
+    /// </para>
+    /// <para>
+    /// A floor, like everything else here. The reader sees only channels they
+    /// were in themselves, boarding is not flying, and nothing records how long
+    /// anybody stayed - so this answers "we were both in this ship" and refuses
+    /// the question it looks like it answers, which is how much you flew
+    /// together.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<SharedShip> SharedShips(int days = 0)
+    {
+        var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+        var sessions = Counted(WipeScope.History);
+
+        var mine = sessions
+            .Select(s => s.Handle)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+
+        var pairings = new List<(string Handle, string Ship, string Owner, DateTimeOffset At)>();
+
+        foreach (var note in sessions.SelectMany(s => s.ChannelNotes).Where(n => n.At >= cutoff))
+        {
+            switch (note.Moment)
+            {
+                // Somebody came aboard a channel the reader was already in.
+                case ChannelMoment.TheyBoarded when note.Handle is { } who && !mine.Contains(who):
+                    pairings.Add((who, note.Ship, note.Owner, note.At));
+                    break;
+
+                // The reader boarded a ship somebody else owns. Their name is on
+                // the berth even when no arrival line ever named them.
+                case ChannelMoment.YouBoarded when !mine.Contains(note.Owner):
+                    pairings.Add((note.Owner, note.Ship, note.Owner, note.At));
+                    break;
+            }
+        }
+
+        return
+        [
+            .. pairings
+                // One key rather than a tuple comparer: handles and ship names
+                // are both matched without regard to case, and the newest
+                // spelling of each is taken from the group below.
+                .GroupBy(p => $"{p.Handle}|{p.Ship}|{p.Owner}".ToLowerInvariant())
+                .Select(g => new SharedShip(
+                    g.OrderByDescending(p => p.At).First().Handle,
+                    g.OrderByDescending(p => p.At).First().Ship,
+                    g.OrderByDescending(p => p.At).First().Owner,
+                    g.Count(),
+                    g.Min(p => p.At),
+                    g.Max(p => p.At)))
+                .OrderByDescending(s => s.Times)
+                .ThenByDescending(s => s.Last)
+        ];
+    }
+
     public IReadOnlyList<BlueprintReceipt> Blueprints()
     {
         return
@@ -1469,7 +1566,8 @@ public sealed class LogLibrary : IDisposable
                     pickup.At,
                     Names.Item(pickup.ItemClass),
                     pickup.ItemClass,
-                    PlaceAt(session, pickup.At)));
+                    PlaceAt(session, pickup.At),
+                    ItemCategories.Of(pickup.ItemClass)));
             }
         }
 

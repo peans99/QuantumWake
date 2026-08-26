@@ -74,3 +74,8 @@ cache/
 # OS
 Thumbs.db
 desktop.ini
+
+# Worktrees taken inside the repo. CLAUDE.md asks for them beside it rather
+# than in it, but when one lands here it must not be committed: git records it
+# as a gitlink to a commit no clone can fetch.
+.worktrees/

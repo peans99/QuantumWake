@@ -270,6 +270,13 @@ public sealed record SessionSummary
     /// </summary>
     public IReadOnlyList<PartyNote> PartyNotes { get; init; } = [];
 
+    /// <summary>
+    /// Ship comms channels: who was aboard which vehicle, and whose it was.
+    /// The only lines that put a person inside a particular ship - see
+    /// <see cref="ShipChannel"/> for what they cannot say.
+    /// </summary>
+    public IReadOnlyList<ChannelNote> ChannelNotes { get; init; } = [];
+
     /// <summary>Confirmed spend only.</summary>
     public decimal Spend => Purchases.Where(p => p.Confirmed).Sum(p => p.Total);
 

@@ -284,8 +284,11 @@ window.scOverlayExpanded = (on) => {
 
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
 const NOW_HIDDEN_KEY = 'qw-now-hidden-cards';
+const NOW_ORDER_KEY = 'qw-now-card-order';
 let collapsedNowCards = new Set();
 let hiddenNowCards = new Set();
+let nowCardOrder = [];
+let draggedNowCard = null;
 
 try {
   const saved = JSON.parse(localStorage.getItem(NOW_COLLAPSED_KEY) || '[]');
@@ -297,12 +300,117 @@ try {
   if (Array.isArray(saved)) hiddenNowCards = new Set(saved);
 } catch { /* a bad preference must not remove a dashboard card */ }
 
+try {
+  const saved = JSON.parse(localStorage.getItem(NOW_ORDER_KEY) || '[]');
+  if (Array.isArray(saved)) nowCardOrder = saved.filter((n) => typeof n === 'string');
+} catch { /* a bad preference must not scramble the dashboard */ }
+
 function saveCollapsedNowCards() {
   try { localStorage.setItem(NOW_COLLAPSED_KEY, JSON.stringify([...collapsedNowCards])); } catch { /* optional */ }
 }
 
 function saveHiddenNowCards() {
   try { localStorage.setItem(NOW_HIDDEN_KEY, JSON.stringify([...hiddenNowCards])); } catch { /* optional */ }
+}
+
+function saveNowCardOrder() {
+  try { localStorage.setItem(NOW_ORDER_KEY, JSON.stringify(nowCardOrder)); } catch { /* optional */ }
+}
+
+/**
+ * The order to draw the cards in: the saved one, reconciled with the markup.
+ *
+ * A card the saved order never saw goes back where the markup puts it - beside
+ * the neighbour it was designed to sit next to - rather than to the end. The
+ * overlay's layout store makes the same promise for the same reason: a card
+ * added in a later version must not read as one the reader arranged away, or
+ * anyone who ever touched these controls would quietly stop seeing new work.
+ */
+function resolveNowOrder(natural, saved) {
+  const seen = new Set(saved);
+  const order = saved.filter((name) => natural.includes(name));
+
+  natural.forEach((name, index) => {
+    if (seen.has(name)) return;
+
+    let at = order.length;
+    for (let before = index - 1; before >= 0; before--) {
+      const found = order.indexOf(natural[before]);
+      if (found !== -1) { at = found + 1; break; }
+    }
+    order.splice(at, 0, name);
+  });
+
+  return order;
+}
+
+/** Moves one card so it sits before another, and answers with the new order. */
+function moveNowCard(order, name, beforeName) {
+  const without = order.filter((n) => n !== name);
+  const at = beforeName === null ? without.length : without.indexOf(beforeName);
+  if (at === -1) return order;
+
+  without.splice(at, 0, name);
+  return without;
+}
+
+/**
+ * Moves a card one place, for the keyboard.
+ *
+ * Dragging is the obvious gesture and the only one some people cannot make, so
+ * the grip is a real button that answers the arrow keys too.
+ */
+function nudgeNowCard(name, delta) {
+  const order = [...nowCardOrder];
+  const at = order.indexOf(name);
+  if (at === -1) return;
+
+  const to = at + delta;
+  if (to < 0 || to >= order.length) return;
+
+  nowCardOrder = moveNowCard(order, name, delta > 0 ? (order[to + 1] ?? null) : order[to]);
+  saveNowCardOrder();
+  applyNowCardOrder();
+}
+
+/** The card after this one, or null when it is the last. */
+function nextNowCard(name) {
+  const at = nowCardOrder.indexOf(name);
+  return at === -1 ? null : (nowCardOrder[at + 1] ?? null);
+}
+
+/**
+ * Puts a card in a position now, redrawing only if that is a change.
+ *
+ * Called from dragover, which fires continuously, so the guard is what keeps
+ * the grid from being rebuilt hundreds of times a second - and what stops the
+ * dragged card flickering under its own pointer.
+ */
+function placeNowCard(name, beforeName) {
+  if (name === beforeName) return;
+
+  const wanted = moveNowCard(nowCardOrder, name, beforeName);
+  if (wanted.join() === nowCardOrder.join()) return;
+
+  nowCardOrder = wanted;
+  applyNowCardOrder();
+}
+
+/** Puts the grid in the saved order. Re-appending a card moves it. */
+function applyNowCardOrder() {
+  const grid = $('#view-now .now-grid');
+  if (!grid) return;
+
+  const cards = $$('#view-now .now-grid .card[data-card]');
+  const natural = cards.map((card) => card.dataset.card);
+  const byName = new Map(cards.map((card) => [card.dataset.card, card]));
+
+  nowCardOrder = resolveNowOrder(natural, nowCardOrder);
+
+  for (const name of nowCardOrder) {
+    const card = byName.get(name);
+    if (card) grid.append(card);
+  }
 }
 
 function renderHiddenNowCards() {
@@ -368,12 +476,94 @@ function initNowCardCollapsers() {
       saveHiddenNowCards();
       renderHiddenNowCards();
     });
-    actions.append(hide, button);
+    const grip = el('button', 'now-grip now-card-action', '⠿');
+    grip.type = 'button';
+    grip.title = 'Drag to move this card; the arrow keys move it too';
+    grip.setAttribute('aria-label', grip.title);
+
+    // The card is the thing that drags, but only while the grip is held:
+    // draggable on the card itself would make every stretch of text in it
+    // un-selectable.
+    grip.addEventListener('mousedown', () => { card.draggable = true; });
+    grip.addEventListener('mouseup', () => { card.draggable = false; });
+
+    grip.addEventListener('keydown', (event) => {
+      const delta = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+      if (delta === undefined) return;
+
+      event.preventDefault();
+      nudgeNowCard(name, delta);
+      // The grid was rebuilt around this button; it keeps the focus so the
+      // next press carries on from where the last one left off.
+      grip.focus();
+    });
+
+    card.addEventListener('dragstart', (event) => {
+      draggedNowCard = name;
+      card.classList.add('dragging');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        // Firefox starts no drag at all unless something is carried.
+        try { event.dataTransfer.setData('text/plain', name); } catch { /* not fatal */ }
+      }
+    });
+
+    card.addEventListener('dragend', () => {
+      draggedNowCard = null;
+      card.draggable = false;
+      card.classList.remove('dragging');
+      // The order was kept true while dragging; this is where it is written
+      // down, once, rather than on every twitch of the pointer.
+      saveNowCardOrder();
+    });
+
+    // The cards move under the pointer rather than waiting for the drop. A
+    // preview that only appears at the end is one the reader has to guess at,
+    // and in a grid - where "after" can mean the next column or the next row -
+    // guessing is exactly what goes wrong.
+    card.addEventListener('dragover', (event) => {
+      if (!draggedNowCard || draggedNowCard === name) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+
+      const box = card.getBoundingClientRect();
+      const past = (event.clientX - box.left) > box.width / 2;
+
+      placeNowCard(draggedNowCard, past ? nextNowCard(name) : name);
+    });
+
+    card.addEventListener('drop', (event) => {
+      if (!draggedNowCard) return;
+      // Already in place; this only stops the browser treating it as a
+      // navigation.
+      event.preventDefault();
+    });
+
+    actions.append(grip, hide, button);
     card.append(actions);
 
     card.classList.toggle('user-hidden', !isOverlay && hiddenNowCards.has(name));
   }
 
+  // The gaps between cards, and the empty space at the end of the grid. Without
+  // this the one place a card could not be dropped was the space after the last
+  // one - which is exactly where a hand goes to send a card to the bottom.
+  const grid = $('#view-now .now-grid');
+  if (grid && !grid.dataset.reorderWired) {
+    grid.dataset.reorderWired = '1';
+
+    grid.addEventListener('dragover', (event) => {
+      if (!draggedNowCard || event.target !== grid) return;
+      event.preventDefault();
+      placeNowCard(draggedNowCard, null);
+    });
+
+    grid.addEventListener('drop', (event) => {
+      if (draggedNowCard) event.preventDefault();
+    });
+  }
+
+  applyNowCardOrder();
   renderHiddenNowCards();
 }
 
@@ -2048,11 +2238,52 @@ async function loadLoot() {
   renderLoot(await getJson(`/api/loot?days=${days}`));
 }
 
+/**
+ * Fills a filter with what the rows actually contain.
+ *
+ * Only what is there, rather than every category the classifier knows: a
+ * dropdown offering "Containers" on an install that has never seen one is a
+ * filter that can only disappoint. The chosen value is kept across a redraw
+ * when it still exists, and quietly falls back to everything when it does not -
+ * which happens when the date window moves and takes the last of something
+ * with it.
+ */
+function fillLootFilter(select, all, label) {
+  if (!select) return '';
+
+  const chosen = select.value;
+  const values = [...new Set(all.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  select.textContent = '';
+
+  const any = document.createElement('option');
+  any.value = '';
+  any.textContent = label;
+  select.append(any);
+
+  for (const value of values) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+
+  select.value = values.includes(chosen) ? chosen : '';
+  return select.value;
+}
+
 function renderLoot(pickups) {
   const term = ($('#loot-search').value || '').trim().toLowerCase();
 
+  // Built from everything the window holds, not from what survives the other
+  // filters - or choosing a kind would empty the place list and strand you.
+  const kind = fillLootFilter($('#loot-kind'), pickups.map((p) => p.category), 'Any kind');
+  const place = fillLootFilter($('#loot-place'), pickups.map((p) => p.place), 'Anywhere');
+
   const rows = pickups.filter((p) =>
-    !term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term));
+    (!term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term))
+    && (!kind || p.category === kind)
+    && (!place || p.place === place));
 
   tiles('#loot-summary', [
     ['New items', rows.length],
@@ -2065,10 +2296,17 @@ function renderLoot(pickups) {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'Nothing in that range.');
-    td.colSpan = 3;
+
+    // Name the filter that emptied it. "Nothing in that range" is the wrong
+    // explanation for a table a dropdown hid every row from.
+    const td = el('td', 'muted', kind || place
+      ? `Nothing matching ${[kind, place].filter(Boolean).join(' at ')} in that range.`
+      : 'Nothing in that range.');
+
+    td.colSpan = 4;
     tr.append(td);
     body.append(tr);
+    lastLootRows = pickups;
     return;
   }
 
@@ -2076,6 +2314,7 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
+    tr.append(el('td', 'muted', pickup.category));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
@@ -2087,6 +2326,10 @@ let lastLootRows = [];
 
 onInput('#loot-search', () => renderLoot(lastLootRows));
 onInput('#loot-period', loadLoot);
+
+// The two filters redraw what is already loaded; only the date window refetches.
+$('#loot-kind')?.addEventListener('change', () => renderLoot(lastLootRows));
+$('#loot-place')?.addEventListener('change', () => renderLoot(lastLootRows));
 
 /* ---------- reference catalogues: ships, parts ---------- */
 
@@ -2965,7 +3208,9 @@ async function loadCasualties() {
   const body = $('#casualties-fees tbody');
   body.textContent = '';
 
-  for (const fee of data.fees) {
+  // Guarded like every other read on this page: one absent array should not
+  // take the whole page down when the rest of the answer arrived intact.
+  for (const fee of data.fees || []) {
     const tr = el('tr');
     tr.append(el('td', null, fee.name));
     tr.append(el('td', 'num outward', money(fee.fee)));
@@ -2976,6 +3221,76 @@ async function loadCasualties() {
 onInput('#casualties-period', loadCasualties);
 
 /* ---------- crew ---------- */
+
+/**
+ * The ships you and somebody else were both aboard.
+ *
+ * The party channel says who was online while grouped with you; this says who
+ * was actually in the vehicle, and whose it was. It is the only thing in these
+ * logs that ties a person to a ship.
+ *
+ * Deliberately counted in boardings rather than hours. There is no leave line
+ * for you, a channel opens when somebody gets in rather than when the ship
+ * flies, and a parked Cyclone reads the same as a crossing - so the caption
+ * says so instead of letting a number imply time spent together.
+ */
+async function renderSharedShips(days) {
+  const host = $('#crew-ships');
+  if (!host) return;
+
+  host.textContent = '';
+
+  let ships;
+  try {
+    ships = await getJson(`/api/crew/ships?days=${days}`);
+  } catch {
+    return;
+  }
+
+  if (!ships.length) return;
+
+  const card = el('section', 'shared-block');
+  card.append(el('h3', null, 'Ships you have shared'));
+  card.append(el('p', 'muted', 'Who was aboard which ship, from its comms channel — the only '
+    + 'lines that put a person in a vehicle. Counted in boardings, not hours: nothing records '
+    + 'how long anyone stayed, and a parked ship looks the same as a crossing.'));
+
+  const table = el('table', 'data');
+  const head = el('thead');
+  const headRow = el('tr');
+  for (const label of ['Pilot', 'Ship', 'Whose', 'Boardings', 'First', 'Last']) {
+    headRow.append(el('th', label === 'Boardings' ? 'num' : null, label));
+  }
+  head.append(headRow);
+  table.append(head);
+
+  const body = el('tbody');
+  const mine = ships.filter((s) => s.owner === s.handle).length;
+
+  for (const ship of ships) {
+    const tr = el('tr');
+    tr.append(el('td', null, ship.handle));
+    tr.append(el('td', null, ship.ship));
+
+    // Whose ship it was is the interesting half: crewing for somebody is a
+    // different evening from having them aboard yours.
+    tr.append(el('td', 'muted', ship.owner === ship.handle ? 'theirs' : 'yours'));
+
+    tr.append(el('td', 'num', String(ship.times)));
+    tr.append(el('td', 'muted', dateOf(ship.first)));
+    tr.append(el('td', 'muted', dateOf(ship.last)));
+    body.append(tr);
+  }
+
+  table.append(body);
+  card.append(table);
+
+  card.append(el('p', 'muted', `${ships.length} pairing${ships.length === 1 ? '' : 's'}`
+    + `${mine ? `, ${mine} of them in a ship that was not yours` : ''}.`));
+
+  host.append(card);
+}
+
 
 /**
  * The people the party channel has named.
@@ -2999,13 +3314,18 @@ async function loadCrew() {
     return;
   }
 
+  renderSharedShips(days).catch(() => {});
+
+  const joins = rows.reduce((total, r) => total + (r.joined || 0), 0);
   const arrivals = rows.reduce((total, r) => total + r.connected, 0);
-  const drops = rows.reduce((total, r) => total + r.dropped, 0);
 
   tiles('#crew-summary', [
     ['People named', rows.length],
-    ['Arrivals seen', arrivals],
-    ['Drops seen', drops],
+
+    // Joins rather than arrivals: this is the one that counts somebody who was
+    // not there a moment before, which is what "flew with" means.
+    ['Joined your party', joins],
+    ['Came online', arrivals],
     ['Most flown with', rows.length ? rows[0].handle : '—'],
   ]);
 
@@ -3023,9 +3343,9 @@ async function loadCrew() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted',
-      'Nobody named in that range — the game only says so when someone joins or '
-      + 'drops while you are partied with them.');
-    td.colSpan = 7;
+      'Nobody named in that range — the game only says so when someone joins, '
+      + 'leaves, or connects while you are partied with them.');
+    td.colSpan = 9;
     tr.append(td);
     body.append(tr);
     return;
@@ -3035,10 +3355,14 @@ async function loadCrew() {
     const tr = el('tr');
     tr.append(el('td', null, row.handle));
     tr.append(el('td', 'num', String(row.sessions)));
+
+    // Blank rather than zero throughout: these are four different facts and a
+    // zero in one of them is usually "the game did not say", not "never".
+    tr.append(el('td', row.joined ? 'num' : 'num muted', row.joined || '—'));
+    tr.append(el('td', row.left ? 'num' : 'num muted', row.left || '—'));
     tr.append(el('td', 'num', String(row.connected)));
     tr.append(el('td', 'num', String(row.dropped)));
 
-    // Blank rather than zero: never having taken lead is not a score.
     tr.append(el('td', row.ledParty ? 'num' : 'num muted', row.ledParty || '—'));
 
     tr.append(el('td', 'muted', dateOf(row.first)));
@@ -10971,7 +11295,7 @@ function askAboutUpdates(state) {
     await fetch(`/api/updates/answer?automatic=${automatic}`, { method: 'POST' });
     notice.hidden = true;
     renderUpdateSettings().catch(() => { /* Settings redraws on its next visit */ });
-    if (thenCheck) await runUpdateCheck({ quiet: false });
+    if (thenCheck) await runUpdateCheck({ quiet: false, announce: true });
   };
 
   const every = el('button', 'ghost', 'Yes, every start');
@@ -10993,16 +11317,30 @@ function askAboutUpdates(state) {
  * @param quiet Say nothing when this copy is current - true for a startup
  *   check, which nobody asked a question of, and false for a click, which is a
  *   question and deserves an answer either way.
+ * @param announce Put the answer in the notice, which every view carries,
+ *   rather than only in Settings' status line. A check started from the
+ *   toolbar or from the notice itself can be pressed from anywhere, and
+ *   "up to date" written into a panel the reader is not looking at is the
+ *   same as no answer at all - which is the half of the promise above that
+ *   the status line alone could not keep.
  */
-async function runUpdateCheck({ quiet }) {
+async function runUpdateCheck({ quiet, announce = false }) {
   const notice = $('#update');
 
   let result;
   try {
     const response = await fetch('/api/updates/check', { method: 'POST' });
+
+    // A dropped connection rejects, but a server whose own call to GitHub threw
+    // answers 500 - and reading that as JSON yields null, which used to fall
+    // through to result.newer and take the whole handler down with it. Both
+    // failures are the same failure to the reader, so both take the same path.
+    if (!response.ok) throw new Error(`the check answered ${response.status}`);
+
     result = await response.json();
   } catch {
     if (!quiet) $('#update-status').textContent = 'could not reach GitHub just now';
+    if (announce) tellUpdateNotice('Could not reach GitHub', 'The check did not get through. Try again in a moment.');
     return;
   }
 
@@ -11010,7 +11348,8 @@ async function runUpdateCheck({ quiet }) {
 
   if (!result.newer) {
     if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
-    notice.hidden = true;
+    if (announce) tellUpdateNotice(`Quantum Wake ${result.current} is the newest`, 'Nothing to update.');
+    else notice.hidden = true;
     return;
   }
 
@@ -11021,10 +11360,15 @@ async function runUpdateCheck({ quiet }) {
   const actions = $('#update-actions');
   actions.textContent = '';
 
-  const open = el('button', 'ghost', 'Open the release page');
+  // Only offered when the server says this copy can actually replace itself: a
+  // source build cannot, and a button that explains itself only after being
+  // pressed is worse than one that was never there.
+  if (result.canInstall) actions.append(updateNowButton(result));
+
+  const open = el('button', 'ghost', result.canInstall ? 'Read the notes' : 'Open the release page');
   open.addEventListener('click', () => {
     window.open(result.url, '_blank', 'noreferrer');
-    notice.hidden = true;
+    if (!result.canInstall) notice.hidden = true;
   });
 
   const later = el('button', 'ghost', 'Later');
@@ -11032,6 +11376,85 @@ async function runUpdateCheck({ quiet }) {
 
   actions.append(open, later);
   notice.hidden = false;
+}
+
+/**
+ * An answer with no newer version behind it: says its piece and offers only a
+ * way to dismiss itself, because there is nothing else to do about it.
+ */
+function tellUpdateNotice(title, detail) {
+  const notice = $('#update');
+
+  $('#update-title').textContent = title;
+  $('#update-detail').textContent = detail;
+
+  const actions = $('#update-actions');
+  actions.textContent = '';
+
+  const close = el('button', 'ghost', 'Close');
+  close.addEventListener('click', () => { notice.hidden = true; });
+  actions.append(close);
+
+  notice.hidden = false;
+}
+
+/**
+ * The one-click update.
+ *
+ * The whole thing happens on the server - fetch, check the hash GitHub
+ * published, move the running file aside, put the new one in place - so this
+ * only has to say what is happening and stay honest when it does not work.
+ *
+ * Ninety megabytes takes a while on a slow line, and a button that looks
+ * unresponsive for a minute gets pressed again, so it disables itself and says
+ * so rather than leaving the reader guessing.
+ */
+function updateNowButton(result) {
+  // The size is on the button rather than in the detail line, because it is
+  // part of what is being agreed to: on a metered connection ninety megabytes
+  // is somebody's actual money, and finding out afterwards is too late.
+  const size = result.downloadBytes
+    ? ` · ${Math.round(result.downloadBytes / 1048576)} MB`
+    : '';
+
+  const install = el('button', 'ghost on', `Update to ${result.latest}${size}`);
+  install.title = 'Downloads it, checks it, and restarts into the new version';
+
+  install.addEventListener('click', async () => {
+    install.disabled = true;
+    install.textContent = 'Downloading…';
+    $('#update-detail').textContent = 'Fetching the new version and checking it against '
+      + 'what GitHub published. This can take a minute.';
+
+    let answer;
+    try {
+      const response = await fetch('/api/updates/install', { method: 'POST' });
+      answer = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        // The server's own words: it knows whether the folder was writable,
+        // the download was short, or something had the file open.
+        $('#update-detail').textContent = answer?.message || 'The update could not be applied.';
+        install.textContent = 'Try again';
+        install.disabled = false;
+        return;
+      }
+    } catch {
+      $('#update-detail').textContent = 'The download did not finish, so nothing was replaced.';
+      install.textContent = 'Try again';
+      install.disabled = false;
+      return;
+    }
+
+    // Two endings, and they are different promises. One restarts itself; the
+    // other has already swapped the file and needs a hand.
+    install.textContent = answer.restarting ? 'Restarting…' : 'Installed';
+    $('#update-detail').textContent = answer.restarting
+      ? `Quantum Wake ${answer.version} is installed. Restarting now.`
+      : `Quantum Wake ${answer.version} is installed. Close this and start it again to use it.`;
+  });
+
+  return install;
 }
 
 /** The Settings block: the toggle, and what the last look found. */
@@ -11051,6 +11474,25 @@ async function renderUpdateSettings() {
 }
 
 function initUpdates() {
+  // Bound before the Settings guard: the toolbar item is on the page whether
+  // or not the Settings block is, and it is the whole point of this one.
+  const fromMenu = $('#menu-update-check');
+  if (fromMenu) {
+    fromMenu.addEventListener('click', async () => {
+      // The group menu is held open by :focus-within, and this item does not
+      // change view - so without letting go of the focus the menu stays hanging
+      // over the answer it just asked for.
+      fromMenu.blur();
+      fromMenu.disabled = true;
+
+      try {
+        await runUpdateCheck({ quiet: false, announce: true });
+      } finally {
+        fromMenu.disabled = false;
+      }
+    });
+  }
+
   const toggle = $('#update-auto');
   if (!toggle) return;
 
