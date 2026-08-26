@@ -6263,6 +6263,78 @@ function slotIconSvg(slot) {
     + `aria-hidden="true"><path d="${path}"/></svg>`;
 }
 
+/**
+ * A character screen needs a stable centre, not a wall of interchangeable
+ * cards. Slots still come from the log and may grow in future game patches,
+ * so the figure is a visual anchor only: every observed slot remains a real,
+ * named card on one of its two sides.
+ */
+function loadoutSide(slot) {
+  const name = `${slot.port || ''} ${slot.label || ''} ${slot.category || ''}`.toLowerCase();
+
+  if (/(helmet|undersuit|arm|leg|glove|shoe|medical|medpen|oxypen|grenade|utility|mobi)/.test(name))
+    return 'left';
+  return 'right';
+}
+
+function loadoutFigure() {
+  const figure = el('div', 'loadout-figure');
+  figure.innerHTML = `
+    <div class="loadout-figure-tag">CURRENT KIT</div>
+    <svg viewBox="0 0 180 350" fill="none" aria-hidden="true">
+      <circle cx="90" cy="38" r="22" />
+      <path d="M64 73 48 112l18 70 24 20 24-20 18-70-16-39z" />
+      <path d="M64 78 31 145l13 13 31-38M116 78l33 67-13 13-31-38" />
+      <path d="M76 198 61 309l23 22 6-88M104 198l15 111-23 22-6-88" />
+      <path d="M61 309 45 337h42M119 309l16 28H93" />
+      <path class="loadout-weapon-line" d="M133 144h33l-7 8h-17l-9 29h-8l8-29h-8z" />
+      <path class="loadout-core-line" d="M72 99h36v55H72z M78 111h24M78 125h24M78 139h24" />
+    </svg>
+    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>HANDS</span><span>PACK</span></div>`;
+  return figure;
+}
+
+function loadoutSlotCard(slot) {
+  const card = el('article', 'loadout-slot');
+  card.dataset.category = slot.category || 'Other';
+
+  const icon = el('div', 'slot-icon');
+  icon.innerHTML = slotIconSvg(slot);
+  card.append(icon);
+
+  const body = el('div', 'slot-body');
+  body.append(el('div', 'slot-category', slot.category || 'Other'));
+
+  const label = slot.slotCount > 1
+    ? `${slot.label || slot.port} · ${slot.slotCount} slots`
+    : slot.label || slot.port;
+  body.append(el('div', 'card-label', label));
+
+  for (const item of slot.items) {
+    const line = el('div', 'slot-current');
+    line.append(el('span', null, prettyItem(item.name)));
+    if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
+
+    // Community reference: size, grade, maker - when enabled and matched.
+    if (item.reference) {
+      const r = item.reference;
+      const bits = [];
+      if (r.size > 0) bits.push(`S${r.size}`);
+      if (r.grade > 0) bits.push(`grade ${r.grade}`);
+      if (r.manufacturer) bits.push(r.manufacturer);
+      if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
+    }
+
+    body.append(line);
+  }
+
+  if (slot.currentSeen)
+    body.append(el('div', 'slot-when', `last observed ${relative(slot.currentSeen)}`));
+
+  card.append(body);
+  return card;
+}
+
 function renderLoadout(stats) {
   libraryStats = stats;
 
@@ -6276,74 +6348,37 @@ function renderLoadout(stats) {
 
   const term = ($('#loadout-search').value || '').trim().toLowerCase();
 
-  // Match on the slot name, what is currently in it, or anything it has held.
-  const slots = stats.loadout.filter((slot) => {
-    if (!term) return true;
-
-    return (slot.label || slot.port).toLowerCase().includes(term)
-      || slot.items.some((i) => i.name.toLowerCase().includes(term));
-  });
+  // Match on the slot name or what currently occupies it. There is no hidden
+  // history in this view: this is the kit the log most recently saw, not an
+  // inventory the game never exposed to us.
+  const slots = stats.loadout.filter((slot) => !term
+    || (slot.label || slot.port).toLowerCase().includes(term)
+    || slot.items.some((item) => item.name.toLowerCase().includes(term)));
 
   if (!slots.length) {
     host.append(el('p', 'muted', 'Nothing matches that search.'));
     return;
   }
 
-  // The server already orders slots by category; preserve that grouping.
-  const byCategory = new Map();
-  for (const slot of slots) {
-    if (!byCategory.has(slot.category)) byCategory.set(slot.category, []);
-    byCategory.get(slot.category).push(slot);
-  }
+  const screen = el('section', 'loadout-character');
+  const head = el('div', 'loadout-character-head');
+  const meta = stats.loadoutAsOf
+    ? `Last complete sighting ${relative(stats.loadoutAsOf)}`
+    : 'Each card says when the log last saw it.';
+  head.append(el('div', 'loadout-eyebrow', term ? `${slots.length} matching slots` : `${slots.length} observed slots`));
+  head.append(el('p', 'muted', meta));
+  screen.append(head);
 
-  for (const [category, slots] of byCategory) {
-    host.append(sectionHeading(category, `${slots.length} slots`));
+  const rig = el('div', 'loadout-rig');
+  const left = el('div', 'loadout-slots loadout-slots-left');
+  const right = el('div', 'loadout-slots loadout-slots-right');
 
-    const grid = el('div', 'card-grid');
+  for (const slot of slots)
+    (loadoutSide(slot) === 'left' ? left : right).append(loadoutSlotCard(slot));
 
-    for (const slot of slots) {
-      const card = el('article', 'card slot-card');
-
-      const icon = el('div', 'slot-icon');
-      icon.innerHTML = slotIconSvg(slot);
-      card.append(icon);
-
-      const body = el('div', 'slot-body');
-
-      const label = slot.slotCount > 1
-        ? `${slot.label} · ${slot.slotCount} slots`
-        : slot.label || slot.port;
-
-      body.append(el('div', 'card-label', label));
-
-      // What is in the family now; the churn goes behind a toggle.
-      for (const item of slot.items) {
-        const line = el('div', 'slot-current');
-        line.append(el('span', null, prettyItem(item.name)));
-        if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
-
-        // Community reference: size, grade, maker - when enabled and matched.
-        if (item.reference) {
-          const r = item.reference;
-          const bits = [];
-          if (r.size > 0) bits.push(`S${r.size}`);
-          if (r.grade > 0) bits.push(`grade ${r.grade}`);
-          if (r.manufacturer) bits.push(r.manufacturer);
-          if (bits.length) line.append(el('span', 'slot-ref', ` · ${bits.join(' · ')}`));
-        }
-
-        body.append(line);
-      }
-
-      if (slot.currentSeen)
-        body.append(el('div', 'slot-when', `equipped ${relative(slot.currentSeen)}`));
-
-      card.append(body);
-      grid.append(card);
-    }
-
-    host.append(grid);
-  }
+  rig.append(left, loadoutFigure(), right);
+  screen.append(rig);
+  host.append(screen);
 }
 
 /**
