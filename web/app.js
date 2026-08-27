@@ -1687,6 +1687,84 @@ $('#community-enable').addEventListener('click', (e) =>
 $('#settings-community-refresh').addEventListener('click', (e) =>
   setCommunity(true, $('#settings-community-status'), e.currentTarget));
 
+/* ---------- diagnostics ---------- */
+
+/**
+ * What a bug report would carry, said before it is written.
+ *
+ * The same rule the export block follows: the reader sees what would go
+ * before there is a file to send. Here it matters more, because the thing
+ * being weighed is privacy rather than size - "nothing personal is in it" is
+ * a claim, and a claim is worth less than the counts sitting next to it.
+ */
+/** Example lines are raw log text, so they are asked for rather than assumed. */
+const wantsSamples = () => $('#diag-samples').checked === true;
+
+async function renderDiagnostics() {
+  const preview = $('#diag-preview');
+
+  try {
+    const report = await getJson(`/api/diagnostics?samples=${wantsSamples()}`);
+    diagnosticsReport = report;
+
+    const unread = report.parser.unread
+      ? `${report.parser.unread} unreadable ${report.parser.unread === 1 ? 'line' : 'lines'}`
+        + ` across ${report.parser.tags.length} tag${report.parser.tags.length === 1 ? '' : 's'}`
+      : 'nothing unreadable in what was parsed this run';
+
+    preview.textContent = [
+      `${report.library.sessions} session${report.library.sessions === 1 ? '' : 's'}`,
+      `${report.library.builds.length} game build${report.library.builds.length === 1 ? '' : 's'}`,
+      unread,
+      report.parser.samples && report.parser.unread
+        ? 'with an example of each'
+        : null,
+    ].filter(Boolean).join(' · ');
+  } catch {
+    preview.textContent = '';
+  }
+}
+
+let diagnosticsReport = null;
+
+$('#diag-samples').addEventListener('change', () => renderDiagnostics());
+
+$('#diag-save').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const status = $('#diag-status');
+
+  button.disabled = true;
+  status.textContent = 'Building the report…';
+
+  let url = null;
+
+  try {
+    // Fetched again rather than saving what the preview held: the preview may
+    // have been drawn before a scan finished, and a report is worth nothing if
+    // it describes a moment other than the one being reported.
+    const report = await getJson(`/api/diagnostics?samples=${wantsSamples()}`);
+    diagnosticsReport = report;
+
+    const stamp = String(report.takenAt).slice(0, 10);
+    const name = `quantumwake-report-${stamp}.json`;
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    url = URL.createObjectURL(blob);
+
+    const link = el('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+
+    status.textContent = `Saved ${name}. Read it, then attach it to an issue.`;
+  } catch (err) {
+    status.textContent = `The report could not be built: ${err.message}`;
+  } finally {
+    if (url) URL.revokeObjectURL(url);
+    button.disabled = false;
+  }
+});
+
 /* ---------- trade advice ---------- */
 
 let adviceFor = null;
@@ -5062,6 +5140,7 @@ async function renderSettings() {
   await renderUexFeeds();
   await renderSignals();
   await renderExportPreview();
+  await renderDiagnostics();
 }
 
 /* ---------- files other pilots have shared ---------- */

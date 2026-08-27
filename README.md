@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![827 tests](https://img.shields.io/badge/tests-827%20passing-4fd48a)
+![827 tests](https://img.shields.io/badge/tests-854%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -271,7 +271,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 827 tests
+dotnet test Quantumwake.slnx      # 854 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -360,6 +360,23 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.30
+
+- **Settings can save a report to send with a bug.** If a page is empty for
+  you and full for somebody else, this is what says why: what the parser could
+  not read, the counts behind each page, your game builds, and which optional
+  data is on. It is a few kilobytes, and nothing is sent anywhere — it saves a
+  file you read first and attach yourself.
+- **Your logs stay on your machine.** The report is built from a list of
+  things the app chose to put in rather than a log with the private parts
+  taken out, so there is nothing to miss: no handle, no character or account
+  id, no folder names, no UEX keys.
+- **Example lines are a separate yes.** The fastest way to fix a parser is to
+  see the line that beat it, but a line is only in there because the game
+  changed its format — and a new format can write your name in a way nothing
+  knows to look for yet. So they are off unless you ask, and the page says
+  plainly what it cannot promise about them.
 
 ### 0.8.29
 
