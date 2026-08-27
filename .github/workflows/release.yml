@@ -128,9 +128,12 @@ jobs:
           $section = [regex]::Match($readme, $pattern)
 
           if ($section.Success) {
-            $changed = "### What changed`n" + $section.Groups[1].Value.Trim() + "`n`n"
+            $summary = $section.Groups[1].Value.Trim()
+            $changed = "### What changed`n" + $summary + "`n`n"
+            Set-Content -Path release-summary.md -Value $summary -Encoding utf8
           } else {
             Write-Host "::warning::No '### $version' section in README.md; releasing without a changelog."
+            $summary = ''
             $changed = ''
           }
 
@@ -176,3 +179,64 @@ jobs:
             'QuantumWake.exe' '${{ steps.archive.outputs.asset }}' `
             --title 'Quantum Wake ${{ steps.version.outputs.version }}' `
             --notes $notes
+
+      # Told to the support Discord after the release exists, not before: an
+      # announcement pointing at a release that failed to publish is worse than
+      # silence. Failing here must not fail the release either - the build is
+      # already out by this point, and a webhook is not a release step.
+      - name: Announce on Discord
+        if: success()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if (-not $env:DISCORD_WEBHOOK) {
+            Write-Host "No DISCORD_WEBHOOK secret set; skipping the announcement."
+            exit 0
+          }
+
+          $version = '${{ steps.version.outputs.version }}'
+          $tag = '${{ steps.version.outputs.tag }}'
+          $url = "https://github.com/${{ github.repository }}/releases/tag/$tag"
+
+          # Discord refuses an embed description over 4096 characters, and a
+          # long release would take the whole announcement down with it. Cut on
+          # a line boundary so the last bullet is whole rather than clipped
+          # mid-word, and say that there is more rather than implying there is not.
+          # Written by the Release step from the README section it published,
+          # so the announcement and the release page cannot disagree.
+          $summary = if (Test-Path release-summary.md) {
+            (Get-Content release-summary.md -Raw).Trim()
+          } else {
+            "See the release page for what changed."
+          }
+
+          if ($summary.Length -gt 3500) {
+            $cut = $summary.Substring(0, 3500)
+            $lastBreak = $cut.LastIndexOf("`n")
+            if ($lastBreak -gt 0) { $cut = $cut.Substring(0, $lastBreak) }
+            $summary = $cut + "`n`n[Read the rest on the release page]($url)"
+          }
+
+          $payload = @{
+            username = "Quantum Wake"
+            embeds = @(@{
+              title = "Quantum Wake $version is out"
+              url = $url
+              description = $summary
+              color = 4771799
+              footer = @{ text = "Download QuantumWake.exe from the release page" }
+            })
+          } | ConvertTo-Json -Depth 6 -Compress
+
+          # The webhook is a secret and stays one: never echoed, never written
+          # to a file, and the response body is not printed either.
+          try {
+            Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK -Method Post `
+              -ContentType 'application/json; charset=utf-8' `
+              -Body ([System.Text.Encoding]::UTF8.GetBytes($payload)) | Out-Null
+            Write-Host "Announced $version to Discord."
+          } catch {
+            Write-Host "::warning::Discord announcement failed: $($_.Exception.Message)"
+          }

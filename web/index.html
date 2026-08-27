@@ -1569,6 +1569,39 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>Report a problem</h3>
+        <button class="ghost" id="diag-save">Save a report</button>
+      </div>
+      <p class="muted">
+        If a page is empty here and full for somebody else, this is what tells
+        us why. It holds what the parser could not read &mdash; a count per
+        unrecognised line and one example of each &mdash; with the counts behind
+        each page, your game builds, and which optional data is turned on.
+      </p>
+      <p class="muted">
+        <b>Your logs stay here.</b> The report is built from a list of things
+        this app chose to include, not from a log with the private parts taken
+        out, so there is nothing to miss: no handle, no character or account id,
+        no folder names, no UEX keys. Nothing is sent anywhere &mdash; it saves
+        a file you can read first and then attach to an issue.
+      </p>
+      <label class="toggle">
+        <input type="checkbox" id="diag-samples">
+        <span>Include an example of each unreadable line</span>
+      </label>
+      <p class="muted" id="diag-samples-copy">
+        These are raw lines from your log, and they are the fastest way to fix a
+        parser. Names and ids we recognise are replaced &mdash; but a line is only
+        in here because the game changed its format, and a new format can write
+        your name in a way nothing knows to look for yet. <b>Read them before you
+        send them.</b>
+      </p>
+      <span class="muted" id="diag-preview"></span>
+      <span class="muted" id="diag-status"></span>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Share what you have</h3>
         <button class="ghost" id="export-save">Save a file</button>
       </div>
@@ -1690,13 +1723,22 @@
           are off until you say otherwise.
         </p>
 
+        <p class="about-note">
+          <b>There is a Discord</b> for questions, bug reports and whatever the
+          logs turn up next:
+          <a href="https://discord.gg/AV3cDzRs39" target="_blank" rel="noopener noreferrer">discord.gg/AV3cDzRs39</a>.
+          It is the place to say a page looks wrong, which is worth more than
+          it sounds: most of what this reads was found by somebody noticing a
+          number that could not be right.
+        </p>
+
         <dl class="about-facts">
           <div><dt>Version</dt><dd id="about-version">—</dd></div>
           <div><dt>Install</dt><dd id="about-install">—</dd></div>
           <div><dt>Dashboard</dt><dd>127.0.0.1:31337</dd></div>
           <div><dt>Licence</dt><dd>Apache 2.0</dd></div>
           <div><dt>Built by</dt><dd>nekron</dd></div>
-          <div><dt>Discord</dt><dd>nekhron</dd></div>
+          <div><dt>Discord</dt><dd><a href="https://discord.gg/AV3cDzRs39" target="_blank" rel="noopener noreferrer">discord.gg/AV3cDzRs39</a></dd></div>
         </dl>
 
         <h2 class="spaced">Credits</h2>
