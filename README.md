@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![798 tests](https://img.shields.io/badge/tests-798%20passing-4fd48a)
+![827 tests](https://img.shields.io/badge/tests-827%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -78,7 +78,7 @@ events, not a radar.*
 | **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on. Click a commodity for every counter that trades it — price, what it costs you against the best, stock or demand, and whether it sits in policed or lawless space |
 | **Commodity** | One good in full, opened from Market: what it has been worth day by day, demand against supply over the same weeks, every counter that buys it and every counter that stocks it, and your own receipts for it. Deep-linkable — `#commodity/Aluminum` |
 | **Loot** | When each item first appeared in your inventories, with the place |
-| **Loadout** | The kit you are wearing, by slot, with size, grade and maker |
+| **Loadout** | The kit you are wearing, arranged around a character frame — worn armour on the body, stowed weapons, magazines, medical and tools in the field kit beside it, each with size, grade and maker, and when the log last saw it |
 | **Stash** | What is in your inventory and where you left it |
 | **Settings** | The overlay switch, the community dataset, UEX, the log cache |
 
@@ -103,6 +103,14 @@ back to the community.
     <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — every counter that trades a commodity: price, what it costs against the best, stock, and whether the law reaches it</sub></td>
   </tr>
 </table>
+
+![The Loadout page](docs/images/loadout.png)
+
+*The 18 slots this install has observed, arranged around the pilot: worn
+armour on the frame, stowed weapons and supplies in the field kit. Every card
+carries when the log last saw it — four days for most of this kit, nine for the
+barrel — because this is what the log watched being equipped, not a live
+inventory read out of the game.*
 
 Names are real names — New Babbage, not `Stanton4_NewBabbage`; a Genoa power
 plant, not `POWR_JUST_S02_Genoa_SCItem` — read from your own `Data.p4k` at
@@ -263,7 +271,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 798 tests
+dotnet test Quantumwake.slnx      # 827 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -352,6 +360,44 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.29
+
+- **The first run no longer assumes the newest patch wiped your account.**
+  It offered the date of the newest patch in your logs, which meant pressing
+  *Start flying* could quietly stop counting months of history — 4.9 and 4.10
+  both kept long-term persistence, so neither ended anybody’s account. The
+  date offered is now the last wipe there is evidence of, with the newest
+  patch named underneath as something to pick rather than something already
+  picked. If your history already starts later than it should, move the date
+  back in Settings and every session returns — nothing was ever deleted.
+- **The wipe you keep is recorded by name**, rather than as “set at first
+  run”, which says when the line was decided rather than what it is.
+- **The community dataset says which game build it was made from**, and tells
+  you when your own logs have moved past it. A patch adds ships, items and
+  commodities the downloaded copy has never heard of, and every one of them
+  showed as a bare id with nothing to explain why — the block reported a
+  count and a download date, neither of which answers whether it is current.
+  It now reads *203 commodities · dumped for 4.10.0-LIVE.12519617 · fetched
+  Aug 27, 2026*, and says plainly when that build is older than the patch you
+  are playing. Nothing goes out to check: both numbers are already on this
+  machine.
+- **A Refresh button for it**, which there was no way to do short of *Disable
+  and delete* followed by *Download*. A refresh replaces the files in place,
+  so a failed one leaves the copy you had.
+- **A failed download says what failed.** Eleven files are fetched and any of
+  them going wrong read as the same sentence with nothing to act on; the
+  reason now reaches the page.
+- **The dashboard no longer trusts every page in your browser.** Any website
+  you visit can quietly send requests to programs on your own machine, and
+  until now this one would have acted on them — cleared imports, replaced
+  UEX keys, started an update. Requests made on another website’s behalf
+  are now refused, including the DNS trick that lets a page read your data
+  rather than just poke at it. Nothing changes in how you use the app;
+  reading it over the LAN with `-Lan` works as before.
+- Nothing you can see: the README now shows the Loadout page, its line in the
+  feature table had been describing the list it replaced, and the parser was
+  re-checked against 4.10 — every tag still matches.
 
 ### 0.8.24
 
