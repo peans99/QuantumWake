@@ -361,6 +361,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.31
+
+- **There is a Discord now**, linked from the About page:
+  [discord.gg/AV3cDzRs39](https://discord.gg/AV3cDzRs39). Questions, bug
+  reports, and a place to say a page looks wrong — which is worth more than
+  it sounds, since most of what this app reads was found by somebody noticing
+  a number that could not be right.
+- Nothing you can see: new releases are announced there automatically.
+
 ### 0.8.29
 
 - **The first run no longer assumes the newest patch wiped your account.**
