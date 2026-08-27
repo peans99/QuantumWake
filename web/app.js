@@ -11693,7 +11693,13 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * would otherwise hide in Settings while the app looked half-empty. Applying
  * them reloads the page so every view boots with the datasets in.
  */
+/* What the wizard offered for the wipe, so the submit can say which patch it
+   was rather than recording the day the question was answered. */
+let setupWipeOffered = null;
+let setupWipePatch = 'set at first run';
+
 async function maybeShowSetup() {
+
   if (isOverlay) return;
 
   // ?setup=1 forces the wizard - a preview that skips nothing permanent.
@@ -11734,18 +11740,27 @@ async function maybeShowSetup() {
       list.append(row);
     }
 
-    // The wipe, offered before anything has been counted. The date defaults to
-    // the newest patch this install has logs from, because a first run on an
-    // old machine is exactly when "why is my total so big" starts.
+    // The wipe, offered before anything has been counted. It defaults to the
+    // last wipe there is evidence of, not to the newest patch: a patch is not
+    // a wipe - 4.9 and 4.10 both kept long-term persistence - and defaulting to
+    // the newest one quietly asserted a reset that never happened, hiding every
+    // session before it. The newest patch is named underneath instead, for the
+    // reader whose last wipe really was that one.
     try {
       const wipe = await getJson('/api/wipe');
       const suggested = wipe.suggested;
 
-      $('#setup-wipe').value = new Date(suggested ? suggested.at : wipe.at || Date.now())
+      $('#setup-wipe').value = new Date(wipe.at || wipe.default || Date.now())
         .toISOString().slice(0, 10);
 
+      setupWipeOffered = $('#setup-wipe').value;
+      setupWipePatch = wipe.patch || 'set at first run';
+
+
       $('#setup-wipe-note').textContent = suggested
-        ? `${suggested.patch} arrived then — change it if your last wipe was another one.`
+        ? `${wipe.patch} — the last wipe this install has evidence of.`
+          + ` ${suggested.patch} arrived ${dayUtc(suggested.at)}; set it to then only if`
+          + ' that one reset your account.'
         : `${wipe.patch} — change it if your last wipe was another one.`;
     } catch { /* the field keeps whatever the markup had */ }
 
@@ -11822,10 +11837,16 @@ async function maybeShowSetup() {
 
       if (chosenWipe) {
         status.textContent = 'Setting where your history starts…';
+
+        // Name the patch when the offered date is kept: 'set at first run' says
+        // when the line was decided, which is not what the Settings page needs
+        // to tell somebody months later.
+        const patch = chosenWipe === setupWipeOffered ? setupWipePatch : 'set at first run';
+
         await fetch('/api/wipe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ at: `${chosenWipe}T00:00:00Z`, patch: 'set at first run' }),
+          body: JSON.stringify({ at: `${chosenWipe}T00:00:00Z`, patch }),
         }).catch(() => { /* Settings can set it later */ });
       }
 
