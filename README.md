@@ -78,7 +78,7 @@ events, not a radar.*
 | **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on. Click a commodity for every counter that trades it — price, what it costs you against the best, stock or demand, and whether it sits in policed or lawless space |
 | **Commodity** | One good in full, opened from Market: what it has been worth day by day, demand against supply over the same weeks, every counter that buys it and every counter that stocks it, and your own receipts for it. Deep-linkable — `#commodity/Aluminum` |
 | **Loot** | When each item first appeared in your inventories, with the place |
-| **Loadout** | The kit you are wearing, by slot, with size, grade and maker |
+| **Loadout** | The kit you are wearing, arranged around a character frame — worn armour on the body, stowed weapons, magazines, medical and tools in the field kit beside it, each with size, grade and maker, and when the log last saw it |
 | **Stash** | What is in your inventory and where you left it |
 | **Settings** | The overlay switch, the community dataset, UEX, the log cache |
 
@@ -103,6 +103,14 @@ back to the community.
     <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — every counter that trades a commodity: price, what it costs against the best, stock, and whether the law reaches it</sub></td>
   </tr>
 </table>
+
+![The Loadout page](docs/images/loadout.png)
+
+*The 18 slots this install has observed, arranged around the pilot: worn
+armour on the frame, stowed weapons and supplies in the field kit. Every card
+carries when the log last saw it — four days for most of this kit, nine for the
+barrel — because this is what the log watched being equipped, not a live
+inventory read out of the game.*
 
 Names are real names — New Babbage, not `Stanton4_NewBabbage`; a Genoa power
 plant, not `POWR_JUST_S02_Genoa_SCItem` — read from your own `Data.p4k` at
@@ -352,6 +360,11 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.25
+
+- Nothing you can see: the README now shows the Loadout page, and its line
+  in the feature table had been describing the list it replaced.
 
 ### 0.8.24
 
