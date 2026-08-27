@@ -384,26 +384,33 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.30
+### 0.8.32
 
 - **Settings can save a report to send with a bug.** If a page is empty for
   you and full for somebody else, this is what says why: what the parser could
   not read, the counts behind each page, your game builds, and which optional
-  data is on. It is a few kilobytes, and nothing is sent anywhere — it saves a
+  data is on. It is about a kilobyte, and nothing is sent anywhere — it saves a
   file you read first and attach yourself.
-- **Your logs stay on your machine.** The report is built from a list of
-  things the app chose to put in rather than a log with the private parts
-  taken out, so there is nothing to miss: no handle, no character or account
-  id, no folder names, no UEX keys.
+- **Your logs stay on your machine.** A gameplay log is megabytes, most paste
+  services refuse it, and it names the pilots you flew with as well as you. The
+  report carries none of it: it is built from a list of things the app chose to
+  include rather than a log with the private parts taken out, so there is no
+  pattern to miss — no handle, no character or account id, no folder names, no
+  UEX keys.
 - **Example lines are a separate yes.** The fastest way to fix a parser is to
   see the line that beat it, but a line is only in there because the game
   changed its format — and a new format can write your name in a way nothing
   knows to look for yet. So they are off unless you ask, and the page says
   plainly what it cannot promise about them.
-- Nothing you can see: [docs/bug-reports.md](docs/bug-reports.md) writes the
-  whole of this down — why a log is the wrong thing to send, what the report
-  holds, and what a maintainer reads first — and the Loadout screenshot is
-  retaken against a current install.
+- **There is a Discord**, linked from the About page:
+  [discord.gg/AV3cDzRs39](https://discord.gg/AV3cDzRs39). Questions, bug
+  reports, and a place to say a page looks wrong — which is worth more than it
+  sounds, since most of what this app reads was found by somebody noticing a
+  number that could not be right.
+- Nothing you can see: new releases are announced there automatically,
+  [docs/bug-reports.md](docs/bug-reports.md) writes down why a log is the wrong
+  thing to send and what a maintainer reads first, and the Loadout screenshot
+  is retaken against a current install.
 
 ### 0.8.29
 
