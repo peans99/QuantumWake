@@ -8,6 +8,8 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
+![798 tests](https://img.shields.io/badge/tests-803%20passing-4fd48a)
+
 ![798 tests](https://img.shields.io/badge/tests-815%20passing-4fd48a)
 
 ![798 tests](https://img.shields.io/badge/tests-805%20passing-4fd48a)
@@ -273,6 +275,8 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
+dotnet test Quantumwake.slnx      # 803 tests
+
 dotnet test Quantumwake.slnx      # 815 tests
 
 dotnet test Quantumwake.slnx      # 805 tests
@@ -364,6 +368,20 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.28
+
+- **The first run no longer assumes the newest patch wiped your account.**
+  It offered the date of the newest patch in your logs, which meant pressing
+  *Start flying* could quietly stop counting months of history — 4.9 and 4.10
+  both kept long-term persistence, so neither ended anybody’s account. The
+  date offered is now the last wipe there is evidence of, with the newest
+  patch named underneath as something to pick rather than something already
+  picked.
+- **The wipe you keep is recorded by name.** It used to be stored as “set at
+  first run”, which says when the line was decided rather than what it is.
+  Nothing was ever deleted: if your history starts later than it should,
+  move the date back in Settings and every session returns.
 
 ### 0.8.27
 
