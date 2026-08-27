@@ -1657,7 +1657,14 @@ async function setCommunity(enabled, statusNode, button) {
 
   try {
     const result = await fetch(`/api/community/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
-    if (!result.ok) throw new Error((await result.json()).title || result.statusText);
+    if (!result.ok) {
+      // The endpoint puts the cause in `detail` - which file, which status -
+      // and showing only the title made every one of eleven downloads fail
+      // with the same sentence and nothing to act on.
+      const problem = await result.json().catch(() => ({}));
+      throw new Error([problem.title || result.statusText, problem.detail]
+        .filter(Boolean).join(' '));
+    }
 
     statusNode.textContent = '';
     await loadCommodities();
@@ -1672,6 +1679,13 @@ async function setCommunity(enabled, statusNode, button) {
 
 $('#community-enable').addEventListener('click', (e) =>
   setCommunity(true, $('#community-status'), e.currentTarget));
+
+// Refresh is the same call as enable: EnableAsync re-downloads and overwrites
+// every digest, so there was nothing to add underneath - only a button saying
+// so, because Download hidden behind 'already downloaded' left no way to ask
+// for newer files short of deleting the copy you had.
+$('#settings-community-refresh').addEventListener('click', (e) =>
+  setCommunity(true, $('#settings-community-status'), e.currentTarget));
 
 /* ---------- trade advice ---------- */
 
@@ -5006,11 +5020,26 @@ async function renderSettings() {
     const community = await getJson('/api/community');
 
     $('#settings-community-enable').hidden = community.enabled;
+    $('#settings-community-refresh').hidden = !community.enabled;
     $('#settings-community-disable').hidden = !community.enabled;
 
+    // The dump it was made from, not only the day it was fetched: a fetch date
+    // says when this machine asked, which is not how old the data is - the dump
+    // for a patch lands days after the patch does.
     $('#settings-community-status').textContent = community.enabled
-      ? `${community.commodities} commodities, fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`
+      ? [`${community.commodities} commodities`,
+         community.dump ? `dumped for ${community.dump}` : 'dump unknown',
+         `fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`].join(' · ')
       : 'not downloaded';
+
+    const behind = $('#settings-community-behind');
+    behind.hidden = !community.behind;
+
+    if (community.behind) {
+      behind.textContent = `Your logs are on build ${community.playing}, and this data was made`
+        + ` from ${community.dump}. Anything that patch added — ships, items,`
+        + ' commodities — has no name here until you refresh.';
+    }
   } catch { /* as above */ }
 
   // UEX.
@@ -11664,7 +11693,13 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * would otherwise hide in Settings while the app looked half-empty. Applying
  * them reloads the page so every view boots with the datasets in.
  */
+/* What the wizard offered for the wipe, so the submit can say which patch it
+   was rather than recording the day the question was answered. */
+let setupWipeOffered = null;
+let setupWipePatch = 'set at first run';
+
 async function maybeShowSetup() {
+
   if (isOverlay) return;
 
   // ?setup=1 forces the wizard - a preview that skips nothing permanent.
@@ -11705,18 +11740,27 @@ async function maybeShowSetup() {
       list.append(row);
     }
 
-    // The wipe, offered before anything has been counted. The date defaults to
-    // the newest patch this install has logs from, because a first run on an
-    // old machine is exactly when "why is my total so big" starts.
+    // The wipe, offered before anything has been counted. It defaults to the
+    // last wipe there is evidence of, not to the newest patch: a patch is not
+    // a wipe - 4.9 and 4.10 both kept long-term persistence - and defaulting to
+    // the newest one quietly asserted a reset that never happened, hiding every
+    // session before it. The newest patch is named underneath instead, for the
+    // reader whose last wipe really was that one.
     try {
       const wipe = await getJson('/api/wipe');
       const suggested = wipe.suggested;
 
-      $('#setup-wipe').value = new Date(suggested ? suggested.at : wipe.at || Date.now())
+      $('#setup-wipe').value = new Date(wipe.at || wipe.default || Date.now())
         .toISOString().slice(0, 10);
 
+      setupWipeOffered = $('#setup-wipe').value;
+      setupWipePatch = wipe.patch || 'set at first run';
+
+
       $('#setup-wipe-note').textContent = suggested
-        ? `${suggested.patch} arrived then — change it if your last wipe was another one.`
+        ? `${wipe.patch} — the last wipe this install has evidence of.`
+          + ` ${suggested.patch} arrived ${dayUtc(suggested.at)}; set it to then only if`
+          + ' that one reset your account.'
         : `${wipe.patch} — change it if your last wipe was another one.`;
     } catch { /* the field keeps whatever the markup had */ }
 
@@ -11793,10 +11837,16 @@ async function maybeShowSetup() {
 
       if (chosenWipe) {
         status.textContent = 'Setting where your history starts…';
+
+        // Name the patch when the offered date is kept: 'set at first run' says
+        // when the line was decided, which is not what the Settings page needs
+        // to tell somebody months later.
+        const patch = chosenWipe === setupWipeOffered ? setupWipePatch : 'set at first run';
+
         await fetch('/api/wipe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ at: `${chosenWipe}T00:00:00Z`, patch: 'set at first run' }),
+          body: JSON.stringify({ at: `${chosenWipe}T00:00:00Z`, patch }),
         }).catch(() => { /* Settings can set it later */ });
       }
 
