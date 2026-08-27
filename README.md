@@ -8,11 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![798 tests](https://img.shields.io/badge/tests-803%20passing-4fd48a)
-
-![798 tests](https://img.shields.io/badge/tests-815%20passing-4fd48a)
-
-![798 tests](https://img.shields.io/badge/tests-805%20passing-4fd48a)
+![827 tests](https://img.shields.io/badge/tests-827%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -275,11 +271,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 803 tests
-
-dotnet test Quantumwake.slnx      # 815 tests
-
-dotnet test Quantumwake.slnx      # 805 tests
+dotnet test Quantumwake.slnx      # 827 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -369,7 +361,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.28
+### 0.8.29
 
 - **The first run no longer assumes the newest patch wiped your account.**
   It offered the date of the newest patch in your logs, which meant pressing
@@ -377,14 +369,10 @@ release workflow lifts it from here, so it is written once.
   both kept long-term persistence, so neither ended anybody’s account. The
   date offered is now the last wipe there is evidence of, with the newest
   patch named underneath as something to pick rather than something already
-  picked.
-- **The wipe you keep is recorded by name.** It used to be stored as “set at
-  first run”, which says when the line was decided rather than what it is.
-  Nothing was ever deleted: if your history starts later than it should,
-  move the date back in Settings and every session returns.
-
-### 0.8.27
-
+  picked. If your history already starts later than it should, move the date
+  back in Settings and every session returns — nothing was ever deleted.
+- **The wipe you keep is recorded by name**, rather than as “set at first
+  run”, which says when the line was decided rather than what it is.
 - **The community dataset says which game build it was made from**, and tells
   you when your own logs have moved past it. A patch adds ships, items and
   commodities the downloaded copy has never heard of, and every one of them
@@ -394,27 +382,22 @@ release workflow lifts it from here, so it is written once.
   Aug 27, 2026*, and says plainly when that build is older than the patch you
   are playing. Nothing goes out to check: both numbers are already on this
   machine.
-- **A Refresh button**, which there was no way to do short of *Disable and
-  delete* followed by *Download*. A refresh replaces the files in place, so a
-  failed one leaves the copy you had.
+- **A Refresh button for it**, which there was no way to do short of *Disable
+  and delete* followed by *Download*. A refresh replaces the files in place,
+  so a failed one leaves the copy you had.
 - **A failed download says what failed.** Eleven files are fetched and any of
   them going wrong read as the same sentence with nothing to act on; the
   reason now reaches the page.
-
-### 0.8.26
-
 - **The dashboard no longer trusts every page in your browser.** Any website
   you visit can quietly send requests to programs on your own machine, and
-  until now this one would have acted on them - cleared imports, replaced
+  until now this one would have acted on them — cleared imports, replaced
   UEX keys, started an update. Requests made on another website’s behalf
   are now refused, including the DNS trick that lets a page read your data
   rather than just poke at it. Nothing changes in how you use the app;
   reading it over the LAN with `-Lan` works as before.
-
-### 0.8.25
-
-- Nothing you can see: the README now shows the Loadout page, and its line
-  in the feature table had been describing the list it replaced.
+- Nothing you can see: the README now shows the Loadout page, its line in the
+  feature table had been describing the list it replaced, and the parser was
+  re-checked against 4.10 — every tag still matches.
 
 ### 0.8.24
 
