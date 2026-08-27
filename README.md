@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![798 tests](https://img.shields.io/badge/tests-798%20passing-4fd48a)
+![798 tests](https://img.shields.io/badge/tests-815%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -263,7 +263,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 798 tests
+dotnet test Quantumwake.slnx      # 815 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -352,6 +352,24 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.27
+
+- **The community dataset says which game build it was made from**, and tells
+  you when your own logs have moved past it. A patch adds ships, items and
+  commodities the downloaded copy has never heard of, and every one of them
+  showed as a bare id with nothing to explain why — the block reported a
+  count and a download date, neither of which answers whether it is current.
+  It now reads *203 commodities · dumped for 4.10.0-LIVE.12519617 · fetched
+  Aug 27, 2026*, and says plainly when that build is older than the patch you
+  are playing. Nothing goes out to check: both numbers are already on this
+  machine.
+- **A Refresh button**, which there was no way to do short of *Disable and
+  delete* followed by *Download*. A refresh replaces the files in place, so a
+  failed one leaves the copy you had.
+- **A failed download says what failed.** Eleven files are fetched and any of
+  them going wrong read as the same sentence with nothing to act on; the
+  reason now reaches the page.
 
 ### 0.8.24
 
