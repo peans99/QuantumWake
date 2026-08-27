@@ -1487,19 +1487,25 @@
       <div class="option-head">
         <h3>Community commodity names</h3>
         <button class="ghost" id="settings-community-enable" hidden>Download</button>
+        <button class="ghost" id="settings-community-refresh" hidden>Refresh</button>
+
         <button class="ghost danger" id="settings-community-disable" hidden>Disable and delete</button>
       </div>
       <p class="muted" id="settings-community-copy">
         Commodity names for your cargo, where each commodity trades, and the
         ship and item reference for the Fleet and Loadout pages — all from
         StarCitizenWiki / scunpacked-data. Enabling downloads a set of public
-        files (~110&nbsp;MB, kept as a few MB) into local app data. Fetched when
-        you ask and never again on its own — this one has no automatic refresh,
-        because a commodity's name does not change while you play. Disabling
-        deletes the local copy.
+        files (~110&nbsp;MB, kept as a few MB) into local app data. Fetched only
+        when you ask — nothing here goes out on a timer or at startup. A game
+        patch adds ships, items and commodities the dump does not have yet, so
+        this says which build it was made from and tells you when that is
+        older than the patch your logs are on. Disabling deletes the local
+        copy.
       </p>
       <span class="muted" id="settings-community-status"></span>
+      <p class="option-stale" id="settings-community-behind" hidden></p>
     </div>
+
 
     <div class="option-block">
       <div class="option-head">

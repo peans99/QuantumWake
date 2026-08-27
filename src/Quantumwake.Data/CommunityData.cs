@@ -1,5 +1,6 @@
 using Quantumwake.Core;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Quantumwake.Data;
 
@@ -128,7 +129,7 @@ public sealed record BlueprintInfo(
 /// so startup loads kilobytes rather than re-parsing the raw file.
 /// </para>
 /// </remarks>
-public sealed class CommunityData
+public sealed partial class CommunityData
 {
     /// <summary>Pinned sources. Raw files, no API, no query strings.</summary>
     public const string CommoditiesUrl =
@@ -164,7 +165,24 @@ public sealed class CommunityData
     public const string StarmapUrl =
         "https://raw.githubusercontent.com/StarCitizenWiki/scunpacked-data/master/starmap_positions.json";
 
+    /// <summary>
+    /// The repository history, read once per fetch to learn which game build
+    /// the files were dumped from.
+    /// </summary>
+    /// <remarks>
+    /// scunpacked stamps each dump commit with the build it was generated
+    /// against - "4.10.0-LIVE.12519617" - and a Star Citizen log names the same
+    /// number in its BackupNameAttachment. That makes "is this dataset older
+    /// than the patch I am playing?" a comparison of two build numbers rather
+    /// than of two dates, which is the difference between an answer and a
+    /// guess: dumps land days after a patch, so a date says stale when it is
+    /// merely later.
+    /// </remarks>
+    public const string HistoryUrl =
+        "https://api.github.com/repos/StarCitizenWiki/scunpacked-data/commits?per_page=20";
+
     private readonly string _directory;
+
     private Dictionary<string, CommodityInfo> _byId = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ShipInfo> _ships = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, List<ShipSlot>> _shipSlots = new(StringComparer.OrdinalIgnoreCase);
@@ -196,6 +214,43 @@ public sealed class CommunityData
     public bool IsEnabled => _byId.Count > 0;
     public int Count => _byId.Count;
     public DateTimeOffset? FetchedAt { get; private set; }
+
+    /// <summary>
+    /// The dump these files came from - "4.10.0-LIVE.12519617" - or null when
+    /// the history could not be read, or when the cache predates this being
+    /// recorded.
+    /// </summary>
+    public string? Dump { get; private set; }
+
+    /// <summary>The build number inside <see cref="Dump"/>, for comparing.</summary>
+    public string? DumpBuild => BuildIn(Dump);
+
+    /// <summary>
+    /// The build number in a dump stamp or a log’s build tag.
+    /// </summary>
+    /// <remarks>
+    /// One reader for both because they carry the same number in different
+    /// wrappers: "4.10.0-LIVE.12519617" from the dataset, "Build(12519617) 27
+    /// Aug 26 (09 47 03)" from a log header. Matching the last run of digits
+    /// of real length keeps the 4, the 10 and the 0 out of it.
+    /// </remarks>
+    public static string? BuildIn(string? stamp)
+    {
+        if (string.IsNullOrWhiteSpace(stamp))
+            return null;
+
+        var m = BuildNumberRegex().Match(stamp);
+
+        return m.Success ? m.Groups["build"].Value : null;
+    }
+
+    [GeneratedRegex(@"(?<build>\d{6,})", RegexOptions.Compiled)]
+    private static partial Regex BuildNumberRegex();
+
+    /// <summary>A dump commit subject, which is the build stamp and nothing else.</summary>
+    [GeneratedRegex(@"^\d+\.\d+(\.\d+)?-[A-Za-z]+\.\d{6,}$", RegexOptions.Compiled)]
+    private static partial Regex DumpStampRegex();
+
 
     /// <summary>The commodity name for a logged resource id, or null.</summary>
     public string? Commodity(string? resourceId) =>
@@ -327,7 +382,13 @@ public sealed class CommunityData
         File.WriteAllText(ResourceSpawnsDigestPath, JsonSerializer.Serialize(spawns));
         File.WriteAllText(BlueprintsDigestPath, JsonSerializer.Serialize(blueprints));
         File.WriteAllText(PlaceLoreDigestPath, JsonSerializer.Serialize(lore));
-        File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow)));
+        // Cosmetic, so it must not be able to fail the fetch: the files are
+        // already downloaded and digested by here, and a dataset that works
+        // while declining to name its dump is better than no dataset.
+        var dump = await ReadDumpAsync(http, token);
+
+        File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow, dump)));
+
 
         _byId = digest;
         _ships = ships;
@@ -339,10 +400,48 @@ public sealed class CommunityData
         _blueprints = blueprints;
         _placeLore = lore;
         FetchedAt = DateTimeOffset.UtcNow;
+        Dump = dump;
         return _byId.Count;
+
+    }
+
+    /// <summary>
+    /// The newest dump stamp in the repository history, or null.
+    /// </summary>
+    /// <remarks>
+    /// Only subjects that are a build stamp and nothing else are taken, so
+    /// housekeeping commits - "remove items.json from LFS tracking" sits
+    /// between two dumps in this history - are skipped rather than recorded as
+    /// the version of the data.
+    /// </remarks>
+    private static async Task<string?> ReadDumpAsync(HttpClient http, CancellationToken token)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(await http.GetStringAsync(HistoryUrl, token));
+
+            foreach (var entry in document.RootElement.EnumerateArray())
+            {
+                if (!entry.TryGetProperty("commit", out var commit)
+                    || !commit.TryGetProperty("message", out var message))
+                    continue;
+
+                var subject = (message.GetString() ?? string.Empty)
+                    .Split('\n')[0].Trim();
+
+                if (DumpStampRegex().IsMatch(subject))
+                    return subject;
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+        {
+        }
+
+        return null;
     }
 
     /// <summary>Deletes the cache and forgets everything.</summary>
+
     public void Disable()
     {
         if (Directory.Exists(_directory))
@@ -357,6 +456,7 @@ public sealed class CommunityData
         _blueprints = [];
         _placeLore = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
+        Dump = null;
     }
 
     private void TryLoad()
@@ -407,7 +507,14 @@ public sealed class CommunityData
                                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(MetaPath))
-                FetchedAt = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath))?.FetchedAt;
+            {
+                // A cache written before dumps were recorded deserialises with
+                // a null Dump, which reads as "not known" - the honest answer.
+                var meta = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath));
+                FetchedAt = meta?.FetchedAt;
+                Dump = meta?.Dump;
+            }
+
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -1080,5 +1187,5 @@ public sealed class CommunityData
             ? value.GetDouble()
             : null;
 
-    private sealed record Meta(DateTimeOffset FetchedAt);
+    private sealed record Meta(DateTimeOffset FetchedAt, string? Dump = null);
 }

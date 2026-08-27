@@ -221,6 +221,15 @@ public sealed class Page
     public void Serve(string url, string json) =>
         Do($"__fetch.routes[{Quote(url)}] = {json};");
 
+    /// <summary>Answers one URL with a refusal that still carries a body.</summary>
+    /// <remarks>
+    /// Distinct from <c>unreachable</c>, which rejects: a server that answers
+    /// 502 with a problem document is the case where the page has something to
+    /// report beyond "it failed".
+    /// </remarks>
+    public void Fail(string url, int status, string json) =>
+        Do($"__fetch.failures[{Quote(url)}] = {{ status: {status}, body: {json} }};");
+
     /// <summary>Every URL the page has fetched, in order.</summary>
     public IReadOnlyList<string> Fetched() =>
         ((object[])Eval("__fetch.calls.map(c => c.method + ' ' + c.url)")!)
