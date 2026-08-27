@@ -1463,6 +1463,91 @@ public static class ServerHost
             return Results.File(bytes, "application/json", ExportFileName(document));
         });
 
+        // What to send with a bug report. Read-only, and built by allow-list:
+        // every field is one this code chose to put in, rather than a log with
+        // the bad parts taken out. See Diagnostics for why that way round.
+        //
+        // No install path - it names a user folder on plenty of machines, and
+        // answers no parser question. No UEX keys; whether keys exist is a
+        // boolean. No handles: the one field carrying log text is scrubbed
+        // against the identifiers this install is known to have.
+        app.MapGet("/api/diagnostics", (LogLibrary lib, WipeStore wipes, UexData uex, bool? samples) =>
+        {
+            var sessions = lib.Store.All().ToList();
+            var stats = lib.Stats();
+
+            var known = sessions
+                .SelectMany(session => new[] { session.Handle, session.Geid })
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Example lines are a second yes, not part of the first: they are raw
+            // log text, and the only reason one exists is that a format changed -
+            // which is exactly when a name can appear in a shape nothing knows.
+            var health = lib.Health(known, samples == true);
+
+            return Results.Ok(new
+            {
+                producer = Producer(),
+                takenAt = DateTimeOffset.UtcNow,
+                install = new
+                {
+                    found = install is not null,
+                    channel = install?.Channel,
+                    hasGameLog = install?.HasGameLog ?? false,
+                    backups = install?.BackupLogs().Count() ?? 0,
+                },
+                library = new
+                {
+                    sessions = sessions.Count,
+                    counted = sessions.Count - lib.SessionsBeforeWipe(),
+                    first = sessions.Count > 0 ? sessions.Min(x => x.StartedAt) : (DateTimeOffset?)null,
+                    last = sessions.Count > 0 ? sessions.Max(x => x.StartedAt) : (DateTimeOffset?)null,
+                    builds = sessions
+                        .Select(x => CommunityData.BuildIn(x.BuildTag))
+                        .Where(x => x is not null)
+                        .GroupBy(x => x!, StringComparer.Ordinal)
+                        .OrderByDescending(g => g.Count())
+                        .Select(g => new { build = g.Key, sessions = g.Count() }),
+                },
+                parser = new
+                {
+                    unread = health.Unread,
+                    samples = samples == true,
+                    tags = health.ByTag,
+                },
+                // The counts behind "this page is empty for me".
+                views = new
+                {
+                    ships = stats.Ships.Count,
+                    places = stats.Locations.Count,
+                    destinations = stats.Destinations.Count,
+                    contracts = stats.ContractsSeen,
+                    purchases = stats.PurchaseCount,
+                    trades = stats.TradeCount,
+                    fleet = stats.FleetSize,
+                    loadout = stats.Loadout.Count,
+                    stash = stats.Stash.Count,
+                },
+                data = new
+                {
+                    community = lib.Community.IsEnabled,
+                    communityDump = lib.Community.Dump,
+                    uex = uex.IsEnabled,
+                    uexKeysStored = uex.HasCredentials,
+                },
+                wipe = new
+                {
+                    at = wipes.Current.At,
+                    patch = wipes.Current.Patch,
+                    scope = wipes.Current.Scope.ToString(),
+                    hidden = lib.SessionsBeforeWipe(),
+                },
+            });
+        });
+
         // Counts and the window, never rows: nothing leaves without a click, and
         // a click is worth more when it follows seeing what would go.
         app.MapGet("/api/export/preview", (ExportBuilder exports,

@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![827 tests](https://img.shields.io/badge/tests-827%20passing-4fd48a)
+![827 tests](https://img.shields.io/badge/tests-854%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -108,9 +108,9 @@ back to the community.
 
 *The 18 slots this install has observed, arranged around the pilot: worn
 armour on the frame, stowed weapons and supplies in the field kit. Every card
-carries when the log last saw it — four days for most of this kit, nine for the
-barrel — because this is what the log watched being equipped, not a live
-inventory read out of the game.*
+carries when the log last saw it — today for most of this kit, ten days for
+the barrel attachment nobody has touched since — because this is what the log
+watched being equipped, not a live inventory read out of the game.*
 
 Names are real names — New Babbage, not `Stanton4_NewBabbage`; a Genoa power
 plant, not `POWR_JUST_S02_Genoa_SCItem` — read from your own `Data.p4k` at
@@ -183,6 +183,28 @@ running Easy Anti-Cheat:
 The trade-off of doing it safely: an always-on-top window is **not** composited
 over exclusive fullscreen, so Star Citizen must run in **Borderless Windowed**
 for the overlay to be visible. The dashboard has no such limitation.
+
+## Reporting a problem
+
+If a page is empty here and full for somebody else, **Settings &rarr; Report a
+problem** saves a small file that says why: what the parser could not read, the
+counts behind each page, your game builds, and which optional data is on. It is
+about a kilobyte. Read it, then attach it to an issue.
+
+**Your logs stay on your machine.** A gameplay log here is 8 MB and 29,000
+lines, most paste services refuse it, and it names the pilots you flew with as
+well as you. The report carries none of it: it is built from a list of things
+the app chose to include rather than from a log with the private parts taken
+out, so there is no pattern to miss - no handle, no character or account id, no
+folder names, no UEX keys.
+
+The exception is the example lines, which are off unless you ask for them. A
+line is only in that list because the game changed its format, and a new format
+can write your name in a shape nothing knows to look for yet - so the page says
+so, and asks separately.
+
+[docs/bug-reports.md](docs/bug-reports.md) has the whole of it, including what a
+maintainer reads first.
 
 ## Requirements
 
@@ -271,7 +293,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 827 tests
+dotnet test Quantumwake.slnx      # 854 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -302,6 +324,7 @@ rather than eyeballed.
 - [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
 - [docs/naming.md](docs/naming.md) — why the project is called Quantum Wake
 - [docs/releasing.md](docs/releasing.md) — how a release is cut, and what enforces the version bump
+- [docs/bug-reports.md](docs/bug-reports.md) — what the problem report holds, and what it deliberately does not
 - [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
 
 ## Licence
@@ -360,6 +383,27 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.30
+
+- **Settings can save a report to send with a bug.** If a page is empty for
+  you and full for somebody else, this is what says why: what the parser could
+  not read, the counts behind each page, your game builds, and which optional
+  data is on. It is a few kilobytes, and nothing is sent anywhere — it saves a
+  file you read first and attach yourself.
+- **Your logs stay on your machine.** The report is built from a list of
+  things the app chose to put in rather than a log with the private parts
+  taken out, so there is nothing to miss: no handle, no character or account
+  id, no folder names, no UEX keys.
+- **Example lines are a separate yes.** The fastest way to fix a parser is to
+  see the line that beat it, but a line is only in there because the game
+  changed its format — and a new format can write your name in a way nothing
+  knows to look for yet. So they are off unless you ask, and the page says
+  plainly what it cannot promise about them.
+- Nothing you can see: [docs/bug-reports.md](docs/bug-reports.md) writes the
+  whole of this down — why a log is the wrong thing to send, what the report
+  holds, and what a maintainer reads first — and the Loadout screenshot is
+  retaken against a current install.
 
 ### 0.8.29
 
