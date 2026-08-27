@@ -132,6 +132,29 @@ public static class ServerHost
         builder.WebHost.UseUrls($"http://{(lan ? "0.0.0.0" : "127.0.0.1")}:{port}");
 
         var app = builder.Build();
+        // The browser on this machine will lend its loopback address to any
+        // page it is showing, so a request arriving over loopback still has to
+        // prove it was made *for* this app: a Host naming another site is DNS
+        // rebinding, and a write declaring a foreign Origin is another page's
+        // form. Requests from other machines fall through to the LAN guard
+        // below, whose read-only rule already says everything there is to say.
+        app.Use(async (context, next) =>
+        {
+            var remote = context.Connection.RemoteIpAddress;
+            var here = remote is null || IPAddress.IsLoopback(remote);
+
+            string? origin = context.Request.Headers.Origin;
+
+            if (!here || OriginGuard.Allows(context.Request.Method, context.Request.Host.Host, origin))
+            {
+                await next();
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { message = OriginGuard.Refusal });
+        });
+
 
         // Opening the dashboard to the LAN opens the API with it, and neither
         // has a login - so from off this machine it is read-only.
