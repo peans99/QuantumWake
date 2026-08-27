@@ -1,4 +1,5 @@
 using Quantumwake.Core.GameData;
+using Quantumwake.Core.Parsing;
 using Quantumwake.Core.Locations;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.State;
@@ -681,6 +682,23 @@ public sealed class LogLibrary : IDisposable
 
     public SessionStore Store => _store;
 
+    private readonly Dictionary<string, (int Count, string Sample)> _unread = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What the parser could not read, over the files this run actually parsed.
+    /// </summary>
+    /// <remarks>
+    /// Empty after a start that read everything from cache, which is the honest
+    /// answer rather than a stale one: nothing was parsed, so nothing was found
+    /// unreadable. A forced rescan fills it.
+    /// </remarks>
+    public ParserHealth Health(IEnumerable<string> known, bool samples = false)
+    {
+        lock (_unread)
+            return Diagnostics.Health(_unread.Values.Sum(v => v.Count), _unread, known, samples);
+    }
+
+
     /// <summary>
     /// The line a wipe draws, and how deep it goes.
     /// </summary>
@@ -815,7 +833,7 @@ public sealed class LogLibrary : IDisposable
             if (cached)
                 continue;
 
-            pending.Add((BuildSession(file), fingerprint));
+            pending.Add((BuildSession(file, _unread), fingerprint));
             parsed++;
 
             // Commit in batches so a long scan is not one giant transaction.
@@ -833,12 +851,31 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>Parses one log file into a summary.</summary>
-    public static SessionSummary BuildSession(string path)
+    public static SessionSummary BuildSession(string path) => BuildSession(path, null);
+
+    /// <summary>
+    /// Parses one log file, and reports what it could not read.
+    /// </summary>
+    /// <param name="unread">
+    /// Collects the tags this file defeated the parser with. A fresh parser per
+    /// file rather than one shared across the scan: it carries a half-read
+    /// session header between lines, and that state belongs to the file it came
+    /// from.
+    /// </param>
+    public static SessionSummary BuildSession(
+        string path, Dictionary<string, (int Count, string Sample)>? unread)
     {
         var builder = new SessionBuilder(path);
+        var parser = new LogEventParser();
 
-        foreach (var ev in LogFileReader.ReadEvents(path))
+        foreach (var ev in LogFileReader.ReadEvents(path, parser))
             builder.Add(ev);
+
+        if (unread is not null)
+        {
+            lock (unread)
+                unread.Merge(parser);
+        }
 
         return builder.Build();
     }
