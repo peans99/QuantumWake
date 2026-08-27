@@ -158,7 +158,11 @@ class El {
   fire(type, event) {
     let last;
     for (const handler of this.listeners[type] || []) {
-      last = handler(event || { target: this, preventDefault() {}, stopPropagation() {} });
+      // currentTarget as well as target: the page's handlers read it to reach
+      // the button that was pressed - disabling it while the work runs - and
+      // an event without it made every clickable control throw here rather
+      // than do its job.
+      last = handler(event || { target: this, currentTarget: this, preventDefault() {}, stopPropagation() {} });
     }
     return last;
   }
@@ -240,6 +244,7 @@ globalThis.__dom = {
     globalThis.__fetch.calls = [];
     globalThis.__fetch.unreachable = [];
     globalThis.__fetch.headers = {};
+    globalThis.__fetch.failures = {};
     globalThis.__downloads = [];
   },
 };
@@ -290,7 +295,7 @@ for (const [selector, card] of [
 ]) node(selector).dataset.card = card;
 
 /* Network: a routing table the test fills in, and a record of what was asked. */
-globalThis.__fetch = { routes: {}, calls: [], unreachable: [], headers: {} };
+globalThis.__fetch = { routes: {}, calls: [], unreachable: [], headers: {}, failures: {} };
 
 globalThis.fetch = (url, options) => {
   globalThis.__fetch.calls.push({ url, method: (options && options.method) || 'GET', body: options && options.body });
@@ -299,6 +304,21 @@ globalThis.fetch = (url, options) => {
   // app's error paths are reached only by that shape - not by a 404.
   if (globalThis.__fetch.unreachable.includes(url))
     return Promise.reject(new Error(`unreachable: ${url}`));
+
+  /* A refusal that still answers: an endpoint returning 502 with a problem
+     body is a different shape from a dropped connection, and the page reads
+     the body to say which of eleven files failed. */
+  const refusal = globalThis.__fetch.failures[url];
+  if (refusal) {
+    return Promise.resolve({
+      ok: false,
+      status: refusal.status,
+      statusText: 'Error',
+      headers: { get: () => null },
+      json: () => Promise.resolve(refusal.body),
+      text: () => Promise.resolve(JSON.stringify(refusal.body)),
+    });
+  }
 
   const body = Object.prototype.hasOwnProperty.call(globalThis.__fetch.routes, url)
     ? globalThis.__fetch.routes[url]
