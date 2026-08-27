@@ -291,12 +291,30 @@ public static class ServerHost
         // logs but never explains. Enabling it performs the application's one
         // and only outbound request - a single file, fetched on the user's
         // explicit click, cached locally. See CommunityData for the reasoning.
-        app.MapGet("/api/community", (LogLibrary lib) => new
+        app.MapGet("/api/community", (LogLibrary lib) =>
         {
-            enabled = lib.Community.IsEnabled,
-            commodities = lib.Community.Count,
-            fetchedAt = lib.Community.FetchedAt,
-            source = CommunityData.CommoditiesUrl
+            // The dump the files came from against the build the logs are on.
+            // Both numbers are already to hand - scunpacked stamps its commit,
+            // the log header names its build - so the page can say the dataset
+            // predates the patch without asking the network anything.
+            // The number only: a log's build tag carries the file's own date and
+            // time as well, which is noise in a sentence about versions.
+            var playing = CommunityData.BuildIn(PlayedBuild(lib));
+            var dumped = lib.Community.DumpBuild;
+
+            return new
+            {
+                enabled = lib.Community.IsEnabled,
+                commodities = lib.Community.Count,
+                fetchedAt = lib.Community.FetchedAt,
+                dump = lib.Community.Dump,
+                playing,
+                behind = lib.Community.IsEnabled
+                         && playing is not null
+                         && dumped is not null
+                         && !playing.Equals(dumped, StringComparison.Ordinal),
+                source = CommunityData.CommoditiesUrl
+            };
         });
 
         app.MapPost("/api/community/enable", async (LogLibrary lib, IHttpClientFactory httpFactory) =>
@@ -2035,7 +2053,22 @@ public static class ServerHost
 /// The wipe as the page reads it: names rather than a flags number, and the
 /// count of what it is holding back, which is the honest part.
 /// </summary>
+/// <summary>
+/// The build tag of the most recent session, or null when nothing is stored.
+/// </summary>
+/// <remarks>
+/// The newest session rather than the newest by version string, because
+/// "4.10" sorts below "4.9" as text and the question is what was played last.
+/// </remarks>
+static string? PlayedBuild(LogLibrary lib) =>
+    lib.Store.All()
+        .Where(s => !string.IsNullOrWhiteSpace(s.BuildTag))
+        .OrderByDescending(s => s.StartedAt)
+        .Select(s => s.BuildTag)
+        .FirstOrDefault();
+
 static object Describe(Wipe wipe, LogLibrary lib) => new
+
 {
     at = wipe.At == DateTimeOffset.MinValue ? (DateTimeOffset?)null : wipe.At,
     wipe.Patch,

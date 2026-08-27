@@ -1657,7 +1657,14 @@ async function setCommunity(enabled, statusNode, button) {
 
   try {
     const result = await fetch(`/api/community/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
-    if (!result.ok) throw new Error((await result.json()).title || result.statusText);
+    if (!result.ok) {
+      // The endpoint puts the cause in `detail` - which file, which status -
+      // and showing only the title made every one of eleven downloads fail
+      // with the same sentence and nothing to act on.
+      const problem = await result.json().catch(() => ({}));
+      throw new Error([problem.title || result.statusText, problem.detail]
+        .filter(Boolean).join(' '));
+    }
 
     statusNode.textContent = '';
     await loadCommodities();
@@ -1672,6 +1679,13 @@ async function setCommunity(enabled, statusNode, button) {
 
 $('#community-enable').addEventListener('click', (e) =>
   setCommunity(true, $('#community-status'), e.currentTarget));
+
+// Refresh is the same call as enable: EnableAsync re-downloads and overwrites
+// every digest, so there was nothing to add underneath - only a button saying
+// so, because Download hidden behind 'already downloaded' left no way to ask
+// for newer files short of deleting the copy you had.
+$('#settings-community-refresh').addEventListener('click', (e) =>
+  setCommunity(true, $('#settings-community-status'), e.currentTarget));
 
 /* ---------- trade advice ---------- */
 
@@ -5006,11 +5020,26 @@ async function renderSettings() {
     const community = await getJson('/api/community');
 
     $('#settings-community-enable').hidden = community.enabled;
+    $('#settings-community-refresh').hidden = !community.enabled;
     $('#settings-community-disable').hidden = !community.enabled;
 
+    // The dump it was made from, not only the day it was fetched: a fetch date
+    // says when this machine asked, which is not how old the data is - the dump
+    // for a patch lands days after the patch does.
     $('#settings-community-status').textContent = community.enabled
-      ? `${community.commodities} commodities, fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`
+      ? [`${community.commodities} commodities`,
+         community.dump ? `dumped for ${community.dump}` : 'dump unknown',
+         `fetched ${community.fetchedAt ? dateOf(community.fetchedAt) : '—'}`].join(' · ')
       : 'not downloaded';
+
+    const behind = $('#settings-community-behind');
+    behind.hidden = !community.behind;
+
+    if (community.behind) {
+      behind.textContent = `Your logs are on build ${community.playing}, and this data was made`
+        + ` from ${community.dump}. Anything that patch added — ships, items,`
+        + ' commodities — has no name here until you refresh.';
+    }
   } catch { /* as above */ }
 
   // UEX.
