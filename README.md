@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![798 tests](https://img.shields.io/badge/tests-798%20passing-4fd48a)
+![798 tests](https://img.shields.io/badge/tests-805%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes everything you do to `Game.log` and then rotates it away.
@@ -271,7 +271,7 @@ Linux-hosted server mode later.
 Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
 
 ```powershell
-dotnet test Quantumwake.slnx      # 798 tests
+dotnet test Quantumwake.slnx      # 805 tests
 ```
 
 Parser fixtures are real log lines, not synthesised ones — which is how three
@@ -360,6 +360,16 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.26
+
+- **The dashboard no longer trusts every page in your browser.** Any website
+  you visit can quietly send requests to programs on your own machine, and
+  until now this one would have acted on them - cleared imports, replaced
+  UEX keys, started an update. Requests made on another website’s behalf
+  are now refused, including the DNS trick that lets a page read your data
+  rather than just poke at it. Nothing changes in how you use the app;
+  reading it over the LAN with `-Lan` works as before.
 
 ### 0.8.25
 
