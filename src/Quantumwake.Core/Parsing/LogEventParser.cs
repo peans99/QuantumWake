@@ -248,12 +248,9 @@ public sealed partial class LogEventParser
                     m.Groups["flags"].Success
                         && m.Groups["flags"].Value.Contains("ShowInLog", StringComparison.Ordinal))),
 
+            "CEntityComponentShipListProvider::SetVehicleSpawningInformations" or
             "CEntityComponentShipListProvider::SetVehicleSpawnedInformations" =>
-                Match(VehicleSpawnRegex, line, m =>
-                    new VehicleSpawnEvent(
-                        line.Timestamp,
-                        m.Groups["entity"].Value,
-                        m.Groups["area"].Success ? m.Groups["area"].Value.Trim() : null)),
+                ParseVehicleSpawn(line),
 
             "AttachmentReceived" => Match(AttachmentRegex, line, m =>
                 new AttachmentEvent(
@@ -563,6 +560,36 @@ public sealed partial class LogEventParser
     {
         var m = regex.Match(line.Body);
         return m.Success ? project(m) : null;
+    }
+
+    /// <summary>
+    /// A ship being retrieved, from either spelling of the line.
+    /// </summary>
+    /// <remarks>
+    /// Both spellings mark the same retrieval: "Spawning" when the request goes
+    /// in, "Spawned" a few seconds later once the ship is on the pad. Build
+    /// 12519617 stopped emitting "Spawned" at all, so reading only that one lost
+    /// every retrieval on current builds - and silently, because the tag simply
+    /// stopped appearing rather than failing to parse. The timestamp is
+    /// therefore the request, not the arrival, which is all the current build
+    /// offers. <see cref="SessionBuilder"/> collapses the pair by entity id, so
+    /// reading both does not double-count a retrieval on older logs.
+    ///
+    /// The ASOP terminal also emits an [Error] twin of the request line when it
+    /// cannot resolve the landing area name. It repeats an entity id already
+    /// being retrieved on the line beside it, so it is not a second retrieval
+    /// and must not count as a parse failure either.
+    /// </remarks>
+    private GameEvent? ParseVehicleSpawn(LogLine line)
+    {
+        if (line.Body.Contains("Invalid landingAreaLocStr", StringComparison.Ordinal))
+            return null;
+
+        return Match(VehicleSpawnRegex, line, m =>
+            new VehicleSpawnEvent(
+                line.Timestamp,
+                m.Groups["entity"].Value,
+                m.Groups["area"].Success ? m.Groups["area"].Value.Trim() : null));
     }
 
     /// <summary>

@@ -384,6 +384,15 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.33
+
+- Ship retrievals are recorded again. Game build 12519617 stopped writing the
+  log line that confirmed a retrieved ship had reached the pad, so retrievals
+  on the current build went uncounted — the ship shown for a session stayed
+  empty and sortie totals stopped rising. Quantum Wake now reads the request
+  line the game still writes. Existing sessions are re-read on upgrade, so the
+  history fills itself back in.
+
 ### 0.8.32
 
 - **Settings can save a report to send with a bug.** If a page is empty for
