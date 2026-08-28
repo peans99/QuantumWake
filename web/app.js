@@ -624,6 +624,8 @@ function renderNow(state) {
 
   sessionStarted = state.sessionStarted || null;
 
+  renderNowParty(state);
+
   const feed = $('#now-feed');
   feed.textContent = '';
 
@@ -642,6 +644,45 @@ function renderNow(state) {
       feed.append(li);
     }
   }
+}
+
+/**
+ * Who the party channel has named this session.
+ *
+ * Deliberately not called a roster. The game emits a toast when somebody
+ * connects, drops, joins or leaves, and nothing at all for a member who was
+ * already online when you grouped up and stayed to the end - so this card can
+ * only ever say who was mentioned. The note is permanent rather than shown on
+ * empty, because a short list is exactly when it would be misread as complete.
+ *
+ * The card hides itself when nobody has been named, rather than showing a zero:
+ * flying alone and flying with a silent party look identical from here, and a
+ * bare 0 would claim to tell them apart.
+ */
+function renderNowParty(state) {
+  const card = $('#now-party-card');
+  if (!card) return;
+
+  const party = state.party || [];
+  card.hidden = party.length === 0;
+  if (card.hidden) return;
+
+  const list = $('#now-party-list');
+  list.textContent = '';
+
+  for (const member of party) {
+    const li = el('li');
+    li.append(el('span', 't', timeOf(member.at)));
+    li.append(el('span', 'k party', member.moment));
+    li.append(el('span', 'x', member.handle));
+    list.append(li);
+  }
+
+  $('#now-party-note').textContent =
+    `${party.length} ${party.length === 1 ? 'person' : 'people'} named by party `
+    + 'notifications — a floor, not a roster. '
+    + 'Someone already online when you grouped up is never announced'
+    + (state.partyDisbanded ? '. The party has since disbanded.' : '.');
 }
 
 /**
