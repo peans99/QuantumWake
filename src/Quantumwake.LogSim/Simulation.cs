@@ -237,7 +237,7 @@ internal sealed class Simulation
         Noise(_random.Next(3, 9));
         Advance(_options.FlightSeconds / 2, _options.FlightSeconds);
 
-        // Combat, when enabled. Absent from real 4.9 logs by default.
+        // Combat, when enabled. Absent from real 4.9 and 4.10 logs by default.
         if (_options.Combat && _random.NextDouble() < 0.5)
             RunCombat();
 
@@ -374,7 +374,7 @@ internal sealed record SimOptions
     public double IncapacitationChance { get; init; } = 0.2;
 
     /// <summary>
-    /// Emit combat events. Off by default because SC 4.9 does not produce them;
+    /// Emit combat events. Off by default because SC 4.9 and 4.10 do not produce them;
     /// turning it on is the only way to see the dormant parser light up.
     /// </summary>
     public bool Combat { get; init; }

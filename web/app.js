@@ -615,11 +615,11 @@ function renderNow(state) {
 
   // Be explicit about what each number is and is not. Deaths are inferred, so
   // the note is permanent rather than conditional: there is no state of the
-  // game in which it stops being true. Kills are not shown at all - 4.9 logs
+  // game in which it stops being true. Kills are not shown at all - 4.9 and 4.10 log
   // nothing that names a killer, and a counter stuck at zero reads as broken
   // rather than absent. The About page says where they went.
   $('#combat-note').textContent =
-    'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
+    'Deaths are inferred from corpse item-recovery bursts — 4.9 and 4.10 no longer write '
     + '<Actor Death>, and an Incapacitated notification is not always raised.';
 
   sessionStarted = state.sessionStarted || null;

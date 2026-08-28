@@ -9,7 +9,7 @@ namespace Quantumwake.Core.State;
 /// metric and should lead in any UI.
 /// </param>
 /// <param name="EstimatedTime">
-/// Approximate time aboard. SC 4.9 logs no seat-entry event at all - 497 of 497
+/// Approximate time aboard. SC 4.9 and 4.10 log no seat-entry event at all - 552 of 552
 /// vehicle events are <c>ClearDriver</c> - so this is inferred as the span from
 /// the last known ground anchor (a location visit, spawn, or previous flight)
 /// to the moment control was released, capped to avoid absurd values across
@@ -265,7 +265,7 @@ public sealed record SessionSummary
     public IReadOnlyList<MedicalBedVisit> MedicalBeds { get; init; } = [];
 
     /// <summary>
-    /// Party notifications, the only lines in a 4.9 log naming another player.
+    /// Party notifications, the only lines in a 4.9 or 4.10 log naming another player.
     /// Not a roster - see <see cref="Party"/> for the difference.
     /// </summary>
     public IReadOnlyList<PartyNote> PartyNotes { get; init; } = [];

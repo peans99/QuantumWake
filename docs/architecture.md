@@ -10,8 +10,15 @@ Approved plan: `C:\Users\nicol\.claude\plans\sunny-finding-shannon.md`
 
 ## Constraints that drive everything
 
-Two facts about SC 4.9 logs, both established empirically over 402.5 MB / 144
+Two facts about SC 4.9 and 4.10 logs, both established empirically over 438 MB / 159
 files. They are not preferences — they bound what is buildable.
+
+Re-checked when 4.10 arrived, because a constraint that has quietly lifted is
+worse than one that never held: across the five 4.10 sessions on this install —
+four backups on build 12519617 plus the live `Game.log` at 4.10.191.2241 — there
+is still not one `<Actor Death>` or `<Vehicle Destruction>` line, and still no
+seat-entry event: 552 of 552 vehicle-control lines are `ClearDriver`, none
+`SetDriver`. Both facts survive the patch.
 
 1. **No combat telemetry.** Zero `<Actor Death>` / `<Vehicle Destruction>`.
    → A killboard is impossible. Combat parsing ships dormant (Phase 5).

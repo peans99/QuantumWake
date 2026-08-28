@@ -174,7 +174,7 @@ public sealed record NotificationEvent(
 /// A ship being retrieved at a hangar or landing pad.
 /// </summary>
 /// <remarks>
-/// The only signal that a ship was taken out. SC 4.9 logs no boarding event, so
+/// The only signal that a ship was taken out. SC 4.9 and 4.10 log no boarding event, so
 /// without this a ship swap goes unrecorded until the player leaves the vehicle.
 /// The line carries only an entity id - the model name arrives separately, on
 /// quantum-navigation lines - so <see cref="VehicleIdentifiedEvent"/> is what

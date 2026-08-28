@@ -1348,7 +1348,7 @@ public sealed class LogLibrary : IDisposable
             Count("Beds used", "Casualties", s => s.MedicalBeds.Count),
             Count("Incapacitations", "Casualties", s => s.Incapacitations),
             Count("Deaths", "Casualties", s => s.Deaths,
-                "Inferred from corpse item-recovery bursts: 4.9 logs no death event."),
+                "Inferred from corpse item-recovery bursts: 4.9 and 4.10 log no death event."),
             Count("Kills", "Casualties", s => s.Kills,
                 "Not logged at all since 4.9. The parser is written and dormant, "
                 + "and this fills in by itself if CIG restore the events."),

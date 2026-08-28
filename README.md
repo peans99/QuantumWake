@@ -71,7 +71,7 @@ events, not a radar.*
 | **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on. **Upgrades** opens the game's own port list for that ship: what fits each hole, what it costs, and the counter that stocks it |
 | **Places** | Most-visited locations and quantum destinations |
 | **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
-| **Crew** | The people you fly with, from the only lines in a 4.9 log that name anyone — sessions shared, arrivals and drops seen, and who has led the party. A floor rather than a total: someone already online when you grouped up produces no line at all |
+| **Crew** | The people you fly with, from the only lines in a 4.9 or 4.10 log that name anyone — sessions shared, arrivals and drops seen, and who has led the party. A floor rather than a total: someone already online when you grouped up produces no line at all |
 | **Spending** | Confirmed purchases by shop, item and category |
 | **Ledger** | Every transaction, back-tracked to the place it happened |
 | **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
@@ -154,7 +154,7 @@ fleet and the places you have been carry on. The date defaults to Alpha 4.8 on
 
 ## Two things it deliberately does not do
 
-**It is not a killboard.** Star Citizen 4.9 does not write kill or
+**It is not a killboard.** Star Citizen 4.9 and 4.10 do not write kill or
 vehicle-destruction events to `Game.log`. This was verified, not assumed: a
 line-by-line scan of 403 MB across 144 log backups found **zero** `<Actor Death>`
 and `<Vehicle Destruction>` lines, despite 22 incapacitations proving combat
@@ -252,7 +252,7 @@ dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
 ```
 
 `--combat` emits kill and vehicle-destruction events, which is the only way to
-see the dormant killboard populate — real 4.9 logs never will. `--live` appends
+see the dormant killboard populate — real 4.9 and 4.10 logs never will. `--live` appends
 to `Game.log` in real time so the Now view and overlay update as you watch.
 
 The cache is scoped per install, so a simulated install never blends into your
@@ -383,6 +383,16 @@ affiliated with or endorsed by Cloud Imperium Games.
 
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
+
+### 0.8.36
+
+- The app no longer talks as though 4.9 were the current patch. Alpha 4.10
+  arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
+  kills, deaths, who boarded which ship — were all pinned to 4.9 by name, so
+  they read as though they might since have been fixed. They have not: across
+  the five 4.10 sessions here there is still no death or vehicle-destruction
+  line and still no seat-entry event, so the wording now names both patches
+  and the check is written down with its numbers.
 
 ### 0.8.35
 
@@ -774,7 +784,7 @@ release workflow lifts it from here, so it is written once.
   a collapse. Fetched on the click that opens the page, never on a page load and
   never while UEX is off, and the page has a link of its own -
   `#commodity/Aluminum`.
-- **The people you fly with.** A 4.9 log names another player in exactly one
+- **The people you fly with.** A 4.9 or 4.10 log names another player in exactly one
   place: the toasts announcing that somebody in your party came online or
   dropped. There is no roster event, no join event carrying a member list, and
   no player id anywhere - so that channel is the whole of what can be known,
@@ -898,7 +908,7 @@ buttons stop looking borrowed.
   occupies lights the bubble its outposts and stations sit in, and clicking the
   gaps between them frames that body. At rest the bubble stays a faint ground
   rather than another thing to read.
-- **The kill counter is gone.** It could only ever read zero: 4.9 writes no
+- **The kill counter is gone.** It could only ever read zero: 4.9 and 4.10 write no
   kill or vehicle-destruction line at all, so a counter pinned at zero read as a
   broken feature rather than a missing one. The About page says where it went
   and what would bring it back.

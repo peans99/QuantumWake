@@ -2,7 +2,7 @@
 
 `Quantumwake.LogSim` generates a fake Star Citizen install so the dashboard,
 map and overlay can be exercised without launching the game — and, crucially,
-so the **dormant combat parser can be tested at all**, since real 4.9 logs
+so the **dormant combat parser can be tested at all**, since real 4.9 and 4.10 logs
 contain no combat events.
 
 ## Use it

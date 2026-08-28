@@ -286,7 +286,7 @@ internal sealed class Report
 
         if (deaths == 0 && destructions == 0)
         {
-            Console.WriteLine("  -> no <Actor Death> or <Vehicle Destruction>, as expected on SC 4.9.");
+            Console.WriteLine("  -> no <Actor Death> or <Vehicle Destruction>, as expected on SC 4.9 and 4.10.");
             Console.WriteLine("     Deaths above come from corpse bursts, which the game still emits.");
         }
 

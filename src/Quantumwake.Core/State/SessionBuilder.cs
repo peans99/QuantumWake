@@ -302,7 +302,7 @@ public sealed class SessionBuilder
                 RecordNotification(notification);
                 break;
 
-            // Dormant on SC 4.9 - no combat events are emitted - but wired so the
+            // Dormant on SC 4.9 and 4.10 - no combat events are emitted - but wired so the
             // counters populate the moment CIG restores them.
             case ActorDeathEvent death:
                 RecordDeath(death);
@@ -421,7 +421,7 @@ public sealed class SessionBuilder
         }
 
         // Release. Prefer a genuine pairing; otherwise estimate from the last
-        // known ground anchor, since SC 4.9 logs no boarding event.
+        // known ground anchor, since SC 4.9 and 4.10 log no boarding event.
         var elapsed = _seatVehicle == key && _seatSince != default
             ? vehicle.Timestamp - _seatSince
             : EstimateFrom(vehicle.Timestamp);
@@ -963,7 +963,7 @@ public sealed class SessionBuilder
     /// </summary>
     /// <remarks>
     /// One line per carried item, so the burst is grouped by time. This is the
-    /// only death signal SC 4.9 still emits reliably - see
+    /// only death signal SC 4.9 and 4.10 still emit reliably - see
     /// <see cref="CorpseItemEvent"/>.
     /// </remarks>
     private void RecordCorpse(CorpseItemEvent corpse)
@@ -1064,7 +1064,7 @@ public sealed class SessionBuilder
             FleetSize = _fleetSize,
             Incapacitations = _incapacitations,
 
-            // Deaths come from corpse-item bursts, which SC 4.9 still emits.
+            // Deaths come from corpse-item bursts, which SC 4.9 and 4.10 still emit.
             // Kills stay zero: no event identifies a killer any more.
             Deaths = _deaths,
             Kills = _kills,

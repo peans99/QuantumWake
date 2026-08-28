@@ -39,7 +39,7 @@ public sealed record PartyNote(DateTimeOffset At, string? Handle, PartyMoment Mo
 /// </summary>
 /// <remarks>
 /// <para>
-/// The only place in a 4.9 log where another player is named. There is no party
+/// The only place in a 4.9 or 4.10 log where another player is named. There is no party
 /// roster event, no join event carrying a member list, and no id - just toasts
 /// saying that somebody connected or dropped, printed while you happen to be
 /// partied with them. So this cannot answer "who was in my party"; it answers

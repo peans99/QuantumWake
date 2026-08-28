@@ -32,7 +32,7 @@ public sealed record NowState
     /// <summary>Deaths, detected from corpse item-recovery bursts.</summary>
     public int Deaths { get; init; }
 
-    /// <summary>Always zero on SC 4.9 - no event identifies a killer any more.</summary>
+    /// <summary>Always zero on SC 4.9 and 4.10 - no event identifies a killer any more.</summary>
     public int Kills { get; init; }
 
     public IReadOnlyList<TimelineEntry> RecentEvents { get; init; } = [];
@@ -157,7 +157,7 @@ public sealed class LiveSessionService : BackgroundService
             _builder.Add(ev);
 
             // Leaving a ship clears it; retrieval is tracked by the builder,
-            // which is the only signal a ship swap produces on SC 4.9.
+            // which is the only signal a ship swap produces on SC 4.9 and 4.10.
             if (ev is VehicleControlEvent { Change: SeatChange.Left })
                 _currentShip = null;
 

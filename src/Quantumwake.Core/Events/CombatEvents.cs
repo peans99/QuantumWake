@@ -21,7 +21,7 @@ public enum KillKind
 /// A death parsed from <c>&lt;Actor Death&gt;</c>.
 /// </summary>
 /// <remarks>
-/// <b>Dormant on current game versions.</b> Star Citizen 4.9 does not emit this
+/// <b>Dormant on current game versions.</b> Star Citizen 4.9 and 4.10 do not emit this
 /// event: a scan of 403 MB across 144 log backups found zero occurrences, and
 /// CIG has been narrowing combat logging since 4.0.2. The parser is implemented
 /// from the archived format so the feature lights up automatically if the event
@@ -52,7 +52,7 @@ public sealed record ActorDeathEvent(
 /// </summary>
 /// <remarks>
 /// <para>
-/// The only reliable death signal left in SC 4.9. <c>&lt;Actor Death&gt;</c> is
+/// The only reliable death signal left in SC 4.9 and 4.10. <c>&lt;Actor Death&gt;</c> is
 /// gone and an <c>Incapacitated</c> HUD notification is not always raised - a
 /// session with three confirmed deaths logged zero of them - but every death
 /// produces a burst of these as the game records what was being carried:

@@ -59,7 +59,7 @@ Investigating rather than shipping the zeros found the cause:
 **Every one** of the 497 vehicle events is a control-token *release*. There is no
 seat-entry event of any kind — `RequestEnterVehicle`, `OnEnterVehicle`,
 `EnterSeat` and `CSCSeat` all return zero too. Time in seat is simply not
-derivable from SC 4.9 logs.
+derivable from SC 4.9 and 4.10 logs.
 
 The fix reflects that honestly rather than hiding it:
 
@@ -112,7 +112,7 @@ classification against the archived shapes.
 On current logs it matches nothing, and the UI says so explicitly rather than
 displaying a bare zero:
 
-> Star Citizen 4.9 no longer writes kill or vehicle-destruction events to
+> Star Citizen 4.9 and 4.10 no longer write kill or vehicle-destruction events to
 > Game.log, so combat cannot be counted. Incapacitations are still reported. The
 > parser is in place and will populate if CIG restores them.
 

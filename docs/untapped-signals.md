@@ -149,7 +149,7 @@ reconstructed from this. Do not re-investigate without a new line shape.
 ## 6b. The party channel — taken in 0.7.0, widened in 0.8
 
 Missed by the original sweep, and the best of what was left: the HUD’s party
-notifications are the **only** lines in a 4.9 log that name another player.
+notifications are the **only** lines in a 4.9 or 4.10 log that name another player.
 
 ```
 <SHUDEvent_OnNotification> Added notification "Party
@@ -192,7 +192,7 @@ stepping out of a hired ship is recorded as leaving a party they were never in.
 ### Taken in 0.8: who was aboard whose ship
 
 Those channel lines are read now. They name the ship **and its owner** —
-`'RSI Ursa Medivac : DeathStrokeo1'` — which is the only thing in a 4.9 log
+`'RSI Ursa Medivac : DeathStrokeo1'` — which is the only thing in a 4.9 or 4.10 log
 that puts a person inside a particular vehicle.
 
 **Count the queue entries, not the log lines.** Each notification is written

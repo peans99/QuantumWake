@@ -114,7 +114,7 @@ and 4.1.0 respectively.
 Community reporting on Spectrum ([Keep Kill Trackers Alive
 Please](https://robertsspaceindustries.com/spectrum/community/SC/forum/4/thread/keep-kill-trackers-alive-please/))
 covers the resulting breakage of third-party killboards. On this install, at
-4.9, even the client-player death events are gone.
+4.9 and 4.10, even the client-player death events are gone.
 
 ## Consequences for a build
 
