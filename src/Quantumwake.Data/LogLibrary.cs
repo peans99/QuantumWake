@@ -121,6 +121,12 @@ public sealed record PickupRecord(
     string Place,
     string Category = ItemCategories.Other);
 
+/// <summary>What this install has actually been charged for one item.</summary>
+/// <param name="UnitPrice">Median of what the game quoted per unit.</param>
+/// <param name="Times">How many confirmed purchases stand behind it.</param>
+/// <param name="Last">When it was last bought.</param>
+public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset Last);
+
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
 /// <param name="Rep">
@@ -878,6 +884,61 @@ public sealed class LogLibrary : IDisposable
         }
 
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Every item class this install has been charged for, with what the game
+    /// quoted per unit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// First-party and exact: the price comes off the kiosk line the game wrote,
+    /// so unlike a crowd-sourced table it cannot be wrong about whether the thing
+    /// is sold at all. Its weakness is the opposite one - it only ever covers
+    /// what this player personally bought, which is a floor and nothing more.
+    /// </para>
+    /// <para>
+    /// Per unit, not per line. The logged price is the whole transaction, so a
+    /// stack of 41 MedPens reads as 10,865 rather than 265, and taking it as a
+    /// unit price puts an item forty times over its worth. The median across
+    /// purchases absorbs a one-off discount without being dragged by it.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, ReceiptPrice> Receipts()
+    {
+        var byClass = new Dictionary<string, List<PurchaseRecord>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var session in Counted(WipeScope.Money))
+        {
+            foreach (var purchase in session.Purchases)
+            {
+                if (!purchase.Confirmed || purchase.Item is not { Length: > 0 } item)
+                    continue;
+
+                if (!byClass.TryGetValue(item, out var list))
+                    byClass[item] = list = [];
+
+                list.Add(purchase);
+            }
+        }
+
+        var result = new Dictionary<string, ReceiptPrice>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (item, records) in byClass)
+        {
+            var units = records.Select(r => r.UnitPrice).Where(p => p > 0).Order().ToArray();
+            if (units.Length == 0)
+                continue;
+
+            var middle = units.Length / 2;
+
+            result[item] = new ReceiptPrice(
+                units.Length % 2 == 1 ? units[middle] : (units[middle - 1] + units[middle]) / 2,
+                records.Count,
+                records.Max(r => r.At));
+        }
+
+        return result;
     }
 
     /// <summary>

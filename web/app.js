@@ -166,6 +166,11 @@ function showView(name) {
   // fragment with Market still on screen.
   if (name !== 'commodity') openCommodityName = null;
 
+  // The text overlay reads the game folder and rebuilds its plan, so it is read
+  // on entry rather than cached: StarStrings may have been installed since, and
+  // the plan is layered on whatever is actually there.
+  if (name === 'textoverlay') loadTextOverlay().catch(() => {});
+
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
 
@@ -4984,6 +4989,100 @@ async function loadStarStrings(check = false) {
 
   status.textContent = bits.join(' · ');
   $('#starstrings-install').disabled = !state.gameRoot;
+}
+
+/**
+ * What marking the game's text would change, and the state of the one that is
+ * installed.
+ *
+ * Shows the plan before anything is written, because the file lands in someone
+ * else's game folder: the counts, where the text is being built from, and a
+ * sample of the actual renames. The caveat is permanent rather than shown on a
+ * short list - a tidy table of names is exactly what gets mistaken for a
+ * complete rarity rating, and this is a floor over two incomplete sources.
+ */
+async function loadTextOverlay() {
+  const status = $('#textoverlay-status');
+  if (!status) return;
+
+  const state = await getJson('/api/textoverlay').catch(() => null);
+
+  if (!state) {
+    status.textContent = 'Could not read the game text.';
+    return;
+  }
+
+  $('#textoverlay-remove').hidden = !state.installed;
+  $('#textoverlay-install').textContent = state.installed ? 'Rebuild and install' : 'Install';
+  $('#textoverlay-install').disabled = !!state.problem;
+
+  if (state.problem) {
+    status.textContent = state.problem;
+    tiles('#textoverlay-summary', []);
+    $('#textoverlay-table tbody').textContent = '';
+    return;
+  }
+
+  tiles('#textoverlay-summary', [
+    ['Would be marked', state.marked],
+    ['Something sells', state.sold],
+    ['Not gear you shop for', state.skipped],
+  ]);
+
+  // Which file it builds on decides whether another mod survives, so it is
+  // stated rather than assumed.
+  $('#textoverlay-source').textContent = state.baseSource === 'StarStrings'
+    ? 'Built on top of the StarStrings text, so both survive.'
+    : "Built on the game's own text.";
+
+  const body = $('#textoverlay-table tbody');
+  body.textContent = '';
+
+  for (const line of state.samples || []) {
+    const tr = el('tr');
+    tr.append(el('td', null, line.was));
+    tr.append(el('td', 'muted', line.category));
+    tr.append(el('td', null, line.becomes));
+    body.append(tr);
+  }
+
+  const bits = [];
+  if (state.installed) {
+    bits.push(`Installed${state.installedAt ? ` ${relative(state.installedAt)}` : ''}`);
+    if (state.layered) bits.push('layered over StarStrings');
+    bits.push('restart Star Citizen to see it');
+  } else {
+    bits.push(`Showing ${(state.samples || []).length} of ${state.marked} renames. Nothing is written until you install.`);
+  }
+
+  status.textContent = bits.join(' · ');
+}
+
+function initTextOverlay() {
+  const install = $('#textoverlay-install');
+  if (!install) return;
+
+  install.addEventListener('click', async () => {
+    $('#textoverlay-status').textContent = 'Writing…';
+
+    const answer = await fetch('/api/textoverlay/install', { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => ({ problem: 'The write did not finish.' }));
+
+    if (answer.problem) {
+      $('#textoverlay-status').textContent = answer.problem;
+      return;
+    }
+
+    await loadTextOverlay();
+    alertLine($('#textoverlay-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+  });
+
+  $('#textoverlay-remove').addEventListener('click', async () => {
+    $('#textoverlay-status').textContent = 'Putting the old text back…';
+    await fetch('/api/textoverlay/remove', { method: 'POST' }).catch(() => {});
+    await loadTextOverlay();
+  });
 }
 
 function initStarStrings() {
@@ -11770,6 +11869,7 @@ initWipe();
 initWipePrompt();
 initUpdates();
 initStarStrings();
+initTextOverlay();
 
 /* ---------- scan progress ---------- */
 

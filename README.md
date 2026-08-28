@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.37
+### 0.8.38
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -400,6 +400,18 @@ release workflow lifts it from here, so it is written once.
   commodities the community dataset knows about now have the game’s own blurb
   available. Cargo is still named from the dataset, which is the only thing
   that maps the ids the logs actually carry.
+
+- A Text overlay page, and a mark for gear you cannot just buy. StarStrings
+  has moved off Settings onto a page of its own, alongside a new overlay that
+  puts a `*` after any weapon, armour, attachment, medical item or tool that
+  nothing is known to sell — so something worth carrying is obvious while you
+  are standing over it. It is layered over StarStrings when that is installed,
+  so both survive, and the page shows exactly what would change before
+  anything is written.
+
+- Loot prices now read your own receipts. The game records what it charged you
+  at a kiosk, so an item UEX has never heard of can still show a price — and,
+  more usefully, still counts as something you can buy.
 
 ### 0.8.35
 

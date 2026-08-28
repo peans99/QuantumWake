@@ -113,6 +113,8 @@ public static class ServerHost
         // app that writes outside its own data folder.
         builder.Services.AddSingleton<StarStringsStore>();
         builder.Services.AddSingleton<StarStrings>();
+        builder.Services.AddSingleton<TextOverlayStore>();
+        builder.Services.AddSingleton<TextOverlayService>();
 
 
 
@@ -506,6 +508,25 @@ public static class ServerHost
         app.MapPost("/api/starstrings/remove", (StarStrings mod) =>
             Results.Ok(new { removed = mod.Remove() }));
 
+        // Asking what would change writes nothing. Installing is a separate
+        // call because the file lands in the player's game folder.
+        app.MapGet("/api/textoverlay", (TextOverlayService overlay) => overlay.Status(install));
+
+        app.MapPost("/api/textoverlay/install", (TextOverlayService overlay) =>
+        {
+            var (done, problem) = overlay.Install(install);
+
+            return problem is null
+                ? Results.Ok(new { done!.InstalledAt, done.Marked, done.Layered })
+                : Results.BadRequest(new { problem });
+        });
+
+        app.MapPost("/api/textoverlay/remove", (TextOverlayService overlay) =>
+        {
+            overlay.Remove();
+            return Results.Ok(new { removed = true });
+        });
+
         app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check, SelfUpdate selfUpdate) =>
 
         {
@@ -840,18 +861,36 @@ public static class ServerHost
         // Items observed entering the player's inventories - the Loot page.
         // Priced at the endpoint rather than in the library, the same join the
         // stash uses: the item class names a community entry, which carries the
-        // uuid UEX prices against. Null price is normal and the page says so -
-        // UEX stocks 64 of this install's 109 looted classes.
+        // uuid UEX prices against.
+        //
+        // Two sources, in confidence order. A receipt is this install's own -
+        // the game charged for it, so it settles both the price and the fact
+        // that the thing is sold at all. UEX is broader but crowd-sourced, and
+        // misses 29 of the 106 items these logs prove were bought at a kiosk.
+        // Neither is a catalogue, so "sold" is a floor and the page says so.
         app.MapGet("/api/loot", (LogLibrary lib, UexData uex, int? days) =>
-            lib.Pickups(days ?? 0).Select(p => new
+        {
+            var receipts = lib.Receipts();
+
+            return lib.Pickups(days ?? 0).Select(p =>
             {
-                p.At,
-                p.Item,
-                p.ItemClass,
-                p.Place,
-                p.Category,
-                price = uex.TypicalItemPrice(lib.Community.Item(p.ItemClass)?.Uuid)
-            }));
+                var uuid = lib.Community.Item(p.ItemClass)?.Uuid;
+                var receipt = receipts.GetValueOrDefault(p.ItemClass);
+                var listed = uex.TypicalItemPrice(uuid);
+
+                return new
+                {
+                    p.At,
+                    p.Item,
+                    p.ItemClass,
+                    p.Place,
+                    p.Category,
+                    price = listed ?? receipt?.UnitPrice,
+                    pricedFrom = listed is not null ? "market" : receipt is not null ? "receipt" : null,
+                    sold = uex.ItemMarket(uuid).Count > 0 || receipt is not null
+                };
+            });
+        });
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
         // Work done per faction, and the little reputation anyone has written
