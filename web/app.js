@@ -2405,6 +2405,24 @@ function fillLootFilter(select, all, label) {
   return select.value;
 }
 
+/**
+ * What an item usually costs, or an explanation of why it does not say.
+ *
+ * A blank cell would read as "worthless" and a zero as "free", and neither is
+ * what an unpriced row means: UEX reports 64 of this install's 109 looted item
+ * classes, and the rest are simply not sold anywhere it can see. So the gap
+ * gets a dash and a reason rather than a number nobody should act on.
+ */
+function lootPriceCell(pickup) {
+  if (!(pickup.price > 0)) {
+    const td = el('td', 'num muted', '—');
+    td.title = 'No terminal UEX knows about stocks this, so it has no price to report.';
+    return td;
+  }
+
+  return el('td', 'num', money(pickup.price));
+}
+
 function renderLoot(pickups) {
   const term = ($('#loot-search').value || '').trim().toLowerCase();
 
@@ -2422,6 +2440,10 @@ function renderLoot(pickups) {
     ['New items', rows.length],
     ['Last 7 days', rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
     ['Places', new Set(rows.map((p) => p.place)).size],
+
+    // What share carries a price, rather than a total: these are first
+    // sightings, so summing them would value a wardrobe nobody owns twice over.
+    ['Priced', `${rows.filter((p) => p.price > 0).length} of ${rows.length}`],
   ]);
 
   const body = $('#loot-table tbody');
@@ -2436,7 +2458,7 @@ function renderLoot(pickups) {
       ? `Nothing matching ${[kind, place].filter(Boolean).join(' at ')} in that range.`
       : 'Nothing in that range.');
 
-    td.colSpan = 4;
+    td.colSpan = 5;
     tr.append(td);
     body.append(tr);
     lastLootRows = pickups;
@@ -2448,6 +2470,7 @@ function renderLoot(pickups) {
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
     tr.append(el('td', 'muted', pickup.category));
+    tr.append(lootPriceCell(pickup));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
