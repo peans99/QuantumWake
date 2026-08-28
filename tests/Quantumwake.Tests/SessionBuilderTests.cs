@@ -153,6 +153,25 @@ public class SessionBuilderTests
         Assert.Equal(TimeSpan.FromMinutes(90), builder.Build().InGameDuration);
     }
 
+    /// <summary>
+    /// Older builds log both a "spawning" and a "spawned" line for one retrieval.
+    /// Now that the parser reads both spellings, the same ship must still credit
+    /// a single sortie rather than one per line.
+    /// </summary>
+    [Fact]
+    public void Both_retrieval_lines_for_one_ship_count_a_single_sortie()
+    {
+        var summary = Build(
+            new VehicleIdentifiedEvent(T0, "774736075446", "ANVL_C8X_774736075446", "C8X", "ANVL"),
+            new VehicleSpawnEvent(T0.AddSeconds(1), "774736075446", "nekron's"),
+            new VehicleSpawnEvent(T0.AddSeconds(6), "774736075446", "nekron's")
+        ).Build();
+
+        var ship = Assert.Single(summary.Ships);
+        Assert.Equal("C8X", ship.Model);
+        Assert.Equal(1, ship.Sorties);
+    }
+
     /// <summary>Retained for the day CIG restores a boarding event.</summary>
     [Fact]
     public void Uses_exact_time_when_a_boarding_event_is_present()
