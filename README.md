@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.36
+### 0.8.37
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -393,6 +393,13 @@ release workflow lifts it from here, so it is written once.
   the five 4.10 sessions here there is still no death or vehicle-destruction
   line and still no seat-entry event, so the wording now names both patches
   and the check is written down with its numbers.
+
+- The game names its own commodities, and Quantum Wake now reads them. The
+  text table carries 307 commodity names under a prefix the reader walked
+  past, along with the descriptions the game shows for them — 174 of the 203
+  commodities the community dataset knows about now have the game’s own blurb
+  available. Cargo is still named from the dataset, which is the only thing
+  that maps the ids the logs actually carry.
 
 ### 0.8.35
 
