@@ -624,6 +624,8 @@ function renderNow(state) {
 
   sessionStarted = state.sessionStarted || null;
 
+  renderNowParty(state);
+
   const feed = $('#now-feed');
   feed.textContent = '';
 
@@ -642,6 +644,45 @@ function renderNow(state) {
       feed.append(li);
     }
   }
+}
+
+/**
+ * Who the party channel has named this session.
+ *
+ * Deliberately not called a roster. The game emits a toast when somebody
+ * connects, drops, joins or leaves, and nothing at all for a member who was
+ * already online when you grouped up and stayed to the end - so this card can
+ * only ever say who was mentioned. The note is permanent rather than shown on
+ * empty, because a short list is exactly when it would be misread as complete.
+ *
+ * The card hides itself when nobody has been named, rather than showing a zero:
+ * flying alone and flying with a silent party look identical from here, and a
+ * bare 0 would claim to tell them apart.
+ */
+function renderNowParty(state) {
+  const card = $('#now-party-card');
+  if (!card) return;
+
+  const party = state.party || [];
+  card.hidden = party.length === 0;
+  if (card.hidden) return;
+
+  const list = $('#now-party-list');
+  list.textContent = '';
+
+  for (const member of party) {
+    const li = el('li');
+    li.append(el('span', 't', timeOf(member.at)));
+    li.append(el('span', 'k party', member.moment));
+    li.append(el('span', 'x', member.handle));
+    list.append(li);
+  }
+
+  $('#now-party-note').textContent =
+    `${party.length} ${party.length === 1 ? 'person' : 'people'} named by party `
+    + 'notifications — a floor, not a roster. '
+    + 'Someone already online when you grouped up is never announced'
+    + (state.partyDisbanded ? '. The party has since disbanded.' : '.');
 }
 
 /**
@@ -2364,6 +2405,24 @@ function fillLootFilter(select, all, label) {
   return select.value;
 }
 
+/**
+ * What an item usually costs, or an explanation of why it does not say.
+ *
+ * A blank cell would read as "worthless" and a zero as "free", and neither is
+ * what an unpriced row means: UEX reports 64 of this install's 109 looted item
+ * classes, and the rest are simply not sold anywhere it can see. So the gap
+ * gets a dash and a reason rather than a number nobody should act on.
+ */
+function lootPriceCell(pickup) {
+  if (!(pickup.price > 0)) {
+    const td = el('td', 'num muted', '—');
+    td.title = 'No terminal UEX knows about stocks this, so it has no price to report.';
+    return td;
+  }
+
+  return el('td', 'num', money(pickup.price));
+}
+
 function renderLoot(pickups) {
   const term = ($('#loot-search').value || '').trim().toLowerCase();
 
@@ -2381,6 +2440,10 @@ function renderLoot(pickups) {
     ['New items', rows.length],
     ['Last 7 days', rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
     ['Places', new Set(rows.map((p) => p.place)).size],
+
+    // What share carries a price, rather than a total: these are first
+    // sightings, so summing them would value a wardrobe nobody owns twice over.
+    ['Priced', `${rows.filter((p) => p.price > 0).length} of ${rows.length}`],
   ]);
 
   const body = $('#loot-table tbody');
@@ -2395,7 +2458,7 @@ function renderLoot(pickups) {
       ? `Nothing matching ${[kind, place].filter(Boolean).join(' at ')} in that range.`
       : 'Nothing in that range.');
 
-    td.colSpan = 4;
+    td.colSpan = 5;
     tr.append(td);
     body.append(tr);
     lastLootRows = pickups;
@@ -2407,6 +2470,7 @@ function renderLoot(pickups) {
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
     tr.append(el('td', 'muted', pickup.category));
+    tr.append(lootPriceCell(pickup));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }

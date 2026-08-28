@@ -302,6 +302,61 @@ public class LogEventParserTests
     }
 
     /// <summary>
+    /// The retrieval line the game writes today. Build 12519617 stopped emitting
+    /// the "Spawned" confirmation, so this spelling is the only one left - and
+    /// reading only the other one lost every retrieval on current builds without
+    /// registering as a parse failure.
+    /// </summary>
+    [Fact]
+    public void Extracts_retrieval_from_the_spawning_line()
+    {
+        var ev = ParseOne<VehicleSpawnEvent>(
+            "<2026-08-27T14:00:41.291Z> [Notice] " +
+            "<CEntityComponentShipListProvider::SetVehicleSpawningInformations> " +
+            "SetVehicleSpawningInformations - VehicleEntityId: [787284778374], LandingArea: nekron's");
+
+        Assert.Equal("787284778374", ev.EntityId);
+        Assert.Equal("nekron's", ev.LandingArea);
+    }
+
+    /// <summary>
+    /// The ASOP terminal emits an [Error] twin beside the real request when it
+    /// cannot resolve the landing area name. It names an entity already being
+    /// retrieved, so it is neither a retrieval nor a parse failure.
+    /// </summary>
+    [Fact]
+    public void Ignores_the_invalid_landing_area_twin()
+    {
+        Assert.True(LogEnvelope.TryParse(
+            "<2026-07-26T19:37:55.992Z> [Error] " +
+            "<CEntityComponentShipListProvider::SetVehicleSpawningInformations> " +
+            "SetVehicleSpawningInformations - Invalid landingAreaLocStr - " +
+            "Entity id: 738680164755 [Team_GameServices][ASOP]", out var line));
+
+        var parser = new LogEventParser();
+
+        Assert.Null(parser.Parse(line));
+        Assert.Equal(0, parser.UnmatchedKnownTags);
+    }
+
+    /// <summary>
+    /// The older confirmation line, still present in archived logs. Its extra
+    /// LandingATCId field sits between the id and the landing area.
+    /// </summary>
+    [Fact]
+    public void Extracts_retrieval_from_the_spawned_line()
+    {
+        var ev = ParseOne<VehicleSpawnEvent>(
+            "<2026-08-24T01:34:39.741Z> [Notice] " +
+            "<CEntityComponentShipListProvider::SetVehicleSpawnedInformations> " +
+            "SetVehicleSpawnedInformations - VehicleEntityId: [774736075446], " +
+            "LandingATCId: [746997539721], LandingArea: nekron's");
+
+        Assert.Equal("774736075446", ev.EntityId);
+        Assert.Equal("nekron's", ev.LandingArea);
+    }
+
+    /// <summary>
     /// The session header spans several lines and only completes at FileVersion,
     /// so the parser must hold state across them.
     /// </summary>

@@ -88,6 +88,32 @@ public sealed record PartyNote(DateTimeOffset At, string? Handle, PartyMoment Mo
 /// </remarks>
 public static class Party
 {
+    /// <summary>
+    /// The latest note about each named player, most recent first.
+    /// </summary>
+    /// <remarks>
+    /// Latest-wins rather than a tally, because the moments are not commutative:
+    /// somebody who connected, dropped and connected again is present, and
+    /// counting arrivals against departures would call that a draw. Disbanded
+    /// names nobody, so it is dropped here and asked about separately.
+    ///
+    /// The result is a floor and every caller has to word it as one. A member
+    /// already online when the party formed, who never drops, is never the
+    /// subject of a toast - so absence from this list says nothing at all.
+    /// </remarks>
+    public static IReadOnlyList<PartyNote> Latest(IReadOnlyList<PartyNote> notes)
+    {
+        var latest = new Dictionary<string, PartyNote>(StringComparer.Ordinal);
+
+        foreach (var note in notes)
+        {
+            if (note.Handle is { Length: > 0 } handle)
+                latest[handle] = note;
+        }
+
+        return [.. latest.Values.OrderByDescending(note => note.At)];
+    }
+
     /// <summary>True when a notification came from the party channel at all.</summary>
     /// <remarks>
     /// Both shared titles are asked about their body rather than taken on their

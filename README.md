@@ -384,6 +384,31 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.35
+
+- Ship retrievals are recorded again. Game build 12519617 stopped writing the
+  log line that confirmed a retrieved ship had reached the pad, so retrievals
+  on the current build went uncounted — the ship shown for a session stayed
+  empty and sortie totals stopped rising. Quantum Wake now reads the request
+  line the game still writes. Existing sessions are re-read on upgrade, so the
+  history fills itself back in.
+
+- The Now page says who is with you. A Party card lists everyone the party
+  channel has named this session and the last thing it said about each of
+  them, so a member who dropped is not left looking like one still aboard. It
+  is a floor rather than a roster, and says so: somebody already online when
+  you grouped up is never announced, and the card stays away entirely rather
+  than showing a zero it cannot stand behind. It can be switched on in the
+  overlay widget too.
+
+- Loot says what things are worth. Each item carries the median price across
+  every terminal UEX reports stocking it — what it usually goes for, rather
+  than the cheapest run to make. The two are not the same: one item here is
+  stocked near 19,175 by a hundred terminals and at 1,975 by one, so the
+  cheapest understates it tenfold. Items UEX does not stock show a dash and
+  the reason instead of a zero, and the summary says how many of the rows
+  carry a price at all.
+
 ### 0.8.32
 
 - **Settings can save a report to send with a bug.** If a page is empty for
