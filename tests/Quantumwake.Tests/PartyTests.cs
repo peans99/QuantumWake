@@ -149,4 +149,42 @@ public class PartyTests
         Assert.Equal(left.Handle, dropped.Handle);
     }
 
+    /// <summary>
+    /// Somebody who dropped and came back is present. A tally of arrivals
+    /// against departures would score that as a draw and show them as gone,
+    /// which is why the reduction keeps the last word rather than counting.
+    /// </summary>
+    [Fact]
+    public void Latest_keeps_the_last_word_about_each_player()
+    {
+        var latest = Party.Latest([
+            new PartyNote(At, "D-Rud", PartyMoment.Connected),
+            new PartyNote(At.AddMinutes(5), "D-Rud", PartyMoment.Disconnected),
+            new PartyNote(At.AddMinutes(9), "D-Rud", PartyMoment.Connected),
+            new PartyNote(At.AddMinutes(2), "Sylosis", PartyMoment.Joined),
+        ]);
+
+        Assert.Equal(2, latest.Count);
+
+        // Most recent first, so the card leads with what just happened.
+        Assert.Equal("D-Rud", latest[0].Handle);
+        Assert.Equal(PartyMoment.Connected, latest[0].Moment);
+        Assert.Equal(At.AddMinutes(9), latest[0].At);
+        Assert.Equal("Sylosis", latest[1].Handle);
+    }
+
+    /// <summary>
+    /// Disbanding names nobody, so it cannot become a row with an empty handle.
+    /// </summary>
+    [Fact]
+    public void Latest_drops_the_note_that_names_nobody()
+    {
+        var latest = Party.Latest([
+            new PartyNote(At, "D-Rud", PartyMoment.Connected),
+            new PartyNote(At.AddMinutes(1), null, PartyMoment.Disbanded),
+        ]);
+
+        Assert.Equal("D-Rud", Assert.Single(latest).Handle);
+    }
+
 }

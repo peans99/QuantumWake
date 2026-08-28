@@ -36,7 +36,27 @@ public sealed record NowState
     public int Kills { get; init; }
 
     public IReadOnlyList<TimelineEntry> RecentEvents { get; init; } = [];
+
+    /// <summary>
+    /// Everyone the party channel has named this session, most recent first.
+    /// </summary>
+    /// <remarks>
+    /// Not a roster, and the view must not present it as one. A party member who
+    /// was already online when you grouped up and never dropped produces no
+    /// toast at all, so this is a floor: everyone here was mentioned, and being
+    /// absent from it means nothing either way.
+    /// </remarks>
+    public IReadOnlyList<PartySighting> Party { get; init; } = [];
+
+    /// <summary>True once a "Party Disbanded" toast has been seen this session.</summary>
+    public bool PartyDisbanded { get; init; }
 }
+
+/// <summary>The last thing the party channel said about one player.</summary>
+/// <param name="Moment">
+/// The <see cref="PartyMoment"/> name, lowercased for display.
+/// </param>
+public sealed record PartySighting(string Handle, string Moment, DateTimeOffset At);
 
 /// <summary>SignalR hub clients subscribe to for live updates.</summary>
 public sealed class LiveHub : Hub
@@ -208,9 +228,22 @@ public sealed class LiveSessionService : BackgroundService
             Incapacitations = summary.Incapacitations,
             Deaths = summary.Deaths,
             Kills = summary.Kills,
-            RecentEvents = [.. _recent]
+            RecentEvents = [.. _recent],
+            Party = ReadParty(summary.PartyNotes),
+            PartyDisbanded = summary.PartyNotes.Count > 0
+                && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded
         };
     }
+
+    /// <summary>
+    /// The party channel's latest word on each player, shaped for the client.
+    /// </summary>
+    private static IReadOnlyList<PartySighting> ReadParty(IReadOnlyList<PartyNote> notes) =>
+        [.. Party.Latest(notes)
+            .Select(note => new PartySighting(
+                note.Handle!,
+                note.Moment.ToString().ToLowerInvariant(),
+                note.At))];
 
     private async Task BroadcastAsync()
     {

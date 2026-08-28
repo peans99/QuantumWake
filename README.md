@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.33
+### 0.8.34
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the
   log line that confirmed a retrieved ship had reached the pad, so retrievals
@@ -392,6 +392,14 @@ release workflow lifts it from here, so it is written once.
   empty and sortie totals stopped rising. Quantum Wake now reads the request
   line the game still writes. Existing sessions are re-read on upgrade, so the
   history fills itself back in.
+
+- The Now page says who is with you. A Party card lists everyone the party
+  channel has named this session and the last thing it said about each of
+  them, so a member who dropped is not left looking like one still aboard. It
+  is a floor rather than a roster, and says so: somebody already online when
+  you grouped up is never announced, and the card stays away entirely rather
+  than showing a zero it cannot stand behind. It can be switched on in the
+  overlay widget too.
 
 ### 0.8.32
 
