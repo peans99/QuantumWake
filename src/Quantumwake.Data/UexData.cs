@@ -266,6 +266,37 @@ public sealed class UexData
     public decimal? ItemPrice(string? uuid) =>
         uuid is not null && _itemPrices.TryGetValue(uuid, out var price) ? price : null;
 
+    /// <summary>
+    /// What an item usually costs: the median buy price across every terminal
+    /// stocking it. Null when nothing stocks it.
+    /// </summary>
+    /// <remarks>
+    /// Median rather than mean, and deliberately not <see cref="ItemPrice"/>.
+    /// The cheapest is what you would pay having flown to the right terminal,
+    /// which is a different question from what a thing is worth, and one odd
+    /// row makes it wildly unrepresentative: this install's MaxLift Tractor
+    /// Beam is stocked by 103 terminals at about 19,175 and by one at 1,975,
+    /// so the cheapest understates it tenfold. A mean would still be dragged
+    /// by that row; a median ignores it.
+    ///
+    /// Falls back to the cheapest when the per-terminal rows are missing but a
+    /// price is known, so an item is never left unpriced over a gap in the
+    /// market table alone.
+    /// </remarks>
+    public decimal? TypicalItemPrice(string? uuid)
+    {
+        var rows = ItemMarket(uuid);
+        if (rows.Count == 0)
+            return ItemPrice(uuid);
+
+        var sorted = rows.Select(row => row.Buy).Order().ToArray();
+        var middle = sorted.Length / 2;
+
+        return sorted.Length % 2 == 1
+            ? sorted[middle]
+            : (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+
     /// <summary>Every terminal stocking an item, by uuid. Empty when unknown.</summary>
     public IReadOnlyList<UexItemRow> ItemMarket(string? uuid) =>
         uuid is not null && _itemMarket.TryGetValue(uuid, out var rows) ? rows : [];

@@ -838,7 +838,20 @@ public static class ServerHost
         });
 
         // Items observed entering the player's inventories - the Loot page.
-        app.MapGet("/api/loot", (LogLibrary lib, int? days) => lib.Pickups(days ?? 0));
+        // Priced at the endpoint rather than in the library, the same join the
+        // stash uses: the item class names a community entry, which carries the
+        // uuid UEX prices against. Null price is normal and the page says so -
+        // UEX stocks 64 of this install's 109 looted classes.
+        app.MapGet("/api/loot", (LogLibrary lib, UexData uex, int? days) =>
+            lib.Pickups(days ?? 0).Select(p => new
+            {
+                p.At,
+                p.Item,
+                p.ItemClass,
+                p.Place,
+                p.Category,
+                price = uex.TypicalItemPrice(lib.Community.Item(p.ItemClass)?.Uuid)
+            }));
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
         // Work done per faction, and the little reputation anyone has written
