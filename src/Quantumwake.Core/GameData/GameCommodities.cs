@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 3;
+    private const int CacheVersion = 6;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -41,21 +41,27 @@ public sealed partial class GameCommodities
     private readonly Dictionary<string, string> _byId;
     private readonly Dictionary<string, string> _itemUuids;
     private readonly Dictionary<string, GameItem> _facts;
+    private readonly List<GameBlueprint> _blueprints;
 
     private GameCommodities(
         Dictionary<string, string> byId,
         Dictionary<string, string> itemUuids,
-        Dictionary<string, GameItem> facts)
+        Dictionary<string, GameItem> facts,
+        List<GameBlueprint> blueprints)
     {
         _byId = byId;
         _itemUuids = itemUuids;
         _facts = facts;
+        _blueprints = blueprints;
     }
+
+    /// <summary>Every crafting recipe the install describes.</summary>
+    public IReadOnlyList<GameBlueprint> Blueprints => _blueprints;
 
     /// <summary>Nothing known, used when the archive is unreadable.</summary>
     public static GameCommodities Empty { get; } =
         new(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase),
-            new(StringComparer.OrdinalIgnoreCase));
+            new(StringComparer.OrdinalIgnoreCase), []);
 
     /// <summary>
     /// What the game says each item is, by class name.
@@ -106,19 +112,20 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts) = Read(archive);
+        var (commodities, items, facts, blueprints) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints);
 
-        return new GameCommodities(commodities, items, facts);
+        return new GameCommodities(commodities, items, facts, blueprints);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
-        Dictionary<string, GameItem> Facts) Read(string archivePath)
+        Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var facts = new Dictionary<string, GameItem>(StringComparer.OrdinalIgnoreCase);
+        var blueprints = new List<GameBlueprint>();
 
         try
         {
@@ -127,7 +134,7 @@ public sealed partial class GameCommodities
             var blob = p4k.TryRead(DataCoreEntry);
             var ini = p4k.TryRead(LocalisationEntry);
 
-            if (blob is null || ini is null) return (result, itemUuids, facts);
+            if (blob is null || ini is null) return (result, itemUuids, facts, blueprints);
 
             var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -171,14 +178,15 @@ public sealed partial class GameCommodities
             }
 
             facts = GameItems.Read(core, text);
+            blueprints = GameBlueprints.Read(core, text, facts);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts);
+            return (result, itemUuids, facts, blueprints);
         }
 
-        return (result, itemUuids, facts);
+        return (result, itemUuids, facts, blueprints);
     }
 
     /// <summary>
@@ -218,7 +226,8 @@ public sealed partial class GameCommodities
             return new GameCommodities(
                 new Dictionary<string, string>(cache.Commodities, StringComparer.OrdinalIgnoreCase),
                 new Dictionary<string, string>(cache.Items, StringComparer.OrdinalIgnoreCase),
-                new Dictionary<string, GameItem>(cache.Facts, StringComparer.OrdinalIgnoreCase));
+                new Dictionary<string, GameItem>(cache.Facts, StringComparer.OrdinalIgnoreCase),
+                cache.Blueprints);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -228,14 +237,20 @@ public sealed partial class GameCommodities
 
     private static void SaveCache(
         string cachePath, string stamp, Dictionary<string, string> names,
-        Dictionary<string, string> items, Dictionary<string, GameItem> facts)
+        Dictionary<string, string> items, Dictionary<string, GameItem> facts,
+        List<GameBlueprint> blueprints)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
             File.WriteAllText(cachePath,
                 JsonSerializer.Serialize(
-                    new Cache { Stamp = stamp, Commodities = names, Items = items, Facts = facts }, Json));
+                    new Cache
+                    {
+                        Stamp = stamp, Commodities = names, Items = items,
+                        Facts = facts, Blueprints = blueprints
+                    },
+                    Json));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -252,5 +267,6 @@ public sealed partial class GameCommodities
         public Dictionary<string, string> Commodities { get; set; } = [];
         public Dictionary<string, string> Items { get; set; } = [];
         public Dictionary<string, GameItem> Facts { get; set; } = [];
+        public List<GameBlueprint> Blueprints { get; set; } = [];
     }
 }

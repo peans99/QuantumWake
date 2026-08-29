@@ -452,6 +452,17 @@ release workflow lifts it from here, so it is written once.
   download is the honest source for them, and Settings now says so instead of
   implying the work simply had not been done.
 
+- Crafting recipes come from your install too. All 1,606 of them, with the
+  first-tier craft time, the materials and which reward pools can drop the
+  blueprint. Checked against the download: of the 1,577 recipes both describe,
+  the craft time agrees on 1,575 and the materials are worded identically, and
+  the same 732 blueprints have a reward pool in each. The handful that differ
+  are the interesting part. Three — the Aztalan legs — are recipes offering a
+  choice of materials, which the download flattened into three mandatory ones
+  and this now reads as "any 2 of". The other two, BroadSpec and the Main
+  Powerplant, simply changed in 4.10, so the install is right and the download
+  is describing an older patch.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the

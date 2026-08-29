@@ -2849,6 +2849,9 @@ const CRAFTING_CAP = 500;
 /** "540 s" is nobody's unit; craft times read as minutes and hours. */
 function craftTime(seconds) {
   if (seconds <= 0) return '—';
+  // Rounding a ten-second recipe to minutes printed "0m", which reads as a
+  // missing number rather than as something that is quick.
+  if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.round((seconds % 3600) / 60);
@@ -2856,6 +2859,17 @@ function craftTime(seconds) {
 }
 
 function renderCraftingRef() {
+  // Both sources describe the same recipes, so this says which is answering
+  // rather than warning about a difference. The install is current with the
+  // patch, which is the part that matters here: two recipes on this install
+  // have already changed since the download was built.
+  const note = $('#crafting-source');
+  if (note && craftingCatalogue.length) {
+    note.textContent = craftingCatalogue[0].source === 'install'
+      ? 'Read from your game install. '
+      : 'From the community dataset. ';
+  }
+
   const term = ($('#crafting-search').value || '').trim().toLowerCase();
   const type = $('#crafting-type').value;
   const obtained = $('#crafting-obtained').value;

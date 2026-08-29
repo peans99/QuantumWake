@@ -966,13 +966,49 @@ public static class ServerHost
             // join is a contains either way round rather than an equality.
             var received = lib.Blueprints();
 
+            object Owned(string output) => new
+            {
+                owned = received.Any(r =>
+                    output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
+                    || r.Name.Contains(output, StringComparison.OrdinalIgnoreCase))
+            };
+
+            // The install describes the recipe itself; the download adds how a
+            // blueprint is obtained, which is not in the game files this reads.
+            if (lib.GameCommodities.Blueprints.Count > 0)
+            {
+                return lib.GameCommodities.Blueprints.Select(b =>
+                {
+                    var facts = lib.GameCommodities.Item(b.OutputClass);
+                    var mine = received.FirstOrDefault(r =>
+                        b.Output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
+                        || r.Name.Contains(b.Output, StringComparison.OrdinalIgnoreCase));
+
+                    return (object)new
+                    {
+                        b.Output,
+                        Type = facts?.Type,
+                        Grade = facts?.Grade ?? 0,
+                        b.Kind,
+                        b.CraftSeconds,
+                        b.Materials,
+                        @default = false,
+                        b.RewardPools,
+                        shopPrice = uex.ItemPrice(lib.ItemUuid(b.OutputClass)),
+                        owned = mine is not null,
+                        receivedAt = mine?.At,
+                        source = "install"
+                    };
+                });
+            }
+
             return lib.Community.Blueprints.Select(b =>
             {
                 var mine = received.FirstOrDefault(r =>
                     b.Output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
                     || r.Name.Contains(b.Output, StringComparison.OrdinalIgnoreCase));
 
-                return new
+                return (object)new
                 {
                     b.Output,
                     b.Type,
@@ -984,7 +1020,8 @@ public static class ServerHost
                     b.RewardPools,
                     shopPrice = uex.ItemPrice(b.OutputUuid),
                     owned = mine is not null,
-                    receivedAt = mine?.At
+                    receivedAt = mine?.At,
+                    source = "dataset"
                 };
             });
         });

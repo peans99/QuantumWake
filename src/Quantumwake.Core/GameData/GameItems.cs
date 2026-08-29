@@ -122,12 +122,17 @@ public static class GameItems
     /// The English behind an instance's own localisation key, or null.
     /// </summary>
     /// <remarks>
+    /// Public because blueprints need the same answer for the resources and
+    /// items a recipe consumes, and they reach those as records rather than
+    /// through this class.
+    /// </remarks>
+    /// <remarks>
     /// Items and manufacturers both carry an inline <c>SCItemLocalization</c>
     /// holding a key, so one reader serves both. A key CIG have not filled in
     /// yields null rather than the raw key, which would read as a bug on the
     /// page.
     /// </remarks>
-    private static string? Localised(
+    public static string? Localised(
         DataCore core, IReadOnlyDictionary<string, string> text, long instance, int structIndex)
     {
         var (at, field) = core.FieldAt(instance, structIndex, "Localization");
