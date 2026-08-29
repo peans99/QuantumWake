@@ -45,6 +45,10 @@ public sealed class DataCore
     private readonly long _recordOffset;
     private readonly int _recordSize;
     private int _mappingCount;
+    private readonly long _stringValues;
+    private readonly long _localeValues;
+    private readonly long _enumValues;
+    private readonly long _strongValues;
 
     public DataCore(byte[] data)
     {
@@ -93,8 +97,14 @@ public sealed class DataCore
         cursor += boolean * 1L;
         cursor += single * 4L; cursor += dbl * 8L;
         cursor += guid * 16L;
-        cursor += str * 4L; cursor += locale * 4L; cursor += @enum * 4L;
-        cursor += strong * 8L; cursor += weak * 8L;
+
+        // The arrays a property can point into. Only these are needed so far;
+        // the rest are skipped by width above.
+        _stringValues = cursor; cursor += str * 4L;
+        _localeValues = cursor; cursor += locale * 4L;
+        _enumValues = cursor; cursor += @enum * 4L;
+        _strongValues = cursor; cursor += strong * 8L;
+        cursor += weak * 8L;
         cursor += reference * 20L;
         cursor += enumOption * 4L;
 
@@ -252,7 +262,11 @@ public sealed class DataCore
     /// <summary>One field on a struct.</summary>
     /// <param name="DataType">The DataForge type code, e.g. 0x000A for a string.</param>
     /// <param name="ConversionType">0 is a plain attribute; 1-3 are array forms.</param>
-    public sealed record Property(string Name, ushort DataType, ushort ConversionType);
+    /// <param name="StructIndex">
+    /// For an inline class, the struct it is - which is also its width. For
+    /// anything else, meaningless.
+    /// </param>
+    public sealed record Property(string Name, ushort DataType, ushort ConversionType, int StructIndex);
 
     private long PropertyOffset => _structOffset + StructDefinitionCount * 16L;
 
@@ -293,7 +307,8 @@ public sealed class DataCore
                 all.Add(new Property(
                     Blob(BitConverter.ToUInt32(_data, (int)pat)),
                     BitConverter.ToUInt16(_data, (int)(pat + 6)),
-                    (ushort)(BitConverter.ToUInt16(_data, (int)(pat + 8)) & 0xFF)));
+                    (ushort)(BitConverter.ToUInt16(_data, (int)(pat + 8)) & 0xFF),
+                    BitConverter.ToUInt16(_data, (int)(pat + 4))));
             }
         }
 
@@ -320,8 +335,35 @@ public sealed class DataCore
             0x000E => 16,                              // guid
             0x0110 or 0x0210 => 8,                     // strong and weak pointers
             0x0310 => 20,                              // reference: an index and a guid
-            _ => 0,                                    // varClass is inline; handled by the caller
+            0x0010 => StructSize(p.StructIndex),        // inline class: it is that struct
+            _ => 0,
         };
+
+    /// <summary>
+    /// Whether a struct's fields add up to the size it declares.
+    /// </summary>
+    /// <remarks>
+    /// The check that caught the width table being right: EntityClassDefinition
+    /// declares 66 bytes, and 4+4+1+1+12+20+8+8+8 is 66. An inline class is the
+    /// struct its property points at - a colour is 12 bytes because RGB is - so
+    /// this fails loudly if any width is guessed wrong rather than silently
+    /// reading a neighbouring field.
+    /// </remarks>
+    public bool FieldsAddUp(int structIndex)
+    {
+        var declared = StructSize(structIndex);
+        if (declared <= 0) return false;
+
+        var total = 0;
+        foreach (var p in StructProperties(structIndex))
+        {
+            var w = Width(p);
+            if (w <= 0) return false;
+            total += w;
+        }
+
+        return total == declared;
+    }
 
     /// <summary>
     /// A named string, locale or enum value on a record, or null.
@@ -356,11 +398,273 @@ public sealed class DataCore
                 };
             }
 
-            if (width == 0) return null;                        // inline class: cannot walk past it
+            if (width <= 0) return null;
             at += width;
         }
 
         return null;
+    }
+
+    /// <summary>A pointer to another instance: which struct, and which of them.</summary>
+    public readonly record struct Pointer(int StructIndex, int VariantIndex);
+
+    /// <summary>
+    /// The instances a pointer array on a record points at.
+    /// </summary>
+    /// <remarks>
+    /// An array property stores a count and a first index rather than the items
+    /// themselves; the items live in the value array for its type. For a strong
+    /// pointer that array is eight bytes an entry - a struct index and which
+    /// instance of it - which is how a ship reaches its Components and a
+    /// commodity reaches where it trades.
+    /// </remarks>
+    public IReadOnlyList<Pointer> PointerArray(DataRecord record, string name)
+    {
+        var at = InstanceAt(record, record.VariantIndex);
+        if (at < 0) return [];
+
+        foreach (var p in StructProperties(record.StructIndex))
+        {
+            var width = Width(p);
+
+            if (p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                // Only an array of pointers; a plain field is not a list.
+                if (p.ConversionType == 0 || p.DataType is not (0x0110 or 0x0210)) return [];
+                if (at + 8 > _data.LongLength) return [];
+
+                var count = BitConverter.ToUInt32(_data, (int)at);
+                var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+
+                if (count > 4096) return [];                    // a wrong offset reads as a vast array
+
+                var items = new List<Pointer>((int)count);
+
+                for (var i = 0; i < count; i++)
+                {
+                    var e = _strongValues + (first + i) * 8L;
+                    if (e + 8 > _data.LongLength) break;
+
+                    items.Add(new Pointer(
+                        (int)BitConverter.ToUInt32(_data, (int)e),
+                        BitConverter.ToUInt16(_data, (int)(e + 4))));
+                }
+
+                return items;
+            }
+
+            if (width <= 0) return [];
+            at += width;
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Where a named field sits inside an instance, and what type it is.
+    /// </summary>
+    /// <remarks>
+    /// Returns -1 when the field is absent. Inline classes are crossed rather
+    /// than stopped at, since their width is the struct they are.
+    /// </remarks>
+    public (long At, Property? Field) FieldAt(long instance, int structIndex, string name)
+    {
+        if (instance < 0) return (-1, null);
+
+        var at = instance;
+
+        foreach (var p in StructProperties(structIndex))
+        {
+            if (p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return (at, p);
+
+            var width = Width(p);
+            if (width <= 0) return (-1, null);
+            at += width;
+        }
+
+        return (-1, null);
+    }
+
+    /// <summary>An integer field, or null.</summary>
+    public int? Int32At(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        return at >= 0 && field is { ConversionType: 0, DataType: 0x0004 } && at + 4 <= _data.LongLength
+            ? BitConverter.ToInt32(_data, (int)at)
+            : null;
+    }
+
+    /// <summary>
+    /// An enum field's name, or null.
+    /// </summary>
+    /// <remarks>
+    /// An enum stores a four-byte offset into the text table, so the value is
+    /// the option's own name rather than an index needing a lookup table.
+    /// </remarks>
+    public string? EnumAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is not { ConversionType: 0, DataType: 0x000F } || at + 4 > _data.LongLength)
+            return null;
+
+        var value = Text(BitConverter.ToUInt32(_data, (int)at));
+        return value.Length > 0 ? value : null;
+    }
+
+    /// <summary>The struct index of a named struct, or -1.</summary>
+    public int StructIndexOf(string name)
+    {
+        for (var i = 0; i < StructDefinitionCount; i++)
+            if (StructName(i).Equals(name, StringComparison.Ordinal)) return i;
+
+        return -1;
+    }
+
+    /// <summary>
+    /// A single strong or weak pointer field, rather than an array of them.
+    /// </summary>
+    /// <remarks>
+    /// Stored inline as the same eight bytes an array entry uses - a struct
+    /// index and which instance - so a ship reaches its loadout, and a loadout
+    /// its entries, without an array in between.
+    /// </remarks>
+    public Pointer? PointerAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is not { ConversionType: 0, DataType: 0x0110 or 0x0210 }
+            || at + 8 > _data.LongLength)
+        {
+            return null;
+        }
+
+        var target = (int)BitConverter.ToUInt32(_data, (int)at);
+        if (target < 0 || target >= StructDefinitionCount) return null;
+
+        return new Pointer(target, BitConverter.ToUInt16(_data, (int)(at + 4)));
+    }
+
+    /// <summary>A float field, or null.</summary>
+    public float? SingleAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        return at >= 0 && field is { ConversionType: 0, DataType: 0x000B } && at + 4 <= _data.LongLength
+            ? BitConverter.ToSingle(_data, (int)at)
+            : null;
+    }
+
+    /// <summary>A pointer array read from an arbitrary instance, not just a record.</summary>
+    public IReadOnlyList<Pointer> PointerArrayAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is null || field.ConversionType == 0
+            || field.DataType is not (0x0110 or 0x0210) || at + 8 > _data.LongLength)
+        {
+            return [];
+        }
+
+        var count = BitConverter.ToUInt32(_data, (int)at);
+        var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+        if (count > 4096) return [];
+
+        var items = new List<Pointer>((int)count);
+
+        for (var i = 0; i < count; i++)
+        {
+            var e = _strongValues + (first + i) * 8L;
+            if (e + 8 > _data.LongLength) break;
+
+            items.Add(new Pointer(
+                (int)BitConverter.ToUInt32(_data, (int)e),
+                BitConverter.ToUInt16(_data, (int)(e + 4))));
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// An array of inline classes, as instances of the struct they are.
+    /// </summary>
+    /// <remarks>
+    /// The third array shape, and the one that is not obvious. A pointer array
+    /// holds struct index and instance per entry; a class array holds only a
+    /// count and a first index, and the entries are consecutive instances of the
+    /// property's own struct. Verified on a ship's item ports: 12 of them from
+    /// index 34,103, reading as hardpoint_controller_fuel,
+    /// hardpoint_air_traffic_controller and so on rather than as noise.
+    /// </remarks>
+    public IReadOnlyList<Pointer> ClassArrayAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is null || field.ConversionType == 0
+            || field.DataType != 0x0010 || at + 8 > _data.LongLength)
+        {
+            return [];
+        }
+
+        var count = BitConverter.ToUInt32(_data, (int)at);
+        var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+        if (count > 8192) return [];
+
+        var items = new List<Pointer>((int)count);
+        for (var i = 0u; i < count; i++) items.Add(new Pointer(field.StructIndex, (int)(first + i)));
+
+        return items;
+    }
+
+    /// <summary>A string field, or null.</summary>
+    public string? StringAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is not { ConversionType: 0, DataType: 0x000A or 0x000D }
+            || at + 4 > _data.LongLength)
+        {
+            return null;
+        }
+
+        var value = Text(BitConverter.ToUInt32(_data, (int)at));
+        return value.Length > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// The record id a reference field names, or null.
+    /// </summary>
+    /// <remarks>
+    /// A reference is 20 bytes: an index nobody needs, then the same 16-byte
+    /// GUID a record carries. It is how the files share a definition rather than
+    /// repeating it - every cargo grid in the game points at one of a handful of
+    /// container records this way - so following it is what turns a ship into
+    /// numbers.
+    /// </remarks>
+    public Guid? ReferenceAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is not { ConversionType: 0, DataType: 0x0310 }
+            || at + 20 > _data.LongLength)
+        {
+            return null;
+        }
+
+        var id = ReadHash(_data.AsSpan((int)at + 4, 16));
+        return id == Guid.Empty ? null : id;
+    }
+
+    /// <summary>Where a pointed-at instance begins, or -1.</summary>
+    public long InstanceAt(Pointer pointer)
+    {
+        MapInstances();
+
+        if (_structData is null || !_structData.TryGetValue(pointer.StructIndex, out var block))
+            return -1;
+
+        return _dataOffset + block + pointer.VariantIndex * (long)StructSize(pointer.StructIndex);
     }
 
     /// <summary>Every record, with its path and type.</summary>

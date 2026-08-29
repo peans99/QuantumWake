@@ -1045,30 +1045,30 @@ public static class ServerHost
         });
 
         app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
-            lib.Community.Items
-                .Select(kv =>
+            lib.Items()
+                .Select(item =>
                 {
-                    var stock = uex.ItemMarket(kv.Value.Uuid);
+                    var stock = uex.ItemMarket(item.Uuid);
                     var cheapest = stock.Count > 0 ? stock.MinBy(r => r.Buy) : null;
 
                     return new
                     {
-                        className = kv.Key,
-                        kv.Value.Name,
-                        kv.Value.Type,
-                        kv.Value.SubType,
-                        kv.Value.Size,
-                        kv.Value.Grade,
-                        kv.Value.Manufacturer,
-                        price = uex.ItemPrice(kv.Value.Uuid),
+                        className = item.ClassName,
+                        item.Name,
+                        item.Type,
+                        item.SubType,
+                        item.Size,
+                        item.Grade,
+                        item.Manufacturer,
+                        item.Source,
+                        price = uex.ItemPrice(item.Uuid),
                         stockedAt = stock.Count,
                         cheapestAt = cheapest?.Terminal,
                         terminals = stock.Count > 0
                             ? stock.OrderBy(r => r.Buy).Select(r => $"{r.Terminal} — {r.Buy:N0} aUEC")
                             : null
                     };
-                })
-                .OrderBy(i => i.className));
+                }));
 
         // Hauls worth flying, sized to a hold and a wallet the caller names.
         // Each end of a haul carries the map's own id for it where the terminal

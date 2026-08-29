@@ -254,6 +254,23 @@ public sealed record MarketEntry(
     int MyTrades,
     string Source = "dataset");
 
+/// <summary>One item in the reference catalogue, and where it came from.</summary>
+/// <param name="Source">
+/// <c>install</c> or <c>dataset</c>. They agree - all 10,843 of the dataset's
+/// items match the install on type, sub-type, size and grade - but the install
+/// knows 26,028, so which one is answering changes how much is listed.
+/// </param>
+public sealed record ItemReference(
+    string ClassName,
+    string? Name,
+    string? Type,
+    string? SubType,
+    int Size,
+    int Grade,
+    string? Manufacturer,
+    string? Uuid,
+    string Source);
+
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
 /// <param name="Confirmed">
@@ -1759,6 +1776,39 @@ public sealed class LogLibrary : IDisposable
             })
             .OrderByDescending(e => e.MyRevenue)
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// Every item the reference page can show, from whichever source has them.
+    /// </summary>
+    /// <remarks>
+    /// The install is preferred because it is both larger and current with the
+    /// patch, and it needs no download. The dataset stays the fallback for an
+    /// install this cannot read - a moved folder, a machine with no game on it.
+    /// </remarks>
+    public IReadOnlyList<ItemReference> Items()
+    {
+        if (GameCommodities.ItemFacts.Count > 0)
+        {
+            return [.. GameCommodities.ItemFacts
+                .Select(kv => new ItemReference(
+                    kv.Key,
+                    kv.Value.Name,
+                    kv.Value.Type,
+                    kv.Value.SubType,
+                    kv.Value.Size,
+                    kv.Value.Grade,
+                    kv.Value.Manufacturer is { Length: > 0 } maker ? maker : null,
+                    ItemUuid(kv.Key),
+                    "install"))
+                .OrderBy(i => i.ClassName, StringComparer.OrdinalIgnoreCase)];
+        }
+
+        return [.. Community.Items
+            .Select(kv => new ItemReference(
+                kv.Key, kv.Value.Name, kv.Value.Type, kv.Value.SubType,
+                kv.Value.Size, kv.Value.Grade, kv.Value.Manufacturer, kv.Value.Uuid, "dataset"))
+            .OrderBy(i => i.ClassName, StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>

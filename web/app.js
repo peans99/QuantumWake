@@ -2608,6 +2608,20 @@ async function loadPartsRef() {
   for (const type of types) select.append(new Option(prettyType(type), type));
   if (types.includes(previous)) select.value = previous;
 
+  // The two sources agree item for item, so the caption says which is answering
+  // rather than warning about a difference there is not one of. What does
+  // change is the size of the list: the install describes more than twice what
+  // the download does, and a reader comparing counts deserves to know why.
+  const caption = $('#parts-caption');
+  if (caption && partCatalogue.length) {
+    caption.textContent = partCatalogue[0].source === 'install'
+      ? `${partCatalogue.length.toLocaleString()} ship components and pieces of personal gear, `
+        + `read from your game install with type, size, grade and maker, and UEX in-game `
+        + `prices where a shop stocks one.`
+      : `Every ship component and piece of personal gear in the community digest, with type, `
+        + `size, grade and maker, and UEX in-game prices where a shop stocks one.`;
+  }
+
   renderPartsRef();
 }
 

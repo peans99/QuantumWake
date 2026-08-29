@@ -434,6 +434,17 @@ release workflow lifts it from here, so it is written once.
   download still adds the unpriced facilities, the commodity groupings and the
   map placement.
 
+- The parts and gear reference comes from your install now. Every item the game
+  can attach to anything carries its own definition — type, sub-type, size,
+  grade and maker — so the page no longer needs the download for any of it.
+  Checked against the download rather than assumed: all 10,843 of its items are
+  in the install by class name, and type, sub-type, size and grade agree on
+  every single one. The install describes 26,028, so the download was the
+  smaller catalogue, and 25,362 items come through with the name the game shows
+  rather than a class name. Makers arrive spelled out — Shubin Interstellar
+  rather than SHIN — across 119 of them. Reading it costs about 25 seconds once
+  per patch and caches.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the
