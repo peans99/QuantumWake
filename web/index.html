@@ -822,10 +822,9 @@
     <div class="community-offer" id="community-offer" hidden>
       <div>
         <b>Name the cargo?</b>
-        The community keeps the id-to-name table as a public file
-        (StarCitizenWiki / scunpacked-data). Enabling this downloads it once.
-        This one is fetched on your request and never again on its own; only
-        the market price table can be given standing leave to refresh, and only
+        Cargo is named from your own game install, so this needs no
+        download. A missing name means the install could not be read — check
+        the game folder on the Settings page.
         if you turn that on.
       </div>
       <button class="ghost" id="community-enable">Download community data</button>
@@ -1544,22 +1543,24 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>Community commodity names</h3>
+        <h3>Community ship and trade reference</h3>
         <button class="ghost" id="settings-community-enable" hidden>Download</button>
         <button class="ghost" id="settings-community-refresh" hidden>Refresh</button>
 
         <button class="ghost danger" id="settings-community-disable" hidden>Disable and delete</button>
       </div>
       <p class="muted" id="settings-community-copy">
-        Commodity names for your cargo, where each commodity trades, and the
-        ship and item reference for the Fleet and Loadout pages — all from
-        StarCitizenWiki / scunpacked-data. Enabling downloads a set of public
-        files (~110&nbsp;MB, kept as a few MB) into local app data. Fetched only
-        when you ask — nothing here goes out on a timer or at startup. A game
-        patch adds ships, items and commodities the dump does not have yet, so
-        this says which build it was made from and tells you when that is
-        older than the patch your logs are on. Disabling deletes the local
-        copy.
+        <b>Cargo names and item prices no longer need this.</b> Both are read
+        from your own install now, which is always the patch you are playing.
+        What it is still for: where each commodity trades, and the ship
+        reference the Fleet page uses — ship specifications are not in the game
+        files in a form this app can read yet.
+        From StarCitizenWiki / scunpacked-data. Enabling downloads a set of
+        public files (~110&nbsp;MB, kept as a few MB) into local app data.
+        Fetched only when you ask — nothing here goes out on a timer or at
+        startup. A game patch adds ships the dump does not have yet, so this
+        says which build it was made from and tells you when that is older than
+        the patch your logs are on. Disabling deletes the local copy.
       </p>
       <span class="muted" id="settings-community-status"></span>
       <p class="option-stale" id="settings-community-behind" hidden></p>
