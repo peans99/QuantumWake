@@ -421,9 +421,7 @@ release workflow lifts it from here, so it is written once.
 
 - Loot, stash and fleet prices no longer need the download either. Every one of
   the dump's 10,843 item ids turns out to be an id the install already carries,
-  so the prices UEX quotes can be looked up without it. The dump is still there
-  for where each commodity trades, and for the ship reference the Fleet page
-  uses — those are not in the game files in a form this can read yet.
+  so the prices UEX quotes can be looked up without it.
 
 - The Market page works without the download too. Every commodity comes from
   the install and, where each one changes hands, from the counters UEX has an
@@ -444,6 +442,15 @@ release workflow lifts it from here, so it is written once.
   rather than a class name. Makers arrive spelled out — Shubin Interstellar
   rather than SHIN — across 119 of them. Reading it costs about 25 seconds once
   per patch and caches.
+
+- What the download is still for, now that it is much less. Ship
+  specifications, the ports a ship can fit, place lore and map positions, mining
+  spawns and crafting recipes. Ship cargo, speeds and shield totals turned out
+  to be in the install as well — the game names each ship's own definition file
+  and all 171 are in the archive — but those files are encrypted where the ones
+  this app reads are not, so they are closed rather than merely unparsed. The
+  download is the honest source for them, and Settings now says so instead of
+  implying the work simply had not been done.
 
 ### 0.8.35
 
