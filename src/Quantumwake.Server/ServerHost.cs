@@ -1051,7 +1051,22 @@ public static class ServerHost
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Yield).ToList(),
                     StringComparer.OrdinalIgnoreCase);
 
-            return lib.Community.ResourceSpawns.Select(s =>
+            // The download still wins here, and this is the one page where it
+            // does. The install's own deposit tables read cleanly but reach
+            // 1,228 rows across 47 places against the download's 2,642 across
+            // 234, because the cave tables are a separate record type this does
+            // not walk yet. So the install fills the page for somebody who has
+            // no download rather than replacing one they do have.
+            var spawns = lib.Community.ResourceSpawns.Count > 0
+                ? lib.Community.ResourceSpawns.Select(s => (
+                    s.Resource, Deposit: s.Deposit, s.Kind, s.Location, s.System,
+                    s.Group, GroupChance: (double)s.GroupChance, Share: (double)s.Share,
+                    Source: "dataset"))
+                : lib.GameCommodities.Spawns.Select(s => (
+                    s.Resource, s.Deposit, s.Kind, s.Location, s.System,
+                    s.Group, s.GroupChance, s.Share, Source: "install"));
+
+            return spawns.Select(s =>
             {
                 var best = uex.Best(s.Resource);
                 raw.TryGetValue($"{s.Resource} (Raw)", out var rawRow);
@@ -1071,6 +1086,7 @@ public static class ServerHost
                     s.Group,
                     s.GroupChance,
                     s.Share,
+                    s.Source,
                     bestSell = best?.BestSell > 0 ? best.BestSell : (decimal?)null,
                     bestSellTerminal = best?.BestSell > 0 ? best.BestSellTerminal : null,
                     rawSell = rawRow?.Sell,

@@ -463,6 +463,17 @@ release workflow lifts it from here, so it is written once.
   Powerplant, simply changed in 4.10, so the install is right and the download
   is describing an older patch.
 
+- Mining spawns work without the download, but not as well as with it. The
+  install's own deposit tables read cleanly — 1,228 rows across 47 places, with
+  the ore each rock actually yields rather than the rock, the deposit name, and
+  each entry's real share of its spawn group. The download still describes more:
+  2,642 rows across 234 places, because the cave tables live in a record type
+  this does not read yet. So the install fills the page for anyone without the
+  download rather than replacing it for anyone who has one, and the page says
+  which it is showing. Systems are named only where the game plainly names one:
+  Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
+  assigned to whichever system it looks closest to.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the
