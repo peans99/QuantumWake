@@ -398,8 +398,7 @@ release workflow lifts it from here, so it is written once.
   text table carries 307 commodity names under a prefix the reader walked
   past, along with the descriptions the game shows for them — 174 of the 203
   commodities the community dataset knows about now have the game’s own blurb
-  available. Cargo is still named from the dataset, which is the only thing
-  that maps the ids the logs actually carry.
+  available.
 
 - A Text overlay page, and a mark for gear you cannot just buy. StarStrings
   has moved off Settings onto a page of its own, alongside a new overlay that
