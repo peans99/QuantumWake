@@ -425,6 +425,15 @@ release workflow lifts it from here, so it is written once.
   for where each commodity trades, and for the ship reference the Fleet page
   uses — those are not in the game files in a form this can read yet.
 
+- The Market page works without the download too. Every commodity comes from
+  the install and, where each one changes hands, from the counters UEX has an
+  observed price at. That is a different question from the one the download
+  answers — it describes the economy simulation, including facilities nobody
+  has ever priced — so it is a shorter list, and the page says which of the two
+  it is showing rather than letting the shorter one pass for the longer. The
+  download still adds the unpriced facilities, the commodity groupings and the
+  map placement.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the

@@ -251,7 +251,8 @@ public sealed record MarketEntry(
     IReadOnlyList<string> Bought,
     int MyScuSold,
     decimal MyRevenue,
-    int MyTrades);
+    int MyTrades,
+    string Source = "dataset");
 
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
@@ -1718,10 +1719,22 @@ public sealed class LogLibrary : IDisposable
     /// every commodity the dataset knows, with this install's volume and
     /// revenue against each. Empty when the dataset is disabled.
     /// </summary>
-    public IReadOnlyList<MarketEntry> Market()
+    /// <summary>
+    /// Every commodity known, with this install's own trading record against
+    /// each.
+    /// </summary>
+    /// <remarks>
+    /// Two sources answer this, and they answer differently. The community
+    /// dataset lists the economy simulation's own facilities; without it the
+    /// game install still names every commodity and UEX still knows which
+    /// counters it has seen prices at. The second is a floor rather than a
+    /// roster, so each entry carries which one it came from and the page says
+    /// so - the alternative is a shorter list that looks like the same list.
+    /// </remarks>
+    public IReadOnlyList<MarketEntry> Market(UexData? uex = null)
     {
         if (!Community.IsEnabled)
-            return [];
+            return uex is { IsEnabled: true } ? FromInstall(uex) : [];
 
         var trades = Counted(WipeScope.Money)
             .SelectMany(s => s.Trades)
@@ -1743,6 +1756,40 @@ public sealed class LogLibrary : IDisposable
                     mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
                     mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
                     mine?.Count ?? 0);
+            })
+            .OrderByDescending(e => e.MyRevenue)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// The same list built from the game install and UEX, with no download.
+    /// </summary>
+    private IReadOnlyList<MarketEntry> FromInstall(UexData uex)
+    {
+        var trades = Counted(WipeScope.Money)
+            .SelectMany(s => s.Trades)
+            .Where(t => t.ResourceId is not null)
+            .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return [.. GameCommodities.All
+            .Select(pair =>
+            {
+                var mine = trades.GetValueOrDefault(pair.Key);
+                var (sells, buys) = uex.TradeLocations(pair.Value);
+
+                return new MarketEntry(
+                    pair.Key,
+                    pair.Value,
+                    // The install names a commodity without grouping it, and an
+                    // invented grouping would filter worse than none.
+                    [],
+                    sells,
+                    buys,
+                    mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
+                    mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
+                    mine?.Count ?? 0,
+                    "install");
             })
             .OrderByDescending(e => e.MyRevenue)
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];

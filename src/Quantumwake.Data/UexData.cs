@@ -564,6 +564,26 @@ public sealed class UexData
         _matrix.TryGetValue(commodity, out var rows) ? rows : [];
 
     /// <summary>
+    /// Where a commodity changes hands, by the counters UEX has prices for.
+    /// </summary>
+    /// <remarks>
+    /// This answers the same question as the community dataset's own lists and
+    /// does not answer it the same way. The dataset describes the economy
+    /// simulation - every facility configured to handle the commodity, whether
+    /// or not anybody has been there. This is the counters UEX has an observed
+    /// price for, so it is a floor, and it moves. Callers must say which they
+    /// are showing rather than let the two look alike.
+    /// </remarks>
+    public (IReadOnlyList<string> Sells, IReadOnlyList<string> Buys) TradeLocations(string commodity)
+    {
+        if (!_matrix.TryGetValue(commodity, out var rows)) return ([], []);
+
+        return (
+            [.. rows.Where(r => r.Buy > 0).Select(r => r.Terminal).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)],
+            [.. rows.Where(r => r.Sell > 0).Select(r => r.Terminal).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)]);
+    }
+
+    /// <summary>
     /// Fetches current prices, the terminal list, vehicle purchase prices and
     /// item prices. Anonymous endpoints, on the user's click only.
     /// </summary>

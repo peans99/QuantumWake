@@ -2154,8 +2154,28 @@ async function renderMarketDetail(entry, cell) {
     + 'Nothing in the game logs threat, so this is where a place is, not what happened there.'));
 }
 
+// What the two sources can each answer, said plainly. The install list is the
+// counters UEX has actually seen a price at, which is a floor; the dataset
+// lists the economy simulation's own facilities, priced or not. Showing the
+// shorter list under the longer list's wording would read as a shrinking
+// economy rather than a narrower source.
+const MARKET_CAPTIONS = {
+  install: 'Every commodity your game install names, with your own trading record '
+    + 'against each. "Sellable at" counts the counters UEX has seen a price at, so it '
+    + 'is a floor and it moves. Enable the community dataset in Settings to also see '
+    + 'facilities nobody has priced yet, and to group commodities.',
+  dataset: 'Every commodity the community dataset knows, with your own trading record '
+    + 'against each. Sellable at counts facilities in the economy simulation itself, '
+    + 'and show on map lights the ones the star map can place. Static availability, not '
+    + 'live prices.',
+};
+
 function renderMarket() {
   $('#market-offer').hidden = marketEntries.length > 0;
+
+  const caption = $('#market-caption');
+  const source = marketEntries[0]?.source;
+  if (caption && MARKET_CAPTIONS[source]) caption.textContent = MARKET_CAPTIONS[source];
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
   const group = $('#market-group').value;
@@ -2181,7 +2201,7 @@ function renderMarket() {
     const tr = el('tr');
     const td = el('td', 'muted', marketEntries.length
       ? 'No commodities match that search.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : 'Enable UEX, or the community dataset, on the Settings page to fill this in.');
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);

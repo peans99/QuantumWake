@@ -914,7 +914,7 @@ public static class ServerHost
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.
         app.MapGet("/api/market", (LogLibrary lib, UexData uex) =>
-            lib.Market().Select(entry => new
+            lib.Market(uex).Select(entry => new
             {
                 entry.Id,
                 entry.Name,
@@ -924,6 +924,7 @@ public static class ServerHost
                 entry.MyScuSold,
                 entry.MyRevenue,
                 entry.MyTrades,
+                entry.Source,
                 uex = uex.Best(entry.Name)
             }));
 
