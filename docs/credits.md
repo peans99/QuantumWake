@@ -45,6 +45,17 @@ generation of tools before it. No third-party extractor is used or shipped —
 `GameData/P4kArchive.cs` walks the central directory itself and decompresses a
 single entry in memory — but the format was not worked out here.
 
+**`Game2.dcb`** — since 0.9.0 the commodity names and the whole parts and gear
+catalogue are read from the DataCore blob inside `Data.p4k` rather than
+downloaded. The DataForge format — its struct, property and enum tables, its
+typed value arrays, and the two separate string tables — is community knowledge,
+published in [unp4k](https://github.com/dolkensp/unp4k)'s `unforge` and carried
+on by [scdatatools](https://github.com/ventorvar/scdatatools). Reading it from a
+guess produced forty confident matches that were all coincidence; the format had
+to be read rather than inferred, and it is theirs. As with the archive, no
+third-party extractor is used or shipped: `GameData/DataCore.cs` walks the blob
+itself.
+
 **Star Citizen Wiki API** ([api.star-citizen.wiki](https://api.star-citizen.wiki))
 and [starcitizen-api.com](https://starcitizen-api.com) were consulted during
 research as a cross-check on body and station names. Neither is called at

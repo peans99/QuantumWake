@@ -1807,8 +1807,10 @@
           Built on work the community published first. The log formats:
           StarLogs (Ozy311), all-slain (DimmaDont), SCStats (Maple33),
           SCPlay (ckuma), AutoTrackR2, SC-Kill-Monitor and citizenmon.
-          The <code>Data.p4k</code> format: the scdatatools lineage.
-          The optional commodity names, trade locations and ship reference:
+          The <code>Data.p4k</code> and DataCore formats, which is how this app
+          now reads commodity names and the whole item catalogue out of your own
+          install: the scdatatools lineage and unp4k's <code>unforge</code>.
+          The optional ship reference, star-map positions and place lore:
           StarCitizenWiki's <code>scunpacked-data</code>, generated with octfx's
           ScDataDumper. The optional live prices: UEX and its datarunners.
           The optional in-game text mod is <b>StarStrings</b>, written and
@@ -1942,8 +1944,9 @@
     <br>
     Log-format research by the community made this possible - StarLogs (Ozy311),
     all-slain (DimmaDont), SCStats (Maple33), SCPlay (ckuma), AutoTrackR2,
-    SC-Kill-Monitor and citizenmon - with the p4k format from the scdatatools
-    lineage. Optional commodity names come from StarCitizenWiki's scunpacked-data,
+    SC-Kill-Monitor and citizenmon - with the p4k and DataCore formats from the
+    scdatatools lineage and unp4k, which is what lets this read your own install.
+    The optional ship reference comes from StarCitizenWiki's scunpacked-data,
     built with octfx's ScDataDumper. The optional text mod is StarStrings by
     MrKraken. Full attribution in docs/credits.md.
   </span>
@@ -1991,8 +1994,9 @@
         <input type="checkbox" id="setup-community">
         <div>
           <b>Community dataset <em>one download, ~110 MB</em></b>
-          <span>Names the commodities in your cargo history and adds ship and
-          item reference plus real star-map positions. From StarCitizenWiki's
+          <span>Adds ship specifications, real star-map positions, place lore,
+          mining spawns and crafting recipes. Your commodities and gear are read
+          from your install either way. From StarCitizenWiki's
           scunpacked-data.</span>
         </div>
       </label>
