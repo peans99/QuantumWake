@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.8.38
+### 0.9.0
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -412,6 +412,13 @@ release workflow lifts it from here, so it is written once.
 - Loot prices now read your own receipts. The game records what it charged you
   at a kiosk, so an item UEX has never heard of can still show a price — and,
   more usefully, still counts as something you can buy.
+
+- Cargo is named from your own game install. A sale logs a commodity as an id,
+  and resolving it has needed an opt-in 110 MB community download. The install
+  already answers it: the id is a record in the game’s own data, which carries
+  the name the game displays. Reading it takes about six seconds once per
+  patch and caches to 18 KB. All 203 commodities the download knows are named,
+  185 of them word for word, and the game knows 342.
 
 ### 0.8.35
 

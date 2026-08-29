@@ -658,6 +658,24 @@ public sealed class LogLibrary : IDisposable
     public CommunityData Community { get; set; } = new();
 
     /// <summary>
+    /// Commodity names read from the install itself, needing no download.
+    /// </summary>
+    public GameCommodities GameCommodities { get; private set; } = GameCommodities.Empty;
+
+    /// <summary>
+    /// What the game calls a logged resource id.
+    /// </summary>
+    /// <remarks>
+    /// The install is asked first and the dataset second, because the install is
+    /// the patch actually being played while a dump is as old as whenever it was
+    /// built. They agree in practice - 185 of the dataset's 203 word for word,
+    /// with no disagreements - and where the wording differs the game's own is
+    /// the one to show.
+    /// </remarks>
+    public string? CommodityName(string? resourceId) =>
+        GameCommodities.Commodity(resourceId) ?? Community.Commodity(resourceId);
+
+    /// <summary>
     /// Loads display names for an install. Safe to skip - every lookup falls
     /// back to the raw identifier.
     /// </summary>
@@ -668,6 +686,12 @@ public sealed class LogLibrary : IDisposable
             "names.json");
 
         Names = GameNames.Load(installRoot, cache);
+
+        // The blob is 316 MB and takes a few seconds cold, so the answer is
+        // cached beside the names and stamped with the archive's write time.
+        GameCommodities = GameCommodities.Load(
+            installRoot,
+            Path.Combine(Path.GetDirectoryName(cache)!, "commodities.json"));
 
         // Let the resolver prefer the game's own place names, and drop anything
         // resolved before they were available.
@@ -973,7 +997,7 @@ public sealed class LogLibrary : IDisposable
             foreach (var trade in session.Trades)
             {
                 // "Waste · 304 SCU" with the community dataset, "304 SCU" without.
-                var what = Community.Commodity(trade.ResourceId) is { } commodity
+                var what = CommodityName(trade.ResourceId) is { } commodity
                     ? $"{commodity} · {trade.Quantity} SCU"
                     : $"{trade.Quantity} SCU";
 
@@ -1215,7 +1239,7 @@ public sealed class LogLibrary : IDisposable
                     t.Amount,
                     t.Quantity > 0 ? t.Amount / t.Quantity : 0,
                     t.Mode,
-                    Community.Commodity(t.ResourceId),
+                    CommodityName(t.ResourceId),
                     t.ResourceId);
             }))
             .OrderByDescending(t => t.At)];
