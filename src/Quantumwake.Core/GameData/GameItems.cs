@@ -70,8 +70,8 @@ public static class GameItems
 
                 items[bare] = new GameItem(
                     Localised(core, text, at, field.StructIndex) ?? bare,
-                    core.EnumAt(at, field.StructIndex, "Type") ?? string.Empty,
-                    core.EnumAt(at, field.StructIndex, "SubType") ?? string.Empty,
+                    Known(core.EnumAt(at, field.StructIndex, "Type")),
+                    Known(core.EnumAt(at, field.StructIndex, "SubType")),
                     core.Int32At(at, field.StructIndex, "Size") ?? 0,
                     core.Int32At(at, field.StructIndex, "Grade") ?? 0,
                     maker is not null ? makers.GetValueOrDefault(maker.Value, string.Empty) : string.Empty);
@@ -82,6 +82,20 @@ public static class GameItems
 
         return items;
     }
+
+    /// <summary>
+    /// An enum value, unless the game's way of saying there is not one.
+    /// </summary>
+    /// <remarks>
+    /// Most items have no sub-type and the enum says so as the literal
+    /// <c>UNDEFINED</c>. Passing that through puts a shouted word in a column
+    /// where every other empty cell is a dash, and it reads as a failure to look
+    /// something up rather than as an item that simply has no sub-type.
+    /// </remarks>
+    private static string Known(string? value) =>
+        value is null || value.Equals("UNDEFINED", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : value;
 
     /// <summary>Maker id to the name a player would recognise.</summary>
     private static Dictionary<Guid, string> Manufacturers(

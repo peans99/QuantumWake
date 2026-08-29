@@ -1779,6 +1779,33 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>
+    /// The install's commodity records, reduced to one row per commodity.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two things the download had already done for us, and the install has not.
+    /// The game keeps unfinished rows in the same table as real goods and they
+    /// carry their own display name, so a row reading "&lt;= PLACEHOLDER =&gt;"
+    /// turns up beside Tin and the page looks broken.
+    /// </para>
+    /// <para>
+    /// And several records display the same name - a resource type and its
+    /// commodity entity both say "Agricium" - which listed the commodity twice
+    /// with identical numbers. One commodity is one row, and a caller sums the
+    /// player's own trades across every id behind the name, because which record
+    /// a sale logged against is not a distinction anybody made.
+    /// </para>
+    /// <para>
+    /// Both were found by looking at the rendered page rather than the diff.
+    /// </para>
+    /// </remarks>
+    public static IEnumerable<IGrouping<string, KeyValuePair<string, string>>> TradeableRows(
+        IReadOnlyDictionary<string, string> named) =>
+        named
+            .Where(pair => !pair.Value.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Every item the reference page can show, from whichever source has them.
     /// </summary>
     /// <remarks>
@@ -1822,23 +1849,30 @@ public sealed class LogLibrary : IDisposable
             .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-        return [.. GameCommodities.All
-            .Select(pair =>
+        return [.. TradeableRows(GameCommodities.All)
+            .Select(group =>
             {
-                var mine = trades.GetValueOrDefault(pair.Key);
-                var (sells, buys) = uex.TradeLocations(pair.Value);
+                var mine = group
+                    .Select(pair => trades.GetValueOrDefault(pair.Key))
+                    .Where(list => list is not null)
+                    .SelectMany(list => list!)
+                    .ToList();
+
+                var (sells, buys) = uex.TradeLocations(group.Key);
 
                 return new MarketEntry(
-                    pair.Key,
-                    pair.Value,
+                    // The id that carries the trades, so opening the row still
+                    // finds them; otherwise any of them will do.
+                    group.FirstOrDefault(pair => trades.ContainsKey(pair.Key)).Key ?? group.First().Key,
+                    group.Key,
                     // The install names a commodity without grouping it, and an
                     // invented grouping would filter worse than none.
                     [],
                     sells,
                     buys,
-                    mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
-                    mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
-                    mine?.Count ?? 0,
+                    mine.Where(t => t.IsSell).Sum(t => t.Quantity),
+                    mine.Where(t => t.IsSell).Sum(t => t.Amount),
+                    mine.Count,
                     "install");
             })
             .OrderByDescending(e => e.MyRevenue)

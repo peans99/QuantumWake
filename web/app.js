@@ -2679,7 +2679,9 @@ function renderPartsRef() {
     if (part.name) label.title = part.className;
     tr.append(label);
     tr.append(el('td', 'muted', prettyType(part.type)));
-    tr.append(el('td', 'muted', part.subType ?? '—'));
+    // An item with no sub-type arrives as an empty string from the install and
+    // as null from the download, and both mean the same nothing.
+    tr.append(el('td', 'muted', part.subType || '—'));
     tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
     tr.append(el('td', 'num', part.grade > 0 ? String(part.grade) : '—'));
     tr.append(el('td', 'muted', part.manufacturer ?? '—'));

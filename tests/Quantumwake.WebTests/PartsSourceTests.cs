@@ -18,10 +18,10 @@ public class PartsSourceTests
           "source":"{{source}}","price":19175,"stockedAt":2,"cheapestAt":"Area18","terminals":null}]
         """;
 
-    private static Page Loaded(string source)
+    private static Page Loaded(string body)
     {
         var page = new Page();
-        page.Serve("/api/reference/items", Catalogue(source));
+        page.Serve("/api/reference/items", body);
         page.Do("await loadPartsRef();");
         return page;
     }
@@ -29,13 +29,14 @@ public class PartsSourceTests
     [Fact]
     public void The_install_caption_says_where_it_read_them()
     {
-        Assert.Contains("read from your game install", Loaded("install").NodeText("#parts-caption"));
+        Assert.Contains(
+            "read from your game install", Loaded(Catalogue("install")).NodeText("#parts-caption"));
     }
 
     [Fact]
     public void The_download_caption_still_names_the_digest()
     {
-        var caption = Loaded("dataset").NodeText("#parts-caption");
+        var caption = Loaded(Catalogue("dataset")).NodeText("#parts-caption");
 
         Assert.Contains("community digest", caption);
         Assert.DoesNotContain("game install", caption);
@@ -48,6 +49,26 @@ public class PartsSourceTests
     [Fact]
     public void The_row_shows_the_makers_full_name()
     {
-        Assert.Contains("Greycat Industrial", Loaded("install").NodeText("#parts-table tbody"));
+        Assert.Contains(
+            "Greycat Industrial", Loaded(Catalogue("install")).NodeText("#parts-table tbody"));
+    }
+
+    /// <summary>
+    /// The game says "no sub-type" as the literal UNDEFINED, which the reader
+    /// drops. What arrives here is an empty string, and an empty string must
+    /// still reach the table as the dash every other blank cell uses — a
+    /// shouted word in that column reads as a lookup that failed.
+    /// </summary>
+    [Fact]
+    public void An_item_with_no_subtype_shows_a_dash()
+    {
+        var body = Loaded("""
+            [{"className":"jacket","name":"Legion Jacket","type":"Char_Clothing_Torso_1",
+              "subType":"","size":1,"grade":1,"manufacturer":"987","source":"install",
+              "price":1320,"stockedAt":2,"cheapestAt":"KC Trending","terminals":null}]
+            """).NodeText("#parts-table tbody");
+
+        Assert.Contains("—", body);
+        Assert.DoesNotContain("UNDEFINED", body);
     }
 }
