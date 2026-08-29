@@ -39,14 +39,31 @@ public sealed partial class GameCommodities
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
     private readonly Dictionary<string, string> _byId;
+    private readonly Dictionary<string, string> _itemUuids;
 
-    private GameCommodities(Dictionary<string, string> byId) => _byId = byId;
+    private GameCommodities(Dictionary<string, string> byId, Dictionary<string, string> itemUuids)
+    {
+        _byId = byId;
+        _itemUuids = itemUuids;
+    }
 
     /// <summary>Nothing known, used when the archive is unreadable.</summary>
-    public static GameCommodities Empty { get; } = new(new(StringComparer.OrdinalIgnoreCase));
+    public static GameCommodities Empty { get; } =
+        new(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
 
     public int Count => _byId.Count;
-    public bool IsLoaded => _byId.Count > 0;
+    public int ItemCount => _itemUuids.Count;
+    public bool IsLoaded => _byId.Count > 0 || _itemUuids.Count > 0;
+
+    /// <summary>
+    /// The game's id for an item class, which is what UEX prices are keyed on.
+    /// </summary>
+    /// <remarks>
+    /// Every one of the community dump's 10,843 item ids is a record id in the
+    /// install, so this replaces that lookup exactly rather than approximately.
+    /// </remarks>
+    public string? ItemUuid(string? itemClass) =>
+        itemClass is { Length: > 0 } && _itemUuids.TryGetValue(itemClass, out var id) ? id : null;
 
     /// <summary>The game's name for a logged resource id, or null.</summary>
     public string? Commodity(string? resourceId) =>
@@ -69,15 +86,16 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var built = Read(archive);
-        if (built.Count > 0) SaveCache(cachePath, stamp, built);
+        var (commodities, items) = Read(archive);
+        if (commodities.Count > 0 || items.Count > 0) SaveCache(cachePath, stamp, commodities, items);
 
-        return new GameCommodities(built);
+        return new GameCommodities(commodities, items);
     }
 
-    private static Dictionary<string, string> Read(string archivePath)
+    private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -86,7 +104,7 @@ public sealed partial class GameCommodities
             var blob = p4k.TryRead(DataCoreEntry);
             var ini = p4k.TryRead(LocalisationEntry);
 
-            if (blob is null || ini is null) return result;
+            if (blob is null || ini is null) return (result, itemUuids);
 
             var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -105,6 +123,20 @@ public sealed partial class GameCommodities
             // resolving each one's name costs far more than it returns.
             foreach (var record in core.Records())
             {
+                var bare = record.Name.Contains('.')
+                    ? record.Name[(record.Name.LastIndexOf('.') + 1)..]
+                    : record.Name;
+
+                // Several records can share a bare class name; the entity is the
+                // one the dump means. Preferring it takes the id match from 96%
+                // to every one of the 10,843.
+                if (bare.Length > 0)
+                {
+                    var entity = record.Name.StartsWith("EntityClassDefinition.", StringComparison.OrdinalIgnoreCase);
+                    if (entity || !itemUuids.ContainsKey(bare))
+                        itemUuids[bare] = record.Hash.ToString();
+                }
+
                 if (!record.Name.StartsWith("ResourceType.", StringComparison.OrdinalIgnoreCase)
                     && !record.FileName.Contains("entities/commodities/", StringComparison.OrdinalIgnoreCase))
                 {
@@ -118,10 +150,10 @@ public sealed partial class GameCommodities
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return result;
+            return (result, itemUuids);
         }
 
-        return result;
+        return (result, itemUuids);
     }
 
     /// <summary>
@@ -159,7 +191,8 @@ public sealed partial class GameCommodities
             if (cache is null || cache.Stamp != stamp) return null;
 
             return new GameCommodities(
-                new Dictionary<string, string>(cache.Commodities, StringComparer.OrdinalIgnoreCase));
+                new Dictionary<string, string>(cache.Commodities, StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>(cache.Items, StringComparer.OrdinalIgnoreCase));
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -167,13 +200,14 @@ public sealed partial class GameCommodities
         }
     }
 
-    private static void SaveCache(string cachePath, string stamp, Dictionary<string, string> names)
+    private static void SaveCache(
+        string cachePath, string stamp, Dictionary<string, string> names, Dictionary<string, string> items)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
             File.WriteAllText(cachePath,
-                JsonSerializer.Serialize(new Cache { Stamp = stamp, Commodities = names }, Json));
+                JsonSerializer.Serialize(new Cache { Stamp = stamp, Commodities = names, Items = items }, Json));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -188,5 +222,6 @@ public sealed partial class GameCommodities
     {
         public string Stamp { get; set; } = string.Empty;
         public Dictionary<string, string> Commodities { get; set; } = [];
+        public Dictionary<string, string> Items { get; set; } = [];
     }
 }

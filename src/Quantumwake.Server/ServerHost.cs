@@ -808,7 +808,7 @@ public static class ServerHost
                 {
                     var items = s.Groups.SelectMany(g => g.Items).ToList();
                     var priced = items
-                        .Select(i => uex.ItemPrice(lib.Community.Item(i.ItemClass)?.Uuid))
+                        .Select(i => uex.ItemPrice(lib.ItemUuid(i.ItemClass)))
                         .Where(p => p is not null)
                         .Select(p => p!.Value)
                         .ToList();
@@ -874,7 +874,7 @@ public static class ServerHost
 
             return lib.Pickups(days ?? 0).Select(p =>
             {
-                var uuid = lib.Community.Item(p.ItemClass)?.Uuid;
+                var uuid = lib.ItemUuid(p.ItemClass);
                 var receipt = receipts.GetValueOrDefault(p.ItemClass);
                 var listed = uex.TypicalItemPrice(uuid);
 

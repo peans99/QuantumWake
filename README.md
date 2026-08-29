@@ -420,6 +420,12 @@ release workflow lifts it from here, so it is written once.
   patch and caches to 18 KB. All 203 commodities the download knows are named,
   185 of them word for word, and the game knows 342.
 
+- Loot, stash and fleet prices no longer need the download either. Every one of
+  the dump's 10,843 item ids turns out to be an id the install already carries,
+  so the prices UEX quotes can be looked up without it. The dump is still there
+  for where each commodity trades, and for the ship reference the Fleet page
+  uses — those are not in the game files in a form this can read yet.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the

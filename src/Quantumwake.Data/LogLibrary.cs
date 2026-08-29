@@ -676,6 +676,17 @@ public sealed class LogLibrary : IDisposable
         GameCommodities.Commodity(resourceId) ?? Community.Commodity(resourceId);
 
     /// <summary>
+    /// The id UEX prices an item class under.
+    /// </summary>
+    /// <remarks>
+    /// Every one of the community dump's 10,843 item ids turns out to be a
+    /// record id in the install, so the install answers this exactly. The dump
+    /// stays as a fallback for anyone whose archive cannot be read.
+    /// </remarks>
+    public string? ItemUuid(string? itemClass) =>
+        GameCommodities.ItemUuid(itemClass) ?? Community.Item(itemClass ?? "")?.Uuid;
+
+    /// <summary>
     /// Loads display names for an install. Safe to skip - every lookup falls
     /// back to the raw identifier.
     /// </summary>

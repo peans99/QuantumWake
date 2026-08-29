@@ -62,7 +62,7 @@ public sealed class TextOverlayService(
 
         return itemClass =>
             receipts.ContainsKey(itemClass)
-            || uex.ItemMarket(library.Community.Item(itemClass)?.Uuid).Count > 0;
+            || uex.ItemMarket(library.ItemUuid(itemClass)).Count > 0;
     }
 
     /// <summary>Reads the table the overlay should be built on.</summary>
