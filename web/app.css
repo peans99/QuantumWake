@@ -3526,3 +3526,6 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
   margin: 10px 0 14px;
 }
 .mining-form .search { flex: 1 1 9ch; min-width: 0; }
+
+/* A component the game defines but has not marked as shipped. */
+.not-ready { font-size: 10.5px; opacity: .75; }

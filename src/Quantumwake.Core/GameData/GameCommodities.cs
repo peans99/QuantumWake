@@ -71,6 +71,9 @@ public sealed partial class GameCommodities
     /// <summary>How many places the install maps.</summary>
     public int PlaceCount => _places.Count;
 
+    /// <summary>Everything the star map knows, for callers wanting all of it.</summary>
+    public IReadOnlyDictionary<string, GamePlace> Places => _places;
+
     /// <summary>Every crafting recipe the install describes.</summary>
     public IReadOnlyList<GameBlueprint> Blueprints => _blueprints;
 

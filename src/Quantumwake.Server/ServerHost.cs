@@ -880,6 +880,15 @@ public static class ServerHost
                 .OrderByDescending(p => p.perRock);
         });
 
+        // What the game says each place has. Separate from the service badges,
+        // which are UEX's account of where you can actually trade: this is the
+        // star map's own list, and the two disagree usefully often.
+        app.MapGet("/api/map/amenities", (LogLibrary lib) =>
+            lib.GameCommodities.Places
+                .Where(p => p.Value.Amenities.Count > 0)
+                .Select(p => new { place = p.Key, amenities = p.Value.Amenities })
+                .OrderBy(p => p.place, StringComparer.OrdinalIgnoreCase));
+
         app.MapGet("/api/mining/log", (MiningLogStore runs) => runs.All());
 
         app.MapPost("/api/mining/log", (MiningLogStore runs, MiningRunEntry body) =>
@@ -2093,9 +2102,23 @@ public static class ServerHost
 
             // Everything sold, by what it is and how big: one pass over the
             // catalogue rather than one per port.
-            var catalogue = lib.Community.Items.Values
-                .Where(i => i.Uuid is not null && i.Type is { Length: > 0 })
-                .GroupBy(i => (i.Type!, i.Size))
+            // Which kinds of component the game actually tags as shipped. The
+            // tag is not used evenly: 196 of 203 weapon guns carry it and not
+            // one of the 81 coolers does, so an untagged cooler means the tag
+            // was never applied to coolers rather than that the cooler is
+            // unfinished. Saying otherwise would put "not flight ready" on
+            // every cooler, shield and quantum drive in the game.
+            var tagged = lib.GameCommodities.ItemFacts.Values
+                .Where(i => i.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase))
+                .Select(i => i.Type)
+                .Where(t => t.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Keyed by class name rather than flattened to values, because the
+            // class is what joins these to the install's own facts.
+            var catalogue = lib.Community.Items
+                .Where(i => i.Value.Uuid is not null && i.Value.Type is { Length: > 0 })
+                .GroupBy(i => (i.Value.Type!, i.Value.Size))
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var groups = slots
@@ -2109,13 +2132,31 @@ public static class ServerHost
                         .ToList();
 
                     var options = (catalogue.TryGetValue(group.Key, out var candidates) ? candidates : [])
-                        .Select(item => new
+                        .Select(entry => new
                         {
-                            item.Name,
-                            item.Manufacturer,
-                            item.Grade,
-                            price = uex.ItemPrice(item.Uuid),
-                            shops = uex.ItemMarket(item.Uuid)
+                            Item = entry.Value,
+                            Facts = lib.GameCommodities.Item(entry.Key),
+                        })
+                        .Select(row => new
+                        {
+                            row.Item,
+                            // Null where the game does not use the tag for this
+                            // kind of part at all, which is most kinds. Only a
+                            // component of a kind the tag is applied to can be
+                            // said to be missing it.
+                            Ready = row.Facts is null || !tagged.Contains(row.Facts.Type)
+                                ? (bool?)null
+                                : row.Facts.Tags.Contains(
+                                    "flightReady", StringComparison.OrdinalIgnoreCase),
+                        })
+                        .Select(row => new
+                        {
+                            row.Item.Name,
+                            row.Item.Manufacturer,
+                            row.Item.Grade,
+                            flightReady = row.Ready,
+                            price = uex.ItemPrice(row.Item.Uuid),
+                            shops = uex.ItemMarket(row.Item.Uuid)
                                 .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
                                 .Select(g => g.MinBy(r => r.Buy)!)
                                 .OrderBy(r => r.Buy)

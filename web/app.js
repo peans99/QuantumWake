@@ -7209,7 +7209,19 @@ function fillUpgradeOptions(body, group) {
 
   for (const option of group.options) {
     const tr = el('tr');
-    tr.append(el('td', null, option.name));
+    const part = el('td');
+    part.append(el('span', null, option.name));
+
+    // The game's own flag for a component that has actually shipped. Shown as
+    // the absence of a caveat rather than a badge on everything: most options
+    // carry it, so marking those would be noise and marking the rest is news.
+    if (option.flightReady === false) {
+      const draft = el('span', 'muted not-ready', ' not flight ready');
+      draft.title = 'The game defines this but does not mark it as shipped';
+      part.append(draft);
+    }
+
+    tr.append(part);
     tr.append(el('td', 'muted', option.manufacturer || '—'));
     tr.append(el('td', 'num muted', gradeLetter(option.grade)));
     tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
@@ -7771,7 +7783,15 @@ async function renderStash(stats) {
 
       if (!groups.length) return null;
 
-      return { ...place, groups, itemCount: groups.reduce((n, g) => n + g.items.length, 0) };
+      return {
+        ...place,
+        groups,
+        itemCount: groups.reduce((n, g) => n + g.items.length, 0),
+        // Recomputed from what survived the filter, so a narrowed view does not
+        // keep quoting the whole stash's volume.
+        microScu: groups.reduce(
+          (n, g) => n + g.items.reduce((v, i) => v + (i.microScu || 0), 0), 0),
+      };
     })
     .filter(Boolean);
 
@@ -7783,7 +7803,13 @@ async function renderStash(stats) {
   for (const place of places) {
     const card = el('article', 'card');
     { const label = el('div', 'card-label'); label.append(placeLink(place.name)); card.append(label); }
-    card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
+    // Volume as well as a count. A count says how much stuff; this says whether
+    // it fits, which is the question a hold asks. Only 9,000 of the install's
+    // items carry a real one, so it is left off rather than shown as nothing.
+    const measured = place.microScu > 0 ? ` · ${volume(place.microScu)}` : '';
+
+    card.append(el('div', 'sub',
+      `${place.itemCount} item types${measured} · last seen ${dateOf(place.lastSeen)}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
@@ -7939,6 +7965,40 @@ const serviceKey = (name) => ({
 }[name] || '');
 
 const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
+
+/**
+ * What the game itself says a place has, by place name.
+ *
+ * Deliberately not merged into the service badges above. Those are UEX's
+ * account of where you can actually trade today; this is the star map's own
+ * list of facilities, and the two disagree usefully often. Keyed by name
+ * because that is what the star map keys it by - there is no map id in the
+ * game's own data to join on.
+ */
+const amenitiesByPlace = new Map();
+let mapAmenityFilter = '';
+
+async function loadMapAmenities() {
+  const select = $('#map-amenity');
+  if (!select || amenitiesByPlace.size) return;
+
+  const places = await getJson('/api/map/amenities').catch(() => []);
+  const counts = new Map();
+
+  for (const place of places) {
+    amenitiesByPlace.set(place.place.toLowerCase(), place.amenities);
+    for (const amenity of place.amenities) counts.set(amenity, (counts.get(amenity) || 0) + 1);
+  }
+
+  // Rarest first: a facility six places have is the one worth searching for,
+  // and one that 231 places have barely narrows anything.
+  for (const [amenity, count] of [...counts].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])))
+    select.append(new Option(`${amenity} (${count})`, amenity));
+}
+
+/** Whether the game lists a facility at a place, matched on the readable name. */
+const hasAmenity = (location, amenity) =>
+  (amenitiesByPlace.get((location.name || '').toLowerCase()) || []).includes(amenity);
 
 // Service is a property of a place, not its identity. Badges sit outside the
 // location glyph so a clinic at a station still reads as a station first.
@@ -8846,6 +8906,13 @@ function initMap() {
     button.addEventListener('click', () => selectMapService(button.dataset.service));
   for (const button of $$('#map-focus-filter button'))
     button.addEventListener('click', () => selectMapFocus(button.dataset.focus));
+
+  loadMapAmenities().catch(() => {});
+
+  $('#map-amenity')?.addEventListener('change', (event) => {
+    mapAmenityFilter = event.target.value;
+    drawMap();
+  });
 
   const labelDensity = $('#map-label-density');
   try { labelDensity.value = localStorage.getItem(MAP_LABEL_DENSITY_KEY) || 'auto'; } catch { /* private mode */ }
@@ -11015,7 +11082,14 @@ function drawMap() {
 
   highlightIds = null;
 
-  if (sites) {
+  // A chosen facility lights the places that have it, the same way a search
+  // does, rather than filtering the rest away: seeing which twenty-four of the
+  // map refine is the point, and a filtered map cannot show where they sit.
+  if (mapAmenityFilter) {
+    highlightIds = new Set(atlas
+      .filter((l) => hasAmenity(l, mapAmenityFilter))
+      .map((l) => l.rawId));
+  } else if (sites) {
     highlightIds = new Set(atlas
       .filter((l) => {
         const compact = `${l.name} ${l.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');

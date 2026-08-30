@@ -480,18 +480,28 @@ public static class LoadoutCategories
 
 /// <summary>One item in a stash, with when it was last seen there.</summary>
 /// <param name="ItemClass">Engine class, kept so prices can join precisely.</param>
-public sealed record StashItem(string Name, DateTimeOffset LastSeen, string? ItemClass = null);
+/// <param name="MicroScu">
+/// The room it takes up, in millionths of an SCU, or 0 where the install says
+/// nothing worth saying.
+/// </param>
+public sealed record StashItem(
+    string Name, DateTimeOffset LastSeen, string? ItemClass = null, long MicroScu = 0);
 
 /// <summary>Items of one kind, within a stash or elsewhere.</summary>
 public sealed record ItemGroup(string Category, IReadOnlyList<StashItem> Items);
 
 /// <summary>Items seen stored at one location, grouped by kind.</summary>
+/// <param name="MicroScu">
+/// What the whole stash takes up. A count of items answers "how much stuff";
+/// this answers "will it fit", which is the question a hold asks.
+/// </param>
 public sealed record StashLocation(
     string LocationId,
     string Name,
     DateTimeOffset LastSeen,
     int ItemCount,
-    IReadOnlyList<ItemGroup> Groups);
+    IReadOnlyList<ItemGroup> Groups,
+    long MicroScu = 0);
 
 /// <summary>
 /// Sorts item class names into recognisable kinds.
@@ -599,18 +609,26 @@ public static class ItemCategories
     /// "P4-AR Boneyard Rifle" does not contain the word "rifle" reliably, but
     /// <c>behr_rifle_ballistic_01</c> does.
     /// </param>
+    /// <param name="volume">
+    /// How much room a class takes up, in millionths of an SCU. Optional, since
+    /// only an install can answer it and callers without one still want groups.
+    /// </param>
     public static IReadOnlyList<ItemGroup> Group(
         IEnumerable<(string ItemClass, DateTimeOffset SeenAt)> items,
-        Func<string, string>? display = null)
+        Func<string, string>? display = null,
+        Func<string, long>? volume = null)
     {
         display ??= x => x;
+        volume ??= _ => 0;
 
         return [.. items
             .GroupBy(x => Of(x.ItemClass), StringComparer.Ordinal)
             .Select(g => new ItemGroup(
                 g.Key,
                 [.. g.GroupBy(x => display(x.ItemClass), StringComparer.OrdinalIgnoreCase)
-                     .Select(i => new StashItem(i.Key, i.Max(x => x.SeenAt), i.First().ItemClass))
+                     .Select(i => new StashItem(
+                         i.Key, i.Max(x => x.SeenAt), i.First().ItemClass,
+                         i.Sum(x => volume(x.ItemClass))))
                      .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)]))
             .OrderBy(g => Rank(g.Category))];
     }
@@ -1650,14 +1668,16 @@ public sealed class LogLibrary : IDisposable
                     .Select(i => i.MaxBy(e => e.SeenAt))
                     .ToList();
 
-                var groups = ItemCategories.Group(items, Names.Item);
+                var groups = ItemCategories.Group(
+                    items, Names.Item, c => GameCommodities.Item(c)?.MicroScu ?? 0);
 
                 return new StashLocation(
                     g.Key,
                     g.First().LocationName,
                     latest,
                     groups.Sum(x => x.Items.Count),
-                    groups);
+                    groups,
+                    groups.Sum(x => x.Items.Sum(i => i.MicroScu)));
             })
             .OrderByDescending(l => l.ItemCount)
     ];

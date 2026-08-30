@@ -350,7 +350,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.14
+### 0.9.15
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -441,6 +441,28 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The map can light up places by facility. The star map lists what 254 places
+  have — 22 kinds — and none of it was searchable. Pick one and the map lights
+  the places that have it, rather than filtering the rest away, because seeing
+  *which* twenty-four of the map refine is the point. Rarest first in the list,
+  since a facility six places have is the one worth searching for. This finishes
+  what the Mining page started: it can tell you Aberdeen is rich, and now
+  something can tell you where to refine what you brought back.
+
+- Stashes say how much room they take, not just how many things are in them.
+  Every item the install describes carries a volume, so Port Tressler's fourteen
+  item types come to 0.21 SCU. Items the game gives no volume are left out of
+  the sum rather than counted as nothing.
+
+- The Upgrades panel says when the game has not marked a part as shipped. This
+  one nearly went out wrong. The `flightReady` tag looked like a clean
+  shipped-or-not flag, and it is not applied evenly: 196 of 203 weapon guns
+  carry it and **not one of the 81 coolers does**. Marking on its absence would
+  have labelled every cooler, shield and quantum drive in the game as
+  unfinished. It now speaks only for kinds of part the tag is actually used on,
+  which on a Cutlass Black means it says something about 41 of the 77 options
+  and stays quiet about the other 36.
 
 - The Mining page says where to go, not just what to shoot. A **Where to go**
   table ranks all 47 places your install describes by how rich the rocks are —
