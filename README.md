@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.3
+### 0.9.4
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,14 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- Place cards say what the game says a place has. Alongside the paragraph, the
+  card now lists the services the star map itself records there — Hospital,
+  Refinery, Buy Armor, Landing Pad XL, and eighteen more — for the 257 places
+  that list any, and names what the place orbits. This is deliberately not the
+  same as the service chips above it: those come from UEX and say where you can
+  trade today, while this is what the game says is there. The two disagree
+  usefully often. Neither has ever been in the community download.
 
 - The Mining page now says how much of a rock is worth having. It has always
   told you how likely a deposit is to turn up and never what is in it; an "In

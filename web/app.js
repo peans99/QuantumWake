@@ -10391,24 +10391,50 @@ function showMapInfo(location) {
 
   // The starmap's own paragraph about this place, fetched on first open and
   // cached; the card must not wait for it.
+  renderMapInfoPlace(location);
+
+  info.hidden = false;
+}
+
+/**
+ * What the star map itself says about a place: its paragraph, what it orbits,
+ * and the services it lists.
+ *
+ * Fetched on first open and cached, because the card must not wait for it. The
+ * amenities are deliberately separate from the service chips above: those come
+ * from UEX and say where you can actually trade today, while these are what the
+ * game says the place has, and the two disagree usefully often.
+ */
+function renderMapInfoPlace(location) {
   const loreNode = $('#map-info-lore');
+  const amenityNode = $('#map-info-amenities');
   loreNode.hidden = true;
+  amenityNode.hidden = true;
 
   if (!loreCache.has(location.name)) {
     loreCache.set(location.name,
       getJson(`/api/map/lore?name=${encodeURIComponent(location.name)}`)
-        .then((r) => r.lore)
         .catch(() => null));
   }
 
-  loreCache.get(location.name).then((lore) => {
-    if (lore && mapInfoLocation === location) {
-      loreNode.textContent = lore;
+  return loreCache.get(location.name).then((found) => {
+    if (!found || mapInfoLocation !== location) return;
+
+    if (found.lore) {
+      loreNode.textContent = found.lore;
       loreNode.hidden = false;
     }
-  });
 
-  info.hidden = false;
+    if (found.amenities?.length) {
+      amenityNode.textContent = '';
+      amenityNode.append(
+        el('span', 'muted', found.parent ? `In ${found.parent} · has ` : 'Has '));
+
+      for (const amenity of found.amenities) amenityNode.append(el('span', 'amenity', amenity));
+
+      amenityNode.hidden = false;
+    }
+  });
 }
 
 /** Service facts on a place card use the same map-id join as the filter. */

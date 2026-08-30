@@ -3459,3 +3459,19 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
   font-size: 11px;
   color: var(--dim);
 }
+
+/* What the game itself says a place has, on the map card. */
+.map-info-amenities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  font-size: 11.5px;
+}
+.map-info-amenities .amenity {
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--dim);
+}

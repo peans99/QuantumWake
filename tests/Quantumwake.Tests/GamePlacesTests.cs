@@ -11,12 +11,12 @@ namespace Quantumwake.Tests;
 /// them is thrown away here rather than missing: a great many map objects carry
 /// a description that is only their own name again, or a key nobody filled in.
 /// </remarks>
-public class GameLoreTests
+public class GamePlacesTests
 {
     [Fact]
     public void A_real_description_is_kept()
     {
-        Assert.False(GameLore.Worthless(
+        Assert.False(GamePlaces.Worthless(
             "Derelict", "The ruined remains of an unfortunate vehicle."));
     }
 
@@ -27,15 +27,15 @@ public class GameLoreTests
     [Fact]
     public void A_description_that_is_only_the_name_is_not_lore()
     {
-        Assert.True(GameLore.Worthless("Downded Relay AC-652", "Downded Relay AC-652"));
-        Assert.True(GameLore.Worthless("Downded Relay AC-652", "downded relay ac-652"));
+        Assert.True(GamePlaces.Worthless("Downded Relay AC-652", "Downded Relay AC-652"));
+        Assert.True(GamePlaces.Worthless("Downded Relay AC-652", "downded relay ac-652"));
     }
 
     [Fact]
     public void An_unfilled_key_is_not_lore()
     {
-        Assert.True(GameLore.Worthless("Somewhere", "<= UNINITIALIZED =>"));
-        Assert.True(GameLore.Worthless("Somewhere", "PLACEHOLDER text for this location"));
+        Assert.True(GamePlaces.Worthless("Somewhere", "<= UNINITIALIZED =>"));
+        Assert.True(GamePlaces.Worthless("Somewhere", "PLACEHOLDER text for this location"));
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public class GameLoreTests
     [Fact]
     public void A_label_is_not_a_paragraph()
     {
-        Assert.True(GameLore.Worthless("Somewhere", "A moon."));
-        Assert.False(GameLore.Worthless("Somewhere", "A moon-sized asteroid hidden in a cluster."));
+        Assert.True(GamePlaces.Worthless("Somewhere", "A moon."));
+        Assert.False(GamePlaces.Worthless("Somewhere", "A moon-sized asteroid hidden in a cluster."));
     }
 }

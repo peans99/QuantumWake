@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 15;
+    private const int CacheVersion = 16;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -43,7 +43,7 @@ public sealed partial class GameCommodities
     private readonly Dictionary<string, GameItem> _facts;
     private readonly List<GameBlueprint> _blueprints;
     private readonly List<GameSpawn> _spawns;
-    private readonly Dictionary<string, string> _lore;
+    private readonly Dictionary<string, GamePlace> _places;
 
     private GameCommodities(
         Dictionary<string, string> byId,
@@ -51,22 +51,25 @@ public sealed partial class GameCommodities
         Dictionary<string, GameItem> facts,
         List<GameBlueprint> blueprints,
         List<GameSpawn> spawns,
-        Dictionary<string, string> lore)
+        Dictionary<string, GamePlace> places)
     {
         _byId = byId;
         _itemUuids = itemUuids;
         _facts = facts;
         _blueprints = blueprints;
         _spawns = spawns;
-        _lore = lore;
+        _places = places;
     }
 
-    /// <summary>The star map's own paragraph about a place, or null.</summary>
-    public string? Lore(string? place) =>
-        place is { Length: > 0 } && _lore.TryGetValue(place, out var text) ? text : null;
+    /// <summary>What the star map knows about a place, or null.</summary>
+    public GamePlace? Place(string? place) =>
+        place is { Length: > 0 } && _places.TryGetValue(place, out var found) ? found : null;
 
-    /// <summary>How many places the install describes.</summary>
-    public int LoreCount => _lore.Count;
+    /// <summary>The star map's own paragraph about a place, or null.</summary>
+    public string? Lore(string? place) => Place(place)?.Description;
+
+    /// <summary>How many places the install maps.</summary>
+    public int PlaceCount => _places.Count;
 
     /// <summary>Every crafting recipe the install describes.</summary>
     public IReadOnlyList<GameBlueprint> Blueprints => _blueprints;
@@ -77,7 +80,8 @@ public sealed partial class GameCommodities
     /// <summary>Nothing known, used when the archive is unreadable.</summary>
     public static GameCommodities Empty { get; } =
         new(new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase),
-            new(StringComparer.OrdinalIgnoreCase), [], [], new(StringComparer.OrdinalIgnoreCase));
+            new(StringComparer.OrdinalIgnoreCase), [], [],
+            new Dictionary<string, GamePlace>(StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// What the game says each item is, by class name.
@@ -128,23 +132,23 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts, blueprints, spawns, lore) = Read(archive);
+        var (commodities, items, facts, blueprints, spawns, places) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, lore);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places);
 
-        return new GameCommodities(commodities, items, facts, blueprints, spawns, lore);
+        return new GameCommodities(commodities, items, facts, blueprints, spawns, places);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
         Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints,
-        List<GameSpawn> Spawns, Dictionary<string, string> Lore) Read(string archivePath)
+        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var facts = new Dictionary<string, GameItem>(StringComparer.OrdinalIgnoreCase);
         var blueprints = new List<GameBlueprint>();
         var spawns = new List<GameSpawn>();
-        var lore = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var places = new Dictionary<string, GamePlace>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -153,7 +157,8 @@ public sealed partial class GameCommodities
             var blob = p4k.TryRead(DataCoreEntry);
             var ini = p4k.TryRead(LocalisationEntry);
 
-            if (blob is null || ini is null) return (result, itemUuids, facts, blueprints, spawns, lore);
+            if (blob is null || ini is null)
+                return (result, itemUuids, facts, blueprints, spawns, places);
 
             var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -199,15 +204,15 @@ public sealed partial class GameCommodities
             facts = GameItems.Read(core, text);
             blueprints = GameBlueprints.Read(core, text, facts);
             spawns = GameSpawns.Read(core, text, facts);
-            lore = GameLore.Read(core, text);
+            places = GamePlaces.Read(core, text);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts, blueprints, spawns, lore);
+            return (result, itemUuids, facts, blueprints, spawns, places);
         }
 
-        return (result, itemUuids, facts, blueprints, spawns, lore);
+        return (result, itemUuids, facts, blueprints, spawns, places);
     }
 
     /// <summary>
@@ -250,7 +255,7 @@ public sealed partial class GameCommodities
                 new Dictionary<string, GameItem>(cache.Facts, StringComparer.OrdinalIgnoreCase),
                 cache.Blueprints,
                 cache.Spawns,
-                new Dictionary<string, string>(cache.Lore, StringComparer.OrdinalIgnoreCase));
+                new Dictionary<string, GamePlace>(cache.Places, StringComparer.OrdinalIgnoreCase));
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -261,7 +266,8 @@ public sealed partial class GameCommodities
     private static void SaveCache(
         string cachePath, string stamp, Dictionary<string, string> names,
         Dictionary<string, string> items, Dictionary<string, GameItem> facts,
-        List<GameBlueprint> blueprints, List<GameSpawn> spawns, Dictionary<string, string> lore)
+        List<GameBlueprint> blueprints, List<GameSpawn> spawns,
+        Dictionary<string, GamePlace> places)
     {
         try
         {
@@ -271,7 +277,7 @@ public sealed partial class GameCommodities
                     new Cache
                     {
                         Stamp = stamp, Commodities = names, Items = items,
-                        Facts = facts, Blueprints = blueprints, Spawns = spawns, Lore = lore
+                        Facts = facts, Blueprints = blueprints, Spawns = spawns, Places = places
                     },
                     Json));
         }
@@ -292,6 +298,6 @@ public sealed partial class GameCommodities
         public Dictionary<string, GameItem> Facts { get; set; } = [];
         public List<GameBlueprint> Blueprints { get; set; } = [];
         public List<GameSpawn> Spawns { get; set; } = [];
-        public Dictionary<string, string> Lore { get; set; } = [];
+        public Dictionary<string, GamePlace> Places { get; set; } = [];
     }
 }

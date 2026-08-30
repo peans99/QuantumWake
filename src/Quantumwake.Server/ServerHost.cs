@@ -1031,13 +1031,25 @@ public static class ServerHost
         app.MapGet("/api/blueprints/owned", (LogLibrary lib) => lib.Blueprints());
 
         // The starmap's own paragraph about one place, for the map detail card.
-        // The install carries the star map's own paragraphs, so this answers
-        // without the download; the download stays the fallback for the places
-        // it describes and the install does not.
+        // The install carries the star map's own account of a place - its
+        // paragraph, what it orbits, and the services it lists - so this answers
+        // without the download; the download stays the fallback for the
+        // paragraph where the install has none.
         app.MapGet("/api/map/lore", (LogLibrary lib, string name) =>
-            (lib.GameCommodities.Lore(name) ?? lib.Community.PlaceLore(name)) is { } lore
-                ? Results.Ok(new { lore })
-                : Results.NotFound());
+        {
+            var place = lib.GameCommodities.Place(name);
+            var lore = place?.Description ?? lib.Community.PlaceLore(name);
+
+            if (lore is null && place is null) return Results.NotFound();
+
+            return Results.Ok(new
+            {
+                lore,
+                place?.Parent,
+                place?.Kind,
+                amenities = place?.Amenities ?? []
+            });
+        });
 
         // The game's own deposit spawn tables, with UEX's best sell joined on
         // resources that are also commodities - what to mine AND what it pays.
