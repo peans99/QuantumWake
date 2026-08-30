@@ -1809,6 +1809,46 @@ public sealed class LogLibrary : IDisposable
             .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// How fast trading is making money, per hour actually in the game.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two things about this number have to be said wherever it is shown, or it
+    /// is worse than no number.
+    /// </para>
+    /// <para>
+    /// It is trading only. Commodity sales are the sole income the logs record -
+    /// no contract pays out in a log line, no bounty, no mission reward - so for
+    /// somebody who hauls this is close to their whole rate, and for somebody who
+    /// runs contracts it is a fraction of it. It is a floor on earnings, never a
+    /// measure of them.
+    /// </para>
+    /// <para>
+    /// It is profit rather than revenue: what the cargo sold for, less what it
+    /// cost to buy. Revenue per hour would flatter a trader who buys high, and
+    /// the question being asked is how fast money accumulates.
+    /// </para>
+    /// <para>
+    /// The hours are in-game hours. Sitting in the menu is not earning time, and
+    /// counting it would quietly halve the rate of anybody who leaves the game
+    /// open.
+    /// </para>
+    /// </remarks>
+    /// <param name="days">Only sessions this recent. Zero means all of them.</param>
+    public EarningRate Earnings(int days = 0)
+    {
+        var stats = Stats(days);
+        var earned = stats.Income - stats.CommoditySpend;
+        var hours = stats.InGameTime.TotalHours;
+
+        // Below a few minutes the division says more about the rounding than
+        // about the trading, so it is reported as no rate rather than a wild one.
+        var perHour = hours >= 0.1 ? earned / (decimal)hours : 0m;
+
+        return new EarningRate(earned, stats.InGameTime, perHour, days);
+    }
+
+    /// <summary>
     /// Every item the reference page can show, from whichever source has them.
     /// </summary>
     /// <remarks>

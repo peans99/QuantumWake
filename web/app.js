@@ -171,6 +171,10 @@ function showView(name) {
   // the plan is layered on whatever is actually there.
   if (name === 'gloss') loadTextOverlay().catch(() => {});
 
+  // The trading rate moves only when a session ends, so it is read on entry
+  // rather than on every tick of the live stream.
+  if (name === 'now') loadEarnings().catch(() => {});
+
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
 
@@ -664,6 +668,128 @@ function renderNow(state) {
  * flying alone and flying with a silent party look identical from here, and a
  * bare 0 would claim to tell them apart.
  */
+/**
+ * What trading makes per in-game hour, and how far that leaves the goal.
+ *
+ * The rate is deliberately not called credits per hour. Commodity sales are the
+ * only income the logs carry - no contract, bounty or mission reward is written
+ * anywhere - so for a hauler this is close to their whole rate and for someone
+ * running contracts it is a fraction of it. Naming it "trading" is the
+ * difference between a floor and a claim.
+ */
+async function loadEarnings() {
+  const card = $('#now-earning-card');
+  if (!card) return;
+
+  const state = await getJson('/api/earnings').catch(() => null);
+  if (!state) { card.hidden = true; return; }
+
+  const rate = state.basis === 'recent' ? state.window : state.lifetime;
+
+  // Nothing traded means no rate. A zero here would read as "you earn nothing
+  // an hour" rather than "nothing has been sold yet".
+  card.hidden = !rate || rate.perHour <= 0;
+  if (card.hidden) return;
+
+  $('#now-earning-rate').textContent = `${money(rate.perHour)}/h`;
+  $('#now-earning-sub').textContent = state.basis === 'recent'
+    ? `trading profit, last ${rate.days} days · ${hoursOf(rate.inGame)} in game`
+    : `trading profit, all time · ${hoursOf(rate.inGame)} in game`;
+
+  $('#now-earning-note').textContent =
+    'Commodity sales are the only income the logs record, so contracts, bounties '
+    + 'and mission rewards are not in this. It is a floor on what you earn, and '
+    + 'menu time is left out of the hours.';
+
+  renderGoal(state);
+}
+
+/** Turns an ISO-ish duration from the server into hours a person reads. */
+function hoursOf(span) {
+  const hours = typeof span === 'string' ? spanHours(span) : Number(span) || 0;
+  return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
+}
+
+/** "1.02:03:04" and "02:03:04" both mean hours here. */
+function spanHours(text) {
+  const days = text.includes('.') && text.indexOf('.') < text.indexOf(':')
+    ? Number(text.slice(0, text.indexOf('.'))) || 0
+    : 0;
+  const clock = days ? text.slice(text.indexOf('.') + 1) : text;
+  const [h = 0, m = 0, sec = 0] = clock.split(':').map(Number);
+  return days * 24 + h + m / 60 + (sec || 0) / 3600;
+}
+
+/**
+ * The goal, as a distance in hours rather than a date nobody can hold to.
+ *
+ * There is deliberately no progress bar. The logs never state a balance, so how
+ * far along you are is not something this can know - only how much trading the
+ * whole thing is worth. A bar would have drawn a number that looks like progress
+ * and is not.
+ */
+function renderGoal(state) {
+  const goal = state.goal;
+  const block = $('#now-goal');
+  const form = $('#now-goal-form');
+  const clear = $('#now-goal-clear');
+
+  block.hidden = !goal;
+  clear.hidden = !goal;
+
+  if (!goal) {
+    form.hidden = false;
+    return;
+  }
+
+  form.hidden = true;
+  $('#now-goal-input').value = goal.name;
+  $('#now-goal-target').value = goal.target;
+
+  $('#now-goal-name').textContent = `${goal.name} · ${money(goal.target)}`;
+
+  // Hours of flying, not a calendar date. The app has no idea how often
+  // somebody plays, and a date would be inventing that.
+  $('#now-goal-eta').textContent = state.hoursToGoal
+    ? `${hoursOf(state.hoursToGoal)} of trading`
+    : 'no rate yet';
+
+}
+
+$('#now-goal-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const body = {
+    name: $('#now-goal-input').value.trim(),
+    target: Number($('#now-goal-target').value) || 0,
+    setAt: new Date().toISOString(),
+  };
+
+  if (!body.name || body.target <= 0) return;
+
+  await fetch('/api/goal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+
+  await loadEarnings().catch(() => {});
+});
+
+$('#now-goal-clear')?.addEventListener('click', async () => {
+  await fetch('/api/goal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: 'null',
+  }).catch(() => {});
+
+  $('#now-goal-input').value = '';
+  $('#now-goal-target').value = '';
+  $('#now-goal-form').hidden = false;
+
+  await loadEarnings().catch(() => {});
+});
+
 function renderNowParty(state) {
   const card = $('#now-party-card');
   if (!card) return;

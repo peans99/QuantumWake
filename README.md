@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.7
+### 0.9.8
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,24 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The Now page says what trading makes you per hour, and how far that leaves
+  what you are saving for. On this install that is 70,942 aUEC an hour over the
+  last 30 days — 3,955,770 earned across 2 days 8 hours actually in the game —
+  which puts a Drake Corsair 47 hours of trading away.
+
+  Two things it is careful about. It is a **trading** rate, not a credits rate:
+  commodity sales are the only income the logs record, so no contract payout,
+  bounty or mission reward is in it. For a hauler that is close to the whole
+  picture and for a contractor it is a fraction of one, so it is labelled as a
+  floor wherever it appears. And the hours are in-game hours, with menu time
+  left out — counting that would quietly halve the rate of anyone who leaves the
+  game open.
+
+  There is no progress bar, on purpose. The logs never state your balance, so
+  how far along you are is not something this can know; only how much trading
+  the whole thing is worth. A bar would have drawn a number that looks like
+  progress and is not.
 
 - Gloss has moved in, and has a page of its own. The text overlay that marked
   gear nothing sells now writes everything Gloss wrote as a standalone tool, in

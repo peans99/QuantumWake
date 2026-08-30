@@ -252,6 +252,30 @@
         <div class="note" id="now-party-note"></div>
       </article>
 
+      <article class="card span2" id="now-earning-card" data-card="earning" hidden>
+        <div class="card-label">Trading rate</div>
+        <div class="value" id="now-earning-rate">&mdash;</div>
+        <div class="sub" id="now-earning-sub"></div>
+
+        <div class="goal" id="now-goal" hidden>
+          <div class="goal-line">
+            <span id="now-goal-name"></span>
+            <b id="now-goal-eta"></b>
+          </div>
+        </div>
+
+        <form class="goal-form" id="now-goal-form">
+          <input type="text" id="now-goal-input" class="search" maxlength="40"
+                 placeholder="Saving for&hellip;" autocomplete="off">
+          <input type="number" id="now-goal-target" class="search" min="0" step="1000"
+                 placeholder="aUEC">
+          <button type="submit" class="ghost" id="now-goal-save">Set</button>
+          <button type="button" class="ghost" id="now-goal-clear" hidden>Clear</button>
+        </form>
+
+        <div class="note" id="now-earning-note"></div>
+      </article>
+
       <article class="card" id="now-respawn-card" data-card="respawn" hidden>
         <div class="card-label">Wake up at</div>
         <div class="value" id="now-respawn">—</div>

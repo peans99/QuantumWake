@@ -3499,3 +3499,21 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
   margin-top: 2px;
   max-width: 72ch;
 }
+
+/* Saving-for, on the Now page. */
+.goal { margin: 8px 0 2px; }
+.goal-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.goal-line b { color: var(--cyan-hot); }
+.goal-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 2px;
+}
+.goal-form .search { flex: 1 1 9ch; min-width: 0; }

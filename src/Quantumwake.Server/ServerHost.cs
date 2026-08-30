@@ -116,6 +116,7 @@ public static class ServerHost
         builder.Services.AddSingleton<StarStrings>();
         builder.Services.AddSingleton<TextOverlayStore>();
         builder.Services.AddSingleton<GlossOptionsStore>();
+        builder.Services.AddSingleton<GoalStore>();
         builder.Services.AddSingleton<TextOverlayService>();
 
 
@@ -747,6 +748,34 @@ public static class ServerHost
                 flown = stats.Ships
             });
         });
+
+        // What trading is making per in-game hour, and how far that leaves the
+        // thing being saved for. Two windows, because a lifetime average goes
+        // stale and a recent one is thin - and the page shows which is which.
+        app.MapGet("/api/earnings", (LogLibrary lib, GoalStore goals, int? days) =>
+        {
+            var window = lib.Earnings(days ?? 30);
+            var lifetime = lib.Earnings();
+            var goal = goals.Current;
+
+            // The rate to plan with is the recent one where there is enough of
+            // it to mean anything, and the lifetime one otherwise.
+            var rate = window.PerHour > 0 ? window : lifetime;
+
+            return Results.Ok(new
+            {
+                window,
+                lifetime,
+                goal,
+                hoursToGoal = goal is not null && rate.PerHour > 0
+                    ? (double?)decimal.ToDouble(goal.Target / rate.PerHour)
+                    : null,
+                basis = rate.Days == 0 ? "lifetime" : "recent",
+            });
+        });
+
+        app.MapPost("/api/goal", (GoalStore goals, Goal? body) =>
+            Results.Ok(new { goal = goals.Save(body) }));
 
         app.MapGet("/api/spending", (LogLibrary lib) =>
         {
