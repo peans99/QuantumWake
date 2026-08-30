@@ -476,6 +476,14 @@ release workflow lifts it from here, so it is written once.
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
 
+- Place descriptions come from your install. Clicking a place on the map opens
+  the star map's own paragraph about it, read from the game rather than
+  downloaded — 1,344 places against the download's 1,361, and of the 1,294 both
+  know, 1,251 are word for word. What is dropped rather than missing: a great
+  many map objects carry a "description" that is only their own name again, or a
+  line nobody ever filled in, and a card that opens to show the name it was
+  already showing is worse than one that says it has nothing.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the

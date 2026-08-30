@@ -1031,8 +1031,11 @@ public static class ServerHost
         app.MapGet("/api/blueprints/owned", (LogLibrary lib) => lib.Blueprints());
 
         // The starmap's own paragraph about one place, for the map detail card.
+        // The install carries the star map's own paragraphs, so this answers
+        // without the download; the download stays the fallback for the places
+        // it describes and the install does not.
         app.MapGet("/api/map/lore", (LogLibrary lib, string name) =>
-            lib.Community.PlaceLore(name) is { } lore
+            (lib.GameCommodities.Lore(name) ?? lib.Community.PlaceLore(name)) is { } lore
                 ? Results.Ok(new { lore })
                 : Results.NotFound());
 
