@@ -250,6 +250,7 @@ public sealed record MarketEntry(
     IReadOnlyList<string> Sold,
     IReadOnlyList<string> Bought,
     int MyScuSold,
+    int MyScuBought,
     decimal MyRevenue,
     int MyTrades,
     string Source = "dataset");
@@ -1774,6 +1775,7 @@ public sealed class LogLibrary : IDisposable
                     pair.Value.Sold,
                     pair.Value.Bought,
                     mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
+                    mine?.Where(t => !t.IsSell).Sum(t => t.Quantity) ?? 0,
                     mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
                     mine?.Count ?? 0);
             })
@@ -1917,6 +1919,7 @@ public sealed class LogLibrary : IDisposable
                     sells,
                     buys,
                     mine.Where(t => t.IsSell).Sum(t => t.Quantity),
+                    mine.Where(t => !t.IsSell).Sum(t => t.Quantity),
                     mine.Where(t => t.IsSell).Sum(t => t.Amount),
                     mine.Count,
                     "install");

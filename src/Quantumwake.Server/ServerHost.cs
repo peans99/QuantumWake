@@ -774,6 +774,16 @@ public static class ServerHost
             });
         });
 
+        // Ore sold that was never bought. The logs record no mining at all - no
+        // extraction, no scan, no refinery job - so this is the only trace that
+        // somebody dug it up rather than hauled it, and it is an inference
+        // rather than an observation. Worded that way on the page.
+        app.MapGet("/api/mining/mine", (LogLibrary lib, UexData uex) =>
+            lib.Market(uex)
+                .Where(e => e.MyScuSold > 0 && e.MyScuBought == 0)
+                .Select(e => new { e.Name, scu = e.MyScuSold, revenue = e.MyRevenue, trips = e.MyTrades })
+                .OrderByDescending(e => e.revenue));
+
         app.MapPost("/api/goal", (GoalStore goals, Goal? body) =>
             Results.Ok(new { goal = goals.Save(body) }));
 
@@ -961,6 +971,7 @@ public static class ServerHost
                 entry.Sold,
                 entry.Bought,
                 entry.MyScuSold,
+                entry.MyScuBought,
                 entry.MyRevenue,
                 entry.MyTrades,
                 entry.Source,

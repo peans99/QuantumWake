@@ -1265,11 +1265,18 @@
       </div>
     </div>
     <p class="muted caption">
-      <span id="mining-source"></span>The game's own deposit tables: what spawns
-      where, from asteroid ores to cave harvestables and salvageable hulls.
-      Share is the deposit's slice within its group. Best sell joins UEX prices
-      for resources that are also commodities. Places fly to the map.
+      <span id="mining-source"></span>The game's own deposit tables, ranked by
+      what a SCU of rock is actually worth &mdash; how much of the rock is this
+      ore, times what it sells for. <em>Find</em> is how much of everything
+      spawning here is this: the group's share of the place, times this
+      deposit's share of the group. Places fly to the map.
+      <b>There is no per-hour ranking</b>, because nothing in the logs says how
+      long a rock takes to mine; respawn is how long it takes to come back,
+      which is a different question.
     </p>
+    <div class="summary-strip" id="mining-mine"></div>
+    <p class="muted caption" id="mining-mine-note" hidden></p>
+
     <div class="table-wrap">
       <table id="mining-table">
         <thead>
@@ -1280,7 +1287,8 @@
             <th class="num" title="How long the slot takes to refill">Respawn</th>
             <th>Kind</th>
             <th>Where</th><th>System</th><th>Spawn group</th>
-            <th class="num">Chance</th><th class="num">Share</th>
+            <th class="num" title="How much of what spawns here is this">Find</th>
+            <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
             <th class="num">Best sell</th>
             <th class="num" title="What the unrefined rock fetches">Raw</th>
             <th class="num" title="Best refinery yield for this ore">Yield</th>

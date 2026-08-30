@@ -174,6 +174,7 @@ function showView(name) {
   // The trading rate moves only when a session ends, so it is read on entry
   // rather than on every tick of the live stream.
   if (name === 'now') loadEarnings().catch(() => {});
+  if (name === 'mining') loadLikelyMined().catch(() => {});
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
@@ -2900,12 +2901,60 @@ $('#parts-type')?.addEventListener('change', renderPartsRef);
 
 let miningCatalogue = [];
 
+/**
+ * What a SCU of a rock is worth once it is sold.
+ *
+ * The middle of the ore range times the best price anything pays. Deliberately
+ * the middle rather than the top: ice runs 9.7% to 84.3% depending on the rock,
+ * and quoting the ceiling would rank every wide band above every reliable one.
+ *
+ * There is no per-hour version of this, and there cannot be one from here -
+ * nothing in the logs says how long a rock takes to mine. Respawn is how long
+ * it takes to come back, which is a different question and has its own column.
+ */
+function oreWorth(spawn) {
+  if (!spawn.bestSell || spawn.minPercent == null || spawn.maxPercent == null) return null;
+
+  const middle = (spawn.minPercent + spawn.maxPercent) / 2;
+  return middle > 0 ? (middle / 100) * spawn.bestSell : null;
+}
+
 const KIND_LABELS = {
   mineable: 'Mineable',
   cave_harvestable: 'Cave harvestable',
   harvestable: 'Harvestable',
   salvageable: 'Salvageable',
 };
+
+/**
+ * Ore sold that was never bought.
+ *
+ * The logs record no mining whatsoever - no extraction, no scan, no refinery
+ * job - so this is the only trace that something was dug up rather than hauled.
+ * It is an inference and the note says so: buying somewhere the app never read
+ * a log for would look exactly the same.
+ */
+async function loadLikelyMined() {
+  const strip = $('#mining-mine');
+  const note = $('#mining-mine-note');
+  if (!strip || !note) return;
+
+  const rows = await getJson('/api/mining/mine').catch(() => []);
+
+  if (!rows.length) {
+    strip.textContent = '';
+    note.hidden = true;
+    return;
+  }
+
+  tiles('#mining-mine', rows.slice(0, 4).map((r) => [r.name, `${r.scu} SCU`]));
+
+  const total = rows.reduce((sum, r) => sum + r.revenue, 0);
+  note.textContent = `${money(total)} from ore you sold and never bought — `
+    + 'the closest thing to a mining record these logs allow, since nothing '
+    + 'writes down a rock being mined. Bought somewhere unread, it would look the same.';
+  note.hidden = false;
+}
 
 async function loadMiningRef() {
   try {
@@ -2962,8 +3011,10 @@ function renderMiningRef() {
       || s.location.toLowerCase().includes(term)
       || (s.deposit || '').toLowerCase().includes(term)))
 
-    // Payers first, then the likeliest finds - the order a miner plans in.
-    .sort((a, b) => (b.bestSell ?? 0) - (a.bestSell ?? 0)
+    // What a SCU of the rock is worth, then how likely it is to be there. A
+    // high price on an ore that is 2% of the rock is not a good rock, which is
+    // what sorting on best sell alone used to say.
+    .sort((a, b) => (oreWorth(b) ?? 0) - (oreWorth(a) ?? 0)
       || (b.groupChance * b.share) - (a.groupChance * a.share));
 
   const counter = $('#mining-count');
@@ -3035,8 +3086,21 @@ function renderMiningRef() {
     tr.append(tdPlace(spawn.location));
     tr.append(el('td', 'muted', spawn.system ?? '—'));
     tr.append(el('td', 'muted', spawn.group));
-    tr.append(el('td', 'num', percent(spawn.groupChance)));
-    tr.append(el('td', 'num muted', percent(spawn.share)));
+    // The two odds multiplied: what share of everything spawning here is this.
+    // Kept as one number with the parts on the tooltip, because a miner asks
+    // "how much of this place is Tin", not "what is the group probability".
+    const find = el('td', 'num muted', percent(spawn.groupChance * spawn.share));
+    find.title = `${percent(spawn.groupChance)} of what spawns here is `
+      + `${spawn.group}, and ${percent(spawn.share)} of that is this`;
+    tr.append(find);
+
+    const worth = oreWorth(spawn);
+    const worthCell = el('td', worth ? 'num inward' : 'num muted', worth ? money(worth) : '—');
+    if (worth) {
+      worthCell.title = 'A SCU of this rock, at the middle of its ore range, '
+        + 'sold at the best price UEX knows';
+    }
+    tr.append(worthCell);
 
     const sell = el('td', spawn.bestSell ? 'num inward' : 'num muted',
       spawn.bestSell ? money(spawn.bestSell) : '—');

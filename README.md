@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.8
+### 0.9.9
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,28 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The Mining page ranks rocks by what they are worth, not by what the ore sells
+  for. A high price on an ore that is 2% of the rock is not a good rock, which
+  is what the old sort said. *Worth* is the middle of the ore range times the
+  best price anything pays, so it answers which rock to shoot; *Find* replaces
+  the two odds columns with the one question they were asking together — how
+  much of everything spawning here is this.
+
+  There is deliberately no per-hour ranking. Nothing in the logs says how long a
+  rock takes to mine, so there is no rate to divide by. Respawn is how long it
+  takes to come back, which is a different question and keeps its own column.
+
+  The scale was checked against something the sum never used: your own Tin
+  receipts work out at 3,932 aUEC per SCU, inside the 2,500–4,500 UEX quotes for
+  it. So the prices really are per SCU, and Janalite really is worth hundreds of
+  times ore by volume.
+
+- The Mining page also shows what you have probably mined: 716 SCU of Tin and
+  288 of Copper, sold and never bought, worth 3,873,510 aUEC. That is an
+  inference, not a record, and it says so — the game writes down no mining at
+  all. No extraction, no scan, no refinery job. Ore bought somewhere these logs
+  never saw would look exactly the same.
 
 - The Now page says what trading makes you per hour, and how far that leaves
   what you are saving for. On this install that is 70,942 aUEC an hour over the
