@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.0
+### 0.9.1
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,13 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The game writes a paragraph about most of your gear, and now you can read it.
+  9,401 of the 26,028 items the install describes carry the blurb the game shows
+  in its own shops — what a mount is for, what a rifle is chambered in. Clicking
+  an item on the Parts page opens it, along with the game's own labels for that
+  item. One of those labels is worth knowing about: `flightReady` is how the
+  game marks what has actually shipped, as opposed to what is merely defined.
 
 - Place descriptions come from your install. Clicking a place on the map opens
   the star map's own paragraph about it, read from the game rather than

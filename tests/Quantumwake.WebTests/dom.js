@@ -114,6 +114,30 @@ class El {
     this.parentElement = null;
   }
 
+  /* Insert a sibling straight after this one. The tables that open a detail
+     row do it this way rather than by rebuilding the body, so a stub without
+     it fails on the app doing something entirely ordinary. */
+  after(node) {
+    const parent = this.parentElement;
+    if (!parent) return;
+
+    if (node instanceof El) {
+      node.remove();
+      node.parentElement = parent;
+    }
+
+    const at = parent.children.indexOf(this);
+    parent.children.splice(at + 1, 0, node);
+  }
+
+  get nextElementSibling() {
+    const parent = this.parentElement;
+    if (!parent) return null;
+
+    const at = parent.children.indexOf(this);
+    return parent.children.slice(at + 1).find((c) => c instanceof El) ?? null;
+  }
+
   /* The class attribute and the class list are one thing, which matters here:
      the map is SVG, and SVG elements are classed with setAttribute. */
   setAttribute(name, value) {

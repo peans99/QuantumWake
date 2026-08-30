@@ -49,6 +49,7 @@ public sealed class DataCore
     private readonly long _localeValues;
     private readonly long _enumValues;
     private readonly long _strongValues;
+    private readonly long _referenceValues;
 
     public DataCore(byte[] data)
     {
@@ -105,7 +106,7 @@ public sealed class DataCore
         _enumValues = cursor; cursor += @enum * 4L;
         _strongValues = cursor; cursor += strong * 8L;
         cursor += weak * 8L;
-        cursor += reference * 20L;
+        _referenceValues = cursor; cursor += reference * 20L;
         cursor += enumOption * 4L;
 
         _textOffset = cursor;
@@ -630,6 +631,44 @@ public sealed class DataCore
 
         var value = Text(BitConverter.ToUInt32(_data, (int)at));
         return value.Length > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// The record ids a reference array names.
+    /// </summary>
+    /// <remarks>
+    /// The fourth array shape. Like the others it stores only a count and a
+    /// first index, but its entries live in the reference value array at twenty
+    /// bytes each - an index nobody needs, then the GUID. Verified on the star
+    /// map: New Babbage lists eleven amenities and Levski thirteen, which is the
+    /// sort of number a place has rather than the sort a wrong offset produces.
+    /// </remarks>
+    public IReadOnlyList<Guid> ReferenceArrayAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is null || field.ConversionType == 0
+            || field.DataType != 0x0310 || at + 8 > _data.LongLength)
+        {
+            return [];
+        }
+
+        var count = BitConverter.ToUInt32(_data, (int)at);
+        var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+        if (count > 4096) return [];
+
+        var ids = new List<Guid>((int)count);
+
+        for (var i = 0u; i < count; i++)
+        {
+            var e = _referenceValues + (first + i) * 20L;
+            if (e + 20 > _data.LongLength) break;
+
+            var id = ReadHash(_data.AsSpan((int)e + 4, 16));
+            if (id != Guid.Empty) ids.Add(id);
+        }
+
+        return ids;
     }
 
     /// <summary>

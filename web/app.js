@@ -2674,7 +2674,18 @@ function renderPartsRef() {
     // shares the cell rather than claiming a tenth column.
     const shown = part.name || prettyItem(part.className);
     const label = el('td', 'with-track');
-    label.append(el('span', null, shown));
+
+    // The game writes a paragraph about most items, so the name opens it rather
+    // than the row carrying a tenth column nobody can read at this width.
+    if (part.description || part.tags) {
+      const open = el('button', 'place-link commodity-open', shown);
+      open.title = 'What the game says about this';
+      open.addEventListener('click', () => togglePartDetail(tr, part));
+      label.append(open);
+    } else {
+      label.append(el('span', null, shown));
+    }
+
     label.append(trackButton(shown));
     if (part.name) label.title = part.className;
     tr.append(label);
@@ -2695,6 +2706,45 @@ function renderPartsRef() {
 
     body.append(tr);
   }
+}
+
+/**
+ * The game's own paragraph about an item, and its own labels for it.
+ *
+ * Opened rather than shown inline because 9,401 of the 26,028 items carry one
+ * and they run to several lines. The tags are the game's, not ours: flightReady
+ * is how it marks what has actually shipped, which is worth seeing beside a
+ * price for something you cannot buy yet.
+ */
+function togglePartDetail(row, part) {
+  const open = row.nextElementSibling?.classList.contains('part-detail');
+
+  $$('#parts-table tr.part-detail').forEach((n) => n.remove());
+  $$('#parts-table tr.expanded').forEach((n) => n.classList.remove('expanded'));
+
+  if (open) return;
+
+  row.classList.add('expanded');
+
+  const holder = el('tr', 'part-detail');
+  const cell = el('td');
+  cell.colSpan = 9;
+
+  if (part.description) {
+    // The game writes these with literal backslash-n between the header lines.
+    for (const line of part.description.split(RegExp('\\\\n|\\n'))) {
+      if (line.trim()) cell.append(el('p', 'part-blurb', line.trim()));
+    }
+  }
+
+  if (part.tags) {
+    const tags = el('div', 'part-tags');
+    for (const tag of part.tags.split(/\s+/).filter(Boolean)) tags.append(el('span', 'tag', tag));
+    cell.append(tags);
+  }
+
+  holder.append(cell);
+  row.after(holder);
 }
 
 onInput('#ships-search', renderShipsRef);

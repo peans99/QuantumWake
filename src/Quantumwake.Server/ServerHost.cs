@@ -1117,6 +1117,8 @@ public static class ServerHost
                         item.Grade,
                         item.Manufacturer,
                         item.Source,
+                        item.Description,
+                        item.Tags,
                         price = uex.ItemPrice(item.Uuid),
                         stockedAt = stock.Count,
                         cheapestAt = cheapest?.Terminal,

@@ -3042,7 +3042,7 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 /* Trades and blueprints from other people, in a block of their own so nothing
    here can be mistaken for one of the reader's totals. */
 .shared-block {
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   border-left: 3px solid var(--amber, #d8a03d);
   border-radius: 6px;
   padding: 10px 12px;
@@ -3067,7 +3067,7 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 /* Shared files: a card per import, shaped like the job cards it sits near so a
    file somebody else wrote does not get a visual language of its own. */
 .import-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   border-left: 3px solid var(--cyan);
   border-radius: 6px;
   padding: 10px 12px;
@@ -3438,3 +3438,24 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
 .map-tip .goods.hint { color: var(--cyan); font-size: 10px; letter-spacing: .06em; margin-top: 2px; }
 .map-result .name.good { color: var(--green); }
 .sold-count { width: 100%; font-size: 10.5px; margin-bottom: 5px; }
+
+/* The game's own words about an item, opened from the parts table. */
+#parts-table tr.expanded > td { border-bottom: 0; }
+#parts-table tr.part-detail > td {
+  padding: 2px 15px 14px;
+  background: rgba(0, 0, 0, .25);
+}
+.part-blurb {
+  margin: 0 0 6px;
+  max-width: 78ch;
+  color: var(--dim);
+  line-height: 1.5;
+}
+.part-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.part-tags .tag {
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--dim);
+}

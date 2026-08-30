@@ -269,7 +269,9 @@ public sealed record ItemReference(
     int Grade,
     string? Manufacturer,
     string? Uuid,
-    string Source);
+    string Source,
+    string? Description = null,
+    string? Tags = null);
 
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
@@ -1827,7 +1829,9 @@ public sealed class LogLibrary : IDisposable
                     kv.Value.Grade,
                     kv.Value.Manufacturer is { Length: > 0 } maker ? maker : null,
                     ItemUuid(kv.Key),
-                    "install"))
+                    "install",
+                    kv.Value.Description is { Length: > 0 } about ? about : null,
+                    kv.Value.Tags is { Length: > 0 } tags ? tags : null))
                 .OrderBy(i => i.ClassName, StringComparer.OrdinalIgnoreCase)];
         }
 
