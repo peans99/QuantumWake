@@ -464,11 +464,13 @@ release workflow lifts it from here, so it is written once.
   is describing an older patch.
 
 - Mining spawns work without the download, but not as well as with it. The
-  install's own deposit tables read cleanly — 1,228 rows across 47 places, with
+  install's own deposit tables read cleanly — 1,321 rows across 50 places, with
   the ore each rock actually yields rather than the rock, the deposit name, and
-  each entry's real share of its spawn group. The download still describes more:
-  2,642 rows across 234 places, because the cave tables live in a record type
-  this does not read yet. So the install fills the page for anyone without the
+  each entry's real share of its spawn group. The cave tables are in there too,
+  and land within two rows of the download's own count of them: 93 against 95,
+  naming Aphorite and Hadanite where the raw record says
+  MinableElement_FPS_Aphorite. The download still describes more overall — 2,642
+  rows across 234 places — so the install fills the page for anyone without the
   download rather than replacing it for anyone who has one, and the page says
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being

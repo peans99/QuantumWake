@@ -34,10 +34,21 @@ public sealed record GameSpawn(
 /// behind the name on the map.
 /// </para>
 /// <para>
-/// The system is read from the designation only when the designation actually
-/// says it. <c>Stanton1a</c> gives Stanton because the digit marks where the
-/// system name ends; <c>AaronHalo</c> gives nothing, and is left blank rather
-/// than guessed at from the places it sits between.
+/// The system is read from the designation only when the designation is plainly
+/// a body in one: letters then a digit, as in <c>Stanton1a</c> or
+/// <c>Pyro5e</c>. Anything else — <c>AaronHalo</c>, <c>Pyro_Cool02</c>,
+/// <c>ShipGraveyard_001</c> — is left blank. Splitting those at the first digit
+/// produced systems called "Pyro_Cool" and "ShipGraveyard", which is worse than
+/// saying nothing. Cave tables name their place outright and get their system
+/// from the mission templates instead.
+/// </para>
+/// <para>
+/// This table is not the equal of the community download: 1,321 rows against
+/// 2,642, and 50 places against 234. The cave tables are read and land within
+/// two of the download's own count of them, so the shortfall is elsewhere —
+/// places whose tables are bound to them somewhere this does not reach. It
+/// stands as what to show when there is no download, not as a replacement for
+/// one.
 /// </para>
 /// </remarks>
 public static class GameSpawns
@@ -51,6 +62,12 @@ public static class GameSpawns
 
         var byId = new Dictionary<Guid, DataRecord>();
         var starMap = new Dictionary<string, DataRecord>(StringComparer.OrdinalIgnoreCase);
+        var caves = new List<DataRecord>();
+
+        // A place's own name does not say which system it is in, but the mission
+        // templates pair the two: Planet_Stanton1b_Aberdeen is Aberdeen, and the
+        // designation beside it says where Aberdeen is.
+        var systemOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var record in core.Records())
         {
@@ -58,6 +75,15 @@ public static class GameSpawns
 
             if (record.Name.StartsWith("StarMapObject.", StringComparison.OrdinalIgnoreCase))
                 starMap.TryAdd(Bare(record.Name), record);
+
+            if (record.Name.StartsWith("SubHarvestableConfigRecord.Cave_", StringComparison.OrdinalIgnoreCase))
+                caves.Add(record);
+
+            if (record.Name.StartsWith("MissionLocationTemplate.Planet_", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = Bare(record.Name).Split('_');
+                if (parts.Length >= 3) systemOf.TryAdd(parts[^1], parts[1]);
+            }
         }
 
         foreach (var record in core.Records())
@@ -108,7 +134,67 @@ public static class GameSpawns
             }
         }
 
+        Caves(core, text, byId, facts, starMap, systemOf, caves, found);
+
         return found;
+    }
+
+    /// <summary>
+    /// The cave tables, which are the same shape one level in.
+    /// </summary>
+    /// <remarks>
+    /// A cave config is named for where it is and how rich it is —
+    /// <c>Cave_Aberdeen_Rich</c> — and holds slots rather than groups, each
+    /// naming a harvestable and its weight. The place is already a name here
+    /// rather than a designation, so the star map is not needed; the system is,
+    /// and comes from the mission templates.
+    /// </remarks>
+    private static void Caves(
+        DataCore core, IReadOnlyDictionary<string, string> text, Dictionary<Guid, DataRecord> byId,
+        IReadOnlyDictionary<string, GameItem> facts, Dictionary<string, DataRecord> starMap,
+        Dictionary<string, string> systemOf, List<DataRecord> caves, List<GameSpawn> found)
+    {
+        foreach (var record in caves)
+        {
+            var parts = Bare(record.Name).Split('_');
+            if (parts.Length < 2) continue;
+
+            var location = parts[1];
+            var richness = parts.Length > 2 ? string.Join(" ", parts[2..]) : "Cave";
+
+            var system = systemOf.TryGetValue(location, out var designation)
+                ? System(core, text, starMap, designation)
+                : null;
+
+            var (at, field) = core.FieldAt(
+                core.InstanceAt(record, record.VariantIndex), record.StructIndex, "subConfig");
+
+            if (at < 0 || field is null) continue;
+
+            var chance = core.SingleAt(at, field.StructIndex, "initialSlotsProbability") ?? 0;
+            var slots = core.ClassArrayAt(at, field.StructIndex, "subHarvestables");
+            if (slots.Count == 0) continue;
+
+            var weights = slots
+                .Select(e => core.SingleAt(core.InstanceAt(e), e.StructIndex, "relativeProbability") ?? 0)
+                .ToList();
+
+            var total = weights.Sum();
+
+            for (var i = 0; i < slots.Count; i++)
+            {
+                var slotAt = core.InstanceAt(slots[i]);
+                var preset = core.ReferenceAt(slotAt, slots[i].StructIndex, "harvestable");
+                var share = total > 0 ? weights[i] / total : 1.0 / slots.Count;
+
+                foreach (var yield in Yields(core, text, byId, facts, preset, null, "Cave"))
+                {
+                    found.Add(new GameSpawn(
+                        yield.Resource, yield.Deposit, "cave harvestable",
+                        location, system, $"Cave {richness}", chance, share));
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -202,7 +288,16 @@ public static class GameSpawns
         return ores;
     }
 
-    /// <summary><c>MineableElement.Ice_Raw</c> is Ice.</summary>
+    /// <summary>
+    /// What an element is called: <c>Ice_Raw</c> is Ice, and
+    /// <c>MinableElement_FPS_Aphorite</c> is Aphorite.
+    /// </summary>
+    /// <remarks>
+    /// The bookkeeping around the name is the game's, not the player's. Left in
+    /// place the cave tables listed "MinableElement FPS Aphorite" where every
+    /// other row on the page said Aphorite, and the two would not have looked
+    /// like the same ore.
+    /// </remarks>
     private static string Element(
         DataCore core, IReadOnlyDictionary<string, string> text, DataRecord element)
     {
@@ -213,7 +308,15 @@ public static class GameSpawns
 
         var bare = Bare(element.Name);
 
-        return Tidied(bare.EndsWith("_Raw", StringComparison.OrdinalIgnoreCase) ? bare[..^4] : bare);
+        foreach (var prefix in new[] { "MinableElement_", "MineableElement_", "FPS_" })
+        {
+            while (bare.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                bare = bare[prefix.Length..];
+        }
+
+        if (bare.EndsWith("_Raw", StringComparison.OrdinalIgnoreCase)) bare = bare[..^4];
+
+        return Tidied(bare);
     }
 
     /// <summary><c>Mining_AsteroidCommon_Ice</c> is a mineable.</summary>
