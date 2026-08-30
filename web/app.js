@@ -2552,7 +2552,7 @@ function renderShipsRef() {
     const td = el('td', 'muted', shipCatalogue.length
       ? 'No ships match that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 13;
+    td.colSpan = 14;
     tr.append(td);
     body.append(tr);
     return;
@@ -2677,7 +2677,7 @@ function renderPartsRef() {
 
     // The game writes a paragraph about most items, so the name opens it rather
     // than the row carrying a tenth column nobody can read at this width.
-    if (part.description || part.tags) {
+    if (part.description || part.tags || part.microScu) {
       const open = el('button', 'place-link commodity-open', shown);
       open.title = 'What the game says about this';
       open.addEventListener('click', () => togglePartDetail(tr, part));
@@ -2716,6 +2716,18 @@ function renderPartsRef() {
  * is how it marks what has actually shipped, which is worth seeing beside a
  * price for something you cannot buy yet.
  */
+/**
+ * Room taken, from millionths of an SCU into something readable.
+ *
+ * A pistol is a few thousand of these and a ship component is millions, so one
+ * unit cannot serve both without printing either 0.000004 SCU or 12,000,000.
+ */
+function volume(microScu) {
+  if (microScu >= 1e6) return `${(microScu / 1e6).toFixed(microScu >= 1e7 ? 0 : 2)} SCU`;
+  if (microScu >= 1e4) return `${(microScu / 1e4).toFixed(1)} centiSCU`;
+  return `${microScu.toLocaleString()} µSCU`;
+}
+
 function togglePartDetail(row, part) {
   const open = row.nextElementSibling?.classList.contains('part-detail');
 
@@ -2735,6 +2747,12 @@ function togglePartDetail(row, part) {
     for (const line of part.description.split(RegExp('\\\\n|\\n'))) {
       if (line.trim()) cell.append(el('p', 'part-blurb', line.trim()));
     }
+  }
+
+  // What it takes up. Every item carries this, and it is the number that turns
+  // a list of gear into something you can hold against a hold.
+  if (part.microScu) {
+    cell.append(el('p', 'part-volume', `Takes up ${volume(part.microScu)}.`));
   }
 
   if (part.tags) {
@@ -2832,7 +2850,7 @@ function renderMiningRef() {
     const td = el('td', 'muted', miningCatalogue.length
       ? 'Nothing matches that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 12;
+    td.colSpan = 13;
     tr.append(td);
     body.append(tr);
     return;
@@ -2842,6 +2860,12 @@ function renderMiningRef() {
 
   // A band rather than a number, because it is one: the game gives a rock a
   // range and rolls within it. A single figure would read as a promise.
+  // Everything tops out at 1000, so the ceiling says nothing and the floor says
+  // most of it: ship mining never yields below 501, hand mining below 201, and
+  // ground mining or gathering can give you anything at all.
+  const qualityFloor = (spawn) =>
+    (spawn.quality ? `${spawn.quality.min}+${spawn.quality.local ? '*' : ''}` : '—');
+
   const oreShare = (spawn) => {
     if (spawn.minPercent == null || spawn.maxPercent == null) return '—';
     const low = spawn.minPercent.toFixed(spawn.minPercent >= 10 ? 0 : 1);
@@ -2863,6 +2887,23 @@ function renderMiningRef() {
     // How much of the rock this ore is. Only the install knows it, and only for
     // mineables, so everything else is a dash rather than a zero.
     tr.append(el('td', 'num muted', oreShare(spawn)));
+
+    // The floor is the number a recipe's quality requirement is measured
+    // against, so it leads; the rest of the distribution rides the tooltip. A
+    // place that overrides the class default is marked, because that is the
+    // whole point - it means here is not the same as everywhere.
+    const quality = el('td', spawn.quality?.local ? 'num' : 'num muted', qualityFloor(spawn));
+    if (spawn.quality) {
+      quality.title = `${spawn.quality.min}–${spawn.quality.max}, `
+        + `average ${Math.round(spawn.quality.mean)}, spread ${Math.round(spawn.quality.spread)}`
+        + (spawn.quality.local ? ' — this place differs from the usual' : '');
+    }
+    tr.append(quality);
+
+    // Worth its own column rather than a footnote: it is the difference between
+    // planning a circuit and planning a stop.
+    tr.append(el('td', 'num muted',
+      spawn.respawnSeconds ? craftTime(spawn.respawnSeconds) : '—'));
 
     tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
     tr.append(tdPlace(spawn.location));

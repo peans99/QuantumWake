@@ -15,7 +15,7 @@ public class PartDetailTests
         [{"className":"varipuck_s5","name":"VariPuck S5 Gimbal Mount","type":"Turret",
           "subType":"GunTurret","size":5,"grade":1,"manufacturer":"Flashfire Systems",
           "source":"install","description":"Item Type: Weapon Mount\nThe VariPuck holds one gun.",
-          "tags":"gimbalMount flightReady","price":null,"stockedAt":0,
+          "tags":"gimbalMount flightReady","microScu":84000,"price":null,"stockedAt":0,
           "cheapestAt":null,"terminals":null}]
         """;
 
@@ -70,6 +70,20 @@ public class PartDetailTests
     /// <summary>
     /// Most items have nothing to say, and those must not look clickable.
     /// </summary>
+    /// <summary>
+    /// Millionths of an SCU is nobody's unit at this scale. A pistol is a few
+    /// thousand and a ship gun is millions, so one unit cannot serve both
+    /// without printing either 0.000004 SCU or 12,000,000.
+    /// </summary>
+    [Fact]
+    public void Volume_reads_in_a_unit_that_suits_the_size()
+    {
+        var page = Loaded(WithBlurb);
+        page.Do("__dom.node('#parts-table tbody').querySelectorAll('.commodity-open')[0].click();");
+
+        Assert.Contains("8.4 centiSCU", page.NodeText("#parts-table tbody"));
+    }
+
     [Fact]
     public void An_item_with_nothing_to_say_does_not_open()
     {

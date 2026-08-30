@@ -11,9 +11,12 @@ namespace Quantumwake.Core.GameData;
 /// <param name="Tags">
 /// The game's own labels, space separated - <c>gimbalMount flightReady</c>.
 /// </param>
+/// <param name="MicroScu">
+/// The room it takes up, in millionths of an SCU. Every item has one.
+/// </param>
 public sealed record GameItem(
     string Name, string Type, string SubType, int Size, int Grade, string Manufacturer,
-    string Description = "", string Tags = "");
+    string Description = "", string Tags = "", long MicroScu = 0);
 
 /// <summary>
 /// The item catalogue, read from the install instead of downloaded.
@@ -81,7 +84,8 @@ public static class GameItems
                     core.Int32At(at, field.StructIndex, "Grade") ?? 0,
                     maker is not null ? makers.GetValueOrDefault(maker.Value, string.Empty) : string.Empty,
                     Localised(core, text, at, field.StructIndex, "Description") ?? string.Empty,
-                    core.StringAt(at, field.StructIndex, "Tags") ?? string.Empty);
+                    core.StringAt(at, field.StructIndex, "Tags") ?? string.Empty,
+                    Volume(core, at, field.StructIndex));
 
                 break;
             }
@@ -103,6 +107,31 @@ public static class GameItems
         value is null || value.Equals("UNDEFINED", StringComparison.OrdinalIgnoreCase)
             ? string.Empty
             : value;
+
+    /// <summary>
+    /// How much room an item takes up, in millionths of an SCU.
+    /// </summary>
+    /// <remarks>
+    /// Every one of the 26,028 items carries this, which is what makes it worth
+    /// reading: a list of gear becomes a volume, and a volume can be held
+    /// against a hold.
+    /// </remarks>
+    private static long Volume(DataCore core, long instance, int structIndex)
+    {
+        var volume = core.PointerAt(instance, structIndex, "inventoryOccupancyVolume");
+        if (volume is null) return 0;
+
+        var at = core.InstanceAt(volume.Value);
+        var s = volume.Value.StructIndex;
+
+        var micro = core.Int32At(at, s, "microSCU") ?? (int?)core.SingleAt(at, s, "microSCU") ?? 0;
+
+        // A single millionth of an SCU is the game's way of saying an entity has
+        // no volume worth speaking of, and 14,492 of them say it - ports, seat
+        // access, cargo grids. Reported as such it would put "1 microSCU" beside
+        // a rifle's 16,862 and look like a measurement.
+        return micro > 1 ? micro : 0;
+    }
 
     /// <summary>Maker id to the name a player would recognise.</summary>
     private static Dictionary<Guid, string> Manufacturers(

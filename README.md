@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.5
+### 0.9.6
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,29 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The Mining page now says what quality you can expect, and where that differs.
+  Every resource class carries its own distribution and the floor is the part
+  worth knowing: ship mining never yields below 501, hand mining never below
+  201, and ground mining or gathering can give you anything from 1. This is the
+  half that makes 0.9.2 usable — a recipe demanding quality 900 is asking where
+  you mined, not only what.
+
+  Some places override the usual, and those rows are marked. Everything in Pyro
+  has a wider spread than the same thing elsewhere, meaning more of the very
+  good and more of the very poor: common ore moves from 143 to 149, legendary
+  from 203 to 225. 165 rows on this install are marked that way.
+
+- Your gear now says how much room it takes. Every item the game defines carries
+  a volume, and 9,000 of them carry a real one — a jacket is 8.7 centiSCU, a
+  gimbal mount 8.4, a ship cannon a full 120 SCU. It shows when you open an item
+  on the Parts page. The other 14,492 say one millionth of an SCU, which is the
+  game's way of saying "no volume worth speaking of" for things like ports and
+  cargo grids, and those stay quiet rather than claiming to have been measured.
+
+- Deposits also say how long they take to come back, which is not one number:
+  most take an hour, some twenty minutes. That is the difference between
+  planning a circuit and planning a stop.
 
 - Mining chances were wrong on the install's own tables, and the page said so
   out loud: 2500%. What the game stores per spawn group is a weight, not a

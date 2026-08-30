@@ -3445,7 +3445,8 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
   padding: 2px 15px 14px;
   background: rgba(0, 0, 0, .25);
 }
-.part-blurb {
+.part-blurb,
+.part-volume {
   margin: 0 0 6px;
   max-width: 78ch;
   color: var(--dim);

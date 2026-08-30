@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
+using Quantumwake.Core.GameData;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
 
@@ -1070,17 +1071,19 @@ public static class ServerHost
             // does: 2,642 rows across 234 places against the install's 1,321
             // across 50. The install fills the page for somebody who has no
             // download rather than replacing one they do have. It does carry one
-            // thing the download never did - how much of a rock each ore is.
+            // thing the download never did - how much of a rock each ore is, and
+            // what quality it comes out at where it sits.
             var spawns = lib.Community.ResourceSpawns.Count > 0
                 ? lib.Community.ResourceSpawns.Select(s => (
                     s.Resource, Deposit: s.Deposit,
                     MinPercent: (double?)null, MaxPercent: (double?)null,
                     s.Kind, s.Location, s.System,
                     s.Group, GroupChance: (double)s.GroupChance, Share: (double)s.Share,
-                    Source: "dataset"))
+                    Quality: (QualityBand?)null, RespawnSeconds: (int?)null, Source: "dataset"))
                 : lib.GameCommodities.Spawns.Select(s => (
                     s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location, s.System,
-                    s.Group, s.GroupChance, s.Share, Source: "install"));
+                    s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds,
+                    Source: "install"));
 
             return spawns.Select(s =>
             {
@@ -1104,6 +1107,8 @@ public static class ServerHost
                     s.Group,
                     s.GroupChance,
                     s.Share,
+                    s.Quality,
+                    s.RespawnSeconds,
                     s.Source,
                     bestSell = best?.BestSell > 0 ? best.BestSell : (decimal?)null,
                     bestSellTerminal = best?.BestSell > 0 ? best.BestSellTerminal : null,
@@ -1134,6 +1139,7 @@ public static class ServerHost
                         item.Source,
                         item.Description,
                         item.Tags,
+                        item.MicroScu,
                         price = uex.ItemPrice(item.Uuid),
                         stockedAt = stock.Count,
                         cheapestAt = cheapest?.Terminal,

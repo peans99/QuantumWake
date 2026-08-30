@@ -271,7 +271,8 @@ public sealed record ItemReference(
     string? Uuid,
     string Source,
     string? Description = null,
-    string? Tags = null);
+    string? Tags = null,
+    long MicroScu = 0);
 
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
@@ -1831,7 +1832,8 @@ public sealed class LogLibrary : IDisposable
                     ItemUuid(kv.Key),
                     "install",
                     kv.Value.Description is { Length: > 0 } about ? about : null,
-                    kv.Value.Tags is { Length: > 0 } tags ? tags : null))
+                    kv.Value.Tags is { Length: > 0 } tags ? tags : null,
+                    kv.Value.MicroScu))
                 .OrderBy(i => i.ClassName, StringComparer.OrdinalIgnoreCase)];
         }
 

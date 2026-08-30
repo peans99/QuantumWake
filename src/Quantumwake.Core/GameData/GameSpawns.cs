@@ -13,6 +13,12 @@ namespace Quantumwake.Core.GameData;
 /// The group's share of what spawns at that place, from 0 to 1.
 /// </param>
 /// <param name="Share">This entry's slice within its group.</param>
+/// <param name="Quality">
+/// The quality this comes out at here, which is not the same everywhere.
+/// </param>
+/// <param name="RespawnSeconds">
+/// How long the slot takes to refill, or null where the game does not say.
+/// </param>
 public sealed record GameSpawn(
     string Resource,
     string? Deposit,
@@ -23,7 +29,9 @@ public sealed record GameSpawn(
     string? System,
     string Group,
     double GroupChance,
-    double Share);
+    double Share,
+    QualityBand? Quality,
+    int? RespawnSeconds);
 
 /// <summary>
 /// What spawns where, read from the install rather than downloaded.
@@ -68,6 +76,7 @@ public static class GameSpawns
         IReadOnlyDictionary<string, GameItem> facts)
     {
         var found = new List<GameSpawn>();
+        var bands = GameQuality.Read(core, text);
 
         var byId = new Dictionary<Guid, DataRecord>();
         var starMap = new Dictionary<string, DataRecord>(StringComparer.OrdinalIgnoreCase);
@@ -142,17 +151,24 @@ public static class GameSpawns
                     var entity = core.ReferenceAt(entryAt, s, "harvestableEntityClass");
                     var share = total > 0 ? weights[i] / total : 1.0 / entries.Count;
 
+                    var quality = GameQuality.For(
+                        bands,
+                        GameQuality.ClassOf(
+                            Referenced(byId, preset), Referenced(byId, core.ReferenceAt(entryAt, s, "clustering"))),
+                        location, system);
+
                     foreach (var yield in Yields(core, text, byId, facts, preset, entity, name))
                     {
                         found.Add(new GameSpawn(
                             yield.Resource, yield.Deposit, yield.Min, yield.Max, yield.Kind,
-                            location, system, Tidied(name), chance, share));
+                            location, system, Tidied(name), chance, share, quality,
+                        Respawn(core, byId, preset)));
                     }
                 }
             }
         }
 
-        Caves(core, text, byId, facts, starMap, systemOf, caves, found);
+        Caves(core, text, byId, facts, starMap, systemOf, bands, caves, found);
 
         return found;
     }
@@ -170,7 +186,8 @@ public static class GameSpawns
     private static void Caves(
         DataCore core, IReadOnlyDictionary<string, string> text, Dictionary<Guid, DataRecord> byId,
         IReadOnlyDictionary<string, GameItem> facts, Dictionary<string, DataRecord> starMap,
-        Dictionary<string, string> systemOf, List<DataRecord> caves, List<GameSpawn> found)
+        Dictionary<string, string> systemOf, Dictionary<string, QualityBand> bands,
+        List<DataRecord> caves, List<GameSpawn> found)
     {
         foreach (var record in caves)
         {
@@ -205,11 +222,15 @@ public static class GameSpawns
                 var preset = core.ReferenceAt(slotAt, slots[i].StructIndex, "harvestable");
                 var share = total > 0 ? weights[i] / total : 1.0 / slots.Count;
 
+                var quality = GameQuality.For(
+                    bands, GameQuality.ClassOf(Referenced(byId, preset), null), location, system);
+
                 foreach (var yield in Yields(core, text, byId, facts, preset, null, "Cave"))
                 {
                     found.Add(new GameSpawn(
                         yield.Resource, yield.Deposit, yield.Min, yield.Max, "cave_harvestable",
-                        location, system, $"Cave {richness}", chance, share));
+                        location, system, $"Cave {richness}", chance, share, quality,
+                        Respawn(core, byId, preset)));
                 }
             }
         }
@@ -415,6 +436,28 @@ public static class GameSpawns
             : presetName;
 
     private static string Tidied(string name) => name.Replace('_', ' ').Trim();
+
+    /// <summary>
+    /// How long a spawn slot takes to refill, or null.
+    /// </summary>
+    /// <remarks>
+    /// It is not one number. 402 presets take an hour, 49 take two, 43 take
+    /// twenty minutes and 31 take half an hour, and 40 say nothing at all. That
+    /// spread is the difference between a mining circuit and a single stop.
+    /// </remarks>
+    private static int? Respawn(DataCore core, Dictionary<Guid, DataRecord> byId, Guid? preset)
+    {
+        if (preset is null || !byId.TryGetValue(preset.Value, out var record)) return null;
+
+        var at = core.InstanceAt(record, record.VariantIndex);
+        var seconds = core.SingleAt(at, record.StructIndex, "respawnInSlotTime") ?? 0;
+
+        return seconds > 0 ? (int)Math.Round(seconds) : null;
+    }
+
+    /// <summary>The bare name a reference points at, or null.</summary>
+    private static string? Referenced(Dictionary<Guid, DataRecord> byId, Guid? id) =>
+        id is not null && byId.TryGetValue(id.Value, out var record) ? Bare(record.Name) : null;
 
     private static string Bare(string recordName) =>
         recordName.Contains('.') ? recordName[(recordName.LastIndexOf('.') + 1)..] : recordName;
