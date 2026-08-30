@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.4
+### 0.9.5
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,13 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- Mining chances were wrong on the install's own tables, and the page said so
+  out loud: 2500%. What the game stores per spawn group is a weight, not a
+  probability, and its scale is each place's own business — one place's groups
+  add up to 0.196 and another's to 90. They are now read as what they are, each
+  group's share of what spawns at that place, and the caption says which of the
+  two meanings is on screen.
 
 - Place cards say what the game says a place has. Alongside the paragraph, the
   card now lists the services the star map itself records there — Hospital,

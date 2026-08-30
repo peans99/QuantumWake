@@ -4,9 +4,14 @@ namespace Quantumwake.Core.GameData;
 /// <param name="Deposit">The deposit the ore sits in, when the game names one.</param>
 /// <param name="MinPercent">The least of the rock this ore makes up, or null.</param>
 /// <param name="MaxPercent">The most of it, or null.</param>
-/// <param name="Kind">mineable, salvageable, cave harvestable.</param>
+/// <param name="Kind">
+/// mineable, salvageable, cave_harvestable - worded exactly as the community
+/// download words them, so one filter and one set of labels serve both sources.
+/// </param>
 /// <param name="Group">The spawn group it belongs to.</param>
-/// <param name="GroupChance">The group's own probability of being used.</param>
+/// <param name="GroupChance">
+/// The group's share of what spawns at that place, from 0 to 1.
+/// </param>
 /// <param name="Share">This entry's slice within its group.</param>
 public sealed record GameSpawn(
     string Resource,
@@ -100,13 +105,22 @@ public static class GameSpawns
             var system = System(core, text, starMap, designation);
 
             var at = core.InstanceAt(record, record.VariantIndex);
+            var groups = core.ClassArrayAt(at, record.StructIndex, "harvestableGroups");
 
-            foreach (var group in core.ClassArrayAt(at, record.StructIndex, "harvestableGroups"))
+            // groupProbability is a weight, not a probability, and its scale is
+            // the preset's own business: one place's groups sum to 0.196 and
+            // another's to 90. Read as a chance they print as 2500%, so they are
+            // normalised into each group's share of what spawns at that place.
+            var budget = groups
+                .Sum(g => core.SingleAt(core.InstanceAt(g), g.StructIndex, "groupProbability") ?? 0);
+
+            foreach (var group in groups)
             {
                 var groupAt = core.InstanceAt(group);
 
                 var name = core.StringAt(groupAt, group.StructIndex, "groupName") ?? string.Empty;
-                var chance = core.SingleAt(groupAt, group.StructIndex, "groupProbability") ?? 0;
+                var weight = core.SingleAt(groupAt, group.StructIndex, "groupProbability") ?? 0;
+                var chance = budget > 0 ? weight / budget : 0;
 
                 var entries = core.ClassArrayAt(groupAt, group.StructIndex, "harvestables");
                 if (entries.Count == 0) continue;
@@ -194,7 +208,7 @@ public static class GameSpawns
                 foreach (var yield in Yields(core, text, byId, facts, preset, null, "Cave"))
                 {
                     found.Add(new GameSpawn(
-                        yield.Resource, yield.Deposit, yield.Min, yield.Max, "cave harvestable",
+                        yield.Resource, yield.Deposit, yield.Min, yield.Max, "cave_harvestable",
                         location, system, $"Cave {richness}", chance, share));
                 }
             }
@@ -348,7 +362,7 @@ public static class GameSpawns
         name.Contains("Mineable", StringComparison.OrdinalIgnoreCase)
             || name.StartsWith("Mining", StringComparison.OrdinalIgnoreCase) ? "mineable"
         : name.Contains("Salvage", StringComparison.OrdinalIgnoreCase) ? "salvageable"
-        : name.Contains("Cave", StringComparison.OrdinalIgnoreCase) ? "cave harvestable"
+        : name.Contains("Cave", StringComparison.OrdinalIgnoreCase) ? "cave_harvestable"
         : "harvestable";
 
     /// <summary>The name a player would use for a designation, or null.</summary>

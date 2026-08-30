@@ -2799,6 +2799,17 @@ function renderMiningRef() {
   const body = $('#mining-table tbody');
   body.textContent = '';
 
+  // The two sources mean different things by "chance". The download carried a
+  // real probability; the game stores a weight whose scale is its own business,
+  // so the install's is that group's share of what spawns at the place. Both
+  // are useful and neither is the other.
+  const note = $('#mining-source');
+  if (note && miningCatalogue.length) {
+    note.textContent = miningCatalogue[0].source === 'install'
+      ? 'Read from your game install; chance is the group’s share of what spawns there. '
+      : 'From the community dataset; chance is the spawn group’s own probability. ';
+  }
+
   const rows = miningCatalogue.filter((s) =>
     (!kind || s.kind === kind)
     && (!system || s.system === system)
