@@ -350,7 +350,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.11
+### 0.9.12
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -441,6 +441,19 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- StarStrings and your item labels can both be installed, in either order. They
+  replace the same file, so whichever went in second used to remove the first.
+  Installing StarStrings now rebuilds the labels on top of its text, and the page
+  says it did. This is what was quietly costing you the contract reputation tags:
+  the app read those off StarStrings' own annotation on a contract title, and
+  there is nowhere else to read them from.
+
+- The app can now tell that its file was replaced. It only checked that the path
+  still existed, which is true whichever mod wrote there last, so it would go on
+  reporting labels that had been overwritten. It now records what it wrote and
+  checks that too. An install from an older build carries no such record and is
+  taken at its word rather than declared missing.
 
 - The Gloss page is called **Item labels**, which is what it does. Same marks,
   same options, clearer name.

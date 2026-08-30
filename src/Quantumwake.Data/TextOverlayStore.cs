@@ -8,12 +8,18 @@ namespace Quantumwake.Data;
 /// True when it was built on top of an installed text mod rather than on the
 /// game's own table. Removing then puts that mod's file back, not the game's.
 /// </param>
+/// <param name="Fingerprint">
+/// The size and hash of the table as written. Existence is not enough: another
+/// text mod installed afterwards writes the same path, and without this the app
+/// would keep reporting marks that had been overwritten.
+/// </param>
 public sealed record TextOverlayInstall(
     DateTimeOffset InstalledAt,
     string GameRoot,
     int Marked,
     bool Layered,
-    IReadOnlyList<InstalledFile> Files);
+    IReadOnlyList<InstalledFile> Files,
+    string? Fingerprint = null);
 
 /// <summary>
 /// Remembers a text-overlay install so it can be undone exactly.
@@ -53,12 +59,45 @@ public sealed class TextOverlayStore
     }
 
     /// <summary>True when every file written is still where it was written.</summary>
+    /// <summary>
+    /// True when every file written is still where it was written, and still
+    /// says what it said.
+    /// </summary>
+    /// <remarks>
+    /// The content check is the point. Installing StarStrings afterwards writes
+    /// the very same path, so a check for existence alone reports the marks as
+    /// installed while the file that carries them is gone - and the first anyone
+    /// notices is a column that stopped filling in.
+    /// </remarks>
     public bool StillPresent()
     {
         var install = Current;
 
-        return install is not null && install.Files.Count > 0
-            && install.Files.All(f => File.Exists(f.Path));
+        if (install is null || install.Files.Count == 0) return false;
+        if (!install.Files.All(f => File.Exists(f.Path))) return false;
+
+        // An install recorded before fingerprints existed is taken at its word
+        // rather than declared missing.
+        if (install.Fingerprint is not { Length: > 0 }) return true;
+
+        var table = install.Files.FirstOrDefault(f =>
+            f.Path.EndsWith(".ini", StringComparison.OrdinalIgnoreCase));
+
+        return table is null || Fingerprint(table.Path) == install.Fingerprint;
+    }
+
+    /// <summary>What a written table looks like, cheaply enough to check often.</summary>
+    public static string Fingerprint(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return $"{stream.Length}:{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream))[..16]}";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
     }
 
     public void Record(TextOverlayInstall install)

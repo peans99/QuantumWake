@@ -181,6 +181,11 @@ public sealed class TextOverlayService(
 
             File.WriteAllText(target, plan.Content, new UTF8Encoding(false));
 
+            // Fingerprinted after the write, so a later mod overwriting this
+            // path shows up as gone rather than as still installed.
+            install = install with { Fingerprint = TextOverlayStore.Fingerprint(target) };
+            store.Record(install);
+
             return (install, null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

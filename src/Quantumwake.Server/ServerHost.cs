@@ -496,16 +496,35 @@ public static class ServerHost
             };
         });
 
-        app.MapPost("/api/starstrings/install", async (StarStrings mod) =>
+        app.MapPost("/api/starstrings/install",
+            async (StarStrings mod, TextOverlayService overlay, TextOverlayStore labels) =>
         {
             if (install is not { } game)
                 return Results.BadRequest(new { problem = "No Star Citizen install was found to write into." });
 
+            // Whether our own marks were there before this. Asked before the
+            // install, because installing writes the same file and the answer
+            // changes underneath.
+            var relabel = labels.StillPresent();
+
             var (done, problem) = await mod.InstallAsync(game);
 
-            return problem is null
-                ? Results.Ok(new { done!.Release, done.InstalledAt, files = done.Files.Count })
-                : Results.BadRequest(new { problem });
+            if (problem is not null)
+                return Results.BadRequest(new { problem });
+
+            // Both mods write one file, so the second one in wins unless the
+            // marks are laid over the new table. Without this, installing
+            // StarStrings silently removes labels that the app still believes
+            // are installed.
+            var relabelled = false;
+
+            if (relabel)
+            {
+                var (again, trouble) = overlay.Install(game);
+                relabelled = trouble is null && again is not null;
+            }
+
+            return Results.Ok(new { done!.Release, done.InstalledAt, files = done.Files.Count, relabelled });
         });
 
         app.MapPost("/api/starstrings/remove", (StarStrings mod) =>

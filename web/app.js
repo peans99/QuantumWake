@@ -5519,7 +5519,18 @@ function initStarStrings() {
     }
 
     await loadStarStrings(true);
-    alertLine($('#starstrings-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+    await loadTextOverlay().catch(() => {});
+
+    // Both write the same file, so the marks are laid over StarStrings' table
+    // again rather than being quietly lost under it. Stated on a line that
+    // stays, not a notice that fades: a second thing changing on one click is
+    // exactly what somebody will want to re-read.
+    const note = $('#starstrings-note');
+    note.textContent = answer.relabelled
+      ? 'Installed, and your item labels were put back on top of it. '
+        + 'Restart Star Citizen to see them.'
+      : 'Installed. Restart Star Citizen to see it.';
+    note.hidden = false;
   });
 
   $('#starstrings-remove').addEventListener('click', async () => {
