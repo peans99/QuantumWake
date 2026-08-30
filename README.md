@@ -350,7 +350,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.12
+### 0.9.13
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -441,6 +441,16 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- Component grades read as A, B, C and D, which is what the game calls them.
+  The Upgrades panel showed `G3`, which is neither the game's scale nor obviously
+  a grade at all: beside `S2` it reads like a second size, and it gives no clue
+  that lower is better. The files store an ordinal, so every page that showed one
+  was asking you to know a mapping nobody published. The Parts, Crafting,
+  Upgrades and Loadout pages all use the letter now, and the column says A is
+  best. A handful of items carry an ordinal past 4, outside anything the game
+  shows, and those keep their number rather than being given a letter that would
+  mean nothing.
 
 - StarStrings and your item labels can both be installed, in either order. They
   replace the same file, so whichever went in second used to remove the first.

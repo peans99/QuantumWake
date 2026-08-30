@@ -2752,6 +2752,25 @@ async function loadPartsRef() {
   renderPartsRef();
 }
 
+/**
+ * A component grade as the game writes it: A, B, C, D.
+ *
+ * The files store an ordinal and the game shows a letter, so a page printing
+ * the ordinal is asking the reader to know a mapping nobody published. "G3"
+ * beside "S2" reads like a second size, and gives no clue that lower is better.
+ *
+ * The mapping was checked rather than assumed: the AEGS coolers come out 1, 2,
+ * 3, 4 exactly where StarStrings independently calls them A, B, C and D. Only
+ * those four are translated. A handful of items carry 5 and above, which is
+ * outside anything the game shows, so those keep their number instead of being
+ * given a letter that means nothing.
+ */
+function gradeLetter(grade) {
+  const n = Number(grade) || 0;
+  if (n < 1) return '—';
+  return n <= 4 ? 'ABCD'[n - 1] : String(n);
+}
+
 /** "Char_Clothing_Hat" -> "Clothing Hat": the digest's type keys, made legible. */
 const prettyType = (type) => (type ? type.replace(/^Char_/, '').replace(/_/g, ' ') : '—');
 
@@ -2821,7 +2840,7 @@ function renderPartsRef() {
     // as null from the download, and both mean the same nothing.
     tr.append(el('td', 'muted', part.subType || '—'));
     tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
-    tr.append(el('td', 'num', part.grade > 0 ? String(part.grade) : '—'));
+    tr.append(el('td', 'num', gradeLetter(part.grade)));
     tr.append(el('td', 'muted', part.manufacturer ?? '—'));
     tr.append(el('td', part.price ? 'num' : 'num muted', part.price ? money(part.price) : '—'));
 
@@ -3224,7 +3243,7 @@ function renderCraftingRef() {
     }
     tr.append(makes);
     tr.append(el('td', 'muted', prettyType(bp.type)));
-    tr.append(el('td', 'num', bp.grade > 0 ? String(bp.grade) : '—'));
+    tr.append(el('td', 'num', gradeLetter(bp.grade)));
     tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
     tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.join(', ') : '—'));
 
@@ -7065,7 +7084,7 @@ function fillUpgradeOptions(body, group) {
     const tr = el('tr');
     tr.append(el('td', null, option.name));
     tr.append(el('td', 'muted', option.manufacturer || '—'));
-    tr.append(el('td', 'num muted', option.grade ? `G${option.grade}` : '—'));
+    tr.append(el('td', 'num muted', gradeLetter(option.grade)));
     tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
 
     // One shop on the row and the rest in the tooltip: the choice of counter
@@ -7362,7 +7381,7 @@ function loadoutItemFacts(item) {
   const kind = [ref.type, ref.subType].filter(Boolean).join(' / ');
   if (kind) facts.push(kind);
   if (ref.size > 0) facts.push(`S${ref.size}`);
-  if (ref.grade > 0) facts.push(`Grade ${ref.grade}`);
+  if (ref.grade > 0) facts.push(`Grade ${gradeLetter(ref.grade)}`);
   return { text: facts.join(' · ') || 'Catalogue entry has no extra specification', known: true };
 }
 
