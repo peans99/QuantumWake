@@ -1,17 +1,37 @@
 using System.Text;
+using Quantumwake.Core.GameData;
 
 namespace Quantumwake.Data;
 
+/// <summary>How the overlay should mark names.</summary>
+/// <param name="Colour">
+/// Whether gear nothing sells is wrapped in an emphasis tag as well as marked.
+/// Off by default: it is the one part of this whose rendering cannot be checked
+/// from here.
+/// </param>
+/// <param name="Level">
+/// Which of the game's emphasis levels to use, 1 to 5. These are the game's own
+/// styles rather than colours chosen here - what each looks like is its
+/// stylesheet's business.
+/// </param>
+/// <param name="Facts">
+/// Whether to add the size, grade and armour-class marks as well as the
+/// sold/unsold one.
+/// </param>
+public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool Facts = true);
+
 /// <summary>What a generated text overlay would change, and the file itself.</summary>
-/// <param name="Marked">Item names that would gain the mark.</param>
+/// <param name="Marked">Item names that would gain the unsold mark.</param>
 /// <param name="Sold">Names left alone because something is known to sell them.</param>
 /// <param name="Skipped">Names left alone because they are not gear a player shops for.</param>
+/// <param name="Annotated">Names that gained a size, grade or armour-class mark.</param>
 /// <param name="Samples">A few of the marked names, for showing before installing.</param>
 /// <param name="Content">The whole localisation file, ready to write.</param>
 public sealed record TextOverlayPlan(
     int Marked,
     int Sold,
     int Skipped,
+    int Annotated,
     IReadOnlyList<TextOverlayLine> Samples,
     string Content)
 {
@@ -22,43 +42,51 @@ public sealed record TextOverlayPlan(
 public sealed record TextOverlayLine(string ItemClass, string Was, string Becomes, string Category);
 
 /// <summary>
-/// Builds the game's English text table with a mark against gear nothing is
-/// known to sell.
+/// Builds the game's English text table with what this app knows written into
+/// the names themselves.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The mark answers one question a player asks while looting: is this worth
-/// carrying, or can I buy another whenever I like? It is deliberately not a
-/// price - a price is stale the moment the game launches, because the table is
-/// read once at startup and never again, while "is this sold at all" barely
-/// moves between patches.
+/// The marks answer the questions a player asks in a kiosk or over a body: is
+/// this worth carrying, and what am I actually looking at. They are deliberately
+/// not prices - a price is stale the moment the game launches, because the table
+/// is read once at startup and never again, while "is this sold at all" and
+/// "what size is it" barely move between patches.
 /// </para>
 /// <para>
-/// It is a floor and has to be worded as one everywhere it is explained. Two
-/// sources say a thing is sold: this install's own receipts, which cannot be
-/// wrong because the game charged for them, and UEX, which is broad but
-/// crowd-sourced - it misses 29 of the 106 items these logs prove were bought.
-/// Nothing enumerates what shops stock, so an unmarked item is "nobody has told
-/// us otherwise", never "confirmed rare".
+/// The sold mark is a floor and has to be worded as one everywhere it is
+/// explained. Two sources say a thing is sold: this install's own receipts,
+/// which cannot be wrong because the game charged for them, and UEX, which is
+/// broad but crowd-sourced - it misses 29 of the 106 items these logs prove were
+/// bought. Nothing enumerates what shops stock, so an unmarked item is "nobody
+/// has told us otherwise", never "confirmed rare".
 /// </para>
 /// <para>
-/// Only gear the player shops for is considered: 5,528 of the names on this
-/// install are ship internals and unclassifiable ids nobody browses a kiosk
-/// for. What is left is still not sparse - 3,116 of 4,047 gear names are
-/// marked, because UEX lists only 931 of them - so across the whole table the
-/// mark mostly reports UEX's coverage rather than rarity.
-///
-/// It is far better on gear this install has actually handled: 39 of 109
-/// looted items, a bit over a third. UEX knows the things players commonly
-/// meet and is thin on everything else, so the mark is worth most exactly
-/// where the player is looking. Whether to narrow the file to that set is a
-/// decision for whoever installs it, not one this class should make quietly.
+/// Size and grade come from the install itself, and both need gating rather than
+/// printing: 25,944 of the 26,028 items carry a size and a grade, because 1/1 is
+/// the default, so marking on their presence would mark almost everything. Only
+/// a fitted ship component gets one, and only when the value is not the default.
+/// A scope is not a part and does not get a size.
+/// </para>
+/// <para>
+/// The grade ordinal is a letter, and the mapping was checked rather than
+/// assumed: the AEGS coolers come out 1, 2, 3, 4 exactly where StarStrings
+/// independently calls them A, B, C and D.
+/// </para>
+/// <para>
+/// The budget is four characters of content inside one bracket pair. That is
+/// measured, not chosen - the median item name is 21 characters and 30.8% are
+/// already over 24 - so <c>[S2B*]</c> puts a median name inside the game's own
+/// 75th percentile.
 /// </para>
 /// </remarks>
 public static class TextOverlay
 {
     /// <summary>The prefix the game keys item names under.</summary>
     private const string ItemNamePrefix = "item_Name";
+
+    /// <summary>Nothing known to sell it.</summary>
+    private const char Unsold = '*';
 
     /// <summary>
     /// Categories worth marking: things sold over a counter and looted off the
@@ -78,7 +106,33 @@ public static class TextOverlay
     };
 
     /// <summary>
-    /// Rewrites <paramref name="baseIni"/>, marking gear nothing is known to sell.
+    /// Types whose size means what a player means by size.
+    /// </summary>
+    /// <remarks>
+    /// Everything here is fitted to a ship. Personal weapons and weapon
+    /// attachments carry a size too and are left out on purpose: a holographic
+    /// sight is not a size 1 component, and saying so was the first thing this
+    /// got wrong.
+    /// </remarks>
+    private static readonly HashSet<string> Fitted = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "WeaponGun", "Turret", "TurretBase", "MainThruster", "ManneuverThruster",
+        "MissileLauncher", "Missile", "BombLauncher", "PowerPlant", "Cooler", "Shield",
+        "QuantumDrive", "QuantumFuelTank", "FuelTank", "ExternalFuelTank", "Radar",
+        "WeaponDefensive", "Module",
+    };
+
+    /// <summary>Armour sub-types, as one letter.</summary>
+    private static readonly Dictionary<string, char> ArmourClass = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Light"] = 'L',
+        ["LightArmor"] = 'L',
+        ["Medium"] = 'M',
+        ["Heavy"] = 'H',
+    };
+
+    /// <summary>
+    /// Rewrites <paramref name="baseIni"/> with the marks turned on.
     /// </summary>
     /// <param name="baseIni">
     /// The table to build on. When a text mod is already installed this must be
@@ -86,17 +140,22 @@ public static class TextOverlay
     /// reverts theirs.
     /// </param>
     /// <param name="isSold">Whether anything is known to sell an item class.</param>
-    /// <param name="mark">Appended to the displayed name. Kept short; it lands in every list the name appears in.</param>
+    /// <param name="facts">What the install says each item is, keyed by class name.</param>
+    /// <param name="options">Which marks to write, and whether to colour them.</param>
     public static TextOverlayPlan Build(
         string baseIni,
         Func<string, bool> isSold,
-        string mark = " *")
+        IReadOnlyDictionary<string, GameItem>? facts = null,
+        TextOverlayOptions? options = null)
     {
+        var settings = options ?? new TextOverlayOptions();
+        var level = Math.Clamp(settings.Level, 1, 5);
+
         var lines = baseIni.Split('\n');
         var output = new StringBuilder(baseIni.Length + (lines.Length / 8));
         var samples = new List<TextOverlayLine>();
 
-        int marked = 0, sold = 0, skipped = 0;
+        int marked = 0, sold = 0, skipped = 0, annotated = 0;
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -125,28 +184,49 @@ public static class TextOverlay
                 continue;
             }
 
+            var item = facts is not null && settings.Facts ? facts.GetValueOrDefault(itemClass) : null;
             var category = ItemCategories.Of(itemClass);
+            var shoppable = Shoppable.Contains(category);
+            var badge = item is null ? string.Empty : Badge(item);
 
-            if (!Shoppable.Contains(category))
+            // A ship component is not something anybody shops for over a
+            // counter, so it never earns the sold mark - but it can still say
+            // what size it is, which is the whole reason to look at one.
+            if (!shoppable && badge.Length == 0)
             {
                 skipped++;
                 Emit(line);
                 continue;
             }
 
-            if (isSold(itemClass))
+            var unsold = shoppable && !isSold(itemClass);
+
+            if (!shoppable) skipped++;
+            else if (unsold) marked++;
+            else sold++;
+
+            if (badge.Length > 0) annotated++;
+
+            var suffix = badge + (unsold ? Unsold.ToString() : string.Empty);
+            var trimmed = value.TrimEnd();
+            var padding = value[trimmed.Length..];
+
+            var rewritten = suffix.Length > 0 ? $"{trimmed} [{suffix}]" : trimmed;
+
+            // The colour marks the same thing the star does, so it goes on for
+            // the same reason and nowhere else.
+            if (unsold && settings.Colour) rewritten = $"<EM{level}>{rewritten}</EM{level}>";
+
+            if (rewritten == trimmed)
             {
-                sold++;
                 Emit(line);
                 continue;
             }
 
-            marked++;
-
             if (samples.Count < 25)
-                samples.Add(new TextOverlayLine(itemClass, value.Trim(), value.Trim() + mark, category));
+                samples.Add(new TextOverlayLine(itemClass, trimmed, rewritten, category));
 
-            Emit(key + "=" + value + mark);
+            Emit(key + "=" + rewritten + padding);
             continue;
 
             void Emit(string text)
@@ -157,6 +237,26 @@ public static class TextOverlay
             }
         }
 
-        return new TextOverlayPlan(marked, sold, skipped, samples, output.ToString());
+        return new TextOverlayPlan(marked, sold, skipped, annotated, samples, output.ToString());
+    }
+
+    /// <summary>
+    /// The size, grade or armour class an item earns, in at most three
+    /// characters.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is invented here. A size appears only on a fitted component whose
+    /// size is not the default 1; a grade only alongside a size; an armour class
+    /// only where the game gives a sub-type it recognises.
+    /// </remarks>
+    private static string Badge(GameItem item)
+    {
+        if (ArmourClass.TryGetValue(item.SubType, out var armour)) return armour.ToString();
+
+        if (!Fitted.Contains(item.Type) || item.Size <= 1) return string.Empty;
+
+        var grade = item.Grade is >= 1 and <= 4 ? ((char)('A' + item.Grade - 1)).ToString() : string.Empty;
+
+        return $"S{item.Size}{grade}";
     }
 }

@@ -23,8 +23,8 @@ public class TextOverlayTests
     {
         var plan = NothingSold();
 
-        Assert.Contains("P4-AR Rifle *", plan.Content);
-        Assert.Contains("F55 LMG *", plan.Content);
+        Assert.Contains("P4-AR Rifle [*]", plan.Content);
+        Assert.Contains("F55 LMG [*]", plan.Content);
         Assert.Equal(3, plan.Marked);
     }
 
@@ -39,7 +39,7 @@ public class TextOverlayTests
         var plan = TextOverlay.Build(Ini, c => c.StartsWith("behr", StringComparison.Ordinal));
 
         Assert.Contains("item_Name_behr_rifle_ballistic_01=P4-AR Rifle\n", plan.Content);
-        Assert.DoesNotContain("P4-AR Rifle *", plan.Content);
+        Assert.DoesNotContain("P4-AR Rifle [*]", plan.Content);
         Assert.Equal(1, plan.Sold);
     }
 
@@ -54,8 +54,8 @@ public class TextOverlayTests
 
         Assert.Contains("vehicle_NameANVL_Hornet=Anvil Hornet", plan.Content);
         Assert.Contains("items_commodities_Agricium=Agricium", plan.Content);
-        Assert.DoesNotContain("Anvil Hornet *", plan.Content);
-        Assert.DoesNotContain("Agricium *", plan.Content);
+        Assert.DoesNotContain("Anvil Hornet [*]", plan.Content);
+        Assert.DoesNotContain("Agricium [*]", plan.Content);
     }
 
     /// <summary>
@@ -101,6 +101,6 @@ public class TextOverlayTests
         var plan = NothingSold();
 
         Assert.Equal(plan.Marked + plan.Sold + plan.Skipped, plan.Considered);
-        Assert.Contains(plan.Samples, s => s.Was == "F55 LMG" && s.Becomes == "F55 LMG *");
+        Assert.Contains(plan.Samples, s => s.Was == "F55 LMG" && s.Becomes == "F55 LMG [*]");
     }
 }

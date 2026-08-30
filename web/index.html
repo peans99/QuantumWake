@@ -77,7 +77,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
-        <button data-view="textoverlay">Text overlay</button>
+        <button data-view="gloss">Gloss</button>
         <button data-view="imports">Shared files</button>
         <!-- An action, not a view. The strip's handler binds only
              button[data-view], so this is ignored by the view switcher and
@@ -1404,8 +1404,8 @@
     </div>
   </section>
 
-  <section id="view-textoverlay" class="view">
-    <h2 class="section-title">Text overlay</h2>
+  <section id="view-gloss" class="view">
+    <h2 class="section-title">Gloss</h2>
     <p class="muted caption">
       Star Citizen reads its English text from one file at startup, so replacing
       that file changes what the game calls things. It is text only &mdash; no
@@ -1443,15 +1443,57 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>Mark gear you cannot just buy</h3>
+        <h3>Gloss marks</h3>
         <button class="ghost" id="textoverlay-install">Install</button>
         <button class="ghost danger" id="textoverlay-remove" hidden>Remove</button>
       </div>
       <p class="muted">
-        Puts a <code>*</code> after the name of any weapon, armour, attachment,
-        medical item or tool that nothing is known to sell &mdash; so a thing
-        worth carrying is obvious while you are standing over it.
+        Writes what this app knows into the names themselves, in one bracket at
+        the end: <code>[S2B]</code> is a size 2 grade B component,
+        <code>[H]</code> is heavy armour, and <code>*</code> means nothing is
+        known to sell it &mdash; so a thing worth carrying is obvious while you
+        are standing over it. Four characters, because the median item name is
+        already 21 and a third are over 24.
       </p>
+
+      <div class="gloss-options">
+        <label class="toggle">
+          <input type="checkbox" id="gloss-facts" checked>
+          <span>
+            Mark size, grade and armour class
+            <em class="muted">From your install, not a download.</em>
+          </span>
+        </label>
+
+        <label class="toggle">
+          <input type="checkbox" id="gloss-colour">
+          <span>
+            Colour the gear nothing sells
+            <em class="muted" id="gloss-colour-note">
+              Uses the game&rsquo;s own emphasis styles. Off by default &mdash; whether
+              the game paints them inside an item name is the one thing here that
+              cannot be checked without launching it and looking.
+            </em>
+          </span>
+        </label>
+
+        <label class="gloss-level">
+          <span class="muted">Emphasis level</span>
+          <select id="gloss-level" class="select">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <em class="muted">
+            What each looks like is the game&rsquo;s stylesheet&rsquo;s business.
+            StarStrings uses 3 for contraband and 4 for contract tags.
+          </em>
+        </label>
+
+        <p class="muted" id="gloss-options-note" hidden></p>
+      </div>
       <p class="muted warn">
         <b>It is a floor, not a rarity rating.</b> Two things say an item is
         sold: your own receipts, which cannot be wrong because the game charged

@@ -169,7 +169,7 @@ function showView(name) {
   // The text overlay reads the game folder and rebuilds its plan, so it is read
   // on entry rather than cached: StarStrings may have been installed since, and
   // the plan is layered on whatever is actually there.
-  if (name === 'textoverlay') loadTextOverlay().catch(() => {});
+  if (name === 'gloss') loadTextOverlay().catch(() => {});
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
@@ -5167,16 +5167,68 @@ async function loadStarStrings(check = false) {
  * short list - a tidy table of names is exactly what gets mistaken for a
  * complete rarity rating, and this is a floor over two incomplete sources.
  */
+/**
+ * Puts the stored marking choices onto the page.
+ *
+ * The level only matters while colour is on, so it is disabled rather than
+ * hidden when it is off - a control that vanishes reads as a bug, and one that
+ * greys out reads as a consequence.
+ */
+function applyGlossOptions(options) {
+  const facts = $('#gloss-facts');
+  const colour = $('#gloss-colour');
+  const level = $('#gloss-level');
+  if (!facts || !colour || !level) return;
+
+  facts.checked = options ? options.facts !== false : true;
+  colour.checked = !!(options && options.colour);
+  level.value = String((options && options.level) || 3);
+  level.disabled = !colour.checked;
+}
+
+/** Stores a marking choice, and says what it does not do. */
+async function saveGlossOptions() {
+  const body = {
+    colour: $('#gloss-colour').checked,
+    level: Number($('#gloss-level').value) || 3,
+    facts: $('#gloss-facts').checked,
+  };
+
+  $('#gloss-level').disabled = !body.colour;
+
+  await fetch('/api/gloss/options', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+
+  // Changing a mark does not touch the game folder. Saying so is the difference
+  // between a preference and a surprise.
+  const note = $('#gloss-options-note');
+  if (note) {
+    note.textContent = 'Saved. Install again to write it into the game, then restart the game.';
+    note.hidden = false;
+  }
+
+  await loadTextOverlay().catch(() => {});
+}
+
+for (const id of ['#gloss-facts', '#gloss-colour', '#gloss-level']) {
+  $(id)?.addEventListener('change', () => { saveGlossOptions().catch(() => {}); });
+}
+
 async function loadTextOverlay() {
   const status = $('#textoverlay-status');
   if (!status) return;
 
-  const state = await getJson('/api/textoverlay').catch(() => null);
+  const state = await getJson('/api/gloss').catch(() => null);
 
   if (!state) {
     status.textContent = 'Could not read the game text.';
     return;
   }
+
+  applyGlossOptions(state.options);
 
   $('#textoverlay-remove').hidden = !state.installed;
   $('#textoverlay-install').textContent = state.installed ? 'Rebuild and install' : 'Install';
@@ -5192,6 +5244,7 @@ async function loadTextOverlay() {
   tiles('#textoverlay-summary', [
     ['Would be marked', state.marked],
     ['Something sells', state.sold],
+    ['Size or class marked', state.annotated],
     ['Not gear you shop for', state.skipped],
   ]);
 
@@ -5231,7 +5284,7 @@ function initTextOverlay() {
   install.addEventListener('click', async () => {
     $('#textoverlay-status').textContent = 'Writing…';
 
-    const answer = await fetch('/api/textoverlay/install', { method: 'POST' })
+    const answer = await fetch('/api/gloss/install', { method: 'POST' })
       .then((r) => r.json())
       .catch(() => ({ problem: 'The write did not finish.' }));
 
@@ -5246,7 +5299,7 @@ function initTextOverlay() {
 
   $('#textoverlay-remove').addEventListener('click', async () => {
     $('#textoverlay-status').textContent = 'Putting the old text back…';
-    await fetch('/api/textoverlay/remove', { method: 'POST' }).catch(() => {});
+    await fetch('/api/gloss/remove', { method: 'POST' }).catch(() => {});
     await loadTextOverlay();
   });
 }

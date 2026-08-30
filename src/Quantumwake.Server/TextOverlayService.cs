@@ -15,7 +15,9 @@ public sealed record TextOverlayStatus(
     int Sold,
     int Skipped,
     IReadOnlyList<TextOverlayLine> Samples,
-    string? Problem);
+    string? Problem,
+    int Annotated = 0,
+    TextOverlayOptions? Options = null);
 
 /// <summary>
 /// Builds and installs the in-game text overlay.
@@ -37,6 +39,7 @@ public sealed record TextOverlayStatus(
 /// </remarks>
 public sealed class TextOverlayService(
     LogLibrary library,
+    GlossOptionsStore options,
     UexData uex,
     TextOverlayStore store,
     StarStringsStore starStrings,
@@ -56,6 +59,10 @@ public sealed class TextOverlayService(
     /// were bought at a kiosk - which is exactly why the receipts are consulted
     /// and not merely the market table.
     /// </remarks>
+    /// <summary>Builds against the player's own choice of marks.</summary>
+    private TextOverlayPlan Plan(string ini) =>
+        TextOverlay.Build(ini, SoldTest(), library.GameCommodities.ItemFacts, options.Current);
+
     private Func<string, bool> SoldTest()
     {
         var receipts = library.Receipts();
@@ -113,10 +120,11 @@ public sealed class TextOverlayService(
             return new(installed, install?.InstalledAt, install?.Layered ?? false,
                 source, 0, 0, 0, [], problem);
 
-        var plan = TextOverlay.Build(ini, SoldTest());
+        var plan = Plan(ini);
 
         return new(installed, install?.InstalledAt, install?.Layered ?? false,
-            source, plan.Marked, plan.Sold, plan.Skipped, plan.Samples, null);
+            source, plan.Marked, plan.Sold, plan.Skipped, plan.Samples, null, plan.Annotated,
+            options.Current);
     }
 
     /// <summary>Writes the overlay into the game folder.</summary>
@@ -131,9 +139,9 @@ public sealed class TextOverlayService(
         if (ini is null)
             return (null, problem);
 
-        var plan = TextOverlay.Build(ini, SoldTest());
+        var plan = Plan(ini);
 
-        if (plan.Marked == 0)
+        if (plan.Marked == 0 && plan.Annotated == 0)
             return (null, "Nothing would be marked, so there is no reason to write a file.");
 
         // The same fence StarStrings is held to: judged on the path it resolves

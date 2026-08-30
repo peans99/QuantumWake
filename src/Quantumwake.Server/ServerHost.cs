@@ -115,6 +115,7 @@ public static class ServerHost
         builder.Services.AddSingleton<StarStringsStore>();
         builder.Services.AddSingleton<StarStrings>();
         builder.Services.AddSingleton<TextOverlayStore>();
+        builder.Services.AddSingleton<GlossOptionsStore>();
         builder.Services.AddSingleton<TextOverlayService>();
 
 
@@ -511,9 +512,9 @@ public static class ServerHost
 
         // Asking what would change writes nothing. Installing is a separate
         // call because the file lands in the player's game folder.
-        app.MapGet("/api/textoverlay", (TextOverlayService overlay) => overlay.Status(install));
+        app.MapGet("/api/gloss", (TextOverlayService overlay) => overlay.Status(install));
 
-        app.MapPost("/api/textoverlay/install", (TextOverlayService overlay) =>
+        app.MapPost("/api/gloss/install", (TextOverlayService overlay) =>
         {
             var (done, problem) = overlay.Install(install);
 
@@ -522,11 +523,19 @@ public static class ServerHost
                 : Results.BadRequest(new { problem });
         });
 
-        app.MapPost("/api/textoverlay/remove", (TextOverlayService overlay) =>
+        app.MapPost("/api/gloss/remove", (TextOverlayService overlay) =>
         {
             overlay.Remove();
             return Results.Ok(new { removed = true });
         });
+
+        // The marks are a preference rather than part of an install, so they are
+        // stored and read back whether or not anything is installed. Changing
+        // them does not rewrite the game's file: the page says to reinstall,
+        // because writing into somebody's game folder on a checkbox is not a
+        // thing to do quietly.
+        app.MapPost("/api/gloss/options", (GlossOptionsStore store, TextOverlayOptions body) =>
+            Results.Ok(store.Save(body)));
 
         app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check, SelfUpdate selfUpdate) =>
 

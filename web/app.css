@@ -3476,3 +3476,26 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
   border-radius: 3px;
   color: var(--dim);
 }
+
+/* Gloss marking choices, on the page that writes them. */
+.gloss-options {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 12px 0 4px;
+}
+.gloss-level {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.gloss-level em { flex: 1 1 22ch; }
+
+/* The note under a toggle is a sentence, not a suffix. Left inline it ran off
+   the right edge of the block and lost its last four words. */
+.gloss-options .toggle em {
+  display: block;
+  margin-top: 2px;
+  max-width: 72ch;
+}

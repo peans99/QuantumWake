@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.6
+### 0.9.7
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,29 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- Gloss has moved in, and has a page of its own. The text overlay that marked
+  gear nothing sells now writes everything Gloss wrote as a standalone tool, in
+  one bracket at the end of the name: `[S2B]` for a size 2 grade B component,
+  `[H]` for heavy armour, `*` for nothing known to sell it. On this install that
+  is 3,115 names marked as unsold and 2,295 given a size or a class. Four
+  characters of content, because the median item name is already 21 and a third
+  are over 24.
+
+  Size needs gating rather than printing, which is the whole difficulty: 25,944
+  of the 26,028 items carry a size and a grade because 1/1 is the default. Only
+  a fitted ship component gets one — a scope is not a part, and saying it was
+  the first thing this got wrong. The grade letter was checked rather than
+  assumed: the AEGS coolers number 1 to 4 exactly where StarStrings
+  independently calls them A to D.
+
+- Optionally, gear nothing sells can be coloured. The game has its own emphasis
+  styles and StarStrings already relies on them — `<EM3>` on eight contraband
+  commodities, `<EM4>` on 958 contract titles — so this offers the same five
+  levels rather than inventing colours. It is off unless you turn it on, and
+  that is deliberate: every other mark here can be read back off the disk, but
+  whether the game paints an emphasis tag inside an *item name* is only knowable
+  by launching the game and looking. Nothing untested gets switched on for you.
 
 - The Mining page now says what quality you can expect, and where that differs.
   Every resource class carries its own distribution and the floor is the part
