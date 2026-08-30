@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.1
+### 0.9.2
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,14 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- Some recipes will not take just any ore. A handful of crafting materials carry
+  a minimum quality, and the Crafting page now says so — "Titanium 2 SCU
+  (quality 900+)". It is rare and that is the point: of the roughly 4,300
+  material lines in the game, 2,890 ask for quality 0 and 1,377 for 1, which
+  both mean anything at all. Only 22 ask for 500 or more, and those are the ones
+  where a full hold can turn out to be unusable. Neither this app nor the
+  community download has ever mentioned them.
 
 - The game writes a paragraph about most of your gear, and now you can read it.
   9,401 of the 26,028 items the install describes carry the blurb the game shows

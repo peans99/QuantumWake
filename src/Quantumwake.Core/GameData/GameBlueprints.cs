@@ -215,7 +215,8 @@ public static class GameBlueprints
                     : core.SingleAt(
                         core.InstanceAt(quantity.Value), quantity.Value.StructIndex, "standardCargoUnits");
 
-                into.Add($"{Resolved(core, text, byId, facts, id)} {scu ?? 0:0.##} SCU");
+                into.Add(
+                    $"{Resolved(core, text, byId, facts, id)} {scu ?? 0:0.##} SCU{Quality(core, at, s)}");
                 return;
             }
 
@@ -224,8 +225,8 @@ public static class GameBlueprints
                 var id = core.ReferenceAt(at, s, "entityClass");
                 // The multiplication sign, matching how the download worded the
                 // same line, so a page fed by either source reads the same.
-                into.Add(
-                    $"{Resolved(core, text, byId, facts, id)} {(char)0x00D7}{core.Int32At(at, s, "quantity") ?? 1}");
+                into.Add($"{Resolved(core, text, byId, facts, id)} "
+                    + $"{(char)0x00D7}{core.Int32At(at, s, "quantity") ?? 1}{Quality(core, at, s)}");
                 return;
             }
 
@@ -254,6 +255,25 @@ public static class GameBlueprints
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// The quality floor on a material, when there is a real one.
+    /// </summary>
+    /// <remarks>
+    /// Almost nothing has one. Across every recipe in the game 2,890 material
+    /// lines ask for quality 0 and 1,377 for 1, which both mean "any"; only 22
+    /// ask for 500 or more. Those 22 are the whole point of showing it - they
+    /// are the recipes where a hold full of ore can turn out to be unusable, and
+    /// nothing else in the app has ever said so.
+    /// </remarks>
+    private static string Quality(DataCore core, long at, int structIndex)
+    {
+        var floor = core.Int32At(at, structIndex, "minQuality")
+                    ?? (int?)core.SingleAt(at, structIndex, "minQuality")
+                    ?? 0;
+
+        return floor > 1 ? $" (quality {floor}+)" : string.Empty;
     }
 
     private static string Resolved(
