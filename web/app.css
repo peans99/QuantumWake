@@ -3517,3 +3517,12 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
   margin: 8px 0 2px;
 }
 .goal-form .search { flex: 1 1 9ch; min-width: 0; }
+
+/* Recording a haul, on the page that plans them. */
+.mining-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px 0 14px;
+}
+.mining-form .search { flex: 1 1 9ch; min-width: 0; }

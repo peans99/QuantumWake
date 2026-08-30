@@ -1275,8 +1275,75 @@
       long a rock takes to mine; respawn is how long it takes to come back,
       which is a different question.
     </p>
+    <h3 class="spaced">Where to go</h3>
+    <p class="muted caption">
+      Every place ranked by what a rock found there is worth. <em>Rich</em> is how
+      much of an average rock here is actually ore; <em>Quality</em> is the best
+      floor on offer, starred where this place beats the usual. <em>Per rock</em>
+      multiplies the two ideas out: each ore's share of what spawns, times what a
+      SCU of it sells for. It is value per rock, <b>not per hour</b> &mdash;
+      nothing says how long a rock takes to mine, so a rich place on a two-hour
+      respawn cannot be compared with a poor one on twenty minutes. Respawn is
+      there so you can judge that yourself.
+    </p>
+    <div class="table-wrap">
+      <table id="mining-places">
+        <thead>
+          <tr>
+            <th>Place</th><th>System</th>
+            <th class="num" title="How much of an average rock here is ore">Rich</th>
+            <th class="num" title="The best quality floor available here">Quality</th>
+            <th class="num" title="What an average rock found here is worth">Per rock</th>
+            <th class="num">Ores</th>
+            <th>Mostly</th>
+            <th class="num">Respawn</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-places-note"></p>
+
+    <h3 class="spaced">What you have brought back</h3>
     <div class="summary-strip" id="mining-mine"></div>
     <p class="muted caption" id="mining-mine-note" hidden></p>
+
+    <p class="muted caption">
+      The game writes down no mining at all &mdash; no rock scanned, no refinery
+      job &mdash; so this half is yours to keep. Anything you record here is your
+      own note, and it is never added to the figures above, which come from your
+      logs.
+    </p>
+
+    <form class="mining-form" id="mining-log-form">
+      <input type="text" id="mining-log-resource" class="search" maxlength="30"
+             placeholder="Ore" autocomplete="off" required>
+      <input type="text" id="mining-log-place" class="search" maxlength="30"
+             placeholder="Where" autocomplete="off">
+      <input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
+             placeholder="SCU" required>
+      <input type="number" id="mining-log-quality" class="search" min="1" max="1000"
+             placeholder="Quality">
+      <input type="number" id="mining-log-revenue" class="search" min="0" step="1"
+             placeholder="Sold for">
+      <button type="submit" class="ghost">Record</button>
+    </form>
+
+    <div class="table-wrap">
+      <table id="mining-log">
+        <thead>
+          <tr>
+            <th>When</th><th>Ore</th><th>Where</th>
+            <th class="num">SCU</th><th class="num">Quality</th><th class="num">Sold for</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-log-note"></p>
+
+    <h3 class="spaced">Every deposit</h3>
 
     <div class="table-wrap">
       <table id="mining-table">

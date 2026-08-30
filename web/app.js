@@ -174,7 +174,11 @@ function showView(name) {
   // The trading rate moves only when a session ends, so it is read on entry
   // rather than on every tick of the live stream.
   if (name === 'now') loadEarnings().catch(() => {});
-  if (name === 'mining') loadLikelyMined().catch(() => {});
+  if (name === 'mining') {
+    loadMiningPlaces().catch(() => {});
+    loadLikelyMined().catch(() => {});
+    loadMiningLog().catch(() => {});
+  }
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
   if (name === 'settings') renderSettings().catch(() => {});
@@ -2953,6 +2957,129 @@ const KIND_LABELS = {
  * It is an inference and the note says so: buying somewhere the app never read
  * a log for would look exactly the same.
  */
+/**
+ * Where the rocks are rich, and what one is worth when you find it.
+ *
+ * Rich and valuable are different questions and both are answered: a place can
+ * be full of ore nobody pays for, or hold a trace of something precious. Per
+ * rock multiplies them out, and is per rock rather than per hour because
+ * nothing says how long a rock takes to mine.
+ */
+/**
+ * The mining record the pilot keeps, because the game keeps none.
+ *
+ * Kept visibly apart from everything else on the page. The figures above are
+ * read from logs and can be checked; these are typed from memory, and adding
+ * the two together would make one number out of two different kinds of claim.
+ */
+async function loadMiningLog() {
+  const body = $('#mining-log tbody');
+  const note = $('#mining-log-note');
+  if (!body) return;
+
+  const runs = await getJson('/api/mining/log').catch(() => []);
+  body.textContent = '';
+
+  if (!runs.length) {
+    note.textContent = 'Nothing recorded yet.';
+    return;
+  }
+
+  for (const run of runs) {
+    const tr = el('tr');
+    tr.append(el('td', 'muted', dayOf(run.at)));
+    tr.append(el('td', null, run.resource));
+    tr.append(el('td', 'muted', run.place));
+    tr.append(el('td', 'num', String(run.scu)));
+    tr.append(el('td', 'num muted', run.quality ? String(run.quality) : '—'));
+    tr.append(el('td', run.revenue ? 'num inward' : 'num muted',
+      run.revenue ? money(run.revenue) : '—'));
+
+    const drop = el('td', 'num');
+    const remove = el('button', 'ghost small', 'Remove');
+    remove.addEventListener('click', async () => {
+      await fetch(`/api/mining/log/${run.id}`, { method: 'DELETE' }).catch(() => {});
+      await loadMiningLog().catch(() => {});
+    });
+    drop.append(remove);
+    tr.append(drop);
+
+    body.append(tr);
+  }
+
+  const scu = runs.reduce((sum, r) => sum + r.scu, 0);
+  const earned = runs.reduce((sum, r) => sum + (r.revenue || 0), 0);
+
+  note.textContent = `${runs.length} run${runs.length === 1 ? '' : 's'}, `
+    + `${scu.toLocaleString()} SCU`
+    + (earned > 0 ? `, ${money(earned)}` : '')
+    + ' — your own record, kept apart from the log-derived figures above.';
+}
+
+$('#mining-log-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const body = {
+    resource: $('#mining-log-resource').value.trim(),
+    place: $('#mining-log-place').value.trim(),
+    scu: Number($('#mining-log-scu').value) || 0,
+    quality: Number($('#mining-log-quality').value) || null,
+    revenue: Number($('#mining-log-revenue').value) || null,
+  };
+
+  if (!body.resource || body.scu <= 0) return;
+
+  await fetch('/api/mining/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+
+  for (const id of ['#mining-log-resource', '#mining-log-place', '#mining-log-scu',
+    '#mining-log-quality', '#mining-log-revenue']) {
+    $(id).value = '';
+  }
+
+  await loadMiningLog().catch(() => {});
+});
+
+async function loadMiningPlaces() {
+  const body = $('#mining-places tbody');
+  const note = $('#mining-places-note');
+  if (!body) return;
+
+  const places = await getJson('/api/mining/places').catch(() => []);
+  body.textContent = '';
+
+  if (!places.length) {
+    note.textContent = 'No deposit tables could be read from your install.';
+    return;
+  }
+
+  for (const place of places.slice(0, 40)) {
+    const tr = el('tr');
+    tr.append(tdPlace(place.place));
+    tr.append(el('td', 'muted', place.system || '—'));
+    tr.append(el('td', 'num', `${place.ore.toFixed(place.ore >= 10 ? 0 : 1)}%`));
+
+    // A place that beats the usual floor is the interesting one, so it is
+    // marked the same way the deposit table marks it.
+    const quality = el('td', place.quality?.local ? 'num' : 'num muted',
+      place.quality ? `${place.quality.min}+${place.quality.local ? '*' : ''}` : '—');
+    tr.append(quality);
+
+    tr.append(el('td', 'num inward', money(place.perRock)));
+    tr.append(el('td', 'num muted', String(place.ores)));
+    tr.append(el('td', 'muted', place.best.map((b) => b.resource).join(', ')));
+    tr.append(el('td', 'num muted', place.respawn ? craftTime(place.respawn) : '—'));
+    body.append(tr);
+  }
+
+  note.textContent = `${places.length} places, read from your install. `
+    + 'The community dataset knows 234, so this is the part of the map your game '
+    + 'files describe rather than all of it.';
+}
+
 async function loadLikelyMined() {
   const strip = $('#mining-mine');
   const note = $('#mining-mine-note');

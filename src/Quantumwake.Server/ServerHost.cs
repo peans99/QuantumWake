@@ -117,6 +117,7 @@ public static class ServerHost
         builder.Services.AddSingleton<TextOverlayStore>();
         builder.Services.AddSingleton<ItemLabelStore>();
         builder.Services.AddSingleton<GoalStore>();
+        builder.Services.AddSingleton<MiningLogStore>();
         builder.Services.AddSingleton<TextOverlayService>();
 
 
@@ -802,6 +803,93 @@ public static class ServerHost
                 .Where(e => e.MyScuSold > 0 && e.MyScuBought == 0)
                 .Select(e => new { e.Name, scu = e.MyScuSold, revenue = e.MyRevenue, trips = e.MyTrades })
                 .OrderByDescending(e => e.revenue));
+
+        // Where to go, rather than what to shoot. Each place is worth the sum of
+        // what spawns there: every deposit's share of the place times what a SCU
+        // of that rock sells for. Ranked, so the question has an answer rather
+        // than a table to read down.
+        app.MapGet("/api/mining/places", (LogLibrary lib, UexData uex) =>
+        {
+            var spawns = lib.GameCommodities.Spawns.Count > 0
+                ? lib.GameCommodities.Spawns.Select(s => (
+                    s.Location, s.System, s.Resource, s.MinPercent, s.MaxPercent,
+                    Odds: s.GroupChance * s.Share, s.RespawnSeconds, s.Quality))
+                : [];
+
+            return spawns
+                .GroupBy(s => s.Location, StringComparer.OrdinalIgnoreCase)
+                .Select(place =>
+                {
+                    // One line per ore. The same ore appears once per table a
+                    // place has - Cave Rich, Cave Medium, Cave Poor - and listing
+                    // those separately would name Hadanite three times as the
+                    // three best things here.
+                    var rows = place
+                        .GroupBy(s => s.Resource, StringComparer.OrdinalIgnoreCase)
+                        .Select(ore => new
+                        {
+                            Resource = ore.Key,
+                            Odds = ore.Sum(s => s.Odds),
+                            // The middle of the ore range, as the table uses.
+                            Worth = ore
+                                .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
+                                    && uex.Best(s.Resource)?.BestSell is { } sell && sell > 0
+                                        ? (decimal)((low + high) / 2 / 100) * sell
+                                        : 0m)
+                                .Max(),
+                            // How much of the rock is worth having, which is a
+                            // different question from what it sells for.
+                            Ore = ore
+                                .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
+                                    ? (low + high) / 2
+                                    : 0)
+                                .Max(),
+                        })
+                        .Where(r => r.Worth > 0)
+                        .ToList();
+
+                    // A place draws on several tables and each is normalised
+                    // within itself, so their odds sum past one. Normalising
+                    // again here makes this "given you find a rock, what is it
+                    // worth" - the only comparison between places the data
+                    // actually supports.
+                    var total = rows.Sum(r => r.Odds);
+
+                    return new
+                    {
+                        place = place.Key,
+                        system = place.Select(s => s.System).FirstOrDefault(s => s is not null),
+                        perRock = total > 0 ? rows.Sum(r => (decimal)(r.Odds / total) * r.Worth) : 0m,
+                        // Two kinds of rich, and they are not the same. Ore is
+                        // how much of a rock is the good stuff; quality is what
+                        // grade it assays at, and a place can override the usual.
+                        ore = total > 0 ? rows.Sum(r => r.Odds / total * r.Ore) : 0,
+                        quality = place
+                            .Where(s => s.Quality is not null)
+                            .OrderByDescending(s => s.Quality!.Min)
+                            .Select(s => new { s.Quality!.Min, s.Quality.Local })
+                            .FirstOrDefault(),
+                        ores = rows.Count,
+                        respawn = place.Select(s => s.RespawnSeconds).FirstOrDefault(r => r is > 0),
+                        best = rows.OrderByDescending(r => r.Odds * (double)r.Worth)
+                            .Take(3)
+                            .Select(r => new { r.Resource, worth = r.Worth })
+                    };
+                })
+                .Where(p => p.perRock > 0)
+                .OrderByDescending(p => p.perRock);
+        });
+
+        app.MapGet("/api/mining/log", (MiningLogStore runs) => runs.All());
+
+        app.MapPost("/api/mining/log", (MiningLogStore runs, MiningRunEntry body) =>
+            runs.Add(body.Place, body.Resource, body.Scu, body.Quality, body.Revenue, body.Note)
+                is { } added
+                ? Results.Ok(added)
+                : Results.BadRequest(new { problem = "A run needs a resource and some SCU." }));
+
+        app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, string id) =>
+            Results.Ok(new { removed = runs.Remove(id) }));
 
         app.MapPost("/api/goal", (GoalStore goals, Goal? body) =>
             Results.Ok(new { goal = goals.Save(body) }));
@@ -2958,3 +3046,7 @@ public sealed record ChecklistItemRequest(
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(
     DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount);
+
+/// <summary>What a mining-run form posts.</summary>
+public sealed record MiningRunEntry(
+    string? Place, string? Resource, double Scu, int? Quality, decimal? Revenue, string? Note);

@@ -94,8 +94,14 @@ public static class GameSpawns
             if (record.Name.StartsWith("StarMapObject.", StringComparison.OrdinalIgnoreCase))
                 starMap.TryAdd(Bare(record.Name), record);
 
-            if (record.Name.StartsWith("SubHarvestableConfigRecord.Cave_", StringComparison.OrdinalIgnoreCase))
+            // Cave_Full_Test is a test fixture, and its name splits into a place
+            // called "Full" that then ranks above Hurston. The game ships a few
+            // of these beside the real tables.
+            if (record.Name.StartsWith("SubHarvestableConfigRecord.Cave_", StringComparison.OrdinalIgnoreCase)
+                && !record.Name.Contains("_Test", StringComparison.OrdinalIgnoreCase))
+            {
                 caves.Add(record);
+            }
 
             if (record.Name.StartsWith("MissionLocationTemplate.Planet_", StringComparison.OrdinalIgnoreCase))
             {

@@ -350,7 +350,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.13
+### 0.9.14
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -441,6 +441,25 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The Mining page says where to go, not just what to shoot. A **Where to go**
+  table ranks all 47 places your install describes by how rich the rocks are —
+  how much of an average rock there is actually ore, 73% at Hurston down to the
+  low fifties in outer Pyro — beside the best quality floor on offer and what a
+  rock found there is worth. Pyro places are starred, because everything there
+  has a wider quality spread than the same rock elsewhere.
+
+  It is value per rock and not per hour, which is said on the page. Nothing in
+  the logs says how long a rock takes to mine, so a rich place on a two-hour
+  respawn cannot be compared with a poor one on twenty minutes; the respawn is
+  shown so you can judge it yourself.
+
+- You can keep a mining record, since the game keeps none. Note the ore, where,
+  how much, the quality and what it sold for. It is kept visibly apart from
+  everything else on the page and never added to it: the figures above come from
+  your logs and can be checked, and these are typed from memory. A quality
+  outside the game's own 1-to-1000 scale is dropped rather than stored, because
+  no rock could have assayed at it.
 
 - Component grades read as A, B, C and D, which is what the game calls them.
   The Upgrades panel showed `G3`, which is neither the game's scale nor obviously
