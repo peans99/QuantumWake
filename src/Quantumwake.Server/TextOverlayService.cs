@@ -39,7 +39,7 @@ public sealed record TextOverlayStatus(
 /// </remarks>
 public sealed class TextOverlayService(
     LogLibrary library,
-    GlossOptionsStore options,
+    ItemLabelStore options,
     UexData uex,
     TextOverlayStore store,
     StarStringsStore starStrings,

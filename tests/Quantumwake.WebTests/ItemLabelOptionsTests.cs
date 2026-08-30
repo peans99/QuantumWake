@@ -1,14 +1,14 @@
 namespace Quantumwake.WebTests;
 
 /// <summary>
-/// The Gloss page's marking choices.
+/// The Item labels page's marking choices.
 /// </summary>
 /// <remarks>
 /// Changing a mark deliberately does not rewrite the game's file. Writing into
 /// somebody's game folder on a checkbox is not a thing to do quietly, so the
 /// page saves the choice and says to install again.
 /// </remarks>
-public class GlossOptionsTests
+public class ItemLabelOptionsTests
 {
     private const string Status = """
         {"installed":false,"installedAt":null,"layered":false,"baseSource":"the game",
@@ -19,7 +19,7 @@ public class GlossOptionsTests
     private static Page Loaded()
     {
         var page = new Page();
-        page.Serve("/api/gloss", Status);
+        page.Serve("/api/labels", Status);
         page.Do("await loadTextOverlay();");
         return page;
     }
@@ -29,9 +29,9 @@ public class GlossOptionsTests
     {
         var page = Loaded();
 
-        Assert.True(page.Truth("__dom.node('#gloss-colour').checked"));
-        Assert.False(page.Truth("__dom.node('#gloss-facts').checked"));
-        Assert.Equal("4", page.Text("__dom.node('#gloss-level').value"));
+        Assert.True(page.Truth("__dom.node('#label-colour').checked"));
+        Assert.False(page.Truth("__dom.node('#label-facts').checked"));
+        Assert.Equal("4", page.Text("__dom.node('#label-level').value"));
     }
 
     /// <summary>
@@ -43,22 +43,22 @@ public class GlossOptionsTests
     public void The_level_is_disabled_when_colour_is_off()
     {
         var page = new Page();
-        page.Serve("/api/gloss", Status.Replace("\"colour\":true", "\"colour\":false"));
+        page.Serve("/api/labels", Status.Replace("\"colour\":true", "\"colour\":false"));
         page.Do("await loadTextOverlay();");
 
-        Assert.True(page.Truth("__dom.node('#gloss-level').disabled"));
+        Assert.True(page.Truth("__dom.node('#label-level').disabled"));
     }
 
     [Fact]
     public void Saving_a_choice_posts_it_and_says_it_is_not_installed_yet()
     {
         var page = Loaded();
-        page.Serve("/api/gloss/options", """{"colour":false,"level":4,"facts":false}""");
+        page.Serve("/api/labels/options", """{"colour":false,"level":4,"facts":false}""");
 
-        page.Do("__dom.node('#gloss-colour').checked = false; await saveGlossOptions();");
+        page.Do("__dom.node('#label-colour').checked = false; await saveLabelOptions();");
 
-        Assert.Contains("\"colour\":false", page.BodyOf("/api/gloss/options"));
-        Assert.Contains("Install again", page.NodeText("#gloss-options-note"));
+        Assert.Contains("\"colour\":false", page.BodyOf("/api/labels/options"));
+        Assert.Contains("Install again", page.NodeText("#label-options-note"));
     }
 
     /// <summary>

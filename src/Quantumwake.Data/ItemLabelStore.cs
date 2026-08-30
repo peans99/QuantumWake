@@ -20,15 +20,15 @@ namespace Quantumwake.Data;
 /// people who never asked for it.
 /// </para>
 /// </remarks>
-public sealed class GlossOptionsStore
+public sealed class ItemLabelStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
     private TextOverlayOptions _current = new();
 
-    public GlossOptionsStore(string? directory = null)
+    public ItemLabelStore(string? directory = null)
     {
-        _path = Path.Combine(directory ?? AppPaths.Root, "gloss.json");
+        _path = Path.Combine(directory ?? AppPaths.Root, "item-labels.json");
         Load();
     }
 

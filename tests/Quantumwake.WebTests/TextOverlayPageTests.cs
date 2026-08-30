@@ -22,7 +22,7 @@ public class TextOverlayPageTests
     private static Page Loaded(string plan = Plan)
     {
         var page = new Page();
-        page.Serve("/api/gloss", plan);
+        page.Serve("/api/labels", plan);
         page.Do("await loadTextOverlay();");
         return page;
     }
@@ -87,7 +87,7 @@ public class TextOverlayPageTests
     public void Looking_at_the_page_writes_nothing()
     {
         var page = new Page();
-        page.Serve("/api/gloss", Plan);
+        page.Serve("/api/labels", Plan);
         page.Do("window.__posted = []; const f = window.fetch;"
             + " window.fetch = (u, o) => { if (o && o.method === 'POST') window.__posted.push(u);"
             + " return f(u, o); }; await loadTextOverlay();");

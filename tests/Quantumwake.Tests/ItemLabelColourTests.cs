@@ -14,7 +14,7 @@ namespace Quantumwake.Tests;
 /// uses plain prefixes there. So this is off unless asked for, and it must be
 /// possible to turn back off.
 /// </remarks>
-public class GlossColourTests
+public class ItemLabelColourTests
 {
     private const string Ini = "item_Name_behr_rifle_ballistic_01=P4-AR Rifle";
 

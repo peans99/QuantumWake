@@ -169,7 +169,7 @@ function showView(name) {
   // The text overlay reads the game folder and rebuilds its plan, so it is read
   // on entry rather than cached: StarStrings may have been installed since, and
   // the plan is layered on whatever is actually there.
-  if (name === 'gloss') loadTextOverlay().catch(() => {});
+  if (name === 'labels') loadTextOverlay().catch(() => {});
 
   // The trading rate moves only when a session ends, so it is read on entry
   // rather than on every tick of the live stream.
@@ -5364,10 +5364,10 @@ async function loadStarStrings(check = false) {
  * hidden when it is off - a control that vanishes reads as a bug, and one that
  * greys out reads as a consequence.
  */
-function applyGlossOptions(options) {
-  const facts = $('#gloss-facts');
-  const colour = $('#gloss-colour');
-  const level = $('#gloss-level');
+function applyLabelOptions(options) {
+  const facts = $('#label-facts');
+  const colour = $('#label-colour');
+  const level = $('#label-level');
   if (!facts || !colour || !level) return;
 
   facts.checked = options ? options.facts !== false : true;
@@ -5377,16 +5377,16 @@ function applyGlossOptions(options) {
 }
 
 /** Stores a marking choice, and says what it does not do. */
-async function saveGlossOptions() {
+async function saveLabelOptions() {
   const body = {
-    colour: $('#gloss-colour').checked,
-    level: Number($('#gloss-level').value) || 3,
-    facts: $('#gloss-facts').checked,
+    colour: $('#label-colour').checked,
+    level: Number($('#label-level').value) || 3,
+    facts: $('#label-facts').checked,
   };
 
-  $('#gloss-level').disabled = !body.colour;
+  $('#label-level').disabled = !body.colour;
 
-  await fetch('/api/gloss/options', {
+  await fetch('/api/labels/options', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -5394,7 +5394,7 @@ async function saveGlossOptions() {
 
   // Changing a mark does not touch the game folder. Saying so is the difference
   // between a preference and a surprise.
-  const note = $('#gloss-options-note');
+  const note = $('#label-options-note');
   if (note) {
     note.textContent = 'Saved. Install again to write it into the game, then restart the game.';
     note.hidden = false;
@@ -5403,22 +5403,22 @@ async function saveGlossOptions() {
   await loadTextOverlay().catch(() => {});
 }
 
-for (const id of ['#gloss-facts', '#gloss-colour', '#gloss-level']) {
-  $(id)?.addEventListener('change', () => { saveGlossOptions().catch(() => {}); });
+for (const id of ['#label-facts', '#label-colour', '#label-level']) {
+  $(id)?.addEventListener('change', () => { saveLabelOptions().catch(() => {}); });
 }
 
 async function loadTextOverlay() {
   const status = $('#textoverlay-status');
   if (!status) return;
 
-  const state = await getJson('/api/gloss').catch(() => null);
+  const state = await getJson('/api/labels').catch(() => null);
 
   if (!state) {
     status.textContent = 'Could not read the game text.';
     return;
   }
 
-  applyGlossOptions(state.options);
+  applyLabelOptions(state.options);
 
   $('#textoverlay-remove').hidden = !state.installed;
   $('#textoverlay-install').textContent = state.installed ? 'Rebuild and install' : 'Install';
@@ -5474,7 +5474,7 @@ function initTextOverlay() {
   install.addEventListener('click', async () => {
     $('#textoverlay-status').textContent = 'Writing…';
 
-    const answer = await fetch('/api/gloss/install', { method: 'POST' })
+    const answer = await fetch('/api/labels/install', { method: 'POST' })
       .then((r) => r.json())
       .catch(() => ({ problem: 'The write did not finish.' }));
 
@@ -5489,7 +5489,7 @@ function initTextOverlay() {
 
   $('#textoverlay-remove').addEventListener('click', async () => {
     $('#textoverlay-status').textContent = 'Putting the old text back…';
-    await fetch('/api/gloss/remove', { method: 'POST' }).catch(() => {});
+    await fetch('/api/labels/remove', { method: 'POST' }).catch(() => {});
     await loadTextOverlay();
   });
 }

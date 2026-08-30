@@ -77,7 +77,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
-        <button data-view="gloss">Gloss</button>
+        <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
         <!-- An action, not a view. The strip's handler binds only
              button[data-view], so this is ignored by the view switcher and
@@ -1436,8 +1436,8 @@
     </div>
   </section>
 
-  <section id="view-gloss" class="view">
-    <h2 class="section-title">Gloss</h2>
+  <section id="view-labels" class="view">
+    <h2 class="section-title">Item labels</h2>
     <p class="muted caption">
       Star Citizen reads its English text from one file at startup, so replacing
       that file changes what the game calls things. It is text only &mdash; no
@@ -1475,7 +1475,7 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>Gloss marks</h3>
+        <h3>Label your items</h3>
         <button class="ghost" id="textoverlay-install">Install</button>
         <button class="ghost danger" id="textoverlay-remove" hidden>Remove</button>
       </div>
@@ -1488,9 +1488,9 @@
         already 21 and a third are over 24.
       </p>
 
-      <div class="gloss-options">
+      <div class="label-options">
         <label class="toggle">
-          <input type="checkbox" id="gloss-facts" checked>
+          <input type="checkbox" id="label-facts" checked>
           <span>
             Mark size, grade and armour class
             <em class="muted">From your install, not a download.</em>
@@ -1498,10 +1498,10 @@
         </label>
 
         <label class="toggle">
-          <input type="checkbox" id="gloss-colour">
+          <input type="checkbox" id="label-colour">
           <span>
             Colour the gear nothing sells
-            <em class="muted" id="gloss-colour-note">
+            <em class="muted" id="label-colour-note">
               Uses the game&rsquo;s own emphasis styles. Off by default &mdash; whether
               the game paints them inside an item name is the one thing here that
               cannot be checked without launching it and looking.
@@ -1509,9 +1509,9 @@
           </span>
         </label>
 
-        <label class="gloss-level">
+        <label class="label-level">
           <span class="muted">Emphasis level</span>
-          <select id="gloss-level" class="select">
+          <select id="label-level" class="select">
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3" selected>3</option>
@@ -1524,7 +1524,7 @@
           </em>
         </label>
 
-        <p class="muted" id="gloss-options-note" hidden></p>
+        <p class="muted" id="label-options-note" hidden></p>
       </div>
       <p class="muted warn">
         <b>It is a floor, not a rarity rating.</b> Two things say an item is

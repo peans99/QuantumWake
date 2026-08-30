@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.Parsing;
@@ -24,10 +26,24 @@ if (install is null)
 
 var liveOnly = args.Contains("--live-only");
 
-Console.WriteLine("Quantumwake CLI  ·  by nekron");
-Console.WriteLine();
-Console.WriteLine($"Install : {install.RootPath}");
-Console.WriteLine($"Channel : {install.Channel}");
+// Machine-readable mode. Everything the human report would say goes to stderr
+// instead, so stdout carries nothing but events and the thing stays pipeable.
+var asJson = args.Contains("--events");
+var only = GetOption(args, "--kind")?.Split(',', StringSplitOptions.RemoveEmptyEntries
+    | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+var log = asJson ? Console.Error : Console.Out;
+
+var json = new JsonSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+};
+
+log.WriteLine("Quantumwake CLI  ·  by nekron");
+log.WriteLine();
+log.WriteLine($"Install : {install.RootPath}");
+log.WriteLine($"Channel : {install.Channel}");
 
 var files = new List<string>();
 if (!liveOnly)
@@ -42,8 +58,8 @@ if (files.Count == 0)
 }
 
 var totalBytes = files.Sum(f => new FileInfo(f).Length);
-Console.WriteLine($"Files   : {files.Count} ({totalBytes / 1024.0 / 1024.0:F1} MB)");
-Console.WriteLine();
+log.WriteLine($"Files   : {files.Count} ({totalBytes / 1024.0 / 1024.0:F1} MB)");
+log.WriteLine();
 
 var report = new Report();
 var parser = new LogEventParser();
@@ -52,7 +68,7 @@ var stopwatch = Stopwatch.StartNew();
 for (var i = 0; i < files.Count; i++)
 {
     var file = files[i];
-    Console.Write($"\r  parsing {i + 1}/{files.Count} ...");
+    log.Write($"\r  parsing {i + 1}/{files.Count} ...");
 
     // A fresh parser per file: session headers are per-file state, and a
     // truncated final line in one log must not leak into the next.
@@ -60,16 +76,26 @@ for (var i = 0; i < files.Count; i++)
     report.BeginFile(Path.GetFileName(file));
 
     foreach (var ev in LogFileReader.ReadEvents(file, fileParser))
+    {
         report.Add(ev);
+
+        // One event per line, serialised as the concrete record so each kind
+        // carries its own fields rather than a lowest common denominator.
+        if (asJson && (only is null || only.Contains(ev.Kind)))
+            Console.Out.WriteLine(JsonSerializer.Serialize(ev, ev.GetType(), json));
+    }
 
     report.Merge(fileParser);
 }
 
 stopwatch.Stop();
-Console.Write("\r".PadRight(40));
-Console.WriteLine($"\rParsed in {stopwatch.Elapsed.TotalSeconds:F1}s\n");
+log.Write("\r".PadRight(40));
+log.WriteLine($"\rParsed in {stopwatch.Elapsed.TotalSeconds:F1}s\n");
 
-report.Print();
+// In --events mode stdout carries events and nothing else, so the report that
+// would otherwise follow them is skipped rather than mixed in.
+if (!asJson) report.Print();
+
 return 0;
 
 static string? GetOption(string[] args, string name)

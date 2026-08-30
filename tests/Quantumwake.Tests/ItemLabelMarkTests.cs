@@ -4,7 +4,7 @@ using Quantumwake.Data;
 namespace Quantumwake.Tests;
 
 /// <summary>
-/// The marks Gloss writes into item names, beyond the sold/unsold one.
+/// The marks written into item names, beyond the sold/unsold one.
 /// </summary>
 /// <remarks>
 /// The gating is the whole job here. 25,944 of the install's 26,028 items carry
@@ -12,7 +12,7 @@ namespace Quantumwake.Tests;
 /// would mark almost everything and say nothing. Only a fitted ship component
 /// earns a size, and only when it is not that default.
 /// </remarks>
-public class GlossMarkTests
+public class ItemLabelMarkTests
 {
     private const string Ini =
         "item_Name_cooler_aegs_s02_arctic=Arctic\n"

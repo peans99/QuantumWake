@@ -17,8 +17,8 @@ where you went, what you flew, what you hauled, what it cost. There is a
 dashboard, an in-game overlay, and a map of the 'verse with your own trail on it.
 
 It reads. It never writes to the game folder, with one exception you turn on
-yourself: the Gloss page, which can replace the game's English text file to put
-marks in item names.
+yourself: the Item labels page, which can replace the game's English text file
+to put marks in item names.
 
 > **Pre-1.0.** Things will keep moving. Pages appear and change, data formats
 > shift, and an update may re-read your logs. Nothing is at risk, since it is all
@@ -80,7 +80,7 @@ radar.*
 | **Loot** | When each item first showed up in your inventories, and where |
 | **Loadout** | The kit you are wearing, arranged around a character frame |
 | **Stash** | What you are carrying, and where you left the rest |
-| **Gloss** | Writes marks into the game's item names: size, grade, armour class, and a star for anything nothing is known to sell |
+| **Item labels** | Writes marks into the game's item names: size, grade, armour class, and a star for anything nothing is known to sell |
 | **Settings** | The overlay, UEX, the community dataset, the log cache |
 
 Tables sort by their headers.
@@ -149,8 +149,8 @@ The date defaults to Alpha 4.8 on 15 May 2026 and is yours to move or switch off
 This touches a live game install running Easy Anti-Cheat, so:
 
 - Log files are read. Nothing is written to the game folder unless you install
-  Gloss or StarStrings from the Gloss page, which replace one text file and can
-  be undone from the same page
+  labels or StarStrings from the Item labels page. Both replace one text file
+  and can be undone from the same page
 - No memory access, no DLL injection, no DirectX or WinAPI hooking
 - No telemetry and no CDN. The app goes online only where you have said it may.
   The two things that can go out unattended, the version check and the price
@@ -202,6 +202,18 @@ It prints per-event counts and a parser health section. CIG remove log events
 between patches, so an unmatched line is skipped rather than fatal. The health
 report names the tag and shows a sample, so breakage shows up immediately
 instead of as an empty chart.
+
+It will also hand you the parsed events, if you would rather use the parser than
+the app:
+
+```powershell
+dotnet run --project src\Quantumwake.Cli -c Release -- --events
+dotnet run --project src\Quantumwake.Cli -c Release -- --events --kind commodity.sell,commodity.buy
+```
+
+One JSON object per line, each carrying its own fields, with progress and the
+summary on stderr so stdout is nothing but events. 67,267 of them from this
+install, across 46 kinds. Pipe it wherever you like.
 
 ## Try it without playing
 
@@ -270,6 +282,7 @@ continuations carry their own timestamp. 15% of notifications were being dropped
 
 - [docs/findings.md](docs/findings.md) — the missing-combat-events evidence
 - [docs/log-format-reference.md](docs/log-format-reference.md) — verified line formats and quirks
+- [docs/datacore.md](docs/datacore.md) — how the game's own data files were read
 - [docs/architecture.md](docs/architecture.md) — decisions and why
 - [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale is hard to name
 - [docs/credits.md](docs/credits.md) — every external resource used
@@ -318,8 +331,8 @@ Built by **nekron**, on top of work that was not mine. Full attribution is in
   [unp4k](https://github.com/dolkensp/unp4k)'s `unforge`. The readers here are
   our own and ship no extractor, but the formats were not worked out here. This
   is what lets the app read your install instead of downloading a copy of it.
-- **StarStrings** by MrKraken, the in-game text mod the Gloss page can install
-  alongside its own marks. Not written by or affiliated with this app.
+- **StarStrings** by MrKraken, the in-game text mod the Item labels page can
+  install alongside its own marks. Not written by or affiliated with this app.
 - **Artwork.** Manufacturer marks and the *Made by the Community* badge are from
   the official [Star Citizen Fankit](https://robertsspaceindustries.com/fankit).
 - **Packages.** [ZstdSharp.Port](https://github.com/oleg-st/ZstdSharp) (Oleg
@@ -337,7 +350,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.10
+### 0.9.11
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -429,6 +442,19 @@ release workflow lifts it from here, so it is written once.
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
 
+- The Gloss page is called **Item labels**, which is what it does. Same marks,
+  same options, clearer name.
+
+- The CLI will hand you the parsed events. `--events` prints one JSON object per
+  line, each with its own fields, and `--kind` narrows it to the kinds you want.
+  Progress and the summary go to stderr, so stdout is nothing but events and it
+  pipes anywhere. 67,267 events across 46 kinds from this install. If you want
+  the parser rather than the app, that is the door.
+
+- [docs/datacore.md](docs/datacore.md) came across with the reader it describes:
+  how the game's own data format was worked out, wrong turns included, since
+  those are the expensive part.
+
 - The readme is shorter and plainer, and the composite screenshot at the top is
   gone. It also describes the app as it is now rather than as it was several
   releases ago: almost everything is read from your own install, and the two
@@ -474,9 +500,9 @@ release workflow lifts it from here, so it is written once.
   the whole thing is worth. A bar would have drawn a number that looks like
   progress and is not.
 
-- Gloss has moved in, and has a page of its own. The text overlay that marked
-  gear nothing sells now writes everything Gloss wrote as a standalone tool, in
-  one bracket at the end of the name: `[S2B]` for a size 2 grade B component,
+- **Item labels** has a page of its own, and marks a great deal more than it
+  did. The text overlay that marked gear nothing sells now writes everything the
+  standalone tool did, in one bracket at the end of the name: `[S2B]` for a size 2 grade B component,
   `[H]` for heavy armour, `*` for nothing known to sell it. On this install that
   is 3,115 names marked as unsold and 2,295 given a size or a class. Four
   characters of content, because the median item name is already 21 and a third
