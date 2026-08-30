@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![961 tests](https://img.shields.io/badge/tests-961%20passing-4fd48a)
+![1000 tests](https://img.shields.io/badge/tests-1000%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Star Citizen writes what you do to `Game.log`, then rotates it away. Quantum
@@ -350,7 +350,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.15
+### 0.9.16
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -441,6 +441,38 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- Removing item labels no longer reports success when it failed. A restore that
+  could not be written was caught, logged, and then followed by forgetting the
+  record anyway — leaving a changed file in the game folder with the only thing
+  that knew how to undo it thrown away, while the page said it was removed. The
+  record is now kept when the restore fails, and the page says what went wrong
+  and that it can be tried again.
+
+- Installing labels no longer marks its own last output. The table to build on
+  was read before the previous install was taken out, and the file StarStrings
+  is recorded at is the live one — so rebuilding labels over StarStrings read a
+  table that already carried them and marked every name a second time. The
+  removal now happens first. A test pins the ordering by showing what marking an
+  already-marked table does.
+
+- Updating StarStrings under installed labels no longer breaks the undo chain.
+  Removing our marks used to restore our backup even when another mod had
+  replaced the file since, which put the *previous* StarStrings build back over
+  the new one and left the app describing a version that was no longer there. A
+  file somebody else has replaced is no longer ours to restore, so the record is
+  simply dropped.
+
+- "Where to go" survives with UEX switched off. Every ore's worth is zero
+  without prices, which emptied the table and left the page claiming the deposit
+  tables could not be read. Richness comes from your install and needs no
+  prices, so the ranking now falls back to it and the page says which half is
+  missing.
+
+- A commodity called "Placeholder Alloy" would have been thrown away. What marks
+  unwritten text is the game's own bracketing — `<= PLACEHOLDER =>` and
+  `<-=MISSING=->` — not the word inside it. The test for this asserted the
+  opposite of what its own name promised, which is how it got through.
 
 - The map can light up places by facility. The star map lists what 254 places
   have — 22 kinds — and none of it was searchable. Pick one and the map lights

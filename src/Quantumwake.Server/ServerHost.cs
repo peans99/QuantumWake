@@ -545,10 +545,14 @@ public static class ServerHost
         });
 
         app.MapPost("/api/labels/remove", (TextOverlayService overlay) =>
-        {
-            overlay.Remove();
-            return Results.Ok(new { removed = true });
-        });
+            overlay.Remove()
+                ? Results.Ok(new { removed = true })
+                : Results.BadRequest(new
+                {
+                    problem = "The file this replaced could not be put back - the game may be "
+                        + "running, or the folder read-only. Nothing was forgotten, so this can "
+                        + "be tried again."
+                }));
 
         // The marks are a preference rather than part of an install, so they are
         // stored and read back whether or not anything is installed. Changing
@@ -845,7 +849,13 @@ public static class ServerHost
                                     : 0)
                                 .Max(),
                         })
-                        .Where(r => r.Worth > 0)
+                        // Kept on having ore, not on having a price. UEX is
+                        // optional, and without it every worth is zero - which
+                        // used to empty this table and leave the page claiming
+                        // the deposit tables could not be read. How rich a rock
+                        // is comes from the install and is the question this
+                        // page exists to answer.
+                        .Where(r => r.Ore > 0)
                         .ToList();
 
                     // A place draws on several tables and each is normalised
@@ -876,8 +886,11 @@ public static class ServerHost
                             .Select(r => new { r.Resource, worth = r.Worth })
                     };
                 })
-                .Where(p => p.perRock > 0)
-                .OrderByDescending(p => p.perRock);
+                .Where(p => p.ore > 0)
+                // Value first where there is any, richness otherwise, so the
+                // ranking still means something with prices switched off.
+                .OrderByDescending(p => p.perRock)
+                .ThenByDescending(p => p.ore);
         });
 
         // What the game says each place has. Separate from the service badges,

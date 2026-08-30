@@ -1827,8 +1827,26 @@ public sealed class LogLibrary : IDisposable
     public static IEnumerable<IGrouping<string, KeyValuePair<string, string>>> TradeableRows(
         IReadOnlyDictionary<string, string> named) =>
         named
-            .Where(pair => !pair.Value.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
+            .Where(pair => !Unfinished(pair.Value))
             .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a display name is the game's own marker for unwritten text.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the wrapper rather than the word. The game writes
+    /// <c>&lt;= PLACEHOLDER =&gt;</c> and <c>&lt;-=MISSING=-&gt;</c>: different
+    /// text inside, both wrapped in angle brackets, and it is the brackets that
+    /// mean "nobody filled this in". Matching the word alone would throw away a
+    /// real commodity called Placeholder Alloy, which a game about mining could
+    /// plausibly ship.
+    /// </remarks>
+    private static bool Unfinished(string name)
+    {
+        var trimmed = name.AsSpan().Trim();
+
+        return trimmed.Length > 1 && trimmed[0] == '<' && trimmed[^1] == '>';
+    }
 
     /// <summary>
     /// How fast trading is making money, per hour actually in the game.

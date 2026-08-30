@@ -3056,6 +3056,10 @@ async function loadMiningPlaces() {
     return;
   }
 
+  // Worth needs UEX; richness does not. Saying which is missing beats a column
+  // of dashes that looks like the page failed.
+  const priced = places.some((p) => p.perRock > 0);
+
   for (const place of places.slice(0, 40)) {
     const tr = el('tr');
     tr.append(tdPlace(place.place));
@@ -3068,7 +3072,8 @@ async function loadMiningPlaces() {
       place.quality ? `${place.quality.min}+${place.quality.local ? '*' : ''}` : '—');
     tr.append(quality);
 
-    tr.append(el('td', 'num inward', money(place.perRock)));
+    tr.append(el('td', place.perRock > 0 ? 'num inward' : 'num muted',
+      place.perRock > 0 ? money(place.perRock) : '—'));
     tr.append(el('td', 'num muted', String(place.ores)));
     tr.append(el('td', 'muted', place.best.map((b) => b.resource).join(', ')));
     tr.append(el('td', 'num muted', place.respawn ? craftTime(place.respawn) : '—'));
@@ -3077,7 +3082,9 @@ async function loadMiningPlaces() {
 
   note.textContent = `${places.length} places, read from your install. `
     + 'The community dataset knows 234, so this is the part of the map your game '
-    + 'files describe rather than all of it.';
+    + 'files describe rather than all of it.'
+    + (priced ? '' : ' Turn on UEX in Settings to price what a rock is worth; '
+      + 'how rich the rocks are needs nothing but your install.');
 }
 
 async function loadLikelyMined() {
@@ -5635,7 +5642,14 @@ function initTextOverlay() {
 
   $('#textoverlay-remove').addEventListener('click', async () => {
     $('#textoverlay-status').textContent = 'Putting the old text back…';
-    await fetch('/api/labels/remove', { method: 'POST' }).catch(() => {});
+    // A removal that could not put the old file back leaves the marks installed,
+    // so saying "removed" would be a lie the page then contradicts on reload.
+    const answer = await fetch('/api/labels/remove', { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => ({ problem: 'The removal could not be started.' }));
+
+    if (answer.problem) $('#textoverlay-status').textContent = answer.problem;
+
     await loadTextOverlay();
   });
 }

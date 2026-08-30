@@ -51,14 +51,26 @@ public class MarketRowsTests
     }
 
     /// <summary>
-    /// A name that merely contains a real word must not be caught: only the
-    /// game's own placeholder wording is dropped.
+    /// A name that merely contains the word must survive. What marks unwritten
+    /// text is the game's own bracketing, not the word inside it, and a rule on
+    /// the word alone would throw away a real commodity called Placeholder Alloy.
     /// </summary>
     [Fact]
     public void A_real_commodity_is_never_mistaken_for_a_placeholder()
     {
         var rows = LogLibrary.TradeableRows(Named(("a", "Placeholder Alloy Composite")));
 
-        Assert.Empty(rows);
+        Assert.Equal(["Placeholder Alloy Composite"], rows.Select(r => r.Key));
+    }
+
+    /// <summary>
+    /// The other marker the game uses for text nobody wrote.
+    /// </summary>
+    [Fact]
+    public void The_other_unwritten_marker_is_dropped_too()
+    {
+        var rows = LogLibrary.TradeableRows(Named(("a", "Tin"), ("b", "<-=MISSING=->")));
+
+        Assert.Equal(["Tin"], rows.Select(r => r.Key));
     }
 }

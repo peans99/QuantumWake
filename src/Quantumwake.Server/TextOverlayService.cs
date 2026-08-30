@@ -134,6 +134,24 @@ public sealed class TextOverlayService(
         if (game is null)
             return (null, "No game install was found, so there is nothing to write to.");
 
+        // The same fence StarStrings is held to: judged on the path it resolves
+        // to, and refused if it lands anywhere but the two allowed places.
+        var target = StarStringsArchive.TargetFor(LooseRelative, game.RootPath);
+
+        if (target is null)
+            return (null, "The localisation path did not resolve inside the game folder, so nothing was written.");
+
+        // Out first, and before the base is read. Reading first meant a rebuild
+        // took its own last output as the table to mark up, and marked it again:
+        // the file StarStrings is recorded at is the live one, which by then had
+        // these marks in it.
+        if (!Remove())
+        {
+            return (null,
+                "The file this replaced could not be put back, so nothing new was written. "
+                + "The marks are still installed and can be removed again.");
+        }
+
         var (ini, source, problem) = BaseTable(game);
 
         if (ini is null)
@@ -143,17 +161,6 @@ public sealed class TextOverlayService(
 
         if (plan.Marked == 0 && plan.Annotated == 0)
             return (null, "Nothing would be marked, so there is no reason to write a file.");
-
-        // The same fence StarStrings is held to: judged on the path it resolves
-        // to, and refused if it lands anywhere but the two allowed places.
-        var target = StarStringsArchive.TargetFor(LooseRelative, game.RootPath);
-
-        if (target is null)
-            return (null, "The localisation path did not resolve inside the game folder, so nothing was written.");
-
-        // Take our own previous install out first, so this one's backup is of
-        // whatever is genuinely underneath rather than of our own last file.
-        Remove();
 
         var layered = source == "StarStrings";
         var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
@@ -197,12 +204,32 @@ public sealed class TextOverlayService(
     }
 
     /// <summary>Puts back whatever the overlay displaced.</summary>
-    public void Remove()
+    /// <summary>
+    /// Puts back whatever this displaced.
+    /// </summary>
+    /// <returns>
+    /// False when something could not be put back. The record is kept in that
+    /// case, because forgetting it would leave a changed file in somebody's game
+    /// folder with nothing left that knows how to undo it.
+    /// </returns>
+    public bool Remove()
     {
         var install = store.Current;
 
         if (install is null)
-            return;
+            return true;
+
+        // Somebody else's file is there now - StarStrings installed over this
+        // one, or a patch replaced it. The backup describes what was under OUR
+        // file, which is no longer what is under theirs, so restoring it would
+        // undo their install rather than ours.
+        if (!store.StillPresent())
+        {
+            store.Forget();
+            return true;
+        }
+
+        var restored = true;
 
         foreach (var file in install.Files)
         {
@@ -216,9 +243,12 @@ public sealed class TextOverlayService(
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 log.LogWarning(e, "could not restore {Path}", file.Path);
+                restored = false;
             }
         }
 
-        store.Forget();
+        if (restored) store.Forget();
+
+        return restored;
     }
 }

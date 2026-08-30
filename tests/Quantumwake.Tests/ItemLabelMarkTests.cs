@@ -75,6 +75,27 @@ public class ItemLabelMarkTests
         Assert.DoesNotContain("P4-AR Rifle [S2", content);
     }
 
+    /// <summary>
+    /// Marking an already-marked table marks it again.
+    /// </summary>
+    /// <remarks>
+    /// This is why <c>Install</c> takes the previous install out before it reads
+    /// the table to build on, and not after. Reading first meant a rebuild over
+    /// StarStrings took its own last output as the base - the path StarStrings is
+    /// recorded at is the live file, which by then carried these marks - and
+    /// every name gained a second bracket. Pinned here so the ordering is not
+    /// quietly swapped back.
+    /// </remarks>
+    [Fact]
+    public void Marking_an_already_marked_table_doubles_the_marks()
+    {
+        var once = Built().Content;
+        var twice = TextOverlay.Build(once, _ => true, Facts()).Content;
+
+        Assert.Contains("Arctic [S2C]", once);
+        Assert.Contains("Arctic [S2C] [S2C]", twice);
+    }
+
     [Fact]
     public void Turning_the_facts_off_leaves_only_the_sold_mark()
     {
