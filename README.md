@@ -8,43 +8,42 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![827 tests](https://img.shields.io/badge/tests-854%20passing-4fd48a)
+![961 tests](https://img.shields.io/badge/tests-961%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
-Star Citizen writes everything you do to `Game.log` and then rotates it away.
-Quantum Wake reads it — the live file and every backup — and gives you back the
-flight it recorded: where you have been, what you flew, what you hauled and what
-it cost you. A second-screen dashboard, a transparent in-game overlay, and a map
-of the whole 'verse with your own trail across it.
+Star Citizen writes what you do to `Game.log`, then rotates it away. Quantum
+Wake reads the live file and every backup, and shows you the flight it recorded:
+where you went, what you flew, what you hauled, what it cost. There is a
+dashboard, an in-game overlay, and a map of the 'verse with your own trail on it.
 
-It is read-only and never touches the game. It connects to the internet only
-where you have said it may - the optional integrations on the Settings page -
-and the only two that can go out unattended, the version check and the
-market-price refresh, are off until you turn them on.
+It reads. It never writes to the game folder, with one exception you turn on
+yourself: the Gloss page, which can replace the game's English text file to put
+marks in item names.
 
-![Quantum Wake at a glance](docs/images/quantum-wake-at-a-glance.png)
+> **Pre-1.0.** Things will keep moving. Pages appear and change, data formats
+> shift, and an update may re-read your logs. Nothing is at risk, since it is all
+> rebuilt from the logs, but expect changes.
 
-> **Pre-1.0.** Until version 1.0 this product will keep changing significantly:
-> pages appear and move, data formats shift, and an update may re-read your logs
-> or ask you to re-enable an integration. Nothing you care about is at risk -
-> everything is rebuilt from the logs - but expect the ground to move.
+## Getting it
 
 **[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)
-and double-click it.** That is the whole installation — one file, no runtime to
-install, nothing to unpack or configure. It finds your Star Citizen install
-itself, across every fixed drive.
+and double-click it.** One file. No runtime to install, nothing to unpack. It
+finds your Star Citizen install on any fixed drive.
 
 It then sits in the notification area. Right-click to open the dashboard, show
-or hide the overlay, check for a new version, or quit. The in-game overlay is
-off until you turn it on - from the Settings page or the tray - and the choice
-is remembered. The overlay arrives ready to move; its **📌 pin** button puts it
-out of the way so clicks reach the game, and the tray icon (or `Ctrl+Alt+O`)
-brings it back. The dashboard is on <http://127.0.0.1:31337>.
+the overlay, check for a new version, or quit. The dashboard is at
+<http://127.0.0.1:31337>.
 
-Windows will warn that the publisher is unknown — the binary is not code signed,
-which costs money a free fan tool does not have. **More info → Run anyway**.
+Windows will say the publisher is unknown, because the binary is not code
+signed. **More info → Run anyway**.
 
-From source instead:
+The overlay is off until you switch it on. Its **📌 pin** button gets it out of
+the way so clicks reach the game; the tray icon or `Ctrl+Alt+O` brings it back.
+Star Citizen has to run in **Borderless Windowed** for the overlay to show,
+because an always-on-top window is not drawn over exclusive fullscreen. The
+dashboard has no such limit.
+
+From source:
 
 ```powershell
 .\start.ps1
@@ -52,10 +51,10 @@ From source instead:
 
 ![The star map](docs/images/map.png)
 
-*Stanton, Pyro and Nyx. Solid nodes are places this install has actually been —
-67 of the 290 the resolver can place — sized by how often. Star Citizen logs no
-player position, so this is a topology map built from location and quantum-travel
-events, not a radar.*
+*Stanton, Pyro and Nyx. Solid nodes are places this install has been, 67 of the
+290 the resolver can place, sized by how often. The game logs no player
+position, so this is built from location and quantum-travel events. It is not a
+radar.*
 
 ---
 
@@ -63,188 +62,150 @@ events, not a radar.*
 
 | View | Contents |
 |---|---|
-| **Flight plan** | Where to go next and the rest of the run, on the Now page and drawn over the map as numbered stops. Built from a trade route, a shopping list, or by hand — and stops cross themselves off as you land |
-| **Shopping** | Lists that hold cargo and ship parts alike, checked against your stashes. Pick what to add and where you mean to shop, then read the list as a set of landings: every counter that carries any of it, ranked by how much one stop covers, with *fewest stops* to pack the run |
-| **Now** | Where you are with a confidence level, active ship, session clock, quantum destination in flight, live event feed. Every card can be hidden, collapsed, or dragged where you want it — the arrangement is remembered |
-| **Map** | Every place in the game across Stanton, Pyro and Nyx — visited ones solid, the rest hollow — with zoom, pan, follow-me mode, per-place detail cards, and a commodity search that lights everywhere a good sells. Picking one opens its cargo panel: best terminals now, your own prices over the last day, three days or seven, and a selling/buying toggle. Double-click a place for what it takes and offers |
-| **Sessions** | Every session you have played, in-game time separated from menu time |
-| **Fleet** | Ships owned over time, flights per ship, estimated time aboard — with role, crew and insurance-claim cost per ship when the community dataset is on. **Upgrades** opens the game's own port list for that ship: what fits each hole, what it costs, and the counter that stocks it |
+| **Now** | Where you are, active ship, session clock, live event feed, and what your trading makes per in-game hour. Cards can be hidden, collapsed or dragged, and the arrangement sticks |
+| **Map** | Every place across Stanton, Pyro and Nyx. Visited ones solid, the rest hollow. Zoom, pan, follow-me, per-place cards, and a commodity search that lights up everywhere a good sells |
+| **Flight plan** | The next stop and the rest of the run, on the Now page and over the map. Built from a trade route, a shopping list, or by hand. Stops cross themselves off as you land |
+| **Shopping** | Lists covering cargo and ship parts, checked against your stashes. Read as a set of landings, ranked by how much one stop covers |
+| **Sessions** | Every session played, with in-game time kept separate from menu time |
+| **Fleet** | Ships owned over time, flights per ship, time aboard. **Upgrades** shows what fits each port, what it costs, and who stocks it |
 | **Places** | Most-visited locations and quantum destinations |
-| **Contracts** | Accepted → completed or abandoned, faceted by issuer and type |
-| **Crew** | The people you fly with, from the only lines in a 4.9 or 4.10 log that name anyone — sessions shared, arrivals and drops seen, and who has led the party. A floor rather than a total: someone already online when you grouped up produces no line at all |
+| **Contracts** | Accepted, then completed or abandoned, by issuer and type |
+| **Crew** | The people you fly with. A floor, not a roster: someone already online when you grouped up produces no log line at all |
 | **Spending** | Confirmed purchases by shop, item and category |
-| **Ledger** | Every transaction, back-tracked to the place it happened |
-| **Cargo** | Commodity trades — named, with the opt-in community dataset — the only income the logs record |
-| **Market** | The commodity catalogue joined onto your own trades: where each good sells, and UEX best prices when that integration is on. Click a commodity for every counter that trades it — price, what it costs you against the best, stock or demand, and whether it sits in policed or lawless space |
-| **Commodity** | One good in full, opened from Market: what it has been worth day by day, demand against supply over the same weeks, every counter that buys it and every counter that stocks it, and your own receipts for it. Deep-linkable — `#commodity/Aluminum` |
-| **Loot** | When each item first appeared in your inventories, with the place |
-| **Loadout** | The kit you are wearing, arranged around a character frame — worn armour on the body, stowed weapons, magazines, medical and tools in the field kit beside it, each with size, grade and maker, and when the log last saw it |
-| **Stash** | What is in your inventory and where you left it |
-| **Settings** | The overlay switch, the community dataset, UEX, the log cache |
+| **Ledger** | Every transaction, traced back to where it happened |
+| **Cargo** | Commodity trades. The only income the logs record |
+| **Market** | Every commodity with your own trades against it, and where each one sells. Click one for every counter that trades it |
+| **Mining** | What spawns where, ranked by what a SCU of the rock is worth. Ore share, quality, respawn, and the ore you have sold but never bought |
+| **Crafting** | Every recipe: what it makes, how long it takes, what it needs, and where the blueprint drops |
+| **Loot** | When each item first showed up in your inventories, and where |
+| **Loadout** | The kit you are wearing, arranged around a character frame |
+| **Stash** | What you are carrying, and where you left the rest |
+| **Gloss** | Writes marks into the game's item names: size, grade, armour class, and a star for anything nothing is known to sell |
+| **Settings** | The overlay, UEX, the community dataset, the log cache |
 
-Every table sorts by its headers. Optional, off-by-default integrations add
-what the logs alone cannot: the **community dataset**
-(StarCitizenWiki/scunpacked-data) names your cargo and supplies the ship and
-item reference, and **UEX** brings live crowd-sourced prices in — and, with
-your own UEX keys, lets you report the sale prices your logs already recorded
-back to the community.
+Tables sort by their headers.
 
 <table>
   <tr>
     <td width="50%"><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="Fleet"></a><br><sub><b>Fleet</b> — ships owned over time, from the entitlement query the game runs each session</sub></td>
-    <td width="50%"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="Ledger"></a><br><sub><b>Ledger</b> — every confirmed transaction, back-tracked to the place it happened</sub></td>
+    <td width="50%"><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="Ledger"></a><br><sub><b>Ledger</b> — every confirmed transaction, traced to where it happened</sub></td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><sub><b>Sessions</b> — in-game time kept separate from time spent in menus</sub></td>
-    <td width="50%"><a href="docs/images/stash.png"><img src="docs/images/stash.png" alt="Stash"></a><br><sub><b>Stash</b> — what you are carrying and where you left the rest</sub></td>
+    <td width="50%"><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="Sessions"></a><br><sub><b>Sessions</b> — in-game time kept separate from menu time</sub></td>
+    <td width="50%"><a href="docs/images/stash.png"><img src="docs/images/stash.png" alt="Stash"></a><br><sub><b>Stash</b> — what you carry, and where the rest is</sub></td>
   </tr>
   <tr>
-    <td width="50%"><a href="docs/images/upgrades.png"><img src="docs/images/upgrades.png" alt="Upgrades"></a><br><sub><b>Upgrades</b> — what fits a ship, from the game's own port list, priced and with the counter that stocks it</sub></td>
-    <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — every counter that trades a commodity: price, what it costs against the best, stock, and whether the law reaches it</sub></td>
+    <td width="50%"><a href="docs/images/upgrades.png"><img src="docs/images/upgrades.png" alt="Upgrades"></a><br><sub><b>Upgrades</b> — what fits a ship, priced, with the counter that stocks it</sub></td>
+    <td width="50%"><a href="docs/images/market.png"><img src="docs/images/market.png" alt="Market"></a><br><sub><b>Market</b> — every counter that trades a commodity, and what it pays</sub></td>
   </tr>
 </table>
 
-![The Loadout page](docs/images/loadout.png)
+## Where the data comes from
 
-*The 18 slots this install has observed, arranged around the pilot: worn
-armour on the frame, stowed weapons and supplies in the field kit. Every card
-carries when the log last saw it — today for most of this kit, ten days for
-the barrel attachment nobody has touched since — because this is what the log
-watched being equipped, not a live inventory read out of the game.*
+Almost all of it is read from your own install at startup. Names, the item
+catalogue, commodity names, crafting recipes, deposit tables and place
+descriptions all come out of `Data.p4k`, with no lookup service involved. It
+takes about half a minute the first time after a patch, then caches.
 
-Names are real names — New Babbage, not `Stanton4_NewBabbage`; a Genoa power
-plant, not `POWR_JUST_S02_Genoa_SCItem` — read from your own `Data.p4k` at
-runtime with no external lookup service involved.
+Two optional integrations add what the install cannot answer, and both are off
+until you turn them on:
 
-## Why another one
+- **UEX** for live crowd-sourced prices. Nothing in the game files says what a
+  shop currently charges.
+- **The community dataset** (StarCitizenWiki/scunpacked-data) for ship
+  specifications and a fuller table of what spawns where. Ship cargo, speeds and
+  shield totals are in your install too, but in files the game encrypts.
 
-It exists because I went looking for it and it was not there: good `Game.log`
-tools, but none of them a whole product built around an org and the things I
-wanted to keep track of. So this is the one I had been looking for, and it is
-free for the community to use, and meant to stay that way.
+## What it will not do
 
-[docs/landscape.md](docs/landscape.md) surveys the dozen that came before it
-honestly, including the one that overlaps this heavily. Three things here are
-not in the others:
+**It is not a killboard.** Star Citizen 4.9 and 4.10 write no kill or
+vehicle-destruction events. That was checked, not assumed: a line-by-line scan
+of 403 MB across 144 backups found zero `<Actor Death>` and zero
+`<Vehicle Destruction>` lines, with 22 incapacitations proving combat happened.
+The parser for them is written and tested against the archived format, sitting
+idle. If CIG restore the lines, the counters fill. See
+[docs/findings.md](docs/findings.md).
 
-- **The whole map, not just your trail.** Others plot where you went. This draws
-  every place it can resolve — 292 of them, against the 72 this install has
-  actually visited — so the map shows how much 'verse is left, not just a trail.
-- **Offline by default, all the way down.** Every other tool that shows real
-  item names fetches them from UEX, the wiki or scunpacked. This reads
-  `Data.p4k` directly with its own ZIP64 + ZStd reader. The single exception is
-  commodity names, which exist nowhere in the local install - naming them is an
-  opt-in, one-file community download that never happens without a click.
-- **It says what the logs cannot support.** Inferred locations carry a
-  confidence level, estimates are labelled and capped, and an event CIG removed
-  produces an explanation rather than a bare zero.
+**It is not a radar.** No player position is logged. Location is inferred from
+inventory requests, quantum routes and spawns, and every guess carries a
+confidence level.
+
+**It does not track mining.** The game writes down no extraction, no scan and no
+refinery job. The Mining page plans; it cannot report what you dug up. Ore you
+sold and never bought is as close as the logs get, and the page says so.
 
 ## Totals describe the account you are playing
 
-A data wipe ends one account and starts another, so totals that reach past one
-are answering about an account you no longer have. Sessions from before the last
-wipe are kept and still parsed — they are simply not counted, and the Settings
-page says how many that is.
+A wipe ends one account and starts another, so totals that reach past one are
+answering about an account you no longer have. Older sessions are kept and still
+parsed. They are simply not counted, and Settings says how many.
 
 Wipes come at different depths, so you say what this one took: money, ships,
-inventory, play history. Tick only what it actually reset and the rest keeps its
-whole history — after an aUEC-only wipe your ledger starts again while your
-fleet and the places you have been carry on. The date defaults to Alpha 4.8 on
-15 May 2026 and is yours to move, or to switch off entirely if you want the lot.
-
-## Two things it deliberately does not do
-
-**It is not a killboard.** Star Citizen 4.9 and 4.10 do not write kill or
-vehicle-destruction events to `Game.log`. This was verified, not assumed: a
-line-by-line scan of 403 MB across 144 log backups found **zero** `<Actor Death>`
-and `<Vehicle Destruction>` lines, despite 22 incapacitations proving combat
-happened. The parser for those events is implemented and tested against the
-archived format, sitting dormant — if CIG restores them, the counters populate
-with no further work. See [docs/findings.md](docs/findings.md).
-
-**The map is not a radar.** No player position is logged either, so location is
-*inferred* from discrete signals — inventory requests, quantum routes, spawns —
-and every estimate carries a confidence level rather than pretending to a
-precision the logs cannot support.
+inventory, play history. Tick only what it reset and the rest keeps its history.
+The date defaults to Alpha 4.8 on 15 May 2026 and is yours to move or switch off.
 
 ## Safety
 
-Modelled on SCStats' read-only stance, because this touches a live game install
-running Easy Anti-Cheat:
+This touches a live game install running Easy Anti-Cheat, so:
 
-- Reads log files only; nothing is ever written to the game directory
+- Log files are read. Nothing is written to the game folder unless you install
+  Gloss or StarStrings from the Gloss page, which replace one text file and can
+  be undone from the same page
 - No memory access, no DLL injection, no DirectX or WinAPI hooking
-- No CDN, no telemetry, no phoning home. The app connects to the internet only
-  where you have said it may, from the Settings page - the optional datasets,
-  and the two things that can go out unattended: the version check and the
-  market-price refresh, both off until you turn them on
+- No telemetry and no CDN. The app goes online only where you have said it may.
+  The two things that can go out unattended, the version check and the price
+  refresh, are off until you turn them on
 - The overlay is an ordinary top-most window using documented Win32 styles
-
-The trade-off of doing it safely: an always-on-top window is **not** composited
-over exclusive fullscreen, so Star Citizen must run in **Borderless Windowed**
-for the overlay to be visible. The dashboard has no such limitation.
 
 ## Reporting a problem
 
-If a page is empty here and full for somebody else, **Settings &rarr; Report a
-problem** saves a small file that says why: what the parser could not read, the
-counts behind each page, your game builds, and which optional data is on. It is
-about a kilobyte. Read it, then attach it to an issue.
+If a page is empty here and full for someone else, **Settings → Report a
+problem** saves a small file explaining why: what the parser could not read, the
+counts behind each page, your game builds, and which integrations are on. About
+a kilobyte. Read it, then attach it to an issue.
 
 **Your logs stay on your machine.** A gameplay log here is 8 MB and 29,000
-lines, most paste services refuse it, and it names the pilots you flew with as
-well as you. The report carries none of it: it is built from a list of things
-the app chose to include rather than from a log with the private parts taken
-out, so there is no pattern to miss - no handle, no character or account id, no
-folder names, no UEX keys.
-
-The exception is the example lines, which are off unless you ask for them. A
-line is only in that list because the game changed its format, and a new format
-can write your name in a shape nothing knows to look for yet - so the page says
-so, and asks separately.
-
-[docs/bug-reports.md](docs/bug-reports.md) has the whole of it, including what a
-maintainer reads first.
+lines, and it names the pilots you flew with. The report contains none of it. It
+is built from a list of things the app chose to include, rather than from a log
+with the private parts removed, so there is no pattern to miss: no handle, no
+character or account id, no folder names, no UEX keys.
 
 ## Requirements
 
-**To run the release:** Windows 10 or 11. Nothing else — the executable is
-self-contained, so no .NET install is needed. The overlay additionally wants the
-WebView2 runtime, which ships with Windows 11; on Windows 10 the dashboard works
-regardless and the overlay stays blank until
+**To run:** Windows 10 or 11. Nothing else. The overlay also wants the WebView2
+runtime, which ships with Windows 11. On Windows 10 the dashboard works either
+way and the overlay stays blank until
 [the runtime](https://developer.microsoft.com/microsoft-edge/webview2/) is
 installed.
 
-**To build from source:** the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+**To build:** the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ## Usage
 
 ```powershell
-.\start.ps1                     # the app: tray icon, dashboard, overlay
-.\start.ps1 -NoOverlay          # the bare server, no tray and no overlay
-.\start.ps1 -Lan                # allow a tablet as second screen
+.\start.ps1                     # tray icon, dashboard, overlay
+.\start.ps1 -NoOverlay          # the bare server
+.\start.ps1 -Lan                # allow a tablet as a second screen
 .\start.ps1 -Rescan             # force a full re-parse
 .\start.ps1 -Path "D:\...\StarCitizen\LIVE"
 ```
 
-Installs are auto-detected across all fixed drives (LIVE/PTU/EPTU).
+Installs are found automatically across fixed drives (LIVE/PTU/EPTU).
 
-The CLI is useful for verification without a UI:
+The CLI checks the parser without a UI:
 
 ```powershell
 dotnet run --project src\Quantumwake.Cli -c Release
 ```
 
-It prints per-event match counts and a **parser health** section. Because CIG
-removes log events patch over patch, an unmatched line is always skipped rather
-than fatal — and the health report names the tag and shows a sample so breakage
-after a patch is visible immediately instead of appearing as silently empty
-charts.
+It prints per-event counts and a parser health section. CIG remove log events
+between patches, so an unmatched line is skipped rather than fatal. The health
+report names the tag and shows a sample, so breakage shows up immediately
+instead of as an empty chart.
 
 ## Try it without playing
 
-`Quantumwake.LogSim` builds a fake install whose logs match the real format,
-quirks included:
+`Quantumwake.LogSim` builds a fake install whose logs match the real format:
 
 ```powershell
 dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
@@ -252,23 +213,21 @@ dotnet run --project src\Quantumwake.LogSim -c Release -- --backups 12 --combat
 ```
 
 `--combat` emits kill and vehicle-destruction events, which is the only way to
-see the dormant killboard populate — real 4.9 and 4.10 logs never will. `--live` appends
-to `Game.log` in real time so the Now view and overlay update as you watch.
+see the idle killboard fill, since real logs never will. `--live` appends to
+`Game.log` as you watch.
 
-The cache is scoped per install, so a simulated install never blends into your
-real totals. Full options in [docs/log-simulator.md](docs/log-simulator.md).
+The cache is per install, so a simulated one never mixes into your real totals.
+Options in [docs/log-simulator.md](docs/log-simulator.md).
 
 ## Architecture
 
-One web UI, hosted three ways — a browser today, WebView2 in the overlay, and
-remote clients when server mode lands. Writing it once is why the overlay cost
-almost nothing to add.
+One web UI, hosted three ways: a browser, WebView2 in the overlay, and remote
+clients later. Writing it once is why the overlay was cheap to add.
 
-It is also **one process**. `QuantumWake.exe` runs the web server inside itself
-and carries the dashboard as embedded resources, which is what lets the whole
-application ship as a single file with no runtime to install. The server is
-still its own project and its own executable, for headless use and for the
-Linux-hosted server mode later.
+It is also one process. `QuantumWake.exe` runs the web server inside itself and
+carries the dashboard as embedded resources, which is what lets it ship as a
+single file. The server is still its own project and executable, for headless
+use and for a Linux-hosted server mode later.
 
 ```
         QuantumWake.exe  (one process, one file)
@@ -283,23 +242,14 @@ Linux-hosted server mode later.
 
 | Project | Target | Role |
 |---|---|---|
-| `Quantumwake.Core` | `net10.0` | Log tailing, parsing, location + session state |
+| `Quantumwake.Core` | `net10.0` | Log tailing, parsing, game-data readers, session state |
 | `Quantumwake.Data` | `net10.0` | SQLite cache, library aggregates |
 | `Quantumwake.Server` | `net10.0` | REST + SSE + static UI |
-| `Quantumwake.Overlay` | `net10.0-windows` | The application: tray icon, transparent WPF overlay, and the server hosted in-process |
+| `Quantumwake.Overlay` | `net10.0-windows` | Tray icon, transparent overlay, server hosted in-process |
 | `Quantumwake.Cli` | `net10.0` | Backfill and verification |
-| `Quantumwake.LogSim` | `net10.0` | Fake-install generator for testing without the game |
+| `Quantumwake.LogSim` | `net10.0` | Fake-install generator |
 
-Only the overlay is Windows-bound, leaving a Linux-hosted server mode open.
-
-```powershell
-dotnet test Quantumwake.slnx      # 854 tests
-```
-
-Parser fixtures are real log lines, not synthesised ones — which is how three
-format quirks were caught that grepping had hidden, including multi-line entries
-whose continuations carry their own timestamp (15% of notifications were being
-silently dropped).
+Only the overlay is Windows-bound, which leaves a Linux server mode open.
 
 ## Tests
 
@@ -307,71 +257,74 @@ silently dropped).
 dotnet test Quantumwake.slnx -c Release
 ```
 
-Two suites. `Quantumwake.Tests` covers the parser, the session builder, the
-resolvers and the stores, against fixtures copied from real log lines.
-`Quantumwake.WebTests` runs `web/app.js` itself under a JavaScript engine with a
-stub document, so the dashboard's own logic - prices, plans, panels - is tested
-rather than eyeballed.
+Two suites. `Quantumwake.Tests` covers the parser, session builder, resolvers,
+game-data readers and stores, against fixtures copied from real log lines.
+`Quantumwake.WebTests` runs `web/app.js` under a JavaScript engine with a stub
+document, so the dashboard's own logic is tested rather than eyeballed.
+
+Fixtures are real log lines, not invented ones. That is how three format quirks
+were caught that grepping had hidden, including multi-line entries whose
+continuations carry their own timestamp. 15% of notifications were being dropped.
 
 ## Documentation
 
 - [docs/findings.md](docs/findings.md) — the missing-combat-events evidence
 - [docs/log-format-reference.md](docs/log-format-reference.md) — verified line formats and quirks
 - [docs/architecture.md](docs/architecture.md) — decisions and why
-- [docs/phase-1-core.md](docs/phase-1-core.md) — parser build log
-- [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale cannot be named
-- [docs/commodity-catalogue.md](docs/commodity-catalogue.md) — what the game data can and cannot tell us about trade
-- [docs/credits.md](docs/credits.md) — every external resource used, and what came from where
-- [docs/naming.md](docs/naming.md) — why the project is called Quantum Wake
-- [docs/releasing.md](docs/releasing.md) — how a release is cut, and what enforces the version bump
-- [docs/bug-reports.md](docs/bug-reports.md) — what the problem report holds, and what it deliberately does not
-- [docs/landscape.md](docs/landscape.md) — who else is doing this, and what is still ours
+- [docs/commodity-names.md](docs/commodity-names.md) — why a cargo sale is hard to name
+- [docs/credits.md](docs/credits.md) — every external resource used
+- [docs/naming.md](docs/naming.md) — why it is called Quantum Wake
+- [docs/releasing.md](docs/releasing.md) — how a release is cut
+- [docs/bug-reports.md](docs/bug-reports.md) — what the problem report holds
+- [docs/landscape.md](docs/landscape.md) — who else is doing this
 
 ## Licence
 
-Code is [Apache 2.0](LICENSE). Fork it, sell it, close your fork — the only ask
+Code is [Apache 2.0](LICENSE). Fork it, sell it, close your fork. The only ask
 is attribution.
 
-Two things it deliberately does not cover, both spelled out in [NOTICE](NOTICE):
+Two things it does not cover, both in [NOTICE](NOTICE):
 
 - **The manufacturer artwork is Cloud Imperium's**, used under the Fankit
-  Agreement, which does not permit commercial use. No licence this project grants
-  can extend to it. Delete `web/assets/manufacturers/` if that matters for your
-  fork — the UI falls back to a text badge.
+  Agreement, which does not allow commercial use. Delete
+  `web/assets/manufacturers/` if that matters for your fork; the UI falls back
+  to a text badge.
 - **The name and logo are not licensed.** Apache §6 grants no trademark rights,
-  and none are granted here. Take the code; ship it under your own name.
+  and none are granted here.
 
-No game data is contained in this repository. Names are read at runtime from your
-own `Data.p4k`.
+No game data is in this repository. Names are read at runtime from your own
+`Data.p4k`.
 
 ## Credits
 
-Built by **nekron**, on top of work that was not mine. Full attribution — what
-was taken from whom — is in [docs/credits.md](docs/credits.md). The short
-version:
+Built by **nekron**, on top of work that was not mine. Full attribution is in
+[docs/credits.md](docs/credits.md). The short version:
 
 - **Community log tooling.** [StarLogs](https://github.com/Ozy311/StarLogs) by
   Ozy311 is owed the most: the archived combat line formats, the
-  kill-classification tree and the NPC-name heuristics in this repo are its
+  kill-classification tree and the NPC-name heuristics here are its
   `event_parser.py` logic re-implemented in C#.
   [all-slain](https://github.com/DimmaDont/all-slain) (DimmaDont) supplied the
-  per-patch record of which events CIG removed and when;
+  per-patch record of which events CIG removed and when.
   [SCStats](https://github.com/Maple33-hash/SCStats) (Maple33) the read-only
-  posture and the purchase-correlation idea;
+  posture and the purchase-correlation idea.
   [SCPlay](https://github.com/ckuma/scplay) (ckuma) timestamp-span playtime.
   [AutoTrackR2](https://github.com/BubbaGumpShrump/AutoTrackR2),
   [SC-Kill-Monitor](https://github.com/greluc/SC-Kill-Monitor) and
   [citizenmon](https://github.com/danieldeschain/citizenmon) were studied too.
-- **`Data.p4k` format.** The ZIP64-with-ZStd-method-100 structure is community
-  knowledge from the [scdatatools](https://github.com/ventorvar/scdatatools)
-  lineage. The reader here is our own and ships no extractor, but the format was
-  not worked out here.
+- **`Data.p4k` and DataCore formats.** The ZIP64-with-ZStd-method-100 archive
+  and the DataForge blob structure are community knowledge, from the
+  [scdatatools](https://github.com/ventorvar/scdatatools) lineage and
+  [unp4k](https://github.com/dolkensp/unp4k)'s `unforge`. The readers here are
+  our own and ship no extractor, but the formats were not worked out here. This
+  is what lets the app read your install instead of downloading a copy of it.
+- **StarStrings** by MrKraken, the in-game text mod the Gloss page can install
+  alongside its own marks. Not written by or affiliated with this app.
 - **Artwork.** Manufacturer marks and the *Made by the Community* badge are from
-  the official [Star Citizen Fankit](https://robertsspaceindustries.com/fankit),
-  used under the Fankit Agreement.
+  the official [Star Citizen Fankit](https://robertsspaceindustries.com/fankit).
 - **Packages.** [ZstdSharp.Port](https://github.com/oleg-st/ZstdSharp) (Oleg
   Stepanischev), Microsoft.Data.Sqlite, WebView2, xUnit and coverlet. Nothing on
-  the client side — no framework, no bundler, no CDN.
+  the client side: no framework, no bundler, no CDN.
 
 Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
 trademarks of Cloud Imperium Rights LLC. This is an unofficial fan tool, not
@@ -384,7 +337,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.9
+### 0.9.10
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +428,11 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The readme is shorter and plainer, and the composite screenshot at the top is
+  gone. It also describes the app as it is now rather than as it was several
+  releases ago: almost everything is read from your own install, and the two
+  optional downloads are there for the two things the install cannot answer.
 
 - The Mining page ranks rocks by what they are worth, not by what the ore sells
   for. A high price on an ore that is 2% of the rock is not a good rock, which
