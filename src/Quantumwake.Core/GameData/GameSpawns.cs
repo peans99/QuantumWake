@@ -2,6 +2,8 @@ namespace Quantumwake.Core.GameData;
 
 /// <summary>One thing that can spawn in one place.</summary>
 /// <param name="Deposit">The deposit the ore sits in, when the game names one.</param>
+/// <param name="MinPercent">The least of the rock this ore makes up, or null.</param>
+/// <param name="MaxPercent">The most of it, or null.</param>
 /// <param name="Kind">mineable, salvageable, cave harvestable.</param>
 /// <param name="Group">The spawn group it belongs to.</param>
 /// <param name="GroupChance">The group's own probability of being used.</param>
@@ -9,6 +11,8 @@ namespace Quantumwake.Core.GameData;
 public sealed record GameSpawn(
     string Resource,
     string? Deposit,
+    double? MinPercent,
+    double? MaxPercent,
     string Kind,
     string Location,
     string? System,
@@ -127,7 +131,7 @@ public static class GameSpawns
                     foreach (var yield in Yields(core, text, byId, facts, preset, entity, name))
                     {
                         found.Add(new GameSpawn(
-                            yield.Resource, yield.Deposit, yield.Kind,
+                            yield.Resource, yield.Deposit, yield.Min, yield.Max, yield.Kind,
                             location, system, Tidied(name), chance, share));
                     }
                 }
@@ -190,7 +194,7 @@ public static class GameSpawns
                 foreach (var yield in Yields(core, text, byId, facts, preset, null, "Cave"))
                 {
                     found.Add(new GameSpawn(
-                        yield.Resource, yield.Deposit, "cave harvestable",
+                        yield.Resource, yield.Deposit, yield.Min, yield.Max, "cave harvestable",
                         location, system, $"Cave {richness}", chance, share));
                 }
             }
@@ -214,7 +218,7 @@ public static class GameSpawns
     /// answer is Ice, and would undercount the table by more than half.
     /// </para>
     /// </remarks>
-    private static List<(string Resource, string? Deposit, string Kind)> Yields(
+    private static List<(string Resource, string? Deposit, double? Min, double? Max, string Kind)> Yields(
         DataCore core, IReadOnlyDictionary<string, string> text, Dictionary<Guid, DataRecord> byId,
         IReadOnlyDictionary<string, GameItem> facts, Guid? preset, Guid? entity, string groupName)
     {
@@ -235,7 +239,8 @@ public static class GameSpawns
         if (target is null || !byId.TryGetValue(target.Value, out var record)) return [];
 
         var ores = Ores(core, text, byId, record);
-        if (ores.Count > 0) return [.. ores.Select(o => (o.Resource, o.Deposit, "mineable"))];
+        if (ores.Count > 0)
+            return [.. ores.Select(o => (o.Resource, o.Deposit, (double?)o.Min, (double?)o.Max, "mineable"))];
 
         var bare = Bare(record.Name);
 
@@ -243,15 +248,25 @@ public static class GameSpawns
             ? item.Name
             : Tidied(bare);
 
-        return [(named, null, kind)];
+        return [(named, null, (double?)null, (double?)null, kind)];
     }
 
-    /// <summary>The ores in a rock, with the deposit they sit in.</summary>
-    private static List<(string Resource, string? Deposit)> Ores(
+    /// <summary>
+    /// The ores in a rock, with the deposit they sit in and how much of it they
+    /// make up.
+    /// </summary>
+    /// <remarks>
+    /// An ore appears once per richness band - ice is 9.7 to 15.7 per cent of
+    /// one kind of rock and 34.3 to 84.3 per cent of another - and the bands are
+    /// spanned rather than listed. A row per band would say the same ore is here
+    /// twice at different odds, which it is not: it is here once, and how much
+    /// of it you get varies.
+    /// </remarks>
+    private static List<(string Resource, string? Deposit, double Min, double Max)> Ores(
         DataCore core, IReadOnlyDictionary<string, string> text,
         Dictionary<Guid, DataRecord> byId, DataRecord entity)
     {
-        var ores = new List<(string Resource, string? Deposit)>();
+        var ores = new List<(string Resource, string? Deposit, double Min, double Max)>();
 
         foreach (var component in core.PointerArray(entity, "Components"))
         {
@@ -276,10 +291,19 @@ public static class GameSpawns
 
                 if (elementId is null || !byId.TryGetValue(elementId.Value, out var element)) continue;
 
-                // The same element appears more than once at different yields,
-                // which is a richness band rather than a second ore.
                 var name = Element(core, text, element);
-                if (ores.All(o => o.Resource != name)) ores.Add((name, deposit));
+                var partAt = core.InstanceAt(part);
+                var low = core.SingleAt(partAt, part.StructIndex, "minPercentage") ?? 0;
+                var high = core.SingleAt(partAt, part.StructIndex, "maxPercentage") ?? 0;
+
+                var seen = ores.FindIndex(o => o.Resource == name);
+
+                if (seen < 0) ores.Add((name, deposit, low, high));
+                else
+                {
+                    ores[seen] = (name, deposit,
+                        Math.Min(ores[seen].Min, low), Math.Max(ores[seen].Max, high));
+                }
             }
 
             break;

@@ -384,7 +384,7 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
-### 0.9.2
+### 0.9.3
 
 - The app no longer talks as though 4.9 were the current patch. Alpha 4.10
   arrived on 26 Aug 2026, and the things Quantum Wake says it cannot see —
@@ -475,6 +475,14 @@ release workflow lifts it from here, so it is written once.
   which it is showing. Systems are named only where the game plainly names one:
   Stanton1a is Stanton, while the Aaron Halo is left blank rather than being
   assigned to whichever system it looks closest to.
+
+- The Mining page now says how much of a rock is worth having. It has always
+  told you how likely a deposit is to turn up and never what is in it; an "In
+  rock" column now gives each ore's share of the rock it sits in, read from the
+  game. It is a band rather than a figure — ice runs from 9.7 to 84.3 per cent
+  depending on the rock — because the game rolls within a range, and one number
+  would read as a promise. It needs your install rather than the download,
+  which never carried this at all.
 
 - Some recipes will not take just any ore. A handful of crafting materials carry
   a minimum quality, and the Crafting page now says so — "Titanium 2 SCU

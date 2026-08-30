@@ -1055,18 +1055,19 @@ public static class ServerHost
                     StringComparer.OrdinalIgnoreCase);
 
             // The download still wins here, and this is the one page where it
-            // does. The install's own deposit tables read cleanly but reach
-            // 1,228 rows across 47 places against the download's 2,642 across
-            // 234, because the cave tables are a separate record type this does
-            // not walk yet. So the install fills the page for somebody who has
-            // no download rather than replacing one they do have.
+            // does: 2,642 rows across 234 places against the install's 1,321
+            // across 50. The install fills the page for somebody who has no
+            // download rather than replacing one they do have. It does carry one
+            // thing the download never did - how much of a rock each ore is.
             var spawns = lib.Community.ResourceSpawns.Count > 0
                 ? lib.Community.ResourceSpawns.Select(s => (
-                    s.Resource, Deposit: s.Deposit, s.Kind, s.Location, s.System,
+                    s.Resource, Deposit: s.Deposit,
+                    MinPercent: (double?)null, MaxPercent: (double?)null,
+                    s.Kind, s.Location, s.System,
                     s.Group, GroupChance: (double)s.GroupChance, Share: (double)s.Share,
                     Source: "dataset"))
                 : lib.GameCommodities.Spawns.Select(s => (
-                    s.Resource, s.Deposit, s.Kind, s.Location, s.System,
+                    s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location, s.System,
                     s.Group, s.GroupChance, s.Share, Source: "install"));
 
             return spawns.Select(s =>
@@ -1083,6 +1084,8 @@ public static class ServerHost
                 {
                     s.Resource,
                     s.Deposit,
+                    s.MinPercent,
+                    s.MaxPercent,
                     s.Kind,
                     s.Location,
                     s.System,

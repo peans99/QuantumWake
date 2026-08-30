@@ -2821,13 +2821,22 @@ function renderMiningRef() {
     const td = el('td', 'muted', miningCatalogue.length
       ? 'Nothing matches that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 11;
+    td.colSpan = 12;
     tr.append(td);
     body.append(tr);
     return;
   }
 
   const percent = (v) => `${(v * 100).toFixed(v * 100 >= 10 ? 0 : 1)}%`;
+
+  // A band rather than a number, because it is one: the game gives a rock a
+  // range and rolls within it. A single figure would read as a promise.
+  const oreShare = (spawn) => {
+    if (spawn.minPercent == null || spawn.maxPercent == null) return '—';
+    const low = spawn.minPercent.toFixed(spawn.minPercent >= 10 ? 0 : 1);
+    const high = spawn.maxPercent.toFixed(spawn.maxPercent >= 10 ? 0 : 1);
+    return low === high ? `${high}%` : `${low}–${high}%`;
+  };
 
   for (const spawn of rows.slice(0, MINING_CAP)) {
     const tr = el('tr');
@@ -2839,6 +2848,11 @@ function renderMiningRef() {
     name.append(trackButton(spawn.resource, 1, spawn.kind === 'mineable' ? 'SCU' : ''));
     tr.append(name);
     tr.append(el('td', 'muted', spawn.deposit ?? '—'));
+
+    // How much of the rock this ore is. Only the install knows it, and only for
+    // mineables, so everything else is a dash rather than a zero.
+    tr.append(el('td', 'num muted', oreShare(spawn)));
+
     tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
     tr.append(tdPlace(spawn.location));
     tr.append(el('td', 'muted', spawn.system ?? '—'));
