@@ -621,10 +621,14 @@ public static class ServerHost
         // stash, and opt-in market feeds. The game never writes a cargo manifest,
         // so trade rows are deliberately "buy here, sell there" leads rather than
         // pretending the player is carrying a commodity it cannot see.
+        // focus overrules what the retrieved ship implies. It is a query rather
+        // than a page-side filter because the extras below are built only for
+        // the focus that asks for them: an override the server never heard
+        // about would open a section with nothing in it.
         app.MapGet("/api/briefing", (
             LiveSessionService live, TripStore trips, JobStore jobs,
-            LogLibrary lib, UexData uex, UexFeeds feeds) =>
-            BuildBriefing(live.Current, trips, jobs, lib, uex, feeds));
+            LogLibrary lib, UexData uex, UexFeeds feeds, string? focus) =>
+            BuildBriefing(live.Current, trips, jobs, lib, uex, feeds, focus));
 
         // The map reads the same deliberately limited service evidence as the
         // briefing. It receives map ids, not UEX's terminal names, so its
@@ -809,90 +813,9 @@ public static class ServerHost
                 .Select(e => new { e.Name, scu = e.MyScuSold, revenue = e.MyRevenue, trips = e.MyTrades })
                 .OrderByDescending(e => e.revenue));
 
-        // Where to go, rather than what to shoot. Each place is worth the sum of
-        // what spawns there: every deposit's share of the place times what a SCU
-        // of that rock sells for. Ranked, so the question has an answer rather
-        // than a table to read down.
-        app.MapGet("/api/mining/places", (LogLibrary lib, UexData uex) =>
-        {
-            var spawns = lib.GameCommodities.Spawns.Count > 0
-                ? lib.GameCommodities.Spawns.Select(s => (
-                    s.Location, s.System, s.Resource, s.MinPercent, s.MaxPercent,
-                    Odds: s.GroupChance * s.Share, s.RespawnSeconds, s.Quality))
-                : [];
-
-            return spawns
-                .GroupBy(s => s.Location, StringComparer.OrdinalIgnoreCase)
-                .Select(place =>
-                {
-                    // One line per ore. The same ore appears once per table a
-                    // place has - Cave Rich, Cave Medium, Cave Poor - and listing
-                    // those separately would name Hadanite three times as the
-                    // three best things here.
-                    var rows = place
-                        .GroupBy(s => s.Resource, StringComparer.OrdinalIgnoreCase)
-                        .Select(ore => new
-                        {
-                            Resource = ore.Key,
-                            Odds = ore.Sum(s => s.Odds),
-                            // The middle of the ore range, as the table uses.
-                            Worth = ore
-                                .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
-                                    && uex.Best(s.Resource)?.BestSell is { } sell && sell > 0
-                                        ? (decimal)((low + high) / 2 / 100) * sell
-                                        : 0m)
-                                .Max(),
-                            // How much of the rock is worth having, which is a
-                            // different question from what it sells for.
-                            Ore = ore
-                                .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
-                                    ? (low + high) / 2
-                                    : 0)
-                                .Max(),
-                        })
-                        // Kept on having ore, not on having a price. UEX is
-                        // optional, and without it every worth is zero - which
-                        // used to empty this table and leave the page claiming
-                        // the deposit tables could not be read. How rich a rock
-                        // is comes from the install and is the question this
-                        // page exists to answer.
-                        .Where(r => r.Ore > 0)
-                        .ToList();
-
-                    // A place draws on several tables and each is normalised
-                    // within itself, so their odds sum past one. Normalising
-                    // again here makes this "given you find a rock, what is it
-                    // worth" - the only comparison between places the data
-                    // actually supports.
-                    var total = rows.Sum(r => r.Odds);
-
-                    return new
-                    {
-                        place = place.Key,
-                        system = place.Select(s => s.System).FirstOrDefault(s => s is not null),
-                        perRock = total > 0 ? rows.Sum(r => (decimal)(r.Odds / total) * r.Worth) : 0m,
-                        // Two kinds of rich, and they are not the same. Ore is
-                        // how much of a rock is the good stuff; quality is what
-                        // grade it assays at, and a place can override the usual.
-                        ore = total > 0 ? rows.Sum(r => r.Odds / total * r.Ore) : 0,
-                        quality = place
-                            .Where(s => s.Quality is not null)
-                            .OrderByDescending(s => s.Quality!.Min)
-                            .Select(s => new { s.Quality!.Min, s.Quality.Local })
-                            .FirstOrDefault(),
-                        ores = rows.Count,
-                        respawn = place.Select(s => s.RespawnSeconds).FirstOrDefault(r => r is > 0),
-                        best = rows.OrderByDescending(r => r.Odds * (double)r.Worth)
-                            .Take(3)
-                            .Select(r => new { r.Resource, worth = r.Worth })
-                    };
-                })
-                .Where(p => p.ore > 0)
-                // Value first where there is any, richness otherwise, so the
-                // ranking still means something with prices switched off.
-                .OrderByDescending(p => p.perRock)
-                .ThenByDescending(p => p.ore);
-        });
+        // Where to go, rather than what to shoot. Ranked in MiningPlaces, which
+        // the Now page's mining focus asks the same question of.
+        app.MapGet("/api/mining/places", (LogLibrary lib, UexData uex) => MiningPlaces(lib, uex));
 
         // What the game says each place has. Separate from the service badges,
         // which are UEX's account of where you can actually trade: this is the
@@ -2867,6 +2790,98 @@ static int Holes(IEnumerable<ShipSlot> slots)
             .Where(t => t.IsSell && t.Commodity is not null && t.Scu > 0)
             .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
 
+    /// <summary>
+    /// Where to go, rather than what to shoot. Each place is worth the sum of
+    /// what spawns there: every deposit's share of the place times what a SCU
+    /// of that rock sells for. Ranked, so the question has an answer rather
+    /// than a table to read down.
+    /// </summary>
+    /// <remarks>
+    /// Shared with the Now page's mining focus, which asks this same question
+    /// narrowed to the system the pilot is standing in. Two rankings drifting
+    /// apart would have the briefing recommending a place the Mining page does
+    /// not rate, which is the kind of disagreement nobody reports and everybody
+    /// stops trusting.
+    /// </remarks>
+    static IEnumerable<MiningPlace> MiningPlaces(LogLibrary lib, UexData uex)
+    {
+        var spawns = lib.GameCommodities.Spawns.Count > 0
+            ? lib.GameCommodities.Spawns.Select(s => (
+                s.Location, s.System, s.Resource, s.MinPercent, s.MaxPercent,
+                Odds: s.GroupChance * s.Share, s.RespawnSeconds, s.Quality))
+            : [];
+
+        return spawns
+            .GroupBy(s => s.Location, StringComparer.OrdinalIgnoreCase)
+            .Select(place =>
+            {
+                // One line per ore. The same ore appears once per table a
+                // place has - Cave Rich, Cave Medium, Cave Poor - and listing
+                // those separately would name Hadanite three times as the
+                // three best things here.
+                var rows = place
+                    .GroupBy(s => s.Resource, StringComparer.OrdinalIgnoreCase)
+                    .Select(ore => new
+                    {
+                        Resource = ore.Key,
+                        Odds = ore.Sum(s => s.Odds),
+                        // The middle of the ore range, as the table uses.
+                        Worth = ore
+                            .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
+                                && uex.Best(s.Resource)?.BestSell is { } sell && sell > 0
+                                    ? (decimal)((low + high) / 2 / 100) * sell
+                                    : 0m)
+                            .Max(),
+                        // How much of the rock is worth having, which is a
+                        // different question from what it sells for.
+                        Ore = ore
+                            .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
+                                ? (low + high) / 2
+                                : 0)
+                            .Max(),
+                    })
+                    // Kept on having ore, not on having a price. UEX is
+                    // optional, and without it every worth is zero - which
+                    // used to empty this table and leave the page claiming
+                    // the deposit tables could not be read. How rich a rock
+                    // is comes from the install and is the question this
+                    // page exists to answer.
+                    .Where(r => r.Ore > 0)
+                    .ToList();
+
+                // A place draws on several tables and each is normalised
+                // within itself, so their odds sum past one. Normalising
+                // again here makes this "given you find a rock, what is it
+                // worth" - the only comparison between places the data
+                // actually supports.
+                var total = rows.Sum(r => r.Odds);
+
+                return new MiningPlace(
+                    place.Key,
+                    place.Select(s => s.System).FirstOrDefault(s => s is not null),
+                    total > 0 ? rows.Sum(r => (decimal)(r.Odds / total) * r.Worth) : 0m,
+                    // Two kinds of rich, and they are not the same. Ore is
+                    // how much of a rock is the good stuff; quality is what
+                    // grade it assays at, and a place can override the usual.
+                    total > 0 ? rows.Sum(r => r.Odds / total * r.Ore) : 0,
+                    place
+                        .Where(s => s.Quality is not null)
+                        .OrderByDescending(s => s.Quality!.Min)
+                        .Select(s => new MiningQuality(s.Quality!.Min, s.Quality.Local))
+                        .FirstOrDefault(),
+                    rows.Count,
+                    place.Select(s => s.RespawnSeconds).FirstOrDefault(r => r is > 0),
+                    [.. rows.OrderByDescending(r => r.Odds * (double)r.Worth)
+                        .Take(3)
+                        .Select(r => new MiningBest(r.Resource, r.Worth))]);
+            })
+            .Where(p => p.Ore > 0)
+            // Value first where there is any, richness otherwise, so the
+            // ranking still means something with prices switched off.
+            .OrderByDescending(p => p.PerRock)
+            .ThenByDescending(p => p.Ore);
+    }
+
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
     /// <remarks>
     /// A briefing is deliberately narrower than its source pages. The next three
@@ -2875,7 +2890,8 @@ static int Holes(IEnumerable<ShipSlot> slots)
     /// what to do before leaving a hangar, not for replacing their full views.
     /// </remarks>
     static PilotBriefing BuildBriefing(
-        NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds)
+        NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds,
+        string? chosenFocus = null)
     {
         var trip = trips.Tracked();
 
@@ -2989,9 +3005,77 @@ static int Holes(IEnumerable<ShipSlot> slots)
                 o.Commodity, o.BuyHere, o.SellThere, o.SellTerminal, o.MarginPerScu))
             .ToList();
 
+        // What the pilot came out to do, read from the ship they retrieved.
+        // NowState.Ship carries the raw log form - "DRAK Corsair" - which is
+        // the reference key with a space in it, so this lookup is exact where
+        // the Fleet page's has to try the class name first.
+        var reference = lib.Community.Ship(now.Ship);
+
+        // Named the way the Fleet page names it. The live state carries the raw
+        // log form - "ANVL Hornet F7CM Mk2" - and putting that in a sentence
+        // about the pilot's own ship reads like a parser leaking.
+        var focus = now.Ship is { Length: > 0 } flying
+            && ShipFocus.Of(reference?.Career, reference?.Role) is { } chosen
+                ? new BriefingFocus(
+                    chosen.Key, chosen.Label, reference?.Name ?? flying,
+                    reference?.Career, reference?.Role)
+                : null;
+
+        // The focus the extras are built for. The pilot's own choice wins, and
+        // "off" wins over both - a pilot who asked for the plain card must not
+        // have the next ship swap hand them one back. focus itself still
+        // reports what the ship said, so the card can name whose idea it was.
+        var wanted = chosenFocus is { Length: > 0 } ? chosenFocus : focus?.Key;
+
+        // Both extras are built only for the focus that asks for them. A combat
+        // pilot has no use for ore prices, and computing them anyway would put
+        // the whole deposit table through this call once a second.
+        var mining = wanted == ShipFocus.Mining.Key
+            ? NearbyMining(lib, uex, now.LocationSystem)
+            : [];
+
+        var claim = wanted == ShipFocus.Combat.Key && reference is not null
+            ? new BriefingClaim(
+                reference.Name,
+                reference.ExpeditedCost,
+                reference.ExpeditedClaimTime,
+                reference.StandardClaimTime)
+            : null;
+
         return new PilotBriefing(
             placeId, place, trip?.Id, trip?.Title, stops,
-            [.. shopping.Take(8)], trade, services, stashItems);
+            [.. shopping.Take(8)], trade, services, stashItems,
+            focus, mining, claim);
+    }
+
+    /// <summary>
+    /// The best places to mine, preferring the system the pilot is in.
+    /// </summary>
+    /// <remarks>
+    /// "Near you" is answerable only where the deposit table's own designation
+    /// carried a system - Stanton1a does, Aaron Halo and the Ship Graveyard do
+    /// not, which is the read GameSpawns describes. Where no
+    /// place in this system is known, the best anywhere beats an empty section,
+    /// and every row is flagged with whether it is actually here so the card
+    /// can say which of the two it is showing.
+    /// </remarks>
+    static IReadOnlyList<BriefingMining> NearbyMining(LogLibrary lib, UexData uex, string? system)
+    {
+        var places = MiningPlaces(lib, uex).ToList();
+
+        var here = system is { Length: > 0 }
+            ? places.Where(p => string.Equals(p.System, system, StringComparison.OrdinalIgnoreCase)).ToList()
+            : [];
+
+        return
+        [
+            .. (here.Count > 0 ? here : places)
+                .Take(3)
+                .Select(p => new BriefingMining(
+                    p.Place, p.System, p.PerRock, p.Ore,
+                    p.Best.FirstOrDefault()?.Resource,
+                    here.Count > 0))
+        ];
     }
 
     /// <summary>Maps service evidence onto the app's own atlas identifiers.</summary>
@@ -3089,7 +3173,52 @@ public sealed record PilotBriefing(
     IReadOnlyList<BriefingShopping> Shopping,
     IReadOnlyList<BriefingTrade> Trade,
     IReadOnlyList<BriefingService> Services,
-    IReadOnlyList<BriefingStash> Stash);
+    IReadOnlyList<BriefingStash> Stash,
+    BriefingFocus? Focus = null,
+    IReadOnlyList<BriefingMining>? Mining = null,
+    BriefingClaim? Claim = null);
+
+/// <summary>
+/// The work the retrieved ship implies, and the ship that implied it.
+/// </summary>
+/// <remarks>
+/// The ship is carried alongside the answer because the page has to say why it
+/// rearranged itself. A dashboard that quietly reorders on its own is one
+/// people stop trusting; one that says "because you took the Hermes out" is one
+/// they can correct.
+/// </remarks>
+public sealed record BriefingFocus(
+    string Key, string Label, string Ship, string? Career, string? Role);
+
+/// <summary>One place worth mining, as the deposit tables rank it.</summary>
+/// <param name="Here">
+/// Whether this is in the system the pilot is standing in. False means the
+/// section fell back to the best anywhere, which the card says out loud.
+/// </param>
+public sealed record BriefingMining(
+    string Place, string? System, decimal PerRock, double Ore, string? Best, bool Here);
+
+/// <summary>
+/// What losing this ship costs, for the pilot about to risk it.
+/// </summary>
+/// <remarks>
+/// Reference data about the hull, never a claim in progress: Game.log records
+/// no insurance claim at all, so this says what the game's own tables say a
+/// claim takes and costs, and nothing about whether one is running.
+/// </remarks>
+public sealed record BriefingClaim(
+    string Ship, decimal? ExpeditedCost, double? ExpeditedMinutes, double? StandardMinutes);
+
+/// <summary>One place ranked by what its deposit tables are worth.</summary>
+public sealed record MiningPlace(
+    string Place, string? System, decimal PerRock, double Ore,
+    MiningQuality? Quality, int Ores, int? Respawn, IReadOnlyList<MiningBest> Best);
+
+/// <summary>The grade a place assays at, and whether it overrides the usual.</summary>
+public sealed record MiningQuality(int Min, bool Local);
+
+/// <summary>One of the best things a place has, and what a SCU of it fetches.</summary>
+public sealed record MiningBest(string Resource, decimal Worth);
 
 /// <summary>One outstanding flight-plan stop, in the order it will be flown.</summary>
 /// <param name="Actions">

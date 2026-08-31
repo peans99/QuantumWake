@@ -195,8 +195,18 @@
           <div>
             <div class="briefing-title" id="briefing-title"></div>
             <div class="briefing-sub" id="briefing-sub"></div>
+            <div class="briefing-why muted" id="briefing-why" hidden></div>
           </div>
           <div class="briefing-actions">
+            <select id="briefing-focus" class="select tiny"
+                    title="What this card leads with. Set from the ship you retrieved; change it to override.">
+              <option value="">Focus: from my ship</option>
+              <option value="freight">Focus: Freight</option>
+              <option value="mining">Focus: Mining</option>
+              <option value="combat">Focus: Combat</option>
+              <option value="explore">Focus: Exploration</option>
+              <option value="off">Focus: off</option>
+            </select>
             <button class="ghost tiny" id="briefing-add-stop">Add this stop</button>
             <button class="ghost tiny" id="briefing-map">Show on map</button>
             <button class="ghost tiny" id="briefing-overlay">Pin to overlay</button>
@@ -222,6 +232,14 @@
           <section class="briefing-section" id="briefing-stash-section">
             <div class="briefing-label">Stashed here</div>
             <div class="briefing-list" id="briefing-stash"></div>
+          </section>
+          <section class="briefing-section" id="briefing-mining-section" hidden>
+            <div class="briefing-label">Best rocks</div>
+            <div class="briefing-list" id="briefing-mining"></div>
+          </section>
+          <section class="briefing-section" id="briefing-claim-section" hidden>
+            <div class="briefing-label">If you lose it</div>
+            <div class="briefing-list" id="briefing-claim"></div>
           </section>
         </div>
       </article>

@@ -852,7 +852,10 @@ async function refreshPilotBriefing(state) {
 
   let briefing;
   try {
-    briefing = await getJson('/api/briefing');
+    // The chosen focus goes with the request: the mining and claim extras are
+    // built server-side for whichever focus asked for them.
+    briefing = await getJson('/api/briefing'
+      + (briefingFocus ? `?focus=${encodeURIComponent(briefingFocus)}` : ''));
   } catch (err) {
     if (briefingFor === key) {
       briefingFor = null;
@@ -959,6 +962,192 @@ function briefingShoppingRow(item) {
   return row;
 }
 
+/* ---------- briefing focus ---------- */
+
+/**
+ * What the briefing leads with, and whose idea that was.
+ *
+ * The retrieved ship is the signal because nothing else is one: the logs carry
+ * no mining, no salvage and no cargo, so what came out of the hangar is the
+ * only statement of intent the app ever sees. That makes it a guess about
+ * intent rather than a record of work, which is why the card says out loud what
+ * it read and this chooser can overrule it. "off" is kept distinct from unset:
+ * a pilot who wants the plain page must not have a ship swap hand them a focus
+ * back.
+ */
+const BRIEFING_FOCUS_KEY = 'qw-briefing-focus';
+
+let briefingFocus = '';
+try {
+  briefingFocus = localStorage.getItem(BRIEFING_FOCUS_KEY) || '';
+} catch { /* a bad preference must not blank the briefing */ }
+
+const FOCUS_LABELS = {
+  freight: 'Freight',
+  mining: 'Mining',
+  combat: 'Combat',
+  explore: 'Exploration',
+};
+
+/**
+ * The sections each focus leads with. Deliberately partial: naming only the
+ * two or three that change the answer leaves the rest in the order the markup
+ * gives them, so a section added in a later version still appears rather than
+ * being dropped by every focus that predates it.
+ */
+const BRIEFING_LEADS = {
+  freight: ['trade', 'stops', 'shopping'],
+  mining: ['mining', 'stops', 'services'],
+  combat: ['claim', 'services', 'stops'],
+  explore: ['stops', 'services', 'trade'],
+};
+
+/** Markup order, which is the arrangement with no focus in force. */
+const BRIEFING_SECTIONS = ['stops', 'shopping', 'trade', 'services', 'stash', 'mining', 'claim'];
+
+/** The order to draw the briefing's sections in, for one focus. */
+function briefingOrder(focus) {
+  const leads = BRIEFING_LEADS[focus] || [];
+  return [...leads, ...BRIEFING_SECTIONS.filter((name) => !leads.includes(name))];
+}
+
+/** The focus in force: the pilot's choice, else the ship's, else none. */
+function focusInForce(briefing) {
+  if (briefingFocus === 'off') return null;
+  return briefingFocus || briefing?.focus?.key || null;
+}
+
+/**
+ * Reorders the sections rather than the cards.
+ *
+ * The Now grid is arranged by hand and that arrangement is saved; a focus that
+ * moved cards would silently overwrite it every time the pilot changed ship.
+ * Inside this one card there is no such promise to keep.
+ */
+function applyBriefingOrder(focus) {
+  const grid = $('.briefing-grid');
+  if (!grid) return;
+
+  for (const name of briefingOrder(focus)) {
+    const section = $(`#briefing-${name}-section`);
+    if (section) grid.append(section);
+  }
+}
+
+/**
+ * Records the pilot's own choice of focus and draws the card again with it.
+ *
+ * Goes back through the briefing rather than re-rendering what is on screen:
+ * the extras are built server-side for the focus that asked for them, so
+ * switching to mining has to ask for the rocks rather than discover the card
+ * has none.
+ */
+async function chooseBriefingFocus(value) {
+  briefingFocus = value;
+  try { localStorage.setItem(BRIEFING_FOCUS_KEY, value); } catch { /* optional */ }
+  await reloadPilotBriefing();
+}
+
+function renderBriefingFocus(briefing) {
+  const chooser = $('#briefing-focus');
+  if (chooser) chooser.value = briefingFocus;
+
+  const focus = focusInForce(briefing);
+  const why = $('#briefing-why');
+  const chosen = briefingFocus && briefingFocus !== 'off';
+
+  if (!focus) {
+    why.textContent = '';
+  } else if (chosen) {
+    why.textContent = `${FOCUS_LABELS[focus] || focus} — your choice, not your ship's.`;
+  } else {
+    // "a light mining ship", not "a light mining". The dataset's roles are noun
+    // phrases that need the word after them, and the compound ones - "Starter /
+    // Pathfinder" - need the slash spelled out to read as a sentence at all.
+    const from = briefing.focus;
+    const role = from.role ? from.role.toLowerCase().replaceAll(' / ', ' or ') : null;
+
+    why.textContent = `${from.label} — you retrieved ${from.ship}`
+      + (role ? `, a ${role} ship.` : '.');
+  }
+
+  why.hidden = !why.textContent;
+  applyBriefingOrder(focus);
+  return focus;
+}
+
+/**
+ * Where to mine, for a mining ship.
+ *
+ * Never a claim that anything was mined. The rows are the game's own deposit
+ * tables ranked by what a rock is worth, and the caveat says which question was
+ * answered: the tables name a system for a body and nothing at all for the
+ * Aaron Halo, so "best here" quietly becomes "best anywhere" often enough that
+ * it has to be visible when it does.
+ */
+function renderBriefingMining(briefing, focus) {
+  const section = $('#briefing-mining-section');
+  const rows = focus === 'mining' ? (briefing.mining || []) : [];
+
+  section.hidden = rows.length === 0;
+  if (section.hidden) return;
+
+  const list = $('#briefing-mining');
+  list.textContent = '';
+
+  for (const place of rows) {
+    const row = el('div', 'briefing-row');
+    const main = el('div', 'briefing-main');
+    main.append(el('b', null, place.place));
+    main.append(el('div', 'briefing-detail', [
+      place.system,
+      place.best ? `best: ${place.best}` : null,
+      `${Math.round(place.ore)}% ore`,
+    ].filter(Boolean).join(' · ')));
+    row.append(main);
+    row.append(el('span', 'inward', `${money(place.perRock)}/rock`));
+    list.append(row);
+  }
+
+  list.append(el('div', 'briefing-caveat', rows[0].here
+    ? 'What a rock is worth, from the game’s own deposit tables.'
+    : 'The deposit tables place nothing in this system — these are the best anywhere.'));
+}
+
+/**
+ * What losing this hull costs, for a combat ship.
+ *
+ * The one number 4.9 can honestly put in front of a fighter pilot. Kills are
+ * not logged and deaths are inferred, so a scoreboard would be invention; a
+ * claim fee and a wait are in the game's own tables and are the thing actually
+ * worth knowing before undocking.
+ */
+function renderBriefingClaim(briefing, focus) {
+  const section = $('#briefing-claim-section');
+  const claim = focus === 'combat' ? briefing.claim : null;
+
+  section.hidden = !claim;
+  if (!claim) return;
+
+  const list = $('#briefing-claim');
+  list.textContent = '';
+
+  const row = el('div', 'briefing-row');
+  const main = el('div', 'briefing-main');
+  main.append(el('b', null, claim.ship));
+  main.append(el('div', 'briefing-detail', [
+    claim.standardMinutes ? `standard ~${Math.round(claim.standardMinutes)}m` : null,
+    claim.expeditedMinutes ? `expedited ~${Math.round(claim.expeditedMinutes)}m` : null,
+  ].filter(Boolean).join(' · ') || 'The reference data gives no claim time.'));
+  row.append(main);
+  if (claim.expeditedCost) row.append(el('span', 'outward', money(claim.expeditedCost)));
+  list.append(row);
+
+  list.append(el('div', 'briefing-caveat',
+    'From the game’s own tables. Game.log records no insurance claim, '
+    + 'so this is what one costs — not one in progress.'));
+}
+
 function renderPilotBriefing(briefing) {
   const card = $('#now-briefing-card');
   if (!briefing?.location) {
@@ -1031,6 +1220,12 @@ function renderPilotBriefing(briefing) {
     stash.append(row);
   }
   $('#briefing-stash-section').hidden = !(briefing.stash || []).length;
+
+  const focus = renderBriefingFocus(briefing);
+  renderBriefingMining(briefing, focus);
+  renderBriefingClaim(briefing, focus);
+
+  $('#briefing-focus').onchange = () => chooseBriefingFocus($('#briefing-focus').value);
 
   $('#briefing-map').onclick = () => briefingMap(briefing.locationId, briefing.location);
   $('#briefing-add-stop').onclick = addBriefingStop;

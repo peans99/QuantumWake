@@ -3248,6 +3248,8 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .briefing-title { color: var(--cyan-hot); font-size: 17px; font-weight: 600; }
 .briefing-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .briefing-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; padding-right: 58px; }
+.briefing-why { color: var(--cyan); font-size: 10px; margin-top: 4px; }
+.briefing-actions .select { min-width: 0; font-size: 10px; padding: 3px 5px; }
 .briefing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
 .briefing-section { min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
 .briefing-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }

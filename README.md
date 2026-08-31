@@ -245,7 +245,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.21
+### 0.9.22
+
+- **The Now page leads with whatever your ship is for.** Take a hauler out and
+  the briefing opens with trade leads; take a mining ship and it opens with the
+  best rocks it can see, ranked by what a rock there is actually worth; take a
+  fighter and it opens with what a claim on that hull costs and how long the
+  wait is. Nothing in the logs records mining, salvage or cargo, so the ship you
+  retrieved is the only thing that can say what you came out to do — the card
+  names the ship it read that from, and the chooser beside it overrules the
+  guess or switches the whole idea off. Your own arrangement of the Now cards is
+  left alone: only the sections inside the briefing move.
 
 - **Shield generators get their size and grade like everything else.** 203 item
   names were coming out unmarked, and silently: the localisation table keys the
