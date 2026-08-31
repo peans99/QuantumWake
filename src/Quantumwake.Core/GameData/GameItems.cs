@@ -167,8 +167,24 @@ public static class GameItems
     /// Items and manufacturers both carry an inline <c>SCItemLocalization</c>
     /// holding a key, so one reader serves both. A key CIG have not filled in
     /// yields null rather than the raw key, which would read as a bug on the
-    /// page.
+    /// page - and so does one whose text is still a placeholder.
     /// </remarks>
+    /// <summary>
+    /// Text the game has not written yet, rather than something to show.
+    /// </summary>
+    /// <remarks>
+    /// A key can be present in the string table and still say nothing: 8,149 of
+    /// 26,028 items resolve to "&lt;= PLACEHOLDER =&gt;", CIG's own marker for a
+    /// name not yet authored. Passing those through filled a third of the Parts
+    /// catalogue with identical unreadable rows. Bracket-wrapped text is never a
+    /// real name, so it is treated as the missing entry it stands for.
+    /// </remarks>
+    public static bool Unwritten(string? text)
+    {
+        var trimmed = text?.Trim();
+        return trimmed is { Length: > 1 } && trimmed[0] == '<' && trimmed[^1] == '>';
+    }
+
     public static string? Localised(
         DataCore core, IReadOnlyDictionary<string, string> text, long instance, int structIndex,
         string which = "Name")
@@ -179,8 +195,14 @@ public static class GameItems
         var key = core.StringAt(at, field.StructIndex, which);
         if (key is not { Length: > 0 }) return null;
 
-        return text.TryGetValue(key.TrimStart('@'), out var english) && english.Length > 0
-            ? english
-            : null;
+        if (!text.TryGetValue(key.TrimStart('@'), out var english) || english.Length == 0) return null;
+
+        // A key can be present and still say nothing. 8,149 of 26,028 items
+        // resolve to "<= PLACEHOLDER =>", CIG's marker for a name not yet
+        // written, and passing that through filled a third of the Parts
+        // catalogue with identical unreadable rows. Bracket-wrapped text is
+        // never a real name, so it is treated as the missing key it stands for
+        // and callers fall back to the class name, as they already do.
+        return Unwritten(english) ? null : english;
     }
 }

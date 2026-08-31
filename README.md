@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1017 tests](https://img.shields.io/badge/tests-1017%20passing-4fd48a)
+![1043 tests](https://img.shields.io/badge/tests-1043%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -211,7 +211,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,000 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,043 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard JavaScript against a stub DOM.
 
@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.19
+### 0.9.20
 
 - **Shield generators get their size and grade like everything else.** 203 item
   names were coming out unmarked, and silently: the localisation table keys the
@@ -265,8 +265,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 - **Mining uses both sources instead of choosing one.** Turning on the community
   dataset used to replace the install's deposit tables outright, which silently
   took away every richness, quality and respawn figure the install supplies.
-  They are merged now: 3,599 rows across 255 places, of which 259 are described
-  by both. Matching needs care, because the install writes "Copper Ore" where
+  They are merged now: 3,163 rows across 255 places, 232 of them described by
+  both. Matching needs care, because the install writes "Copper Ore" where
   the download writes "Copper" — joining on the raw names found 164 pairs, and
   joining on the ore found 259. Spelling is left alone: the install says
   Aluminium and the download says Aluminum, and treating those as one would be a
@@ -279,9 +279,40 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   recipes, deposits and places. Pages with nothing to show say which of those it
   is, because "not yet" and "never will" had looked identical.
 
-- **A placeholder was reaching the Mining page as an ore.** The game wraps text
-  nobody has written in angle brackets, and one of those arrived as a resource
-  called `<= PLACEHOLDER =>`.
+- **Placeholder names stay out of the catalogues.** The game wraps text nobody
+  has written yet in angle brackets. One arrived on the Mining page as an ore
+  called `<= PLACEHOLDER =>`, and 8,149 of the install's 26,028 items carry the
+  same marker in place of a name — a third of the Parts catalogue, every row of
+  it reading identically. They fall back to the item's class name now, which is
+  at least something you can search for.
+
+- **A rich deposit is no longer advertised at trace concentration.** The same ore
+  sits in different rocks at one place: at Fuego, borase is 9.7-74.3% of a Borase
+  deposit and 2-5% of a Bexalite one. Ore and place were being treated as enough
+  to identify a deposit, so one of those figures was picked arbitrarily, stamped
+  onto the row, and the other quietly dropped. Where the install describes a
+  place more than one way every variant is kept now and none is guessed at; where
+  it does not, the row is filled in as before. Deduping at the same time took
+  1,311 rows down to the 783 distinct deposits they actually describe.
+
+- **Parts, Mining and Crafting fill themselves in when the read finishes.** They
+  were fetched once, as the page opened — on a cold install that is half a minute
+  before there is anything to fetch, so they came back empty and stayed empty
+  until the browser was reloaded. Those three were also still recommending the
+  110 MB download for tables they now read from your own install.
+
+- **An unreadable backup no longer reports your game files as unreadable.**
+  Reading the game files and parsing the logs shared a failure path, so one bad
+  log claimed the install could not be read and sent you off to check something
+  that was never at fault.
+
+- **Cargo stopped saying its commodity ids cannot be resolved.** They are read
+  back into names from your own install — all 20 of this install's cargo receipts
+  resolve with no download present at all.
+
+- **The install figures Settings quotes are measured rather than typed in.**
+  Three had gone stale: it claimed 1,321 deposit rows across 50 places where this
+  build reads 783 across 49.
 
 - **Corrected two claims that had stopped being true.** The release notes said
   the app reads `Game.log` only and never writes to the game directory, which

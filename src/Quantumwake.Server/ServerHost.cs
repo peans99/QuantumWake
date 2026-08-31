@@ -1251,55 +1251,7 @@ public static class ServerHost
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Yield).ToList(),
                     StringComparer.OrdinalIgnoreCase);
 
-            // Neither source is a superset. The download reaches further - 2,642
-            // rows across 234 places against the install's 1,321 across 50 - and
-            // the install knows things the download never carried: how much of a
-            // rock each ore is, what quality it comes out at, and how long the
-            // slot takes to refill. Choosing one used to throw the other away,
-            // so a player who enabled the download silently lost every richness
-            // and quality figure on the page.
-            var fromInstall = lib.GameCommodities.Spawns;
-
-            // What the install says about a deposit, found by the pair that
-            // identifies one to a reader: this ore, at this place.
-            var detail = fromInstall
-                .GroupBy(s => (s.Resource, s.Location), ResourcePlaceComparer.Instance)
-                .ToDictionary(g => g.Key, g => g.First(), ResourcePlaceComparer.Instance);
-
-            var covered = new HashSet<(string, string)>(ResourcePlaceComparer.Instance);
-
-            var merged = lib.Community.ResourceSpawns.Select(s =>
-            {
-                var key = (s.Resource, s.Location);
-                var known = detail.TryGetValue(key, out var extra);
-                if (known) covered.Add(key);
-
-                return (
-                    s.Resource,
-                    Deposit: s.Deposit ?? extra?.Deposit,
-                    MinPercent: extra?.MinPercent,
-                    MaxPercent: extra?.MaxPercent,
-                    s.Kind, s.Location, s.System, s.Group,
-                    GroupChance: (double)s.GroupChance,
-                    Share: (double)s.Share,
-                    Quality: extra?.Quality,
-                    RespawnSeconds: extra?.RespawnSeconds,
-                    Source: known ? "both" : "dataset");
-            });
-
-            // Rows the download does not have at all are kept rather than
-            // dropped: the point of merging is that neither side is complete.
-            var spawns = lib.Community.ResourceSpawns.Count > 0
-                ? merged.ToList().Concat(fromInstall
-                    .Where(s => !covered.Contains((s.Resource, s.Location)))
-                    .Select(s => (
-                        s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location,
-                        s.System, s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds,
-                        Source: "install")))
-                : fromInstall.Select(s => (
-                    s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location, s.System,
-                    s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds,
-                    Source: "install"));
+            var spawns = SpawnMerge.Merge(lib.GameCommodities.Spawns, lib.Community.ResourceSpawns);
 
             return spawns.Select(s =>
             {
@@ -2541,23 +2493,45 @@ public static class ServerHost
                         ["recipes"] = library.GameCommodities.Blueprints.Count,
                         ["deposits"] = library.GameCommodities.Spawns.Count,
                         ["places"] = library.GameCommodities.PlaceCount,
+
+                        // Not the same as "places": the Settings copy compares
+                        // how far each source reaches, and that is the number of
+                        // distinct spots deposits sit in, not the whole gazetteer.
+                        ["spawnplaces"] = library.GameCommodities.Spawns
+                            .Select(s => s.Location)
+                            .Distinct(StringComparer.OrdinalIgnoreCase).Count(),
                     });
 
                     app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
                         library.Names.ItemCount, library.Names.VehicleCount);
+                }
+                catch (Exception e)
+                {
+                    gameData.Failed($"The game files could not be read: {e.Message}");
+                    app.Logger.LogError(e, "Reading the game files failed.");
+                }
 
-                    var status = app.Services.GetRequiredService<ScanStatus>();
+                // Deliberately a second attempt rather than an else. Reading the
+                // game files and parsing the logs fail for unrelated reasons and
+                // neither needs the other to have worked, but they shared a catch:
+                // one unreadable backup reported the install as unreadable, which
+                // sends someone off to verify game files that were never at fault.
+                var status = app.Services.GetRequiredService<ScanStatus>();
+                try
+                {
                     status.Begin();
-
                     var parsed = library.Scan(install, Progress(status));
-                    status.Finish();
                     app.Logger.LogInformation("Library ready: {Parsed} newly parsed, {Total} sessions.",
                         parsed, library.Store.Count());
                 }
                 catch (Exception e)
                 {
-                    gameData.Failed($"The game files could not be read: {e.Message}");
                     app.Logger.LogError(e, "Initial scan failed.");
+                }
+                finally
+                {
+                    // Always: a scan left open reads on the page as one still running.
+                    status.Finish();
                 }
             });
         }
@@ -3219,6 +3193,88 @@ public sealed record MiningRunEntry(
 /// The two sources spell the same place differently in case alone often enough
 /// that an ordinal match loses rows that plainly belong together.
 /// </remarks>
+/// <summary>
+/// One deposit as the Mining page lists it, from either source or both.
+/// </summary>
+public sealed record MergedSpawn(
+    string Resource, string? Deposit, double? MinPercent, double? MaxPercent, string Kind,
+    string Location, string? System, string Group, double GroupChance, double Share,
+    QualityBand? Quality, int? RespawnSeconds, string Source);
+
+public static partial class SpawnMerge
+{
+    /// <summary>
+    /// Joins what the install knows about a deposit to what the download knows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Neither source is a superset. The download reaches further - 2,642 rows
+    /// across 234 places against the install's 783 across 49 - and the install
+    /// knows things the download never carried: how much of a rock each ore is,
+    /// what quality it assays at, and how long the slot takes to refill.
+    /// Choosing one threw the other away, so enabling the download silently
+    /// lost every richness and quality figure on the page.
+    /// </para>
+    /// <para>
+    /// Ore and place do not identify a deposit, which is the trap here. The same
+    /// ore sits in different rocks at one place at wildly different
+    /// concentrations: at Fuego, borase is 9.7-74.3% of a Borase (Ore) deposit
+    /// and 2-5% of a Bexalite (Raw) one. Taking whichever came first stamped one
+    /// of those onto the download's row - advertising a rich deposit at trace
+    /// concentration - and then dropped the variants it had displaced, as though
+    /// the pair were accounted for. Matching on the deposit instead is not open
+    /// to us: the download names them in its own vocabulary ("Mineable Rock
+    /// Asteroid Common"). So enrich only where there is nothing to choose
+    /// between, and keep every variant whenever there is.
+    /// </para>
+    /// </remarks>
+    public static List<MergedSpawn> Merge(
+        IReadOnlyList<GameSpawn> install, IReadOnlyList<ResourceSpawn> dataset)
+    {
+        // Only the fields enrichment actually copies across. Install rows that
+        // agree on all of them are interchangeable however many groups produced
+        // them - an ore drawn from Cave Rich, Cave Medium and Cave Poor is one
+        // deposit listed three times - and that is 542 of the 608 pairs.
+        static (string?, double?, double?, QualityBand?, int?) Copied(GameSpawn s) =>
+            (s.Deposit, s.MinPercent, s.MaxPercent, s.Quality, s.RespawnSeconds);
+
+        static MergedSpawn FromInstall(GameSpawn s) => new(
+            s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location, s.System,
+            s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds, "install");
+
+        if (dataset.Count == 0) return [.. install.Select(FromInstall)];
+
+        var byPair = install
+            .GroupBy(s => (s.Resource, s.Location), ResourcePlaceComparer.Instance)
+            .ToDictionary(g => g.Key, g => g.ToList(), ResourcePlaceComparer.Instance);
+
+        var covered = new HashSet<GameSpawn>();
+        var merged = new List<MergedSpawn>(dataset.Count);
+
+        foreach (var s in dataset)
+        {
+            GameSpawn? extra = null;
+            if (byPair.TryGetValue((s.Resource, s.Location), out var variants)
+                && variants.Select(Copied).Distinct().Count() == 1)
+            {
+                extra = variants[0];
+                foreach (var variant in variants) covered.Add(variant);
+            }
+
+            merged.Add(new MergedSpawn(
+                s.Resource, s.Deposit ?? extra?.Deposit, extra?.MinPercent, extra?.MaxPercent,
+                s.Kind, s.Location, s.System, s.Group, s.GroupChance, s.Share,
+                extra?.Quality, extra?.RespawnSeconds, extra is not null ? "both" : "dataset"));
+        }
+
+        // Rows the download does not have, and variants it could not be joined
+        // to, are kept rather than dropped: the point of merging is that neither
+        // side is complete.
+        merged.AddRange(install.Where(s => !covered.Contains(s)).Select(FromInstall));
+        return merged;
+    }
+}
+
 public sealed class ResourcePlaceComparer : IEqualityComparer<(string Resource, string Location)>
 {
     public static readonly ResourcePlaceComparer Instance = new();

@@ -57,7 +57,11 @@ public sealed partial class GameCommodities
         _itemUuids = itemUuids;
         _facts = facts;
         _blueprints = blueprints;
-        _spawns = spawns;
+        // The same composition is reached through several presets, so the read
+        // repeats itself: 1,308 rows describe 780 distinct deposits. Deduped
+        // here rather than where they are used, so the count the Settings page
+        // reports and the rows the Mining page lists are the same number.
+        _spawns = spawns.Distinct().ToList();
         _places = places;
     }
 

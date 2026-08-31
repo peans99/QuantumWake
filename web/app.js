@@ -1155,6 +1155,11 @@ async function loadHistory() {
   loadLedger().catch((e) => console.error('ledger', e));
   loadLogbook().catch((e) => console.error('logbook', e));
   await loadManufacturers();
+
+  // Awaited, so the catalogue fetches below know whether the game files are
+  // ready yet - and so the poll that refills them is running even for someone
+  // who never opens Settings or Mining, which is where it used to start.
+  await loadGameData().catch(() => {});
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
   loadMiningRef().catch((e) => console.error('mining', e));
@@ -1826,9 +1831,10 @@ async function refreshCommunityOffer() {
 
   if (community.enabled) {
     $('#cargo-caption').textContent =
-      'Volume, price and place come straight from the kiosk. Commodity names '
-      + `come from the community dataset (${community.commodities} commodities, `
-      + 'StarCitizenWiki / scunpacked-data), fetched once at your request.';
+      'Volume, price and place come straight from the kiosk. Commodity names come '
+      + 'from your own install, falling back to the community dataset '
+      + `(${community.commodities} commodities, StarCitizenWiki / scunpacked-data) `
+      + 'for anything it does not name.';
   }
 }
 
@@ -2813,7 +2819,7 @@ function renderPartsRef() {
     const tr = el('tr');
     const td = el('td', 'muted', partCatalogue.length
       ? 'Nothing matches that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : gameDataExcuse() || 'No parts were found in your game files.');
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -3184,7 +3190,7 @@ function renderMiningRef() {
     const tr = el('tr');
     const td = el('td', 'muted', miningCatalogue.length
       ? 'Nothing matches that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : gameDataExcuse() || 'No deposits were found in your game files.');
     td.colSpan = 13;
     tr.append(td);
     body.append(tr);
@@ -3359,7 +3365,7 @@ function renderCraftingRef() {
     const tr = el('tr');
     const td = el('td', 'muted', craftingCatalogue.length
       ? 'Nothing matches that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : gameDataExcuse() || 'No recipes were found in your game files.');
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -8021,7 +8027,26 @@ let gameDataState = null;
 
 async function loadGameData() {
   const state = await getJson('/api/gamedata').catch(() => null);
+  const was = gameDataState?.state;
   gameDataState = state;
+
+  // Still reading means still changing, so the page comes back for the answer
+  // rather than leaving a count that was true a moment ago. Scheduled up here
+  // because the early return below skips it on any page whose panel is absent,
+  // and this poll is the only thing that notices the reading has finished.
+  if (state?.state === 'reading') setTimeout(() => { loadGameData().catch(() => {}); }, 3000);
+
+  // Parts, Mining and Crafting are fetched once, at startup. On a cold install
+  // that is half a minute before the game files have been read, so they came
+  // back empty and stayed empty until the browser was reloaded: the app looked
+  // like it held no data rather than like it was still reading. Refill them the
+  // moment there is something to fetch.
+  if (state?.state === 'ready' && was && was !== 'ready') {
+    loadPartsRef().catch((e) => console.error('parts refill', e));
+    loadMiningRef().catch((e) => console.error('mining refill', e));
+    loadCraftingRef().catch((e) => console.error('crafting refill', e));
+    loadMiningPlaces().catch(() => {});
+  }
 
   const label = $('#gamedata-state');
   const problem = $('#gamedata-problem');
@@ -8042,6 +8067,14 @@ async function loadGameData() {
   const counts = state?.counts || {};
   const count = (n) => (n || 0).toLocaleString();
 
+  // The Settings copy quotes install figures to compare the two sources. They
+  // move with every patch, so they are filled from the counts rather than typed
+  // into the page and left to rot - three of them were already out of date.
+  const quote = (id, n) => { const node = $(id); if (node && n) node.textContent = n.toLocaleString(); };
+  quote('#settings-install-items', counts.items);
+  quote('#settings-install-deposits', counts.deposits);
+  quote('#settings-install-spawnplaces', counts.spawnplaces);
+
   tiles('#gamedata-counts', [
     ['Commodities', count(counts.commodities)],
     ['Items', count(counts.items)],
@@ -8049,10 +8082,6 @@ async function loadGameData() {
     ['Deposits', count(counts.deposits)],
     ['Places', count(counts.places)],
   ]);
-
-  // Still reading means still changing, so the page comes back for the answer
-  // rather than leaving a count that was true a moment ago.
-  if (state?.state === 'reading') setTimeout(() => { loadGameData().catch(() => {}); }, 3000);
 
   return state;
 }

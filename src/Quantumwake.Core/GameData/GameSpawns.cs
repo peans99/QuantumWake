@@ -282,16 +282,13 @@ public static class GameSpawns
         // The game wraps text nobody has written yet in angle brackets. One of
         // those reached the mining page as a resource called
         // "<= PLACEHOLDER =>", which is not a thing anybody can go and mine.
-        static bool Unwritten(string name) =>
-            name.Length > 1 && name.TrimStart().StartsWith('<') && name.TrimEnd().EndsWith('>');
-
         var ores = Ores(core, text, byId, record);
         if (ores.Count > 0)
         {
             return
             [
                 .. ores
-                    .Where(o => !Unwritten(o.Resource))
+                    .Where(o => !GameItems.Unwritten(o.Resource))
                     .Select(o => (o.Resource, o.Deposit, (double?)o.Min, (double?)o.Max, "mineable"))
             ];
         }
@@ -302,7 +299,7 @@ public static class GameSpawns
             ? item.Name
             : Tidied(bare);
 
-        return Unwritten(named) ? [] : [(named, null, (double?)null, (double?)null, kind)];
+        return GameItems.Unwritten(named) ? [] : [(named, null, (double?)null, (double?)null, kind)];
     }
 
     /// <summary>
