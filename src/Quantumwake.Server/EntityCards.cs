@@ -273,6 +273,12 @@ public static class EntityCards
         if (item is null)
             return null;
 
+        // 8,149 of the install's items resolve to CIG's placeholder marker and
+        // come back unnamed. The Parts table has always fallen back to the
+        // class with its underscores opened out; this has to agree with it, or
+        // the drawer opens blank and the shopping list gets a line with no name.
+        var name = item.Name is { Length: > 0 } named ? named : item.ClassName.Replace('_', ' ');
+
         var facts = new List<EntityFact>();
 
         var what = string.Join(" · ", new[] { item.Type, item.SubType }
@@ -286,7 +292,7 @@ public static class EntityCards
                 string.Join(" · ", new[]
                 {
                     item.Size > 0 ? $"S{item.Size}" : null,
-                    item.Grade > 0 ? $"grade {item.Grade}" : null
+                    item.Grade > 0 ? $"grade {GradeLetter(item.Grade)}" : null
                 }.Where(x => x is not null)),
                 EntitySource.Install));
 
@@ -312,17 +318,22 @@ public static class EntityCards
             .Select(s => s.Name)
             .ToList();
 
+        // Never "not yours". An inventory line is a sighting, not a ledger: a
+        // pledged item sitting in a hangar nobody has opened is owned and has
+        // simply never been listed, and telling the pilot they do not have it
+        // is the kind of confident wrong answer this app exists not to give.
         var holding = equipped.Item is not null
             ? new EntityHolding("you are wearing it", equipped.Slot.Label)
             : stashedAt.Count > 0
                 ? new EntityHolding("in your stash", string.Join(", ", stashedAt.Take(3)))
-                : new EntityHolding("not yours", "never seen in your kit or a stash here");
+                : new EntityHolding("not seen in your kit",
+                    "your logs list what you have looked at, so this may still be yours");
 
         var stock = uex.ItemMarket(item.Uuid);
         var cheapest = stock.Count > 0 ? stock.MinBy(r => r.Buy) : null;
 
         return new EntityCard(
-            "part", item.ClassName, item.Name, what.Length > 0 ? what : null,
+            "part", item.ClassName, name, what.Length > 0 ? what : null,
             facts,
             holding,
             uex.ItemPrice(item.Uuid) is { } price
@@ -330,11 +341,31 @@ public static class EntityCards
                 : null,
             [.. stock.OrderBy(r => r.Buy).Take(4)
                 .Select(r => new EntityWhere(null, r.Terminal, $"{r.Buy:N0} aUEC"))],
-            [EntityAction.Shopping, EntityAction.Map, EntityAction.Details],
+            // The map is offered only where something is known to stock it: a
+            // component with no seller has nowhere to be shown, and a button
+            // that does nothing is worse than one that is not there.
+            stock.Count > 0
+                ? [EntityAction.Shopping, EntityAction.Map, EntityAction.Details]
+                : [EntityAction.Shopping, EntityAction.Details],
             item.Description,
             [.. (item.Tags ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries
                 | StringSplitOptions.TrimEntries)]);
     }
+
+    /// <summary>
+    /// Grade 1 is grade A, as everywhere else in the app.
+    /// </summary>
+    /// <remarks>
+    /// The same four letters the Parts table prints, because one component
+    /// described two ways in two places is the disagreement this whole panel
+    /// exists to end. Past D the game has no letter and the number stands.
+    /// </remarks>
+    public static string GradeLetter(int grade) => grade switch
+    {
+        < 1 => "—",
+        <= 4 => "ABCD"[grade - 1].ToString(),
+        _ => grade.ToString()
+    };
 
     /// <summary>"DistributionCentre" -> "Distribution Centre".</summary>
     private static string Spaced(string value) =>

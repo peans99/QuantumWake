@@ -174,6 +174,73 @@ public class EntityDrawerTests
         Assert.Contains("\"name\":\"Laranite\"", page.BodyOf("/api/jobs/collect"));
     }
 
+    /// <summary>
+    /// Only a place has a dot of its own. Passing a commodity name to centreOn
+    /// looked for a place id that was never going to exist, and the button did
+    /// nothing at all.
+    /// </summary>
+    [Fact]
+    public void Showing_a_commodity_on_the_map_searches_for_it_rather_than_centring()
+    {
+        var page = Opened("commodity", "Laranite", Laranite);
+
+        page.Do("await runEntityAction('map', { kind:'commodity', id:'Laranite', name:'Laranite' }, __dom.node('#entity-actions'));");
+
+        Assert.Equal("Laranite", page.Text("__dom.node('#map-search').value"));
+    }
+
+    /// <summary>
+    /// A component has no dot either, so it goes to the nearest thing the map
+    /// can find: the cheapest seller the catalogue named.
+    /// </summary>
+    [Fact]
+    public void Showing_a_component_on_the_map_goes_to_a_seller()
+    {
+        var page = new Page();
+        page.Do("""
+            jumpedTo = null;
+            jumpToPlace = (name) => { jumpedTo = name; };
+            """);
+
+        page.Do("""
+            await runEntityAction('map',
+              { kind:'part', id:'varipuck_s5', name:'VariPuck',
+                places:[{ placeId:null, name:'Platinum Bay, Baijini Point', note:'4,000 aUEC' }] },
+              __dom.node('#entity-actions'));
+            """);
+
+        Assert.Equal("Platinum Bay, Baijini Point", page.Text("jumpedTo"));
+    }
+
+    /* ---------- pinning ---------- */
+
+    /// <summary>
+    /// The endpoint binds visible from the query, so a JSON body was ignored
+    /// and answered 400 — which fetch does not throw for, so the button said it
+    /// had worked every single time.
+    /// </summary>
+    [Fact]
+    public void Pinning_to_the_overlay_asks_the_way_the_endpoint_reads_it()
+    {
+        var page = AtLorville();
+        page.Serve("/api/overlay?visible=true", """{"available":true,"visible":true}""");
+
+        page.Do("await runEntityAction('overlay', { kind:'place', id:'x', name:'X' }, __dom.node('#entity-actions'));");
+
+        Assert.Contains("POST /api/overlay?visible=true", page.Fetched());
+    }
+
+    [Fact]
+    public void A_refused_pin_says_so_rather_than_claiming_success()
+    {
+        var page = AtLorville();
+        page.Fail("/api/overlay?visible=true", 409, """{"message":"No overlay in this process."}""");
+
+        page.Do("await runEntityAction('overlay', { kind:'place', id:'x', name:'X' }, __dom.node('#entity-actions'));");
+
+        Assert.Equal("failed", page.NodeText("#entity-actions"));
+    }
+
     /* ---------- opening and closing ---------- */
 
     [Fact]
@@ -185,6 +252,44 @@ public class EntityDrawerTests
         page.Do("await openEntity('place', 'Stanton1_Lorville');");
 
         Assert.True(page.Truth("__dom.node('#entity-drawer').hidden"));
+    }
+
+    /// <summary>
+    /// Two clicks are two requests, and the first can land second — which had
+    /// the panel describing whatever was clicked before.
+    /// </summary>
+    /// <remarks>
+    /// The ticket is what is tested rather than the interleaving: the fetch
+    /// stub answers in the order it is asked, so an out-of-order landing cannot
+    /// be staged here at all. A first attempt tried and passed against the
+    /// unfixed page, which is worse than no test.
+    /// </remarks>
+    [Fact]
+    public void Only_the_newest_request_is_still_wanted()
+    {
+        var page = new Page();
+
+        page.Do("first = entityTicket(); second = entityTicket();");
+
+        Assert.False(page.Truth("first()"));
+        Assert.True(page.Truth("second()"));
+    }
+
+    /// <summary>
+    /// Closing counts as moving on: a reply still in flight must not reopen a
+    /// drawer the pilot has just dismissed.
+    /// </summary>
+    [Fact]
+    public void Closing_makes_a_reply_in_flight_unwanted()
+    {
+        var page = new Page();
+
+        page.Do("pending = entityTicket();");
+        Assert.True(page.Truth("pending()"));
+
+        page.Do("closeEntity();");
+
+        Assert.False(page.Truth("pending()"));
     }
 
     /// <summary>

@@ -908,8 +908,8 @@ async function pinBriefingToOverlay() {
   const button = $('#briefing-overlay');
   button.disabled = true;
   try {
-    await fetch('/api/overlay', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visible: true }) });
+    // Same call, same fix: visible is bound from the query, not from a body.
+    await fetch('/api/overlay?visible=true', { method: 'POST' });
   } finally {
     button.disabled = false;
   }
@@ -1274,6 +1274,25 @@ function connectStream() {
  */
 let entityShown = null;
 
+let entityRequest = 0;
+
+/**
+ * Stamps a request, and answers whether its reply is still wanted.
+ *
+ * Two clicks in a row are two requests, and the first can land second - which
+ * had the panel describing whatever was clicked before. Closing counts as
+ * moving on too, so a reply still in flight cannot reopen a drawer the pilot
+ * has just dismissed.
+ *
+ * A function rather than a comparison at the call site because that is the
+ * half of this that can be tested: the stub answers in the order it is asked,
+ * so the out-of-order landing itself cannot be staged here.
+ */
+function entityTicket() {
+  const token = ++entityRequest;
+  return () => token === entityRequest;
+}
+
 /** The map-only parts of a place card, which no other kind fills in. */
 const PLACE_ONLY_NODES = [
   '#map-info-services', '#map-info-trade', '#map-info-notes',
@@ -1299,15 +1318,20 @@ async function openEntity(kind, id) {
     return false;
   }
 
+  const wanted = entityTicket();
+
   let card;
   try {
     card = await getJson(`/api/entity?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`);
   } catch {
     // Nothing known is not an error worth a dialog: the click simply has no
-    // answer, and leaving the previous card up would answer for the wrong thing.
-    closeEntity();
+    // answer, and leaving the previous card up would answer for the wrong
+    // thing. A failure for a request already superseded says nothing at all.
+    if (wanted()) closeEntity();
     return false;
   }
+
+  if (!wanted()) return false;
 
   entityShown = `${kind}|${id}`;
   renderEntity(card);
@@ -1315,6 +1339,7 @@ async function openEntity(kind, id) {
 }
 
 function closeEntity() {
+  entityRequest++;
   $('#entity-drawer').hidden = true;
   document.body.classList.remove('entity-open');
   entityShown = null;
@@ -1476,6 +1501,35 @@ function entityMap(placeId, name) {
   else if (name) jumpToPlace(name);
 }
 
+/**
+ * Where "show on map" goes, which is a different question for each kind.
+ *
+ * Only a place has a dot of its own; passing a commodity name or an item class
+ * to centreOn looks for a place id that was never going to exist, and the
+ * button did nothing at all. A commodity goes through the map's own commodity
+ * search, which is what colours the counters that trade it. A component has no
+ * dot either, so it goes to the nearest thing the map can find - the cheapest
+ * seller the catalogue named - and is not offered the button without one.
+ */
+function showEntityOnMap(card) {
+  showView('map');
+
+  if (card.kind === 'place') {
+    centreOn(card.id);
+    return;
+  }
+
+  if (card.kind === 'commodity') {
+    $('#map-search').value = card.name;
+    drawMap();
+    return;
+  }
+
+  const seller = (card.places || [])[0];
+  if (seller?.placeId) centreOn(seller.placeId);
+  else if (seller?.name) jumpToPlace(seller.name);
+}
+
 const ENTITY_ACTION_LABEL = {
   map: 'Show on map',
   stop: 'Add as a stop',
@@ -1500,7 +1554,7 @@ function renderEntityActions(card) {
 }
 
 async function runEntityAction(action, card, button) {
-  if (action === 'map') return entityMap(card.id, card.name);
+  if (action === 'map') return showEntityOnMap(card);
   if (action === 'details') return openEntityDetails(card);
 
   button.disabled = true;
@@ -1529,11 +1583,12 @@ async function runEntityAction(action, card, button) {
     }
 
     if (action === 'overlay') {
-      await fetch('/api/overlay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visible: true }),
-      });
+      // The endpoint binds visible from the query, so a JSON body was ignored
+      // and answered 400 - which fetch does not throw for, so the button said
+      // it had worked every time.
+      const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
+      if (!response.ok) throw new Error('overlay refused');
+
       button.textContent = '✓ pinned';
     }
   } catch {

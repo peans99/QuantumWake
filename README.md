@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.24
+### 0.9.25
 
 - **One panel for everything, wherever you click it.** A place on the map, a
   component in the parts table — they now open the same drawer, and it answers
@@ -259,6 +259,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   Every component opens one now. It used to be only the ones the game happened
   to write a paragraph about; the rest had nothing to click, even though the app
   knew their size, grade, price and whether they were already in your kit.
+
+  What it will not say is that something is not yours. An inventory line is a
+  sighting, not a ledger — a pledged item sitting in a hangar nobody has opened
+  is owned and has simply never been listed — so a component you have no record
+  of reads as "not seen in your kit", with the reason attached.
+
+- **"Pin to overlay" actually pins now.** The button on the Now briefing has
+  never worked: the request was sent in a form the endpoint does not read, and a
+  refused request is not an error in a browser, so it reported success every
+  time and did nothing. It now asks the way the endpoint reads it, and says so
+  when the answer is no — which it is whenever the dashboard is running without
+  the overlay.
 
 
 - **The Now page leads with whatever your ship is for.** Take a hauler out and
