@@ -279,9 +279,22 @@ public static class GameSpawns
 
         if (target is null || !byId.TryGetValue(target.Value, out var record)) return [];
 
+        // The game wraps text nobody has written yet in angle brackets. One of
+        // those reached the mining page as a resource called
+        // "<= PLACEHOLDER =>", which is not a thing anybody can go and mine.
+        static bool Unwritten(string name) =>
+            name.Length > 1 && name.TrimStart().StartsWith('<') && name.TrimEnd().EndsWith('>');
+
         var ores = Ores(core, text, byId, record);
         if (ores.Count > 0)
-            return [.. ores.Select(o => (o.Resource, o.Deposit, (double?)o.Min, (double?)o.Max, "mineable"))];
+        {
+            return
+            [
+                .. ores
+                    .Where(o => !Unwritten(o.Resource))
+                    .Select(o => (o.Resource, o.Deposit, (double?)o.Min, (double?)o.Max, "mineable"))
+            ];
+        }
 
         var bare = Bare(record.Name);
 
@@ -289,7 +302,7 @@ public static class GameSpawns
             ? item.Name
             : Tidied(bare);
 
-        return [(named, null, (double?)null, (double?)null, kind)];
+        return Unwritten(named) ? [] : [(named, null, (double?)null, (double?)null, kind)];
     }
 
     /// <summary>

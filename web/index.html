@@ -849,11 +849,10 @@
 
     <div class="community-offer" id="community-offer" hidden>
       <div>
-        <b>Name the cargo?</b>
-        Cargo is named from your own game install, so this needs no
-        download. A missing name means the install could not be read — check
-        the game folder on the Settings page.
-        if you turn that on.
+        <b>Cargo is named from your own game install</b>, so this needs no
+        download. A name still missing once Settings says your game files are
+        ready means that commodity is not in them &mdash; the community dataset
+        knows a few the install does not.
       </div>
       <button class="ghost" id="community-enable">Download community data</button>
       <span class="muted" id="community-status"></span>
@@ -1695,6 +1694,22 @@
           <span>Play history — sessions, places, contracts</span>
         </label>
       </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Your game files</h3>
+        <span class="muted" id="gamedata-state"></span>
+      </div>
+      <p class="muted">
+        Commodity names, the item catalogue, crafting recipes, deposit tables and
+        place descriptions are read straight out of <code>Data.p4k</code>. The
+        first read after a game patch takes about half a minute and then caches,
+        so pages that use it are empty until this says ready &mdash; that is a
+        wait, not a fault, and nothing needs downloading to fix it.
+      </p>
+      <div class="summary-strip" id="gamedata-counts"></div>
+      <p class="muted warn" id="gamedata-problem" hidden></p>
     </div>
 
     <div class="option-block">

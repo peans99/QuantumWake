@@ -118,6 +118,7 @@ public static class ServerHost
         builder.Services.AddSingleton<ItemLabelStore>();
         builder.Services.AddSingleton<GoalStore>();
         builder.Services.AddSingleton<MiningLogStore>();
+        builder.Services.AddSingleton<GameDataStatus>();
         builder.Services.AddSingleton<TextOverlayService>();
 
 
@@ -896,6 +897,11 @@ public static class ServerHost
         // What the game says each place has. Separate from the service badges,
         // which are UEX's account of where you can actually trade: this is the
         // star map's own list, and the two disagree usefully often.
+        // Whether the install has been read yet. Every page backed by it is
+        // empty until this says ready, and several of them used to suggest
+        // downloading 110 MB to fix what was a thirty-second wait.
+        app.MapGet("/api/gamedata", (GameDataStatus status) => status.Snapshot());
+
         app.MapGet("/api/map/amenities", (LogLibrary lib) =>
             lib.GameCommodities.Places
                 .Where(p => p.Value.Amenities.Count > 0)
@@ -1245,20 +1251,52 @@ public static class ServerHost
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Yield).ToList(),
                     StringComparer.OrdinalIgnoreCase);
 
-            // The download still wins here, and this is the one page where it
-            // does: 2,642 rows across 234 places against the install's 1,321
-            // across 50. The install fills the page for somebody who has no
-            // download rather than replacing one they do have. It does carry one
-            // thing the download never did - how much of a rock each ore is, and
-            // what quality it comes out at where it sits.
+            // Neither source is a superset. The download reaches further - 2,642
+            // rows across 234 places against the install's 1,321 across 50 - and
+            // the install knows things the download never carried: how much of a
+            // rock each ore is, what quality it comes out at, and how long the
+            // slot takes to refill. Choosing one used to throw the other away,
+            // so a player who enabled the download silently lost every richness
+            // and quality figure on the page.
+            var fromInstall = lib.GameCommodities.Spawns;
+
+            // What the install says about a deposit, found by the pair that
+            // identifies one to a reader: this ore, at this place.
+            var detail = fromInstall
+                .GroupBy(s => (s.Resource, s.Location), ResourcePlaceComparer.Instance)
+                .ToDictionary(g => g.Key, g => g.First(), ResourcePlaceComparer.Instance);
+
+            var covered = new HashSet<(string, string)>(ResourcePlaceComparer.Instance);
+
+            var merged = lib.Community.ResourceSpawns.Select(s =>
+            {
+                var key = (s.Resource, s.Location);
+                var known = detail.TryGetValue(key, out var extra);
+                if (known) covered.Add(key);
+
+                return (
+                    s.Resource,
+                    Deposit: s.Deposit ?? extra?.Deposit,
+                    MinPercent: extra?.MinPercent,
+                    MaxPercent: extra?.MaxPercent,
+                    s.Kind, s.Location, s.System, s.Group,
+                    GroupChance: (double)s.GroupChance,
+                    Share: (double)s.Share,
+                    Quality: extra?.Quality,
+                    RespawnSeconds: extra?.RespawnSeconds,
+                    Source: known ? "both" : "dataset");
+            });
+
+            // Rows the download does not have at all are kept rather than
+            // dropped: the point of merging is that neither side is complete.
             var spawns = lib.Community.ResourceSpawns.Count > 0
-                ? lib.Community.ResourceSpawns.Select(s => (
-                    s.Resource, Deposit: s.Deposit,
-                    MinPercent: (double?)null, MaxPercent: (double?)null,
-                    s.Kind, s.Location, s.System,
-                    s.Group, GroupChance: (double)s.GroupChance, Share: (double)s.Share,
-                    Quality: (QualityBand?)null, RespawnSeconds: (int?)null, Source: "dataset"))
-                : lib.GameCommodities.Spawns.Select(s => (
+                ? merged.ToList().Concat(fromInstall
+                    .Where(s => !covered.Contains((s.Resource, s.Location)))
+                    .Select(s => (
+                        s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location,
+                        s.System, s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds,
+                        Source: "install")))
+                : fromInstall.Select(s => (
                     s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location, s.System,
                     s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds,
                     Source: "install"));
@@ -2468,14 +2506,34 @@ public static class ServerHost
 
         // Warm the cache in the background so first paint is not blocked by a cold
         // 400 MB backfill.
-        if (install is not null)
+        var gameData = app.Services.GetRequiredService<GameDataStatus>();
+
+        if (install is null)
+        {
+            gameData.NoInstall();
+        }
+        else
         {
             _ = Task.Run(() =>
             {
                 try
                 {
                     // Names first: cheap when cached, and every view reads better with them.
+                    gameData.Begin();
                     library.LoadNames(install.RootPath);
+
+                    // Said out loud, because for the half minute this takes every
+                    // page backed by it is empty and there is otherwise no way to
+                    // tell that from a failure.
+                    gameData.Ready(new Dictionary<string, int>
+                    {
+                        ["commodities"] = library.GameCommodities.Count,
+                        ["items"] = library.GameCommodities.FactCount,
+                        ["recipes"] = library.GameCommodities.Blueprints.Count,
+                        ["deposits"] = library.GameCommodities.Spawns.Count,
+                        ["places"] = library.GameCommodities.PlaceCount,
+                    });
+
                     app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
                         library.Names.ItemCount, library.Names.VehicleCount);
 
@@ -2489,6 +2547,7 @@ public static class ServerHost
                 }
                 catch (Exception e)
                 {
+                    gameData.Failed($"The game files could not be read: {e.Message}");
                     app.Logger.LogError(e, "Initial scan failed.");
                 }
             });
@@ -3104,3 +3163,48 @@ public sealed record LogbookLine(
 /// <summary>What a mining-run form posts.</summary>
 public sealed record MiningRunEntry(
     string? Place, string? Resource, double Scu, int? Quality, decimal? Revenue, string? Note);
+
+/// <summary>Compares an ore-and-place pair the way a reader would.</summary>
+/// <remarks>
+/// The two sources spell the same place differently in case alone often enough
+/// that an ordinal match loses rows that plainly belong together.
+/// </remarks>
+public sealed class ResourcePlaceComparer : IEqualityComparer<(string Resource, string Location)>
+{
+    public static readonly ResourcePlaceComparer Instance = new();
+
+    public bool Equals((string Resource, string Location) a, (string Resource, string Location) b) =>
+        Ore(a.Resource) == Ore(b.Resource)
+        && string.Equals(a.Location, b.Location, StringComparison.OrdinalIgnoreCase);
+
+    public int GetHashCode((string Resource, string Location) key) =>
+        HashCode.Combine(Ore(key.Resource), key.Location.ToLowerInvariant());
+
+    /// <summary>
+    /// One ore, however the two sources choose to name it.
+    /// </summary>
+    /// <remarks>
+    /// The install writes "Copper Ore" and prefixes some with how they are
+    /// mined - "GroundVehicle Beradom" - where the download writes plain
+    /// "Copper". Matching on the raw strings joined 164 rows; on these it joins
+    /// far more, and the ones left over are genuinely different ores rather than
+    /// the same ore spelled differently. Spelling itself is left alone: the
+    /// install says Aluminium and the download says Aluminum, and quietly
+    /// treating those as one would be a guess rather than a normalisation.
+    /// </remarks>
+    private static string Ore(string name)
+    {
+        var trimmed = name.Trim();
+
+        foreach (var prefix in new[] { "GroundVehicle ", "FPS ", "ShipMining " })
+        {
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                trimmed = trimmed[prefix.Length..];
+        }
+
+        if (trimmed.EndsWith(" Ore", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4];
+
+        return trimmed.Trim().ToLowerInvariant();
+    }
+}

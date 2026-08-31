@@ -76,6 +76,26 @@ public sealed class TextOverlayService(
     /// <returns>The text and a human name for where it came from, or a problem.</returns>
     private (string? Ini, string Source, string? Problem) BaseTable(GameInstall game)
     {
+        // What is underneath OUR file, when ours is the one installed. The live
+        // table is not the base in that case - it is this build's own output,
+        // and reading it would preview a second set of marks on every name.
+        // Install never reaches this, because it takes itself out first; Status
+        // must not, so it asks the backup instead.
+        if (store.StillPresent()
+            && store.Current?.Files.FirstOrDefault(f => f.Backup is { Length: > 0 }) is { } ours
+            && File.Exists(ours.Backup!))
+        {
+            try
+            {
+                return (File.ReadAllText(ours.Backup!),
+                    store.Current.Layered ? "StarStrings" : "the game", null);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                log.LogWarning(e, "displaced table unreadable");
+            }
+        }
+
         // Layered: an installed text mod's file is the base, so both survive.
         if (starStrings.StillPresent()
             && starStrings.Current?.Files.FirstOrDefault(f =>

@@ -175,13 +175,17 @@ function showView(name) {
   // rather than on every tick of the live stream.
   if (name === 'now') loadEarnings().catch(() => {});
   if (name === 'mining') {
+    loadGameData().catch(() => {});
     loadMiningPlaces().catch(() => {});
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
   }
 
   // Settings reflects live state (the tray can change it), so re-read on entry.
-  if (name === 'settings') renderSettings().catch(() => {});
+  if (name === 'settings') {
+    renderSettings().catch(() => {});
+    loadGameData().catch(() => {});
+  }
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
@@ -3052,7 +3056,8 @@ async function loadMiningPlaces() {
   body.textContent = '';
 
   if (!places.length) {
-    note.textContent = 'No deposit tables could be read from your install.';
+    note.textContent = gameDataExcuse()
+      ?? 'No deposit tables could be read from your install.';
     return;
   }
 
@@ -7991,6 +7996,65 @@ const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
  */
 const amenitiesByPlace = new Map();
 let mapAmenityFilter = '';
+
+/**
+ * Whether the install has been read yet.
+ *
+ * Kept because "empty" and "broken" look identical for the half minute the
+ * first read takes, and several pages resolved that ambiguity by suggesting a
+ * 110 MB download to fix a wait.
+ */
+let gameDataState = null;
+
+async function loadGameData() {
+  const state = await getJson('/api/gamedata').catch(() => null);
+  gameDataState = state;
+
+  const label = $('#gamedata-state');
+  const problem = $('#gamedata-problem');
+  if (!label) return state;
+
+  label.textContent = {
+    reading: state?.seconds ? `reading… ${Math.round(state.seconds)}s` : 'reading…',
+    ready: 'ready',
+    failed: 'could not be read',
+    noinstall: 'no install found',
+  }[state?.state] || '';
+
+  if (problem) {
+    problem.textContent = state?.problem || '';
+    problem.hidden = !state?.problem;
+  }
+
+  const counts = state?.counts || {};
+  const count = (n) => (n || 0).toLocaleString();
+
+  tiles('#gamedata-counts', [
+    ['Commodities', count(counts.commodities)],
+    ['Items', count(counts.items)],
+    ['Recipes', count(counts.recipes)],
+    ['Deposits', count(counts.deposits)],
+    ['Places', count(counts.places)],
+  ]);
+
+  // Still reading means still changing, so the page comes back for the answer
+  // rather than leaving a count that was true a moment ago.
+  if (state?.state === 'reading') setTimeout(() => { loadGameData().catch(() => {}); }, 3000);
+
+  return state;
+}
+
+/** What to say to a page that has nothing to show yet. */
+function gameDataExcuse() {
+  if (gameDataState?.state === 'reading') {
+    return 'Still reading your game files — this takes about half a minute after a patch.';
+  }
+
+  if (gameDataState?.state === 'noinstall') return 'No game install was found.';
+  if (gameDataState?.state === 'failed') return gameDataState.problem;
+
+  return null;
+}
 
 async function loadMapAmenities() {
   const select = $('#map-amenity');

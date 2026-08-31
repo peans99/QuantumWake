@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 23;
+    private const int CacheVersion = 24;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";

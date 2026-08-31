@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1000 tests](https://img.shields.io/badge/tests-1000%20passing-4fd48a)
+![1012 tests](https://img.shields.io/badge/tests-1012%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -245,7 +245,33 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.17
+### 0.9.18
+
+- **Mining uses both sources instead of choosing one.** Turning on the community
+  dataset used to replace the install's deposit tables outright, which silently
+  took away every richness, quality and respawn figure the install supplies.
+  They are merged now: 3,599 rows across 255 places, of which 259 are described
+  by both. Matching needs care, because the install writes "Copper Ore" where
+  the download writes "Copper" — joining on the raw names found 164 pairs, and
+  joining on the ore found 259. Spelling is left alone: the install says
+  Aluminium and the download says Aluminum, and treating those as one would be a
+  guess rather than a normalisation.
+
+- **Settings says whether your game files have been read.** The first read after
+  a patch takes about half a minute, and until now every page backed by it sat
+  empty and several suggested downloading 110 MB to fix what was a wait. Settings
+  now shows reading, ready or failed, with what came out: commodities, items,
+  recipes, deposits and places. Pages with nothing to show say which of those it
+  is, because "not yet" and "never will" had looked identical.
+
+- **A placeholder was reaching the Mining page as an ore.** The game wraps text
+  nobody has written in angle brackets, and one of those arrived as a resource
+  called `<= PLACEHOLDER =>`.
+
+- **Corrected two claims that had stopped being true.** The release notes said
+  the app reads `Game.log` only and never writes to the game directory, which
+  item labels made false. The Cargo page said cargo needs no download and then
+  offered one, ending mid-sentence in a line left from an older draft.
 
 - **More data comes directly from the game.** Quantum Wake now reads commodity
   names, item details, crafting recipes, mining deposits, place descriptions
