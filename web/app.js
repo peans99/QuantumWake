@@ -5234,7 +5234,13 @@ function showChecklistAttachment(attachment) {
 }
 
 function checklistItemRow(list, item, compact = false) {
-  const row = el('li', `checklist-item${item.done ? ' done' : ''}`);
+  // Bought since the line was written. Shown as done rather than ticked in the
+  // store: the list belongs to whoever wrote it, and a name matching a receipt
+  // is something the logs observed about it, not licence to edit it.
+  const bought = !item.done && item.bought;
+
+  const row = el('li',
+    `checklist-item${item.done ? ' done' : ''}${bought ? ' bought' : ''}`);
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = item.done;
@@ -5246,6 +5252,13 @@ function checklistItemRow(list, item, compact = false) {
   main.append(el('div', 'checklist-item-text', item.text));
   if (!compact && item.note) main.append(el('div', 'muted checklist-note', item.note));
   if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
+
+  if (bought) {
+    const note = el('div', 'checklist-bought', `bought ${dayOf(item.bought)}`);
+    note.title = 'Your logs show this was bought after you wrote this line. '
+      + 'Tick it to take it off for good.';
+    main.append(note);
+  }
 
   const attachments = item.attachments || [];
   if (attachments.length) {

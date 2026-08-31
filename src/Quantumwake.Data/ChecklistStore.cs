@@ -7,6 +7,11 @@ namespace Quantumwake.Data;
 public sealed record ChecklistAttachment(string Kind, string Label, string? Target = null, string? PlaceId = null);
 
 /// <summary>One authored departure task. Nothing here is inferred from the game.</summary>
+/// <param name="AddedAt">
+/// When it was written down. Null on lines from before this was recorded, which
+/// fall back to the list's own date - without it, "bought since you added this"
+/// cannot be answered and a purchase from last month would tick today's line.
+/// </param>
 public sealed record ChecklistItem(
     string Id,
     string Text,
@@ -14,7 +19,8 @@ public sealed record ChecklistItem(
     string? Note,
     IReadOnlyList<ChecklistAttachment> Attachments,
     bool Done,
-    DateTimeOffset? DoneAt);
+    DateTimeOffset? DoneAt,
+    DateTimeOffset? AddedAt = null);
 
 /// <summary>A reusable checklist, with at most one shown on Now at a time.</summary>
 public sealed record Checklist(
@@ -71,7 +77,8 @@ public sealed class ChecklistStore
             if (index < 0) return null;
 
             var item = new ChecklistItem(NewId(), Clean(text, "Task"), dueAt,
-                CleanOptional(note), CleanAttachments(attachments), Done: false, DoneAt: null);
+                CleanOptional(note), CleanAttachments(attachments), Done: false, DoneAt: null,
+                AddedAt: DateTimeOffset.UtcNow);
             _lists[index] = _lists[index] with { Items = [.. _lists[index].Items, item] };
             Save();
             return _lists[index];

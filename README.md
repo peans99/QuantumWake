@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1012 tests](https://img.shields.io/badge/tests-1012%20passing-4fd48a)
+![1017 tests](https://img.shields.io/badge/tests-1017%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -245,7 +245,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.18
+### 0.9.19
+
+- **Shield generators get their size and grade like everything else.** 203 item
+  names were coming out unmarked, and silently: the localisation table keys the
+  Lorica shield as `SHLD_BEHR_S02_7MA` while the entity describing it is
+  `SHLD_BEHR_S02_7MA_SCItem`, so the lookup missed. Separately, size 1 was being
+  treated as "no size" — it is a real size for something fitted to a ship, and
+  24 of the game's 73 shields are S1. Together those are 303 more items marked.
+
+- **A shopping line says when you have bought the thing.** Purchases are logged
+  by class and lists are written in names, so nothing joined them up. Lines now
+  show as bought, struck through, with the date. Deliberately not ticked for
+  you: the list is yours, and a name matching a receipt is something the logs
+  noticed about it rather than licence to edit it. Only purchases made *after*
+  the line was written count, or something bought last month would tick off a
+  line added this morning.
 
 - **Mining uses both sources instead of choosing one.** Turning on the community
   dataset used to replace the install's deposit tables outright, which silently

@@ -1761,11 +1761,20 @@ public static class ServerHost
 
         // ---- checklists: authored preparation, never guessed from the log ----
 
-        app.MapGet("/api/checklists", (ChecklistStore checklists, ImportStore imports, string? imported) =>
-            checklists.All().Select(list => Draw(list, null))
+        app.MapGet("/api/checklists",
+            (ChecklistStore checklists, ImportStore imports, LogLibrary lib, string? imported) =>
+        {
+            // When a line names something to buy and the logs then show it
+            // bought, the line has been done whether or not anybody ticked it.
+            // Matched on the name the app itself put on the line, which means
+            // going through the display name: purchases are logged by class.
+            var bought = lib.Bought();
+
+            return checklists.All().Select(list => Draw(list, null, bought))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Checklists ?? [])
-                        .Select(list => Draw(list, batch)))));
+                        .Select(list => Draw(list, batch, bought))));
+        });
 
         app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
             Results.Ok(checklists.Add(body.Title)));
@@ -2709,17 +2718,58 @@ static int Holes(IEnumerable<ShipSlot> slots)
     }
 
     /// <summary>A checklist as a page sees it, with whose it is when it is not the reader's.</summary>
-    static object Draw(Checklist list, ImportBatch? from) => new
+    static object Draw(
+        Checklist list,
+        ImportBatch? from,
+        IReadOnlyDictionary<string, DateTimeOffset>? bought = null) => new
     {
         Id = from is null ? list.Id : SharedId(from, list.Id),
         list.Title,
         list.CreatedAt,
         Pinned = from is null && list.Pinned,
-        Items = from is null
-            ? list.Items
-            : [.. list.Items.Select(i => i with { Id = SharedId(from, i.Id) })],
+        Items = list.Items.Select(i => new
+        {
+            Id = from is null ? i.Id : SharedId(from, i.Id),
+            i.Text,
+            i.DueAt,
+            i.Note,
+            i.Attachments,
+            i.Done,
+            i.DoneAt,
+            // What the logs say about the thing this line names. Reported rather
+            // than written back: the list is the pilot's, and a name match is an
+            // observation about it, not permission to edit it.
+            Bought = BoughtSince(i, list.CreatedAt, bought),
+        }),
         imported = from is null ? null : Marker(from),
     };
+
+    /// <summary>
+    /// When the thing a line names was bought, if it was bought since the line
+    /// was written.
+    /// </summary>
+    /// <remarks>
+    /// The floor matters. Without it a rifle bought last month ticks off a line
+    /// added this morning, and the list quietly claims work nobody did.
+    /// </remarks>
+    static DateTimeOffset? BoughtSince(
+        ChecklistItem item,
+        DateTimeOffset listCreated,
+        IReadOnlyDictionary<string, DateTimeOffset>? bought)
+    {
+        if (bought is null || bought.Count == 0) return null;
+
+        var since = item.AddedAt ?? listCreated;
+
+        return item.Attachments
+            .Where(a => a.Kind is "item" or "commodity")
+            .Select(a => a.Target ?? a.Label)
+            .Where(name => name is { Length: > 0 })
+            .Select(name => bought.TryGetValue(name!, out var at) ? at : (DateTimeOffset?)null)
+            .Where(at => at >= since)
+            .OrderByDescending(at => at)
+            .FirstOrDefault();
+    }
 
     /// <summary>A flight plan as a page sees it.</summary>
     static object Draw(Trip trip, ImportBatch? from) => new

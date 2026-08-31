@@ -184,7 +184,7 @@ public static class TextOverlay
                 continue;
             }
 
-            var item = facts is not null && settings.Facts ? facts.GetValueOrDefault(itemClass) : null;
+            var item = facts is not null && settings.Facts ? Facts(facts, itemClass) : null;
             var category = ItemCategories.Of(itemClass);
             var shoppable = Shoppable.Contains(category);
             var badge = item is null ? string.Empty : Badge(item);
@@ -241,6 +241,18 @@ public static class TextOverlay
     }
 
     /// <summary>
+    /// What the install says an item is, however the two spell its class.
+    /// </summary>
+    /// <remarks>
+    /// The localisation table keys a shield as <c>SHLD_BEHR_S02_7MA</c> and the
+    /// entity that describes it is <c>SHLD_BEHR_S02_7MA_SCItem</c>. Looking up
+    /// only the name's own spelling missed 203 items, shield generators among
+    /// them, and missed them silently: they simply came out unmarked.
+    /// </remarks>
+    private static GameItem? Facts(IReadOnlyDictionary<string, GameItem> facts, string itemClass) =>
+        facts.GetValueOrDefault(itemClass) ?? facts.GetValueOrDefault($"{itemClass}_SCItem");
+
+    /// <summary>
     /// The size, grade or armour class an item earns, in at most three
     /// characters.
     /// </summary>
@@ -253,7 +265,11 @@ public static class TextOverlay
     {
         if (ArmourClass.TryGetValue(item.SubType, out var armour)) return armour.ToString();
 
-        if (!Fitted.Contains(item.Type) || item.Size <= 1) return string.Empty;
+        // Size 1 is a real size for something fitted to a ship - 24 of the 73
+        // shields are S1 - and treating it as "unset" left every one of them
+        // unmarked. The default-1 problem it was guarding against belongs to
+        // types that are not components at all, and those are already out.
+        if (!Fitted.Contains(item.Type) || item.Size < 1) return string.Empty;
 
         var grade = item.Grade is >= 1 and <= 4 ? ((char)('A' + item.Grade - 1)).ToString() : string.Empty;
 

@@ -979,6 +979,41 @@ public sealed class LogLibrary : IDisposable
     /// purchases absorbs a one-off discount without being dragged by it.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// What has been bought and when, by the name a person would write down.
+    /// </summary>
+    /// <remarks>
+    /// Purchases are logged by class - <c>behr_rifle_ballistic_01_mag</c> - and
+    /// a shopping list is written in names. Going through the install's own
+    /// naming is what lets a line saying "P4-AR Magazine" know it has been
+    /// bought. Only confirmed purchases count: the game logs a request before it
+    /// logs a sale, and a request is somebody looking at a price.
+    /// </remarks>
+    public IReadOnlyDictionary<string, DateTimeOffset> Bought()
+    {
+        var latest = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var session in Counted(WipeScope.Money))
+        {
+            foreach (var purchase in session.Purchases)
+            {
+                if (!purchase.Confirmed || purchase.Item is not { Length: > 0 } itemClass)
+                    continue;
+
+                var name = GameCommodities.Item(itemClass)?.Name
+                    ?? GameCommodities.Item($"{itemClass}_SCItem")?.Name
+                    ?? Names.Item(itemClass);
+
+                if (name is not { Length: > 0 }) continue;
+
+                if (!latest.TryGetValue(name, out var seen) || purchase.At > seen)
+                    latest[name] = purchase.At;
+            }
+        }
+
+        return latest;
+    }
+
     public IReadOnlyDictionary<string, ReceiptPrice> Receipts()
     {
         var byClass = new Dictionary<string, List<PurchaseRecord>>(StringComparer.OrdinalIgnoreCase);
