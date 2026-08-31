@@ -14,7 +14,7 @@ public sealed record TextOverlayStatus(
     int Marked,
     int Sold,
     int Skipped,
-    IReadOnlyList<TextOverlayLine> Samples,
+    IReadOnlyList<TextOverlayLine> Changes,
     string? Problem,
     int Annotated = 0,
     TextOverlayOptions? Options = null);
@@ -143,7 +143,7 @@ public sealed class TextOverlayService(
         var plan = Plan(ini);
 
         return new(installed, install?.InstalledAt, install?.Layered ?? false,
-            source, plan.Marked, plan.Sold, plan.Skipped, plan.Samples, null, plan.Annotated,
+            source, plan.Marked, plan.Sold, plan.Skipped, plan.Changes, null, plan.Annotated,
             options.Current);
     }
 

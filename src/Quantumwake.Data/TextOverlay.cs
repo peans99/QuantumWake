@@ -25,14 +25,20 @@ public sealed record TextOverlayOptions(bool Colour = false, int Level = 3, bool
 /// <param name="Sold">Names left alone because something is known to sell them.</param>
 /// <param name="Skipped">Names left alone because they are not gear a player shops for.</param>
 /// <param name="Annotated">Names that gained a size, grade or armour-class mark.</param>
-/// <param name="Samples">A few of the marked names, for showing before installing.</param>
+/// <param name="Changes">
+/// Every name that would actually be rewritten, for showing before installing.
+/// Not a sample: it was capped at 25 of some 4,000, which is fine as an
+/// illustration and useless as an answer to "what would happen to mine?" - the
+/// question anybody deciding whether to write into their game folder is asking.
+/// Lines the pass leaves alone are not here, because they have nothing to show.
+/// </param>
 /// <param name="Content">The whole localisation file, ready to write.</param>
 public sealed record TextOverlayPlan(
     int Marked,
     int Sold,
     int Skipped,
     int Annotated,
-    IReadOnlyList<TextOverlayLine> Samples,
+    IReadOnlyList<TextOverlayLine> Changes,
     string Content)
 {
     public int Considered => Marked + Sold + Skipped;
@@ -153,7 +159,7 @@ public static class TextOverlay
 
         var lines = baseIni.Split('\n');
         var output = new StringBuilder(baseIni.Length + (lines.Length / 8));
-        var samples = new List<TextOverlayLine>();
+        var changes = new List<TextOverlayLine>();
 
         int marked = 0, sold = 0, skipped = 0, annotated = 0;
 
@@ -223,8 +229,7 @@ public static class TextOverlay
                 continue;
             }
 
-            if (samples.Count < 25)
-                samples.Add(new TextOverlayLine(itemClass, trimmed, rewritten, category));
+            changes.Add(new TextOverlayLine(itemClass, trimmed, rewritten, category));
 
             Emit(key + "=" + rewritten + padding);
             continue;
@@ -237,7 +242,7 @@ public static class TextOverlay
             }
         }
 
-        return new TextOverlayPlan(marked, sold, skipped, annotated, samples, output.ToString());
+        return new TextOverlayPlan(marked, sold, skipped, annotated, changes, output.ToString());
     }
 
     /// <summary>

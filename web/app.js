@@ -6149,16 +6149,8 @@ async function loadTextOverlay() {
     ? 'Built on top of the StarStrings text, so both survive.'
     : "Built on the game's own text.";
 
-  const body = $('#textoverlay-table tbody');
-  body.textContent = '';
-
-  for (const line of state.samples || []) {
-    const tr = el('tr');
-    tr.append(el('td', null, line.was));
-    tr.append(el('td', 'muted', line.category));
-    tr.append(el('td', null, line.becomes));
-    body.append(tr);
-  }
+  labelChanges = state.changes || [];
+  renderLabelChanges();
 
   const bits = [];
   if (state.installed) {
@@ -6166,15 +6158,83 @@ async function loadTextOverlay() {
     if (state.layered) bits.push('layered over StarStrings');
     bits.push('restart Star Citizen to see it');
   } else {
-    bits.push(`Showing ${(state.samples || []).length} of ${state.marked} renames. Nothing is written until you install.`);
+    bits.push('Nothing is written until you install.');
   }
 
   status.textContent = bits.join(' · ');
 }
 
+/* Kept so typing in the box re-renders without asking the server to rebuild the
+   whole localisation file again. */
+let labelChanges = [];
+
+/** The table is thousands of rows; rendering caps so typing stays quick. */
+const LABELS_CAP = 400;
+
+/**
+ * The rows a search term matches.
+ *
+ * Searched across all three columns, because all three are things somebody
+ * would look for: the name they are holding, the kind of thing it is, and the
+ * mark itself - "[S2B]" or "[*]" - which is how you answer "what does the star
+ * actually get put on?" without reading four thousand rows.
+ */
+function matchingLabelChanges(term) {
+  const wanted = (term || '').trim().toLowerCase();
+  if (!wanted) return labelChanges;
+
+  return labelChanges.filter((line) =>
+    line.was.toLowerCase().includes(wanted)
+    || line.becomes.toLowerCase().includes(wanted)
+    || (line.category || '').toLowerCase().includes(wanted));
+}
+
+function renderLabelChanges() {
+  const body = $('#textoverlay-table tbody');
+  if (!body) return;
+
+  const term = $('#labels-search')?.value || '';
+  const rows = matchingLabelChanges(term);
+
+  body.textContent = '';
+
+  for (const line of rows.slice(0, LABELS_CAP)) {
+    const tr = el('tr');
+    tr.append(el('td', null, line.was));
+    tr.append(el('td', 'muted', line.category));
+    tr.append(el('td', null, line.becomes));
+    body.append(tr);
+  }
+
+  const counter = $('#labels-count');
+  if (!counter) return;
+
+  if (labelChanges.length === 0) {
+    counter.textContent = '';
+    return;
+  }
+
+  // The total is what the page is answering for, so it is always said - a bare
+  // "400 rows" would read as the whole plan when it is a tenth of it.
+  if (rows.length === 0) {
+    counter.textContent = `Nothing matches "${term.trim()}" among ${labelChanges.length.toLocaleString()} renames.`;
+  } else if (rows.length > LABELS_CAP) {
+    counter.textContent =
+      `Showing ${LABELS_CAP} of ${rows.length.toLocaleString()} matches, `
+      + `out of ${labelChanges.length.toLocaleString()} renames — narrow the search to see the rest.`;
+  } else if (term.trim()) {
+    counter.textContent =
+      `${rows.length.toLocaleString()} of ${labelChanges.length.toLocaleString()} renames match.`;
+  } else {
+    counter.textContent = `${labelChanges.length.toLocaleString()} renames.`;
+  }
+}
+
 function initTextOverlay() {
   const install = $('#textoverlay-install');
   if (!install) return;
+
+  onInput('#labels-search', renderLabelChanges);
 
   install.addEventListener('click', async () => {
     $('#textoverlay-status').textContent = 'Writing…';

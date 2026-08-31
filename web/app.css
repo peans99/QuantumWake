@@ -2869,6 +2869,10 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 /* The detail card sits inside the map, so it never pushes the layout around. */
 /* The one detail surface. Fixed rather than absolute inside the map, because
    every view opens it and only one of them is the map. */
+/* The names it searches run long - the median is 21 characters - so the box is
+   given room for one rather than the width a bare flex child works out to. */
+#labels-search { min-width: 28ch; }
+
 .entity-drawer {
   position: fixed;
   top: 64px;

@@ -94,13 +94,51 @@ public class TextOverlayTests
         Assert.DoesNotContain("*", plan.Content);
     }
 
-    /// <summary>The samples are what the page shows before anything is written.</summary>
+    /// <summary>The changes are what the page shows before anything is written.</summary>
     [Fact]
     public void It_reports_what_it_would_change_before_writing_anything()
     {
         var plan = NothingSold();
 
         Assert.Equal(plan.Marked + plan.Sold + plan.Skipped, plan.Considered);
-        Assert.Contains(plan.Samples, s => s.Was == "F55 LMG" && s.Becomes == "F55 LMG [*]");
+        Assert.Contains(plan.Changes, s => s.Was == "F55 LMG" && s.Becomes == "F55 LMG [*]");
+    }
+
+    /// <summary>
+    /// Every rewritten line, not a sample of them.
+    /// </summary>
+    /// <remarks>
+    /// This was capped at 25 of some 4,000 on a real install, which is fine as
+    /// an illustration and useless as an answer to "what would happen to mine?"
+    /// - the question anybody deciding whether to let it write into their game
+    /// folder is actually asking. The page searches the list, so the list has
+    /// to be the list.
+    /// </remarks>
+    [Fact]
+    public void Every_rewritten_line_is_carried_rather_than_a_sample_of_them()
+    {
+        var text = string.Join((char)10, Enumerable.Range(0, 60)
+            .Select(i => $"item_Name_gmni_lmg_ballistic_{i:D2}=F55 LMG {i}"));
+
+        var plan = TextOverlay.Build(text, _ => false);
+
+        Assert.Equal(60, plan.Marked);
+        Assert.Equal(60, plan.Changes.Count);
+    }
+
+    /// <summary>
+    /// A line the pass leaves alone has nothing to show, so it is not a row.
+    /// </summary>
+    [Fact]
+    public void A_line_that_is_not_rewritten_is_not_listed()
+    {
+        var plan = TextOverlay.Build(
+            """
+            item_Name_gmni_lmg_ballistic_01=F55 LMG
+            item_Name_AEGS_Idris_Retro_CIV=Retro Thruster
+            """,
+            _ => false);
+
+        Assert.DoesNotContain(plan.Changes, s => s.Was == "Retro Thruster");
     }
 }
