@@ -39,7 +39,7 @@ public class SpawnMergeTests
             ],
             [Dataset("Borase", "Fuego")]);
 
-        var fromDataset = Assert.Single(merged.Where(m => m.Source == "dataset"));
+        var fromDataset = Assert.Single(merged, m => m.Source == "dataset");
         Assert.Null(fromDataset.MinPercent);
         Assert.Null(fromDataset.MaxPercent);
 

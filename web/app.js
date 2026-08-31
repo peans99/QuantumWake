@@ -8046,6 +8046,13 @@ async function loadGameData() {
     loadMiningRef().catch((e) => console.error('mining refill', e));
     loadCraftingRef().catch((e) => console.error('crafting refill', e));
     loadMiningPlaces().catch(() => {});
+
+    // The map is on the same footing and was missed: its places come from the
+    // install's own gazetteer, and the amenities filter is built entirely from
+    // it. Both loaded once at startup, so a cold start left the map holding
+    // whatever had been read by then.
+    loadAtlas().catch((e) => console.error('map refill', e));
+    loadMapAmenities().catch(() => {});
   }
 
   const label = $('#gamedata-state');

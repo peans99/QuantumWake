@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1043 tests](https://img.shields.io/badge/tests-1043%20passing-4fd48a)
+![1047 tests](https://img.shields.io/badge/tests-1047%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -211,7 +211,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,043 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,047 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard JavaScript against a stub DOM.
 
@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.20
+### 0.9.21
 
 - **Shield generators get their size and grade like everything else.** 203 item
   names were coming out unmarked, and silently: the localisation table keys the
@@ -285,6 +285,24 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   same marker in place of a name — a third of the Parts catalogue, every row of
   it reading identically. They fall back to the item's class name now, which is
   at least something you can search for.
+
+- **The placeholder fix reaches installs that had already read their game files.**
+  What the game files say is cached under a stamp that only moves when Star
+  Citizen itself patches, so the previous build's rule cleared 8,149 unwritten
+  names for new installs and for nobody else. The stamp moves now, and CI fails a
+  change to the readers that forgets to move it - the same guard the session
+  cache has had since that exact mistake shipped twice.
+
+- **The map fills itself in when the read finishes too.** Its places come from
+  the game's own gazetteer and the amenities filter is built entirely from it, so
+  a cold start left it thin until the browser was reloaded. It was missed when
+  Parts, Mining and Crafting learned to do this.
+
+- **A shopping line naming cargo can be crossed off.** Gear is bought at a kiosk
+  and cargo at a commodity terminal, and only the kiosk records were being read -
+  so a line naming an ore stayed uncrossed however many SCU of it came home. The
+  line had been accepting that attachment all along, which is what made it look
+  supported.
 
 - **A rich deposit is no longer advertised at trace concentration.** The same ore
   sits in different rocks at one place: at Fuego, borase is 9.7-74.3% of a Borase

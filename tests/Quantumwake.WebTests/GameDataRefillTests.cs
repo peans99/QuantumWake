@@ -29,6 +29,9 @@ public class GameDataRefillTests
         page.Serve("/api/reference/items", "[]");
         page.Serve("/api/reference/resources", "[]");
         page.Serve("/api/reference/blueprints", "[]");
+        page.Serve("/api/map", """{"nodes":[],"destinations":[],"positions":{}}""");
+        page.Serve("/api/map/services", "[]");
+        page.Serve("/api/map/amenities", "[]");
         page.Serve("/api/gamedata", Reading);
         page.Do("await loadGameData();");
         return page;
@@ -96,5 +99,23 @@ public class GameDataRefillTests
         var text = page.NodeText(body);
         Assert.Contains("Still reading", text);
         Assert.DoesNotContain("community dataset", text);
+    }
+    /// <summary>
+    /// The map reads the install too - its places come from the game's own
+    /// gazetteer and the amenities filter is built entirely from it - and it was
+    /// left out of the first pass at this, so a cold start showed a thin map
+    /// until the browser was reloaded.
+    /// </summary>
+    [Fact]
+    public void The_map_is_filled_in_when_the_read_finishes()
+    {
+        var page = Waiting();
+        Assert.DoesNotContain("GET /api/map/amenities", page.Fetched());
+
+        page.Serve("/api/gamedata", Ready);
+        page.Do("await loadGameData();");
+
+        Assert.Contains("GET /api/map", page.Fetched());
+        Assert.Contains("GET /api/map/amenities", page.Fetched());
     }
 }

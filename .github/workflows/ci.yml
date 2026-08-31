@@ -129,3 +129,63 @@ jobs:
           echo "::error::"
           echo "::error::    No-payload-bump: renamed a private field, nothing new is read"
           exit 1
+
+  # The same failure, one cache along. What the game files say is read once and
+  # kept under a stamp of CacheVersion and the archive's timestamp, so a change
+  # to how those files are *read* reaches nobody until Star Citizen patches: the
+  # stamp still matches and the old answers load. It shipped that way once, with
+  # 8,149 placeholder item names surviving the rule written to remove them.
+  cache-version:
+    name: Cached game data retired
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: A reader change must retire the game-data cache
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          changed=$(git diff --name-only "$BASE"...HEAD)
+
+          reading=$(echo "$changed" | grep -E '^src/Quantumwake\.Core/GameData/' || true)
+
+          if [ -z "$reading" ]; then
+            echo "No game-data reader touched; nothing to retire."
+            exit 0
+          fi
+
+          echo "Game-data readers in this change:"
+          echo "$reading" | sed 's/^/  /'
+
+          if git diff "$BASE"...HEAD -- src/Quantumwake.Core/GameData/GameCommodities.cs              | grep -qE '^\+.*CacheVersion = [0-9]+'; then
+            echo
+            echo "CacheVersion moves in this change. Cached game data will be retired."
+            exit 0
+          fi
+
+          if git log "$BASE"..HEAD --format='%B' | grep -qiE '^No-cache-bump:[[:space:]]*[^[:space:]]'; then
+            echo
+            echo "Waived by a commit trailer:"
+            git log "$BASE"..HEAD --format='%B' | grep -iE '^No-cache-bump:' | sed 's/^/  /'
+            exit 0
+          fi
+
+          echo
+          echo "::error::This change touches how the game files are read, but CacheVersion"
+          echo "::error::in src/Quantumwake.Core/GameData/GameCommodities.cs does not move."
+          echo "::error::"
+          echo "::error::The cache is keyed on that constant and the archive's timestamp, so"
+          echo "::error::every install that has already read its game files will keep the old"
+          echo "::error::answers until the game itself patches. Bump the constant, or, if the"
+          echo "::error::change cannot alter what was stored, add a commit trailer on its own"
+          echo "::error::line:"
+          echo "::error::"
+          echo "::error::    No-cache-bump: renamed a local, the same values are read"
+          exit 1

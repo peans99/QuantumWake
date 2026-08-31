@@ -1009,6 +1009,20 @@ public sealed class LogLibrary : IDisposable
                 if (!latest.TryGetValue(name, out var seen) || purchase.At > seen)
                     latest[name] = purchase.At;
             }
+
+            // Cargo is bought at a commodity terminal, not a kiosk, so it never
+            // reaches Purchases - and a shopping line naming an ore or a good
+            // could not be crossed off however many SCU of it you carried home.
+            foreach (var trade in session.Trades)
+            {
+                if (trade.IsSell) continue;
+
+                var name = CommodityName(trade.ResourceId);
+                if (name is not { Length: > 0 }) continue;
+
+                if (!latest.TryGetValue(name, out var seen) || trade.At > seen)
+                    latest[name] = trade.At;
+            }
         }
 
         return latest;
