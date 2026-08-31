@@ -245,7 +245,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.23
+### 0.9.24
+
+- **One panel for everything, wherever you click it.** A place on the map, a
+  component in the parts table — they now open the same drawer, and it answers
+  the same questions each time: what is known and who says so, whether the thing
+  is already yours, what it costs and how old that price is, where you would go
+  for it, and what you can do about it now. Every line carries its source, so
+  "58 visits recorded" from your own logs never sits unlabelled beside a price
+  somebody else reported last week. Adding a place to a plan or a component to a
+  shopping list is a button on the panel rather than a different page.
+
+  Every component opens one now. It used to be only the ones the game happened
+  to write a paragraph about; the rest had nothing to click, even though the app
+  knew their size, grade, price and whether they were already in your kit.
+
 
 - **The Now page leads with whatever your ship is for.** Take a hauler out and
   the briefing opens with trade leads; take a mining ship and it opens with the

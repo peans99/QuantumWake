@@ -2867,6 +2867,71 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 }
 
 /* The detail card sits inside the map, so it never pushes the layout around. */
+/* The one detail surface. Fixed rather than absolute inside the map, because
+   every view opens it and only one of them is the map. */
+.entity-drawer {
+  position: fixed;
+  top: 64px;
+  right: 14px;
+  width: 268px;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+  padding: 13px 15px;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .97), rgba(6, 12, 20, .96));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12px;
+  line-height: 1.55;
+  z-index: 40;
+}
+.entity-drawer[hidden] { display: none; }
+/* The drawer takes room rather than covering: it used to be an absolute card
+   inside the map, and floating it over the page put it on top of the map's own
+   right-hand controls - Follow, Your location, Reset view - which are exactly
+   the ones wanted while a place is open. */
+body.entity-open .view { padding-right: 296px; }
+.entity-close {
+  position: absolute;
+  top: 6px;
+  right: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.entity-close:hover { color: var(--text); }
+.entity-kicker { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; }
+.entity-name { font-size: 15px; font-weight: 600; color: var(--cyan-hot); padding-right: 16px; margin-top: 2px; }
+.entity-sub { font-size: 11px; margin-bottom: 8px; }
+.entity-holding { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-holding b { color: var(--green); font-size: 11.5px; }
+.entity-price { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-amount { color: var(--text); font-size: 15px; }
+.entity-detail { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 1px; }
+.entity-blurb { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-facts { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-fact { display: flex; justify-content: space-between; gap: 9px; padding: 2px 0; min-width: 0; }
+.entity-fact-label { color: var(--dim); font-size: 10px; white-space: nowrap; }
+.entity-fact-value { color: var(--text); font-size: 11px; text-align: right; overflow-wrap: anywhere; }
+/* The source rides under the value it is answerable for, never beside it: the
+   claim and who made it have to stay together when the value wraps. */
+.entity-source { display: block; color: var(--dim); font-size: 8.5px; letter-spacing: .05em; }
+.entity-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 4px; }
+.entity-where { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-where-row { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; min-width: 0; }
+.entity-where-name { overflow-wrap: anywhere; }
+.entity-link { border: 0; background: transparent; color: var(--cyan-hot); cursor: pointer; font: inherit; font-size: 11.5px; padding: 0; text-align: left; }
+.entity-link:hover { text-decoration: underline; }
+/* No rule of its own: the blocks inside carry their own separators, and an
+   empty one drew a line under nothing whenever the drawer was opened from
+   somewhere other than the map. */
+.entity-place-extra { margin-top: 7px; }
+.entity-place-extra[hidden] { display: none; }
+.entity-actions { display: flex; flex-wrap: wrap; gap: 5px; border-top: 1px solid var(--rule); padding-top: 9px; margin-top: 9px; }
+
 .map-info {
   position: absolute;
   top: 14px;

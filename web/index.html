@@ -429,23 +429,6 @@
         <div class="cargo-body" id="cargo-body"></div>
       </aside>
 
-      <aside class="map-info" id="map-info" hidden>
-        <button class="map-info-close" id="map-info-close" aria-label="Close">×</button>
-        <div class="map-info-name" id="map-info-name"></div>
-        <div class="map-info-where muted" id="map-info-where"></div>
-        <div class="map-info-row">
-          <span class="map-info-kind" id="map-info-kind"></span>
-          <span id="map-info-visits"></span>
-        </div>
-        <div class="map-info-services" id="map-info-services" hidden></div>
-        <div class="muted" id="map-info-last"></div>
-        <div id="map-info-trade" hidden></div>
-        <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
-        <div class="map-info-notes" id="map-info-notes"></div>
-        <div class="map-info-amenities" id="map-info-amenities" hidden></div>
-        <div class="map-info-lore muted" id="map-info-lore" hidden></div>
-        <div class="map-info-sold" id="map-info-sold" hidden></div>
-      </aside>
     </div>
     <div class="legend" id="map-legend"></div>
   </section>
@@ -2237,6 +2220,30 @@
       </div>
     </div>
   </div>
+  <!-- ENTITY DRAWER: one description of a thing, wherever it was clicked.
+       Outside every view because every view opens it. -->
+  <aside class="entity-drawer" id="entity-drawer" hidden aria-label="Details">
+    <button class="entity-close" id="entity-close" aria-label="Close">&times;</button>
+    <div class="entity-kicker" id="entity-kicker"></div>
+    <div class="entity-name" id="entity-name"></div>
+    <div class="entity-sub muted" id="entity-sub"></div>
+    <div class="entity-holding" id="entity-holding" hidden></div>
+    <div class="entity-price" id="entity-price" hidden></div>
+    <div class="entity-blurb" id="entity-blurb" hidden></div>
+    <div class="entity-facts" id="entity-facts"></div>
+    <div class="part-tags" id="entity-tags" hidden></div>
+    <div class="entity-where" id="entity-where" hidden></div>
+    <div class="entity-place-extra" id="entity-place-extra" hidden>
+      <div class="map-info-services" id="map-info-services" hidden></div>
+      <div id="map-info-trade" hidden></div>
+      <div class="map-info-notes" id="map-info-notes"></div>
+      <div class="map-info-amenities" id="map-info-amenities" hidden></div>
+      <div class="map-info-lore muted" id="map-info-lore" hidden></div>
+      <div class="map-info-sold" id="map-info-sold" hidden></div>
+    </div>
+    <div class="entity-actions" id="entity-actions"></div>
+  </aside>
+
 <script src="app.js?v=0.7.16"></script>
 </body>
 </html>

@@ -1257,6 +1257,301 @@ function connectStream() {
   };
 }
 
+/* ---------- entity drawer ---------- */
+
+/**
+ * One description of a thing, wherever it was clicked.
+ *
+ * Every view used to grow its own detail panel, and they disagreed: the map's
+ * place card knew about visits and notes, the parts row knew about size and
+ * volume, and neither could say whether you already owned the thing or add it
+ * to a plan. This is the one surface, and the server builds the same shape for
+ * every kind - what is known and who says so, whether it is already yours, what
+ * it costs and how old that is, where to go, and what can be done now.
+ *
+ * A section with no answer is hidden rather than shown empty. "Not reported" is
+ * a fact worth stating; a blank row is not.
+ */
+let entityShown = null;
+
+/** The map-only parts of a place card, which no other kind fills in. */
+const PLACE_ONLY_NODES = [
+  '#map-info-services', '#map-info-trade', '#map-info-notes',
+  '#map-info-amenities', '#map-info-lore', '#map-info-sold',
+];
+
+const ENTITY_KICKER = {
+  place: 'Place',
+  commodity: 'Commodity',
+  ship: 'Ship',
+  part: 'Component',
+};
+
+async function openEntity(kind, id) {
+  if (!kind || !id) return false;
+
+  const drawer = $('#entity-drawer');
+
+  // Clicking the same thing again closes it, which is what a second click on
+  // an open panel has always meant here.
+  if (entityShown === `${kind}|${id}` && !drawer.hidden) {
+    closeEntity();
+    return false;
+  }
+
+  let card;
+  try {
+    card = await getJson(`/api/entity?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`);
+  } catch {
+    // Nothing known is not an error worth a dialog: the click simply has no
+    // answer, and leaving the previous card up would answer for the wrong thing.
+    closeEntity();
+    return false;
+  }
+
+  entityShown = `${kind}|${id}`;
+  renderEntity(card);
+  return true;
+}
+
+function closeEntity() {
+  $('#entity-drawer').hidden = true;
+  document.body.classList.remove('entity-open');
+  entityShown = null;
+
+  if ($('#view-map').classList.contains('active')) drawMap();
+}
+
+function renderEntity(card) {
+  $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] || card.kind;
+  $('#entity-name').textContent = card.name;
+  $('#entity-sub').textContent = card.subtitle || '';
+
+  renderEntityHolding(card);
+  renderEntityPrice(card);
+  renderEntityBlurb(card);
+  renderEntityFacts(card);
+  renderEntityWhere(card);
+  renderEntityActions(card);
+
+  // Cleared rather than merely hidden: these renderers append, so a place's
+  // notes left in the node would reappear under the next place opened.
+  const extra = $('#entity-place-extra');
+  extra.hidden = card.kind !== 'place';
+  if (extra.hidden) for (const id of PLACE_ONLY_NODES) $(id).textContent = '';
+
+  $('#entity-drawer').hidden = false;
+  document.body.classList.add('entity-open');
+
+  // The map sizes itself from the space it has, so it has to be told the space
+  // just changed - otherwise the dots stay where they were and the place that
+  // was clicked ends up under the drawer that describes it.
+  if ($('#view-map').classList.contains('active')) drawMap();
+}
+
+/** Whether it is already yours, which changes every decision about it. */
+function renderEntityHolding(card) {
+  const node = $('#entity-holding');
+  node.textContent = '';
+  node.hidden = !card.holding;
+  if (node.hidden) return;
+
+  node.append(el('b', null, card.holding.status));
+  if (card.holding.detail) node.append(el('div', 'entity-detail', card.holding.detail));
+}
+
+/**
+ * The price, and how old it is.
+ *
+ * The age is not decoration. Every price here is somebody else's report of a
+ * counter that may have moved since, and it is the one number on this card that
+ * can cost real money if it is trusted further than it deserves.
+ */
+function renderEntityPrice(card) {
+  const node = $('#entity-price');
+  node.textContent = '';
+  node.hidden = card.price === null || card.price === undefined
+    || card.price.amount === null || card.price.amount === undefined;
+  if (node.hidden) return;
+
+  const price = card.price;
+  node.append(el('b', 'entity-amount',
+    `${money(price.amount)}${price.unit === 'aUEC/SCU' ? '/SCU' : ''}`));
+
+  const detail = [
+    price.where ? `at ${price.where}` : null,
+    price.asOf ? `${price.source}, ${ageWord(price.asOf)}` : price.source,
+  ].filter(Boolean).join(' · ');
+
+  node.append(el('div', 'entity-detail', detail));
+}
+
+/** "collected 3 days ago", so a stale table reads as stale rather than as fact. */
+function ageWord(at) {
+  const days = Math.floor((Date.now() - new Date(at).getTime()) / 86400000);
+  if (!Number.isFinite(days) || days < 0) return 'age unknown';
+  if (days === 0) return 'collected today';
+  if (days === 1) return 'collected yesterday';
+  return `collected ${days} days ago`;
+}
+
+/**
+ * What is known, each line carrying who is answerable for it.
+ *
+ * The source label is the whole point. This install's own logs and a community
+ * price table deserve very different amounts of trust, and a card that mixed
+ * them silently would give up the thing that makes the app worth having.
+ */
+function renderEntityFacts(card) {
+  const list = $('#entity-facts');
+  list.textContent = '';
+
+  for (const fact of card.facts || []) {
+    const row = el('div', 'entity-fact');
+    row.append(el('span', 'entity-fact-label', fact.label));
+    const value = el('span', 'entity-fact-value', fact.value);
+    value.append(el('span', 'entity-source', fact.source));
+    row.append(value);
+    list.append(row);
+  }
+}
+
+/**
+ * What the game says about the thing, in its own words.
+ *
+ * Kept because the parts table had it and losing it would make this drawer a
+ * downgrade for the one view it replaces first. The game writes these with a
+ * literal backslash-n between the header lines, which is why the split is
+ * looking for both.
+ */
+function renderEntityBlurb(card) {
+  const blurb = $('#entity-blurb');
+  blurb.textContent = '';
+  blurb.hidden = !card.blurb;
+
+  if (card.blurb) {
+    for (const line of card.blurb.split(RegExp('\\n|\n'))) {
+      if (line.trim()) blurb.append(el('p', 'part-blurb', line.trim()));
+    }
+  }
+
+  const tags = $('#entity-tags');
+  tags.textContent = '';
+  tags.hidden = !(card.tags || []).length;
+  for (const tag of card.tags || []) tags.append(el('span', 'tag', tag));
+}
+
+function renderEntityWhere(card) {
+  const node = $('#entity-where');
+  const places = card.places || [];
+  node.textContent = '';
+  node.hidden = places.length === 0;
+  if (node.hidden) return;
+
+  node.append(el('div', 'entity-label', 'Where'));
+
+  for (const place of places) {
+    const row = el('div', 'entity-where-row');
+
+    // Only a place the atlas can actually find becomes a link; the rest are
+    // UEX terminal names, which the map has no dot for.
+    if (place.placeId) {
+      const link = el('button', 'entity-link', place.name);
+      link.type = 'button';
+      link.title = 'Show this on the map';
+      link.addEventListener('click', () => entityMap(place.placeId, place.name));
+      row.append(link);
+    } else {
+      row.append(el('span', 'entity-where-name', place.name));
+    }
+
+    if (place.note) row.append(el('span', 'entity-detail', place.note));
+    node.append(row);
+  }
+}
+
+function entityMap(placeId, name) {
+  showView('map');
+  if (placeId) centreOn(placeId);
+  else if (name) jumpToPlace(name);
+}
+
+const ENTITY_ACTION_LABEL = {
+  map: 'Show on map',
+  stop: 'Add as a stop',
+  shopping: 'Add to shopping',
+  overlay: 'Pin to overlay',
+  details: 'Open details',
+};
+
+function renderEntityActions(card) {
+  const bar = $('#entity-actions');
+  bar.textContent = '';
+
+  for (const action of card.actions || []) {
+    // The overlay is already the pinned window; it has nothing to pin into.
+    if (action === 'overlay' && isOverlay) continue;
+
+    const button = el('button', 'ghost tiny', ENTITY_ACTION_LABEL[action] || action);
+    button.type = 'button';
+    button.addEventListener('click', () => runEntityAction(action, card, button));
+    bar.append(button);
+  }
+}
+
+async function runEntityAction(action, card, button) {
+  if (action === 'map') return entityMap(card.id, card.name);
+  if (action === 'details') return openEntityDetails(card);
+
+  button.disabled = true;
+  try {
+    if (action === 'stop') {
+      await fetch('/api/trips/stops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId: card.id, place: card.name, note: null }),
+      });
+      await loadTrips();
+      button.textContent = '✓ added';
+      return;
+    }
+
+    if (action === 'shopping') {
+      const result = await fetch('/api/jobs/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: card.name, needed: 1, unit: '' }),
+      }).then((r) => r.json());
+
+      button.textContent = '✓ added';
+      button.title = `On "${result.title}"`;
+      return;
+    }
+
+    if (action === 'overlay') {
+      await fetch('/api/overlay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visible: true }),
+      });
+      button.textContent = '✓ pinned';
+    }
+  } catch {
+    button.textContent = 'failed';
+    button.disabled = false;
+  }
+}
+
+/** The full page for this kind, which the drawer summarises rather than replaces. */
+function openEntityDetails(card) {
+  if (card.kind === 'commodity') return openCommodity(card.name);
+  if (card.kind === 'ship') return showView('fleet');
+  if (card.kind === 'part') return showView('parts');
+  return entityMap(card.id, card.name);
+}
+
+$('#entity-close')?.addEventListener('click', closeEntity);
+
 /* ---------- charts ---------- */
 
 function bars(container, rows, format) {
@@ -3036,16 +3331,13 @@ function renderPartsRef() {
     const shown = part.name || prettyItem(part.className);
     const label = el('td', 'with-track');
 
-    // The game writes a paragraph about most items, so the name opens it rather
-    // than the row carrying a tenth column nobody can read at this width.
-    if (part.description || part.tags || part.microScu) {
-      const open = el('button', 'place-link commodity-open', shown);
-      open.title = 'What the game says about this';
-      open.addEventListener('click', () => togglePartDetail(tr, part));
-      label.append(open);
-    } else {
-      label.append(el('span', null, shown));
-    }
+    // Every part has a card now - what it is, whether it is already yours, what
+    // it costs and where - so the name always opens one, where it used to open
+    // only for the items the game happened to write a paragraph about.
+    const open = el('button', 'place-link commodity-open', shown);
+    open.title = 'What Quantum Wake knows about this';
+    open.addEventListener('click', () => openEntity('part', part.className));
+    label.append(open);
 
     label.append(trackButton(shown));
     if (part.name) label.title = part.className;
@@ -3087,43 +3379,6 @@ function volume(microScu) {
   if (microScu >= 1e6) return `${(microScu / 1e6).toFixed(microScu >= 1e7 ? 0 : 2)} SCU`;
   if (microScu >= 1e4) return `${(microScu / 1e4).toFixed(1)} centiSCU`;
   return `${microScu.toLocaleString()} µSCU`;
-}
-
-function togglePartDetail(row, part) {
-  const open = row.nextElementSibling?.classList.contains('part-detail');
-
-  $$('#parts-table tr.part-detail').forEach((n) => n.remove());
-  $$('#parts-table tr.expanded').forEach((n) => n.classList.remove('expanded'));
-
-  if (open) return;
-
-  row.classList.add('expanded');
-
-  const holder = el('tr', 'part-detail');
-  const cell = el('td');
-  cell.colSpan = 9;
-
-  if (part.description) {
-    // The game writes these with literal backslash-n between the header lines.
-    for (const line of part.description.split(RegExp('\\\\n|\\n'))) {
-      if (line.trim()) cell.append(el('p', 'part-blurb', line.trim()));
-    }
-  }
-
-  // What it takes up. Every item carries this, and it is the number that turns
-  // a list of gear into something you can hold against a hold.
-  if (part.microScu) {
-    cell.append(el('p', 'part-volume', `Takes up ${volume(part.microScu)}.`));
-  }
-
-  if (part.tags) {
-    const tags = el('div', 'part-tags');
-    for (const tag of part.tags.split(/\s+/).filter(Boolean)) tags.append(el('span', 'tag', tag));
-    cell.append(tags);
-  }
-
-  holder.append(cell);
-  row.after(holder);
 }
 
 onInput('#ships-search', renderShipsRef);
@@ -9280,8 +9535,7 @@ function initMap() {
   });
 
   // Clicking empty map space dismisses the detail card.
-  map.addEventListener('click', () => $('#map-info').hidden = true);
-  $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
+  map.addEventListener('click', closeEntity);
 
   // The Goods checkbox: one switch for goods on hover tips and on the detail
   // card, remembered per browser.
@@ -9928,7 +10182,7 @@ function showStation(rawId, name) {
   cargo.trip = false;
   cargo.place = { id: rawId, name: name || location?.name || rawId, location };
   $('#map-window').hidden = false;
-  $('#map-info').hidden = true;
+  closeEntity();
   renderStationPanel();
 }
 
@@ -9978,11 +10232,6 @@ function initCargoPanel() {
   $('#map-plan').addEventListener('click', () => {
     showTripPanel();
     drawMap();
-  });
-
-  // The detail card can put the place it is describing on the plan.
-  $('#map-info-stop').addEventListener('click', () => {
-    if (mapInfoLocation) addStop(mapInfoLocation.rawId, mapInfoLocation.name, null);
   });
 
   $('#cargo-close').addEventListener('click', () => {
@@ -11202,23 +11451,19 @@ function renderMapInfoSold() {
   list.hidden = false;
 }
 
-/** The card that opens when a node is clicked. */
-function showMapInfo(location) {
+/**
+ * The card that opens when a node is clicked - the shared drawer, plus the
+ * parts only a place on this map has.
+ *
+ * The name, where it is, its kind and how often you have been are the drawer's
+ * own facts now, so they are not written twice. Notes, lore, amenities, the
+ * sold list and the commodity-search verdict stay here: they are answers about
+ * a dot on this map rather than about the place in general.
+ */
+async function showMapInfo(location) {
   mapInfoLocation = location;
-  const info = $('#map-info');
 
-  $('#map-info-name').textContent = location.name;
-  $('#map-info-where').textContent =
-    [location.body, location.system].filter(Boolean).join(' · ') || 'unmapped';
-  $('#map-info-kind').textContent = location.kind.replace(/([a-z])([A-Z])/g, '$1 $2');
-
-  $('#map-info-visits').textContent = location.visits > 0
-    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
-    : 'never visited';
-
-  $('#map-info-last').textContent = location.lastVisit
-    ? `last there ${relative(location.lastVisit)}`
-    : '';
+  if (!await openEntity('place', location.rawId)) return;
 
   renderMapInfoServices(location);
   renderMapInfoNotes(location);
@@ -11239,8 +11484,6 @@ function showMapInfo(location) {
   // The starmap's own paragraph about this place, fetched on first open and
   // cached; the card must not wait for it.
   renderMapInfoPlace(location);
-
-  info.hidden = false;
 }
 
 /**

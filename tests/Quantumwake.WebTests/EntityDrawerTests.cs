@@ -1,0 +1,204 @@
+namespace Quantumwake.WebTests;
+
+/// <summary>
+/// The one detail surface, whichever view opened it.
+/// </summary>
+/// <remarks>
+/// Every view had grown its own panel and they disagreed: the map's place card
+/// knew about visits and notes, the parts row knew about size and volume, and
+/// neither could say whether the thing was already yours or put it on a plan.
+/// What matters here is that the shape does not change with the kind, and that
+/// every line still says who is answerable for it.
+/// </remarks>
+public class EntityDrawerTests
+{
+    private const string Lorville = """
+        {"kind":"place","id":"Stanton1_Lorville","name":"Lorville","subtitle":"Hurston · Stanton",
+         "facts":[{"label":"Visits","value":"41 recorded, last 12 Aug 2026","source":"your logs"},
+                  {"label":"Trade counter","value":"listed","source":"UEX"}],
+         "holding":{"status":"18 of your things are here","detail":"P4-AR, Medpen"},
+         "price":null,
+         "places":[{"placeId":"Stanton1_Lorville","name":"Lorville","note":"here"},
+                   {"placeId":null,"name":"TDD, Lorville","note":"sell Laranite here"}],
+         "actions":["map","stop","overlay"]}
+        """;
+
+    private const string Laranite = """
+        {"kind":"commodity","id":"Laranite","name":"Laranite","subtitle":"best price at TDD, Lorville",
+         "facts":[{"label":"You have traded","value":"never","source":"your logs"}],
+         "holding":null,
+         "price":{"amount":2340,"unit":"aUEC/SCU","where":"TDD, Lorville",
+                  "asOf":"2026-08-28T00:00:00Z","source":"UEX"},
+         "places":[],"actions":["map","shopping","details"]}
+        """;
+
+    private static Page Opened(string kind, string id, string card)
+    {
+        var page = new Page();
+        page.Serve($"/api/entity?kind={kind}&id={id}", card);
+        page.Do($"await openEntity('{kind}', '{id}');");
+        return page;
+    }
+
+    private static Page AtLorville() => Opened("place", "Stanton1_Lorville", Lorville);
+
+    /* ---------- the same shape for every kind ---------- */
+
+    [Fact]
+    public void A_place_and_a_commodity_fill_in_the_same_panel()
+    {
+        Assert.Equal("Lorville", AtLorville().NodeText("#entity-name"));
+        Assert.Equal("Laranite", Opened("commodity", "Laranite", Laranite).NodeText("#entity-name"));
+    }
+
+    /// <summary>
+    /// The label is not decoration. This install's own logs and a community
+    /// price table deserve very different amounts of trust, and a card that
+    /// mixed them silently would give up the thing that makes the app worth
+    /// having.
+    /// </summary>
+    [Fact]
+    public void Every_fact_says_who_is_answerable_for_it()
+    {
+        var facts = AtLorville().NodeText("#entity-facts");
+
+        Assert.Contains("41 recorded", facts);
+        Assert.Contains("your logs", facts);
+        Assert.Contains("UEX", facts);
+    }
+
+    /// <summary>
+    /// Whether it is already yours changes every decision about it, so it sits
+    /// above the price rather than below the facts.
+    /// </summary>
+    [Fact]
+    public void What_you_already_have_is_stated()
+    {
+        Assert.Contains("18 of your things are here", AtLorville().NodeText("#entity-holding"));
+    }
+
+    [Fact]
+    public void A_kind_with_no_answer_for_a_section_hides_it()
+    {
+        var page = AtLorville();
+
+        Assert.True(page.Truth("__dom.node('#entity-price').hidden"));
+        Assert.True(page.Truth("__dom.node('#entity-blurb').hidden"));
+    }
+
+    /* ---------- the price, and how old it is ---------- */
+
+    /// <summary>
+    /// The one number on this card that can cost real money if it is trusted
+    /// further than it deserves. Every price here is somebody else's report of
+    /// a counter that may have moved since.
+    /// </summary>
+    [Fact]
+    public void A_price_never_appears_without_its_age()
+    {
+        var price = Opened("commodity", "Laranite", Laranite).NodeText("#entity-price");
+
+        Assert.Contains("2,340 aUEC/SCU", price);
+        Assert.Contains("TDD, Lorville", price);
+        Assert.Contains("UEX", price);
+        Assert.Contains("collected", price);
+    }
+
+    [Fact]
+    public void An_age_that_cannot_be_worked_out_says_so_rather_than_guessing()
+    {
+        Assert.Equal("age unknown", Opened("commodity", "X", """
+            {"kind":"commodity","id":"X","name":"X","subtitle":null,"facts":[],"holding":null,
+             "price":{"amount":10,"unit":"aUEC","where":null,"asOf":"not a date","source":"UEX"},
+             "places":[],"actions":[]}
+            """).Text("ageWord('not a date')"));
+    }
+
+    /* ---------- the map-only parts ---------- */
+
+    /// <summary>
+    /// Notes, lore and the sold list are answers about a dot on the map rather
+    /// than about the thing in general, so they belong to places only — and
+    /// must be cleared rather than merely hidden, since their renderers append.
+    /// </summary>
+    [Fact]
+    public void The_place_only_block_is_kept_for_places()
+    {
+        Assert.False(AtLorville().Truth("__dom.node('#entity-place-extra').hidden"));
+    }
+
+    [Fact]
+    public void Opening_something_else_clears_the_last_places_notes()
+    {
+        var page = AtLorville();
+        page.Do("__dom.node('#map-info-notes').textContent = 'Cargo elevator is round the back';");
+
+        page.Serve("/api/entity?kind=commodity&id=Laranite", Laranite);
+        page.Do("await openEntity('commodity', 'Laranite');");
+
+        Assert.True(page.Truth("__dom.node('#entity-place-extra').hidden"));
+        Assert.Equal("", page.NodeText("#map-info-notes"));
+    }
+
+    /* ---------- acting on it ---------- */
+
+    [Fact]
+    public void The_actions_offered_are_the_ones_the_kind_supports()
+    {
+        Assert.Equal(3, AtLorville().Count("__dom.node('#entity-actions').children.length"));
+        Assert.Contains("Add as a stop", AtLorville().NodeText("#entity-actions"));
+        Assert.DoesNotContain("Add to shopping", AtLorville().NodeText("#entity-actions"));
+    }
+
+    [Fact]
+    public void Adding_a_place_as_a_stop_sends_that_place()
+    {
+        var page = AtLorville();
+        page.Serve("/api/trips", "[]");
+
+        page.Do("await runEntityAction('stop', { kind:'place', id:'Stanton1_Lorville', name:'Lorville' }, __dom.node('#entity-actions'));");
+
+        var body = page.BodyOf("/api/trips/stops");
+        Assert.Contains("\"placeId\":\"Stanton1_Lorville\"", body);
+        Assert.Contains("\"place\":\"Lorville\"", body);
+    }
+
+    [Fact]
+    public void Adding_a_commodity_to_the_shopping_list_sends_its_name()
+    {
+        var page = Opened("commodity", "Laranite", Laranite);
+        page.Serve("/api/jobs/collect", """{"id":"j1","title":"Shopping list"}""");
+
+        page.Do("await runEntityAction('shopping', { kind:'commodity', id:'Laranite', name:'Laranite' }, __dom.node('#entity-actions'));");
+
+        Assert.Contains("\"name\":\"Laranite\"", page.BodyOf("/api/jobs/collect"));
+    }
+
+    /* ---------- opening and closing ---------- */
+
+    [Fact]
+    public void Clicking_the_same_thing_again_closes_it()
+    {
+        var page = AtLorville();
+        Assert.False(page.Truth("__dom.node('#entity-drawer').hidden"));
+
+        page.Do("await openEntity('place', 'Stanton1_Lorville');");
+
+        Assert.True(page.Truth("__dom.node('#entity-drawer').hidden"));
+    }
+
+    /// <summary>
+    /// Nothing known is not an error worth a dialog — but leaving the previous
+    /// card up would have the panel answering for the wrong thing.
+    /// </summary>
+    [Fact]
+    public void A_thing_nothing_is_known_about_closes_the_panel_rather_than_lying()
+    {
+        var page = AtLorville();
+
+        page.Fail("/api/entity?kind=place&id=nowhere", 404, """{"problem":"Nothing is known about that."}""");
+        page.Do("await openEntity('place', 'nowhere');");
+
+        Assert.True(page.Truth("__dom.node('#entity-drawer').hidden"));
+    }
+}

@@ -82,6 +82,14 @@ public class PilotBriefingTests
     {
         var page = new Page();
 
+        // The place card is the shared drawer now, so opening one asks the
+        // server what is known about the place before the map-only parts of it
+        // are filled in.
+        page.Serve("/api/entity?kind=place&id=clinic", """
+            {"kind":"place","id":"clinic","name":"Seraphim","subtitle":null,
+             "facts":[],"holding":null,"price":null,"places":[],"actions":["map"]}
+            """);
+
         page.Do("""
             atlas = [
               { rawId: 'clinic', name: 'Seraphim', kind: 'Station', visits: 1, system: '', body: '', lastVisit: null },
@@ -90,7 +98,7 @@ public class PilotBriefingTests
             mapServicesByPlace.set('clinic', ['clinic']);
             mapServicesByPlace.set('shop', ['shop']);
             selectMapService('clinic');
-            showMapInfo(atlas[0]);
+            await showMapInfo(atlas[0]);
             """);
 
         Assert.Equal("clinic", page.Text("mapServiceFilter"));

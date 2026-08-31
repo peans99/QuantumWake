@@ -630,6 +630,14 @@ public static class ServerHost
             LogLibrary lib, UexData uex, UexFeeds feeds, string? focus) =>
             BuildBriefing(live.Current, trips, jobs, lib, uex, feeds, focus));
 
+        // One description of a thing, whichever surface it was clicked on. The
+        // panels this replaces each knew a different subset and offered a
+        // different set of actions; see EntityCards.
+        app.MapGet("/api/entity", (string? kind, string? id, LogLibrary lib, UexData uex, UexFeeds feeds) =>
+            EntityCards.Build(kind, id, lib, uex, feeds) is { } card
+                ? Results.Ok(card)
+                : Results.NotFound(new { problem = "Nothing is known about that." }));
+
         // The map reads the same deliberately limited service evidence as the
         // briefing. It receives map ids, not UEX's terminal names, so its
         // filtering and detail card use exactly the resolver the trade views do.
