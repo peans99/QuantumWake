@@ -77,6 +77,38 @@ public class PilotBriefingTests
         Assert.False(page.Truth("__dom.node('#now-briefing-card').classList.contains('user-hidden')"));
     }
 
+    /// <summary>
+    /// Pinning has to say when it did not happen.
+    /// </summary>
+    /// <remarks>
+    /// The bare server has no overlay to show and answers 409, which a browser
+    /// treats as a perfectly good response — so for as long as this card has
+    /// existed the button reported success and did nothing. The release note
+    /// for the fix claimed the briefing said so before the briefing did.
+    /// </remarks>
+    [Fact]
+    public void Pinning_the_briefing_says_so_when_there_is_no_overlay()
+    {
+        var page = AtArea18();
+        page.Fail("/api/overlay?visible=true", 409, """{"message":"No overlay in this process."}""");
+
+        page.Do("await pinBriefingToOverlay();");
+
+        Assert.Equal("no overlay", page.NodeText("#briefing-overlay"));
+    }
+
+    [Fact]
+    public void Pinning_the_briefing_asks_the_way_the_endpoint_reads_it()
+    {
+        var page = AtArea18();
+        page.Serve("/api/overlay?visible=true", """{"available":true,"visible":true}""");
+
+        page.Do("await pinBriefingToOverlay();");
+
+        Assert.Contains("POST /api/overlay?visible=true", page.Fetched());
+        Assert.Equal("✓ pinned", page.NodeText("#briefing-overlay"));
+    }
+
     [Fact]
     public void A_service_filter_keeps_only_matching_places_and_marks_the_place_card()
     {

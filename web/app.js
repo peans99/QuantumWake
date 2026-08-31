@@ -906,13 +906,26 @@ async function addBriefingStop() {
 
 async function pinBriefingToOverlay() {
   const button = $('#briefing-overlay');
+  const label = button.textContent;
   button.disabled = true;
+
   try {
-    // Same call, same fix: visible is bound from the query, not from a body.
-    await fetch('/api/overlay?visible=true', { method: 'POST' });
+    // visible is bound from the query, not from a body. And a refusal - which
+    // is what the bare server always answers, having no overlay to show - is a
+    // normal response rather than a thrown one, so it has to be looked at.
+    const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
+
+    button.textContent = response.ok ? '✓ pinned' : 'no overlay';
+    button.title = response.ok ? '' : 'The dashboard is running without the overlay.';
+  } catch {
+    button.textContent = 'failed';
   } finally {
     button.disabled = false;
   }
+
+  // Long enough to be read, short enough that the button is a button again
+  // before the next place is worth pinning.
+  setTimeout(() => { button.textContent = label; button.title = ''; }, 4000);
 }
 
 function briefingStopRow(briefing, stop) {
@@ -1519,15 +1532,19 @@ function showEntityOnMap(card) {
     return;
   }
 
+  // searchCommodity rather than writing the box: it also drops whatever the
+  // cargo panel was describing. Setting the term alone recoloured the map and
+  // left the panel beside it still describing the station opened before.
   if (card.kind === 'commodity') {
-    $('#map-search').value = card.name;
-    drawMap();
+    searchCommodity(card.name);
     return;
   }
 
+  // A seller is a UEX terminal name and the atlas holds place names - "Platinum
+  // Bay, Baijini Point" against "Baijini Point" - so an exact search finds
+  // nothing. centreOnTerminal is the loose match the shading already joins on.
   const seller = (card.places || [])[0];
-  if (seller?.placeId) centreOn(seller.placeId);
-  else if (seller?.name) jumpToPlace(seller.name);
+  if (seller) centreOnTerminal(seller.name, seller.placeId);
 }
 
 const ENTITY_ACTION_LABEL = {

@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1047 tests](https://img.shields.io/badge/tests-1047%20passing-4fd48a)
+![1117 tests](https://img.shields.io/badge/tests-1117%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -211,7 +211,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,047 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,117 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard JavaScript against a stub DOM.
 
@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.25
+### 0.9.26
 
 - **One panel for everything, wherever you click it.** A place on the map, a
   component in the parts table — they now open the same drawer, and it answers

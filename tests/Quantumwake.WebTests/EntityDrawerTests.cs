@@ -179,28 +179,39 @@ public class EntityDrawerTests
     /// looked for a place id that was never going to exist, and the button did
     /// nothing at all.
     /// </summary>
+    /// <remarks>
+    /// searchCommodity rather than writing the box directly: it also drops what
+    /// the cargo panel was describing. Setting the term alone recoloured the map
+    /// and left the panel beside it still describing the station opened before.
+    /// </remarks>
     [Fact]
-    public void Showing_a_commodity_on_the_map_searches_for_it_rather_than_centring()
+    public void Showing_a_commodity_on_the_map_searches_for_it_and_drops_the_old_station()
     {
         var page = Opened("commodity", "Laranite", Laranite);
+        page.Do("cargo.place = { id: 'ELSEWHERE', name: 'Somewhere else' };");
 
         page.Do("await runEntityAction('map', { kind:'commodity', id:'Laranite', name:'Laranite' }, __dom.node('#entity-actions'));");
 
         Assert.Equal("Laranite", page.Text("__dom.node('#map-search').value"));
+        Assert.Equal("null", page.Text("String(cargo.place)"));
     }
 
     /// <summary>
     /// A component has no dot either, so it goes to the nearest thing the map
-    /// can find: the cheapest seller the catalogue named.
+    /// can find: the cheapest seller the catalogue names.
     /// </summary>
+    /// <remarks>
+    /// A seller is a UEX terminal name and the atlas holds place names —
+    /// "Platinum Bay, Baijini Point" against "Baijini Point" — so an exact
+    /// search finds nothing at all. This asserts the map actually arrived
+    /// somewhere; an earlier version only checked that a function had been
+    /// called, and passed while the search was still coming up empty.
+    /// </remarks>
     [Fact]
-    public void Showing_a_component_on_the_map_goes_to_a_seller()
+    public void Showing_a_component_on_the_map_finds_the_place_behind_the_terminal_name()
     {
         var page = new Page();
-        page.Do("""
-            jumpedTo = null;
-            jumpToPlace = (name) => { jumpedTo = name; };
-            """);
+        page.Do("atlas = [{ rawId: 'BAIJINI', name: 'Baijini Point', kind: 'Station', visits: 0 }];");
 
         page.Do("""
             await runEntityAction('map',
@@ -209,7 +220,27 @@ public class EntityDrawerTests
               __dom.node('#entity-actions'));
             """);
 
-        Assert.Equal("Platinum Bay, Baijini Point", page.Text("jumpedTo"));
+        Assert.Equal("BAIJINI", page.Text("cargo.place.id"));
+    }
+
+    /// <summary>
+    /// And a seller the atlas cannot place leaves the map where it was, rather
+    /// than centring on whatever happened to match loosely enough.
+    /// </summary>
+    [Fact]
+    public void A_seller_the_map_cannot_name_moves_nothing()
+    {
+        var page = new Page();
+        page.Do("atlas = [{ rawId: 'BAIJINI', name: 'Baijini Point', kind: 'Station', visits: 0 }];");
+
+        page.Do("""
+            await runEntityAction('map',
+              { kind:'part', id:'x', name:'X',
+                places:[{ placeId:null, name:'Nowhere In Particular', note:'' }] },
+              __dom.node('#entity-actions'));
+            """);
+
+        Assert.Equal("null", page.Text("String(cargo.place)"));
     }
 
     /* ---------- pinning ---------- */
