@@ -196,6 +196,46 @@ public class BriefingFocusTests
         Assert.True(page.Truth("__dom.node('#briefing-mining-section').hidden"));
     }
 
+    /* ---------- keeping up with the ship ---------- */
+
+    /// <summary>
+    /// The refresh fix behind 0.9.23.
+    /// </summary>
+    /// <remarks>
+    /// Swapping ships is something you do standing still in your own hangar, so
+    /// keying the card on the place alone meant the most common way to change
+    /// the focus was the one way that could not refresh it. The card kept the
+    /// last ship's lane until the pilot happened to fly somewhere else.
+    /// </remarks>
+    [Fact]
+    public void Swapping_ships_without_moving_refreshes_the_focus()
+    {
+        var page = At(Freight);
+        Assert.Contains("RSI Hermes", page.NodeText("#briefing-why"));
+
+        page.Serve("/api/briefing", Combat);
+        page.Do("renderNow({ connected:true, inGame:true, locationId:'Area18', location:'Area18', ship:'ANVL Hornet F7CM Mk2', confidence:'High', recentEvents:[] });");
+
+        Assert.Contains("Combat", page.NodeText("#briefing-why"));
+        Assert.False(page.Truth("__dom.node('#briefing-claim-section').hidden"));
+    }
+
+    /// <summary>
+    /// And the card is still not refetched on every frame: the live state
+    /// arrives once a second, and a briefing joins the whole stash, every
+    /// shopping list and the market to the place it describes.
+    /// </summary>
+    [Fact]
+    public void Standing_still_in_the_same_ship_does_not_refetch()
+    {
+        var page = At(Freight);
+        var before = page.Count("__fetch.calls.filter(c => c.url.indexOf('/api/briefing') === 0).length");
+
+        page.Do("renderNow({ connected:true, inGame:true, locationId:'Area18', location:'Area18', confidence:'High', recentEvents:[] });");
+
+        Assert.Equal(before, page.Count("__fetch.calls.filter(c => c.url.indexOf('/api/briefing') === 0).length"));
+    }
+
     /* ---------- overruling it ---------- */
 
     /// <summary>

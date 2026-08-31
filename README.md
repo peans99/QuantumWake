@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.22
+### 0.9.23
 
 - **The Now page leads with whatever your ship is for.** Take a hauler out and
   the briefing opens with trade leads; take a mining ship and it opens with the
@@ -254,8 +254,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   wait is. Nothing in the logs records mining, salvage or cargo, so the ship you
   retrieved is the only thing that can say what you came out to do — the card
   names the ship it read that from, and the chooser beside it overrules the
-  guess or switches the whole idea off. Your own arrangement of the Now cards is
-  left alone: only the sections inside the briefing move.
+  guess or switches the whole idea off. It keeps up when you swap ships without
+  going anywhere, which is how ships are usually swapped. Your own arrangement
+  of the Now cards is left alone: only the sections inside the briefing move.
+
+  A salvage ship gets the plain card rather than a lane of its own. The game
+  files every salvage hull as Industrial alongside the mining ones, so guessing
+  from that would send a Vulture to the best ore deposits in the system — and
+  there is nothing salvage-specific worth showing yet. A wrong lane is worse
+  than none.
 
 - **Shield generators get their size and grade like everything else.** 203 item
   names were coming out unmarked, and silently: the localisation table keys the

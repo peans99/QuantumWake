@@ -831,8 +831,14 @@ function renderNowParty(state) {
  */
 async function refreshPilotBriefing(state) {
   const card = $('#now-briefing-card');
+
+  // The ship is part of the key, not just the place. Swapping ships is
+  // something you do standing still in your own hangar, so a key made only of
+  // where you are meant the most common way to change the focus was the one
+  // way that could not refresh it: the card kept the last ship's lane until
+  // the pilot happened to fly somewhere else.
   const key = state?.inGame && state.location
-    ? `${state.locationId || ''}|${state.location}`
+    ? `${state.locationId || ''}|${state.location}|${state.ship || ''}`
     : null;
 
   if (!key) {
@@ -864,7 +870,7 @@ async function refreshPilotBriefing(state) {
     throw err;
   }
 
-  if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}`) return;
+  if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}|${nowState?.ship || ''}`) return;
 
   renderPilotBriefing(briefing);
 }
