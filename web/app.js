@@ -7252,19 +7252,30 @@ $('#settings-community-enable').addEventListener('click', (e) =>
 $('#settings-community-disable').addEventListener('click', (e) =>
   setCommunity(false, $('#settings-community-status'), e.currentTarget));
 
+/**
+ * Re-read every log, on demand.
+ *
+ * The request only starts the work now. It used to hold the connection open for
+ * the whole half-minute read and say "rescanning…" the entire time, which is
+ * the same as saying nothing; the strip at the top of the page has the progress,
+ * counts the files as they go by, and reloads the views when it finishes.
+ */
 $('#settings-rescan').addEventListener('click', async (e) => {
   const button = e.currentTarget;
   const status = $('#settings-rescan-status');
 
   button.disabled = true;
-  status.textContent = 'rescanning…';
+  status.textContent = 'starting…';
 
   try {
-    const result = await getJson2('/api/scan?force=true');
-    status.textContent = `${result.sessions} sessions from a full re-read`;
-    await loadHistory();
+    await getJson2('/api/scan?force=true');
+    status.textContent = 'reading every log — progress is at the top of the page';
   } catch (err) {
-    status.textContent = `failed: ${err.message}`;
+    // 409 is the honest one: a scan was already running, which is not a failure
+    // and does not mean the re-read they asked for is not happening.
+    status.textContent = err.message.includes('409')
+      ? 'a scan is already running'
+      : `failed: ${err.message}`;
   } finally {
     button.disabled = false;
   }
@@ -13249,49 +13260,111 @@ initTextOverlay();
  * empty while boot() retried in silence, which is indistinguishable from being
  * broken.
  */
-async function watchScan() {
+/**
+ * What the app is doing, on a strip that never goes away.
+ *
+ * This used to watch the opening log scan and then return, which is why the app
+ * looked idle for the rest of the session however hard it was working: a game
+ * patch sends it off to read 110 MB of game files for half a minute, a UEX
+ * refresh fires at startup, and a manual re-read of every log said "rescanning…"
+ * and nothing else for thirty seconds. All of it now reports to one place.
+ *
+ * The loop does not end. It is the only thing that notices work starting that
+ * nobody on this page began.
+ */
+async function watchActivity() {
   const panel = $('#scan');
-  let sawRunning = false;
+  if (!panel) return;
+
+  let wasBusy = false;
 
   for (;;) {
-    let status;
+    let jobs;
     try {
-      status = await getJson('/api/scan/status');
+      jobs = await getJson('/api/activity');
     } catch {
-      await wait(1000);
+      await wait(2000);
       continue;
     }
 
-    if (status.running) {
-      sawRunning = true;
-      panel.hidden = false;
-
-      $('#scan-fill').style.width = `${status.percent}%`;
-      $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
-      $('#scan-file').textContent = status.file || '';
-
-      $('#scan-label').textContent = status.parsed > 0
-        ? `Parsing logs — ${status.parsed} new`
-        : 'Checking logs…';
-    } else if (sawRunning) {
-      // Finished: fill the bar, then reload the views with the new data.
-      $('#scan-fill').style.width = '100%';
-      $('#scan-label').textContent = 'Scan complete';
-      $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
-      $('#scan-file').textContent = '';
-
-      await wait(1200);
-      panel.hidden = true;
-
-      try {
-        await loadHistory();
-      } catch { /* the retry loop in boot covers this */ }
-
-      return;
+    if (jobs.length > 0) {
+      wasBusy = true;
+      showActivity(jobs);
+    } else if (wasBusy) {
+      wasBusy = false;
+      await finishActivity();
     }
 
-    await wait(status.running ? 400 : 1000);
+    await wait(jobs.length > 0 ? 700 : 2500);
   }
+}
+
+/**
+ * The strip, showing the oldest job.
+ *
+ * One at a time rather than a list: these overlap rarely and briefly, and a
+ * stack of bars that appears and collapses is harder to read than a line that
+ * says what is happening. The others are counted, so nothing is hidden.
+ */
+function showActivity(jobs) {
+  const job = jobs[0];
+
+  $('#scan').hidden = false;
+  $('#scan-label').textContent = jobs.length > 1
+    ? `${job.label} · +${jobs.length - 1} more`
+    : job.label;
+
+  // Two of these can say how far along they are and two cannot. An indeterminate
+  // bar is honest about the difference; a guessed one that sticks at 90% teaches
+  // people to ignore bars.
+  const fill = $('#scan-fill');
+  const known = job.percent !== null && job.percent !== undefined;
+
+  fill.classList.toggle('working', !known);
+  fill.style.width = known ? `${job.percent}%` : '100%';
+
+  $('#scan-count').textContent = [job.count, `${job.seconds}s`].filter(Boolean).join(' · ');
+  $('#scan-file').textContent = job.detail || '';
+}
+
+/**
+ * Nothing is running any more.
+ *
+ * In three parts because the middle one is a sleep, and a sleep is the one
+ * thing the headless harness cannot run: its timers never fire, so a test that
+ * awaited this would hang rather than fail. The two halves that carry the
+ * behaviour are reachable on their own.
+ */
+async function finishActivity() {
+  showActivityDone();
+  await wait(1200);
+  hideActivity();
+  await reloadAfterActivity();
+}
+
+/** A full bar and a word, so a scan that ends in a blink still reads as ended. */
+function showActivityDone() {
+  const fill = $('#scan-fill');
+  fill.classList.remove('working');
+  fill.style.width = '100%';
+
+  $('#scan-label').textContent = 'Done';
+  $('#scan-file').textContent = '';
+}
+
+function hideActivity() {
+  $('#scan').hidden = true;
+}
+
+/**
+ * The views are reloaded because the whole point of the work that just ended
+ * was to change what they would say - a re-read that leaves the page showing
+ * the numbers from before it is a re-read nobody can tell happened.
+ */
+async function reloadAfterActivity() {
+  try {
+    await loadHistory();
+  } catch { /* the retry loop in boot covers this */ }
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13536,7 +13609,7 @@ async function boot() {
 
   if (!isSnapshot) {
     connectStream();
-    watchScan();
+    watchActivity();
 
     // Once per load, never on a timer: the offer to renew a price table that
     // has gone a day old, and the line the wipe draws under the history.

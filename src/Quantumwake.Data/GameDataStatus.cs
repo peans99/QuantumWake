@@ -90,6 +90,21 @@ public sealed class GameDataStatus
     }
 
     /// <summary>What to tell a page that has nothing to show.</summary>
+    /// <summary>Whether the install is being read right now, for the activity feed.</summary>
+    public bool Reading { get { lock (_gate) return _state == GameDataState.Reading; } }
+
+    /// <summary>How long the current read has been going.</summary>
+    public int Seconds
+    {
+        get
+        {
+            lock (_gate)
+                return _startedAt is { } began
+                    ? (int)((_finishedAt ?? DateTimeOffset.UtcNow) - began).TotalSeconds
+                    : 0;
+        }
+    }
+
     public object Snapshot()
     {
         lock (_gate)

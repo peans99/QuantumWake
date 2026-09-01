@@ -1451,7 +1451,9 @@ td.outward { color: var(--amber); }
   text-transform: uppercase;
   color: var(--cyan-hot);
 }
-.scan-count { color: var(--dim); font-family: var(--mono); letter-spacing: 0; }
+/* Was --dim, which on this strip is the one thing being read: the whole
+   point of it is that somebody across the room can tell work is happening. */
+.scan-count { color: var(--muted); font-family: var(--mono); letter-spacing: 0; }
 
 .scan-track {
   height: 4px;
@@ -1466,6 +1468,26 @@ td.outward { color: var(--amber); }
   background: linear-gradient(90deg, var(--cyan-deep), var(--cyan));
   box-shadow: 0 0 10px rgba(53, 200, 240, .5);
   transition: width .3s ease-out;
+}
+
+/* Work that genuinely cannot say how far along it is. The bar fills the track
+   and sweeps, rather than sitting at a number nobody measured. */
+.scan-fill.working {
+  background: linear-gradient(90deg,
+    transparent 0%, var(--cyan-deep) 35%, var(--cyan) 50%, var(--cyan-deep) 65%, transparent 100%);
+  background-size: 220% 100%;
+  animation: scan-sweep 1.4s linear infinite;
+  transition: none;
+}
+
+@keyframes scan-sweep {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+
+/* Someone who has asked for less motion gets a plain filled track instead. */
+@media (prefers-reduced-motion: reduce) {
+  .scan-fill.working { animation: none; background: var(--cyan-deep); }
 }
 
 .scan-file {

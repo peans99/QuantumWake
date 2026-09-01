@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1124 tests](https://img.shields.io/badge/tests-1124%20passing-4fd48a)
+![1141 tests](https://img.shields.io/badge/tests-1141%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -211,7 +211,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,124 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,141 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard JavaScript against a stub DOM.
 
@@ -245,7 +245,25 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.27
+### 0.9.28
+
+- **You can see what it is doing.** The strip at the top of the page used to
+  watch the opening log scan and then go quiet for the rest of the session,
+  however hard the app was working: reading 110 MB of game files after a patch
+  took half a minute with nothing said outside Settings, and a UEX price refresh
+  fires at startup and every fifteen minutes without ever having said a word.
+  All four jobs report to the one strip now, with the file being read and how
+  long it has been going. Two of them can say how far along they are and two
+  cannot — the ones that cannot show a moving bar rather than a made-up
+  percentage.
+
+- **Re-read every log now shows its progress.** The button in Settings held the
+  connection open for the whole half-minute and said "rescanning…" the entire
+  time, which is the same as saying nothing. It starts the read and hands over
+  to the strip, which counts the files as they go by and reloads your pages when
+  it finishes. Pressing it twice while one is running is refused rather than
+  reading 400 MB twice for one answer.
+
 
 - **The item-label list is the whole list, and you can search it.** *Label your
   items* showed 25 renames out of the 4,388 it would actually make on this

@@ -59,6 +59,51 @@ public sealed class ScanStatus
         }
     }
 
+    /// <summary>
+    /// Claims the scan, or answers false because one is already running.
+    /// </summary>
+    /// <remarks>
+    /// The button can be pressed twice, and two scans over one library would
+    /// interleave their progress into a bar that goes backwards - quite apart
+    /// from reading 400 MB twice for one answer.
+    /// </remarks>
+    public bool TryBegin()
+    {
+        lock (_gate)
+        {
+            if (_running)
+                return false;
+
+            _running = true;
+            _done = 0;
+            _total = 0;
+            _parsed = 0;
+            _file = null;
+            _startedAt = DateTimeOffset.UtcNow;
+            _finishedAt = null;
+            return true;
+        }
+    }
+
+    /// <summary>Whether a scan is running, for the activity feed.</summary>
+    public bool Running { get { lock (_gate) return _running; } }
+
+    /// <summary>How far along, or null when the total is not known yet.</summary>
+    public (int Done, int Total, string? File, int Seconds) Progress
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var elapsed = _startedAt is null
+                    ? TimeSpan.Zero
+                    : (_finishedAt ?? DateTimeOffset.UtcNow) - _startedAt.Value;
+
+                return (_done, _total, _file, (int)elapsed.TotalSeconds);
+            }
+        }
+    }
+
     public void Report(int done, int total, string file, bool cached)
     {
         lock (_gate)

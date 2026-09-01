@@ -27,6 +27,7 @@ public sealed class TradeDataRefresh(
     UexData uex,
     TradeDataStore preference,
     IHttpClientFactory factory,
+    BackgroundWork work,
     ILogger<TradeDataRefresh> logger) : BackgroundService
 {
     private static readonly TimeSpan Tick = TimeSpan.FromMinutes(15);
@@ -70,6 +71,12 @@ public sealed class TradeDataRefresh(
             // still push the next try out to RetryAfter, and one that hangs
             // until shutdown must not leave the timestamp untouched.
             preference.Checked();
+
+            // Claimed after IsDue, not before: this fires every fifteen minutes
+            // and almost always has nothing to do, and a strip that blinked
+            // "refreshing prices" four times an hour for no reason would be
+            // noise rather than news.
+            using var _ = work.Begin("prices", "Refreshing prices from UEX");
 
             var count = await uex.EnableAsync(factory.CreateClient("community"), token);
 

@@ -74,6 +74,7 @@ public static class ServerHost
             builder.Services.AddSingleton(install);
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<ScanStatus>();
+        builder.Services.AddSingleton<BackgroundWork>();
         builder.Services.AddSingleton<LiveSessionService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LiveSessionService>());
 
@@ -347,8 +348,11 @@ public static class ServerHost
             };
         });
 
-        app.MapPost("/api/community/enable", async (LogLibrary lib, IHttpClientFactory httpFactory) =>
+        app.MapPost("/api/community/enable",
+            async (LogLibrary lib, IHttpClientFactory httpFactory, BackgroundWork work) =>
         {
+            using var _ = work.Begin("community", "Downloading the community dataset");
+
             try
             {
                 var count = await lib.Community.EnableAsync(httpFactory.CreateClient("community"));
@@ -754,26 +758,49 @@ public static class ServerHost
                 .Take(Math.Clamp(limit ?? 150, 1, 500));
         });
 
-        // Rescan on demand: unchanged backups are skipped by fingerprint, so this is
-        // cheap after the first run.
-        app.MapPost("/api/scan", (LogLibrary lib, bool? force) =>
+        // Rescan on demand: unchanged backups are skipped by fingerprint, so this
+        // is cheap after the first run - and force reads all 159 of them again,
+        // which is the half-minute the button exists to make visible.
+        //
+        // Started rather than awaited. A forced reparse holds the connection for
+        // the whole read, and a browser that gives up on it leaves the work
+        // running with nothing watching. The answer is the status endpoint the
+        // strip already polls, so this says "started" and gets out of the way.
+        app.MapPost("/api/scan", (LogLibrary lib, ScanStatus status, ILoggerFactory logs, bool? force) =>
         {
             if (install is null)
                 return Results.NotFound(new { message = "No install." });
 
-            var status = app.Services.GetRequiredService<ScanStatus>();
-            status.Begin();
+            // Two scans over one library would interleave their progress and
+            // report nonsense, quite apart from the wasted read.
+            if (!status.TryBegin())
+                return Results.Conflict(new { message = "A scan is already running." });
 
-            try
+            var full = force ?? false;
+
+            _ = Task.Run(() =>
             {
-                var parsed = lib.Scan(install, Progress(status), force ?? false);
-                return Results.Ok(new { parsed, sessions = lib.Store.Count() });
-            }
-            finally
-            {
-                status.Finish();
-            }
+                try
+                {
+                    lib.Scan(install, Progress(status), full);
+                }
+                catch (Exception e)
+                {
+                    logs.CreateLogger("Scan").LogError(e, "Scan failed.");
+                }
+                finally
+                {
+                    status.Finish();
+                }
+            });
+
+            return Results.Accepted(value: new { started = true, force = full });
         });
+
+        // What the app is busy with. One place, so the strip does not have to
+        // know which subsystem owns which kind of work.
+        app.MapGet("/api/activity", (ScanStatus scan, GameDataStatus gameData, BackgroundWork work) =>
+            Activity(scan, gameData, work));
 
         app.MapGet("/api/fleet", (LogLibrary lib) =>
         {
@@ -2260,8 +2287,10 @@ public static class ServerHost
                 };
             }));
 
-        app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory) =>
+        app.MapPost("/api/uex/enable", async (UexData uex, IHttpClientFactory httpFactory, BackgroundWork work) =>
         {
+            using var _ = work.Begin("uex", "Downloading UEX prices");
+
             try
             {
                 var count = await uex.EnableAsync(httpFactory.CreateClient("community"));
@@ -2600,6 +2629,48 @@ static int Holes(IEnumerable<ShipSlot> slots)
 
 /// <summary>Bridges the library's progress callback to the shared status.</summary>
 
+
+    /// <summary>
+    /// Everything the app is doing, as one list the strip can read down.
+    /// </summary>
+    /// <remarks>
+    /// Two of these know how far along they are and two do not. Rather than
+    /// invent a percentage for a download whose length nobody checked, the ones
+    /// that cannot say carry a null and the strip shows them as running with
+    /// their elapsed time. A guessed bar that sticks at 90% teaches people to
+    /// ignore bars.
+    /// </remarks>
+    static IReadOnlyList<ActivityItem> Activity(
+        ScanStatus scan, GameDataStatus gameData, BackgroundWork work)
+    {
+        var items = new List<ActivityItem>();
+
+        if (scan.Running)
+        {
+            var (done, total, file, seconds) = scan.Progress;
+
+            items.Add(new ActivityItem(
+                "scan",
+                "Reading your logs",
+                file,
+                total > 0 ? (int)Math.Round(done * 100.0 / total) : null,
+                seconds,
+                total > 0 ? $"{done} of {total}" : null));
+        }
+
+        // Half a minute after every game patch, and the reason Parts, Mining,
+        // Crafting and the map are empty while it runs.
+        if (gameData.Reading)
+            items.Add(new ActivityItem(
+                "gamedata", "Reading your game files", null, null, gameData.Seconds, null));
+
+        var now = DateTimeOffset.UtcNow;
+
+        items.AddRange(work.Running().Select(w => new ActivityItem(
+            w.Key, w.Label, null, null, (int)(now - w.StartedAt).TotalSeconds, null)));
+
+        return items;
+    }
 
     static IProgress<ScanProgress> Progress(ScanStatus status) =>
         new Progress<ScanProgress>(p => status.Report(p.Done, p.Total, p.CurrentFile, p.WasCached));
@@ -3251,6 +3322,13 @@ public sealed record BriefingService(string Name, string Status, bool DataEnable
 
 /// <summary>One item last seen at the live place.</summary>
 public sealed record BriefingStash(string Name, string Category, DateTimeOffset LastSeen);
+
+/// <summary>One thing the app is doing, for the activity strip.</summary>
+/// <param name="Percent">Null where the job genuinely cannot say how far along it is.</param>
+/// <param name="Detail">The file, or whatever else names the current step.</param>
+/// <param name="Count">"41 of 159", where there is a count worth showing.</param>
+public sealed record ActivityItem(
+    string Key, string Label, string? Detail, int? Percent, int Seconds, string? Count);
 
 /// <summary>One atlas place and the services the installed feeds can locate there.</summary>
 public sealed record MapServicePlace(string PlaceId, IReadOnlyList<string> Services);
