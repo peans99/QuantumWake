@@ -245,7 +245,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.27
+### 0.9.28
+
+- **Re-reading every log now shows what it is doing.** It is the slowest thing
+  the app does — a full re-parse of every backup, 160 files and about eleven
+  seconds on this install — and it showed nothing but the word *rescanning*
+  beside the button. It counts the files off there now. The bar at the top of
+  the page follows it too: that bar used to stop watching the moment the
+  startup scan finished, so the one scan long enough to be worth watching was
+  the one it never drew.
+- **The Settings block is called “Game logs”**, not “Log cache”, because that is
+  what people look under when they want their logs read again.
+- **A re-read that worked is no longer reported as failed.** If refreshing the
+  views stumbled afterwards, the line beside the button said the rescan failed.
+  The rescan had not failed.
+- **The first-run wizard counts what it is actually reading.** It said *events*
+  while counting log files, which on a full history read “148 events” for 400 MB
+  of flying. It says files now, and the two bars agree with each other.
 
 - **The item-label list is the whole list, and you can search it.** *Label your
   items* showed 25 renames out of the 4,388 it would actually make on this
