@@ -5966,18 +5966,44 @@ $('#settings-rescan').addEventListener('click', async (e) => {
   const status = $('#settings-rescan-status');
 
   button.disabled = true;
-  status.textContent = 'rescanning…';
+  status.textContent = rescanLine({ running: true });
+
+  // The page's bar is at the top of the document and this button is near the
+  // bottom of a long Settings page, so from here it is off-screen. The count is
+  // repeated beside the button that started it.
+  const poll = setInterval(async () => {
+    try {
+      status.textContent = rescanLine(await getJson('/api/scan/status'));
+    } catch { /* the result below is the answer that matters */ }
+  }, 500);
 
   try {
     const result = await getJson2('/api/scan?force=true');
     status.textContent = `${result.sessions} sessions from a full re-read`;
-    await loadHistory();
+
+    // The re-read is what the button promised, and it is already done. A reload
+    // that fails afterwards leaves the views stale, which is a smaller problem
+    // than telling somebody their rescan failed when it did not.
+    await loadHistory().catch(() => {});
   } catch (err) {
     status.textContent = `failed: ${err.message}`;
   } finally {
+    clearInterval(poll);
     button.disabled = false;
   }
 });
+
+/**
+ * What the Settings line says while a forced rescan runs.
+ *
+ * Files rather than a percentage: this is a re-read of every backup, and "112
+ * of 160" says how much is left in a way "70%" does not.
+ */
+function rescanLine(scan) {
+  return scan.running && scan.total > 0
+    ? `${scan.done} / ${scan.total} logs · ${scan.elapsedSeconds}s`
+    : 'rescanning…';
+}
 
 /** POST that expects JSON back; getJson is GET-only. */
 async function getJson2(url) {
@@ -11781,7 +11807,6 @@ initStarStrings();
  * broken.
  */
 async function watchScan() {
-  const panel = $('#scan');
   let sawRunning = false;
 
   for (;;) {
@@ -11793,36 +11818,91 @@ async function watchScan() {
       continue;
     }
 
-    if (status.running) {
-      sawRunning = true;
-      panel.hidden = false;
+    const finished = paintScan(status, sawRunning);
+    sawRunning = status.running;
 
-      $('#scan-fill').style.width = `${status.percent}%`;
-      $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
-      $('#scan-file').textContent = status.file || '';
-
-      $('#scan-label').textContent = status.parsed > 0
-        ? `Parsing logs — ${status.parsed} new`
-        : 'Checking logs…';
-    } else if (sawRunning) {
-      // Finished: fill the bar, then reload the views with the new data.
-      $('#scan-fill').style.width = '100%';
-      $('#scan-label').textContent = 'Scan complete';
-      $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
-      $('#scan-file').textContent = '';
-
+    if (finished) {
+      // The bar holds on "complete" long enough to be read, then goes.
       await wait(1200);
-      panel.hidden = true;
+      $('#scan').hidden = true;
 
       try {
         await loadHistory();
       } catch { /* the retry loop in boot covers this */ }
-
-      return;
     }
 
+    // Never returns. The forced rescan on the Settings page re-reads all 400 MB
+    // and is by far the slowest scan there is; a watcher that stopped at the
+    // end of the boot scan left that one with no bar at all, and only a
+    // "rescanning…" line beside the button.
     await wait(status.running ? 400 : 1000);
   }
+}
+
+/**
+ * Draws one poll of the scan status on the bar.
+ *
+ * Split from the loop so the transitions can be asserted: the loop is paced by
+ * setTimeout, and a test has no way to advance it.
+ *
+ * @returns true when this is the poll that finished a scan, so the caller can
+ *   retire the bar and reload the views behind it.
+ */
+function paintScan(status, sawRunning) {
+  const panel = $('#scan');
+
+  if (status.running) {
+    panel.hidden = false;
+
+    $('#scan-fill').style.width = `${status.percent}%`;
+    $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
+    $('#scan-file').textContent = status.file || '';
+
+    $('#scan-label').textContent = status.parsed > 0
+      ? `Parsing logs — ${status.parsed} new`
+      : 'Checking logs…';
+
+    return false;
+  }
+
+  // An idle server is not a finished scan. Without this the bar would announce
+  // "scan complete" on the first poll of every load, for a scan that ended
+  // before the page was open — or never ran.
+  if (!sawRunning)
+    return false;
+
+  $('#scan-fill').style.width = '100%';
+  $('#scan-label').textContent = 'Scan complete';
+  $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
+  $('#scan-file').textContent = '';
+
+  return true;
+}
+
+/**
+ * The wizard's own copy of the bar.
+ *
+ * The wizard is a fixed, opaque sheet over the whole page, so the bar beneath
+ * it cannot be seen — and first run is the one time the scan has half a minute
+ * of real work to show.
+ */
+function paintSetupScan(status) {
+  if (status.running) {
+    $('#setup-scan-fill').style.width = `${status.percent}%`;
+
+    // Files, not events: ScanStatus counts one per log it had to parse, and a
+    // wizard promising events while counting files overstated it by thousands.
+    $('#setup-scan-label').textContent = status.parsed > 0
+      ? `Reading logs — ${status.parsed} new`
+      : 'Checking logs…';
+
+    $('#setup-scan-count').textContent = `${status.done} / ${status.total} files`;
+    return;
+  }
+
+  $('#setup-scan-fill').style.width = '100%';
+  $('#setup-scan-label').textContent = 'Logs read — history ready';
+  $('#setup-scan-count').textContent = '';
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -11924,23 +12004,9 @@ async function maybeShowSetup() {
     syncFeeds();
   } catch { /* no feed list; the wizard still works */ }
 
-  // The wizard has its own copy of the scan bar - the page's one sits
-  // underneath it where nobody can see it.
   const poll = setInterval(async () => {
     try {
-      const status = await getJson('/api/scan/status');
-
-      if (status.running) {
-        $('#setup-scan-fill').style.width = `${status.percent}%`;
-        $('#setup-scan-label').textContent = status.parsed > 0
-          ? `Reading logs — ${status.parsed} events so far`
-          : 'Checking logs…';
-        $('#setup-scan-count').textContent = `${status.done} / ${status.total} files`;
-      } else {
-        $('#setup-scan-fill').style.width = '100%';
-        $('#setup-scan-label').textContent = 'Logs read — history ready';
-        $('#setup-scan-count').textContent = '';
-      }
+      paintSetupScan(await getJson('/api/scan/status'));
     } catch { /* server between restarts; the next tick answers */ }
   }, 700);
 
