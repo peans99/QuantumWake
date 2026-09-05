@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.29
+### 0.9.30
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -258,6 +258,29 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   the size and grade marks this feature exists to add among them. The mark is
   now written whichever table was used as the base, and both bases produce the
   same bytes.
+
+- Contracts now show what they paid. Star Citizen states a payout exactly once,
+  in a HUD toast — `Awarded 50250 aUEC` — that names no contract and carries an
+  always-empty mission id, so Quantum Wake pairs it with the completion toast in
+  front of it and books the result in the Ledger as a `Contract paid` row. This
+  is the first money in the Ledger that did not come from selling something.
+
+  It is a floor over hauling, not your contract income. Across the 179 backups
+  in this install the game stated a payout 14 times against 230 completed
+  contracts, and every one of the 14 followed a cargo run — the 90 Combat
+  Gauntlet completions pay nothing the log admits to. Missing rows mean the game
+  said nothing, not that a contract paid nothing.
+
+- Completions and payouts now raise a toast while you play, on the dashboard and
+  in the overlay, so a contract finishing is something you see rather than
+  something you find afterwards. Nothing else toasts: arrivals, jumps and
+  medical beds stay in the feed, because a notifier that fires on everything is
+  one you stop reading. Click a toast to dismiss it, or leave it to fade.
+
+- Sessions are re-read on upgrade, so past payouts appear in the Ledger without
+  reflying anything.
+
+### 0.8.35
 
 - **Re-reading every log now shows what it is doing.** It is the slowest thing
   the app does — a full re-parse of every backup, 160 files and about eleven

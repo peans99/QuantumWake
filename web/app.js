@@ -1,4 +1,4 @@
-/* Quantumwake dashboard.
+﻿/* Quantumwake dashboard.
  *
  * No framework and no external requests: the page is served by the local
  * process and also loaded by the overlay's WebView2, so it stays dependency
@@ -644,6 +644,8 @@ function renderNow(state) {
 
   renderNowParty(state);
 
+  raiseToasts(state.recentEvents);
+
   const feed = $('#now-feed');
   feed.textContent = '';
 
@@ -658,10 +660,108 @@ function renderNow(state) {
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, entry.kind));
       li.append(el('span', 'x', entry.text));
-      if (entry.detail) li.append(el('span', 'd', entry.detail));
+      if (entry.detail) li.append(el('span', 'd', withoutMarkup(entry.detail)));
       feed.append(li);
     }
   }
+}
+
+/* ---------- live toasts ---------- */
+
+/**
+ * A contract title with StarStrings' markup taken off.
+ *
+ * The mod writes its additions inside the game's own <EM> tags, and the log
+ * records the title with the tags still in it - so a contract reads as
+ * "Rookie | <EM3>DIRECT</EM3> Extra Small Haul" everywhere the title is shown.
+ * The bracket tags stay: "[BP]*" and "[150 Rep]" are the research the mod
+ * exists for, and a player glancing at a toast wants them.
+ */
+function withoutMarkup(text) {
+  return typeof text === 'string' ? text.replace(/<\/?EM\d*>/gi, '').trim() : text;
+}
+
+const TOAST_MS = 9000;
+
+/**
+ * Timeline kinds worth interrupting somebody for, and what to call them.
+ *
+ * Deliberately short. The feed carries everything; a toast is for the two
+ * moments a player wants to see without looking away from the game, and a
+ * notifier that fires on arrivals and medbeds trains people to ignore it.
+ */
+const TOAST_KINDS = {
+  'contract-done': 'Contract complete',
+  payout: 'Paid',
+};
+
+/**
+ * The newest entry already toasted, as "at|kind|text".
+ *
+ * Null until the first frame lands, which is the whole point: the stream opens
+ * with up to 40 entries of history, and a client that toasted what it found
+ * would replay the last hour of the session every time the page was refreshed
+ * or the overlay reloaded.
+ */
+let lastToastKey = null;
+
+function toastKey(entry) {
+  return `${entry.at}|${entry.kind}|${entry.text}`;
+}
+
+/**
+ * Toast whatever arrived since the last frame.
+ *
+ * recentEvents is newest-first, so this walks forward to the previously seen
+ * entry and then fires what it passed in the order it happened. Falling off the
+ * end means more than 40 entries landed between frames - it toasts nothing
+ * rather than the whole window, since the point is the moment, not the backlog.
+ */
+function raiseToasts(entries) {
+  if (!entries || entries.length === 0) return;
+
+  const newest = toastKey(entries[0]);
+
+  if (lastToastKey === null) {
+    lastToastKey = newest;
+    return;
+  }
+
+  if (lastToastKey === newest) return;
+
+  const fresh = [];
+
+  for (const entry of entries) {
+    if (toastKey(entry) === lastToastKey) break;
+    fresh.push(entry);
+  }
+
+  lastToastKey = newest;
+
+  for (const entry of fresh.reverse()) {
+    const label = TOAST_KINDS[entry.kind];
+    if (label) toast(entry.kind, entry.text, entry.detail);
+  }
+}
+
+/**
+ * One toast. Click dismisses; otherwise it fades on its own.
+ *
+ * The node is removed rather than hidden so a long session does not accumulate
+ * a thousand dead divs behind the overlay.
+ */
+function toast(kind, text, detail) {
+  const host = $('#toasts');
+  if (!host) return;
+
+  const card = el('div', `toast ${kind}`);
+  card.append(el('span', 'toast-text', text));
+  if (detail) card.append(el('span', 'toast-detail', withoutMarkup(detail)));
+
+  card.addEventListener('click', () => card.remove());
+  host.append(card);
+
+  setTimeout(() => card.remove(), TOAST_MS);
 }
 
 /**

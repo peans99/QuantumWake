@@ -1,4 +1,4 @@
-using Quantumwake.Core.Events;
+﻿using Quantumwake.Core.Events;
 using Quantumwake.Core.Locations;
 
 namespace Quantumwake.Core.State;
@@ -48,6 +48,13 @@ public sealed class SessionBuilder
 
     private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<BlueprintReceipt> _blueprintReceipts = [];
+    private readonly List<ContractPayout> _payouts = [];
+
+    /// <summary>
+    /// The last "Contract Complete" toast, so the award toast that follows can
+    /// be attributed. Cleared once used: one completion pays once.
+    /// </summary>
+    private (DateTimeOffset At, string Title)? _lastCompletionToast;
 
     private readonly List<RespawnRecord> _respawns = [];
     private readonly List<MedicalBedVisit> _medicalBeds = [];
@@ -689,8 +696,37 @@ public sealed class SessionBuilder
 
         if (notification.IsContractAccepted)
         {
-            var title = notification.Text["Contract Accepted:".Length..].Trim(' ', ':');
+            var title = ContractTitle(notification.Text, "Contract Accepted:");
             Timeline(notification.Timestamp, "contract", "Contract accepted", title);
+            return;
+        }
+
+        if (notification.IsContractComplete)
+        {
+            var title = ContractTitle(notification.Text, "Contract Complete:");
+
+            // Held rather than acted on: the completion itself already reaches
+            // the timeline from the objective state, which is the better signal
+            // because it carries the mission id. This is only here to give the
+            // award toast a name.
+            _lastCompletionToast = (notification.Timestamp, title);
+            return;
+        }
+
+        if (notification.Awarded is { } amount)
+        {
+            // Every one of the 14 awards in this corpus lands within 0.4 s of
+            // the completion it pays for. Two seconds is five times that, and
+            // still far short of the gap to any unrelated completion.
+            var paidFor = _lastCompletionToast is { } toast
+                && notification.Timestamp - toast.At <= TimeSpan.FromSeconds(2)
+                    ? toast.Title
+                    : null;
+
+            _lastCompletionToast = null;
+            _payouts.Add(new ContractPayout(notification.Timestamp, paidFor, amount));
+
+            Timeline(notification.Timestamp, "payout", $"Paid {amount:N0} aUEC", paidFor);
             return;
         }
 
@@ -744,6 +780,19 @@ public sealed class SessionBuilder
             }
         }
     }
+
+    /// <summary>
+    /// The contract title out of a toast, kept exactly as the game rendered it.
+    /// </summary>
+    /// <remarks>
+    /// The trailing colon is the game's, and the leading gap is too - accepted
+    /// toasts carry two spaces after theirs. StarStrings' own additions
+    /// (<c>[150 Rep]</c>, the <c>&lt;EM&gt;</c> markup) are deliberately left
+    /// on: stripping them needs ContractTags, which lives a layer up, and the
+    /// stored title should be what was on screen.
+    /// </remarks>
+    private static string ContractTitle(string text, string prefix) =>
+        text[prefix.Length..].Trim(' ', ':');
 
     /// <summary>
     /// Matches a server response to the request it answers. Requests and
@@ -1055,6 +1104,7 @@ public sealed class SessionBuilder
             Trades = _trades,
             Pickups = _pickups,
             Blueprints = _blueprintReceipts,
+            Payouts = _payouts,
             Respawns = _respawns,
             MedicalBeds = _medicalBeds,
             PartyNotes = _partyNotes,

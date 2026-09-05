@@ -1,4 +1,4 @@
-/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
+﻿/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
  *
  * The look leans on four devices: chamfered (not rounded) corners, thin glowing
  * cyan rules, wide-tracked uppercase labels, and corner brackets on panels.
@@ -681,6 +681,9 @@ h2.spaced { margin-top: 32px; }
 
 .feed .k.session { color: var(--cyan); border-color: var(--cyan-deep); }
 .feed .k.sold { color: var(--green); border-color: #1f5c3d; }
+
+/* Money earned, not money moved: same green as a sale. */
+.feed .k.payout { color: var(--green); border-color: #1f5c3d; }
 .feed .k.bought { color: var(--amber); border-color: #6d4715; }
 .feed .k.loot { color: var(--violet); border-color: #4a3670; }
 
@@ -3605,3 +3608,77 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
    list is the pilot's, and this is an observation about it. */
 .checklist-item.bought .checklist-item-text { opacity: .55; text-decoration: line-through; }
 .checklist-bought { font-size: 11px; color: var(--cyan); }
+/* ---------- live toasts ----------
+ *
+ * Bottom-right so they sit clear of the tab strip at the top and of the
+ * overlay's own header. Pointer events are on the cards, not the stack: a
+ * full-height column catching clicks would make the page behind it dead in
+ * the overlay, where the window is click-through only when nothing wants
+ * the mouse. */
+.toasts {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: min(380px, 78vw);
+  padding: 10px 14px;
+  background: linear-gradient(158deg, var(--panel-2) 0%, var(--deep) 100%);
+  border: 1px solid var(--rule-hot);
+  border-left: 3px solid var(--cyan);
+  clip-path: var(--chamfer);
+  box-shadow: 0 6px 22px #0009;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: toast-in 180ms ease-out;
+}
+
+/* Money reads green, the same as it does in the ledger. */
+.toast.payout {
+  border-left-color: var(--green);
+}
+
+.toast-text {
+  font-family: var(--display);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.toast-detail {
+  font-size: 12px;
+  color: var(--muted);
+
+  /* Contract titles run long and carry StarStrings' own markup; two lines is
+     enough to recognise one without the toast becoming a paragraph. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The overlay is 360px wide at rest, so the stack tucks in and the cards give
+   up their own margin rather than overflowing the window. */
+body.overlay .toasts {
+  right: 10px;
+  bottom: 10px;
+}
+
+body.overlay .toast {
+  max-width: calc(100vw - 20px);
+}

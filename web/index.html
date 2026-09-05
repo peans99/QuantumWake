@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2249,6 +2249,9 @@
     </div>
     <div class="entity-actions" id="entity-actions"></div>
   </aside>
+  <!-- Live toasts. Outside every view because they fire whatever page is open,
+       and in the overlay they are the only thing the player will actually see. -->
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <script src="app.js?v=0.7.16"></script>
 </body>
