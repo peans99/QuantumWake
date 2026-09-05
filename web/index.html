@@ -979,9 +979,14 @@
     <div class="section-bar">
       <h2>Contracts</h2>
       <div class="controls">
+        <button class="ghost stats-toggle" data-stats-toggle="contracts"
+                title="Hide the summary and go straight to the contracts"></button>
         <select id="contracts-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
+    <!-- Everything above "Every contract" that is analysis rather than the list
+         itself, so it can be folded away in one go. -->
+    <div class="page-stats" id="contracts-stats">
     <div class="summary-strip" id="contract-summary"></div>
     <h2 class="spaced">Standing</h2>
     <p class="muted caption">
@@ -1011,6 +1016,8 @@
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
     <div id="types-chart" class="bars"></div>
+
+    </div>
 
     <h2 class="spaced">Every contract</h2>
     <p class="muted caption">

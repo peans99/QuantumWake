@@ -3682,3 +3682,12 @@ body.overlay .toasts {
 body.overlay .toast {
   max-width: calc(100vw - 20px);
 }
+
+/* The summary/standing/charts block a page can fold away. Only the button needs
+   styling: the panel is toggled with [hidden], so nothing here has to know what
+   is inside it. */
+.stats-toggle {
+  font-size: 11px;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}

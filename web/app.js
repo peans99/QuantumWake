@@ -298,6 +298,62 @@ window.scOverlayExpanded = (on) => {
   if (isOverlay) applyOverlayLayout().catch(() => {});
 };
 
+/* ---------- page stats collapse ----------
+ *
+ * A page whose analysis sits above its table pushes the newest rows below the
+ * fold - Contracts leads with four tiles, a standing table with a paragraph of
+ * caveat, and two charts before the first contract. Folding that away is a
+ * per-reader preference, so it lives in localStorage next to the Now page's
+ * card collapse rather than in server settings.
+ *
+ * Markup declares both halves: a button carrying data-stats-toggle="<name>"
+ * and the panel it folds at id "<name>-stats". Adding this to another page is
+ * then two attributes and no JavaScript. */
+
+const STATS_COLLAPSED_KEY = 'qw-collapsed-page-stats';
+let collapsedPageStats = new Set();
+
+try {
+  const saved = JSON.parse(localStorage.getItem(STATS_COLLAPSED_KEY) || '[]');
+  if (Array.isArray(saved)) collapsedPageStats = new Set(saved);
+} catch { /* a bad preference must not hide a page's summary for ever */ }
+
+function saveCollapsedPageStats() {
+  try { localStorage.setItem(STATS_COLLAPSED_KEY, JSON.stringify([...collapsedPageStats])); } catch { /* optional */ }
+}
+
+function initPageStatsCollapsers() {
+  for (const button of $$('[data-stats-toggle]')) {
+    const name = button.dataset.statsToggle;
+    const panel = $(`#${name}-stats`);
+    if (!name || !panel) continue;
+
+    const apply = (collapsed) => {
+      panel.hidden = collapsed;
+
+      // Named rather than an arrow, because a button reading "Summary" gives no
+      // clue which way it goes - and the summary is gone when it matters most.
+      button.textContent = collapsed ? 'Show summary' : 'Hide summary';
+      button.title = collapsed
+        ? 'Show the summary, standing and charts again'
+        : 'Hide the summary and go straight to the contracts';
+      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-expanded', String(!collapsed));
+    };
+
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      const collapsed = !panel.hidden;
+      if (collapsed) collapsedPageStats.add(name);
+      else collapsedPageStats.delete(name);
+      saveCollapsedPageStats();
+      apply(collapsed);
+    });
+
+    apply(collapsedPageStats.has(name));
+  }
+}
+
 /* ---------- Now card collapse ---------- */
 
 const NOW_COLLAPSED_KEY = 'qw-now-collapsed-cards';
@@ -13642,6 +13698,7 @@ async function maybeShowSetup() {
 
 async function boot() {
   initNowCardCollapsers();
+  initPageStatsCollapsers();
 
   if (isOverlay) {
     document.body.classList.add('overlay');

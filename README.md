@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.30
+### 0.9.31
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -279,6 +279,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 - Sessions are re-read on upgrade, so past payouts appear in the Ledger without
   reflying anything.
+
+- The Contracts page can fold its summary away. Four tiles, the standing table
+  and both charts sit above the contract list, so the newest contract — usually
+  the reason for opening the page — started below the fold. **Hide summary** in
+  the page header collapses all of it and the list rises to the top; the choice
+  is remembered per browser, so it stays folded until you unfold it.
 
 ### 0.8.35
 
