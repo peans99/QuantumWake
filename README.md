@@ -245,7 +245,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.28
+### 0.9.29
+
+- **Labelling your items no longer wipes the game's text.** The file this
+  writes is the one the game reads all of its English out of at startup, and it
+  has to be UTF-8 with a byte order mark, exactly as the game's own is. Ours
+  only carried the mark when the table underneath came straight out of
+  `Data.p4k`. Every other case — StarStrings installed, or simply applying the
+  marks a second time over our own backup — went through a reader that eats the
+  mark, and wrote a file three bytes short of what the game writes. The result
+  was labels falling back to the engine ids beneath them right across the game,
+  the size and grade marks this feature exists to add among them. The mark is
+  now written whichever table was used as the base, and both bases produce the
+  same bytes.
 
 - **Re-reading every log now shows what it is doing.** It is the slowest thing
   the app does — a full re-parse of every backup, 160 files and about eleven

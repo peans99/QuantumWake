@@ -87,7 +87,7 @@ public sealed class TextOverlayService(
         {
             try
             {
-                return (File.ReadAllText(ours.Backup!),
+                return (GameText.WithoutBom(File.ReadAllText(ours.Backup!)),
                     store.Current.Layered ? "StarStrings" : "the game", null);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -103,7 +103,7 @@ public sealed class TextOverlayService(
         {
             try
             {
-                return (File.ReadAllText(theirs.Path), "StarStrings", null);
+                return (GameText.WithoutBom(File.ReadAllText(theirs.Path)), "StarStrings", null);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -121,7 +121,7 @@ public sealed class TextOverlayService(
 
         return raw is null
             ? (null, "the game", "The game's text table could not be read out of Data.p4k.")
-            : (Encoding.UTF8.GetString(raw), "the game", null);
+            : (GameText.WithoutBom(Encoding.UTF8.GetString(raw)), "the game", null);
     }
 
     /// <summary>What installing would change. Writes nothing.</summary>
@@ -206,7 +206,17 @@ public sealed class TextOverlayService(
 
             store.Record(install);
 
-            File.WriteAllText(target, plan.Content, new UTF8Encoding(false));
+            // UTF-8 with the byte order mark, because that is what the game's
+            // own file is and this one replaces it. The BOM used to depend on
+            // where the base table came from: read out of Data.p4k with
+            // Encoding.UTF8.GetString it survived into the text and was written
+            // back, but File.ReadAllText - the path taken whenever StarStrings
+            // is installed or our own backup is the base - strips the preamble,
+            // so those installs wrote a file whose first three bytes differed
+            // from the game's. Emitting it here makes the result the same
+            // whichever base was used; GameText.WithoutBom keeps the source
+            // from contributing a second one.
+            File.WriteAllText(target, plan.Content, new UTF8Encoding(true));
 
             // Fingerprinted after the write, so a later mod overwriting this
             // path shows up as gone rather than as still installed.
