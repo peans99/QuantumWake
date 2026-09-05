@@ -1,4 +1,4 @@
-using Quantumwake.Core.GameData;
+﻿using Quantumwake.Core.GameData;
 using Quantumwake.Core.Parsing;
 using Quantumwake.Core.Locations;
 using Quantumwake.Core.Logging;
@@ -907,6 +907,24 @@ public sealed class LogLibrary : IDisposable
                 movements.Add((purchase.At, "Item bought", Names.Item(purchase.Item),
                     PlaceAt(session, purchase.At), ShopLabel(purchase.Shop),
                     -purchase.Total, purchase.Quantity, purchase.Confirmed));
+            }
+
+            foreach (var payout in session.Payouts)
+            {
+                // The only income in the ledger that is not a sale. Titles keep
+                // the game's own wording but lose StarStrings' annotations -
+                // "[150 Rep]" on a money row is noise, and the rep it names is
+                // not what was paid.
+                var what = ContractTags.Clean(payout.Contract) is { Length: > 0 } title
+                    ? title
+                    : "Contract payout";
+
+                movements.Add((payout.At, "Contract paid", what,
+                    PlaceAt(session, payout.At), string.Empty,
+                    payout.Amount, 0,
+
+                    // The game stated the sum outright; nothing needs confirming.
+                    true));
             }
 
             foreach (var trade in session.Trades)

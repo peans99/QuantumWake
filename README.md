@@ -384,6 +384,29 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.37
+
+- Contracts now show what they paid. Star Citizen states a payout exactly once,
+  in a HUD toast — `Awarded 50250 aUEC` — that names no contract and carries an
+  always-empty mission id, so Quantum Wake pairs it with the completion toast in
+  front of it and books the result in the Ledger as a `Contract paid` row. This
+  is the first money in the Ledger that did not come from selling something.
+
+  It is a floor over hauling, not your contract income. Across the 179 backups
+  in this install the game stated a payout 14 times against 230 completed
+  contracts, and every one of the 14 followed a cargo run — the 90 Combat
+  Gauntlet completions pay nothing the log admits to. Missing rows mean the game
+  said nothing, not that a contract paid nothing.
+
+- Completions and payouts now raise a toast while you play, on the dashboard and
+  in the overlay, so a contract finishing is something you see rather than
+  something you find afterwards. Nothing else toasts: arrivals, jumps and
+  medical beds stay in the feed, because a notifier that fires on everything is
+  one you stop reading. Click a toast to dismiss it, or leave it to fade.
+
+- Sessions are re-read on upgrade, so past payouts appear in the Ledger without
+  reflying anything.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the

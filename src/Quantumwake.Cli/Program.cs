@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.Parsing;
@@ -106,6 +106,9 @@ internal sealed class Report
     private int _unmatchedKnownTags;
     private int _corpseDeaths;
     private int _shipRetrievals;
+    private int _contractCompletions;
+    private int _awards;
+    private decimal _awarded;
     private DateTimeOffset? _lastCorpseAt;
 
     public void BeginFile(string fileName) => _currentFile = fileName;
@@ -179,6 +182,15 @@ internal sealed class Report
                     _incapacitationFiles.Add(_currentFile);
                 }
 
+                if (notification.IsContractComplete)
+                    _contractCompletions++;
+
+                if (notification.Awarded is { } awarded)
+                {
+                    _awards++;
+                    _awarded += awarded;
+                }
+
                 // Both sides are counted rather than just the successes: the gap
                 // between notifications seen and notes read is the number of
                 // lines the reader declined to guess at, and that number should
@@ -245,6 +257,17 @@ internal sealed class Report
         Top("Ships flown", _ships, 10);
         Top("Quantum destinations", _quantumDestinations);
         Top("Contracts", _contracts);
+
+        Section("Contract payouts");
+        Console.WriteLine($"  completions   : {_contractCompletions}");
+        Console.WriteLine($"  awards stated : {_awards}");
+        Console.WriteLine($"  total         : {_awarded:N0} aUEC");
+
+        // Both numbers, always, because the gap between them is the point: the
+        // game states a payout for a fraction of what it completes, and a total
+        // shown on its own reads as contract income rather than a floor over
+        // the few it bothered to price.
+        Console.WriteLine("  -> a floor: most completions state no payout at all.");
 
         Section("Party");
         Console.WriteLine($"  notifications : {_partyNotifications}");
