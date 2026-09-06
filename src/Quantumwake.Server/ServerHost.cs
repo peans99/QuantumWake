@@ -870,6 +870,45 @@ public static class ServerHost
          * Recorded here rather than in the stores because this is where the
          * pilot's intent to delete is actually expressed.
          */
+        /*
+         * A haul from the rock to the money. Every stage is typed, because the
+         * game logs no extraction, no refinery job and no collection - so this
+         * is the pilot writing down what they did, and it stays on its own side
+         * of the wall from anything observed.
+         */
+        app.MapPost("/api/mining/log/{id}/submit",
+            (MiningLogStore runs, string id, RefineryRequest body) =>
+            runs.Submit(id, body.Place, body.Method, body.Cost, body.ExpectedAt, DateTimeOffset.UtcNow)
+                ? Results.Ok(new { id })
+                : Results.BadRequest(new { problem = "That haul is not waiting to be refined." }));
+
+        app.MapPost("/api/mining/log/{id}/collect", (MiningLogStore runs, string id, double? yield) =>
+            runs.Collect(id, yield, DateTimeOffset.UtcNow)
+                ? Results.Ok(new { id })
+                : Results.BadRequest(new { problem = "That haul is not at a refinery." }));
+
+        app.MapPost("/api/mining/log/{id}/sell", (MiningLogStore runs, string id, decimal? revenue) =>
+            runs.Sell(id, revenue, DateTimeOffset.UtcNow)
+                ? Results.Ok(new { id })
+                : Results.BadRequest(new { problem = "That haul has not been collected yet." }));
+
+        // What is owed to you right now, soonest first.
+        app.MapGet("/api/mining/pending", (MiningLogStore runs) =>
+            runs.Pending(DateTimeOffset.UtcNow).Select(run => new
+            {
+                run.Id,
+                run.Place,
+                run.Resource,
+                run.Scu,
+                Stage = run.StageAt(DateTimeOffset.UtcNow),
+                run.Refinery,
+
+                // Said rather than computed on the page, so one build cannot
+                // word this differently from another.
+                Caveat = "The game keeps the refinery timer and logs nothing about it, "
+                    + "so this is the time you told us to expect.",
+            }));
+
         app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, TombstoneStore deleted, string id) =>
         {
             var removed = runs.Remove(id);
@@ -3527,6 +3566,10 @@ public sealed record MapNoteRequest(
     string? Title,
     string? Note,
     List<string>? Tags);
+
+/// <summary>Body of POST /api/mining/log/{id}/submit.</summary>
+public sealed record RefineryRequest(
+    string? Place, string? Method, decimal? Cost, DateTimeOffset? ExpectedAt);
 
 /// <summary>Body of POST and PUT /api/kits.</summary>
 public sealed record KitRequest(string? Name, IReadOnlyList<KitItem>? Items);

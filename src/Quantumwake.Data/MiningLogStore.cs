@@ -3,8 +3,54 @@ using Quantumwake.Core;
 
 namespace Quantumwake.Data;
 
+/// <summary>How far along a haul is.</summary>
+/// <remarks>
+/// Derived from the fields rather than stored. A stage kept beside the dates it
+/// summarises is a second thing that can disagree with them, and the one that
+/// disagrees is never the one being read carefully.
+/// </remarks>
+public enum MiningStage
+{
+    /// <summary>Out of the rock and in a hold. Nothing has been refined yet.</summary>
+    Extracted,
+
+    /// <summary>At a refinery, still working as far as the pilot said.</summary>
+    Submitted,
+
+    /// <summary>Past the time the pilot expected it to finish.</summary>
+    Ready,
+
+    /// <summary>Picked up. What came back may be less than what went in.</summary>
+    Collected,
+
+    /// <summary>Sold, and what it made was written down.</summary>
+    Sold
+}
+
+/// <summary>
+/// A refinery job, as the pilot recorded it.
+/// </summary>
+/// <param name="ExpectedAt">
+/// When they expect it done. The game keeps that timer and logs nothing about
+/// it, so this is their reading of a screen rather than anything observed - and
+/// anything built on it has to be worded as a reminder of what they typed.
+/// </param>
+/// <param name="Yield">
+/// What came back, in SCU. Less than what went in is normal, and the difference
+/// is the number worth knowing - so the two are kept apart rather than one
+/// overwriting the other.
+/// </param>
+public sealed record RefineryJob(
+    string Place,
+    string? Method,
+    decimal? Cost,
+    DateTimeOffset SubmittedAt,
+    DateTimeOffset? ExpectedAt,
+    double? Yield = null,
+    DateTimeOffset? CollectedAt = null);
+
 /// <summary>One haul, as the pilot recorded it.</summary>
-/// <param name="Scu">What came out, in SCU.</param>
+/// <param name="Scu">What came out of the rock, in SCU.</param>
 /// <param name="Quality">The quality it came out at, when they noted one.</param>
 /// <param name="Revenue">What it sold for, when they know yet.</param>
 public sealed record MiningRun(
@@ -16,7 +62,9 @@ public sealed record MiningRun(
     int? Quality,
     decimal? Revenue,
     string? Note,
-    DateTimeOffset? ModifiedAt = null) : IStamped<MiningRun>
+    DateTimeOffset? ModifiedAt = null,
+    RefineryJob? Refinery = null,
+    DateTimeOffset? SoldAt = null) : IStamped<MiningRun>
 {
     public string StampId => Id;
     public MiningRun Bare() => this with { ModifiedAt = null };
@@ -25,6 +73,30 @@ public sealed record MiningRun(
     /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
     /// <remarks>At is when the haul happened, which is not when the row was edited.</remarks>
     public DateTimeOffset ChangedAt => ModifiedAt ?? At;
+
+    /// <summary>
+    /// How far along this haul is, worked out from what has been filled in.
+    /// </summary>
+    /// <remarks>
+    /// Takes the time because Ready is the one stage that is about now rather
+    /// than about the record: a job is ready when the moment the pilot expected
+    /// has passed, and nothing writes that down when it happens.
+    /// </remarks>
+    public MiningStage StageAt(DateTimeOffset now) =>
+        SoldAt is not null ? MiningStage.Sold
+        : Refinery is not { } job ? MiningStage.Extracted
+        : job.CollectedAt is not null ? MiningStage.Collected
+        : job.ExpectedAt is { } due && due <= now ? MiningStage.Ready
+        : MiningStage.Submitted;
+
+    /// <summary>
+    /// SCU that went in and did not come back, when both are known.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than zero before the job is collected: nothing lost and
+    /// nothing known yet are different facts, and only one of them is a number.
+    /// </remarks>
+    public double? Lost => Refinery?.Yield is { } back ? Math.Max(0, Scu - back) : null;
 }
 
 /// <summary>
@@ -131,6 +203,107 @@ public sealed class MiningLogStore
     /// a shrug. See the catch in <see cref="Save"/>.
     /// </summary>
     private bool _restoring;
+
+    /// <summary>
+    /// Sends a haul to a refinery.
+    /// </summary>
+    /// <remarks>
+    /// Only from Extracted. Stages run one way: a haul already collected cannot
+    /// be submitted again, and letting it would quietly discard the yield that
+    /// came back the first time.
+    /// </remarks>
+    public bool Submit(string id, string? place, string? method, decimal? cost,
+        DateTimeOffset? expected, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _runs.FindIndex(r => r.Id == id);
+
+            if (index < 0 || _runs[index].StageAt(now) != MiningStage.Extracted)
+                return false;
+
+            _runs[index] = _runs[index] with
+            {
+                Refinery = new RefineryJob(
+                    Sanitise.Clean(place, _runs[index].Place),
+                    Sanitise.CleanOptional(method, 40),
+                    cost is >= 0 and <= 1_000_000_000m ? cost : null,
+                    now,
+                    expected),
+            };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>Picks a job up, recording what actually came back.</summary>
+    public bool Collect(string id, double? yield, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _runs.FindIndex(r => r.Id == id);
+            if (index < 0) return false;
+
+            if (_runs[index].StageAt(now) is not (MiningStage.Submitted or MiningStage.Ready))
+                return false;
+
+            _runs[index] = _runs[index] with
+            {
+                Refinery = _runs[index].Refinery! with
+                {
+                    Yield = yield is >= 0 and <= 100_000 ? yield : null,
+                    CollectedAt = now,
+                },
+            };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>Records what the refined ore sold for.</summary>
+    /// <remarks>
+    /// Typed, never inferred. A commodity sale in the ledger might be this ore
+    /// or might be anything else, and joining the two would turn a guess into a
+    /// figure that looks observed.
+    /// </remarks>
+    public bool Sell(string id, decimal? revenue, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _runs.FindIndex(r => r.Id == id);
+
+            if (index < 0 || _runs[index].StageAt(now) != MiningStage.Collected)
+                return false;
+
+            _runs[index] = _runs[index] with
+            {
+                Revenue = revenue is >= 0 and <= 1_000_000_000m ? revenue : null,
+                SoldAt = now,
+            };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Hauls waiting on a refinery, soonest first.
+    /// </summary>
+    /// <remarks>
+    /// The feed for "what is owed to me right now", which is the question this
+    /// page exists to answer once a haul stops being one row.
+    /// </remarks>
+    public IReadOnlyList<MiningRun> Pending(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            return [.. _runs
+                .Where(r => r.StageAt(now) is MiningStage.Submitted or MiningStage.Ready)
+                .OrderBy(r => r.Refinery!.ExpectedAt ?? DateTimeOffset.MaxValue)];
+        }
+    }
 
     /// <summary>
     /// Puts a record back exactly as given, replacing any with the same id.

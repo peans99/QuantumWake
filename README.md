@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.43
+### 0.9.44
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -449,6 +449,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   what you have and asks about the rest. Only the uncertain lines get a button:
   asking about something the game actually reported would invite an answer the
   app should not take.
+
+- **A mining haul can be followed from the rock to the money.** A run used to
+  be one row; it can now carry the refinery you sent it to, what the job cost,
+  when you expect it back, what actually came back, and what it sold for.
+
+  What went in stays beside what came back, because the difference is the
+  number worth knowing. Before you collect, the loss is *unknown* rather than
+  zero — those are different facts and only one of them is a number.
+
+  A job only says it is ready once the time **you** entered has passed, and one
+  with no expected time never claims to be ready at all: the game keeps that
+  timer and logs nothing about it, so the app has nothing else to go on.
+
+  All of it is typed, none of it is observed, and it stays on its own side of
+  that line — mining revenue never joins the Ledger, which is what your logs
+  actually recorded.
 
 ### 0.8.35
 
