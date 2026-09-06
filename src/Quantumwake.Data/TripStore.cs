@@ -665,7 +665,11 @@ public sealed class TripStore
         {
             var index = _trips.FindIndex(x => x.Id == trip.Id);
 
-            if (index >= 0) _trips[index] = trip;
+            // View state is this machine's and the preview promises to leave it
+            // alone, so a replacement keeps the pin or the tracking it lands on.
+            // The file never carried them - a backup strips both on the way out -
+            // so taking the record verbatim silently unpins whatever it replaced.
+            if (index >= 0) _trips[index] = trip with { Tracked = _trips[index].Tracked };
             else _trips.Add(trip);
 
             // The record keeps the change time it was backed up with.

@@ -7182,11 +7182,11 @@ async function saveBackup() {
  * asked whether to overwrite their own more recent work.
  */
 const RESTORE_WHY = {
-  add: 'not on this machine',
-  replace: 'yours is older',
-  conflict: 'yours is newer',
-  deleted: 'you deleted this',
-  same: 'already the same',
+  Add: 'not on this machine',
+  Replace: 'yours is older',
+  Conflict: 'yours is newer',
+  Deleted: 'you deleted this',
+  Same: 'already the same',
 };
 
 async function planRestore(text) {
@@ -7212,7 +7212,7 @@ function renderRestorePlan() {
   panel.hidden = !restorePlan;
   if (!restorePlan) return;
 
-  const acting = restorePlan.lines.filter((line) => line.action !== 'same');
+  const acting = restorePlan.lines.filter((line) => line.action !== 'Same');
 
   const summary = $('#backup-plan-summary');
   summary.textContent = '';
@@ -7309,6 +7309,17 @@ async function applyRestore() {
 
     if (!response.ok) {
       status.textContent = body?.problem || 'Nothing was restored.';
+      return;
+    }
+
+    // A refused write is not a smaller restore. Saying "nothing was restored"
+    // over a half-finished one is the most misleading thing this screen could
+    // do, so a failure says what it was and whether it went back.
+    if (body.failed) {
+      status.textContent = body.rolledBack
+        ? 'A file could not be written, so nothing was restored — everything was put back as it was.'
+        : 'A file could not be written, and not all of it could be put back. '
+          + 'Check your jobs, plans and mining log before restoring again.';
       return;
     }
 

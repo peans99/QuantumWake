@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.37
+### 0.9.38
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -375,6 +375,27 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
   Plans you have never started are left alone entirely: a backlog of routes is
   not a pile of abandoned flights.
+
+- Six faults in backup and restore, found in review. Five were the app saying
+  one thing and doing another.
+
+  **A restore that fails now says so.** A write that refused partway used to
+  report success, or report that nothing had happened when half of it had.
+  Every store is now photographed first and put back if any write refuses, and
+  the page says which of those two things occurred.
+
+  **Pinned jobs stay pinned and the tracked plan stays tracked.** The preview
+  promised to leave both alone; replacing a record was quietly clearing them.
+
+  **A restore takes on the deletions the file remembers**, so setting up a new
+  machine no longer walks back everything you had thrown away — unless the
+  record is present here, in which case it is left exactly as it is.
+
+  **A restored wipe line reaches the whole app.** It was moving the setting
+  while every page carried on counting against the old cutoff.
+
+  **The preview reads correctly.** Records that already matched were listed as
+  choices and their reason column showed a raw internal name.
 
 ### 0.8.35
 

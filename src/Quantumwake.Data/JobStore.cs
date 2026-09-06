@@ -248,7 +248,11 @@ public sealed class JobStore
         {
             var index = _jobs.FindIndex(x => x.Id == job.Id);
 
-            if (index >= 0) _jobs[index] = job;
+            // View state is this machine's and the preview promises to leave it
+            // alone, so a replacement keeps the pin or the tracking it lands on.
+            // The file never carried them - a backup strips both on the way out -
+            // so taking the record verbatim silently unpins whatever it replaced.
+            if (index >= 0) _jobs[index] = job with { Pinned = _jobs[index].Pinned };
             else _jobs.Add(job);
 
             // The record keeps the change time it was backed up with.

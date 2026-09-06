@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Quantumwake.Server;
 using System.Text;
 using System.Text.Json;
@@ -96,6 +96,25 @@ public class ServerUnderTest : IAsyncLifetime
         return text.Length == 0
             ? default
             : JsonDocument.Parse(text).RootElement.Clone();
+    }
+
+    /// <summary>
+    /// POSTs a body of text and hands back what came out, unparsed.
+    /// </summary>
+    /// <remarks>
+    /// For the file-shaped endpoints, which read the request body rather than a
+    /// JSON object - and for asserting on the wire format itself, which is the
+    /// only place a mismatch between what the server writes and what the page
+    /// reads can actually be seen.
+    /// </remarks>
+    public async Task<string> PostedText(string url, string body)
+    {
+        var response = await Client.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"));
+
+        Assert.True(response.IsSuccessStatusCode,
+            $"POST {url} answered {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+
+        return await response.Content.ReadAsStringAsync();
     }
 
     /// <summary>The message an endpoint refused with, for asserting on the wording.</summary>

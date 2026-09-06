@@ -190,7 +190,11 @@ public sealed class ChecklistStore
         {
             var index = _lists.FindIndex(x => x.Id == list.Id);
 
-            if (index >= 0) _lists[index] = list;
+            // View state is this machine's and the preview promises to leave it
+            // alone, so a replacement keeps the pin or the tracking it lands on.
+            // The file never carried them - a backup strips both on the way out -
+            // so taking the record verbatim silently unpins whatever it replaced.
+            if (index >= 0) _lists[index] = list with { Pinned = _lists[index].Pinned };
             else _lists.Add(list);
 
             // The record keeps the change time it was backed up with.

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace Quantumwake.Data;
@@ -100,7 +100,19 @@ public sealed record RestoreChoices(
 }
 
 /// <summary>How much a restore actually did.</summary>
+/// <param name="Failed">
+/// True when a write refused partway. Restored is zero in that case rather than
+/// a count of what happened to land first: a half-restore is not a smaller
+/// restore, and reporting it as one would send somebody away believing it
+/// worked.
+/// </param>
+/// <param name="RolledBack">
+/// Whether everything went back as it was. False means some of it did not, and
+/// the page has to say so - rollback needs the same disk that just refused.
+/// </param>
 public sealed record RestoreResult(
     int Restored,
     int Skipped,
-    int Ignored);
+    int Ignored,
+    bool Failed = false,
+    bool RolledBack = true);

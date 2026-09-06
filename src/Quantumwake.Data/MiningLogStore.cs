@@ -117,9 +117,20 @@ public sealed class MiningLogStore
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // Losing a write costs the newest entry, never the file: the next
-            // save rewrites the whole list from memory.
+            // save rewrites the whole list from memory. That bargain is right
+            // for somebody typing a haul in - and wrong for a restore, which
+            // would report success over a write that never landed. Put() is
+            // the one caller that needs to know, so the failure is re-raised
+            // for it and swallowed for everyone else.
+            if (_restoring) throw;
         }
     }
+
+    /// <summary>
+    /// True while a restore is writing, so a lost write is an error rather than
+    /// a shrug. See the catch in <see cref="Save"/>.
+    /// </summary>
+    private bool _restoring;
 
     /// <summary>
     /// Puts a record back exactly as given, replacing any with the same id.
@@ -141,7 +152,17 @@ public sealed class MiningLogStore
 
             // The record keeps the change time it was backed up with.
             _stamp.Adopt(run);
-            Save();
+
+            _restoring = true;
+
+            try
+            {
+                Save();
+            }
+            finally
+            {
+                _restoring = false;
+            }
         }
     }
 

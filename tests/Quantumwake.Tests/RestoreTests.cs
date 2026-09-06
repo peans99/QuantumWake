@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Quantumwake.Data;
 
 namespace Quantumwake.Tests;
@@ -19,15 +19,18 @@ public class RestoreTests : IDisposable
         Path.Combine(Path.GetTempPath(), $"qw-restore-{Guid.NewGuid():N}");
 
     public RestoreTests() => Directory.CreateDirectory(_root);
-    public void Dispose() => Directory.Delete(_root, true);
+    public void Dispose() { _sessions.Dispose(); Directory.Delete(_root, true); }
 
     private static readonly DateTimeOffset Old = new(2026, 8, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Newer = new(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
 
+    private readonly SessionStore _sessions = new(":memory:");
+
     private RestoreService Service() => new(
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
-        new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root));
+        new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
+        new LogLibrary(_sessions));
 
     private static ExportBackup Backup(params Job[] jobs) =>
         new(jobs, [], [], [], [], [], null, null, null);

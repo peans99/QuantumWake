@@ -29,7 +29,8 @@ public sealed class RestoreService(
     GoalStore goals,
     WipeStore wipe,
     ItemLabelStore labels,
-    TombstoneStore deleted)
+    TombstoneStore deleted,
+    LogLibrary library)
 {
     /// <summary>Ids for the things there is only ever one of.</summary>
     private static class Single
@@ -118,8 +119,22 @@ public sealed class RestoreService(
     }
 
     /// <summary>
-    /// Applies a plan, and only a plan.
+    /// Applies a plan, and only a plan - all of it or none of it.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every store is photographed before anything is written, and put back if
+    /// any write fails. Without that, a disk that fills up halfway leaves some
+    /// records replaced and some not, with no record of which - and the page
+    /// says "nothing was restored", which is the one thing that is certainly
+    /// untrue.
+    /// </para>
+    /// <para>
+    /// The rollback is itself best-effort: putting records back needs the same
+    /// disk that just refused a write. So the result says what happened rather
+    /// than promising the machine is untouched.
+    /// </para>
+    /// </remarks>
     /// <returns>
     /// What was done, or null when the hash does not match the file - which
     /// means the reader approved something other than what is being applied.
@@ -129,6 +144,7 @@ public sealed class RestoreService(
         if (!string.Equals(plan.Hash, hash, StringComparison.Ordinal))
             return null;
 
+        var before = Photograph();
         var restored = 0;
         var skipped = 0;
 
@@ -146,60 +162,158 @@ public sealed class RestoreService(
             return false;
         }
 
-        foreach (var job in file.Jobs.Where(j => Wanted(TombstoneStore.Kinds.Jobs, j.Id)))
+        try
         {
-            jobs.Put(job);
-            deleted.Forget(TombstoneStore.Kinds.Jobs, job.Id);
-            restored++;
-        }
+            foreach (var job in file.Jobs.Where(j => Wanted(TombstoneStore.Kinds.Jobs, j.Id)))
+            {
+                jobs.Put(job);
+                deleted.Forget(TombstoneStore.Kinds.Jobs, job.Id);
+                restored++;
+            }
 
-        foreach (var list in file.Checklists.Where(c => Wanted(TombstoneStore.Kinds.Checklists, c.Id)))
-        {
-            checklists.Put(list);
-            deleted.Forget(TombstoneStore.Kinds.Checklists, list.Id);
-            restored++;
-        }
+            foreach (var list in file.Checklists.Where(c => Wanted(TombstoneStore.Kinds.Checklists, c.Id)))
+            {
+                checklists.Put(list);
+                deleted.Forget(TombstoneStore.Kinds.Checklists, list.Id);
+                restored++;
+            }
 
-        foreach (var trip in file.Trips.Where(t => Wanted(TombstoneStore.Kinds.Trips, t.Id)))
-        {
-            trips.Put(trip);
-            deleted.Forget(TombstoneStore.Kinds.Trips, trip.Id);
-            restored++;
-        }
+            foreach (var trip in file.Trips.Where(t => Wanted(TombstoneStore.Kinds.Trips, t.Id)))
+            {
+                trips.Put(trip);
+                deleted.Forget(TombstoneStore.Kinds.Trips, trip.Id);
+                restored++;
+            }
 
-        foreach (var run in file.MiningRuns.Where(r => Wanted(TombstoneStore.Kinds.Mining, r.Id)))
-        {
-            mining.Put(run);
-            deleted.Forget(TombstoneStore.Kinds.Mining, run.Id);
-            restored++;
-        }
+            foreach (var run in file.MiningRuns.Where(r => Wanted(TombstoneStore.Kinds.Mining, r.Id)))
+            {
+                mining.Put(run);
+                deleted.Forget(TombstoneStore.Kinds.Mining, run.Id);
+                restored++;
+            }
 
-        foreach (var note in file.Notes.Where(n => Wanted(TombstoneStore.Kinds.Notes, n.Id)))
-        {
-            notes.Put(note);
-            deleted.Forget(TombstoneStore.Kinds.Notes, note.Id);
-            restored++;
-        }
+            foreach (var note in file.Notes.Where(n => Wanted(TombstoneStore.Kinds.Notes, n.Id)))
+            {
+                notes.Put(note);
+                deleted.Forget(TombstoneStore.Kinds.Notes, note.Id);
+                restored++;
+            }
 
-        if (file.Goal is { } goal && Wanted(Single.Goal, Single.Goal))
-        {
-            goals.Save(goal);
-            restored++;
-        }
+            if (file.Goal is { } goal && Wanted(Single.Goal, Single.Goal))
+            {
+                goals.Save(goal);
+                restored++;
+            }
 
-        if (file.Wipe is { } wiped && Wanted(Single.Wipe, Single.Wipe))
-        {
-            wipe.Set(wiped.At, wiped.Patch, wiped.Scope);
-            restored++;
-        }
+            if (file.Wipe is { } wiped && Wanted(Single.Wipe, Single.Wipe))
+            {
+                // The library holds its own copy and every page counts against
+                // it, so setting only the store moves the line on the settings
+                // screen and nowhere else.
+                library.Wipe = wipe.Set(wiped.At, wiped.Patch, wiped.Scope);
+                restored++;
+            }
 
-        if (file.Labels is { } options && Wanted(Single.Labels, Single.Labels))
+            if (file.Labels is { } options && Wanted(Single.Labels, Single.Labels))
+            {
+                labels.Save(options);
+                restored++;
+            }
+
+            AdoptDeletions(file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            labels.Save(options);
-            restored++;
+            var undone = PutBack(before);
+
+            return new RestoreResult(0, skipped, plan.Ignored, Failed: true, RolledBack: undone);
         }
 
         return new RestoreResult(restored, skipped, plan.Ignored);
+    }
+
+    /// <summary>
+    /// Takes on the deletions the file remembers, where they do not contradict
+    /// what is here.
+    /// </summary>
+    /// <remarks>
+    /// Without this a fresh machine forgets every deletion the moment it is set
+    /// up: restore a recent backup, then an older one, and everything thrown
+    /// away in between walks back in with nothing to say it was ever deleted.
+    ///
+    /// A tombstone for a record that is present here is dropped rather than
+    /// acted on. The record exists, the reader was never shown a line proposing
+    /// to remove it, and a restore that deletes something it did not mention is
+    /// exactly the failure this whole feature was built to prevent.
+    /// </remarks>
+    private void AdoptDeletions(ExportBackup file)
+    {
+        var here = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var id in jobs.All().Select(j => $"{TombstoneStore.Kinds.Jobs}:{j.Id}")) here.Add(id);
+        foreach (var id in checklists.All().Select(c => $"{TombstoneStore.Kinds.Checklists}:{c.Id}")) here.Add(id);
+        foreach (var id in trips.All().Select(t => $"{TombstoneStore.Kinds.Trips}:{t.Id}")) here.Add(id);
+        foreach (var id in mining.All().Select(r => $"{TombstoneStore.Kinds.Mining}:{r.Id}")) here.Add(id);
+        foreach (var id in notes.All().Select(n => $"{TombstoneStore.Kinds.Notes}:{n.Id}")) here.Add(id);
+
+        foreach (var stone in file.Deleted)
+        {
+            if (here.Contains($"{stone.Store}:{stone.Id}")) continue;
+
+            deleted.Record(stone.Store, stone.Id);
+        }
+    }
+
+    /// <summary>Everything that could be written, as it stands right now.</summary>
+    private (IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
+        IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
+        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted) Photograph() =>
+        (jobs.All(), checklists.All(), trips.All(), mining.All(), notes.All(),
+         goals.Current, wipe.Current, labels.Current, deleted.All());
+
+    /// <summary>
+    /// Puts a photograph back, and says whether all of it landed.
+    /// </summary>
+    /// <remarks>
+    /// Best-effort by nature: this needs the same disk that just refused a
+    /// write. Anything that fails here is left rather than retried, because a
+    /// rollback that loops on a full disk is worse than one that stops and says
+    /// so.
+    /// </remarks>
+    private bool PutBack((IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
+        IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
+        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted) before)
+    {
+        var whole = true;
+
+        void Try(Action write)
+        {
+            try
+            {
+                write();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                whole = false;
+            }
+        }
+
+        foreach (var job in before.Jobs) Try(() => jobs.Put(job));
+        foreach (var list in before.Lists) Try(() => checklists.Put(list));
+        foreach (var trip in before.Trips) Try(() => trips.Put(trip));
+        foreach (var run in before.Runs) Try(() => mining.Put(run));
+        foreach (var note in before.Notes) Try(() => notes.Put(note));
+
+        Try(() => goals.Save(before.Goal));
+        Try(() => labels.Save(before.Labels));
+
+        if (before.Wipe is { } wiped)
+            Try(() => library.Wipe = wipe.Set(wiped.At, wiped.Patch, wiped.Scope));
+
+        // Deletions the run had forgotten on the way through.
+        foreach (var stone in before.Deleted) Try(() => deleted.Record(stone.Store, stone.Id));
+
+        return whole;
     }
 
     private static RestoreLine Settingal<T>(

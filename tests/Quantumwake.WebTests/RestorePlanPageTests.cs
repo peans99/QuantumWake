@@ -17,15 +17,15 @@ public class RestorePlanPageTests
         {"hash":"abc123","ignored":2,
          "adds":1,"replaces":1,"conflicts":1,"deleted":1,"unchanged":1,
          "lines":[
-          {"store":"jobs","id":"j1","key":"jobs:j1","label":"Buy armour","action":"add",
+          {"store":"jobs","id":"j1","key":"jobs:j1","label":"Buy armour","action":"Add",
            "yours":null,"theirs":"2026-08-20T09:00:00+00:00","takenByDefault":true},
-          {"store":"trips","id":"t1","key":"trips:t1","label":"Ore run","action":"replace",
+          {"store":"trips","id":"t1","key":"trips:t1","label":"Ore run","action":"Replace",
            "yours":"2026-08-01T09:00:00+00:00","theirs":"2026-08-20T09:00:00+00:00","takenByDefault":true},
-          {"store":"trips","id":"t2","key":"trips:t2","label":"Pyro scrap","action":"conflict",
+          {"store":"trips","id":"t2","key":"trips:t2","label":"Pyro scrap","action":"Conflict",
            "yours":"2026-09-01T09:00:00+00:00","theirs":"2026-08-20T09:00:00+00:00","takenByDefault":false},
-          {"store":"jobs","id":"j2","key":"jobs:j2","label":"Old list","action":"deleted",
+          {"store":"jobs","id":"j2","key":"jobs:j2","label":"Old list","action":"Deleted",
            "yours":null,"theirs":"2026-08-20T09:00:00+00:00","takenByDefault":false},
-          {"store":"notes","id":"n1","key":"notes:n1","label":"Good rocks","action":"same",
+          {"store":"notes","id":"n1","key":"notes:n1","label":"Good rocks","action":"Same",
            "yours":"2026-08-20T09:00:00+00:00","theirs":"2026-08-20T09:00:00+00:00","takenByDefault":false}]}
         """;
 
@@ -91,7 +91,7 @@ public class RestorePlanPageTests
         Assert.Contains("yours is older", text);
         Assert.Contains("yours is newer", text);
         Assert.Contains("you deleted this", text);
-        Assert.DoesNotContain("conflict", text);
+        Assert.DoesNotContain("Conflict", text);
     }
 
     /// <summary>
@@ -172,12 +172,47 @@ public class RestorePlanPageTests
     {
         var page = Planned("""
             {"hash":"abc123","ignored":0,"adds":0,"replaces":0,"conflicts":0,"deleted":0,"unchanged":1,
-             "lines":[{"store":"notes","id":"n1","key":"notes:n1","label":"Good rocks","action":"same",
+             "lines":[{"store":"notes","id":"n1","key":"notes:n1","label":"Good rocks","action":"Same",
               "yours":null,"theirs":null,"takenByDefault":false}]}
             """);
 
         Assert.Contains("Nothing to do", page.NodeText("#backup-plan-summary"));
         Assert.True(page.Truth("__dom.node('#backup-apply').disabled"));
+    }
+
+    /// <summary>
+    /// A refused write is not a smaller restore. Reporting one as "nothing was
+    /// restored" is the most misleading thing this screen could say, because
+    /// half of it did happen.
+    /// </summary>
+    [Fact]
+    public void A_restore_that_failed_says_so_rather_than_saying_nothing_happened()
+    {
+        var page = Planned();
+        page.Serve("/api/backup/restore?hash=abc123",
+            """{"restored":0,"skipped":0,"ignored":0,"failed":true,"rolledBack":true}""");
+        page.Do("await applyRestore();");
+
+        var status = page.NodeText("#backup-status");
+
+        Assert.Contains("could not be written", status);
+        Assert.Contains("put back as it was", status);
+        Assert.DoesNotContain("Nothing was restored", status);
+    }
+
+    /// <summary>
+    /// And a rollback that did not fully land has to be louder still: the
+    /// machine is in neither state, and only the reader can check it.
+    /// </summary>
+    [Fact]
+    public void A_rollback_that_did_not_finish_tells_the_reader_to_look()
+    {
+        var page = Planned();
+        page.Serve("/api/backup/restore?hash=abc123",
+            """{"restored":0,"skipped":0,"ignored":0,"failed":true,"rolledBack":false}""");
+        page.Do("await applyRestore();");
+
+        Assert.Contains("not all of it could be put back", page.NodeText("#backup-status"));
     }
 
     [Fact]
