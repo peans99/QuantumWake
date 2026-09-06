@@ -76,13 +76,30 @@ public sealed record RunAction(
 /// the point of the card is to say where to go next, and two plans have no
 /// single next.
 /// </param>
+/// <summary>Why a run is out of the working list.</summary>
+public enum Archived
+{
+    /// <summary>It is not.</summary>
+    No,
+
+    /// <summary>The pilot finished it, or filed it themselves.</summary>
+    You,
+
+    /// <summary>It went quiet and the sweep filed it. Reversible - see TripStore.Resume.</summary>
+    Quiet
+}
+
 public sealed record Trip(
     string Id,
     string Title,
     DateTimeOffset CreatedAt,
     IReadOnlyList<TripStop> Stops,
     bool Tracked = false,
-    DateTimeOffset? ModifiedAt = null) : IStamped<Trip>
+    DateTimeOffset? ModifiedAt = null,
+    DateTimeOffset? StartedAt = null,
+    DateTimeOffset? FinishedAt = null,
+    Archived Archived = Archived.No,
+    DateTimeOffset? ArchivedAt = null) : IStamped<Trip>
 {
     public string StampId => Id;
     /// <remarks>
@@ -114,6 +131,20 @@ public sealed record Trip(
     public TripStop? Next => Stops.FirstOrDefault(Outstanding);
 
     public bool Done => Stops.Count > 0 && !Stops.Any(Outstanding);
+
+    /// <summary>Begun and not yet ended.</summary>
+    public bool Flying => StartedAt is not null && FinishedAt is null && Archived == Archived.No;
+
+    /// <summary>
+    /// How long the run took, or has taken so far.
+    /// </summary>
+    /// <remarks>
+    /// Measured from StartedAt, never from CreatedAt. A plan written last week
+    /// and flown tonight is a two-hour run, and reporting a week of it is the
+    /// whole reason this field exists.
+    /// </remarks>
+    public TimeSpan? Elapsed(DateTimeOffset now) =>
+        StartedAt is { } began ? (FinishedAt ?? now) - began : null;
 }
 
 /// <summary>
@@ -452,6 +483,171 @@ public sealed class TripStore
     {
         for (var i = 0; i < _trips.Count; i++)
             _trips[i] = _trips[i] with { Tracked = _trips[i].Id == id };
+    }
+
+    /// <summary>
+    /// Marks a run as begun, now.
+    /// </summary>
+    /// <remarks>
+    /// Explicit rather than inferred from the first ticked stop, because only
+    /// the pilot knows when they set off - and a plan can be edited for a week
+    /// before it is flown. Starting a run that is already going leaves its
+    /// original start alone.
+    /// </remarks>
+    public bool Start(string id, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == id);
+            if (index < 0 || _trips[index].StartedAt is not null) return false;
+
+            _trips[index] = _trips[index] with { StartedAt = now, FinishedAt = null };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Ends a run and files it, so the working list holds only what is live.
+    /// </summary>
+    public bool Finish(string id, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == id);
+            if (index < 0 || _trips[index].FinishedAt is not null) return false;
+
+            _trips[index] = _trips[index] with
+            {
+                // A run finished without ever being started still took some
+                // time, and pretending otherwise would leave the review with
+                // nothing to measure. The best guess available is when the plan
+                // was written, and it is marked as a guess by being equal.
+                StartedAt = _trips[index].StartedAt ?? _trips[index].CreatedAt,
+                FinishedAt = now,
+                Archived = Archived.You,
+                ArchivedAt = now,
+                Tracked = false,
+            };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Puts a filed run back in the working list, keeping when it began.
+    /// </summary>
+    /// <remarks>
+    /// The half that makes the quiet sweep safe. Without this, taking a
+    /// fortnight off turns a real run into a lost one; with it, the sweep only
+    /// ever costs somebody a click. StartedAt survives on purpose - the run did
+    /// begin when it began, and rewriting that to now would report a two-week
+    /// flight as a two-minute one.
+    /// </remarks>
+    public bool Resume(string id)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == id);
+            if (index < 0 || _trips[index].Archived == Archived.No) return false;
+
+            _trips[index] = _trips[index] with
+            {
+                Archived = Archived.No,
+                ArchivedAt = null,
+                FinishedAt = null,
+            };
+
+            // Saving stamps ModifiedAt, which is the clock the sweep reads - so
+            // resuming resets it and the run is not filed again tomorrow.
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Copies a run into a fresh one, ready to fly again.
+    /// </summary>
+    /// <remarks>
+    /// Everything done is cleared: a repeat is the same route, not the same
+    /// history. The copy takes the tracking, because somebody who asked to
+    /// repeat a run is about to fly it.
+    /// </remarks>
+    public Trip? Repeat(string id, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var source = _trips.FirstOrDefault(t => t.Id == id);
+            if (source is null) return null;
+
+            var copy = new Trip(
+                NewId(),
+                source.Title,
+                now,
+                [.. source.Stops.Select(stop => stop with
+                {
+                    Id = NewId(),
+                    Done = false,
+                    DoneAt = null,
+                    Actions = [.. (stop.Actions ?? []).Select(action => action with
+                    {
+                        Id = NewId(),
+                        Done = false,
+                        DoneAt = null,
+                    })],
+                })]);
+
+            _trips.Insert(0, copy);
+            Follow(copy.Id);
+            Save();
+
+            return _trips[0];
+        }
+    }
+
+    /// <summary>
+    /// Files runs that have gone quiet, and says how many it filed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only runs that were actually begun. An unstarted plan is a backlog item
+    /// rather than an abandoned flight, and filing those would empty the list
+    /// somebody keeps their intentions in.
+    /// </para>
+    /// <para>
+    /// The clock is <see cref="Trip.ChangedAt"/> rather than a field of its own.
+    /// That is already "when the content last changed", which is what working on
+    /// a run does - ticking a stop, adding an action, renaming it - and a second
+    /// date would be one more thing that can disagree with the first.
+    /// </para>
+    /// </remarks>
+    public int SweepQuiet(TimeSpan idle, DateTimeOffset now)
+    {
+        if (idle <= TimeSpan.Zero) return 0;
+
+        lock (_gate)
+        {
+            var filed = 0;
+
+            for (var i = 0; i < _trips.Count; i++)
+            {
+                if (!_trips[i].Flying || now - _trips[i].ChangedAt < idle) continue;
+
+                _trips[i] = _trips[i] with
+                {
+                    Archived = Archived.Quiet,
+                    ArchivedAt = now,
+                    Tracked = false,
+                };
+
+                filed++;
+            }
+
+            if (filed > 0) Save();
+
+            return filed;
+        }
     }
 
     /// <summary>

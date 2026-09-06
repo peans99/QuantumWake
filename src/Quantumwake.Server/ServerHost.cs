@@ -101,6 +101,7 @@ public static class ServerHost
         builder.Services.AddSingleton<TombstoneStore>();
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
+        builder.Services.AddSingleton<RunSettingsStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
@@ -1989,11 +1990,44 @@ public static class ServerHost
             return Results.Ok(Describe(wipe, lib));
         });
 
-        app.MapGet("/api/trips", (TripStore trips, ImportStore imports, string? imported) =>
-            trips.All().Select(trip => Draw(trip, null))
+        app.MapGet("/api/trips", (TripStore trips, ImportStore imports,
+            RunSettingsStore settings, string? imported) =>
+        {
+            // Swept here rather than on a timer: the list is the only place the
+            // result is visible, so filing on read costs nothing and cannot
+            // drift out of step with what is on screen.
+            trips.SweepQuiet(settings.Current.Idle, DateTimeOffset.UtcNow);
+
+            return trips.All().Select(trip => Draw(trip, null))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Trips ?? [])
-                        .Select(trip => Draw(trip, batch)))));
+                        .Select(trip => Draw(trip, batch))));
+        });
+
+        /*
+         * A run has a beginning and an end, and neither is inferred. Only the
+         * pilot knows when they set off, and the app has no way to tell a break
+         * from an abandonment - so it files quiet runs rather than guessing,
+         * and resuming one is a click.
+         */
+        app.MapPost("/api/trips/{id}/start", (string id, TripStore trips) =>
+            trips.Start(id, DateTimeOffset.UtcNow) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/finish", (string id, TripStore trips) =>
+            trips.Finish(id, DateTimeOffset.UtcNow) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/resume", (string id, TripStore trips) =>
+            trips.Resume(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/repeat", (string id, TripStore trips) =>
+            trips.Repeat(id, DateTimeOffset.UtcNow) is { } copy
+                ? Results.Ok(new { copy.Id, copy.Title, stops = copy.Stops.Count })
+                : Results.NotFound());
+
+        app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
+
+        app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
+            Results.Ok(settings.Save(days)));
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
             Results.Ok(trips.Add(body.Title, body.Stops)));
@@ -2793,6 +2827,15 @@ static int Holes(IEnumerable<ShipSlot> slots)
             })],
         trip.Next,
         trip.Done,
+
+        // The lifecycle, and only for your own runs: a shared file carries
+        // somebody else's plan, and their run being underway is not a state
+        // this machine can act on.
+        StartedAt = from is null ? trip.StartedAt : null,
+        FinishedAt = from is null ? trip.FinishedAt : null,
+        Archived = from is null ? trip.Archived : Archived.No,
+        Flying = from is null && trip.Flying,
+        ElapsedSeconds = from is null ? trip.Elapsed(DateTimeOffset.UtcNow)?.TotalSeconds : null,
         imported = from is null ? null : Marker(from),
     };
 

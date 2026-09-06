@@ -11110,6 +11110,11 @@ function renderTripPanel() {
     body.append(el('div', 'cargo-empty',
       'Double-click a place, or use Add stop on its card, to start a plan. '
       + 'A trade route or a shopping list can start one for you.'));
+
+    // Finishing your only run leaves nothing tracked, and the runs you have
+    // flown are exactly what you want to see at that moment - so the filed
+    // list is drawn on this path too, not only when a plan is open.
+    renderFiledRuns(body);
     return;
   }
 
@@ -11156,6 +11161,22 @@ function renderTripPanel() {
 
   const actions = el('div', 'trip-actions');
 
+  // A run has a beginning and an end and neither is guessed: the app cannot
+  // tell setting off from opening the page, so it asks once and then knows.
+  if (trip.archived === 'No' || trip.archived === undefined) {
+    const lifecycle = el('button', trip.flying ? 'primary' : 'ghost',
+      trip.flying ? 'Finish run' : 'Start run');
+
+    lifecycle.title = trip.flying
+      ? 'Stop the clock and file this run'
+      : 'Start the clock — elapsed time is measured from here, not from when you wrote the plan';
+
+    lifecycle.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/${trip.flying ? 'finish' : 'start'}`));
+
+    actions.append(lifecycle);
+  }
+
   const track = el('button', 'ghost', trip.tracked ? 'Stop tracking' : 'Track');
   track.title = 'Show this plan on the Now page';
   track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
@@ -11172,8 +11193,13 @@ function renderTripPanel() {
 
   body.append(actions);
 
+  if (trip.flying) {
+    body.append(el('div', 'trip-elapsed muted',
+      `Running for ${spanOf(trip.elapsedSeconds)} — since you pressed Start, not since you wrote it.`));
+  }
+
   // Other plans, so one can be picked up again without a management screen.
-  const others = trips.filter((t) => t !== trip);
+  const others = trips.filter((t) => t !== trip && !isFiled(t));
 
   if (others.length) {
     body.append(el('div', 'cargo-h', 'Other plans'));
@@ -11193,6 +11219,78 @@ function renderTripPanel() {
       body.append(row);
     }
   }
+
+  renderFiledRuns(body);
+}
+
+/**
+ * Runs that are out of the working list, and the two ways back.
+ *
+ * A run filed by the sweep and a run you finished are listed together but do
+ * not read the same: one is over, the other only went quiet, and offering
+ * "resume" on both would suggest the app knows which of them you meant to stop.
+ */
+function renderFiledRuns(body) {
+  const filed = trips.filter(isFiled);
+  if (!filed.length) return;
+
+  body.append(el('div', 'cargo-h', 'Finished and filed'));
+
+  for (const run of filed) {
+    const row = el('div', 'cargo-row');
+    row.append(el('span', 'swatch'));
+
+    const main = el('div', 'cargo-row-main');
+    main.append(el('div', 'name', run.title));
+
+    const done = run.stops.filter((s) => s.done).length;
+    main.append(el('div', 'sub', run.archived === 'Quiet'
+      ? `${done} of ${run.stops.length} stops — filed itself after going quiet`
+      : `${done} of ${run.stops.length} stops — ${spanOf(run.elapsedSeconds)}`));
+
+    row.append(main);
+
+    const tools = el('div', 'trip-tools');
+
+    // Only offered on the ones the app filed on its own. A run you finished is
+    // finished, and a button undoing that would make the sweep and the pilot
+    // look like the same decision.
+    if (run.archived === 'Quiet') {
+      const resume = el('button', 'ghost tiny', 'Resume');
+      resume.title = 'Put this back — it keeps the time it started';
+      resume.addEventListener('click', () => tripCall(`/api/trips/${run.id}/resume`));
+      tools.append(resume);
+    }
+
+    const again = el('button', 'ghost tiny', 'Repeat');
+    again.title = 'Fly the same route again, with nothing ticked off';
+    again.addEventListener('click', () => tripCall(`/api/trips/${run.id}/repeat`));
+    tools.append(again);
+
+    row.append(tools);
+    body.append(row);
+  }
+}
+
+/** Out of the working list, however it got there. */
+function isFiled(trip) {
+  return trip.archived === 'You' || trip.archived === 'Quiet';
+}
+
+/** A duration in the shortest words that stay honest about it. */
+function spanOf(seconds) {
+  if (!seconds || seconds < 0) return 'no time at all';
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  if (hours < 24) return rest ? `${hours}h ${rest}m` : `${hours}h`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
 }
 
 /* ---------- the plan on the map ---------- */

@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.36
+### 0.9.37
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -357,6 +357,24 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   Records that already match are counted but not listed, because they are not
   decisions. Pinned jobs and the tracked flight plan are left alone either
   way, and the summary says how many.
+
+- **A flight plan can be a run: started, finished, and timed.** Press Start
+  when you set off and Finish when you are done. Elapsed time is measured from
+  Start, never from when you wrote the plan — a route drafted last week and
+  flown tonight is a two-hour run, not a week-long one.
+
+  Runs you finish move to a **Finished and filed** list, with Repeat to fly the
+  same route again with nothing ticked off.
+
+  A run you start and never come back to files itself after ten days, so the
+  working list stays honest. That is reversible: those runs offer **Resume**,
+  which puts them back and keeps the time they started, and the ten days is a
+  setting you can change or switch off. Runs you finished yourself do not offer
+  Resume — the app filing something and you finishing it are not the same
+  decision, and the list should not pretend they are.
+
+  Plans you have never started are left alone entirely: a backlog of routes is
+  not a pile of abandoned flights.
 
 ### 0.8.35
 

@@ -3725,3 +3725,12 @@ body.overlay .toast {
 #backup-plan-table td:first-child { width: 60px; text-align: center; }
 #backup-plan-table input { cursor: pointer; }
 #backup-plan { margin-top: 6px; }
+
+/* How long a run has been going. Its own line under the buttons rather than a
+   badge, because the caveat beside it is the point: this is time since Start,
+   not since the plan was written. */
+.trip-elapsed {
+  font-size: 11.5px;
+  margin-top: 8px;
+  line-height: 1.45;
+}
