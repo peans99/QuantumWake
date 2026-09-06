@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.32
+### 0.9.33
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -313,6 +313,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   terminals that sell it to you under “buys it from you”, and had the two counts
   the wrong way round — so anyone with a hold full of cargo was pointed at the
   shops that stock it rather than the ones that pay for it.
+
+- **You can take a complete backup of everything you have typed.** Settings →
+  Export already offered a file to share with someone else, and it carried
+  three of the ten things you author: jobs, checklists and flight plans. Your
+  mining log, your goal, your map notes, your item-label settings and your wipe
+  line were not in it. The new backup carries all of them.
+
+  It does not carry sessions, trades, payouts or contracts, and it is not meant
+  to — those come back by reading your logs again, and a copy in the file would
+  be a second version that can disagree with the game. What it protects is the
+  part rescanning cannot bring back: the things you typed.
+
+  The file also records what you have deleted. That sounds odd in a backup and
+  is the point of one: restoring a month-old file should not quietly hand back
+  the eight plans you threw away last week, and without this it cannot tell
+  them from plans you never had.
 
 ### 0.8.35
 

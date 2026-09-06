@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Quantumwake.Core;
 
 namespace Quantumwake.Data;
@@ -15,7 +15,17 @@ public sealed record MiningRun(
     double Scu,
     int? Quality,
     decimal? Revenue,
-    string? Note);
+    string? Note,
+    DateTimeOffset? ModifiedAt = null) : IStamped<MiningRun>
+{
+    public string StampId => Id;
+    public MiningRun Bare() => this with { ModifiedAt = null };
+    public MiningRun Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
+    /// <remarks>At is when the haul happened, which is not when the row was edited.</remarks>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? At;
+}
 
 /// <summary>
 /// A mining record the pilot keeps, because the game keeps none.
@@ -38,6 +48,9 @@ public sealed class MiningLogStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<MiningRun> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<MiningRun> _runs = [];
 
     public MiningLogStore(string? directory = null)
@@ -98,6 +111,7 @@ public sealed class MiningLogStore
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            _stamp.Apply(_runs, DateTimeOffset.UtcNow);
             File.WriteAllText(_path, JsonSerializer.Serialize(_runs));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -119,5 +133,7 @@ public sealed class MiningLogStore
         {
             _runs = [];
         }
+
+        _stamp.Loaded(_runs);
     }
 }

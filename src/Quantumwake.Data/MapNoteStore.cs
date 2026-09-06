@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -17,13 +17,27 @@ public sealed record MapNote(
     string? Note,
     IReadOnlyList<string> Tags,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt) : IStamped<MapNote>
+{
+    /// <summary>
+    /// Notes already carried their own edit time, so this rides on UpdatedAt
+    /// rather than adding a second date that could disagree with it.
+    /// </summary>
+    public string StampId => Id;
+    public MapNote Bare() => this with { UpdatedAt = default };
+    public MapNote Stamped(DateTimeOffset at) => this with { UpdatedAt = at };
+
+    public DateTimeOffset ChangedAt => UpdatedAt;
+}
 
 /// <summary>The pilot's reusable map notes, separate from log-derived places.</summary>
 public sealed class MapNoteStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<MapNote> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<MapNote> _notes = [];
 
     public MapNoteStore(string? directory = null)
@@ -95,11 +109,14 @@ public sealed class MapNoteStore
             // leave the atlas usable instead of preventing the dashboard loading.
             _notes = [];
         }
+
+        _stamp.Loaded(_notes);
     }
 
     private void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_notes));
+        _stamp.Apply(_notes, DateTimeOffset.UtcNow);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_notes));
     }
 }

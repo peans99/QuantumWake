@@ -98,6 +98,8 @@ public static class ServerHost
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<MapNoteStore>();
+        builder.Services.AddSingleton<TombstoneStore>();
+        builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
@@ -858,8 +860,20 @@ public static class ServerHost
                 ? Results.Ok(added)
                 : Results.BadRequest(new { problem = "A run needs a resource and some SCU." }));
 
-        app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, string id) =>
-            Results.Ok(new { removed = runs.Remove(id) }));
+        /*
+         * Deletes note a tombstone as well as removing the record. A restore
+         * otherwise cannot tell "you never had this" from "you threw this
+         * away", and the quiet answer - hand it back - is the wrong one.
+         * Recorded here rather than in the stores because this is where the
+         * pilot's intent to delete is actually expressed.
+         */
+        app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, TombstoneStore deleted, string id) =>
+        {
+            var removed = runs.Remove(id);
+            if (removed) deleted.Record(TombstoneStore.Kinds.Mining, id);
+
+            return Results.Ok(new { removed });
+        });
 
         app.MapPost("/api/goal", (GoalStore goals, Goal? body) =>
             Results.Ok(new { goal = goals.Save(body) }));
@@ -1650,8 +1664,13 @@ public static class ServerHost
         app.MapPost("/api/jobs/{id}/pin", (string id, JobStore jobs) =>
             jobs.TogglePin(id) ? Results.Ok(new { id }) : Results.NotFound());
 
-        app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
-            jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs, TombstoneStore deleted) =>
+        {
+            if (!jobs.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Jobs, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- checklists: authored preparation, never guessed from the log ----
 
@@ -1688,8 +1707,13 @@ public static class ServerHost
         app.MapDelete("/api/checklists/{id}/items/{itemId}", (string id, string itemId, ChecklistStore checklists) =>
             checklists.RemoveItem(id, itemId) ? Results.Ok(new { id, itemId }) : Results.NotFound());
 
-        app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists) =>
-            checklists.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists, TombstoneStore deleted) =>
+        {
+            if (!checklists.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Checklists, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- sharing: a file of the pilot's own, for a pilot they fly with ----
 
@@ -1801,6 +1825,24 @@ public static class ServerHost
 
         // Counts and the window, never rows: nothing leaves without a click, and
         // a click is worth more when it follows seeing what would go.
+        /*
+         * A backup: everything typed, in one file, for getting a machine back.
+         * Separate from /api/export, which is a selection offered to somebody
+         * else - the two have different rules about what may be left out, and
+         * folding them together is how a backup quietly stops being complete.
+         */
+        app.MapGet("/api/backup", (BackupBuilder backups, LogLibrary lib) =>
+        {
+            var document = backups.Build(Producer(), DateTimeOffset.UtcNow, lib.Handle());
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(document, ExportDocument.Json);
+
+            return Results.File(bytes, "application/json",
+                $"quantumwake-backup-{DateTimeOffset.Now:yyyy-MM-dd}.json");
+        });
+
+        // What it would hold, so the page can say so before anything is written.
+        app.MapGet("/api/backup/preview", (BackupBuilder backups) => backups.Preview());
+
         app.MapGet("/api/export/preview", (ExportBuilder exports,
             bool? receipts, bool? blueprints, bool? authored, int? days) =>
         {
@@ -1953,8 +1995,13 @@ public static class ServerHost
         app.MapDelete("/api/trips/{id}/stops/{stopId}", (string id, string stopId, TripStore trips) =>
             trips.RemoveStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
 
-        app.MapDelete("/api/trips/{id}", (string id, TripStore trips) =>
-            trips.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/trips/{id}", (string id, TripStore trips, TombstoneStore deleted) =>
+        {
+            if (!trips.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Trips, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- map notes: personal POIs, deliberately not telemetry ----
 
@@ -1966,8 +2013,13 @@ public static class ServerHost
             return item is null ? Results.BadRequest(new { message = "Choose a map location first." }) : Results.Ok(item);
         });
 
-        app.MapDelete("/api/map-notes/{id}", (string id, MapNoteStore notes) =>
-            notes.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/map-notes/{id}", (string id, MapNoteStore notes, TombstoneStore deleted) =>
+        {
+            if (!notes.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Notes, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- optional UEX feeds, each switched on by itself ----
 

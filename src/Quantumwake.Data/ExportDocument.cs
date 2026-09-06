@@ -1,4 +1,4 @@
-using Quantumwake.Core.State;
+﻿using Quantumwake.Core.State;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -89,6 +89,9 @@ public static class ExportDocument
     public const string Receipts = "receipts";
     public const string Blueprints = "blueprints";
     public const string Authored = "authored";
+
+    /// <summary>Everything authored, for restoring a machine rather than sharing.</summary>
+    public const string Backup = "backup";
 }
 
 /// <summary>What wrote a file, so a reader can say where a surprise came from.</summary>
@@ -119,7 +122,38 @@ public sealed record ExportFile(
     string? Note = null,
     ExportReceipts? Receipts = null,
     ExportBlueprints? Blueprints = null,
-    ExportAuthored? Authored = null);
+    ExportAuthored? Authored = null,
+    ExportBackup? Backup = null);
+
+/// <summary>
+/// Everything the pilot has typed, for getting a machine back rather than for
+/// sending to somebody else.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Separate from <see cref="ExportAuthored"/> because the two answer different
+/// questions. A share is a selection offered to a stranger; a backup is the
+/// whole of your own authored work, and the difference decides what may be left
+/// out. Nothing here is observed - sessions, trades, payouts and contracts come
+/// back by reading the logs again, and a copy of them in this file would be a
+/// second version that can disagree with the game.
+/// </para>
+/// <para>
+/// <paramref name="Deleted"/> is what makes a restore able to ask rather than
+/// guess: without it, a record this file still carries and the machine no
+/// longer has looks the same whether it was never there or was thrown away.
+/// </para>
+/// </remarks>
+public sealed record ExportBackup(
+    IReadOnlyList<Job> Jobs,
+    IReadOnlyList<Checklist> Checklists,
+    IReadOnlyList<Trip> Trips,
+    IReadOnlyList<MiningRun> MiningRuns,
+    IReadOnlyList<MapNote> Notes,
+    IReadOnlyList<Tombstone> Deleted,
+    Goal? Goal = null,
+    Wipe? Wipe = null,
+    TextOverlayOptions? Labels = null);
 
 /// <summary>
 /// The user's own commodity trades.

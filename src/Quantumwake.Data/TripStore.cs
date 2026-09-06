@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -81,8 +81,22 @@ public sealed record Trip(
     string Title,
     DateTimeOffset CreatedAt,
     IReadOnlyList<TripStop> Stops,
-    bool Tracked = false)
+    bool Tracked = false,
+    DateTimeOffset? ModifiedAt = null) : IStamped<Trip>
 {
+    public string StampId => Id;
+    /// <remarks>
+    /// Tracked comes off as well as the stamp. It is this machine's view state
+    /// and never travels in a backup, so a change to it is not a change a
+    /// restore could ever see - and counting it would make every trip look
+    /// edited the moment a new plan took the tracking from it.
+    /// </remarks>
+    public Trip Bare() => this with { ModifiedAt = null, Tracked = false };
+    public Trip Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
+
     /// <summary>
     /// A stop that still wants something: not yet reached, or reached with run
     /// work outstanding.
@@ -114,6 +128,9 @@ public sealed class TripStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<Trip> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<Trip> _trips = [];
 
     public TripStore(string? directory = null)
@@ -449,11 +466,14 @@ public sealed class TripStore
             // A corrupt file must not stop the app; the user starts with none.
             _trips = [];
         }
+
+        _stamp.Loaded(_trips);
     }
 
     private void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_trips));
+        _stamp.Apply(_trips, DateTimeOffset.UtcNow);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_trips));
     }
 }

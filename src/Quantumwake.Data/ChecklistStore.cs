@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -28,7 +28,17 @@ public sealed record Checklist(
     string Title,
     DateTimeOffset CreatedAt,
     IReadOnlyList<ChecklistItem> Items,
-    bool Pinned = false);
+    bool Pinned = false,
+    DateTimeOffset? ModifiedAt = null) : IStamped<Checklist>
+{
+    public string StampId => Id;
+    /// <remarks>Pinned is view state and does not travel - see <see cref="Trip.Bare"/>.</remarks>
+    public Checklist Bare() => this with { ModifiedAt = null, Pinned = false };
+    public Checklist Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
+}
 
 /// <summary>
 /// The pilot's own checklists, stored separately from log-derived facts.
@@ -42,6 +52,9 @@ public sealed class ChecklistStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<Checklist> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<Checklist> _lists = [];
 
     public ChecklistStore(string? directory = null)
@@ -172,11 +185,14 @@ public sealed class ChecklistStore
         {
             _lists = [];
         }
+
+        _stamp.Loaded(_lists);
     }
 
     private void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_lists));
+        _stamp.Apply(_lists, DateTimeOffset.UtcNow);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_lists));
     }
 }
