@@ -649,6 +649,17 @@ public static class ServerHost
         // One description of a thing, whichever surface it was clicked on. The
         // panels this replaces each knew a different subset and offered a
         // different set of actions; see EntityCards.
+        /*
+         * One box across everything. Grouped by source rather than interleaved
+         * by score: a query crosses a catalogue from the game files, sightings
+         * from the reader's own logs and their own written work, and a single
+         * ranked list would be the one place this app stopped saying which is
+         * which.
+         */
+        app.MapGet("/api/search", (string? q, LogLibrary lib, JobStore jobs,
+            ChecklistStore checklists, TripStore trips, KitStore kits, MapNoteStore notes) =>
+            Search.Run(q, lib, jobs, checklists, trips, kits, notes));
+
         app.MapGet("/api/entity", (string? kind, string? id, LogLibrary lib, UexData uex, UexFeeds feeds) =>
             EntityCards.Build(kind, id, lib, uex, feeds) is { } card
                 ? Results.Ok(card)

@@ -13827,6 +13827,87 @@ function onInput(selector, handler) {
   node.addEventListener('change', handler);
 }
 
+/* ---------- search everything ---------- */
+
+/**
+ * Where each kind of hit goes when it is clicked.
+ *
+ * The four the entity drawer already describes open there; the rest are the
+ * reader's own work and belong on the page that owns them. A hit with nowhere
+ * to go is not offered as a link, because a result that does nothing when
+ * pressed is worse than one that is plainly just an answer.
+ */
+const SEARCH_OPENS = {
+  place: (hit) => openEntity('place', hit.id),
+  ship: (hit) => openEntity('ship', hit.id),
+  part: (hit) => openEntity('part', hit.id),
+  commodity: (hit) => openEntity('commodity', hit.id),
+  job: () => showView('jobs'),
+  checklist: () => showView('checklists'),
+  kit: () => showView('loadout'),
+  note: () => showView('map'),
+  run: () => showView('map'),
+};
+
+async function runGlobalSearch() {
+  const box = $('#global-search');
+  const panel = $('#global-results');
+  const q = box.value.trim();
+
+  if (q.length < 2) {
+    panel.hidden = true;
+    return;
+  }
+
+  const results = await getJson(`/api/search?q=${encodeURIComponent(q)}`);
+
+  panel.hidden = false;
+  panel.textContent = '';
+
+  // Nothing matching is an answer, and saying it beats an empty frame the
+  // reader has to work out for themselves.
+  if (results.nothing) {
+    panel.append(el('div', 'search-empty', `Nothing matches “${q}”.`));
+    return;
+  }
+
+  for (const group of results.groups) {
+    if (!group.hits.length) continue;
+
+    panel.append(el('div', 'search-source', group.source));
+
+    for (const hit of group.hits) {
+      const open = SEARCH_OPENS[hit.kind];
+      const row = el(open ? 'button' : 'div', 'search-hit');
+
+      row.append(el('span', 'name', hit.name));
+      row.append(el('span', 'why muted', hit.why));
+
+      if (open) {
+        row.type = 'button';
+        row.addEventListener('click', () => {
+          panel.hidden = true;
+          box.value = '';
+          open(hit);
+        });
+      }
+
+      panel.append(row);
+    }
+  }
+}
+
+onInput('#global-search', () => runGlobalSearch().catch(() => {}));
+
+$('#global-search')?.addEventListener('keydown', (event) => {
+  // Escape puts the page back rather than leaving a panel over it.
+  if (event.key === 'Escape') {
+    $('#global-results').hidden = true;
+    $('#global-search').value = '';
+  }
+});
+
+
 /**
  * Re-fetches totals for one view's chosen window and re-renders just that view.
  *

@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.47
+### 0.9.48
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -490,6 +490,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   the answer under the row. Nothing is fetched until you ask, and the count of
   movements has no **?** at all — a control on every figure would promise an
   explanation for numbers nobody has written one for.
+
+- **One search box, in the header, across everything.** Items, places, ships,
+  your jobs, checklists, runs, kits and map notes.
+
+  Results are grouped by where they came from — your logs, things you wrote,
+  the catalogue — rather than mixed into one ranked list, because those are
+  three very different kinds of answer and only the first is about you. Every
+  hit says why it matched, so a list of ten results is not ten clicks.
+
+  Something you have never seen still comes back, from the catalogue, with
+  nothing under your own logs. Never having seen a thing is a fact worth
+  showing, and a search that reports nothing for a real item reads as broken
+  rather than as an honest answer.
 
 ### 0.8.35
 

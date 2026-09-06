@@ -3943,3 +3943,61 @@ body.overlay .toast {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ---------- search everything ---------- */
+.search-box { position: relative; }
+
+.search-box .search { width: 200px; }
+
+/* Over the page rather than pushing it: a search panel that moved the layout
+   would shift whatever the reader was about to click. */
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 380px;
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 50;
+  background: linear-gradient(158deg, var(--panel-2), var(--deep));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  padding: 8px 0;
+}
+
+.search-source {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 8px 14px 4px;
+}
+
+.search-hit {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 5px 14px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: var(--text);
+  font-size: 12px;
+
+  /* Buttons in this app are uppercase labels; these are names. "PEMBROKE
+     LIGHT ARMOUR" is not what the item is called, and reads as shouting. */
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+button.search-hit { cursor: pointer; }
+button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
+
+/* The name takes the room and the reason gives it up: a name broken across
+   three lines is unreadable, and "seen in storage" wrapping is merely untidy. */
+.search-hit .name { flex: 1 1 auto; min-width: 0; }
+.search-hit .why { flex: 0 1 auto; text-align: right; font-size: 11px; }
+
+.search-empty { padding: 10px 14px; font-size: 12px; color: var(--muted); }

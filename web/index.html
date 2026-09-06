@@ -90,6 +90,14 @@
   </nav>
 
   <div class="status">
+    <!-- One box across everything. Results are grouped by where they came
+         from, because a single ranked list would stop saying which of them
+         this app can stand behind. -->
+    <div class="search-box">
+      <input type="search" id="global-search" class="search" placeholder="Search everything…"
+             autocomplete="off" spellcheck="false" aria-label="Search everything">
+      <div id="global-results" class="search-results" hidden></div>
+    </div>
     <span id="install" class="muted">detecting…</span>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
