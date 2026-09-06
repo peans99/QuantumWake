@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -44,6 +44,7 @@ public sealed class TombstoneStore
         public const string Trips = "trips";
         public const string Mining = "mining";
         public const string Notes = "notes";
+        public const string Kits = "kits";
     }
 
     private readonly string _path;

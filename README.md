@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.40
+### 0.9.41
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -423,6 +423,26 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   is deliberately not coloured like the money that counted, because it is not
   in the totals above it. Beside each planned action you can record what it
   actually came to; the estimate stays on screen next to it.
+
+- **Saved kits.** Keep a loadout you like, and ask what it would take to put it
+  back together. Anything you are wearing is settled. Anything nothing has ever
+  seen goes straight on the shopping list.
+
+  Everything else is a question, and it has to be. The game logs an item being
+  *seen* in a container and never one being taken out or used up, so anything
+  you have ever stored looks present for ever — a kit that treated that as a
+  stock level would report a full loadout to somebody standing in an empty
+  hangar. So stored items are shown as sightings with where and when, and only
+  you can say whether they are still there. Sightings older than a month are
+  marked, which changes how loudly the page doubts them and never whether it
+  asks.
+
+  A sighting you say nothing about is left as held: the cost of that being
+  wrong is a wasted trip, and the cost the other way is buying something you
+  already own. Once you have answered, the replacements become a shopping list
+  you can attach to a flight plan like any other.
+
+  Kits are in the backup from the day they exist.
 
 ### 0.8.35
 

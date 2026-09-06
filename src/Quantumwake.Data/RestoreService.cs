@@ -30,7 +30,8 @@ public sealed class RestoreService(
     WipeStore wipe,
     ItemLabelStore labels,
     TombstoneStore deleted,
-    LogLibrary library)
+    LogLibrary library,
+    KitStore kits)
 {
     /// <summary>Ids for the things there is only ever one of.</summary>
     private static class Single
@@ -103,6 +104,9 @@ public sealed class RestoreService(
 
         Compare(TombstoneStore.Kinds.Notes, file.Notes, notes.All(),
             n => n.Id, n => n.Title, n => n.ChangedAt);
+
+        Compare(TombstoneStore.Kinds.Kits, file.Kits, kits.All(),
+            k => k.Id, k => k.Name, k => k.ChangedAt);
 
         // The singular settings. There is only one of each, so there is nothing
         // to match on - the question is only whether the file's differs.
@@ -199,6 +203,13 @@ public sealed class RestoreService(
                 restored++;
             }
 
+            foreach (var kit in file.Kits.Where(k => Wanted(TombstoneStore.Kinds.Kits, k.Id)))
+            {
+                kits.Put(kit);
+                deleted.Forget(TombstoneStore.Kinds.Kits, kit.Id);
+                restored++;
+            }
+
             if (file.Goal is { } goal && Wanted(Single.Goal, Single.Goal))
             {
                 goals.Save(goal);
@@ -255,6 +266,7 @@ public sealed class RestoreService(
         foreach (var id in trips.All().Select(t => $"{TombstoneStore.Kinds.Trips}:{t.Id}")) here.Add(id);
         foreach (var id in mining.All().Select(r => $"{TombstoneStore.Kinds.Mining}:{r.Id}")) here.Add(id);
         foreach (var id in notes.All().Select(n => $"{TombstoneStore.Kinds.Notes}:{n.Id}")) here.Add(id);
+        foreach (var id in kits.All().Select(k => $"{TombstoneStore.Kinds.Kits}:{k.Id}")) here.Add(id);
 
         foreach (var stone in file.Deleted)
         {
@@ -267,9 +279,9 @@ public sealed class RestoreService(
     /// <summary>Everything that could be written, as it stands right now.</summary>
     private (IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
         IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
-        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted) Photograph() =>
+        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits) Photograph() =>
         (jobs.All(), checklists.All(), trips.All(), mining.All(), notes.All(),
-         goals.Current, wipe.Current, labels.Current, deleted.All());
+         goals.Current, wipe.Current, labels.Current, deleted.All(), kits.All());
 
     /// <summary>
     /// Puts a photograph back, and says whether all of it landed.
@@ -282,7 +294,7 @@ public sealed class RestoreService(
     /// </remarks>
     private bool PutBack((IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
         IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
-        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted) before)
+        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits) before)
     {
         var whole = true;
 
@@ -303,6 +315,7 @@ public sealed class RestoreService(
         foreach (var trip in before.Trips) Try(() => trips.Put(trip));
         foreach (var run in before.Runs) Try(() => mining.Put(run));
         foreach (var note in before.Notes) Try(() => notes.Put(note));
+        foreach (var kit in before.Kits) Try(() => kits.Put(kit));
 
         Try(() => goals.Save(before.Goal));
         Try(() => labels.Save(before.Labels));

@@ -1,4 +1,4 @@
-namespace Quantumwake.Data;
+﻿namespace Quantumwake.Data;
 
 /// <summary>
 /// Assembles the whole of the pilot's authored work into one file.
@@ -33,7 +33,8 @@ public sealed class BackupBuilder(
     GoalStore goals,
     WipeStore wipe,
     ItemLabelStore labels,
-    TombstoneStore deleted)
+    TombstoneStore deleted,
+    KitStore kits)
 {
     /// <summary>The format this build writes and can read back.</summary>
     public const int Version = 1;
@@ -65,6 +66,7 @@ public sealed class BackupBuilder(
         mining.All().Count,
         notes.All().Count,
         deleted.All().Count,
+        kits.All().Count,
         goals.Current is not null,
         wipe.Current is not null);
 
@@ -76,6 +78,7 @@ public sealed class BackupBuilder(
         [.. mining.All()],
         [.. notes.All()],
         [.. deleted.All()],
+        [.. kits.All()],
         goals.Current,
         wipe.Current,
         labels.Current);
@@ -89,5 +92,6 @@ public sealed record BackupCounts(
     int MiningRuns,
     int Notes,
     int Deleted,
+    int Kits,
     bool Goal,
     bool Wipe);

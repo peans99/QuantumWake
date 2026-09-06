@@ -30,10 +30,10 @@ public class RestoreTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new LogLibrary(_sessions));
+        new LogLibrary(_sessions), new KitStore(_root));
 
     private static ExportBackup Backup(params Job[] jobs) =>
-        new(jobs, [], [], [], [], [], null, null, null);
+        new(jobs, [], [], [], [], [], [], null, null, null);
 
     private static Job AJob(string id, string title, DateTimeOffset changed) =>
         new(id, title, "list", null, Old, false, [], ModifiedAt: changed);
@@ -245,7 +245,7 @@ public class RestoreTests : IDisposable
         var future = new ExportFile(ExportDocument.Format, ExportDocument.FormatVersion,
             BackupBuilder.Version + 1, DateTimeOffset.UtcNow,
             new ExportProducer("Quantumwake", "9.9.9"), [ExportDocument.Backup],
-            Backup: new ExportBackup([], [], [], [], [], []));
+            Backup: new ExportBackup([], [], [], [], [], [], []));
 
         var (contents, _, problem) = BackupReader.Read(JsonSerializer.Serialize(future, ExportDocument.Json));
 

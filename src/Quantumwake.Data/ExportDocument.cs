@@ -151,6 +151,7 @@ public sealed record ExportBackup(
     IReadOnlyList<MiningRun> MiningRuns,
     IReadOnlyList<MapNote> Notes,
     IReadOnlyList<Tombstone> Deleted,
+    IReadOnlyList<Kit> Kits,
     Goal? Goal = null,
     Wipe? Wipe = null,
     TextOverlayOptions? Labels = null);

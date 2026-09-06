@@ -102,6 +102,7 @@ public static class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
@@ -2050,6 +2051,55 @@ public static class ServerHost
                 ? Results.Ok(new { id, stopId, actionId })
                 : Results.NotFound());
 
+        /*
+         * Saved kits: a loadout the pilot keeps, and what it would take to put
+         * it back together. The preparing half writes nothing - it is a reading
+         * of the logs and a set of questions only the pilot can answer.
+         */
+        app.MapGet("/api/kits", (KitStore kits) => kits.All());
+
+        app.MapPost("/api/kits", (KitStore kits, KitRequest body) =>
+            Results.Ok(kits.Add(body.Name, body.Items)));
+
+        app.MapPut("/api/kits/{id}", (string id, KitStore kits, KitRequest body) =>
+            kits.Replace(id, body.Name, body.Items) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/kits/{id}", (string id, KitStore kits, TombstoneStore deleted) =>
+        {
+            if (!kits.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Kits, id);
+            return Results.Ok(new { id });
+        });
+
+        app.MapGet("/api/kits/{id}/prepare", (string id, KitStore kits, LogLibrary lib) =>
+            kits.Find(id) is { } kit
+                ? Results.Ok(KitPreparer.Prepare(kit, lib.Stats(), DateTimeOffset.UtcNow))
+                : Results.NotFound());
+
+        /*
+         * The answers to the questions come back here, and only here: a
+         * sighting the pilot has not spoken about is left as held, because the
+         * cost of that being wrong is a wasted trip rather than a purchase
+         * nobody needed.
+         */
+        app.MapPost("/api/kits/{id}/shopping",
+            (string id, KitStore kits, LogLibrary lib, JobStore jobs, string? gone) =>
+        {
+            if (kits.Find(id) is not { } kit) return Results.NotFound();
+
+            var prepared = KitPreparer.Prepare(kit, lib.Stats(), DateTimeOffset.UtcNow);
+            var wanted = KitPreparer.Shopping(prepared, Keys(gone));
+
+            if (wanted.Count == 0)
+                return Results.Ok(new { job = (string?)null, items = 0 });
+
+            var job = jobs.Add($"{kit.Name} - replacements", "list", null,
+                [.. wanted.Select(line => new JobItem(line.Name, line.Quantity))]);
+
+            return Results.Ok(new { job = job.Id, items = wanted.Count });
+        });
+
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
 
         app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
@@ -3477,6 +3527,9 @@ public sealed record MapNoteRequest(
     string? Title,
     string? Note,
     List<string>? Tags);
+
+/// <summary>Body of POST and PUT /api/kits.</summary>
+public sealed record KitRequest(string? Name, IReadOnlyList<KitItem>? Items);
 
 /// <summary>
 /// Body of POST /api/export: what to share, and how far back.

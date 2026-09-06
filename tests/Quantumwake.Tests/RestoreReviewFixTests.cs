@@ -30,7 +30,7 @@ public class RestoreReviewFixTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new LogLibrary(new SessionStore(":memory:")));
+        new LogLibrary(new SessionStore(":memory:")), new KitStore(_root));
 
     private static Job AJob(string id, string title, DateTimeOffset changed) =>
         new(id, title, "list", null, Old, false, [], ModifiedAt: changed);
@@ -50,7 +50,7 @@ public class RestoreReviewFixTests : IDisposable
         jobs.TogglePin("j1");
 
         var service = Service();
-        var file = new ExportBackup([AJob("j1", "Buy better armour", Newer)], [], [], [], [], []);
+        var file = new ExportBackup([AJob("j1", "Buy better armour", Newer)], [], [], [], [], [], []);
 
         service.Apply(file, service.Plan(file, "h"), "h", new RestoreChoices());
 
@@ -72,7 +72,7 @@ public class RestoreReviewFixTests : IDisposable
 
         var service = Service();
         var file = new ExportBackup([], [], [trip with { Title = "Ore run v2", ModifiedAt = Newer, Tracked = false }],
-            [], [], []);
+            [], [], [], []);
 
         // Taken explicitly: the local copy is newer, so this is a conflict and
         // the safe default is to keep it. What is under test is what happens to
@@ -97,7 +97,7 @@ public class RestoreReviewFixTests : IDisposable
     {
         var service = Service();
         var file = new ExportBackup([], [], [], [], [],
-            [new Tombstone(TombstoneStore.Kinds.Jobs, "gone", Old)]);
+            [new Tombstone(TombstoneStore.Kinds.Jobs, "gone", Old)], []);
 
         service.Apply(file, service.Plan(file, "h"), "h", new RestoreChoices());
 
@@ -117,7 +117,7 @@ public class RestoreReviewFixTests : IDisposable
 
         var service = Service();
         var file = new ExportBackup([], [], [], [], [],
-            [new Tombstone(TombstoneStore.Kinds.Jobs, "j1", Old)]);
+            [new Tombstone(TombstoneStore.Kinds.Jobs, "j1", Old)], []);
 
         service.Apply(file, service.Plan(file, "h"), "h", new RestoreChoices());
 
@@ -141,10 +141,11 @@ public class RestoreReviewFixTests : IDisposable
         var service = new RestoreService(
             new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
             new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
-            new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root), library);
+            new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root), library,
+            new KitStore(_root));
 
         var wiped = new Wipe(Newer, "Alpha 4.9", WipeScope.Money);
-        var file = new ExportBackup([], [], [], [], [], [], Wipe: wiped);
+        var file = new ExportBackup([], [], [], [], [], [], [], Wipe: wiped);
 
         // A wipe line always differs from the one already set, so it arrives as
         // a conflict and is kept by default. Asked for explicitly here.
@@ -170,7 +171,7 @@ public class RestoreReviewFixTests : IDisposable
         var service = Service();
 
         var file = new ExportBackup(
-            [AJob("j1", "Theirs", Newer)], [], [], [], [], []);
+            [AJob("j1", "Theirs", Newer)], [], [], [], [], [], []);
 
         var plan = service.Plan(file, "h");
 

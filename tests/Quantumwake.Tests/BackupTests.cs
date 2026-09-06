@@ -1,4 +1,4 @@
-using Quantumwake.Data;
+﻿using Quantumwake.Data;
 
 namespace Quantumwake.Tests;
 
@@ -25,7 +25,8 @@ public class BackupTests : IDisposable
     private BackupBuilder Builder() => new(
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
-        new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root));
+        new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
+        new KitStore(_root));
 
     private static ExportProducer Producer() => new("Quantumwake", "0.9.33");
 
