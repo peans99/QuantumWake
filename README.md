@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.38
+### 0.9.39
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -396,6 +396,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
   **The preview reads correctly.** Records that already matched were listed as
   choices and their reason column showed a raw internal name.
+
+- **A finished run can be compared with what your logs recorded while it ran.**
+  Money that moved between the moment you pressed Start and the moment you
+  pressed Finish is matched to the stop you were at when it happened, and each
+  stop shows what it planned beside what it took.
+
+  Nothing is moved onto a stop to make a total come out. A sale somewhere the
+  run never went, or at a stop you never ticked off, is listed on its own
+  rather than added in or hidden — when a figure looks wrong, that list is
+  usually the reason. Each figure also says what it left out and why, including
+  how much of it is what a terminal was asked for rather than what it confirmed.
+
+  The match rests on an inference and says so: a receipt names a kiosk and
+  never a place, so the place comes from the last arrival before it.
+
+  You can also record what a stop actually came to, beside what you planned.
+  The estimate is kept — the two together are the point.
 
 ### 0.8.35
 

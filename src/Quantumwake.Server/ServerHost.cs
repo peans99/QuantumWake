@@ -2024,6 +2024,32 @@ public static class ServerHost
                 ? Results.Ok(new { copy.Id, copy.Title, stops = copy.Stops.Count })
                 : Results.NotFound());
 
+        /*
+         * What a run planned against what the logs recorded while it ran.
+         * Computed, never stored: a rescan can improve the answer, and a saved
+         * one would freeze whichever reading was current when it was filed.
+         */
+        app.MapGet("/api/trips/{id}/review", (string id, TripStore trips, LogLibrary lib, UexData uex) =>
+        {
+            var trip = trips.All().FirstOrDefault(t => t.Id == id);
+
+            if (trip is null) return Results.NotFound();
+
+            return RunReviewer.Build(trip, lib.Ledger(), DateTimeOffset.UtcNow) is { } review
+                ? Results.Ok(review)
+                : Results.BadRequest(new
+                {
+                    problem = "This plan has never been started, so there is nothing to compare against yet."
+                });
+        });
+
+        // A correction sits beside the estimate rather than replacing it.
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/actual",
+            (string id, string stopId, string actionId, TripStore trips, decimal? amount) =>
+            trips.Correct(id, stopId, actionId, amount)
+                ? Results.Ok(new { id, stopId, actionId })
+                : Results.NotFound());
+
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
 
         app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>

@@ -23,6 +23,12 @@ public sealed record TripStop(
 /// Game.log does not carry a cargo manifest, so action lines deliberately say
 /// what the pilot intends or confirms themselves; they are not inferred cargo.
 /// </remarks>
+/// <param name="Actual">
+/// What the action turned out to be worth, when the pilot corrects it. Kept
+/// beside <paramref name="Quantity"/> rather than replacing it: the estimate
+/// and the outcome are the comparison, and overwriting one destroys the point
+/// of recording either.
+/// </param>
 public sealed record RunAction(
     string Id,
     string Kind,
@@ -30,7 +36,8 @@ public sealed record RunAction(
     decimal? Quantity,
     string? Unit,
     bool Done,
-    DateTimeOffset? DoneAt)
+    DateTimeOffset? DoneAt,
+    decimal? Actual = null)
 {
     /// <summary>
     /// The kinds a run sheet may use, with anything else read as a plain "do".
@@ -647,6 +654,42 @@ public sealed class TripStore
             if (filed > 0) Save();
 
             return filed;
+        }
+    }
+
+    /// <summary>
+    /// Records what an action actually came to, leaving the estimate alone.
+    /// </summary>
+    /// <remarks>
+    /// Null clears a correction rather than setting it to zero - a stop that
+    /// turned out to be worth nothing and a stop nobody has checked yet are
+    /// different facts, and only one of them is a number.
+    /// </remarks>
+    public bool Correct(string tripId, string stopId, string actionId, decimal? actual)
+    {
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var stopIndex = stops.FindIndex(s => s.Id == stopId);
+            if (stopIndex < 0) return false;
+
+            var actions = (stops[stopIndex].Actions ?? []).ToList();
+            var actionIndex = actions.FindIndex(a => a.Id == actionId);
+            if (actionIndex < 0) return false;
+
+            actions[actionIndex] = actions[actionIndex] with
+            {
+                Actual = actual is null ? null : RunAction.CleanQuantity(actual),
+            };
+
+            stops[stopIndex] = stops[stopIndex] with { Actions = actions };
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
+
+            Save();
+            return true;
         }
     }
 
