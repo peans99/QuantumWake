@@ -950,6 +950,24 @@ public static class ServerHost
 
         app.MapGet("/api/ledger", (LogLibrary lib, int? days) => lib.Ledger(days ?? 0));
 
+        /*
+         * Why a number is what it is: the rule that made it, the records behind
+         * it, and what was left out.
+         *
+         * A figure nobody has taught this to explain is absent rather than
+         * empty. Answering with a blank explanation would say "there is nothing
+         * behind this number", which is a far stronger claim than "no one has
+         * written that down yet".
+         */
+        app.MapGet("/api/explain", (string? figure, int? days, LogLibrary lib) =>
+            Explanations.For(figure, lib, days ?? 0) is { } explained
+                ? Results.Ok(explained)
+                : Results.NotFound(new
+                {
+                    problem = "Nothing here knows how to explain that figure yet.",
+                    known = Explanations.Known,
+                }));
+
         // Trades with the UEX comparison joined on: what the best sell was, so
         // the page can say what a sale left on the table.
         app.MapGet("/api/commodities", (LogLibrary lib, UexData uex, int? days) =>

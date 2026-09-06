@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.45
+### 0.9.46
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -470,6 +470,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   soonest first, and a stage column on every haul with a button for whatever
   comes next. What went in and what came back are separate columns, so the
   difference is on screen rather than worked out in your head.
+
+- **Figures can be asked where they came from.** Money in, money out, net,
+  contracts paid and deaths each carry the rule that made them, the records
+  behind them, and what was left out.
+
+  What was left out is the part worth having. A net that looks wrong is almost
+  never an arithmetic problem — it is mining and salvage the game never
+  recorded. Contracts paid says outright that most completions were never
+  priced, so a missing payout means the log said nothing rather than that a
+  contract paid nothing.
+
+  Deaths has no records at all, and says so instead of showing an empty list:
+  the game stopped writing a death event, so the count is a pattern the app
+  recognises rather than something it read. A figure this cannot explain says
+  it does not know, rather than answering with a blank.
 
 ### 0.8.35
 
