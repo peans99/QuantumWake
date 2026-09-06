@@ -6651,6 +6651,7 @@ async function renderSettings() {
   await renderUexFeeds();
   await renderSignals();
   await renderExportPreview();
+  await renderBackupPreview();
   await renderDiagnostics();
 }
 
@@ -7092,6 +7093,262 @@ async function renderExportPreview() {
  * history at once. So the blob comes back from fetch and is clicked into the
  * downloads folder here.
  */
+/* ---------- backup and restore ---------- */
+
+/**
+ * The file being restored and the plan for it, held between preview and apply.
+ *
+ * The text is kept rather than re-read because the apply has to send the same
+ * bytes the plan was computed from: the server hashes what it is given and
+ * refuses when it disagrees with what was approved. Reading the picker a second
+ * time would be a fresh read of a file that may have changed underneath.
+ */
+let restoreFile = null;
+let restorePlan = null;
+
+async function renderBackupPreview() {
+  const line = $('#backup-preview');
+  if (!line) return;
+
+  // A count nobody asked for must not be able to take the rest of Settings
+  // down with it: everything below this on the page is more important.
+  let counts;
+
+  try {
+    counts = await getJson('/api/backup/preview');
+  } catch {
+    line.textContent = '';
+    return;
+  }
+
+  // Only what is actually there, so an empty install does not read as a list of
+  // zeroes somebody has to be told to ignore.
+  const parts = [
+    [counts.jobs, 'job'], [counts.checklists, 'checklist'], [counts.trips, 'flight plan'],
+    [counts.miningRuns, 'mining haul'], [counts.notes, 'map note'],
+  ].filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+
+  if (counts.goal) parts.push('your goal');
+  if (counts.wipe) parts.push('your wipe line');
+
+  line.textContent = parts.length
+    ? `Would save ${parts.join(', ')}.`
+    : 'Nothing typed yet — a backup would be empty.';
+}
+
+async function saveBackup() {
+  const button = $('#backup-save');
+  const status = $('#backup-status');
+
+  button.disabled = true;
+  status.textContent = 'Building the file…';
+
+  let url = null;
+
+  try {
+    const response = await fetch('/api/backup');
+
+    if (!response.ok) {
+      status.textContent = 'The backup could not be built.';
+      return;
+    }
+
+    const name = /filename="?([^";]+)"?/i.exec(
+      response.headers.get('content-disposition') || '')?.[1] || 'quantumwake-backup.json';
+
+    const blob = await response.blob();
+    url = URL.createObjectURL(blob);
+
+    const link = el('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+
+    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+  } catch {
+    status.textContent = 'The backup could not be built.';
+  } finally {
+    // Revoking frees the blob; doing it before the click lands cancels the save.
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
+    button.disabled = false;
+  }
+}
+
+/**
+ * Why each kind of line is on the list, in the reader's terms.
+ *
+ * "Conflict" is the code's word and would be the wrong one here: nothing has
+ * gone wrong, the copy on this machine is simply newer, and the reader is being
+ * asked whether to overwrite their own more recent work.
+ */
+const RESTORE_WHY = {
+  add: 'not on this machine',
+  replace: 'yours is older',
+  conflict: 'yours is newer',
+  deleted: 'you deleted this',
+  same: 'already the same',
+};
+
+async function planRestore(text) {
+  const status = $('#backup-status');
+  status.textContent = 'Reading the file…';
+
+  const response = await fetch('/api/backup/plan', { method: 'POST', body: text });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    status.textContent = body?.problem || 'That file could not be read.';
+    return;
+  }
+
+  restoreFile = text;
+  restorePlan = body;
+  status.textContent = '';
+  renderRestorePlan();
+}
+
+function renderRestorePlan() {
+  const panel = $('#backup-plan');
+  panel.hidden = !restorePlan;
+  if (!restorePlan) return;
+
+  const acting = restorePlan.lines.filter((line) => line.action !== 'same');
+
+  const summary = $('#backup-plan-summary');
+  summary.textContent = '';
+
+  const counts = [
+    [restorePlan.adds, 'to bring back'],
+    [restorePlan.replaces, 'to replace'],
+    [restorePlan.conflicts, 'newer here'],
+    [restorePlan.deleted, 'you deleted'],
+    [restorePlan.unchanged, 'already the same'],
+  ].filter(([n]) => n > 0);
+
+  for (const [n, word] of counts) {
+    const tile = el('span', 'restore-count');
+    tile.append(el('b', null, String(n)));
+    tile.append(el('span', 'muted', ` ${word}`));
+    summary.append(tile);
+  }
+
+  // Said even when it is zero-shaped news: "what happened to my pins" is a
+  // question somebody will ask of a screen that rewrote their jobs.
+  if (restorePlan.ignored > 0) {
+    summary.append(el('span', 'restore-count muted',
+      `${restorePlan.ignored} pinned or tracked — left alone either way`));
+  }
+
+  const body = $('#backup-plan-table').querySelector('tbody');
+  body.textContent = '';
+
+  for (const line of acting) {
+    const row = el('tr');
+
+    const cell = el('td');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = line.takenByDefault;
+    box.dataset.key = line.key;
+    box.title = line.takenByDefault ? 'Untick to leave this alone' : 'Tick to take the copy in the file';
+    cell.append(box);
+    row.append(cell);
+
+    const what = el('td');
+    what.append(el('span', null, line.label));
+    what.append(el('span', 'note-inline muted', ` ${RESTORE_WHY[line.action] || line.action}`));
+    row.append(what);
+
+    row.append(el('td', 'muted', line.store));
+    row.append(el('td', 'muted', line.yours ? dateOf(line.yours) : '—'));
+    row.append(el('td', 'muted', line.theirs ? dateOf(line.theirs) : '—'));
+
+    body.append(row);
+  }
+
+  // Nothing to do is worth saying outright, rather than showing an empty table
+  // above a button that would do nothing.
+  $('#backup-apply').disabled = acting.length === 0;
+
+  if (acting.length === 0) {
+    summary.append(el('span', 'restore-count muted',
+      'Nothing to do — this file matches what you have.'));
+  }
+}
+
+async function applyRestore() {
+  const button = $('#backup-apply');
+  const status = $('#backup-status');
+
+  // Sent as exceptions to the plan's own defaults, so approving it untouched
+  // sends nothing at all - and a line this page did not know how to draw cannot
+  // arrive unanswered and be read as a refusal.
+  const take = [];
+  const leave = [];
+
+  for (const box of $('#backup-plan-table').querySelectorAll('input')) {
+    const line = restorePlan.lines.find((l) => l.key === box.dataset.key);
+    if (!line) continue;
+
+    if (box.checked && !line.takenByDefault) take.push(line.key);
+    if (!box.checked && line.takenByDefault) leave.push(line.key);
+  }
+
+  button.disabled = true;
+  status.textContent = 'Restoring…';
+
+  // Built the way the rest of the app builds a query, rather than through
+  // URLSearchParams: the keys are store:id pairs and both halves need escaping.
+  let query = `hash=${encodeURIComponent(restorePlan.hash)}`;
+  if (take.length) query += `&take=${encodeURIComponent(take.join(','))}`;
+  if (leave.length) query += `&leave=${encodeURIComponent(leave.join(','))}`;
+
+  try {
+    const response = await fetch(`/api/backup/restore?${query}`, { method: 'POST', body: restoreFile });
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      status.textContent = body?.problem || 'Nothing was restored.';
+      return;
+    }
+
+    status.textContent = body.restored === 0
+      ? 'Nothing was restored — every line was left alone.'
+      : `Restored ${body.restored} record${body.restored === 1 ? '' : 's'}.`
+        + (body.skipped ? ` Left ${body.skipped} alone.` : '');
+
+    closeRestore();
+    await renderBackupPreview().catch(() => {});
+  } catch {
+    status.textContent = 'Nothing was restored.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function closeRestore() {
+  restoreFile = null;
+  restorePlan = null;
+  $('#backup-plan').hidden = true;
+  $('#backup-file').value = '';
+}
+
+$('#backup-save')?.addEventListener('click', () => saveBackup().catch(() => {}));
+$('#backup-pick')?.addEventListener('click', () => $('#backup-file').click());
+$('#backup-cancel')?.addEventListener('click', closeRestore);
+$('#backup-apply')?.addEventListener('click', () => applyRestore().catch(() => {}));
+
+$('#backup-file')?.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    await planRestore(await file.text());
+  } catch {
+    $('#backup-status').textContent = 'That file could not be read.';
+  }
+});
+
 async function saveExport() {
   const button = $('#export-save');
   const status = $('#export-status');

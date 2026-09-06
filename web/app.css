@@ -3691,3 +3691,37 @@ body.overlay .toast {
   letter-spacing: .06em;
   white-space: nowrap;
 }
+
+/* ---------- restore preview ----------
+ *
+ * The one screen in the app that overwrites work somebody did, so the counts
+ * lead and the table explains them. Deliberately not cards: these are five
+ * readings of one number, not five separate objects. */
+.restore-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
+  margin: 14px 0 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.restore-count {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.restore-count b {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--cyan);
+  margin-right: 2px;
+}
+
+/* A tick here means "write over this", so the column reads as a decision
+   rather than as a row selector. */
+#backup-plan-table td:first-child { width: 60px; text-align: center; }
+#backup-plan-table input { cursor: pointer; }
+#backup-plan { margin-top: 6px; }

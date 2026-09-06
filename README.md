@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.34
+### 0.9.35
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -345,6 +345,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   If the file changes between the preview and the restore, the restore is
   refused rather than applied — a preview is only a promise if what it
   described is what runs.
+
+- **Backup and restore have a page.** Settings now has a Back up what you
+  typed block: one button saves the file, another reads one back. Restoring
+  shows the whole change first — what comes back, what gets overwritten, what
+  it is leaving alone — with a tick against every line, and writes nothing
+  until you press Restore.
+
+  Every row says why it is there in your terms rather than the code's: *not on
+  this machine*, *yours is older*, *yours is newer*, *you deleted this*.
+  Records that already match are counted but not listed, because they are not
+  decisions. Pinned jobs and the tracked flight plan are left alone either
+  way, and the summary says how many.
 
 ### 0.8.35
 

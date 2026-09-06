@@ -1851,6 +1851,48 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>Back up what you typed</h3>
+        <button class="ghost" id="backup-save">Save a backup</button>
+      </div>
+      <p class="muted">
+        Everything you have written down &mdash; jobs, checklists, flight plans,
+        your mining log, map notes, your goal and your settings &mdash; in one
+        file. <b>Your sessions, trades and contracts are not in it, and do not
+        need to be</b>: those come back by reading your logs again. This is for
+        the part re-reading cannot bring back.
+      </p>
+      <span class="muted" id="backup-preview"></span>
+
+      <div class="export-row">
+        <button class="ghost" id="backup-pick">Restore from a backup&hellip;</button>
+        <input type="file" id="backup-file" accept="application/json,.json" hidden>
+      </div>
+      <span class="muted" id="backup-status"></span>
+
+      <!-- The plan, once a file has been read. Nothing is written until the
+           button under it is pressed. -->
+      <div id="backup-plan" hidden>
+        <div class="restore-summary" id="backup-plan-summary"></div>
+        <div class="table-wrap">
+          <table id="backup-plan-table">
+            <thead>
+              <tr>
+                <th>Restore</th><th>What</th><th>Where</th>
+                <th>Yours</th><th>In the file</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="export-row">
+          <button class="primary" id="backup-apply">Restore</button>
+          <button class="ghost" id="backup-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Share what you have</h3>
         <button class="ghost" id="export-save">Save a file</button>
       </div>
