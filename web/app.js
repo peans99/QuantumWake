@@ -11273,6 +11273,11 @@ function renderFiledRuns(body) {
       tools.append(resume);
     }
 
+    const look = el('button', 'ghost tiny', 'Review');
+    look.title = 'What this run planned, against what your logs recorded';
+    look.addEventListener('click', () => showRunReview(run.id).catch(() => {}));
+    tools.append(look);
+
     const again = el('button', 'ghost tiny', 'Repeat');
     again.title = 'Fly the same route again, with nothing ticked off';
     again.addEventListener('click', () => tripCall(`/api/trips/${run.id}/repeat`));
@@ -11302,6 +11307,186 @@ function spanOf(seconds) {
 
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h`;
+}
+
+/* ---------- run review ---------- */
+
+/**
+ * What a run planned, against what the logs recorded while it ran.
+ *
+ * Opened from a filed run rather than living on its own page: a review is about
+ * one run, and the list of runs is where you already are when you want one.
+ */
+async function showRunReview(id) {
+  cargo.place = null;
+  cargo.trip = false;
+
+  const body = cargoPanelHead('Run review', 'Reading the logs…');
+
+  let review;
+
+  try {
+    review = await getJson(`/api/trips/${encodeURIComponent(id)}/review`);
+  } catch {
+    cargoPanelHead('Run review', 'Nothing to review')
+      .append(el('div', 'cargo-empty',
+        'This plan has never been started, so there is nothing to compare against yet.'));
+    return;
+  }
+
+  renderRunReview(review);
+}
+
+function renderRunReview(review) {
+  const body = cargoPanelHead('Run review', review.title);
+
+  const when = [
+    review.startedAt ? `Started ${dateOf(review.startedAt)}` : null,
+    review.elapsedSeconds ? `took ${spanOf(review.elapsedSeconds)}` : null,
+  ].filter(Boolean).join(' · ');
+
+  if (when) body.append(el('div', 'sub muted', when));
+
+  body.append(runFigure('Money in', review.earned));
+  body.append(runFigure('Money out', review.spent));
+
+  body.append(el('div', 'cargo-h', 'Stop by stop'));
+
+  for (const stop of review.stops) {
+    const block = el('div', 'run-stop');
+
+    const head = el('div', 'run-stop-head');
+    head.append(el('span', 'name', stop.place));
+    head.append(el('span', 'muted', stop.doneAt ? dateOf(stop.doneAt) : 'never reached'));
+    block.append(head);
+
+    if (stop.note) block.append(el('div', 'sub muted', stop.note));
+
+    for (const action of stop.planned) block.append(runPlannedRow(review, stop, action));
+
+    for (const claim of stop.claimed) {
+      const row = el('div', 'run-claim');
+      row.append(el('span', 'muted', claim.kind));
+      row.append(el('span', null, claim.what));
+      row.append(el('span', claim.amount >= 0 ? 'amount in' : 'amount out', money(claim.amount)));
+      block.append(row);
+    }
+
+    // Said rather than left blank: most stops move no money, and an empty space
+    // reads as a gap in the data instead of an ordinary stop.
+    if (!stop.planned.length && !stop.claimed.length) {
+      block.append(el('div', 'sub muted', 'Nothing planned, and no money moved here.'));
+    }
+
+    body.append(block);
+  }
+
+  if (review.unclaimed.length) {
+    body.append(el('div', 'cargo-h', 'During the run, but not at a stop'));
+    body.append(el('div', 'sub muted',
+      'Money that moved while this run was going that no stop can account for. '
+      + 'Listed rather than added in — attaching it to the nearest stop would be a guess.'));
+
+    for (const claim of review.unclaimed) {
+      const row = el('div', 'run-claim');
+      row.append(el('span', 'muted', dateOf(claim.at)));
+      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+
+      // Muted, not green: this money is real and is not in the figure above,
+      // and colouring it like counted income would say otherwise.
+      row.append(el('span', 'amount loose', money(claim.amount)));
+      body.append(row);
+    }
+  }
+}
+
+/**
+ * One figure, and the button that says where it came from.
+ *
+ * The explanation is folded away rather than absent: a number nobody is
+ * questioning does not need three lines of provenance under it, and a number
+ * somebody is questioning needs all of it.
+ */
+function runFigure(label, figure) {
+  const block = el('div', 'run-figure');
+
+  const head = el('div', 'run-figure-head');
+  head.append(el('span', 'muted', label));
+  head.append(el('span', 'run-figure-value', money(figure.value)));
+
+  const why = el('button', 'ghost tiny', 'Why this number?');
+  const detail = el('div', 'run-why');
+  detail.hidden = true;
+
+  why.addEventListener('click', () => {
+    detail.hidden = !detail.hidden;
+    why.textContent = detail.hidden ? 'Why this number?' : 'Hide';
+  });
+
+  head.append(why);
+  block.append(head);
+
+  detail.append(el('div', 'sub muted', figure.rule));
+
+  for (const line of figure.excluded) detail.append(el('div', 'run-excluded', line));
+
+  if (figure.from.length) {
+    const list = el('div', 'run-from');
+
+    for (const claim of figure.from) {
+      const row = el('div', 'run-claim');
+      row.append(el('span', 'muted', dateOf(claim.at)));
+      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+      row.append(el('span', 'amount', money(claim.amount)));
+      list.append(row);
+    }
+
+    detail.append(list);
+  } else {
+    detail.append(el('div', 'sub muted', 'No records behind this one — nothing was matched to a stop.'));
+  }
+
+  block.append(detail);
+  return block;
+}
+
+/**
+ * A planned action, with room to say what it actually came to.
+ *
+ * The estimate stays on screen beside the correction. Replacing one with the
+ * other would leave nothing to compare, which is the entire reason a review
+ * records both.
+ */
+function runPlannedRow(review, stop, action) {
+  const row = el('div', 'run-planned');
+
+  row.append(el('span', 'muted', action.kind));
+  row.append(el('span', null, action.text));
+
+  const planned = action.quantity === null || action.quantity === undefined
+    ? '—'
+    : `${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`;
+
+  row.append(el('span', 'muted planned-was', `planned ${planned}`));
+
+  const actual = el('input', 'run-actual');
+  actual.type = 'number';
+  actual.placeholder = 'actual';
+  actual.title = 'What it came to. Leave empty if you have not checked.';
+  if (action.actual !== null && action.actual !== undefined) actual.value = String(action.actual);
+
+  actual.addEventListener('change', async () => {
+    const value = actual.value.trim();
+    const query = value === '' ? '' : `?amount=${encodeURIComponent(value)}`;
+
+    await fetch(
+      `/api/trips/${encodeURIComponent(review.tripId)}/stops/${encodeURIComponent(stop.stopId)}`
+      + `/actions/${encodeURIComponent(action.id)}/actual${query}`,
+      { method: 'POST' });
+  });
+
+  row.append(actual);
+  return row;
 }
 
 /* ---------- the plan on the map ---------- */

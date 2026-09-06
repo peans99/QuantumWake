@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.39
+### 0.9.40
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -413,6 +413,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
   You can also record what a stop actually came to, beside what you planned.
   The estimate is kept — the two together are the point.
+
+  **Review** on a finished run opens that comparison. Money in and money out
+  lead; under each is a **Why this number?** that shows the rule it used, the
+  records behind it, and what it left out. It starts folded — a figure nobody
+  is questioning does not need three lines of provenance under it.
+
+  Money the run moved that no stop can account for is listed at the bottom and
+  is deliberately not coloured like the money that counted, because it is not
+  in the totals above it. Beside each planned action you can record what it
+  actually came to; the estimate stays on screen next to it.
 
 ### 0.8.35
 
