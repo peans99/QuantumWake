@@ -115,6 +115,11 @@ document, so the dashboard's own logic is tested rather than eyeballed. Add to
 the second one when changing `web/` — it is the only thing standing between a
 broken panel and a screenshot nobody took.
 
+Node is on this machine — v24, in `C:\Program Files\nodejs` — and
+`node --check web/app.js` is worth running before the suite. A syntax error
+there fails every WebTest at once with a stack from inside the engine, which
+reads like the harness broke rather than the file.
+
 ## Then check it against the real logs
 
 Green tests mean the fixtures still parse. They do not mean the app reads *this*
@@ -136,8 +141,7 @@ like a plausible integer.
 
 ## Seeing it actually run
 
-The browser automation tools cannot reach this machine's localhost, and there is
-no Node here. What works:
+The browser automation tools cannot reach this machine's localhost. What works:
 
 1. `dotnet run --project src\Quantumwake.LogSim -c Release -- --install <temp>`
    builds a fake install, so no game is needed.
