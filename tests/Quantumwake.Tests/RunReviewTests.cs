@@ -1,4 +1,4 @@
-using Quantumwake.Data;
+﻿using Quantumwake.Data;
 
 namespace Quantumwake.Tests;
 
@@ -12,6 +12,11 @@ namespace Quantumwake.Tests;
 /// was never ticked, a sale somewhere the run never went, money that moved
 /// before the run began. Getting any of those wrong produces a total that looks
 /// authoritative and is invented.
+///
+/// Every fixture here puts its sales AFTER the stop's DoneAt, because landing
+/// is what ticks a stop: the pilot arrives and then trades. These originally
+/// read the other way and passed, which is how the window ran backwards through
+/// two releases - the tests agreed with the code about a thing both had wrong.
 /// </remarks>
 public class RunReviewTests
 {
@@ -42,7 +47,7 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", Noon.AddHours(1))),
-            [Sale(Noon.AddMinutes(30), "Hurston", 288_000)],
+            [Sale(Noon.AddHours(1).AddMinutes(30), "Hurston", 288_000)],
             Noon.AddHours(5))!;
 
         var claim = Assert.Single(review.Stops.Single().Claimed);
@@ -78,7 +83,7 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", Noon.AddHours(1))),
-            [Sale(Noon.AddMinutes(30), "Area18", 120_000)],
+            [Sale(Noon.AddHours(2), "Area18", 120_000)],
             Noon.AddHours(5))!;
 
         Assert.Empty(review.Stops.Single().Claimed);
@@ -97,8 +102,8 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", Noon.AddHours(1)), Stop("s2", "Hurston", Noon.AddHours(3))),
-            [Sale(Noon.AddMinutes(30), "Hurston", 90_000),
-             Sale(Noon.AddHours(2), "Hurston", 40_000)],
+            [Sale(Noon.AddHours(1).AddMinutes(30), "Hurston", 90_000),
+             Sale(Noon.AddHours(3).AddMinutes(30), "Hurston", 40_000)],
             Noon.AddHours(5))!;
 
         Assert.Equal(90_000, review.Stops[0].Claimed.Single().Amount);
@@ -116,7 +121,7 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", null)),
-            [Sale(Noon.AddMinutes(30), "Hurston", 288_000)],
+            [Sale(Noon.AddHours(2), "Hurston", 288_000)],
             Noon.AddHours(5))!;
 
         Assert.Empty(review.Stops.Single().Claimed);
@@ -128,11 +133,11 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", Noon.AddHours(1)), Stop("s2", "Crusader", Noon.AddHours(3))),
-            [Sale(Noon.AddMinutes(30), "Hurston", 100_000),
-             Sale(Noon.AddHours(2), "Crusader", 200_000),
+            [Sale(Noon.AddHours(1).AddMinutes(30), "Hurston", 100_000),
+             Sale(Noon.AddHours(3).AddMinutes(30), "Crusader", 200_000),
 
              // At the first stop's place, but after the run had moved on.
-             Sale(Noon.AddHours(2), "Hurston", 50_000)],
+             Sale(Noon.AddHours(3).AddMinutes(45), "Hurston", 50_000)],
             Noon.AddHours(5))!;
 
         Assert.Equal(100_000, review.Stops[0].Claimed.Single().Amount);
@@ -146,8 +151,8 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", Noon.AddHours(1))),
-            [Sale(Noon.AddMinutes(10), "Hurston", 288_000),
-             Sale(Noon.AddMinutes(20), "Hurston", -64_000)],
+            [Sale(Noon.AddHours(1).AddMinutes(10), "Hurston", 288_000),
+             Sale(Noon.AddHours(1).AddMinutes(20), "Hurston", -64_000)],
             Noon.AddHours(5))!;
 
         Assert.Equal(288_000, review.Earned.Value);
@@ -163,8 +168,8 @@ public class RunReviewTests
     {
         var review = RunReviewer.Build(
             Run(Stop("s1", "Hurston", Noon.AddHours(1))),
-            [Sale(Noon.AddMinutes(10), "Hurston", 288_000, confirmed: false),
-             Payout(Noon.AddMinutes(20), "Hurston", 50_250)],
+            [Sale(Noon.AddHours(1).AddMinutes(10), "Hurston", 288_000, confirmed: false),
+             Payout(Noon.AddHours(1).AddMinutes(20), "Hurston", 50_250)],
             Noon.AddHours(5))!;
 
         Assert.Equal(338_250, review.Earned.Value);
@@ -190,7 +195,7 @@ public class RunReviewTests
         var flying = new Trip("t1", "Ore run", Noon.AddDays(-1),
             [Stop("s1", "Hurston", Noon.AddMinutes(30))], StartedAt: Noon);
 
-        var review = RunReviewer.Build(flying, [Sale(Noon.AddMinutes(10), "Hurston", 10_000)], Noon.AddHours(2))!;
+        var review = RunReviewer.Build(flying, [Sale(Noon.AddMinutes(40), "Hurston", 10_000)], Noon.AddHours(2))!;
 
         Assert.Null(review.FinishedAt);
         Assert.Equal(7200, review.ElapsedSeconds);

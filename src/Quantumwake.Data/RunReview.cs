@@ -111,7 +111,9 @@ public static class RunReviewer
             // That is what lets a station visited twice in one run keep its two
             // visits apart: the time says which one, and without it the app
             // would have to guess between them.
-            var fits = windows.FirstOrDefault(w => entry.At > w.From && entry.At <= w.To
+            // Inclusive at the start: a sale can land on the same second as
+            // the arrival that made it possible.
+            var fits = windows.FirstOrDefault(w => entry.At >= w.From && entry.At <= w.To
                 && string.Equals(w.Place, entry.Where, StringComparison.OrdinalIgnoreCase));
 
             var claim = new RunClaim(entry.At, entry.Kind, entry.What, entry.Where, entry.Amount, entry.Confirmed);
@@ -153,24 +155,38 @@ public static class RunReviewer
     /// The stretch of the run each ticked stop can account for.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// A stop's window runs from arriving at it to arriving at the next one.
+    /// Landing is what ticks a stop, so DoneAt is when the player got there -
+    /// and everything they did there happened after it. Running the window up
+    /// to DoneAt instead put every sale in the leg of the journey before the
+    /// stop that earned it, and left them all unclaimed.
+    /// </para>
+    /// <para>
     /// A stop that was never ticked has no window and claims nothing. That is
     /// not a gap to paper over: without a time the app has no idea when the
     /// player was there, and a stop that claims by place alone would take a
     /// sale from a station visited twice in one run.
+    /// </para>
     /// </remarks>
     private static List<(string StopId, string Place, DateTimeOffset From, DateTimeOffset To)> Windows(
         Trip trip, DateTimeOffset began, DateTimeOffset ended)
     {
         var windows = new List<(string, string, DateTimeOffset, DateTimeOffset)>();
-        var from = began;
 
-        foreach (var stop in trip.Stops)
+        var reached = trip.Stops
+            .Where(stop => stop.DoneAt is not null)
+            .OrderBy(stop => stop.DoneAt)
+            .ToList();
+
+        for (var i = 0; i < reached.Count; i++)
         {
-            if (stop.DoneAt is not { } reached)
-                continue;
+            var from = reached[i].DoneAt!.Value;
+            var to = i + 1 < reached.Count ? reached[i + 1].DoneAt!.Value : ended;
 
-            windows.Add((stop.Id, stop.Place, from, reached > ended ? ended : reached));
-            from = reached;
+            if (from >= ended) continue;
+
+            windows.Add((reached[i].Id, reached[i].Place, from, to > ended ? ended : to));
         }
 
         return windows;

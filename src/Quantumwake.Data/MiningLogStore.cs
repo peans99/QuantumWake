@@ -82,8 +82,14 @@ public sealed record MiningRun(
     /// than about the record: a job is ready when the moment the pilot expected
     /// has passed, and nothing writes that down when it happens.
     /// </remarks>
+    /// <remarks>
+    /// Revenue counts as sold even with no SoldAt. Hauls recorded before the
+    /// stages existed carry one and not the other, and so does anything entered
+    /// through the log form's own "Sold for" box - and a finished haul offering
+    /// to be sent to a refinery is the app arguing with what it was told.
+    /// </remarks>
     public MiningStage StageAt(DateTimeOffset now) =>
-        SoldAt is not null ? MiningStage.Sold
+        SoldAt is not null || Revenue is not null ? MiningStage.Sold
         : Refinery is not { } job ? MiningStage.Extracted
         : job.CollectedAt is not null ? MiningStage.Collected
         : job.ExpectedAt is { } due && due <= now ? MiningStage.Ready

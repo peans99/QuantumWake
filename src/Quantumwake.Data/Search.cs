@@ -161,13 +161,25 @@ public static class Search
             yield return new SearchHit("ship", ship.Name, ship.Name, "a ship the catalogue knows");
         }
 
-        foreach (var item in library.Community.Items
-            .Where(pair => Hits(pair.Key, q))
-            .DistinctBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+        /*
+         * Through library.Items() rather than the community dictionary, and
+         * matched on the display name as well as the class id. That dictionary
+         * is keyed by engine class - behr_rifle_ballistic_01_white02 - so
+         * searching its keys answered nothing for "P4-AR", which is the only
+         * name anybody would type. It also skipped the install's own catalogue
+         * entirely, which is the better of the two sources when it is there.
+         */
+        foreach (var item in library.Items()
+            .Where(item => Hits(item.Name, q) || Hits(item.ClassName, q))
+            .DistinctBy(item => item.Name ?? item.ClassName, StringComparer.OrdinalIgnoreCase))
         {
-            var kind = item.Value.Type is { Length: > 0 } type ? type : "gear";
+            var kind = item.Type is { Length: > 0 } type ? type : "gear";
 
-            yield return new SearchHit("part", item.Key, item.Key, $"{kind} the catalogue knows");
+            yield return new SearchHit(
+                "part",
+                item.ClassName,
+                item.Name is { Length: > 0 } named ? named : item.ClassName,
+                $"{kind} the catalogue knows");
         }
     }
 

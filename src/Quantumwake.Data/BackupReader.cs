@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -78,6 +78,22 @@ public static class BackupReader
                     : "That file does not carry a backup."));
         }
 
-        return (backup, RestorePlan.HashOf(text), null);
+        // A file written before a store existed has no key for it, and JSON
+        // leaves the list null rather than empty - so every reader downstream
+        // would have to remember to check. Normalised once, here, because the
+        // next store added will have the same problem and nobody will be
+        // thinking about three-month-old backups when they add it.
+        var whole = backup with
+        {
+            Jobs = backup.Jobs ?? [],
+            Checklists = backup.Checklists ?? [],
+            Trips = backup.Trips ?? [],
+            MiningRuns = backup.MiningRuns ?? [],
+            Notes = backup.Notes ?? [],
+            Deleted = backup.Deleted ?? [],
+            Kits = backup.Kits ?? [],
+        };
+
+        return (whole, RestorePlan.HashOf(text), null);
     }
 }

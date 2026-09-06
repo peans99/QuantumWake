@@ -602,6 +602,12 @@ public sealed class TripStore
                         Id = NewId(),
                         Done = false,
                         DoneAt = null,
+
+                        // The estimate is the plan and comes along; the
+                        // correction was the last run's outcome, and carrying
+                        // it would present that as this run's result before it
+                        // has been flown.
+                        Actual = null,
                     })],
                 })]);
 

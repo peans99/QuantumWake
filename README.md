@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.48
+### 0.9.49
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -503,6 +503,35 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   nothing under your own logs. Never having seen a thing is a fact worth
   showing, and a search that reports nothing for a real item reads as broken
   rather than as an honest answer.
+
+- Seven faults found in review, three of them serious.
+
+  **Older backups can be restored again.** A backup taken before saved kits
+  existed has no kits in it, and restoring one failed outright — the files
+  most worth keeping were the ones that could not be read.
+
+  **A failed restore now really does undo itself.** It put back what it had
+  overwritten but left behind anything it had added, while reporting that
+  everything had been returned.
+
+  **Run review counts sales made at a stop.** Landing is what ticks a stop
+  off, so everything you do there happens afterwards — and the review was
+  looking at the journey before it instead. A run where you arrived at 13:00
+  and sold at 13:15 reported nothing earned.
+
+  **A kit asks for the number of things you wrote down.** One medpen no
+  longer satisfies a kit that wants four; the shopping list asks for the
+  three you are short.
+
+  **Repeating a run no longer carries the last run's figures.** The copy kept
+  what you had recorded as the previous run's outcome.
+
+  **Searching the catalogue finds things by name.** It was matching engine
+  ids, so "P4-AR" found nothing, and it never looked at your install at all.
+
+  **Hauls you already sold read as sold.** Anything recorded before refining
+  stages existed, or entered with a price straight away, was offering to be
+  sent to a refinery.
 
 ### 0.8.35
 

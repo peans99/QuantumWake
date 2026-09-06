@@ -298,6 +298,27 @@ public sealed class RestoreService(
     {
         var whole = true;
 
+        // Anything the failed run added is not in the photograph, so putting
+        // the photograph back leaves it behind. A rollback that reports success
+        // over a record the reader never agreed to is the same lie the failure
+        // reporting was fixed to stop telling.
+        void Drop<T>(IEnumerable<T> now, IReadOnlyList<T> before, Func<T, string> id, Action<string> remove)
+        {
+            var kept = before.Select(id).ToHashSet(StringComparer.Ordinal);
+
+            foreach (var added in now.Select(id).Where(x => !kept.Contains(x)).ToList())
+            {
+                try
+                {
+                    remove(added);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    whole = false;
+                }
+            }
+        }
+
         void Try(Action write)
         {
             try
@@ -309,6 +330,13 @@ public sealed class RestoreService(
                 whole = false;
             }
         }
+
+        Drop(jobs.All(), before.Jobs, j => j.Id, id => jobs.Remove(id));
+        Drop(checklists.All(), before.Lists, c => c.Id, id => checklists.Remove(id));
+        Drop(trips.All(), before.Trips, t => t.Id, id => trips.Remove(id));
+        Drop(mining.All(), before.Runs, r => r.Id, id => mining.Remove(id));
+        Drop(notes.All(), before.Notes, n => n.Id, id => notes.Remove(id));
+        Drop(kits.All(), before.Kits, k => k.Id, id => kits.Remove(id));
 
         foreach (var job in before.Jobs) Try(() => jobs.Put(job));
         foreach (var list in before.Lists) Try(() => checklists.Put(list));
