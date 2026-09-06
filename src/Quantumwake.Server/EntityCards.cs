@@ -1,4 +1,4 @@
-using Quantumwake.Data;
+﻿using Quantumwake.Data;
 
 namespace Quantumwake.Server;
 
@@ -192,11 +192,16 @@ public static class EntityCards
         else
             facts.Add(new EntityFact("You have traded", "never", EntitySource.Logs));
 
+        // Named from the terminal's side, which is the opposite of the reader's:
+        // Sells is where the commodity is sold TO you, Buys is where it is
+        // bought FROM you. Reading them the other way round sent anyone with
+        // cargo to hand to the shops that stock it rather than the ones that
+        // pay for it - the exact opposite of the question being asked.
         var (sells, buys) = uex.TradeLocations(name);
 
         if (uex.IsEnabled)
             facts.Add(new EntityFact("Counters",
-                $"{sells.Count} buy it from you, {buys.Count} sell it", EntitySource.Uex));
+                $"{buys.Count} buy it from you, {sells.Count} sell it", EntitySource.Uex));
 
         return new EntityCard(
             "commodity", name, name,
@@ -206,7 +211,7 @@ public static class EntityCards
             best is null ? null : new EntityPrice(
                 best.BestSell > 0 ? best.BestSell : null, "aUEC/SCU",
                 best.BestSellTerminal, uex.FetchedAt, EntitySource.Uex),
-            [.. sells.Take(4).Select(s => new EntityWhere(null, s, "buys it from you"))],
+            [.. buys.Take(4).Select(b => new EntityWhere(null, b, "buys it from you"))],
             [EntityAction.Map, EntityAction.Shopping, EntityAction.Details]);
     }
 

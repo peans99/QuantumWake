@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Quantumwake.Core.GameData;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
@@ -233,7 +233,54 @@ public sealed class TextOverlayService(
         }
     }
 
-    /// <summary>Puts back whatever the overlay displaced.</summary>
+    /// <summary>
+    /// Runs something that rewrites the localisation file with our layer lifted
+    /// out of the way, then puts our layer back on top of whatever it left.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both this and StarStrings write one file, and each backs up whatever it
+    /// finds there. Installing StarStrings while our marks are down therefore
+    /// records the <em>marked</em> file as "the original" - so removing both
+    /// afterwards restores the marked file and leaves the game permanently
+    /// marked, with both stores reporting nothing installed. It is not
+    /// recoverable through the UI, because neither store believes it has
+    /// anything left to undo.
+    /// </para>
+    /// <para>
+    /// StarStrings already lifts its own previous install for exactly this
+    /// reason - see the comment in <c>StarStrings.InstallAsync</c>. This is the
+    /// same rule applied across the two mods rather than within one.
+    /// </para>
+    /// <para>
+    /// Failing to lift is fatal to the operation rather than a warning: going
+    /// ahead is what creates the unrecoverable state.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The work's own problem, if any, and whether our marks went back on.
+    /// </returns>
+    public async Task<(string? Problem, bool Relabelled)> WhileLiftedAsync(
+        GameInstall? game, Func<Task<string?>> work)
+    {
+        var live = store.StillPresent();
+
+        if (live && !Remove())
+        {
+            return ("The item labels could not be taken off first, so nothing was changed. "
+                + "Close the game and anything else reading its localisation file, then try again.", false);
+        }
+
+        var problem = await work();
+
+        if (!live)
+            return (problem, false);
+
+        var (again, trouble) = Install(game);
+
+        return (problem, trouble is null && again is not null);
+    }
+
     /// <summary>
     /// Puts back whatever this displaced.
     /// </summary>
@@ -249,11 +296,24 @@ public sealed class TextOverlayService(
         if (install is null)
             return true;
 
+        var presence = store.Presence();
+
+        // Not knowing is not the same as knowing it is gone. A file held open -
+        // by the game, a text editor, a virus scanner mid-pass - reads exactly
+        // like a file somebody replaced, and forgetting the record on that
+        // leaves a marked table in the game folder with nothing left that can
+        // undo it. So the record stays and the caller is told to try again.
+        if (presence == OverlayPresence.Unreadable)
+        {
+            log.LogWarning("could not read {Path}; keeping the removal record", install.Files[0].Path);
+            return false;
+        }
+
         // Somebody else's file is there now - StarStrings installed over this
         // one, or a patch replaced it. The backup describes what was under OUR
         // file, which is no longer what is under theirs, so restoring it would
         // undo their install rather than ours.
-        if (!store.StillPresent())
+        if (presence != OverlayPresence.Ours)
         {
             store.Forget();
             return true;

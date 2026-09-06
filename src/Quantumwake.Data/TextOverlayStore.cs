@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -20,6 +20,22 @@ public sealed record TextOverlayInstall(
     bool Layered,
     IReadOnlyList<InstalledFile> Files,
     string? Fingerprint = null);
+
+/// <summary>Whether the layer this store recorded is still the file on disk.</summary>
+public enum OverlayPresence
+{
+    /// <summary>Nothing recorded, or what was written is no longer there.</summary>
+    Gone,
+
+    /// <summary>Our layer, byte for byte.</summary>
+    Ours,
+
+    /// <summary>Someone else's file now - a text mod, or a game patch.</summary>
+    Replaced,
+
+    /// <summary>Could not be read, so neither of the above is established.</summary>
+    Unreadable
+}
 
 /// <summary>
 /// Remembers a text-overlay install so it can be undone exactly.
@@ -58,7 +74,6 @@ public sealed class TextOverlayStore
         get { lock (_gate) return _current; }
     }
 
-    /// <summary>True when every file written is still where it was written.</summary>
     /// <summary>
     /// True when every file written is still where it was written, and still
     /// says what it said.
@@ -69,34 +84,72 @@ public sealed class TextOverlayStore
     /// installed while the file that carries them is gone - and the first anyone
     /// notices is a column that stopped filling in.
     /// </remarks>
-    public bool StillPresent()
+    public bool StillPresent() => Presence() == OverlayPresence.Ours;
+
+    /// <summary>
+    /// Whether our layer is still the one on disk - and, when that cannot be
+    /// established, says so rather than guessing.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Replaced"/> and <see cref="Unreadable"/> look identical to a
+    /// bool and must not be treated alike. Replaced is a fact: somebody else's
+    /// file is there, and the record is worthless. Unreadable is the absence of
+    /// a fact - the game holding the file open is enough - and throwing the
+    /// record away on it destroys the only thing that knows how to undo the
+    /// install.
+    /// </remarks>
+    public OverlayPresence Presence()
     {
         var install = Current;
 
-        if (install is null || install.Files.Count == 0) return false;
-        if (!install.Files.All(f => File.Exists(f.Path))) return false;
+        if (install is null || install.Files.Count == 0) return OverlayPresence.Gone;
+        if (!install.Files.All(f => File.Exists(f.Path))) return OverlayPresence.Gone;
 
         // An install recorded before fingerprints existed is taken at its word
         // rather than declared missing.
-        if (install.Fingerprint is not { Length: > 0 }) return true;
+        if (install.Fingerprint is not { Length: > 0 }) return OverlayPresence.Ours;
 
         var table = install.Files.FirstOrDefault(f =>
             f.Path.EndsWith(".ini", StringComparison.OrdinalIgnoreCase));
 
-        return table is null || Fingerprint(table.Path) == install.Fingerprint;
+        if (table is null) return OverlayPresence.Ours;
+
+        if (!TryFingerprint(table.Path, out var fingerprint))
+            return OverlayPresence.Unreadable;
+
+        return fingerprint == install.Fingerprint
+            ? OverlayPresence.Ours
+            : OverlayPresence.Replaced;
     }
 
     /// <summary>What a written table looks like, cheaply enough to check often.</summary>
-    public static string Fingerprint(string path)
+    /// <remarks>
+    /// Empty when the file could not be read, which callers deciding whether to
+    /// discard a record must not accept - use <see cref="TryFingerprint"/>.
+    /// </remarks>
+    public static string Fingerprint(string path) =>
+        TryFingerprint(path, out var fingerprint) ? fingerprint : string.Empty;
+
+    /// <summary>
+    /// The fingerprint, and whether it could be taken at all.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Fingerprint"/> because the difference matters
+    /// exactly once and matters a lot: a file that cannot be read is not a file
+    /// that changed.
+    /// </remarks>
+    public static bool TryFingerprint(string path, out string fingerprint)
     {
         try
         {
             using var stream = File.OpenRead(path);
-            return $"{stream.Length}:{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream))[..16]}";
+            fingerprint = $"{stream.Length}:{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream))[..16]}";
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return string.Empty;
+            fingerprint = string.Empty;
+            return false;
         }
     }
 

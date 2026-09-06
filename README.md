@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.31
+### 0.9.32
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -285,6 +285,34 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   the reason for opening the page — started below the fold. **Hide summary** in
   the page header collapses all of it and the list rises to the top; the choice
   is remembered per browser, so it stays folded until you unfold it.
+
+- Four faults found in review, all of which were green under the tests and
+  wrong in front of you.
+
+  **A locked file no longer destroys the way back.** Removing item labels while
+  something held the game's text file open — the game itself, an editor, a
+  virus scanner mid-pass — reported success, changed nothing, and threw away the
+  record of what to put back. The labels then could not be undone through the
+  app at all. An unreadable file is now told apart from a replaced one: the
+  record is kept and the removal asks you to try again.
+
+  **Installing StarStrings over item labels no longer marks your game for
+  ever.** StarStrings backs up whatever file it finds, so installing it while
+  the marks were down recorded the *marked* file as your original — and
+  removing both afterwards put the marks back permanently, with both pages
+  reporting nothing installed. The marks are now lifted before either mod is
+  installed or removed, and laid back on top afterwards.
+
+  **Mining places are ranked on the rock you will actually break.** A place
+  where nine rocks in ten are poor and the tenth is rich was scored as though
+  every rock were the rich one — five times its real worth in the worked case,
+  and the same inflation reached the mining suggestion on Now. Each deposit now
+  counts for how often it occurs.
+
+  **The commodity card sends you where the commodity is bought.** It listed the
+  terminals that sell it to you under “buys it from you”, and had the two counts
+  the wrong way round — so anyone with a hold full of cargo was pointed at the
+  shops that stock it rather than the ones that pay for it.
 
 ### 0.8.35
 

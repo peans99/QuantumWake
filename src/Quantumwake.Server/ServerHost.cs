@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
@@ -504,33 +504,44 @@ public static class ServerHost
             if (install is not { } game)
                 return Results.BadRequest(new { problem = "No Star Citizen install was found to write into." });
 
-            // Whether our own marks were there before this. Asked before the
-            // install, because installing writes the same file and the answer
-            // changes underneath.
-            var relabel = labels.StillPresent();
+            // Both mods write one file and each backs up what it finds, so our
+            // marks come off before StarStrings goes on and back on afterwards.
+            // Installing over them makes StarStrings record the marked file as
+            // the original, and removing both then leaves the game marked for
+            // ever with nothing left that knows how to undo it.
+            StarStringsInstall? done = null;
 
-            var (done, problem) = await mod.InstallAsync(game);
-
-            if (problem is not null)
-                return Results.BadRequest(new { problem });
-
-            // Both mods write one file, so the second one in wins unless the
-            // marks are laid over the new table. Without this, installing
-            // StarStrings silently removes labels that the app still believes
-            // are installed.
-            var relabelled = false;
-
-            if (relabel)
+            var (problem, relabelled) = await overlay.WhileLiftedAsync(game, async () =>
             {
-                var (again, trouble) = overlay.Install(game);
-                relabelled = trouble is null && again is not null;
-            }
+                var (installed, trouble) = await mod.InstallAsync(game);
+                done = installed;
+                return trouble;
+            });
 
-            return Results.Ok(new { done!.Release, done.InstalledAt, files = done.Files.Count, relabelled });
+            if (problem is not null || done is null)
+                return Results.BadRequest(new { problem = problem ?? "The install did not finish." });
+
+            return Results.Ok(new { done.Release, done.InstalledAt, files = done.Files.Count, relabelled });
         });
 
-        app.MapPost("/api/starstrings/remove", (StarStrings mod) =>
-            Results.Ok(new { removed = mod.Remove() }));
+        app.MapPost("/api/starstrings/remove",
+            async (StarStrings mod, TextOverlayService overlay) =>
+        {
+            // The same ordering, for the same reason: StarStrings restores the
+            // file it backed up, which would wipe marks laid over it while the
+            // label store still believed they were installed.
+            var removed = false;
+
+            var (problem, relabelled) = await overlay.WhileLiftedAsync(install, () =>
+            {
+                removed = mod.Remove();
+                return Task.FromResult<string?>(null);
+            });
+
+            return problem is null
+                ? Results.Ok(new { removed, relabelled })
+                : Results.BadRequest(new { problem });
+        });
 
         // Asking what would change writes nothing. Installing is a separate
         // call because the file lands in the player's game folder.
@@ -2829,24 +2840,35 @@ static int Holes(IEnumerable<ShipSlot> slots)
                 // three best things here.
                 var rows = place
                     .GroupBy(s => s.Resource, StringComparer.OrdinalIgnoreCase)
-                    .Select(ore => new
+                    .Select(ore =>
                     {
-                        Resource = ore.Key,
-                        Odds = ore.Sum(s => s.Odds),
+                        // Each variant carries its own likelihood, so the ore's
+                        // figures are the average across them weighted by it -
+                        // not the best of them. Taking the maximum let a rare
+                        // rich seam stand in for every common poor one: a place
+                        // with a 90% chance of 10%-copper rock and a 10% chance
+                        // of 90%-copper reported 900 aUEC per SCU when the rock
+                        // a player actually breaks is worth 180.
+                        var weight = ore.Sum(s => s.Odds);
+                        var sell = uex.Best(ore.Key)?.BestSell is { } best && best > 0 ? best : 0m;
+
                         // The middle of the ore range, as the table uses.
-                        Worth = ore
+                        var variants = ore
                             .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
-                                && uex.Best(s.Resource)?.BestSell is { } sell && sell > 0
-                                    ? (decimal)((low + high) / 2 / 100) * sell
-                                    : 0m)
-                            .Max(),
-                        // How much of the rock is worth having, which is a
-                        // different question from what it sells for.
-                        Ore = ore
-                            .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
-                                ? (low + high) / 2
-                                : 0)
-                            .Max(),
+                                ? (Share: weight > 0 ? s.Odds / weight : 0, Middle: (low + high) / 2)
+                                : (Share: weight > 0 ? s.Odds / weight : 0, Middle: 0d))
+                            .ToList();
+
+                        return new
+                        {
+                            Resource = ore.Key,
+                            Odds = weight,
+                            Worth = variants.Sum(v => (decimal)(v.Share * v.Middle / 100) * sell),
+
+                            // How much of the rock is worth having, which is a
+                            // different question from what it sells for.
+                            Ore = variants.Sum(v => v.Share * v.Middle),
+                        };
                     })
                     // Kept on having ore, not on having a price. UEX is
                     // optional, and without it every worth is zero - which
