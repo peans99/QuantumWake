@@ -3848,3 +3848,28 @@ body.overlay .toast {
 #kit-prepare-table button.want { color: var(--amber); }
 
 #kit-prepare-table td:last-child { width: 120px; }
+
+/* ---------- refining a haul ---------- */
+.mining-waiting {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+}
+
+.mining-waiting .name { color: var(--text); }
+
+/* The time sits right whichever state it is in. Hanging the alignment off the
+   amber class put waiting hauls and overdue ones in different columns, which
+   read as two kinds of row rather than one list. */
+.mining-waiting > :last-child { margin-left: auto; }
+.mining-waiting .want { color: var(--amber); }
+
+/* A haul the app believes is due back. Amber because it is the app noticing
+   your own estimate has passed, not the game telling it anything. */
+#mining-log td.want { color: var(--amber); }
+
+.mining-stage-form td { background: var(--panel-2); }
+.mining-stage-form .mining-form { padding: 6px 0; }

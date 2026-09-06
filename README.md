@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.44
+### 0.9.45
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -465,6 +465,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   All of it is typed, none of it is observed, and it stays on its own side of
   that line — mining revenue never joins the Ledger, which is what your logs
   actually recorded.
+
+  The Mining page carries it: a **Waiting on a refinery** list at the top,
+  soonest first, and a stage column on every haul with a button for whatever
+  comes next. What went in and what came back are separate columns, so the
+  difference is on screen rather than worked out in your head.
 
 ### 0.8.35
 

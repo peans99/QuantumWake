@@ -1373,13 +1373,19 @@
       <button type="submit" class="ghost">Record</button>
     </form>
 
+    <div id="mining-pending" hidden>
+      <h4 class="spaced">Waiting on a refinery</h4>
+      <p class="muted caption" id="mining-pending-note"></p>
+      <div id="mining-pending-list"></div>
+    </div>
+
     <div class="table-wrap">
       <table id="mining-log">
         <thead>
           <tr>
             <th>When</th><th>Ore</th><th>Where</th>
-            <th class="num">SCU</th><th class="num">Quality</th><th class="num">Sold for</th>
-            <th></th>
+            <th class="num">SCU</th><th class="num">Back</th><th class="num">Quality</th>
+            <th class="num">Sold for</th><th>Stage</th><th></th>
           </tr>
         </thead>
         <tbody></tbody>

@@ -855,7 +855,23 @@ public static class ServerHost
                 .Select(p => new { place = p.Key, amenities = p.Value.Amenities })
                 .OrderBy(p => p.place, StringComparer.OrdinalIgnoreCase));
 
-        app.MapGet("/api/mining/log", (MiningLogStore runs) => runs.All());
+        /*
+         * Stage is worked out from the record rather than stored, so it has to
+         * be projected here - the raw record does not carry it, and a page
+         * reading run.stage off the bare list would silently get nothing.
+         */
+        app.MapGet("/api/mining/log", (MiningLogStore runs) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            return runs.All().Select(run => new
+            {
+                run.Id, run.At, run.Place, run.Resource, run.Scu, run.Quality,
+                run.Revenue, run.Note, run.Refinery, run.SoldAt,
+                Stage = run.StageAt(now),
+                run.Lost,
+            });
+        });
 
         app.MapPost("/api/mining/log", (MiningLogStore runs, MiningRunEntry body) =>
             runs.Add(body.Place, body.Resource, body.Scu, body.Quality, body.Revenue, body.Note)

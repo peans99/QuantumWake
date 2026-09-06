@@ -3667,7 +3667,133 @@ const KIND_LABELS = {
  * read from logs and can be checked; these are typed from memory, and adding
  * the two together would make one number out of two different kinds of claim.
  */
+/**
+ * What a haul is waiting on, and what to press next.
+ *
+ * Stage is the server's word; these are the reader's. "Ready" in particular
+ * needs saying carefully - the app has not been told the job finished, it has
+ * only noticed that the time the pilot expected has gone by.
+ */
+const MINING_STAGE = {
+  Extracted: ['In your hold', 'Send to a refinery'],
+  Submitted: ['At a refinery', 'Collect it'],
+  Ready: ['Due back by now', 'Collect it'],
+  Collected: ['Back in your hold', 'Record what it sold for'],
+  Sold: ['Sold', null],
+};
+
+async function loadMiningPending() {
+  const panel = $('#mining-pending');
+  if (!panel) return;
+
+  const waiting = await getJson('/api/mining/pending').catch(() => []);
+
+  panel.hidden = waiting.length === 0;
+  if (!waiting.length) return;
+
+  $('#mining-pending-note').textContent = waiting[0].caveat;
+
+  const list = $('#mining-pending-list');
+  list.textContent = '';
+
+  for (const run of waiting) {
+    const row = el('div', 'mining-waiting');
+
+    row.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
+    row.append(el('span', 'muted', run.refinery.place));
+
+    // The two states read differently on purpose: one is waiting, the other is
+    // the app pointing out that your own estimate has passed.
+    row.append(el('span', run.stage === 'Ready' ? 'want' : 'muted',
+      run.refinery.expectedAt
+        ? (run.stage === 'Ready'
+          ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
+          : `due ${dateOf(run.refinery.expectedAt)}`)
+        : 'no time given'));
+
+    list.append(row);
+  }
+}
+
+/**
+ * The inline form for whichever stage comes next.
+ *
+ * A row rather than a dialog: a browser prompt blocks everything, and the
+ * overlay's WebView is the worst place in the app to find that out.
+ */
+function miningStageForm(run) {
+  const row = el('tr', 'mining-stage-form');
+  const cell = el('td');
+  cell.colSpan = 9;
+
+  const form = el('div', 'mining-form');
+  const inputs = {};
+
+  function field(key, placeholder, type = 'text') {
+    const input = el('input', 'search');
+    input.type = type;
+    input.placeholder = placeholder;
+    if (type === 'number') input.step = 'any';
+    inputs[key] = input;
+    form.append(input);
+    return input;
+  }
+
+  if (run.stage === 'Extracted') {
+    field('place', 'Refinery');
+    field('method', 'Method');
+    field('cost', 'Cost', 'number');
+    field('expectedAt', 'Back by (yyyy-mm-dd hh:mm)');
+  } else if (run.stage === 'Submitted' || run.stage === 'Ready') {
+    field('yield', 'SCU that came back', 'number');
+  } else if (run.stage === 'Collected') {
+    field('revenue', 'Sold for', 'number');
+  }
+
+  const save = el('button', 'ghost', 'Save');
+
+  save.addEventListener('click', async () => {
+    if (run.stage === 'Extracted') {
+      const when = inputs.expectedAt.value.trim();
+      const expected = when ? new Date(when.replace(' ', 'T')) : null;
+
+      await fetch(`/api/mining/log/${encodeURIComponent(run.id)}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          place: inputs.place.value.trim(),
+          method: inputs.method.value.trim(),
+          cost: inputs.cost.value === '' ? null : Number(inputs.cost.value),
+
+          // An unreadable date is sent as nothing rather than as now: a job
+          // with no expected time never claims to be ready, which is the
+          // honest state when nobody has said when it is due.
+          expectedAt: expected && !isNaN(expected) ? expected.toISOString() : null,
+        }),
+      });
+    } else if (run.stage === 'Collected') {
+      const value = inputs.revenue.value.trim();
+      await fetch(`/api/mining/log/${encodeURIComponent(run.id)}/sell`
+        + (value === '' ? '' : `?revenue=${encodeURIComponent(value)}`), { method: 'POST' });
+    } else {
+      const value = inputs.yield.value.trim();
+      await fetch(`/api/mining/log/${encodeURIComponent(run.id)}/collect`
+        + (value === '' ? '' : `?yield=${encodeURIComponent(value)}`), { method: 'POST' });
+    }
+
+    await loadMiningLog().catch(() => {});
+    await loadMiningPending().catch(() => {});
+  });
+
+  form.append(save);
+  cell.append(form);
+  row.append(cell);
+  return row;
+}
+
 async function loadMiningLog() {
+  loadMiningPending().catch(() => {});
+
   const body = $('#mining-log tbody');
   const note = $('#mining-log-note');
   if (!body) return;
@@ -3686,9 +3812,48 @@ async function loadMiningLog() {
     tr.append(el('td', null, run.resource));
     tr.append(el('td', 'muted', run.place));
     tr.append(el('td', 'num', String(run.scu)));
+
+    // What went in stays beside what came back: the difference is the number
+    // worth knowing, and a single column would hide it.
+    tr.append(el('td', 'num muted',
+      run.refinery?.yield === null || run.refinery?.yield === undefined
+        ? '—'
+        : String(run.refinery.yield)));
+
     tr.append(el('td', 'num muted', run.quality ? String(run.quality) : '—'));
     tr.append(el('td', run.revenue ? 'num inward' : 'num muted',
       run.revenue ? money(run.revenue) : '—'));
+
+    const [words, next] = MINING_STAGE[run.stage] || [run.stage, null];
+
+    const stage = el('td', run.stage === 'Ready' ? 'want' : 'muted', words);
+    tr.append(stage);
+
+    const step = el('td');
+
+    if (next) {
+      let form = null;
+      const advance = el('button', 'ghost small', next);
+
+      advance.addEventListener('click', () => {
+        // Toggling rather than stacking: pressing it twice should close the
+        // form, not leave two of them arguing over the same haul. The open one
+        // is held here rather than found by walking siblings, which is both
+        // shorter and does not care what else the table inserts.
+        if (form) {
+          form.remove();
+          form = null;
+          return;
+        }
+
+        form = miningStageForm(run);
+        tr.after(form);
+      });
+
+      step.append(advance);
+    }
+
+    tr.append(step);
 
     const drop = el('td', 'num');
     const remove = el('button', 'ghost small', 'Remove');
@@ -3705,9 +3870,12 @@ async function loadMiningLog() {
   const scu = runs.reduce((sum, r) => sum + r.scu, 0);
   const earned = runs.reduce((sum, r) => sum + (r.revenue || 0), 0);
 
+  const waiting = runs.filter((r) => r.stage === 'Submitted' || r.stage === 'Ready').length;
+
   note.textContent = `${runs.length} run${runs.length === 1 ? '' : 's'}, `
     + `${scu.toLocaleString()} SCU`
     + (earned > 0 ? `, ${money(earned)}` : '')
+    + (waiting > 0 ? `, ${waiting} still at a refinery` : '')
     + ' — your own record, kept apart from the log-derived figures above.';
 }
 
