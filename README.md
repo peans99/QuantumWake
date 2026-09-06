@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.46
+### 0.9.47
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -485,6 +485,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   the game stopped writing a death event, so the count is a pattern the app
   recognises rather than something it read. A figure this cannot explain says
   it does not know, rather than answering with a blank.
+
+  The Ledger has it first: a small **?** on Money in, Money out and Net opens
+  the answer under the row. Nothing is fetched until you ask, and the count of
+  movements has no **?** at all — a control on every figure would promise an
+  explanation for numbers nobody has written one for.
 
 ### 0.8.35
 

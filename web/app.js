@@ -2470,10 +2470,12 @@ function renderLedger() {
   const sum = (rows) => rows.reduce((total, e) => total + Number(e.amount), 0);
   const net = sum(ledgerEntries);
 
+  const days = Number($('#ledger-period').value) || 0;
+
   tiles('#ledger-summary', [
-    ['Money in', money(sum(inbound))],
-    ['Money out', money(Math.abs(sum(outbound)))],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net))],
+    ['Money in', money(sum(inbound)), 'ledger.in', days],
+    ['Money out', money(Math.abs(sum(outbound))), 'ledger.out', days],
+    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net)), 'ledger.net', days],
     ['Movements', ledgerEntries.length],
   ]);
 
@@ -8041,16 +8043,117 @@ function compareCells(rowA, rowB, index) {
 
 makeTablesSortable();
 
+/* ---------- why this number ---------- */
+
+/**
+ * Attaches "why?" to a figure, and folds the answer under it.
+ *
+ * Folded by default because a number nobody is questioning does not want three
+ * lines of provenance beneath it - and a number somebody is questioning wants
+ * all of them. The same trade the run review panel settled on.
+ *
+ * The wording all comes from the server. A page that reworded a rule would be a
+ * second copy of it, and the two would drift apart in exactly the direction
+ * that makes a caveat stop being true.
+ */
+function explainable(tile, panel, figure, days = 0) {
+  const why = el('button', 'why', '?');
+  why.type = 'button';
+  why.title = 'Where this number came from';
+  why.setAttribute('aria-label', 'Where this number came from');
+
+  why.addEventListener('click', async () => {
+    // One panel for the whole strip, so pressing a second question swaps the
+    // answer rather than opening a competing one.
+    if (!panel.hidden && panel.dataset.figure === figure) {
+      panel.hidden = true;
+      return;
+    }
+
+    panel.hidden = false;
+    panel.dataset.figure = figure;
+    panel.textContent = 'Working it out…';
+
+    await fillExplanation(panel, figure, days);
+  });
+
+  tile.append(why);
+  return tile;
+}
+
+async function fillExplanation(panel, figure, days) {
+  let explained;
+
+  try {
+    explained = await getJson(`/api/explain?figure=${encodeURIComponent(figure)}&days=${days}`);
+  } catch {
+    // A figure this build cannot explain says so. Silence would read as "there
+    // is nothing behind this number", which is a much bigger claim.
+    panel.textContent = '';
+    panel.append(el('div', 'why-rule', 'Nothing here knows how to explain that one yet.'));
+    return;
+  }
+
+  panel.textContent = '';
+  panel.append(el('div', 'why-rule', explained.rule));
+
+  for (const line of explained.excluded) panel.append(el('div', 'why-excluded', line));
+
+  // Empty is a real answer and a different one from "no records matched", so
+  // it is worded rather than left as a blank space under the exclusions.
+  if (!explained.records.length) {
+    panel.append(el('div', 'why-rule muted',
+      'This figure has no underlying records — only the rule above.'));
+    return;
+  }
+
+  const list = el('div', 'why-records');
+
+  // A long list is folded to a readable head; the count says what is under it,
+  // so a page of four hundred receipts does not bury the rule that matters.
+  for (const record of explained.records.slice(0, 12)) {
+    const row = el('div', 'why-record');
+    row.append(el('span', 'muted', dateOf(record.at)));
+    row.append(el('span', null, record.where ? `${record.what} at ${record.where}` : record.what));
+    row.append(el('span', 'amount', record.amount === null ? '' : money(record.amount)));
+    list.append(row);
+  }
+
+  if (explained.records.length > 12) {
+    list.append(el('div', 'why-rule muted',
+      `and ${(explained.records.length - 12).toLocaleString()} more.`));
+  }
+
+  panel.append(list);
+}
+
 function tiles(container, entries) {
   const node = $(container);
   node.textContent = '';
 
-  for (const [label, value] of entries) {
+  /*
+   * The explanation lives under the strip rather than inside a tile, and that
+   * is not decoration. The strip is a grid, so a panel inside one tile stretches
+   * every other tile to match it - three empty boxes as tall as the answer - and
+   * a paragraph of provenance in a 155px column wraps every line to three.
+   */
+  const panel = el('div', 'why-panel');
+  panel.hidden = true;
+
+  for (const [label, value, figure, days] of entries) {
     const tile = el('div', 'tile');
     tile.append(el('div', 'n', String(value)));
     tile.append(el('div', 'l', label));
+
+    // Only the figures the server can actually answer for. A control on
+    // everything would promise an explanation for numbers nobody has written
+    // one down for yet.
+    if (figure) explainable(tile, panel, figure, days || 0);
+
     node.append(tile);
   }
+
+  node.append(panel);
 }
 
 /* Manufacturer prefixes as they appear in vehicle ids. */
