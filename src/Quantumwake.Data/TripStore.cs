@@ -454,6 +454,30 @@ public sealed class TripStore
             _trips[i] = _trips[i] with { Tracked = _trips[i].Id == id };
     }
 
+    /// <summary>
+    /// Puts a record back exactly as given, replacing any with the same id.
+    /// </summary>
+    /// <remarks>
+    /// For restoring a backup, and nothing else. Every other way in makes its
+    /// own record so the store owns the id and the dates; this one deliberately
+    /// does not, because a restore has to reproduce what was backed up rather
+    /// than author something new that resembles it.
+    /// </remarks>
+    public void Put(Trip trip)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(x => x.Id == trip.Id);
+
+            if (index >= 0) _trips[index] = trip;
+            else _trips.Add(trip);
+
+            // The record keeps the change time it was backed up with.
+            _stamp.Adopt(trip);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try

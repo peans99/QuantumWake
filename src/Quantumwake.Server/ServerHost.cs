@@ -100,6 +100,7 @@ public static class ServerHost
         builder.Services.AddSingleton<MapNoteStore>();
         builder.Services.AddSingleton<TombstoneStore>();
         builder.Services.AddSingleton<BackupBuilder>();
+        builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
@@ -1843,6 +1844,43 @@ public static class ServerHost
         // What it would hold, so the page can say so before anything is written.
         app.MapGet("/api/backup/preview", (BackupBuilder backups) => backups.Preview());
 
+        /*
+         * Restoring is two calls on purpose. The first says what would change
+         * and writes nothing; the second does that and nothing else, and has to
+         * quote back the hash of the file the first one read. A file swapped
+         * between them is refused rather than quietly restored - the preview is
+         * only a promise if the thing it described is the thing that runs.
+         */
+        app.MapPost("/api/backup/plan", async (HttpRequest request, RestoreService restore) =>
+        {
+            var (contents, hash, problem) = BackupReader.Read(await Body(request));
+
+            return problem is not null
+                ? Results.Json(new { problem = problem.Message }, statusCode: problem.Status)
+                : Results.Ok(restore.Plan(contents!, hash!));
+        });
+
+        app.MapPost("/api/backup/restore", async (HttpRequest request, RestoreService restore,
+            string? hash, string? take, string? leave) =>
+        {
+            var (contents, actual, problem) = BackupReader.Read(await Body(request));
+
+            if (problem is not null)
+                return Results.Json(new { problem = problem.Message }, statusCode: problem.Status);
+
+            var plan = restore.Plan(contents!, actual!);
+
+            var result = restore.Apply(contents!, plan, hash ?? string.Empty,
+                new RestoreChoices(Keys(take), Keys(leave)));
+
+            return result is null
+                ? Results.BadRequest(new
+                {
+                    problem = "That is not the file you were shown. Check the backup and preview it again."
+                })
+                : Results.Ok(result);
+        });
+
         app.MapGet("/api/export/preview", (ExportBuilder exports,
             bool? receipts, bool? blueprints, bool? authored, int? days) =>
         {
@@ -2874,6 +2912,26 @@ static int Holes(IEnumerable<ShipSlot> slots)
     /// not rate, which is the kind of disagreement nobody reports and everybody
     /// stops trusting.
     /// </remarks>
+    /// <summary>The whole request body as text, for the file-shaped endpoints.</summary>
+    private static async Task<string> Body(HttpRequest request)
+    {
+        using var reader = new StreamReader(request.Body, System.Text.Encoding.UTF8);
+        return await reader.ReadToEndAsync();
+    }
+
+    /// <summary>
+    /// A comma-separated list of plan keys, as the page sends its exceptions.
+    /// </summary>
+    /// <remarks>
+    /// Exceptions rather than a decision per line, so approving a long plan
+    /// untouched sends nothing - and a line this build did not know about
+    /// cannot arrive unanswered and be read as a refusal.
+    /// </remarks>
+    private static IReadOnlyList<string> Keys(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
     static IEnumerable<MiningPlace> MiningPlaces(LogLibrary lib, UexData uex)
     {
         var spawns = lib.GameCommodities.Spawns.Count > 0

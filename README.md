@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.33
+### 0.9.34
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -329,6 +329,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   is the point of one: restoring a month-old file should not quietly hand back
   the eight plans you threw away last week, and without this it cannot tell
   them from plans you never had.
+
+- **A backup can be put back, and it shows you what it will do first.**
+  Restoring works out the whole change — what comes back, what gets
+  overwritten, what it will not touch — and writes nothing until you approve
+  it. Approving the plan as it stands is one click; every line can be turned
+  around individually.
+
+  Where a plan and this machine disagree, the newer work wins by default, and
+  that means yours: a record you edited since the backup is kept unless you
+  say otherwise. Anything you deleted stays deleted unless you ask for it
+  back. Restoring never quietly overwrites something you did more recently
+  than the file.
+
+  If the file changes between the preview and the restore, the restore is
+  refused rather than applied — a preview is only a promise if what it
+  described is what runs.
 
 ### 0.8.35
 

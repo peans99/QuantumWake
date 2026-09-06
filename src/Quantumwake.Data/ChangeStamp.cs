@@ -1,4 +1,4 @@
-namespace Quantumwake.Data;
+﻿namespace Quantumwake.Data;
 
 /// <summary>
 /// An authored record that can say when it last changed.
@@ -67,6 +67,17 @@ public sealed class ChangeStamp<T> where T : IStamped<T>
         foreach (var record in records)
             _written[record.StampId] = _serialise(record.Bare());
     }
+
+    /// <summary>
+    /// Takes a record as already current, without stamping it.
+    /// </summary>
+    /// <remarks>
+    /// For a restore, which is the one write that must not count as an edit.
+    /// A restored record carries the change time it had when it was backed up;
+    /// stamping it "now" would make every restored record look freshly edited
+    /// and win the next conflict against the machine it came from.
+    /// </remarks>
+    public void Adopt(T record) => _written[record.StampId] = _serialise(record.Bare());
 
     /// <summary>
     /// Stamps whatever changed, in place, and returns whether anything did.

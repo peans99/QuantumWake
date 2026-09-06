@@ -96,6 +96,30 @@ public sealed class MapNoteStore
 
     private static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
+    /// <summary>
+    /// Puts a record back exactly as given, replacing any with the same id.
+    /// </summary>
+    /// <remarks>
+    /// For restoring a backup, and nothing else. Every other way in makes its
+    /// own record so the store owns the id and the dates; this one deliberately
+    /// does not, because a restore has to reproduce what was backed up rather
+    /// than author something new that resembles it.
+    /// </remarks>
+    public void Put(MapNote note)
+    {
+        lock (_gate)
+        {
+            var index = _notes.FindIndex(x => x.Id == note.Id);
+
+            if (index >= 0) _notes[index] = note;
+            else _notes.Add(note);
+
+            // The record keeps the change time it was backed up with.
+            _stamp.Adopt(note);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try

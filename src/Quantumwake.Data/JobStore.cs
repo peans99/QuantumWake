@@ -233,6 +233,30 @@ public sealed class JobStore
         }
     }
 
+    /// <summary>
+    /// Puts a record back exactly as given, replacing any with the same id.
+    /// </summary>
+    /// <remarks>
+    /// For restoring a backup, and nothing else. Every other way in makes its
+    /// own record so the store owns the id and the dates; this one deliberately
+    /// does not, because a restore has to reproduce what was backed up rather
+    /// than author something new that resembles it.
+    /// </remarks>
+    public void Put(Job job)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(x => x.Id == job.Id);
+
+            if (index >= 0) _jobs[index] = job;
+            else _jobs.Add(job);
+
+            // The record keeps the change time it was backed up with.
+            _stamp.Adopt(job);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try
