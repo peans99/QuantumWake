@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.42
+### 0.9.43
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -443,6 +443,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   you can attach to a flight plan like any other.
 
   Kits are in the backup from the day they exist.
+
+  Kits live at the bottom of the Character loadout page. **Save what I am
+  wearing** makes one out of your current loadout; **Prepare** compares it with
+  what you have and asks about the rest. Only the uncertain lines get a button:
+  asking about something the game actually reported would invite an answer the
+  app should not take.
 
 ### 0.8.35
 

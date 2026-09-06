@@ -922,6 +922,40 @@
         </table>
       </div>
     </div>
+
+    <h2 class="spaced">Your kits</h2>
+    <p class="muted caption">
+      A loadout worth keeping, saved so it can be put back together. Preparing
+      one compares it with what you are wearing and what your logs have seen in
+      storage &mdash; and asks you about the rest, because the game records an
+      item being <em>seen</em> in a container and never one being taken out.
+    </p>
+    <div class="export-row">
+      <input type="text" id="kit-name" class="search" placeholder="Name this kit&hellip;"
+             autocomplete="off" spellcheck="false">
+      <button class="ghost" id="kit-from-loadout" title="Save what you are wearing now as a kit">
+        Save what I am wearing
+      </button>
+    </div>
+    <span class="muted" id="kit-status"></span>
+    <div id="kit-list"></div>
+
+    <div id="kit-prepare" hidden>
+      <h2 class="spaced" id="kit-prepare-title">Preparing</h2>
+      <p class="muted caption" id="kit-prepare-rule"></p>
+      <div class="table-wrap">
+        <table id="kit-prepare-table">
+          <thead>
+            <tr><th>Item</th><th>Where it was</th><th>When</th><th>Still have it?</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="export-row">
+        <button class="primary" id="kit-shopping">Make a shopping list</button>
+        <button class="ghost" id="kit-prepare-close">Close</button>
+      </div>
+    </div>
   </section>
 
   <!-- STASH -->

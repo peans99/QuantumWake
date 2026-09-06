@@ -3828,3 +3828,23 @@ body.overlay .toast {
 }
 
 .run-from { margin-top: 6px; }
+
+/* ---------- saved kits ---------- */
+.kit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.kit-row-main { flex: 1 1 auto; min-width: 0; }
+.kit-row-main .name { color: var(--text); font-size: 13px; }
+.kit-row-main .sub { font-size: 11px; }
+
+/* Something the app knows it has to buy, or the pilot has just said is gone.
+   Amber rather than red: this is a shopping line, not a fault. */
+#kit-prepare-table .want,
+#kit-prepare-table button.want { color: var(--amber); }
+
+#kit-prepare-table td:last-child { width: 120px; }

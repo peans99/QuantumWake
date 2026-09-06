@@ -191,6 +191,7 @@ function showView(name) {
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
+  if (name === 'loadout') loadKits().catch(() => {});
   if (name === 'commodities') renderSharedReceipts().catch(() => {});
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
@@ -11488,6 +11489,195 @@ function runPlannedRow(review, stop, action) {
   row.append(actual);
   return row;
 }
+
+/* ---------- saved kits ---------- */
+
+let kits = [];
+let preparing = null;
+
+/**
+ * What each holding means, in the reader's terms.
+ *
+ * "Seen" and "Stale" are the same fact at two ages, and both are questions. The
+ * wording has to carry that: a page that says "in your stash" about a sighting
+ * is making the claim this whole feature exists to avoid.
+ */
+const KIT_HOLDING = {
+  Equipped: ['You are wearing it', false],
+  Seen: ['Last seen in storage', true],
+  Stale: ['Not seen for a while', true],
+  Missing: ['Never seen anywhere', false],
+};
+
+async function loadKits() {
+  kits = await getJson('/api/kits');
+  renderKits();
+}
+
+function renderKits() {
+  const list = $('#kit-list');
+  if (!list) return;
+
+  list.textContent = '';
+
+  if (!kits.length) {
+    list.append(el('p', 'muted', 'No kits yet. Save what you are wearing to make one.'));
+    return;
+  }
+
+  for (const kit of kits) {
+    const row = el('div', 'kit-row');
+
+    const main = el('div', 'kit-row-main');
+    main.append(el('div', 'name', kit.name));
+    main.append(el('div', 'sub muted',
+      `${kit.items.length} item${kit.items.length === 1 ? '' : 's'}`));
+    row.append(main);
+
+    const prepare = el('button', 'ghost tiny', 'Prepare');
+    prepare.title = 'Compare this kit with what you have';
+    prepare.addEventListener('click', () => prepareKit(kit.id).catch(() => {}));
+    row.append(prepare);
+
+    const drop = el('button', 'ghost tiny danger', '×');
+    drop.title = 'Delete this kit';
+    drop.addEventListener('click', async () => {
+      await fetch(`/api/kits/${encodeURIComponent(kit.id)}`, { method: 'DELETE' });
+      if (preparing?.kitId === kit.id) closeKitPrepare();
+      await loadKits();
+    });
+    row.append(drop);
+
+    list.append(row);
+  }
+}
+
+/**
+ * Saves what the character is wearing as a kit.
+ *
+ * Built from the loadout the page already has rather than asking the server
+ * again: this is the same list on screen, and a second read could disagree with
+ * what the pilot is looking at.
+ */
+async function saveWornAsKit() {
+  const status = $('#kit-status');
+  const name = $('#kit-name').value.trim();
+
+  const items = (libraryStats?.loadout || [])
+    .flatMap((slot) => slot.items || [])
+    .map((item) => ({ name: item.name, quantity: item.count || 1, optional: false }));
+
+  if (!items.length) {
+    status.textContent = 'Nothing is showing in your loadout yet, so there is nothing to save.';
+    return;
+  }
+
+  await fetch('/api/kits', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || 'Kit', items }),
+  });
+
+  $('#kit-name').value = '';
+  status.textContent = `Saved ${items.length} item${items.length === 1 ? '' : 's'}.`;
+  await loadKits();
+}
+
+async function prepareKit(id) {
+  preparing = await getJson(`/api/kits/${encodeURIComponent(id)}/prepare`);
+  renderKitPrepare();
+}
+
+function renderKitPrepare() {
+  const panel = $('#kit-prepare');
+  panel.hidden = !preparing;
+  if (!preparing) return;
+
+  $('#kit-prepare-title').textContent = `Preparing ${preparing.name}`;
+  $('#kit-prepare-rule').textContent = preparing.rule;
+
+  const body = $('#kit-prepare-table').querySelector('tbody');
+  body.textContent = '';
+
+  for (const line of preparing.lines) {
+    const [words, asks] = KIT_HOLDING[line.holding] || [line.holding, false];
+
+    const row = el('tr');
+
+    const name = el('td');
+    name.append(el('span', null, line.name));
+    if (line.quantity > 1) name.append(el('span', 'note-inline muted', ` ×${line.quantity}`));
+    if (line.optional) name.append(el('span', 'note-inline muted', ' optional'));
+    row.append(name);
+
+    // Where it was only matters for the lines that need answering. Equipped
+    // already carries its own place in the wording, and "You are wearing it —
+    // on you" says the same thing twice.
+    row.append(el('td', line.holding === 'Missing' ? 'muted want' : 'muted',
+      asks && line.where ? `${words} — ${line.where}` : words));
+
+    row.append(el('td', 'muted', line.lastSeen ? dateOf(line.lastSeen) : '—'));
+
+    const answer = el('td');
+
+    // Only the uncertain lines get a control. Offering one against something
+    // the game actually reported would invite an answer the app should not
+    // take, and offering one against "never seen" asks about nothing.
+    if (asks) {
+      const gone = el('button', 'ghost tiny');
+      gone.textContent = 'I have it';
+      gone.dataset.name = line.name;
+      gone.dataset.gone = 'false';
+
+      gone.addEventListener('click', () => {
+        const isGone = gone.dataset.gone !== 'true';
+        gone.dataset.gone = String(isGone);
+        gone.textContent = isGone ? 'It is gone' : 'I have it';
+        gone.classList.toggle('want', isGone);
+      });
+
+      answer.append(gone);
+    } else {
+      answer.append(el('span', 'muted', line.holding === 'Missing' ? 'on the list' : 'settled'));
+    }
+
+    row.append(answer);
+    body.append(row);
+  }
+}
+
+async function makeKitShopping() {
+  const status = $('#kit-status');
+
+  // Only what the pilot actually said is gone. Silence is left as held, which
+  // is the direction that costs a trip rather than a purchase.
+  const gone = Array.from($('#kit-prepare-table').querySelectorAll('button'))
+    .filter((button) => button.dataset.gone === 'true')
+    .map((button) => button.dataset.name);
+
+  const query = gone.length ? `?gone=${encodeURIComponent(gone.join(','))}` : '';
+
+  const response = await fetch(
+    `/api/kits/${encodeURIComponent(preparing.kitId)}/shopping${query}`, { method: 'POST' });
+
+  const answer = await response.json();
+
+  status.textContent = answer.items === 0
+    ? 'Nothing to buy — everything in this kit is either on you or accounted for.'
+    : `Made a list of ${answer.items} item${answer.items === 1 ? '' : 's'}. It is on the Jobs page.`;
+
+  closeKitPrepare();
+  await loadJobs().catch(() => {});
+}
+
+function closeKitPrepare() {
+  preparing = null;
+  $('#kit-prepare').hidden = true;
+}
+
+$('#kit-from-loadout')?.addEventListener('click', () => saveWornAsKit().catch(() => {}));
+$('#kit-shopping')?.addEventListener('click', () => makeKitShopping().catch(() => {}));
+$('#kit-prepare-close')?.addEventListener('click', closeKitPrepare);
 
 /* ---------- the plan on the map ---------- */
 
