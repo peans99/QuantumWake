@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.49
+### 0.9.50
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -532,6 +532,31 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   **Hauls you already sold read as sold.** Anything recorded before refining
   stages existed, or entered with a price straight away, was offering to be
   sent to a refinery.
+
+- Six more from review, and one of them changes what a kit tells you.
+
+  **Your character loadout is a sighting too.** It is the last thing seen in
+  each slot rather than what you are wearing now, so a helmet nothing has
+  replaced since March read as settled and was quietly dropped from the
+  shopping list. An old one is now asked about like anything else, and the
+  page says why.
+
+  **Search results from your own logs open properly.** Clicking one showed a
+  blank drawer that closed itself, while the identical row under the
+  catalogue worked.
+
+  **A place opened from search shows its own details.** It was drawing the new
+  place over the last one's services, lore and notes — and a note typed there
+  was filed against the wrong place.
+
+  **A shared file is recognised as one.** Opening someone else's export in the
+  restore picker told you to update an app that was already up to date.
+
+  **A new stop cannot land on a finished run**, where it would have been
+  invisible and uneditable.
+
+  **A failed restore that cannot undo itself says so** for mining hauls too,
+  rather than only for the writes it makes on the way in.
 
 ### 0.8.35
 

@@ -223,8 +223,13 @@ public sealed class TripStore
         {
             var index = _trips.FindIndex(t => t.Tracked);
 
+            // Archived as well as unfinished. Trip.Done is false whenever any
+            // stop is outstanding, so a run finished with one stop unticked
+            // still looked like the obvious place to put a new stop - and
+            // filed runs are drawn without a stop list, so the stop landed
+            // somewhere invisible while the call answered success.
             if (index < 0)
-                index = _trips.FindIndex(t => !t.Done);
+                index = _trips.FindIndex(t => t.Archived == Archived.No && !t.Done);
 
             if (index < 0)
             {

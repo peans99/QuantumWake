@@ -3,7 +3,16 @@
 /// <summary>Where a kit's item stands, as far as the logs can say.</summary>
 public enum KitHolding
 {
-    /// <summary>On your character in the last loadout the game reported.</summary>
+    /// <summary>
+    /// The most recent thing the logs saw in that port, and recently enough to
+    /// take at face value.
+    /// </summary>
+    /// <remarks>
+    /// Still not "currently worn". The loadout is the latest occupant of each
+    /// port across the whole library, so an item nothing has replaced stays
+    /// there for ever - which is why an old one is asked about like a stash
+    /// sighting rather than treated as settled.
+    /// </remarks>
     Equipped,
 
     /// <summary>Seen in a stash recently. A sighting, not a stock level.</summary>
@@ -75,6 +84,12 @@ public sealed record KitPreparation(
 /// loadout to somebody standing in an empty hangar.
 /// </para>
 /// <para>
+/// The character's own loadout is the same problem wearing better clothes. It
+/// is the latest occupant of each port across the whole library rather than
+/// what is worn now, so an item nothing has replaced sits there indefinitely -
+/// and it gets the same treatment once it is old enough to doubt.
+/// </para>
+/// <para>
 /// That is why the answer is three-valued rather than have/need, and why the
 /// asking step is not a nicety to trim later: it is the only place the
 /// uncertainty can be resolved, because nothing in the logs can resolve it.
@@ -95,7 +110,8 @@ public static class KitPreparer
     public const string Rule =
         "The game logs an item being seen in a container, never one being taken out or used up. "
         + "So anything stored is a sighting rather than a stock level, and only you can say "
-        + "whether it is still there.";
+        + "whether it is still there. Your character's loadout is the last thing seen in each "
+        + "slot rather than what is worn now, so an old one is asked about too.";
 
     public static KitPreparation Prepare(Kit kit, LibraryStats stats, DateTimeOffset now)
     {
@@ -138,24 +154,37 @@ public static class KitPreparer
         IReadOnlyDictionary<string, (DateTimeOffset At, string Where)> stashed,
         DateTimeOffset now)
     {
-        // Worn beats stored, and is the one state the logs can be sure of: a
-        // loadout is what the game reported was on the character, not a
-        // sighting in a container it may have been taken out of since.
+        /*
+         * Worn beats stored, and is the better of the two answers - but it is
+         * not certainty. LibraryStats.Loadout is the latest occupant of each
+         * port across the whole library, not what is on the character now, so
+         * a helmet nothing has replaced since March still reports as equipped.
+         * Taken at face value that dropped it from the shopping list without
+         * ever asking, which is precisely the failure the three-valued answer
+         * exists to prevent.
+         */
         if (equipped.TryGetValue(item.Name, out var worn))
         {
             // Counted, not just found. The loadout says how many slots hold
             // this, and a kit that wants four of something is not satisfied by
             // one of them.
-            var enough = worn.Count >= item.Quantity;
+            if (worn.Count < item.Quantity)
+            {
+                return new KitLine(
+                    item.Name, item.Quantity, item.Optional, KitHolding.Missing,
+                    "on you", worn.LastSeen, NeedsAsking: false, Held: worn.Count);
+            }
+
+            // Old enough to doubt, and doubted the same way a stash sighting
+            // is: the two are different kinds of sighting, not sighting and
+            // fact.
+            var stale = now - worn.LastSeen > TimeSpan.FromDays(StaleAfterDays);
 
             return new KitLine(
                 item.Name, item.Quantity, item.Optional,
-                enough ? KitHolding.Equipped : KitHolding.Missing,
+                stale ? KitHolding.Stale : KitHolding.Equipped,
                 "on you", worn.LastSeen,
-
-                // Nothing to ask: the count is a fact, and the shortfall
-                // follows from it.
-                NeedsAsking: false,
+                NeedsAsking: stale,
                 Held: worn.Count);
         }
 

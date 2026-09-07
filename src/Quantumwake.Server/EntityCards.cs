@@ -272,8 +272,17 @@ public static class EntityCards
 
     private static EntityCard? Part(string id, LogLibrary lib, UexData uex)
     {
-        var item = lib.Items().FirstOrDefault(i =>
-            string.Equals(i.ClassName, id, StringComparison.OrdinalIgnoreCase));
+        // By class first and by display name second. Search hits from the
+        // reader's own logs carry the name the stash reported - that is what a
+        // locker lists - while catalogue hits carry the class, and a drawer
+        // that only understood one of them closed silently on the other. The
+        // group most likely to be clicked was the one that did not work.
+        var catalogue = lib.Items();
+
+        var item = catalogue.FirstOrDefault(i =>
+                string.Equals(i.ClassName, id, StringComparison.OrdinalIgnoreCase))
+            ?? catalogue.FirstOrDefault(i =>
+                string.Equals(i.Name, id, StringComparison.OrdinalIgnoreCase));
 
         if (item is null)
             return null;

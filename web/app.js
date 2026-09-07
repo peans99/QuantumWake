@@ -1479,6 +1479,11 @@ const ENTITY_KICKER = {
 async function openEntity(kind, id) {
   if (!kind || !id) return false;
 
+  // Forgotten here rather than left pointing at whoever was open before: a note
+  // typed into a place reached from search would otherwise be filed against the
+  // last place opened from the map.
+  mapInfoLocation = null;
+
   const drawer = $('#entity-drawer');
 
   // Clicking the same thing again closes it, which is what a second click on
@@ -1529,11 +1534,13 @@ function renderEntity(card) {
   renderEntityWhere(card);
   renderEntityActions(card);
 
-  // Cleared rather than merely hidden: these renderers append, so a place's
-  // notes left in the node would reappear under the next place opened.
+  // Cleared every time, not only when the section is hidden. These renderers
+  // append, and only showMapInfo refills them - so a place opened from search,
+  // which calls openEntity directly, drew the new place's name over the last
+  // place's services, lore and notes.
   const extra = $('#entity-place-extra');
   extra.hidden = card.kind !== 'place';
-  if (extra.hidden) for (const id of PLACE_ONLY_NODES) $(id).textContent = '';
+  for (const id of PLACE_ONLY_NODES) $(id).textContent = '';
 
   $('#entity-drawer').hidden = false;
   document.body.classList.add('entity-open');
@@ -12787,9 +12794,10 @@ function renderMapInfoSold() {
  * a dot on this map rather than about the place in general.
  */
 async function showMapInfo(location) {
-  mapInfoLocation = location;
-
+  // Claimed after openEntity, which forgets whatever was open before it.
   if (!await openEntity('place', location.rawId)) return;
+
+  mapInfoLocation = location;
 
   renderMapInfoServices(location);
   renderMapInfoNotes(location);

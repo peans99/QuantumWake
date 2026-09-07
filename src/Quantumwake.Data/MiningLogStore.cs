@@ -197,9 +197,10 @@ public sealed class MiningLogStore
             // Losing a write costs the newest entry, never the file: the next
             // save rewrites the whole list from memory. That bargain is right
             // for somebody typing a haul in - and wrong for a restore, which
-            // would report success over a write that never landed. Put() is
-            // the one caller that needs to know, so the failure is re-raised
-            // for it and swallowed for everyone else.
+            // would report success over a write that never landed. Every
+            // restore path sets the flag, removal included: a rollback that
+            // cannot delete what it added is exactly the case the reporting
+            // was built to stop hiding.
             if (_restoring) throw;
         }
     }
@@ -320,6 +321,30 @@ public sealed class MiningLogStore
     /// does not, because a restore has to reproduce what was backed up rather
     /// than author something new that resembles it.
     /// </remarks>
+    /// <summary>Removes a record, letting a write failure through.</summary>
+    /// <remarks>
+    /// For a restore rolling itself back. Ordinary removal still swallows, for
+    /// the reason in <see cref="Save"/>; this one is the half that has to be
+    /// heard, because the caller is about to tell somebody whether their
+    /// machine was put back as it was.
+    /// </remarks>
+    public bool RemoveLoudly(string id)
+    {
+        lock (_gate)
+        {
+            _restoring = true;
+
+            try
+            {
+                return Remove(id);
+            }
+            finally
+            {
+                _restoring = false;
+            }
+        }
+    }
+
     public void Put(MiningRun run)
     {
         lock (_gate)

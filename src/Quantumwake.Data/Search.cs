@@ -102,14 +102,18 @@ public static class Search
         var seen = stats.Stash
             .SelectMany(place => place.Groups.SelectMany(group => group.Items)
                 .Where(item => Hits(item.Name, q))
-                .Select(item => (item.Name, place.Name)))
-            .GroupBy(pair => pair.Item1, StringComparer.OrdinalIgnoreCase);
+                .Select(item => (Name: item.Name, Class: item.ItemClass, Where: place.Name)))
+            .GroupBy(row => row.Name, StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in seen)
         {
-            var places = item.Select(pair => pair.Item2).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            var places = item.Select(row => row.Where).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
-            yield return new SearchHit("part", item.Key, item.Key,
+            // The class where the stash knows one: it is carried for exactly
+            // this join, and the drawer resolves a class without guessing.
+            var id = item.Select(row => row.Class).FirstOrDefault(c => !string.IsNullOrWhiteSpace(c));
+
+            yield return new SearchHit("part", id ?? item.Key, item.Key,
                 $"seen in storage at {places} place{(places == 1 ? "" : "s")}");
         }
 

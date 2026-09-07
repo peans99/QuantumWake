@@ -334,7 +334,7 @@ public sealed class RestoreService(
         Drop(jobs.All(), before.Jobs, j => j.Id, id => jobs.Remove(id));
         Drop(checklists.All(), before.Lists, c => c.Id, id => checklists.Remove(id));
         Drop(trips.All(), before.Trips, t => t.Id, id => trips.Remove(id));
-        Drop(mining.All(), before.Runs, r => r.Id, id => mining.Remove(id));
+        Drop(mining.All(), before.Runs, r => r.Id, id => mining.RemoveLoudly(id));
         Drop(notes.All(), before.Notes, n => n.Id, id => notes.Remove(id));
         Drop(kits.All(), before.Kits, k => k.Id, id => kits.Remove(id));
 

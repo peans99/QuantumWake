@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Quantumwake.Core.State;
 using Quantumwake.Data;
 
@@ -114,10 +114,16 @@ public class SecondReviewFixTests : IDisposable
             var result = service.Apply(file, plan, "h", new RestoreChoices());
 
             Assert.True(result!.Failed);
-            Assert.True(result.RolledBack);
+
+            // Not a complete rollback, and it says so: the same lock that
+            // refused the write refuses the removal that would undo it. The
+            // app cannot see that nothing actually reached the disk, and
+            // guessing in the reassuring direction is the failure this whole
+            // report exists to prevent.
+            Assert.False(result.RolledBack);
         }
 
-        // The job the run had already added is gone again.
+        // What could be taken back was: the job the run had already added.
         Assert.Empty(new JobStore(_root).All());
     }
 

@@ -60,22 +60,28 @@ public static class BackupReader
                 + $"this build reads {ExportDocument.FormatVersion}). Update, then try again."));
         }
 
-        if (document.ContentVersion > BackupBuilder.Version)
-        {
-            return (null, null, new ImportProblem(
-                "That backup holds things this build does not know how to put back. "
-                + "Update Quantum Wake, then try again."));
-        }
-
-        // A share file and a backup are both valid documents; only one of them
-        // can be restored, and saying so beats restoring three stores out of ten
-        // and calling it done.
+        /*
+         * What kind of file it is comes before what version it is, and that
+         * order is the fix rather than an ordering preference. ContentVersion
+         * counts the share format, which is already past the backup format's
+         * number - so a share file written by this very build failed the
+         * version check and told the reader to update an app that was already
+         * current, while the message that would have explained the real problem
+         * sat below and could never be reached.
+         */
         if (document.Backup is not { } backup)
         {
             return (null, null, new ImportProblem(
                 (document.Classes ?? []).Contains(ExportDocument.Authored)
                     ? "That is a shared export, not a backup. Bring it in from Settings → Import instead."
                     : "That file does not carry a backup."));
+        }
+
+        if (document.ContentVersion > BackupBuilder.Version)
+        {
+            return (null, null, new ImportProblem(
+                "That backup holds things this build does not know how to put back. "
+                + "Update Quantum Wake, then try again."));
         }
 
         // A file written before a store existed has no key for it, and JSON
