@@ -27,6 +27,73 @@ machine, or sent by somebody else.
 
 ---
 
+## What the licence actually says
+
+Read from the [EULA](https://robertsspaceindustries.com/eula) and the
+[Terms of Service](https://robertsspaceindustries.com/tos) rather than from
+forum wisdom. Quoted so the wording can be checked rather than trusted.
+
+Nobody here is a lawyer and this is not advice. It is the text, and what the
+text plainly does and does not cover.
+
+### Named and prohibited
+
+| Clause | Where | Does this feature do it? |
+|---|---|---|
+| "any software that reads areas of RAM used by the Game to store information about a character or the game environment" | EULA §I | **No.** Nothing touches the game process. |
+| "intercept, emulate or redirect the communication protocols used by RSII" | EULA §I | **No.** No network traffic of the game's is touched. |
+| "Modify or cause to be modified any files that are a part of the Game Client in any way not expressly authorized by RSII" | EULA §I | **No** — for this feature. See below for what does. |
+| "Use cheats, automation software (bots), hacks, mods or any other unauthorized third party software designed to modify the Game experience" | EULA §I | **No.** Nothing is automated and the game experience is unchanged. |
+| "'auto' software programs, 'macro' software programs or other 'cheat utility' software" | ToS | **No.** No input is generated. |
+| "'bots', 'spiders', 'scrapers' … data scraping or harvesting" | ToS | **No.** That clause governs the RSI Services - their site and servers - which this app never contacts. |
+
+### Not mentioned at all
+
+**Neither document says anything about screen capture or screenshots.** Not
+permitted, not prohibited — absent. So the honest position is that reading a
+screenshot is unaddressed rather than blessed, and the argument for it is that
+it does none of the things that *are* named.
+
+What the ToS does address is fan content, and generously: "You may make review,
+gameplay, tutorial, or fan commentary videos using RSI Content". A player is
+plainly expected to capture what is on their screen. What they may then do with
+it locally is not restricted anywhere in either document.
+
+### Where the real exposure is, and it is not here
+
+Two things this app already does sit closer to the line than anything in this
+plan.
+
+**The label overlay writes to the game folder.** Installing item labels — and
+StarStrings — replaces `Data\Localization\english\global.ini`, which is a file
+that is part of the Game Client. The EULA's wording is "Modify or cause to be
+modified any files that are a part of the Game Client in any way not expressly
+authorized by RSII". A text mod is a long-standing and openly tolerated part of
+this community, and the app is careful to back the file up and put it back — but
+tolerated is not the same as authorised, and this document should say so rather
+than let a screenshot reader carry a worry that belongs elsewhere.
+
+**The catalogues are read out of `Data.p4k`.** Item names, ship data and the
+star map's own paragraphs come from the install's proprietary archive, which
+requires understanding its format. Whether that is "reverse engineer" or merely
+"read a file the user owns" is a question this doc cannot settle, and it is
+worth knowing that it is the older question.
+
+Neither is a reason to stop. Both are reasons not to pretend the new feature is
+where the risk lives.
+
+### The limit this feature sets itself
+
+Reading a saved file does none of the named things, and it is also the variant
+that stays furthest from the game process: no window handles, no capture APIs,
+no hooks, no hotkey that grabs the display, and nothing running while the game
+runs. The image is a file on disk like `Game.log` is a file on disk.
+
+If that ever stops being enough, the answer is to stop — not to find a cleverer
+way in.
+
+---
+
 ## What other people already built
 
 Checked before designing anything, because several of these have been through
