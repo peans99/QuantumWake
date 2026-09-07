@@ -1950,6 +1950,8 @@ function renderContracts(stats) {
       : '—'],
   ]);
 
+  renderContractsPaid(stats).catch(() => {});
+
   bars('#issuers-chart',
     stats.contractIssuers.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
     (v) => `${v}`);
@@ -2488,6 +2490,49 @@ const LEDGER_PER_PAGE = 40;
 let ledgerEntries = [];
 let ledgerPage = 0;
 
+/** Kinds the reader has switched off. Empty means everything, which is the default. */
+let ledgerHidden = new Set();
+
+/**
+ * The kinds present, in the order the ledger itself uses.
+ *
+ * Built from the rows rather than from a fixed list: a toggle for something
+ * that never happens is a control that empties the table and teaches nothing.
+ */
+function ledgerKinds() {
+  return [...new Set(ledgerEntries.map((entry) => entry.kind))].sort();
+}
+
+function renderLedgerKinds() {
+  const row = $('#ledger-kinds');
+  if (!row) return;
+
+  row.textContent = '';
+
+  const kinds = ledgerKinds();
+
+  // One kind is not a choice.
+  if (kinds.length < 2) return;
+
+  for (const kind of kinds) {
+    const on = !ledgerHidden.has(kind);
+    const button = el('button', on ? 'ghost' : 'ghost off', kind);
+    button.type = 'button';
+    button.dataset.kind = kind;
+    button.title = on ? `Hide ${kind}` : `Show ${kind}`;
+
+    button.addEventListener('click', () => {
+      if (on) ledgerHidden.add(kind);
+      else ledgerHidden.delete(kind);
+
+      ledgerPage = 0;
+      renderLedger();
+    });
+
+    row.append(button);
+  }
+}
+
 async function loadLedger() {
   const days = Number($('#ledger-period').value) || 0;
   ledgerEntries = await getJson(`/api/ledger?days=${days}`);
@@ -2499,26 +2544,47 @@ function renderLedger() {
   const body = $('#ledger-table tbody');
   body.textContent = '';
 
-  const inbound = ledgerEntries.filter((e) => e.amount > 0);
-  const outbound = ledgerEntries.filter((e) => e.amount < 0);
+  renderLedgerKinds();
+
+  const visible = ledgerEntries.filter((entry) => !ledgerHidden.has(entry.kind));
+
+  const inbound = visible.filter((e) => e.amount > 0);
+  const outbound = visible.filter((e) => e.amount < 0);
 
   const sum = (rows) => rows.reduce((total, e) => total + Number(e.amount), 0);
-  const net = sum(ledgerEntries);
+  const net = sum(visible);
 
   const days = Number($('#ledger-period').value) || 0;
 
+  /*
+   * The totals follow the filter, because a contract total is the reason to
+   * filter at all - but the "why this number?" does not. The server explains
+   * the whole figure, and offering it over a filtered one would answer a
+   * question nobody asked with records that do not add up to what is on
+   * screen. So the control is there when everything is shown and gone when it
+   * is not, and the line below says why.
+   */
+  const filtered = ledgerHidden.size > 0;
+
   tiles('#ledger-summary', [
-    ['Money in', money(sum(inbound)), 'ledger.in', days],
-    ['Money out', money(Math.abs(sum(outbound))), 'ledger.out', days],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net)), 'ledger.net', days],
-    ['Movements', ledgerEntries.length],
+    ['Money in', money(sum(inbound)), filtered ? null : 'ledger.in', days],
+    ['Money out', money(Math.abs(sum(outbound))), filtered ? null : 'ledger.out', days],
+    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net)), filtered ? null : 'ledger.net', days],
+    ['Movements', visible.length],
   ]);
 
-  const pages = Math.max(1, Math.ceil(ledgerEntries.length / LEDGER_PER_PAGE));
+  const filterNote = $('#ledger-kinds');
+
+  if (filtered && filterNote) {
+    filterNote.append(el('span', 'muted',
+      'Totals cover only what is shown. Turn everything back on to ask where a figure came from.'));
+  }
+
+  const pages = Math.max(1, Math.ceil(visible.length / LEDGER_PER_PAGE));
   ledgerPage = Math.min(Math.max(0, ledgerPage), pages - 1);
 
   const start = ledgerPage * LEDGER_PER_PAGE;
-  const page = ledgerEntries.slice(start, start + LEDGER_PER_PAGE);
+  const page = visible.slice(start, start + LEDGER_PER_PAGE);
 
   if (!page.length) {
     const tr = el('tr');
@@ -2547,17 +2613,17 @@ function renderLedger() {
     body.append(tr);
   }
 
-  renderLedgerPager(pages, start, page.length);
+  renderLedgerPager(pages, start, page.length, visible.length);
 }
 
-function renderLedgerPager(pages, start, shown) {
+function renderLedgerPager(pages, start, shown, total) {
   const pager = $('#ledger-pager');
   pager.textContent = '';
 
-  if (!ledgerEntries.length) return;
+  if (!total) return;
 
   pager.append(el('span', 'pager-info',
-    `${start + 1}–${start + shown} of ${ledgerEntries.length}`));
+    `${start + 1}–${start + shown} of ${total}`));
 
   const nav = el('div', 'pager-nav');
   const step = (label, delta, disabled) => {
@@ -8077,6 +8143,58 @@ function compareCells(rowA, rowB, index) {
 }
 
 makeTablesSortable();
+
+/* ---------- what contracts paid ---------- */
+
+/**
+ * What the game said your contracts paid, and how little of it that is.
+ *
+ * The figure and its explanation come from the same call on purpose. A tile
+ * summing the ledger itself and a "why?" answered by the server would be two
+ * readings of one number, and the day they disagreed the page would be arguing
+ * with itself.
+ */
+async function renderContractsPaid(stats) {
+  const note = $('#contract-paid-note');
+  if (!note) return;
+
+  let paid;
+
+  try {
+    paid = await getJson('/api/explain?figure=contracts.paid&days=0');
+  } catch {
+    note.hidden = true;
+    return;
+  }
+
+  // Nothing priced is not nothing earned, and a zero here would say the second.
+  if (!paid.records.length) {
+    note.hidden = false;
+    note.textContent = 'The game has never stated what one of your contracts paid. '
+      + 'It prices a completion only now and then, and only for hauling.';
+    return;
+  }
+
+  const strip = $('#contract-summary');
+
+  const tile = el('div', 'tile');
+  tile.append(el('div', 'n', money(paid.value)));
+  tile.append(el('div', 'l', 'Stated payouts'));
+
+  // The strip's shared panel is the last child tiles() appended.
+  const panel = strip.children[strip.children.length - 1];
+  explainable(tile, panel, 'contracts.paid', 0);
+
+  // Appended, then the panel is appended again to move it back to last.
+  // Appending a node that already has a parent moves it, in a browser and in
+  // the test DOM alike, so the explanation stays the row under the tiles.
+  strip.append(tile);
+  strip.append(panel);
+
+  note.hidden = false;
+  note.textContent = `From ${paid.records.length} of your ${stats.contractsCompleted} completed `
+    + 'contracts — the only ones the game put a price on. A floor, not your contract income.';
+}
 
 /* ---------- why this number ---------- */
 

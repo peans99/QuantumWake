@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.51
+### 0.9.52
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -586,6 +586,26 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   a label install can no longer leave a record that outlives the file it
   describes; and CI accepts a bump to either game-data cache rather than
   steering you to move the wrong one.
+
+- **The Ledger can be filtered by kind.** Cargo, purchases and contract
+  payouts each get a toggle, built from what is actually in the list rather
+  than a fixed set — so switching everything else off shows what your
+  contracts paid, on its own, which was not previously possible.
+
+  The totals follow the filter, because that is the point of it. The
+  **?** beside them does not: it explains the whole figure, and offering it
+  over a filtered one would answer with records that do not add up to what is
+  on screen. It comes back when everything is shown again, and the line under
+  the toggles says so.
+
+- **The Contracts page says what the game said your contracts paid**, with the
+  same **?** behind it. The figure and its explanation come from one call, so
+  they cannot disagree.
+
+  It is a floor and it says so: across this install the game priced 14
+  completions out of 231, all of them hauling. If it has never priced one of
+  yours the page says that outright rather than showing a zero, which would
+  read as having earned nothing.
 
 ### 0.8.35
 

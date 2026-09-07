@@ -819,6 +819,9 @@
         <select id="ledger-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
+    <!-- Built from the kinds actually present, so it never offers a toggle
+         that would empty the table. -->
+    <div class="export-row" id="ledger-kinds"></div>
     <div class="summary-strip" id="ledger-summary"></div>
     <p class="muted caption">
       Every movement the logs record, newest first. There is no wallet event in
@@ -1030,6 +1033,7 @@
          itself, so it can be folded away in one go. -->
     <div class="page-stats" id="contracts-stats">
     <div class="summary-strip" id="contract-summary"></div>
+    <p class="muted caption" id="contract-paid-note" hidden></p>
     <h2 class="spaced">Standing</h2>
     <p class="muted caption">
       Who you have worked for and how much of it you finished. <b>This is not
