@@ -245,6 +245,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.9.54
+
+- Backup and restore, saved kits, and refinery hauls now have full endpoint
+  scenarios behind them: a backup brings a deleted job back only when the same
+  file was previewed, a missing kit item becomes a shopping job at the right
+  quantity, and a haul can reach Sold through the routes the page uses.
+
 ### 0.9.53
 
 - The Ledger now resets its kind filters when you choose a different time
