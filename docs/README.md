@@ -22,6 +22,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [naming.md](naming.md) | Why the project is called Quantum Wake, and what the name had to survive. |
 | [landscape.md](landscape.md) | Who else builds on Game.log, what overlaps, and what is still ours. |
 | [org-network.md](org-network.md) | Plan, unbuilt: pooling blueprints, stashes and prices across an org. |
+| [screen-insight.md](screen-insight.md) | Plan, unbuilt: reading a screenshot to name an item, with what OCR can and cannot be asked to do. |
 | [releasing.md](releasing.md) | Bump, tag, and what the pipeline does with it. |
 | [bug-reports.md](bug-reports.md) | What the report Settings saves holds, what it deliberately leaves out, and the one thing it cannot promise. |
 
