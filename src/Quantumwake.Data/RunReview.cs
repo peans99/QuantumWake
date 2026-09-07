@@ -113,8 +113,14 @@ public static class RunReviewer
             // would have to guess between them.
             // Inclusive at the start: a sale can land on the same second as
             // the arrival that made it possible.
+            // Place compared the way TripStore.Arrived compares it. A stop is
+            // often written from a trade route and carries a UEX terminal name,
+            // while a ledger row carries the resolved game place - so an exact
+            // match made the reviewer stricter than the arrival that ticked the
+            // stop, and a run planned from a route reviewed as nothing earned
+            // with every sale unaccounted for.
             var fits = windows.FirstOrDefault(w => entry.At >= w.From && entry.At <= w.To
-                && string.Equals(w.Place, entry.Where, StringComparison.OrdinalIgnoreCase));
+                && SamePlace(w.Place, entry.Where));
 
             var claim = new RunClaim(entry.At, entry.Kind, entry.What, entry.Where, entry.Amount, entry.Confirmed);
 
@@ -169,6 +175,32 @@ public static class RunReviewer
     /// sale from a station visited twice in one run.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Whether two spellings of a place are the same place.
+    /// </summary>
+    /// <remarks>
+    /// The same problem TripStore.Arrived solves, and solved the same way on
+    /// purpose: one of them ticks the stop and the other decides what the stop
+    /// earned, and a review that disagreed with the arrival is a review of a
+    /// run that never happened.
+    /// </remarks>
+    private static bool SamePlace(string? a, string? b)
+    {
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+        if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var left = Compact(a);
+        var right = Compact(b);
+
+        return left.Length > 0 && right.Length > 0
+            && (left.Contains(right, StringComparison.Ordinal)
+                || right.Contains(left, StringComparison.Ordinal));
+    }
+
+    /// <summary>Letters and digits only, lowered - punctuation and spacing differ everywhere.</summary>
+    private static string Compact(string value) =>
+        new([.. value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
+
     private static List<(string StopId, string Place, DateTimeOffset From, DateTimeOffset To)> Windows(
         Trip trip, DateTimeOffset began, DateTimeOffset ended)
     {

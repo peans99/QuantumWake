@@ -164,7 +164,12 @@ jobs:
           echo "Game-data readers in this change:"
           echo "$reading" | sed 's/^/  /'
 
-          if git diff "$BASE"...HEAD -- src/Quantumwake.Core/GameData/GameCommodities.cs              | grep -qE '^\+.*CacheVersion = [0-9]+'; then
+          # Either cache counts. GameNames and GameCommodities keep separate
+          # caches with their own CacheVersion, and accepting only the
+          # commodities one failed an author who had correctly bumped the other
+          # - steering them to move the wrong constant, retire the wrong cache,
+          # and leave exactly the stale names this job exists to prevent.
+          if git diff "$BASE"...HEAD -- src/Quantumwake.Core/GameData/GameCommodities.cs src/Quantumwake.Core/GameData/GameNames.cs              | grep -qE '^\+.*CacheVersion = [0-9]+'; then
             echo
             echo "CacheVersion moves in this change. Cached game data will be retired."
             exit 0
@@ -178,8 +183,9 @@ jobs:
           fi
 
           echo
-          echo "::error::This change touches how the game files are read, but CacheVersion"
-          echo "::error::in src/Quantumwake.Core/GameData/GameCommodities.cs does not move."
+          echo "::error::This change touches how the game files are read, but no CacheVersion"
+          echo "::error::moves - neither GameCommodities.cs nor GameNames.cs. Bump the one"
+          echo "::error::whose cache your change makes stale."
           echo "::error::"
           echo "::error::The cache is keyed on that constant and the archive's timestamp, so"
           echo "::error::every install that has already read its game files will keep the old"

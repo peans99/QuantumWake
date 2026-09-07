@@ -1,4 +1,4 @@
-namespace Quantumwake.WebTests;
+﻿namespace Quantumwake.WebTests;
 
 /// <summary>
 /// The trading-rate card on the Now page.
@@ -48,10 +48,17 @@ public class EarningRateTests
     }
 
     /// <summary>
-    /// Nothing sold is not a rate of nought an hour. The card stays away.
+    /// Nothing sold is not a rate of nought an hour, so the rate goes - but the
+    /// card stays, because the goal lives inside it.
     /// </summary>
+    /// <remarks>
+    /// This asserted the whole card disappeared, which is what the fix changed:
+    /// hiding it meant somebody who had never sold a commodity could not set a
+    /// goal at all, and a goal already set became invisible with no way to
+    /// clear it. The rate is what is missing in that state, not the card.
+    /// </remarks>
     [Fact]
-    public void A_player_who_has_never_traded_sees_no_card()
+    public void A_player_who_has_never_traded_sees_no_rate_but_keeps_the_card()
     {
         var page = Loaded("""
             {"window":{"earned":0,"inGame":"04:00:00","perHour":0,"days":30},
@@ -59,7 +66,9 @@ public class EarningRateTests
              "goal":null,"hoursToGoal":null,"basis":"lifetime"}
             """);
 
-        Assert.True(page.Truth("__dom.node('#now-earning-card').hidden"));
+        Assert.False(page.Truth("__dom.node('#now-earning-card').hidden"));
+        Assert.True(page.Truth("__dom.node('#now-earning-sub').hidden"));
+        Assert.Contains("No trading yet", page.Text("__dom.node('#now-earning-rate').textContent"));
     }
 
     /// <summary>

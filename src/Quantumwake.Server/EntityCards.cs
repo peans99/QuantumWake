@@ -105,6 +105,17 @@ public static class EntityCards
 
         var resolved = visited is null ? Quantumwake.Core.Locations.LocationResolver.Resolve(id) : null;
 
+        /*
+         * An id nothing recognises is not a place. LocationResolver hands back
+         * Unresolved(rawId) with the caller's own string as its DisplayName, so
+         * the blank check could never fire and IsResolved was never consulted -
+         * any id at all returned a card titled from whatever was asked for.
+         * That is the opposite of the house rule that an inferred location
+         * carries a confidence.
+         */
+        if (visited is null && resolved?.IsResolved is not true)
+            return null;
+
         var name = visited?.Name ?? resolved?.DisplayName;
         if (string.IsNullOrWhiteSpace(name))
             return null;

@@ -787,13 +787,24 @@ function raiseToasts(entries) {
   if (lastToastKey === newest) return;
 
   const fresh = [];
+  let anchored = false;
 
   for (const entry of entries) {
-    if (toastKey(entry) === lastToastKey) break;
+    if (toastKey(entry) === lastToastKey) {
+      anchored = true;
+      break;
+    }
+
     fresh.push(entry);
   }
 
   lastToastKey = newest;
+
+  // The anchor is gone, so more happened between frames than the window holds -
+  // after an EventSource reconnect, that is an hour of history. Toast nothing
+  // rather than the whole window, which is what the rule above says and what
+  // this had stopped doing.
+  if (!anchored) return;
 
   for (const entry of fresh.reverse()) {
     const label = TOAST_KINDS[entry.kind];
@@ -854,8 +865,25 @@ async function loadEarnings() {
 
   // Nothing traded means no rate. A zero here would read as "you earn nothing
   // an hour" rather than "nothing has been sold yet".
-  card.hidden = !rate || rate.perHour <= 0;
-  if (card.hidden) return;
+  const noRate = !rate || rate.perHour <= 0;
+
+  for (const id of ['#now-earning-rate', '#now-earning-sub', '#now-earning-note'])
+    $(id).hidden = noRate;
+
+  /*
+   * The card stays, because the goal lives inside it. Hiding the whole thing
+   * meant somebody who had never sold a commodity could not set a goal at all -
+   * and a goal already set became invisible with no way to clear it. The rate
+   * is what is missing here, not the card.
+   */
+  card.hidden = false;
+
+  if (noRate) {
+    $('#now-earning-rate').hidden = false;
+    $('#now-earning-rate').textContent = 'No trading yet';
+    renderGoal(state);
+    return;
+  }
 
   $('#now-earning-rate').textContent = `${money(rate.perHour)}/h`;
   $('#now-earning-sub').textContent = state.basis === 'recent'
@@ -1632,7 +1660,7 @@ function renderEntityBlurb(card) {
   blurb.hidden = !card.blurb;
 
   if (card.blurb) {
-    for (const line of card.blurb.split(RegExp('\\n|\n'))) {
+    for (const line of card.blurb.split(RegExp('\\\\n|\n'))) {
       if (line.trim()) blurb.append(el('p', 'part-blurb', line.trim()));
     }
   }

@@ -114,7 +114,14 @@ public sealed class RestoreService(
             lines.Add(Settingal(Single.Goal, goal.Name, goals.Current, goal, goals.Current?.SetAt, goal.SetAt));
 
         if (file.Wipe is { } wiped)
-            lines.Add(Settingal(Single.Wipe, $"History counted from {wiped.At:d}", wipe.Current, wiped, null, wiped.At));
+        {
+            // The store's wipe is never null - there is a factory default - so
+            // this is always a conflict, and it has to show the date it is
+            // conflicting with rather than a blank where "yours" should be.
+            lines.Add(Settingal(
+                Single.Wipe, $"History counted from {wiped.At:d}",
+                wipe.Current, wiped, wipe.Current.At, wiped.At));
+        }
 
         if (file.Labels is { } options)
             lines.Add(Settingal(Single.Labels, "Item label settings", labels.Current, options, null, null));

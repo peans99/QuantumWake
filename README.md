@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.50
+### 0.9.51
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -557,6 +557,35 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
   **A failed restore that cannot undo itself says so** for mining hauls too,
   rather than only for the writes it makes on the way in.
+
+- The rest of that review, eight more.
+
+  **You can set a goal without having traded.** The goal lives inside the
+  earnings card, and the card was hidden whenever there was no rate to show —
+  so a new pilot could not set one, and an existing goal became invisible
+  with no way to clear it.
+
+  **A run planned from a trade route reviews properly.** Stops written from a
+  route carry a terminal name while your logs carry the game place, and the
+  review demanded they match exactly — stricter than the arrival that ticked
+  the stop off, so the whole run reported nothing earned.
+
+  **Large stations keep their description.** Where the game files describe a
+  place twice, the two halves are merged rather than one replacing the other,
+  which was dropping the star map paragraph for exactly the places that have
+  amenity lists.
+
+  **Installing StarStrings puts your item labels back if it fails.** A corrupt
+  download left them off, with the record already gone.
+
+  **A place id the app does not recognise no longer opens a card** titled from
+  whatever it was handed.
+
+  Also: item descriptions split their lines properly again; a live-feed
+  reconnect no longer replays an hour of toasts at once; a locked file during
+  a label install can no longer leave a record that outlives the file it
+  describes; and CI accepts a bump to either game-data cache rather than
+  steering you to move the wrong one.
 
 ### 0.8.35
 

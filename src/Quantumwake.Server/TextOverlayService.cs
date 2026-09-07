@@ -218,9 +218,21 @@ public sealed class TextOverlayService(
             // from contributing a second one.
             File.WriteAllText(target, plan.Content, new UTF8Encoding(true));
 
-            // Fingerprinted after the write, so a later mod overwriting this
-            // path shows up as gone rather than as still installed.
-            install = install with { Fingerprint = TextOverlayStore.Fingerprint(target) };
+            /*
+             * Fingerprinted after the write, so a later mod overwriting this
+             * path shows up as gone rather than as still installed - and taken
+             * with TryFingerprint, because the empty string Fingerprint returns
+             * on a locked file is not a fingerprint. Recorded as one it matched
+             * nothing ever after, so Presence() answered Ours for ever and a
+             * later Remove would have copied our backup over another mod's
+             * file. Fingerprint's own doc says callers deciding whether to
+             * discard a record must not accept it; this was one.
+             */
+            install = install with
+            {
+                Fingerprint = TextOverlayStore.TryFingerprint(target, out var written) ? written : null,
+            };
+
             store.Record(install);
 
             return (install, null);
@@ -271,7 +283,24 @@ public sealed class TextOverlayService(
                 + "Close the game and anything else reading its localisation file, then try again.", false);
         }
 
-        var problem = await work();
+        /*
+         * try/finally, because the marks have already come off. StarStrings'
+         * InstallAsync throws InvalidDataException on a corrupt archive -
+         * outside its own catch - and without this the request 500s with the
+         * pilot's labels uninstalled and their record deleted. Whatever the
+         * work does, the layer that was lifted goes back on.
+         */
+        string? problem;
+
+        try
+        {
+            problem = await work();
+        }
+        catch
+        {
+            if (live) Install(game);
+            throw;
+        }
 
         if (!live)
             return (problem, false);

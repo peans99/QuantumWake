@@ -1,4 +1,4 @@
-namespace Quantumwake.Core.GameData;
+﻿namespace Quantumwake.Core.GameData;
 
 /// <summary>What the star map knows about one place.</summary>
 /// <param name="Parent">The body it belongs to, or null for a system.</param>
@@ -91,10 +91,14 @@ public static class GamePlaces
             var place = new GamePlace(
                 name, parent, core.EnumAt(at, record.StructIndex, "navIcon"), description, amenities);
 
-            // The same name can appear more than once; the entry that actually
-            // says something is the one worth keeping.
-            if (!places.TryGetValue(name, out var existing) || Thinner(existing, place))
-                places[name] = place;
+            // The same name can appear more than once, and the variants say
+            // different things: one carries the star map's paragraph, another
+            // the amenity list. Swapping one wholesale for the other lost
+            // whichever half the loser held - and it was the large stations,
+            // the ones with amenities, that ended up with no description.
+            places[name] = places.TryGetValue(name, out var existing)
+                ? Richer(existing, place)
+                : place;
         }
 
         return places;
@@ -115,10 +119,23 @@ public static class GamePlaces
             : name;
     }
 
-    /// <summary>Whether the one already kept says less than the one just read.</summary>
-    private static bool Thinner(GamePlace kept, GamePlace found) =>
-        (kept.Description is null && found.Description is not null)
-        || (kept.Amenities.Count == 0 && found.Amenities.Count > 0);
+    /// <summary>
+    /// Both variants of a place, keeping whatever either of them said.
+    /// </summary>
+    /// <remarks>
+    /// Field by field rather than record by record. The old rule replaced the
+    /// whole entry when the new one was better in either respect, so a place
+    /// described but not itemised was replaced by one itemised and not
+    /// described, and the description was gone.
+    /// </remarks>
+    private static GamePlace Richer(GamePlace kept, GamePlace found) =>
+        kept with
+        {
+            Parent = kept.Parent ?? found.Parent,
+            Kind = kept.Kind ?? found.Kind,
+            Description = kept.Description ?? found.Description,
+            Amenities = kept.Amenities.Count > 0 ? kept.Amenities : found.Amenities,
+        };
 
     /// <summary>
     /// Whether a description says anything the name did not.

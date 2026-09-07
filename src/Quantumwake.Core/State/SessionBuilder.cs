@@ -792,7 +792,11 @@ public sealed class SessionBuilder
     /// stored title should be what was on screen.
     /// </remarks>
     private static string ContractTitle(string text, string prefix) =>
-        text[prefix.Length..].Trim(' ', ':');
+        // Clamped, because the tests for "is this a completion" match without
+        // the colon while the prefixes here carry one. A toast of exactly
+        // "Contract Complete" is a character shorter than the slice and threw
+        // inside the scan loop, which has no catch of its own.
+        text.Length <= prefix.Length ? string.Empty : text[prefix.Length..].Trim(' ', ':');
 
     /// <summary>
     /// Matches a server response to the request it answers. Requests and
