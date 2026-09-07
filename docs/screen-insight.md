@@ -27,6 +27,67 @@ machine, or sent by somebody else.
 
 ---
 
+## What other people already built
+
+Checked before designing anything, because several of these have been through
+exactly the problem this doc is about.
+
+**Star Citizen Navigation** ([Valalol](https://github.com/Valalol/Star-Citizen-Navigation))
+does not use OCR at all, and that is the most useful thing in this section. It
+watches the clipboard: the in-game `/showlocation` command copies the player's
+global coordinates there, and the tool reads them as text. Exact, free, no
+pixels involved.
+
+The lesson generalises past navigation. **Before reading a screen, find out
+whether the game will simply say it.** For coordinates it will. For an item's
+name and price there is no equivalent command as far as this doc knows, which
+is what leaves OCR on the table — but that is a thing to confirm rather than
+assume, and it is cheap to confirm.
+
+**Datarunner for UEX** ([shebuka](https://shebuka.github.io/SC-Datarunner-UEX/))
+is the closest prior art to the half of this feature that matters most. It
+reads trading terminal screens with Tesseract and pulls out the terminal name,
+the commodity, SCU, stock level, price and whether the terminal buys or sells,
+then submits it to UEX. That is the same class of text this feature wants, off
+the same screens, and it works well enough that UEX takes the data.
+
+**ContractTracker V2** ([Nexus](https://www.nexusmods.com/starcitizen/mods/34))
+uses Windows 10/11's built-in recognition with Tesseract as a fallback. That is
+the arrangement this doc arrived at independently, which is mild evidence it is
+the right one rather than merely the convenient one.
+
+**SC Signature Scanner**
+([seneca0815-rgb](https://github.com/seneca0815-rgb/SC_Signature_Scanner))
+does not feed the raw frame to OCR. It finds the scanner's pills with OpenCV,
+applies adaptive thresholding and morphological operations, and only then runs
+Tesseract in single-line mode for digits. Preprocessing is not a nicety on this
+kind of source.
+
+**SC Toolbox** ([ScPlaceholder](https://github.com/ScPlaceholder/SC-Toolbox-Beta-V2))
+went further still: its mining signal reader is a purpose-trained CNN rather
+than an OCR engine. Somebody reached for that because general-purpose OCR was
+not good enough on that particular HUD element — which is the honest ceiling of
+this approach, and worth knowing before promising anything about the scanner
+HUD specifically.
+
+### What that changes here
+
+1. **Ask the game first.** A command that puts text on the clipboard beats any
+   amount of image processing. Worth ten minutes before step 1.
+2. **The in-box engine with Tesseract behind it is a known-good arrangement**,
+   not a guess.
+3. **Terminal and panel text is proven readable.** Datarunner does it in
+   production. The scanner HUD is the hard case, and is not what this feature
+   is aimed at.
+4. **Expect to preprocess.** Every one of these tools does something to the
+   image before the engine sees it.
+
+One difference worth stating: most of these capture the screen live. This one
+reads a file the pilot saved, which is the more conservative variant of an
+established practice rather than a new idea.
+
+---
+
 ## Verified on this machine
 
 **Windows has an OCR engine, offline and in the box.**
@@ -185,6 +246,11 @@ image is read and forgotten unless the pilot asks to keep the reading.
 Each step is worth having on its own, which is the test of whether the order is
 right.
 
+0. **Ask whether the game will just tell us.** Star Citizen Navigation gets
+   coordinates from `/showlocation` and the clipboard, with no image at all. If
+   any in-game command names the item under the cursor, this feature is a
+   clipboard reader and the rest of this document is moot. Ten minutes, and it
+   is the only step that could make the other four unnecessary.
 1. **Read a file and print what OCR saw.** No matching, no panel — just the
    lines and their boxes, on a real screenshot. This answers every one of the
    Not yet known questions and is the point at which the feature is either
