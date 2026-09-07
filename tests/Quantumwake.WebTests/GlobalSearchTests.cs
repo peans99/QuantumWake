@@ -122,4 +122,26 @@ public class GlobalSearchTests
         Assert.True(page.Truth("__dom.node('#global-results').hidden"));
         Assert.Equal("", page.Text("__dom.node('#global-search').value"));
     }
+
+    /// <summary>
+    /// Catalogue names are for people, but the drawer needs the engine class.
+    /// Replacing the id with the display name makes a click appear to work and
+    /// then close the drawer when it cannot resolve the item.
+    /// </summary>
+    [Fact]
+    public void Choosing_a_catalogue_name_opens_its_engine_class()
+    {
+        var page = Searched("""
+            {"query":"p4-ar","nothing":false,"groups":[
+              {"source":"the catalogue","hits":[
+                {"kind":"part","id":"behr_rifle_ballistic_01","name":"P4-AR Rifle",
+                 "why":"weapon the catalogue knows"}]}]}
+            """, "p4-ar");
+        page.Serve("/api/entity?kind=part&id=behr_rifle_ballistic_01",
+            """{"kind":"part","name":"P4-AR Rifle","facts":[]}""");
+
+        page.Do("__dom.node('#global-results').byClass('search-hit')[0].click();");
+
+        Assert.Contains("GET /api/entity?kind=part&id=behr_rifle_ballistic_01", page.Fetched());
+    }
 }

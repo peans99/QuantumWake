@@ -2536,6 +2536,12 @@ function renderLedgerKinds() {
 async function loadLedger() {
   const days = Number($('#ledger-period').value) || 0;
   ledgerEntries = await getJson(`/api/ledger?days=${days}`);
+
+  // A filter is an answer about the rows currently on screen. Keeping it when
+  // the period fetches a different set can hide the only kind in that range;
+  // with one kind there is no toggle to bring it back, so the page would say
+  // there were no transactions when it had just fetched one.
+  ledgerHidden.clear();
   ledgerPage = 0;
   renderLedger();
 }
@@ -12037,8 +12043,14 @@ function renderKitPrepare() {
     // Where it was only matters for the lines that need answering. Equipped
     // already carries its own place in the wording, and "You are wearing it —
     // on you" says the same thing twice.
-    row.append(el('td', line.holding === 'Missing' ? 'muted want' : 'muted',
-      asks && line.where ? `${words} — ${line.where}` : words));
+    // A known shortfall is neither a missing item nor a question. Calling one
+    // medpen in a kit of four "never seen anywhere" discards the useful fact
+    // that one is on the character, then leaves the pilot unable to tell why
+    // the shopping list has three rather than four.
+    const holding = line.short > 0
+      ? `${line.held} on you · ${line.short} still needed`
+      : asks && line.where ? `${words} — ${line.where}` : words;
+    row.append(el('td', line.holding === 'Missing' ? 'muted want' : 'muted', holding));
 
     row.append(el('td', 'muted', line.lastSeen ? dateOf(line.lastSeen) : '—'));
 

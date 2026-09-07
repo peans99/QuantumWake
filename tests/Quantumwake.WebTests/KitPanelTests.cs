@@ -149,4 +149,30 @@ public class KitPanelTests
         Assert.Contains("Nothing to buy", page.NodeText("#kit-status"));
         Assert.True(page.Truth("__dom.node('#kit-prepare').hidden"));
     }
+
+    /// <summary>
+    /// A known count is stronger than either a stash sighting or an absence.
+    /// The page must retain both halves: one medpen is on the character, and
+    /// three more are needed for this kit.
+    /// </summary>
+    [Fact]
+    public void A_known_shortfall_says_what_is_held_and_what_is_still_needed()
+    {
+        const string shortfall = """
+            {"kitId":"k1","name":"Bounty kit","rule":"rule","lines":[
+              {"name":"MedPen","quantity":4,"optional":false,"holding":"Missing",
+               "where":"on you","lastSeen":"2026-09-06T10:00:00+00:00","needsAsking":false,
+               "held":1,"short":3}]}
+            """;
+
+        var page = new Page();
+        page.Serve("/api/kits/k1/prepare", shortfall);
+        page.Do("await prepareKit('k1');");
+
+        var text = page.NodeText("#kit-prepare-table");
+
+        Assert.Contains("1 on you · 3 still needed", text);
+        Assert.DoesNotContain("Never seen anywhere", text);
+        Assert.Contains("on the list", text);
+    }
 }

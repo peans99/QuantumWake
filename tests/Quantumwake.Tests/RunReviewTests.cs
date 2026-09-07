@@ -58,6 +58,24 @@ public class RunReviewTests
     }
 
     /// <summary>
+    /// The game can write the arrival and receipt in the same second. Arrival
+    /// opens the stop's window, so equality belongs to the stop rather than to
+    /// the unclaimed list.
+    /// </summary>
+    [Fact]
+    public void A_sale_on_the_same_second_as_arrival_belongs_to_that_stop()
+    {
+        var review = RunReviewer.Build(
+            Run(Stop("s1", "Hurston", Noon.AddHours(1))),
+            [Sale(Noon.AddHours(1), "Hurston", 288_000)],
+            Noon.AddHours(5))!;
+
+        Assert.Equal(288_000, review.Earned.Value);
+        Assert.Single(review.Stops.Single().Claimed);
+        Assert.Empty(review.Unclaimed);
+    }
+
+    /// <summary>
     /// Money that moved before the run began belongs to whatever came before
     /// it. Counting it would make every run look better than it was.
     /// </summary>

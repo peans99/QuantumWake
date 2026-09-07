@@ -245,6 +245,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.9.53
+
+- The Ledger now resets its kind filters when you choose a different time
+  range. A filter could otherwise hide the sole kind in the new range, leaving
+  a fetched transaction invisible and no toggle to bring it back.
+
+- A saved kit now says when it can account for some, but not all, of an item:
+  “1 on you · 3 still needed” rather than claiming the item was never seen.
+
 ### 0.9.52
 
 - **Labelling your items no longer wipes the game's text.** The file this

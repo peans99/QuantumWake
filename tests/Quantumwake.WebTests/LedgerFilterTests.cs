@@ -120,4 +120,26 @@ public class LedgerFilterTests
 
         Assert.Contains("1–1 of 1", page.NodeText("#ledger-pager"));
     }
+
+    /// <summary>
+    /// A filter describes the fetched period, not every period the page will
+    /// ever load. Keeping it when the reader chooses a different range can
+    /// hide that range's only kind; one kind has no toggle, leaving a fetched
+    /// transaction invisible with no way to bring it back.
+    /// </summary>
+    [Fact]
+    public void Changing_period_does_not_hide_the_new_periods_only_kind()
+    {
+        var page = Loaded();
+        page.Do(Press("Cargo sold"));
+        page.Serve("/api/ledger?days=7", """
+            [{"at":"2026-08-20T09:00:00+00:00","kind":"Cargo sold","what":"Agricium","where":"P",
+              "shop":"TDD","amount":288000,"confirmed":true,"running":288000}]
+            """);
+
+        page.Do("__dom.node('#ledger-period').value = '7'; await loadLedger();");
+
+        Assert.Contains("Agricium", page.NodeText("#ledger-table tbody"));
+        Assert.DoesNotContain("No transactions", page.NodeText("#ledger-table tbody"));
+    }
 }
