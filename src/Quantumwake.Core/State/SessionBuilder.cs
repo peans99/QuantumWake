@@ -46,6 +46,15 @@ public sealed class SessionBuilder
     private readonly Dictionary<string, string> _contractsByMission = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ObjectiveState> _objectiveStates = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Endings by mission id, for the ones that arrive before the contract
+    /// marker they belong to - which happens, the same way objective state
+    /// does, because the push messages and the markers are separate streams.
+    /// First ending wins; the two tags land milliseconds apart and the
+    /// difference between them is not a fact about the contract.
+    /// </summary>
+    private readonly Dictionary<string, MissionEndedEvent> _missionEndings = new(StringComparer.Ordinal);
+
     private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<BlueprintReceipt> _blueprintReceipts = [];
     private readonly List<ContractPayout> _payouts = [];
@@ -262,6 +271,10 @@ public sealed class SessionBuilder
                     $"{trade.Amount:N0} aUEC · {PrettyShop(trade.ShopName)}");
                 break;
 
+
+            case MissionEndedEvent ended:
+                ApplyMissionEnded(ended);
+                break;
 
             case MissionObjectiveEvent objective:
                 ApplyObjectiveState(objective);
@@ -850,10 +863,27 @@ public sealed class SessionBuilder
     }
 
     /// <summary>
-    /// Applies objective state to the contract that owns it. A contract counts as
-    /// completed once any of its objectives completes, and abandoned only if
-    /// nothing completed and something was withdrawn.
+    /// Applies objective state to the contract that owns it - progress, not
+    /// outcome.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An objective completing used to complete the whole contract, and that
+    /// was wrong in a way nobody could see from the outside. A hauling run has
+    /// a pickup and a dropoff, so it finished the moment it was loaded. Across
+    /// the 179 backups in this install 96 of 212 missions complete more than
+    /// one objective - one completes 29 - and the last lands a median of 521
+    /// seconds after the first, the worst by 3 hours 25 minutes. Contracts
+    /// with a single objective were right, which is why it read as happening
+    /// for no reason.
+    /// </para>
+    /// <para>
+    /// So completion now comes from <see cref="ApplyMissionEnded"/> and this
+    /// only ever records progress. Abandonment is still taken from a withdrawn
+    /// objective as well, because that is a claim about the contract rather
+    /// than about one step of it, and it is never contradicted by the ending.
+    /// </para>
+    /// </remarks>
     private void ApplyObjectiveState(MissionObjectiveEvent objective)
     {
         _objectiveStates[objective.MissionId] = objective.State;
@@ -873,13 +903,13 @@ public sealed class SessionBuilder
         if (key is null || !_contracts.TryGetValue(key, out var contract))
             return;
 
+        // A finished objective says a step is done, and nothing about whether
+        // the contract is. Completing one is deliberately not an outcome here.
         var outcome = objective.State switch
         {
-            ObjectiveState.Completed => ContractOutcome.Completed,
             ObjectiveState.Withdrawn => ContractOutcome.Abandoned,
             ObjectiveState.Failed => ContractOutcome.Abandoned,
-            ObjectiveState.InProgress => ContractOutcome.InProgress,
-            _ => ContractOutcome.Unknown
+            _ => ContractOutcome.InProgress
         };
 
         // Step counts are recorded whatever the outcome: a contract abandoned
@@ -890,21 +920,78 @@ public sealed class SessionBuilder
             StepsDone = StepsDoneCount(objective.MissionId)
         };
 
-        // Completion is terminal: a later in-progress objective must not undo it.
-        if (contract.Outcome == ContractOutcome.Completed && outcome != ContractOutcome.Completed)
+        // An ending is terminal. Objectives keep arriving after one - the
+        // server upserts them as it tears the mission down - and none of that
+        // may reopen a contract that is over.
+        if (contract.Outcome is ContractOutcome.Completed or ContractOutcome.Abandoned)
         {
             _contracts[key] = progressed;
             return;
         }
 
-        _contracts[key] = progressed with
+        _contracts[key] = progressed with { Outcome = outcome };
+    }
+
+    /// <summary>
+    /// Ends a contract, on the only signal that actually says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two log tags carry this and both are taken. They agree exactly on this
+    /// install - 230 completions each - but neither is redundant:
+    /// <c>EndMission</c> is the only one that tells an abandonment from a
+    /// failure, and <c>MissionEnded</c> is the only one that fires for the 50
+    /// completions with no journal objectives at all.
+    /// </para>
+    /// <para>
+    /// Whichever arrives first wins, and the other is ignored rather than
+    /// overwriting the timestamp: they land milliseconds apart and the
+    /// difference is not a fact about the contract.
+    /// </para>
+    /// </remarks>
+    private void ApplyMissionEnded(MissionEndedEvent ended)
+    {
+        // An ending nobody has words for tells us nothing and must not stand
+        // as the remembered one, or the real ending beside it is ignored.
+        if (ended.Ending == MissionEnding.Unknown) return;
+
+        if (!_missionEndings.ContainsKey(ended.MissionId))
+            _missionEndings[ended.MissionId] = ended;
+
+        var key = _contractsByMission.GetValueOrDefault(ended.MissionId);
+        if (key is null || !_contracts.TryGetValue(key, out var contract)) return;
+
+        End(key, contract, ended);
+    }
+
+    /// <summary>Writes an ending onto a contract that is not already ended.</summary>
+    private void End(string key, ContractRecord contract, MissionEndedEvent ended)
+    {
+        if (contract.Outcome is ContractOutcome.Completed or ContractOutcome.Abandoned) return;
+
+        var outcome = ended.Ending switch
+        {
+            MissionEnding.Completed => ContractOutcome.Completed,
+
+            // Failure is filed as abandonment for now because that is the only
+            // ended state the rest of the app has words for. The game keeps
+            // them apart - 64 abandoned against 5 failed here - and so should
+            // this, once the pages and the counts have somewhere to put it.
+            MissionEnding.Abandoned or MissionEnding.Failed => ContractOutcome.Abandoned,
+
+            _ => contract.Outcome
+        };
+
+        if (outcome == contract.Outcome) return;
+
+        _contracts[key] = contract with
         {
             Outcome = outcome,
-            CompletedAt = outcome == ContractOutcome.Completed ? objective.Timestamp : contract.CompletedAt
+            CompletedAt = outcome == ContractOutcome.Completed ? ended.Timestamp : contract.CompletedAt
         };
 
         if (outcome == ContractOutcome.Completed)
-            Timeline(objective.Timestamp, "contract-done", "Contract completed", contract.DisplayName);
+            Timeline(ended.Timestamp, "contract-done", "Contract completed", contract.DisplayName);
     }
 
     private int StepCount(string missionId) =>
@@ -1151,11 +1238,15 @@ public sealed class SessionBuilder
             Accepted: false)
         {
             MissionId = contract.MissionId,
+
+            // A completed objective is a completed step, here as everywhere
+            // else. Seeding the contract as done from one was the same bug in
+            // its other hiding place: a marker that arrives after the first
+            // step finishes made the contract born complete.
             Outcome = known switch
             {
-                ObjectiveState.Completed => ContractOutcome.Completed,
                 ObjectiveState.Withdrawn or ObjectiveState.Failed => ContractOutcome.Abandoned,
-                ObjectiveState.InProgress => ContractOutcome.InProgress,
+                ObjectiveState.InProgress or ObjectiveState.Completed => ContractOutcome.InProgress,
                 _ => ContractOutcome.Unknown
             },
             Steps = StepCount(contract.MissionId),
@@ -1163,5 +1254,10 @@ public sealed class SessionBuilder
         };
 
         _contractsByMission[contract.MissionId] = contract.Contract;
+
+        // The ending can arrive before the marker, and a contract that ended
+        // in this session is over whichever order the two turned up in.
+        if (_missionEndings.TryGetValue(contract.MissionId, out var ended))
+            End(contract.Contract, _contracts[contract.Contract], ended);
     }
 }

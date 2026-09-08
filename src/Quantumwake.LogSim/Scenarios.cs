@@ -1,4 +1,4 @@
-namespace Quantumwake.LogSim;
+﻿namespace Quantumwake.LogSim;
 
 /// <summary>A reproducible log story and the facts it is expected to produce.</summary>
 public sealed record ScenarioDefinition(
@@ -347,6 +347,12 @@ public static class ScenarioRunner
         c.Log.MissionObjective(c.Now, mission, "pickup_crate_0", "MISSION_OBJECTIVE_STATE_COMPLETED");
         c.Advance(5);
         c.Log.MissionObjective(c.Now, mission, "deliver_crate_0", "MISSION_OBJECTIVE_STATE_COMPLETED");
+        c.Advance(2);
+
+        // The step above is not what finishes a contract - the real game says
+        // so separately, and this install has to say it too or the scenario
+        // describes a hauling run that ends the moment it is loaded.
+        c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_COMPLETED", "Complete");
         c.Advance(5);
         c.Notify("Received Blueprint: Omnisky IX");
     }
@@ -364,6 +370,8 @@ public static class ScenarioRunner
         c.Log.MissionObjective(c.Now, mission, "recover_crate_0", "MISSION_OBJECTIVE_STATE_INPROGRESS");
         c.Advance(20);
         c.Log.MissionObjective(c.Now, mission, "recover_crate_0", "MISSION_OBJECTIVE_STATE_WITHDRAWN");
+        c.Advance(2);
+        c.Log.MissionEnded(c.Now, mission, "MISSION_STATE_WITHDRAWN", "Abandon", "Player left");
         c.Advance(10);
     }
 

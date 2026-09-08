@@ -245,6 +245,29 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.9.57
+
+- **Contracts no longer finish before you do.** A contract was counted as
+  complete the moment any one of its objectives finished — so a hauling run
+  was done as soon as the cargo was loaded, with the delivery still ahead of
+  you. Contracts with a single objective were right, which is why this looked
+  like it happened for no reason.
+
+  In this install 96 of 212 contracts complete more than one objective, and the
+  last one finishes a median of nine minutes after the first. The worst was
+  marked done three and a half hours early.
+
+  The game says plainly when a contract is over, in two separate lines, and
+  neither was being read. Both are now, and they agree on every one of the 231
+  completions here. Objectives count steps, which is all they ever said.
+
+  **Your history is re-read on upgrade**, so past contracts get their real
+  completion times rather than keeping the early ones.
+
+- Walking away from a contract is now noticed properly too. Sixty-four
+  abandoned contracts in this install left no trace in the objective log at
+  all, because abandonment is announced on the line that was not being read.
+
 ### 0.9.56
 
 The first release since 0.8.35, and everything below is new since it. If you
