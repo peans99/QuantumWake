@@ -1,5 +1,19 @@
 ﻿namespace Quantumwake.Data;
 
+/// <summary>One line an OCR engine returned, and where it sat.</summary>
+/// <remarks>
+/// The position is not decoration. The engine returns lines in its own order,
+/// which is not the order they are laid out in: on a loadout screen it handed
+/// back the toolbar item "MAPS" directly before "Manufacturer: Drake
+/// Interplanetary", 297 pixels away across and on the other half of the
+/// screen. Reading a tooltip by list order named the toolbar.
+/// </remarks>
+/// <param name="Height">
+/// The tallest word on the line. Distances are measured in these rather than
+/// in pixels, so the rules hold at whatever resolution the game is played at.
+/// </param>
+public sealed record ScreenTextLine(string Text, double Left, double Top, double Height);
+
 /// <summary>What one screenshot's text was understood to say.</summary>
 /// <param name="Name">
 /// The line taken to be the thing's name - the unlabelled line directly above
@@ -166,43 +180,104 @@ public static class ScreenInsight
     /// </remarks>
     private const int LongEnoughToContain = 6;
 
+    /// <summary>
+    /// How far off the labels' left edge a line can sit and still belong to
+    /// the same tooltip, in line heights.
+    /// </summary>
+    /// <remarks>
+    /// A tooltip's name is left-aligned with its stats: measured on the
+    /// looting view, both start at x=1243 - no difference at all. The toolbar
+    /// item that used to be picked instead was 297 pixels off, about eighteen
+    /// line heights, so this has a great deal of room and still refuses it.
+    /// </remarks>
+    private const double SameColumn = 2.0;
+
+    /// <summary>
+    /// How far above the first label a name can sit, in line heights.
+    /// </summary>
+    /// <remarks>
+    /// One line: 20 pixels against a 16-pixel line on the looting view. Three
+    /// allows for a gap, or a name that wrapped, and still excludes anything
+    /// belonging to another part of the screen.
+    /// </remarks>
+    private const double JustAbove = 3.0;
+
     /// <summary>Reads the lines an engine returned as a tooltip.</summary>
+    /// <remarks>
+    /// Without positions every line is taken to be one column in the order
+    /// given, which is what a hand-typed fixture or a crop of a single name
+    /// is. A whole frame needs the overload that keeps the boxes.
+    /// </remarks>
     public static ScreenReading Read(IEnumerable<string> lines)
     {
-        var all = lines
+        var placed = lines
             .Select(line => line.Trim())
             .Where(line => line.Length > 0)
+            .Select((line, i) => new ScreenTextLine(line, 0, i * 20, 16))
             .ToList();
 
-        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var firstLabelled = -1;
+        return Read(placed);
+    }
 
-        for (var i = 0; i < all.Count; i++)
+    /// <summary>Reads a tooltip out of a frame, using where the lines sat.</summary>
+    public static ScreenReading Read(IReadOnlyList<ScreenTextLine> lines)
+    {
+        var all = lines
+            .Select(line => line with { Text = line.Text.Trim() })
+            .Where(line => line.Text.Length > 0)
+            .ToList();
+
+        var texts = all.Select(line => line.Text).ToList();
+
+        // The topmost labelled line anchors the tooltip. Topmost rather than
+        // first-returned, for the same reason the name is chosen by position:
+        // the engine's order is not the layout's.
+        var anchor = all
+            .Where(line => LabelOn(line.Text) is not null)
+            .OrderBy(line => line.Top)
+            .FirstOrDefault();
+
+        // No labels means no tooltip. A whole frame of loadout text has no one
+        // thing it is about, and taking its first line would name the panel -
+        // but a single line on its own is a crop of a name, and the only thing
+        // it can be.
+        if (anchor is null)
         {
-            if (LabelOn(all[i]) is not { } found) continue;
-
-            if (firstLabelled < 0) firstLabelled = i;
-
-            // First wins. A frame can hold two tooltips - a hovered item and
-            // the one already equipped, shown for comparison - and taking the
-            // later would describe the thing the reader did not point at.
-            if (!fields.ContainsKey(found.Label)) fields[found.Label] = found.Value;
+            return new ScreenReading(
+                all.Count == 1 ? all[0].Text : null,
+                new Dictionary<string, string>(),
+                texts);
         }
 
-        // The name sits directly above the stats, so an unlabelled line further
-        // up is a panel title - "LOOTING VIEW" - rather than the thing itself.
-        //
-        // With no labelled line at all there is no tooltip, and a whole frame
-        // of loadout text has no one thing it is about: taking its first line
-        // would name the panel. One line on its own is different - that is a
-        // crop of a name, and the only thing it can be.
-        var name =
-            firstLabelled > 0 ? all[firstLabelled - 1]
-            : firstLabelled < 0 && all.Count == 1 ? all[0]
-            : null;
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        return new ScreenReading(name, fields, all);
+        // Only the labels in the anchor's own column. A frame can hold two
+        // tooltips - a hovered item and the one already equipped, shown for
+        // comparison - and mixing their stats describes neither.
+        foreach (var line in all.Where(line => Beside(line, anchor)).OrderBy(line => line.Top))
+        {
+            if (LabelOn(line.Text) is { } found && !fields.ContainsKey(found.Label))
+                fields[found.Label] = found.Value;
+        }
+
+        // The name is the nearest unlabelled line just above the stats, in the
+        // same column. Nothing there means the tooltip carried no name the
+        // engine could read - which happens, and is worth saying rather than
+        // reaching further up the screen for something that fits.
+        var name = all
+            .Where(line => LabelOn(line.Text) is null)
+            .Where(line => line.Top < anchor.Top)
+            .Where(line => anchor.Top - line.Top <= JustAbove * anchor.Height)
+            .Where(line => Beside(line, anchor))
+            .OrderByDescending(line => line.Top)
+            .FirstOrDefault();
+
+        return new ScreenReading(name?.Text, fields, texts);
     }
+
+    /// <summary>Whether two lines sit in the same column of the same panel.</summary>
+    private static bool Beside(ScreenTextLine line, ScreenTextLine anchor) =>
+        Math.Abs(line.Left - anchor.Left) <= SameColumn * anchor.Height;
 
     /// <summary>Everything in the catalogue the read name could be.</summary>
     public static ScreenMatchResult Match(ScreenReading reading, IReadOnlyList<ItemReference> items)
@@ -242,6 +317,11 @@ public static class ScreenInsight
     public static ScreenMatchResult Look(IEnumerable<string> lines, IReadOnlyList<ItemReference> items)
         => Match(Read(lines), items);
 
+    /// <summary>Reads and matches a frame whose boxes were kept.</summary>
+    public static ScreenMatchResult Look(
+        IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<ItemReference> items)
+        => Match(Read(lines), items);
+
     /// <summary>
     /// Every line of a frame that names something in the catalogue.
     /// </summary>
@@ -259,6 +339,11 @@ public static class ScreenInsight
     /// against, half a name is not evidence of anything.
     /// </para>
     /// </remarks>
+    /// <summary>Sweeps a frame whose boxes were kept.</summary>
+    public static IReadOnlyList<ScreenLine> Sweep(
+        IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<ItemReference> items)
+        => Sweep(lines.Select(line => line.Text), items);
+
     public static IReadOnlyList<ScreenLine> Sweep(
         IEnumerable<string> lines, IReadOnlyList<ItemReference> items)
     {

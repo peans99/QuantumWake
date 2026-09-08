@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.Parsing;
@@ -117,6 +119,44 @@ static string? GetOption(string[] args, string name)
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
 }
 
+/// <summary>Reads the probe's own output, boxes and all.</summary>
+/// <remarks>
+/// The probe prints each line as <c>[ left top hNN]  the text</c>, and the
+/// boxes are what let a tooltip be found by where it sat rather than by the
+/// order the engine happened to return it in. A file without them still works
+/// and is read as one column, which is what a hand-written fixture is.
+/// </remarks>
+static List<ScreenTextLine> Placed(IEnumerable<string> raw)
+{
+    var Box = new Regex(
+        @"^\[\s*(?<left>\d+)\s+(?<top>\d+)\s+h\s*(?<height>\d+)\]\s+(?<text>.*)$");
+
+    var placed = new List<ScreenTextLine>();
+    var row = 0;
+
+    foreach (var line in raw)
+    {
+        var boxed = Box.Match(line);
+
+        if (boxed.Success)
+        {
+            placed.Add(new ScreenTextLine(
+                boxed.Groups["text"].Value,
+                double.Parse(boxed.Groups["left"].Value, CultureInfo.InvariantCulture),
+                double.Parse(boxed.Groups["top"].Value, CultureInfo.InvariantCulture),
+                double.Parse(boxed.Groups["height"].Value, CultureInfo.InvariantCulture)));
+        }
+        else if (line.Trim().Length > 0)
+        {
+            placed.Add(new ScreenTextLine(line, 0, row * 20, 16));
+        }
+
+        row++;
+    }
+
+    return placed;
+}
+
 /// <summary>Prints what a screenshot's text was matched to, and why.</summary>
 /// <remarks>
 /// The catalogue is loaded straight from the install rather than through
@@ -168,7 +208,7 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
         }
     }
 
-    var lines = File.ReadAllLines(linesFile);
+    var lines = Placed(File.ReadAllLines(linesFile));
     var result = ScreenInsight.Look(lines, items);
 
     // A frame with no tooltip on it still has names all over it, and that is
@@ -178,14 +218,17 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
     // measured here the name was not in the reading at all.
     if (result.Reading.Name is null || result.Candidates.Count == 0)
     {
+        Console.WriteLine();
+        Console.WriteLine($"Name read : {result.Reading.Name ?? "(none)"}");
+
+        // Printed even with no name. A tooltip that gave up a manufacturer and
+        // a type and no name is not nothing - it is most of an answer, and
+        // hiding it would make this look like a frame with no tooltip on it.
+        foreach (var (label, value) in result.Reading.Fields.OrderBy(f => f.Key, StringComparer.Ordinal))
+            Console.WriteLine($"  {label,-16} {value}");
+
         if (result.Reading.Name is not null)
         {
-            Console.WriteLine();
-            Console.WriteLine($"Name read : {result.Reading.Name}");
-
-            foreach (var (label, value) in result.Reading.Fields.OrderBy(f => f.Key, StringComparer.Ordinal))
-                Console.WriteLine($"  {label,-16} {value}");
-
             Console.WriteLine();
             Console.WriteLine($"Not certain: {result.Trouble}");
         }
@@ -193,7 +236,7 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
         var swept = ScreenInsight.Sweep(lines, items);
 
         Console.WriteLine();
-        Console.WriteLine($"No tooltip. Swept {lines.Length} lines, {swept.Count} named something:");
+        Console.WriteLine($"No tooltip. Swept {lines.Count} lines, {swept.Count} named something:");
 
         foreach (var line in swept)
         {

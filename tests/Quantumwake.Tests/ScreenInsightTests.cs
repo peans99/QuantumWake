@@ -1,4 +1,4 @@
-using Quantumwake.Data;
+﻿using Quantumwake.Data;
 
 namespace Quantumwake.Tests;
 
@@ -288,10 +288,103 @@ public class ScreenInsightTests
         Assert.Single(ScreenInsight.Look(["Arlington Ri"], items).Candidates);
     }
 
+    /// <summary>
+    /// The looting view, at the coordinates the engine actually returned: the
+    /// name at x=1243 y=379, the first stat at x=1243 y=399. Nothing across,
+    /// one line up.
+    /// </summary>
+    [Fact]
+    public void The_name_is_the_line_just_above_the_stats_in_the_same_column()
+    {
+        var reading = ScreenInsight.Read(new[]
+        {
+            new ScreenTextLine("LOOTING VIEW", 2653, 102, 17),
+            new ScreenTextLine("Arlington Rifle", 1243, 379, 17),
+            new ScreenTextLine("Volume: 13000 pscu", 1243, 399, 16),
+            new ScreenTextLine("Manufacturer: Hedeby Gunworks", 1244, 440, 17),
+        });
+
+        Assert.Equal("Arlington Rifle", reading.Name);
+        Assert.Equal("Hedeby Gunworks", reading.Fields["Manufacturer"]);
+    }
+
+    /// <summary>
+    /// The misfire that made this positional, at its real coordinates. The
+    /// engine returned the toolbar item "MAPS" immediately before
+    /// "Manufacturer: Drake Interplanetary", and by list order it was the
+    /// name. It is 297 pixels across, on the other half of the screen, and
+    /// below the label rather than above it.
+    /// </summary>
+    [Fact]
+    public void A_toolbar_item_the_engine_happened_to_return_first_is_not_the_name()
+    {
+        var reading = ScreenInsight.Read(new[]
+        {
+            new ScreenTextLine("SIZE", 1806, 1016, 15),
+            new ScreenTextLine("MAPS", 1800, 1329, 12),
+            new ScreenTextLine("Manufacturer: Drake Interplanetary", 2097, 995, 17),
+            new ScreenTextLine("Type: Flight Blade", 2096, 1015, 15),
+        });
+
+        Assert.Null(reading.Name);
+
+        // The stats are still read. A tooltip with no name the engine could
+        // make out is most of an answer, not nothing.
+        Assert.Equal("Drake Interplanetary", reading.Fields["Manufacturer"]);
+        Assert.Equal("Flight Blade", reading.Fields["Type"]);
+    }
+
+    /// <summary>
+    /// A frame can hold two tooltips - the item hovered and the one already
+    /// equipped, shown beside it for comparison. Mixing their stats describes
+    /// neither.
+    /// </summary>
+    [Fact]
+    public void A_second_tooltip_in_another_column_does_not_lend_its_stats()
+    {
+        var reading = ScreenInsight.Read(new[]
+        {
+            new ScreenTextLine("Arlington Rifle", 1243, 379, 16),
+            new ScreenTextLine("Volume: 13000 pscu", 1243, 399, 16),
+            new ScreenTextLine("Manufacturer: Klaus & Werner", 2400, 399, 16),
+            new ScreenTextLine("Item Type: Rifle", 1243, 419, 16),
+        });
+
+        Assert.Equal("Arlington Rifle", reading.Name);
+        Assert.Equal("Rifle", reading.Fields["Item Type"]);
+        Assert.False(reading.Fields.ContainsKey("Manufacturer"));
+    }
+
+    /// <summary>
+    /// A panel title sits far enough above the stats to be one. "LOOTING VIEW"
+    /// is at the top of the screen and the tooltip is in the middle of it.
+    /// </summary>
+    [Fact]
+    public void A_panel_title_far_above_the_stats_is_not_the_name()
+    {
+        var reading = ScreenInsight.Read(new[]
+        {
+            new ScreenTextLine("LOOTING VIEW", 1243, 102, 17),
+            new ScreenTextLine("Volume: 13000 pscu", 1243, 399, 16),
+        });
+
+        Assert.Null(reading.Name);
+    }
+
+    /// <summary>
+    /// Lines with no boxes are one column in the order given, which is what a
+    /// hand-typed fixture and a crop of a single name both are.
+    /// </summary>
+    [Fact]
+    public void Without_boxes_the_order_given_is_the_only_signal()
+    {
+        Assert.Equal("Arlington Rifle", ScreenInsight.Read(Arlington).Name);
+    }
+
     [Fact]
     public void A_frame_with_no_tooltip_on_it_says_so()
     {
-        var result = ScreenInsight.Look([], []);
+        var result = ScreenInsight.Look(Array.Empty<string>(), []);
 
         Assert.Null(result.Reading.Name);
         Assert.Equal("nothing on this frame looked like an item tooltip", result.Trouble);

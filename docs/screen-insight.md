@@ -438,23 +438,60 @@ catalogue entries all named "Drake Corsair" - `DRAK_Corsair`,
 `DRAK_Corsair_Exec_Military`, and ten more. Reporting twelve is the right
 answer. Picking one would be a coin toss with a confident face on.
 
-#### The limit step 3 inherits
+#### Reading by position, not by order
 
-**OCR line order is not layout order.** The rule that the name is the line
-directly above the first labelled line works on the looting tooltip and fails
-on the component tooltip, where the engine returned `MAPS` - the toolbar item
-at the bottom of the screen - immediately before `Manufacturer: Drake
-Interplanetary`. They are 334 pixels and half a screen apart.
+**OCR line order is not layout order**, and the first version of this step
+assumed it was. Taking the name to be the line directly above the first
+labelled one worked on the looting tooltip and failed on the component
+tooltip, where the engine returned `MAPS` - the toolbar item at the bottom of
+the screen - immediately before `Manufacturer: Drake Interplanetary`. The app
+confidently reported the toolbar as the item.
 
-The engine gives a bounding box for every line and this step threw them away.
-It has to stop doing that: the name is the nearest line *above and in the same
-column*, which is a geometric question and not an ordinal one. Step 3 does its
-own OCR and has the boxes to hand.
+The engine gives a bounding box per line, so the question is geometric. The
+thresholds come from the frames rather than from taste:
 
-Worth noting what that frame did carry: `Manufacturer: Drake Interplanetary`
-and `Type: Flight Blade`, and **no name at all** - the component's name is not
-in the reading. Two fields with no name still narrow the catalogue a great
-deal, which is an answer this design could give and does not yet.
+| | Name | First stat | Apart |
+|---|---|---|---|
+| Looting tooltip | x 1243, y 379 | x 1243, y 399 | **0 across, 20 up** |
+| The misfire | `MAPS` x 1800, y 1329 | x 2097, y 995 | 297 across, *below* |
+
+So the name is the nearest unlabelled line **above** the topmost label, within
+**two line heights across** and **three line heights up**. Distances are
+measured in line heights rather than pixels, so the rules hold at whatever
+resolution the game is played at - the real gap is one line and the real
+misfire was eighteen line heights away and on the wrong side.
+
+The same geometry fixed something that had not been noticed: **stats are now
+taken only from the anchor's own column**. A frame can hold two tooltips, the
+item hovered and the one already equipped shown beside it, and the old rule
+would have mixed their stats into one reading that described neither.
+
+Re-run across all eight frames, the misfire is gone: the looting tooltip still
+resolves certain, and the component frame now reports no name - which is the
+truth, because the component's name is not in the reading at all.
+
+#### Two halves of an answer that have not been introduced
+
+That component frame is worth dwelling on. The tooltip gives:
+
+```
+Manufacturer: Drake Interplanetary
+Type: Flight Blade
+```
+
+and no name. Meanwhile the sweep of the same frame finds, elsewhere on it:
+
+```
+"Drake Corsair Standard Flight Blade"  [exact]
+    Drake Corsair Standard Flight Blade  (Controller_Flight_DRAK_Corsair)
+```
+
+The two agree completely and nothing joins them. A manufacturer and a type
+with no name still narrow 26,028 items to a handful, and here they narrow it
+to exactly the thing the sweep already found. **Matching on fields alone, and
+crossing that against what the rest of the frame names, is the obvious next
+move** - and it is only obvious because a real screenshot was measured rather
+than imagined.
 
 ### What this settles
 
@@ -585,12 +622,16 @@ right.
 2. ~~**Match lines to the catalogues**, with scores, and a CLI or endpoint
    that prints the candidates.~~ **Done** - see **Step 2** above. One tooltip
    resolves certain, the loadout frames name what they can and tie where they
-   should, and three places where the screen and the catalogue disagree about
-   what a thing is called are written down.
+   should, three places where the screen and the catalogue disagree about what
+   a thing is called are written down, and the reading is done by position
+   after list order turned out to name the wrong thing.
+2b. **Match on fields when there is no name.** A manufacturer and a type narrow
+   26,028 items to a handful, and one measured frame has exactly that and no
+   readable name. Small, and it uses only what is already here.
 3. **The panel**, showing what was read beside what it matched, with the
-   existing entity drawer behind a click. It must keep the bounding boxes -
-   see the limit above; picking the name by list order is already known to be
-   wrong.
+   existing entity drawer behind a click. The reading is positional now, so
+   whatever does the OCR has to hand the boxes through rather than a list of
+   strings.
 4. **Prices and stock**, from UEX and the dataset, reusing the commodity and
    part cards rather than drawing new ones.
 
