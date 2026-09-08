@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
@@ -247,6 +247,23 @@ public sealed partial class LogEventParser
                     ParseObjectiveState(m.Groups["state"].Value),
                     m.Groups["flags"].Success
                         && m.Groups["flags"].Value.Contains("ShowInLog", StringComparison.Ordinal))),
+
+            // The two ways the game says a contract is over. Both are read: they
+            // agree on every completion in this install, but only EndMission
+            // tells an abandonment from a failure, and only MissionEnded fires
+            // for the 50 completions that have no journal objectives at all.
+            "MissionEnded" => Match(MissionEndedRegex, line, m =>
+                new MissionEndedEvent(
+                    line.Timestamp,
+                    m.Groups["mission"].Value,
+                    ParseMissionState(m.Groups["state"].Value))),
+
+            "EndMission" => Match(EndMissionRegex, line, m =>
+                new MissionEndedEvent(
+                    line.Timestamp,
+                    m.Groups["mission"].Value,
+                    ParseCompletionType(m.Groups["completion"].Value),
+                    m.Groups["reason"].Success ? m.Groups["reason"].Value : null)),
 
             "CEntityComponentShipListProvider::SetVehicleSpawningInformations" or
             "CEntityComponentShipListProvider::SetVehicleSpawnedInformations" =>
@@ -631,6 +648,32 @@ public sealed partial class LogEventParser
         return (int)Math.Round(quantity, MidpointRounding.AwayFromZero);
     }
 
+    /// <remarks>
+    /// A state nobody has seen is <see cref="MissionEnding.Unknown"/> rather
+    /// than a guess at completion: an unrecognised ending must not silently
+    /// bank a contract as done.
+    /// </remarks>
+    private static MissionEnding ParseMissionState(string raw) => raw switch
+    {
+        "MISSION_STATE_COMPLETED" => MissionEnding.Completed,
+        "MISSION_STATE_WITHDRAWN" => MissionEnding.Abandoned,
+        "MISSION_STATE_FAILED" => MissionEnding.Failed,
+        _ => MissionEnding.Unknown
+    };
+
+    /// <remarks>
+    /// "Deactivate" appears once in 300 endings and is not an outcome the
+    /// player caused, so it is left unknown rather than filed as an
+    /// abandonment they would not recognise.
+    /// </remarks>
+    private static MissionEnding ParseCompletionType(string raw) => raw switch
+    {
+        "Complete" => MissionEnding.Completed,
+        "Abandon" => MissionEnding.Abandoned,
+        "Fail" => MissionEnding.Failed,
+        _ => MissionEnding.Unknown
+    };
+
     private static ObjectiveState ParseObjectiveState(string raw) => raw switch
     {
         "MISSION_OBJECTIVE_STATE_INPROGRESS" => ObjectiveState.InProgress,
@@ -682,6 +725,19 @@ public sealed partial class LogEventParser
         @"(?:.*?flags=(?<flags>[^\s\[]*))?",
         RegexOptions.Compiled)]
     private static partial Regex ObjectiveRegex { get; }
+
+    [GeneratedRegex(
+        @"mission_id (?<mission>[0-9a-fA-F-]+) - mission_state (?<state>MISSION_STATE_\w+)",
+        RegexOptions.Compiled)]
+    private static partial Regex MissionEndedRegex { get; }
+
+    // Reason is optional because only some endings carry one, and an ending
+    // without a reason is still an ending.
+    [GeneratedRegex(
+        @"MissionId\[(?<mission>[^\]]+)\].*?CompletionType\[(?<completion>[^\]]*)\]" +
+        @"(?:\s*Reason\[(?<reason>[^\]]*)\])?",
+        RegexOptions.Compiled)]
+    private static partial Regex EndMissionRegex { get; }
 
     [GeneratedRegex(
         @"Player\[(?<player>[^\]]+)\] Attachment\[[^,]+,\s*(?<class>[^,]+),\s*(?<entity>\d+)\] " +

@@ -1941,14 +1941,22 @@ async function loadHistory() {
 }
 
 function renderContracts(stats) {
-  tiles('#contract-summary', [
+  // Failures get a tile only when there are any. Five in a whole install is
+  // worth seeing; a permanent zero beside four real figures is furniture, and
+  // it would read as "nothing ever went wrong" on an install too new to know.
+  const contractTiles = [
     ['Contracts seen', stats.contractsSeen],
     ['Completed', stats.contractsCompleted],
     ['Abandoned', stats.contractsAbandoned],
-    ['Completion rate', stats.contractsSeen
-      ? `${Math.round((stats.contractsCompleted / stats.contractsSeen) * 100)}%`
-      : '—'],
-  ]);
+  ];
+
+  if (stats.contractsFailed > 0) contractTiles.push(['Failed', stats.contractsFailed]);
+
+  contractTiles.push(['Completion rate', stats.contractsSeen
+    ? `${Math.round((stats.contractsCompleted / stats.contractsSeen) * 100)}%`
+    : '—']);
+
+  tiles('#contract-summary', contractTiles);
 
   renderContractsPaid(stats).catch(() => {});
 
@@ -2009,7 +2017,13 @@ async function loadStanding() {
       done.append(el('span', 'muted', ` · ${Math.round((row.completed / row.contracts) * 100)}%`));
 
     tr.append(done);
-    tr.append(el('td', row.abandoned ? 'num outward' : 'num muted', String(row.abandoned)));
+    const dropped = el('td', row.abandoned ? 'num outward' : 'num muted', String(row.abandoned));
+
+    // Failures ride the abandoned column rather than adding a fifth that is
+    // empty for every issuer but one. The count is there when it is not zero.
+    if (row.failed > 0) dropped.append(el('span', 'muted', ` · ${row.failed} failed`));
+
+    tr.append(dropped);
 
     // Never a bare zero: no annotated title is "nobody wrote it down", which is
     // not the same as "this pays nothing".
@@ -2054,6 +2068,11 @@ async function loadContractList() {
   const OUTCOMES = {
     Completed: ['done', 'completed'],
     Abandoned: ['outward', 'abandoned'],
+
+    // Worded as something that happened to you rather than something you did,
+    // because that is the distinction the game is drawing and the whole reason
+    // this is not filed as an abandonment.
+    Failed: ['outward', 'failed'],
     InProgress: ['muted', 'in progress'],
     Unknown: ['muted', '—'],
   };
