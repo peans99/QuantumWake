@@ -502,6 +502,132 @@ at. No Tesseract, no preprocessing, nothing to ship.
 The scanner HUD and the display-face numbers are a different project, and this
 document should not pretend otherwise.
 
+## The fleet, where the logs say nothing at all
+
+The idea this arrived at: a screenshot is not a second-rate source of the
+things the logs already carry. For one thing it is the **only** source, and
+that thing is what you have fitted to your ships.
+
+### The measurement that settles it
+
+Across the 179 log backups in this install:
+
+| Searched for | Times found |
+|---|---|
+| `hardpoint` | **0** |
+| Any `Port[...]` naming a ship component | **0** |
+
+Every `Port[...]` the game writes is a person: `Armor_Helmet`,
+`magazine_attach`, `weapon_attach_hand_right`, `inventory_pocket_2`. The logs
+record what the pilot is wearing in exhaustive detail and record **nothing
+whatsoever** about what is bolted to their ship.
+
+What the Fleet page shows today is `ShipSlot.Fitted`, and its own summary says
+what that is: *"The part in it as the ship comes"* - the factory loadout out of
+the game files. It is the same for every player who owns that ship. If you have
+swapped every component on your Corsair, the app has never known.
+
+**So this is not a better source of truth. It is the first one.**
+
+### What a loadout frame gives, measured
+
+From `ScreenShot-2026-09-07_21-09-02-4D4.jpg`, the engine's own boxes:
+
+```
+[ 727  334 h16]  Missile Rack 4          <- the slot
+[ 728  356 h14]  MSD-423 Missile Rack    <- what is in it
+[ 746  421 h15]  Missile Slot 2          <- a slot with nothing under it
+[ 750  507 h15]  Missile Slot 1
+[ 739  591 h15]  Missile Rack 1
+[ 740  613 h12]  MSO-423 Missile Rack
+```
+
+Three things fall out of that.
+
+**The pairing rule is the one already built, upside down.** A fitted part is
+the line directly *below* its slot label, in the same column: 22 pixels down
+and 1 pixel across, against a 16-pixel line. That is the same geometry as a
+tooltip's name sitting directly above its stats, and the same constants apply -
+though the column tolerance has to be looser here, because the tree indents and
+the left edges wander across 46 pixels between depths.
+
+**An empty slot is visible as an absence.** `Missile Slot 2` at y=421 has
+nothing beneath it until the next slot label at y=507 - an 86-pixel gap where a
+filled slot has 22. A frame therefore says *this port is empty*, which is a
+claim, not a silence.
+
+**The frame says how complete it is.** The game prints its own caveat at the
+top, and the engine reads it:
+
+```
+Only showing ships and equipment located in Nyx.
+```
+
+So a loadout frame is a statement about the ships at one place, not about a
+fleet. Anything built on this has to carry that sentence through to the page
+rather than quietly presenting a partial fleet as a whole one.
+
+### What a fitting would have to be
+
+Not a value on a ship, but a record with a provenance and a date:
+
+| Part | Where it comes from | How certain |
+|---|---|---|
+| The ship | the frame, matched to the fleet | a name, exactly read |
+| The port | the frame's slot label | as the game labels it, not the game's id |
+| The part | the frame, matched to the catalogue | exact or corroborated only |
+| When | the screenshot's own timestamp | exact |
+| Where the fleet was | the frame's own caveat line | the game's words |
+
+Two honesty constraints follow, and they are the whole difference between this
+being useful and being a liability.
+
+**A screenshot is a moment, never a state.** It says what was fitted when the
+shot was taken. A page that shows it as *the* loadout is lying by a week. The
+wording has to be "as you last photographed it, on 7 September", the same way
+kit sightings are already worded.
+
+**The slot labels are not the game's port ids.** The screen says `Missile Rack
+4`; the data says `hardpoint_missilerack_4` or something else entirely. Joining
+them is a separate problem and probably a partial one, so a fitting should
+stand on its own terms - the pilot's words - and join to `ShipSlot` only where
+the join is certain. Half a join is worse than none: it would put a real part
+in the wrong port.
+
+### Choosing the source
+
+The idea of *selecting* a source of truth is right, but it is narrower than it
+sounds, because there is only one source for most of this. Where both exist the
+rule can be plain:
+
+- **A port the factory fills and a screenshot confirms** - agreement, say so.
+- **A port the factory fills and a screenshot contradicts** - the screenshot
+  wins, and the page says the ship is not stock.
+- **A port only the factory knows** - shown as the factory part, labelled as
+  such, because that is a guess about this pilot's ship.
+- **A port only a screenshot knows** - shown, dated.
+
+That is a preference over provenance, not a switch to be flipped, and it can
+be stated in one sentence on the page instead of being a setting.
+
+### What the next screenshots need to show
+
+Not more of the same. The frames measured so far are all missile racks on one
+ship, which is the easy case - a repeated part in a repeated slot. Worth
+having:
+
+1. **A ship with mixed components** - shields, coolers, a power plant, a quantum
+   drive - so the slot labels of different kinds can be read rather than one
+   kind generalised from.
+2. **A ship that is visibly not stock**, so the disagreement case is real
+   rather than imagined.
+3. **The same ship twice, some time apart**, which is the only way to see what
+   a stale fitting looks like.
+4. **A frame with the fleet list visible**, to find out whether ship names read
+   as reliably as component names do.
+
+---
+
 ## How the pieces would fit
 
 The striking thing is how little of this is new.
@@ -634,6 +760,9 @@ right.
    strings.
 4. **Prices and stock**, from UEX and the dataset, reusing the commodity and
    part cards rather than drawing new ones.
+5. **Fitted loadouts for the fleet** - see above. Last in the order and first in
+   value: it is the only one of these that tells the pilot something no other
+   part of the app could ever have told them.
 
 Step 1 was not a formality and did not go entirely the expected way: the panel
 text read better than hoped and the wallet balance did not read at all. Both of
