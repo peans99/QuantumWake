@@ -146,7 +146,7 @@ public sealed class SessionStore : IDisposable
     // 7: ship comms channels are kept, so sessions summarised before them know
     //    nobody was ever aboard anything and the Crew page's ships would be
     //    empty for every install except a brand new one.
-    private const int PayloadVersion = 10;
+    private const int PayloadVersion = 11;
 
 
     /// <summary>

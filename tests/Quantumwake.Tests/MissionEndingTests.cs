@@ -146,18 +146,65 @@ public class MissionEndingTests
     }
 
     /// <summary>
-    /// Failure is filed as abandonment for now - the rest of the app has no
-    /// word for it yet - but it must never be filed as done.
+    /// A contract lost is not a contract dropped. The game draws the line - 64
+    /// walked away from against 5 lost in this install - and filing a failure
+    /// as a decision the player made puts it in front of them as one they took.
     /// </summary>
     [Fact]
-    public void A_failed_contract_is_not_a_completed_one()
+    public void A_contract_lost_is_not_a_contract_dropped()
     {
         var contract = Only(Built(
             Marker(T0),
             Ended(T0.AddMinutes(4), MissionEnding.Failed)));
 
-        Assert.NotEqual(ContractOutcome.Completed, contract.Outcome);
+        Assert.Equal(ContractOutcome.Failed, contract.Outcome);
         Assert.Null(contract.CompletedAt);
+    }
+
+    /// <summary>
+    /// A failed objective fails the contract; a withdrawn one drops it. The
+    /// two states were being flattened onto abandonment together.
+    /// </summary>
+    [Fact]
+    public void A_failed_objective_and_a_withdrawn_one_do_not_mean_the_same()
+    {
+        var failed = Only(Built(
+            Marker(T0),
+            Step(T0.AddSeconds(30), "escort_0", ObjectiveState.Failed)));
+
+        var dropped = Only(Built(
+            Marker(T0),
+            Step(T0.AddSeconds(30), "escort_0", ObjectiveState.Withdrawn)));
+
+        Assert.Equal(ContractOutcome.Failed, failed.Outcome);
+        Assert.Equal(ContractOutcome.Abandoned, dropped.Outcome);
+    }
+
+    /// <summary>A failure is as terminal as any other ending.</summary>
+    [Fact]
+    public void A_failure_cannot_be_reopened_by_a_later_objective()
+    {
+        var contract = Only(Built(
+            Marker(T0),
+            Ended(T0.AddMinutes(4), MissionEnding.Failed),
+            Step(T0.AddMinutes(5), "cleanup_0", ObjectiveState.InProgress)));
+
+        Assert.Equal(ContractOutcome.Failed, contract.Outcome);
+    }
+
+    /// <summary>
+    /// A session line has room for one number, so the two bad endings are
+    /// counted together there - and only there.
+    /// </summary>
+    [Fact]
+    public void A_session_counts_both_kinds_of_bad_ending_together()
+    {
+        var session = Built(
+            Marker(T0),
+            Ended(T0.AddMinutes(4), MissionEnding.Failed));
+
+        Assert.Equal(1, session.ContractsLost);
+        Assert.Equal(0, session.ContractsCompleted);
     }
 
     /// <summary>

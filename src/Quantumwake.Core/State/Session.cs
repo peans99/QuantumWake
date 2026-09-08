@@ -48,7 +48,18 @@ public enum ContractOutcome
     Unknown,
     InProgress,
     Completed,
-    Abandoned
+
+    /// <summary>Dropped by the player.</summary>
+    Abandoned,
+
+    /// <summary>Lost - a timer ran out, cargo was destroyed, the target got away.</summary>
+    /// <remarks>
+    /// Apart from <see cref="Abandoned"/> because the game keeps them apart and
+    /// they are different stories: 64 walked away from against 5 lost, across
+    /// the 179 backups in this install. Filing a failure as a decision the
+    /// player made puts a contract in front of them as one they dropped.
+    /// </remarks>
+    Failed
 }
 
 /// <summary>
@@ -314,6 +325,14 @@ public sealed record SessionSummary
     public decimal Net => Income - Spend - CommoditySpend;
 
     public int ContractsCompleted => Contracts.Count(c => c.Outcome == ContractOutcome.Completed);
+
+    /// <summary>Contracts that ended badly, however they ended badly.</summary>
+    /// <remarks>
+    /// The two are counted together here because a session line has room for
+    /// one number. The pages that have room for two show two.
+    /// </remarks>
+    public int ContractsLost =>
+        Contracts.Count(c => c.Outcome is ContractOutcome.Abandoned or ContractOutcome.Failed);
 
     public int Incapacitations { get; init; }
     public int Deaths { get; init; }

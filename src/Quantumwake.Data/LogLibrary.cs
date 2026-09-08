@@ -52,6 +52,16 @@ public sealed record LibraryStats
 
     public int ContractsCompleted { get; init; }
     public int ContractsAbandoned { get; init; }
+
+    /// <summary>
+    /// Contracts lost rather than dropped, counted apart from abandonments.
+    /// </summary>
+    /// <remarks>
+    /// A small number and worth its own: 5 against 64 in this install. Rolled
+    /// into abandonment it reads as a decision the player made.
+    /// </remarks>
+    public int ContractsFailed { get; init; }
+
     public int ContractsSeen { get; init; }
 
     // ---- fleet, loadout, stash ----
@@ -166,6 +176,7 @@ public sealed record Standing(
     int Contracts,
     int Completed,
     int Abandoned,
+    int Failed,
     DateTimeOffset First,
     DateTimeOffset Last,
     int Rep,
@@ -1484,6 +1495,7 @@ public sealed class LogLibrary : IDisposable
                         g.Count(),
                         g.Count(c => c.Outcome == ContractOutcome.Completed),
                         g.Count(c => c.Outcome == ContractOutcome.Abandoned),
+                        g.Count(c => c.Outcome == ContractOutcome.Failed),
                         g.Min(c => c.FirstSeen),
                         g.Max(c => c.FirstSeen),
                         rep.Sum(),
@@ -2239,6 +2251,7 @@ public sealed class LogLibrary : IDisposable
             ContractsSeen = contracts.Count,
             ContractsCompleted = contracts.Count(c => c.Outcome == ContractOutcome.Completed),
             ContractsAbandoned = contracts.Count(c => c.Outcome == ContractOutcome.Abandoned),
+            ContractsFailed = contracts.Count(c => c.Outcome == ContractOutcome.Failed),
 
             FleetSize = fleetHistory.Count > 0 ? fleetHistory.Max(f => f.Vehicles) : null,
             FleetHistory = fleetHistory,

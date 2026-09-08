@@ -908,7 +908,7 @@ public sealed class SessionBuilder
         var outcome = objective.State switch
         {
             ObjectiveState.Withdrawn => ContractOutcome.Abandoned,
-            ObjectiveState.Failed => ContractOutcome.Abandoned,
+            ObjectiveState.Failed => ContractOutcome.Failed,
             _ => ContractOutcome.InProgress
         };
 
@@ -923,7 +923,7 @@ public sealed class SessionBuilder
         // An ending is terminal. Objectives keep arriving after one - the
         // server upserts them as it tears the mission down - and none of that
         // may reopen a contract that is over.
-        if (contract.Outcome is ContractOutcome.Completed or ContractOutcome.Abandoned)
+        if (Ended(contract.Outcome))
         {
             _contracts[key] = progressed;
             return;
@@ -964,20 +964,21 @@ public sealed class SessionBuilder
         End(key, contract, ended);
     }
 
+    /// <summary>Whether an outcome is one a contract can come back from.</summary>
+    private static bool Ended(ContractOutcome outcome) =>
+        outcome is ContractOutcome.Completed or ContractOutcome.Abandoned or ContractOutcome.Failed;
+
     /// <summary>Writes an ending onto a contract that is not already ended.</summary>
     private void End(string key, ContractRecord contract, MissionEndedEvent ended)
     {
-        if (contract.Outcome is ContractOutcome.Completed or ContractOutcome.Abandoned) return;
+        if (Ended(contract.Outcome)) return;
 
         var outcome = ended.Ending switch
         {
             MissionEnding.Completed => ContractOutcome.Completed,
 
-            // Failure is filed as abandonment for now because that is the only
-            // ended state the rest of the app has words for. The game keeps
-            // them apart - 64 abandoned against 5 failed here - and so should
-            // this, once the pages and the counts have somewhere to put it.
-            MissionEnding.Abandoned or MissionEnding.Failed => ContractOutcome.Abandoned,
+            MissionEnding.Abandoned => ContractOutcome.Abandoned,
+            MissionEnding.Failed => ContractOutcome.Failed,
 
             _ => contract.Outcome
         };
@@ -1245,7 +1246,8 @@ public sealed class SessionBuilder
             // step finishes made the contract born complete.
             Outcome = known switch
             {
-                ObjectiveState.Withdrawn or ObjectiveState.Failed => ContractOutcome.Abandoned,
+                ObjectiveState.Withdrawn => ContractOutcome.Abandoned,
+                ObjectiveState.Failed => ContractOutcome.Failed,
                 ObjectiveState.InProgress or ObjectiveState.Completed => ContractOutcome.InProgress,
                 _ => ContractOutcome.Unknown
             },
