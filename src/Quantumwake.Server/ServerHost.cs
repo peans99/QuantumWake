@@ -24,7 +24,16 @@ public static class ServerHost
     /// Configures the server without starting it. Call <c>Run</c> to block, or
     /// <c>StartAsync</c> to run it alongside a UI.
     /// </summary>
-    public static WebApplication Build(string[] args)
+    /// <param name="screen">
+    /// How to read a screenshot, and what the pilot last copied. Supplied by
+    /// the overlay, which is a desktop app and can do both; null when the
+    /// server is run on its own, and the screen endpoints then say so rather
+    /// than failing.
+    /// </param>
+    public static WebApplication Build(
+        string[] args,
+        IScreenReader? screen = null,
+        IClipboardReader? clipboard = null)
     {
 
         // Quantumwake server.
@@ -102,6 +111,12 @@ public static class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<ScreenSettingsStore>();
+
+        // Built by hand rather than resolved, because the two readers come from
+        // the host and may not exist at all.
+        builder.Services.AddSingleton(sp =>
+            new ScreenInsightService(sp.GetRequiredService<LogLibrary>(), screen, clipboard));
         builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
@@ -2182,6 +2197,55 @@ public static class ServerHost
                 [.. wanted.Select(line => new JobItem(line.Name, line.Quantity))]);
 
             return Results.Ok(new { job = job.Id, items = wanted.Count });
+        });
+
+        // ---- the screen panel ----
+        //
+        // Nothing here reads the screen. It reads a file the pilot saved and
+        // the clipboard the pilot filled, both on a button, and it says which
+        // of those it is able to do at all.
+
+        app.MapGet("/api/screen/settings", (
+            ScreenSettingsStore settings, ScreenInsightService insight) => Results.Ok(new
+        {
+            settings.Current.Mode,
+            settings.Current.Watch,
+            canReadScreenshots = insight.CanReadScreenshots,
+            canReadClipboard = insight.CanReadClipboard,
+        }));
+
+        app.MapPost("/api/screen/settings", (
+            ScreenSettingsStore settings, ScreenMode? mode, bool? watch) =>
+            Results.Ok(settings.Save(mode, watch)));
+
+        app.MapPost("/api/screen/clipboard", async (
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            CancellationToken token) =>
+        {
+            // The setting is enforced here and not only in the page. A panel
+            // that has been switched off should be switched off however the
+            // request arrives.
+            if (settings.Current.Mode == ScreenMode.Off)
+                return Results.Ok(new ClipboardReading(false, null, null, null, null, "the screen panel is off"));
+
+            return Results.Ok(await insight.ReadClipboardAsync(token));
+        });
+
+        app.MapPost("/api/screen/scan", async (
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            GameInstall? install,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+            {
+                return Results.Ok(new ScreenScan(
+                    null, null, null, new Dictionary<string, string>(), [], [], false,
+                    "screenshot analysis is switched off", 0));
+            }
+
+            return Results.Ok(await insight.ScanNewestAsync(install?.RootPath, token));
         });
 
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);

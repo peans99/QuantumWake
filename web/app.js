@@ -204,6 +204,7 @@ function showView(name) {
   if (name === 'overlay') {
     renderSettings().catch(() => {});
     renderOverlayLayout().catch(() => {});
+    renderScreenPanel().catch(() => {});
   }
 
   buttons.forEach((b) => b.classList.toggle('active', b === target));
@@ -4435,6 +4436,246 @@ const OVERLAY_LABELS = {
  * immediate - there is no Save button because there is nothing to lose by a
  * tick going straight through, and the widget picks it up on its next poll.
  */
+/**
+ * The screen panel: what the app is allowed to read, and what it found.
+ *
+ * Two separate permissions rather than one, because they are different sizes
+ * of thing. Reading the clipboard is reading what somebody deliberately
+ * copied; reading a screenshot is reading a picture of their game. Both are
+ * off until asked for, and the server enforces that as well - a panel switched
+ * off should stay off however the request arrives.
+ */
+let screenSettings = { mode: 'Off', watch: false, canReadScreenshots: false, canReadClipboard: false };
+
+/**
+ * How long a finding stays up.
+ *
+ * Long enough to read a tooltip's worth of detail and get back to flying,
+ * short enough that the panel is not still showing the last thing when you
+ * come back to it. Each scan replaces the one before rather than queueing.
+ */
+const SCREEN_HOLD_MS = 30000;
+
+let screenHold = null;
+let screenWatcher = null;
+
+async function renderScreenPanel() {
+  try {
+    screenSettings = await getJson('/api/screen/settings');
+  } catch {
+    // The panel is not the page; a failure here must not take the rest down.
+    return;
+  }
+
+  const desktop = screenSettings.canReadClipboard || screenSettings.canReadScreenshots;
+  const unavailable = $('#screen-unavailable');
+  if (unavailable) unavailable.hidden = desktop;
+
+  const mode = $('#screen-mode');
+
+  if (mode) {
+    mode.value = screenSettings.mode;
+    mode.disabled = !desktop;
+  }
+
+  const watch = $('#screen-watch');
+  if (watch) watch.checked = !!screenSettings.watch;
+
+  applyScreenMode();
+}
+
+/** Shows the controls the chosen mode actually has. */
+function applyScreenMode() {
+  const on = screenSettings.mode !== 'Off';
+
+  const controls = $('#screen-controls');
+  if (controls) controls.hidden = !on;
+
+  // The screenshot button appears with the mode that allows it rather than
+  // being greyed out: a control that is there and refuses is worse than one
+  // that is not there yet.
+  const scan = $('#screen-scan');
+  if (scan) scan.hidden = screenSettings.mode !== 'Screenshots';
+
+  const status = $('#screen-mode-status');
+  if (status) {
+    status.textContent =
+      screenSettings.mode === 'Screenshots' ? 'clipboard and screenshots'
+      : screenSettings.mode === 'CopyOnly' ? 'clipboard only'
+      : 'off';
+  }
+
+  startScreenWatch();
+}
+
+async function saveScreenSettings(mode, watch) {
+  screenSettings = {
+    ...screenSettings,
+    ...await getJson2(
+      `/api/screen/settings?mode=${encodeURIComponent(mode)}&watch=${watch ? 'true' : 'false'}`),
+  };
+
+  applyScreenMode();
+}
+
+/**
+ * The clipboard, on a timer, when asked for.
+ *
+ * Polled rather than pushed because there is no event for "somebody copied
+ * something" that reaches a web page. Three seconds is slower than a person
+ * types /showlocation and alt-tabs, and slow enough not to be a spin.
+ */
+function startScreenWatch() {
+  if (screenWatcher) {
+    clearInterval(screenWatcher);
+    screenWatcher = null;
+  }
+
+  if (screenSettings.mode === 'Off' || !$('#screen-watch')?.checked) return;
+
+  screenWatcher = setInterval(() => {
+    // Quietly: a watcher that announced "nothing copied" every three seconds
+    // would be unusable.
+    parseClipboard(true).catch(() => {});
+  }, 3000);
+}
+
+function screenSay(message) {
+  const status = $('#screen-status');
+  if (status) status.textContent = message;
+}
+
+/**
+ * Puts a finding up, and takes it down again after a while.
+ *
+ * Replacing rather than appending: the panel answers the last thing asked,
+ * and a pile of old answers is a log, which this is not.
+ */
+function screenShow(build) {
+  const box = $('#screen-result');
+  if (!box) return;
+
+  box.textContent = '';
+  build(box);
+
+  if (screenHold) clearTimeout(screenHold);
+
+  screenHold = setTimeout(() => {
+    box.textContent = '';
+    screenSay('');
+  }, SCREEN_HOLD_MS);
+}
+
+async function parseClipboard(quiet = false) {
+  if (!quiet) screenSay('reading what you copied…');
+
+  const found = await getJson2('/api/screen/clipboard');
+
+  if (!found.found) {
+    if (!quiet) {
+      screenSay(found.trouble || 'nothing to read');
+      screenShow(() => {});
+    }
+    return;
+  }
+
+  screenSay('');
+
+  screenShow((box) => {
+    box.append(el('div', 'strong', `${found.gigametresFromCentre.toFixed(4)} Gm from the system centre`));
+
+    // The raw numbers stay visible. They are the thing the game gave and the
+    // only part of this that is exact.
+    box.append(el('div', 'muted',
+      `x ${Math.round(found.x).toLocaleString()} · `
+      + `y ${Math.round(found.y).toLocaleString()} · `
+      + `z ${Math.round(found.z).toLocaleString()}`));
+
+    box.append(el('div', 'muted',
+      'Which system this is in comes from your logs, not from the reading.'));
+  });
+}
+
+async function scanScreenshot() {
+  screenSay('reading your last screenshot…');
+  screenShow(() => {});
+
+  const scan = await getJson2('/api/screen/scan');
+
+  if (scan.trouble && !scan.name && !scan.named?.length) {
+    screenSay(scan.trouble);
+    return;
+  }
+
+  screenSay(`${scan.shot} · read in ${scan.tookMs} ms`);
+
+  screenShow((box) => {
+    if (scan.name) {
+      box.append(el('div', 'strong', scan.name));
+
+      for (const [label, value] of Object.entries(scan.fields || {}))
+        box.append(el('div', 'muted', `${label}: ${value}`));
+    }
+
+    for (const match of scan.matches || []) {
+      const line = el('div', null, match.name);
+
+      if (match.agrees?.length)
+        line.append(el('span', 'muted', ` · ${match.agrees.join(', ')} agree`));
+
+      if (match.disagrees?.length)
+        line.append(el('span', 'outward', ` · ${match.disagrees.join(', ')} do not`));
+
+      box.append(line);
+    }
+
+    // Said out loud rather than left to be inferred from an empty space.
+    if (scan.trouble) box.append(el('div', 'muted', scan.trouble));
+
+    const named = (scan.named || []).filter((n) => n.exact);
+
+    if (!scan.name && named.length) {
+      box.append(el('div', 'muted', `Also on this frame: ${named.length} named`));
+      for (const line of named.slice(0, 8))
+        box.append(el('div', 'muted', line.candidates[0] || line.text));
+    }
+  });
+}
+
+$('#screen-mode')?.addEventListener('change', async () => {
+  await saveScreenSettings($('#screen-mode').value, $('#screen-watch')?.checked);
+});
+
+$('#screen-watch')?.addEventListener('change', async () => {
+  await saveScreenSettings(screenSettings.mode, $('#screen-watch').checked);
+});
+
+$('#screen-parse')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await parseClipboard();
+  } catch (err) {
+    screenSay(`could not read the clipboard: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#screen-scan')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await scanScreenshot();
+  } catch (err) {
+    screenSay(`could not read the screenshot: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function renderOverlayLayout() {
   let data;
   try {

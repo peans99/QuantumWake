@@ -1,0 +1,160 @@
+namespace Quantumwake.Data;
+
+/// <summary>What one scan of a screenshot found.</summary>
+/// <param name="Trouble">
+/// Why there is no answer, in the pilot's words, or null when there is one.
+/// Never a bare empty result: a panel that goes blank is indistinguishable
+/// from one that is broken.
+/// </param>
+/// <param name="Shot">The file that was read, by name only.</param>
+/// <param name="TookMs">How long the engine took, because it is worth knowing.</param>
+public sealed record ScreenScan(
+    string? Shot,
+    DateTimeOffset? ShotAt,
+    string? Name,
+    IReadOnlyDictionary<string, string> Fields,
+    IReadOnlyList<ScreenScanMatch> Matches,
+    IReadOnlyList<ScreenScanNamed> Named,
+    bool Certain,
+    string? Trouble,
+    long TookMs);
+
+/// <summary>One thing the tooltip might be, and what vouches for it.</summary>
+public sealed record ScreenScanMatch(
+    string Name,
+    string ClassName,
+    string? Manufacturer,
+    string? Type,
+    long MicroScu,
+    string Tier,
+    IReadOnlyList<string> Agrees,
+    IReadOnlyList<string> Disagrees);
+
+/// <summary>One line of a frame that named something.</summary>
+public sealed record ScreenScanNamed(string Text, IReadOnlyList<string> Candidates, bool Exact);
+
+/// <summary>What reading the clipboard found.</summary>
+public sealed record ClipboardReading(
+    bool Found,
+    double? X,
+    double? Y,
+    double? Z,
+    double? GigametresFromCentre,
+    string? Trouble);
+
+/// <summary>
+/// The screenshot feature, joined up: a file, an engine, and the catalogue.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Everything here refuses rather than guesses. There is no engine on some
+/// machines, no screenshots folder until the first screenshot, and no name on
+/// some tooltips - and each of those is a sentence the panel can show rather
+/// than an empty box.
+/// </para>
+/// <para>
+/// The reader is optional because the server can run without one. See
+/// <see cref="IScreenReader"/>.
+/// </para>
+/// </remarks>
+public sealed class ScreenInsightService(
+    LogLibrary library,
+    IScreenReader? reader = null,
+    IClipboardReader? clipboard = null)
+{
+    public bool CanReadScreenshots => reader is not null;
+
+    public bool CanReadClipboard => clipboard is not null;
+
+    /// <summary>Reads the newest screenshot and says what it holds.</summary>
+    public async Task<ScreenScan> ScanNewestAsync(string? installRoot, CancellationToken token = default)
+    {
+        if (reader is null)
+            return Nothing("this copy cannot read screenshots - the overlay does that");
+
+        if (installRoot is not { Length: > 0 })
+            return Nothing("no Star Citizen install found to take screenshots from");
+
+        if (Screenshots.Newest(installRoot) is not { } shot)
+        {
+            return Nothing(
+                "no screenshots yet - press Print Screen in the game and try again");
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        IReadOnlyList<ScreenTextLine> lines;
+
+        try
+        {
+            lines = await reader.ReadAsync(shot, token);
+        }
+        catch (Exception e)
+        {
+            // A half-written file is the likely one: the game is still saving
+            // the shot the pilot took a moment ago.
+            return Nothing($"could not read that screenshot ({e.GetType().Name})");
+        }
+
+        watch.Stop();
+
+        var items = library.Items();
+        var result = ScreenInsight.Look(lines, items);
+
+        var named = ScreenInsight.Sweep(lines, items)
+            .Select(line => new ScreenScanNamed(
+                line.Text,
+                [.. line.Candidates.Select(c => c.Item.Name ?? c.Item.ClassName)],
+                line.Named))
+            .ToList();
+
+        var info = new FileInfo(shot);
+
+        return new ScreenScan(
+            info.Name,
+            info.LastWriteTimeUtc,
+            result.Reading.Name,
+            result.Reading.Fields,
+            [.. result.Candidates.Select(Describe)],
+            named,
+            result.Certain,
+
+            // A frame with no tooltip is not a failure when it named things.
+            result.Reading.Name is null && named.Count > 0 ? null : result.Trouble,
+            watch.ElapsedMilliseconds);
+    }
+
+    /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
+    public async Task<ClipboardReading> ReadClipboardAsync(CancellationToken token = default)
+    {
+        if (clipboard is null)
+            return new ClipboardReading(false, null, null, null, null,
+                "this copy cannot read the clipboard - the overlay does that");
+
+        var text = await clipboard.ReadTextAsync(token);
+
+        if (text is not { Length: > 0 })
+            return new ClipboardReading(false, null, null, null, null, "nothing copied");
+
+        if (ShipPosition.Parse(text) is not { } position)
+        {
+            return new ClipboardReading(false, null, null, null, null,
+                "what you copied is not a location - type /showlocation in the game first");
+        }
+
+        return new ClipboardReading(
+            true, position.X, position.Y, position.Z, position.GigametresFromCentre, null);
+    }
+
+    private static ScreenScan Nothing(string trouble) =>
+        new(null, null, null, new Dictionary<string, string>(), [], [], false, trouble, 0);
+
+    private static ScreenScanMatch Describe(ScreenCandidate candidate) =>
+        new(candidate.Item.Name ?? candidate.Item.ClassName,
+            candidate.Item.ClassName,
+            candidate.Item.Manufacturer,
+            candidate.Item.Type,
+            candidate.Item.MicroScu,
+            candidate.Tier.ToString(),
+            candidate.Agrees,
+            candidate.Disagrees);
+}

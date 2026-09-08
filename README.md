@@ -245,6 +245,32 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.9.59
+
+- **The overlay can read what you copy, and the screenshots you take.** New on
+  the Overlay page, off until you switch it on, and in two steps rather than
+  one.
+
+  **Copy only** reads your clipboard. Type `/showlocation` in the game, press
+  **Parse what I copied**, and it turns the coordinates into a distance you can
+  use — the reading in this install works out at 15.0000 Gm from the system
+  centre. It says which system it is in comes from your logs and not from the
+  reading, because it does.
+
+  **Copy and screenshots** adds **Read my last screenshot**, which says what an
+  item is: name, manufacturer, type and volume, matched against the 26,028
+  items in your game files. On the looting screen it names the weapon you are
+  standing over with four separate facts agreeing.
+
+  Nothing watches your screen. A screenshot is a file you chose to save, and it
+  is only read when you press the button. Findings stay up for thirty seconds
+  and then clear, so the panel is never showing something that has stopped
+  being true.
+
+  A dashboard opened in a browser against the bare server says so rather than
+  offering buttons that cannot work — reading the clipboard and reading files
+  are things the desktop app does.
+
 ### 0.9.58
 
 - **A contract you lost is no longer filed as one you dropped.** Both endings

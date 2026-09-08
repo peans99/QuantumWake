@@ -1533,6 +1533,48 @@
       </p>
     </div>
 
+    <div class="option-block" id="option-screen">
+      <div class="option-head">
+        <h3>Reading the screen</h3>
+        <span class="muted" id="screen-mode-status"></span>
+      </div>
+
+      <p class="muted">
+        Two separate things, and neither is on until you say so. <b>Copy only</b>
+        reads what you have copied — type <code>/showlocation</code> in the game
+        and it turns the coordinates into something readable. <b>Screenshots</b>
+        adds reading the last screenshot you took, to say what an item is.
+        Nothing watches the screen: a screenshot is a file you chose to save.
+      </p>
+
+      <div class="option-head">
+        <label class="muted" for="screen-mode">What it may read</label>
+        <select id="screen-mode" class="select">
+          <option value="Off">Off</option>
+          <option value="CopyOnly">Copy only</option>
+          <option value="Screenshots">Copy and screenshots</option>
+        </select>
+      </div>
+
+      <p class="muted" id="screen-unavailable" hidden>
+        Not available here: this dashboard is served by the bare server, which
+        has no desktop to read from. Run <code>QuantumWake.exe</code> to get one.
+      </p>
+
+      <div id="screen-controls" hidden>
+        <div class="option-head">
+          <button class="ghost" id="screen-parse">Parse what I copied</button>
+          <button class="ghost" id="screen-scan" hidden>Read my last screenshot</button>
+          <label class="muted" title="Check the clipboard on its own every few seconds">
+            <input type="checkbox" id="screen-watch"> Watch the clipboard
+          </label>
+        </div>
+
+        <p class="muted" id="screen-status" aria-live="polite"></p>
+        <div id="screen-result"></div>
+      </div>
+    </div>
+
     <div class="option-block">
       <div class="option-head">
         <h3>What the widget shows</h3>

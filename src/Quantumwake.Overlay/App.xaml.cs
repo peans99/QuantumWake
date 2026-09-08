@@ -1,10 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
+using Quantumwake.Ocr;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -110,11 +111,31 @@ public partial class App : System.Windows.Application
         return window;
     }
 
+    /// <summary>
+    /// Runs something on the UI thread and waits for it.
+    /// </summary>
+    /// <remarks>
+    /// The clipboard is single-threaded apartment only and the server's request
+    /// threads are not it, so the call has to come back here to be made.
+    /// </remarks>
+    private static Task<string?> OnUiThread(Func<string?> work) =>
+        Current?.Dispatcher is { } dispatcher
+            ? dispatcher.InvokeAsync(work).Task
+            : Task.FromResult<string?>(null);
+
     private async Task StartServerAsync(string[] args)
     {
         try
         {
-            _server = ServerHost.Build(args);
+            // The two things only a desktop app can do, handed to the server
+            // it hosts. A server started on its own gets neither, and the
+            // screen panel says so rather than failing when pressed.
+            var screen = new WindowsScreenReader();
+
+            _server = ServerHost.Build(
+                args,
+                screen.Available ? screen : null,
+                new WindowsClipboardReader(OnUiThread));
             await _server.StartAsync();
 
             // Whatever the last update left behind. Done here rather than at the
