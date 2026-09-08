@@ -106,7 +106,7 @@ afterwards — `grep -c $'\xef\xbf\xbd' README.md` must print 0.
 ## Running the tests
 
 ```powershell
-dotnet test Quantumwake.slnx -c Release        # both suites
+dotnet test Quantumwake.slnx -c Release        # all three suites
 ```
 
 `Quantumwake.Tests` covers the parser, resolvers and stores.
@@ -114,6 +114,16 @@ dotnet test Quantumwake.slnx -c Release        # both suites
 document, so the dashboard's own logic is tested rather than eyeballed. Add to
 the second one when changing `web/` — it is the only thing standing between a
 broken panel and a screenshot nobody took.
+
+`Quantumwake.OcrTests` is small and exists for one reason: reading a screenshot
+needs the `net10.0-windows10.0.19041.0` target, and dragging the parser suite
+onto that for thirty lines around an OS API would make every test in the
+project Windows-only. It draws its own fixtures rather than checking images in,
+and **every test in it stands down when the machine has no OCR engine** - a
+Windows install without an English language pack has none, so a red build there
+would be nothing to do with the code. That does mean it can pass by doing
+nothing, which is the price of the alternative being a build that fails for
+people who have done nothing wrong.
 
 Node is on this machine — v24, in `C:\Program Files\nodejs` — and
 `node --check web/app.js` is worth running before the suite. A syntax error

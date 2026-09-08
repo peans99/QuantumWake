@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.59
+### 0.9.60
 
 - **The overlay can read what you copy, and the screenshots you take.** New on
   the Overlay page, off until you switch it on, and in two steps rather than
