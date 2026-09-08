@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.0
+### 0.9.54
 
 The first release since 0.8.35, and everything below is new since it. If you
 are updating from there, this is a big one: contracts finally say what they
