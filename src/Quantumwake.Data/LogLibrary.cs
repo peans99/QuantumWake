@@ -141,7 +141,8 @@ public sealed record ContractLine(
     int StepsDone,
     double? Minutes,
     int? Rep = null,
-    bool Blueprint = false);
+    bool Blueprint = false,
+    bool FromGameId = false);
 
 /// <summary>
 /// How much work this install has done for one faction.
@@ -1240,7 +1241,12 @@ public sealed class LogLibrary : IDisposable
                     c.StepsDone,
                     c.TimeToComplete?.TotalMinutes,
                     ContractTags.RepFrom(c.DisplayName),
-                    ContractTags.AwardsBlueprint(c.DisplayName)))
+                    ContractTags.AwardsBlueprint(c.DisplayName),
+
+                    // Whether this row's name is the game's id rather than a
+                    // title. Read off the stored Raw, so no session has to be
+                    // re-summarised for the page to start saying it.
+                    ContractNameParser.IsGameId(c.Raw)))
         ];
     }
 

@@ -1129,6 +1129,32 @@ async function loadStanding() {
   }
 }
 
+/**
+ * Says how many of the listed contracts are named by the game's id.
+ *
+ * Silent when none are, rather than carrying a disclaimer nobody needs: the
+ * day the game starts logging real titles this line disappears on its own.
+ */
+function namedByIdNote(rows) {
+  const note = $('#contracts-id-note');
+  if (!note) return;
+
+  const byId = rows.filter((r) => r.fromGameId).length;
+
+  note.hidden = byId === 0;
+
+  if (!byId) return;
+
+  note.textContent = byId === rows.length
+    ? `Every one of these ${rows.length} is named by the game's own id, not by a title. `
+      + 'The marker line the game writes carries an id and never the wording the '
+      + 'contract manager showed, so Type is this app tidying up an identifier — "Small Grade4" is the '
+      + 'ship-size class and tier, not something anybody wrote.'
+    : `${byId} of these ${rows.length} are named by the game's own id rather than by a `
+      + 'title, so their Type is this app tidying up an identifier rather than the '
+      + 'wording the contract manager showed.';
+}
+
 async function loadContractList() {
   const days = Number($('#contracts-period').value) || 0;
   const rows = await getJson(`/api/contracts?days=${days}`);
@@ -1141,8 +1167,17 @@ async function loadContractList() {
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
+    $('#contracts-id-note').hidden = true;
     return;
   }
+
+  // Say whose words these are. The marker line the game writes carries a
+  // contract definition id and never the localised title, so Type and the row
+  // tooltip are this app's rendering of an id - "Small Grade4" is the
+  // contract's ship-size class and tier, not a phrase anybody wrote. Printing
+  // that unlabelled invents a title the game never showed, and the count is
+  // what makes it checkable rather than a disclaimer.
+  namedByIdNote(rows);
 
   const OUTCOMES = {
     Completed: ['done', 'completed'],
@@ -1161,7 +1196,10 @@ async function loadContractList() {
     tr.append(el('td', 'muted', row.type || '—'));
     tr.append(el('td', 'muted', row.difficulty || '—'));
     tr.append(el('td', 'muted', row.system || '—'));
-    tr.title = row.name;
+
+    tr.title = row.fromGameId
+      ? `${row.name} — the game's own id for this contract, tidied up. It never showed a title.`
+      : row.name;
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
     tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
@@ -4975,8 +5013,14 @@ async function loadStarStrings(check = false) {
   }
 
   if (state.latest) {
+    // "A newer build is out" on its own reads as housekeeping, and it is not.
+    // Each archive is cut against one game build - the release is named for it,
+    // "SC LIVE Build (release-2026-08-26-b83d58b)" - and the mod's own release
+    // notes say that failing to update after a patch "will result in
+    // missing/broken text in-game". So the line carries the consequence, and
+    // the other way out of it: Remove puts the game's own text back.
     bits.push(state.newer
-      ? `A newer build is out: ${state.latest.name}. Install to take it.`
+      ? `A newer build is out: ${state.latest.name}. Until you take it, text the game has added since goes missing in-game — install it, or Remove to go back to the game's own text.`
       : `Newest build: ${state.latest.name}${state.installed ? ' — you have it' : ''}`);
   }
 
@@ -5011,7 +5055,9 @@ function initStarStrings() {
     }
 
     await loadStarStrings(true);
-    alertLine($('#starstrings-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+    alertLine($('#starstrings-status').parentElement,
+      'Installed. Restart Star Citizen to see it — and check for a new build after every '
+      + 'game patch, because text the patch adds is missing from a file written before it.');
   });
 
   $('#starstrings-remove').addEventListener('click', async () => {

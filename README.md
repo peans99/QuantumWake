@@ -384,6 +384,30 @@ affiliated with or endorsed by Cloud Imperium Games.
 Newest first. Each version's section is what the GitHub release says too — the
 release workflow lifts it from here, so it is written once.
 
+### 0.8.36
+
+- **Contracts say whose words their names are.** The marker line the game
+  writes carries a contract definition id and never the title the contract
+  manager showed, so a name on the Contracts page is this app tidying up an
+  identifier — and "Small Grade4" is the contract's ship-size class and its
+  tier, not a phrase anybody wrote. Printed unlabelled that reads as a title
+  the game never gave. The table now says how many of the contracts listed are
+  named by id, each row's tooltip says it too, and the line disappears by
+  itself the day a real title turns up. On this install it is all 87 of them,
+  from 124 of the 126 distinct contract strings across 159 logs carrying no
+  display text at all.
+
+- **The StarStrings card says what a stale build costs.** MrKraken's text mod
+  is cut against one game build — the newest is named `SC LIVE Build
+  (release-2026-08-26-b83d58b)` — and text a later game patch adds is not in a
+  file written before it. Left in place across a patch, the mod is what makes
+  text go missing across the game: menus, contract titles, item names, blank
+  where a string should be. Settings used to say only that a newer build was
+  out, which does not connect the two. It now names the consequence, and both
+  ways out of it — install the new build, or *Remove*, which puts the game's
+  own text back. The gap is not hypothetical: the newest mod build was cut on
+  26 Aug 2026 and the game here is built from 28 Aug 2026, change 12545750.
+
 ### 0.8.35
 
 - Ship retrievals are recorded again. Game build 12519617 stopped writing the
@@ -867,8 +891,11 @@ release workflow lifts it from here, so it is written once.
   The app fetches their release, checks whether a newer build is out, and can
   take it back out again. It is the only thing here that writes into your game
   folder: two files, anything else in the download refused outright, whatever
-  was there copied aside first and put back on removal. Entirely MrKraken's
-  work - nothing of theirs is bundled or altered here.
+  was there copied aside first and put back on removal. Each release is cut
+  against one game build, so it has to be updated after a game patch: left
+  stale it is what makes text go missing across the game, and the card says so
+  rather than leaving you to work it out. Entirely MrKraken's work - nothing of
+  theirs is bundled or altered here.
 
 ### 0.6.12
 

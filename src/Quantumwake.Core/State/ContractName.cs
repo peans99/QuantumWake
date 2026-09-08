@@ -18,6 +18,30 @@ public sealed record ContractName(
     /// <summary>Readable summary for display.</summary>
     public string DisplayName =>
         string.Join(" · ", new[] { Issuer, Type, Difficulty }.Where(p => !string.IsNullOrEmpty(p)));
+
+    /// <summary>
+    /// True when the display name is the game's own identifier tidied up,
+    /// rather than a title the game ever put on screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It is nearly always true, and saying so is the point. The marker line
+    /// carries a contract definition id - <c>HaulCargo_AToB_Refined_Ore_Quartz_Stanton4_Small_Grade</c>
+    /// - and never the localised title, so a name shown here is this app's
+    /// rendering of an id and not what the contract was called in the contract
+    /// manager. Across this install's 159 logs, 124 of the 126 distinct contract
+    /// strings hold no display text at all; the other two are ids with a space
+    /// inside one token (<c>Redwind_ASD_Medical Supplies_0</c>).
+    /// </para>
+    /// <para>
+    /// Underscores are the test because they are what an id has and a title
+    /// does not. The consequence for a reader is real rather than cosmetic:
+    /// "Small Grade4" is the contract's ship-size class and tier, not a phrase
+    /// anybody wrote, and a page that prints it unlabelled is inventing a title
+    /// the game never showed.
+    /// </para>
+    /// </remarks>
+    public bool FromGameId => ContractNameParser.IsGameId(Raw);
 }
 
 /// <summary>
@@ -60,6 +84,18 @@ public static partial class ContractNameParser
     {
         "BP", "Def", "Mission"
     };
+
+    /// <summary>
+    /// True when a contract string is the game's identifier rather than a
+    /// title it displayed.
+    /// </summary>
+    /// <remarks>
+    /// Underscores are the whole test: an id has them and a sentence does not.
+    /// Kept next to the parser because it is the same knowledge - the parser
+    /// splits on the underscores this counts.
+    /// </remarks>
+    public static bool IsGameId(string? raw) =>
+        !string.IsNullOrWhiteSpace(raw) && raw.Contains('_');
 
     public static ContractName Parse(string raw)
     {
