@@ -181,28 +181,114 @@ reaching for only if the game's font defeats the in-box engine.
 
 ---
 
-## Not yet known
+## Measured
 
-No Star Citizen screenshot exists on this machine, so none of the following is
-stated:
+Step 1 has been done. Seven screenshots from this install went through the
+in-box engine; every number below came out of that run rather than out of an
+expectation.
 
-- Where the game writes them. `E:\rsi\StarCitizen\LIVE\ScreenShots` does not
-  exist, `%USERPROFILE%\Pictures` and `%USERPROFILE%\Videos\Captures` are both
-  empty, and there is no `user.cfg`.
-- The format. PNG and JPEG have very different consequences here: JPEG
-  artefacts around small high-contrast text are the classic way OCR accuracy
-  falls over.
-- The resolution, and therefore how many pixels tall the UI text actually is.
-  This is the single number that decides whether preprocessing is needed.
-- How the game's UI font behaves under OCR. Interface text is crisp, evenly
-  spaced and high contrast, which is the easy case — but "easy case" is a
-  prediction until a real frame has been through the engine.
+### Where the game puts them, and in what shape
 
-**The first screenshot settles all four**, and should be a full unedited frame
-with its path and the display resolution, not a crop. The crop is part of what
-has to be worked out.
+```
+E:\rsi\StarCitizen\LIVE\screenshots\ScreenShot-2026-09-07_21-09-02-4D4.jpg
+```
 
----
+Lowercase `screenshots`, beside the install. Named
+`ScreenShot-<date>_<time>-<hex>.jpg`.
+
+**JPEG, 3440x1440, 726-931 KB.** That is 0.15 to 0.19 bytes per pixel, which is
+firm compression — and it turned out not to matter, which is the more useful
+half of the finding.
+
+### The engine
+
+`Windows.Media.Ocr`, `en-US`, reached from a `net10.0-windows10.0.19041.0`
+console project with **no package reference at all**. `MaxImageDimension` is
+10000, so a 3440-wide frame goes in whole.
+
+| Input | Time | Lines |
+|---|---|---|
+| Full frame, 3440x1440 | **170 ms** | 59 |
+| One 400x250 panel crop | **45 ms** | 7 |
+
+Fast enough that cropping is an accuracy decision, not a performance one.
+
+### What it read
+
+Text heights ran 11 to 42 pixels; the item names that matter sat at 12-16.
+
+The names come back **exact**, which is the whole ballgame:
+
+```
+Missile Rack 4
+MSD-423 Missile Rack
+DRAKE CORSAIR
+Only showing ships and equipment located in Nyx.
+```
+
+`MSD-423 Missile Rack` is precisely the string that joins to the catalogue, and
+it is character-perfect.
+
+The errors are real but confined, and they are all punctuation and glyph shape:
+
+| Read as | Should be |
+|---|---|
+| `[IR31 chaos' Missile` | `[IR3] 'Chaos' Missile` |
+| `tCS31 Arrester Missile` | `[CS3] Arrester Missile` |
+| `MSO-423 Missile Rack` | `MSD-423 Missile Rack` |
+| `Missile Slot I` | `Missile Slot 1` |
+| `129.Missile (Missile)` | `129,Missile (Missile)` |
+
+Closing brackets become `1`, opening brackets become `t`, `D` becomes `O`, `1`
+becomes `I`. Every one of them is a shape the engine confuses under 13 pixels,
+and none of them touches a whole word. The same line read correctly elsewhere in
+the same frame — `[IR3] 'Chaos' Missile` came out perfectly one row down — which
+says this is marginal rather than systematic.
+
+**The matching layer has to be tolerant of exactly this class of error and no
+more.** Not general fuzziness: a scorer loose enough to fix `MSO` to `MSD` is
+loose enough to confuse `P4-AR` with `P8-AR`, and that is the failure mode this
+app cannot afford.
+
+### The one thing it will not read
+
+**The wallet balance.** `1,971,263` sits at the bottom of the mobiGlas in an
+italic display face, and the engine returns nothing for it — only the handle
+`NEKRON` beside it.
+
+That is not a size problem. Cropped tight, upscaled three times with Lanczos,
+and contrast-stretched to greyscale, it still comes back with `NEKRON` alone:
+
+```
+wallet.png       ->  NEKRON
+wallet_3x.png    ->  NEKRON
+wallet_3x_bw.png ->  NEKRON
+```
+
+The regular UI face reads perfectly at 12 pixels; the italic face does not read
+at 42. **It is the typeface, not the resolution.**
+
+This is the honest ceiling of the in-box engine, and it is worth knowing which
+side of the line each ambition falls on:
+
+- **Item names, part numbers, ship names, the system name** — the regular face.
+  Read them today.
+- **The wallet balance** — the display face. Needs Tesseract with a trained
+  model, or something purpose-built. SC Toolbox reached for a CNN for their HUD
+  for what is very likely this same reason.
+
+Which is a shame, because the balance is a genuinely new signal: `Game.log`
+records what was spent and earned and **never the total**, so the Ledger has a
+running sum it has never once been able to check against the truth.
+
+### What this settles
+
+The feature is viable, with the in-box engine, on unmodified JPEGs, at full
+resolution, in under a fifth of a second — for the text it was actually aimed
+at. No Tesseract, no preprocessing, nothing to ship.
+
+The scanner HUD and the display-face numbers are a different project, and this
+document should not pretend otherwise.
 
 ## How the pieces would fit
 
@@ -318,10 +404,9 @@ right.
    any in-game command names the item under the cursor, this feature is a
    clipboard reader and the rest of this document is moot. Ten minutes, and it
    is the only step that could make the other four unnecessary.
-1. **Read a file and print what OCR saw.** No matching, no panel — just the
-   lines and their boxes, on a real screenshot. This answers every one of the
-   Not yet known questions and is the point at which the feature is either
-   plausible or not.
+1. ~~**Read a file and print what OCR saw.**~~ **Done** — see **Measured**
+   above. 170 ms for a full frame, names character-perfect, and one hard limit
+   found in the italic display face.
 2. **Match lines to the catalogues**, with scores, and a CLI or endpoint that
    prints the candidates. Still no UI.
 3. **The panel**, showing what was read beside what it matched, with the
@@ -329,7 +414,7 @@ right.
 4. **Prices and stock**, from UEX and the dataset, reusing the commodity and
    part cards rather than drawing new ones.
 
-Step 1 comes first and is not a formality. If a 1440p screenshot of a mobiGlas
-panel does not read cleanly, the honest answer is preprocessing or Tesseract or
-neither — and it is much better to learn that before there is a panel to
-disappoint somebody with.
+Step 1 was not a formality and did not go entirely the expected way: the panel
+text read better than hoped and the wallet balance did not read at all. Both of
+those change what step 2 should try to match, and neither would have been
+guessed correctly from a design conversation.
