@@ -245,6 +245,21 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.9.58
+
+- **A contract you lost is no longer filed as one you dropped.** Both endings
+  were counted and labelled as abandonment, so a run where the timer beat you
+  or the cargo was destroyed sat in your history as a decision you made. The
+  game has always kept the two apart, and now so does this: 231 completed, 65
+  abandoned and 5 failed across this install.
+
+  The Contracts page shows failures as their own figure when there are any, and
+  says nothing when there are none — a permanent zero would read as "nothing
+  ever went wrong" on an install too new to know.
+
+  **Your history is re-read on upgrade**, so past failures stop being counted
+  as things you walked away from.
+
 ### 0.9.57
 
 - **Contracts no longer finish before you do.** A contract was counted as
