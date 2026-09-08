@@ -27,6 +27,7 @@ public class ScreenPanelTests
              "canReadClipboard":{{(desktop ? "true" : "false")}}}
             """);
 
+        page.Serve("/api/screen/readings?take=12", """{"readings":[],"total":0}""");
         page.Do("await renderScreenPanel();");
         return page;
     }
@@ -122,12 +123,13 @@ public class ScreenPanelTests
     {
         var page = Panel("Screenshots");
         page.Serve("/api/screen/scan", """
-            {"shot":"ScreenShot-2026-09-07_21-00-35-8E4.jpg","tookMs":170,
-             "name":"Arlington Rifle",
-             "fields":{"Manufacturer":"Hedeby Gunworks"},
-             "matches":[{"name":"Arlington Rifle","className":"hdgw_rifle_ballistic_01",
-                         "tier":"Exact","agrees":["manufacturer","volume"],"disagrees":[]}],
-             "named":[],"certain":true,"trouble":null}
+            {"shot":"ScreenShot-2026-09-07_21-00-35-8E4.jpg","shotAt":"2026-09-08T01:00:35Z",
+             "kind":"Tooltip","summary":"Arlington Rifle","tookMs":170,"checks":[],"lines":[],
+             "item":{"name":"Arlington Rifle",
+                     "fields":{"Manufacturer":"Hedeby Gunworks"},
+                     "matches":[{"name":"Arlington Rifle","className":"hdgw_rifle_ballistic_01",
+                                 "tier":"Exact","agrees":["manufacturer","volume"],"disagrees":[]}],
+                     "named":[],"certain":true,"trouble":null}}
             """);
 
         page.Do("await scanScreenshot();");
@@ -149,10 +151,12 @@ public class ScreenPanelTests
     {
         var page = Panel("Screenshots");
         page.Serve("/api/screen/scan", """
-            {"shot":"ScreenShot.jpg","tookMs":180,"name":null,"fields":{},"matches":[],
-             "named":[{"text":"MSD-423 Missile Rack",
-                       "candidates":["MSD-423 Missile Rack"],"exact":true}],
-             "certain":false,"trouble":null}
+            {"shot":"ScreenShot.jpg","shotAt":"2026-09-08T01:00:35Z","kind":"Tooltip",
+             "summary":"1 things named","tookMs":180,"checks":[],"lines":[],
+             "item":{"name":null,"fields":{},"matches":[],
+                     "named":[{"text":"MSD-423 Missile Rack",
+                               "candidates":["MSD-423 Missile Rack"],"exact":true}],
+                     "certain":false,"trouble":null}}
             """);
 
         page.Do("await scanScreenshot();");
@@ -169,9 +173,8 @@ public class ScreenPanelTests
     {
         var page = Panel("Screenshots");
         page.Serve("/api/screen/scan", """
-            {"shot":null,"tookMs":0,"name":null,"fields":{},"matches":[],"named":[],
-             "certain":false,
-             "trouble":"no screenshots yet - press Print Screen in the game and try again"}
+            {"shot":"","shotAt":"2026-09-08T01:00:35Z","kind":"Unknown","tookMs":0,"checks":[],"lines":[],
+             "summary":"no screenshots yet - press Print Screen in the game and try again"}
             """);
 
         page.Do("await scanScreenshot();");

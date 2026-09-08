@@ -4010,3 +4010,13 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 }
 
 #ledger-kinds { flex-wrap: wrap; align-items: baseline; }
+
+/* ---- the screen panel: a reading, and the verdicts beside it ---- */
+.screen-reading { padding: 8px 0; border-top: 1px solid var(--rule); }
+.screen-reading:first-child { border-top: 0; }
+.feed.screen-checks, .feed.screen-fittings { max-height: none; overflow: visible; margin-top: 6px; }
+.feed .k.agrees { color: var(--green); border-color: #1f5c3d; }
+.feed .k.differs { color: var(--amber); border-color: #6d4715; }
+.feed .k.new { color: var(--cyan); border-color: var(--cyan-deep); }
+.feed .k.unchecked { color: var(--dim); border-color: var(--rule-hot); }
+.feed.screen-fittings .what { color: var(--text); font-size: 12px; }

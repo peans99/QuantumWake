@@ -318,7 +318,35 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.0
+### 0.10.1
+
+- **Every screenshot you take can be read as it lands, and checked against
+  your logs.** Tick **Read each screenshot as it lands** on the Overlay page
+  and each new one is sorted into the screen it is — an item’s tooltip, the
+  Vehicle Loadout Manager, the mobiGlas map — and what it says is set beside
+  what the app had worked out from your logs at that moment. Where the two
+  disagree, it says so. Nothing already in the folder is read, and the setting
+  names the folder it follows.
+
+  **What your ship is actually carrying.** The logs record nothing about what
+  is bolted to a ship, so until now the Fleet page showed the factory fit,
+  which is the same for everyone. A loadout screenshot names the parts in each
+  port — 39 of 47 ports across the six frames in this install — and the Fleet
+  page shows them, dated, with the parts the factory did not fit marked as
+  such. On this install that is Genoa power plants, a Parapet shield and Chaos
+  missiles the Corsair did not ship with.
+
+  **Where you were, from the map.** The map footer names the system and the
+  place, and the reading is checked against where the logs had put you at the
+  second the shot was taken. The same screen says whether you had any accepted
+  contracts, and that is checked too.
+
+  **What it will not claim.** A part two catalogue entries fit equally is shown
+  as both, never guessed; a ship whose name half-read is offered as a
+  resemblance and nothing is built on it; a moment no session covers is
+  marked as unchecked rather than passed. The wallet balance is still printed
+  in a face the reader cannot see, and the reading says so in those words.
+  A screen this app has no reader for yet is kept with its text.
 
 - **The overlay can read what you copy, and the screenshots you take.** New on
   the Overlay page, off until you switch it on, and in two steps rather than

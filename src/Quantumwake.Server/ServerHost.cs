@@ -112,11 +112,19 @@ public static class ServerHost
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
+        builder.Services.AddSingleton<ScreenReadingStore>();
 
         // Built by hand rather than resolved, because the two readers come from
         // the host and may not exist at all.
         builder.Services.AddSingleton(sp =>
-            new ScreenInsightService(sp.GetRequiredService<LogLibrary>(), screen, clipboard));
+            new ScreenInsightService(
+                sp.GetRequiredService<LogLibrary>(),
+                sp.GetRequiredService<ScreenReadingStore>(),
+                screen, clipboard));
+
+        // Reads each screenshot as it lands, while the pilot has asked for that.
+        // Idle otherwise: it checks the setting, not the folder.
+        builder.Services.AddHostedService<ScreenWatchService>();
         builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
@@ -2205,18 +2213,55 @@ public static class ServerHost
         // the clipboard the pilot filled, both on a button, and it says which
         // of those it is able to do at all.
 
+        // The install comes from the closure and not the container: on a
+        // machine with none it is not registered, and a GET cannot take it
+        // as a body the way the scan endpoint's POST can.
         app.MapGet("/api/screen/settings", (
             ScreenSettingsStore settings, ScreenInsightService insight) => Results.Ok(new
         {
             settings.Current.Mode,
             settings.Current.Watch,
+            settings.Current.WatchScreenshots,
             canReadScreenshots = insight.CanReadScreenshots,
             canReadClipboard = insight.CanReadClipboard,
+
+            // Where the watch looks, said out loud: the pilot is agreeing to a
+            // folder being followed, and should be able to see which.
+            folder = install is null ? null : Screenshots.FolderFor(install.RootPath),
         }));
 
         app.MapPost("/api/screen/settings", (
-            ScreenSettingsStore settings, ScreenMode? mode, bool? watch) =>
-            Results.Ok(settings.Save(mode, watch)));
+            ScreenSettingsStore settings, ScreenMode? mode, bool? watch, bool? watchScreenshots) =>
+            Results.Ok(settings.Save(mode, watch, watchScreenshots)));
+
+        // What the screenshots said, newest first, with what the logs believed
+        // beside each. The whole store: it is bounded, and a page that has to
+        // page through three hundred one-line readings is not a page anybody
+        // wants.
+        app.MapGet("/api/screen/readings", (ScreenReadingStore readings, int? take) =>
+            Results.Ok(new
+            {
+                readings = readings.All().Take(take is > 0 ? take.Value : 50),
+                total = readings.All().Count,
+            }));
+
+        // The newest loadout read for each ship, for the fleet page - dated,
+        // because a screenshot is a moment and never a state.
+        app.MapGet("/api/screen/fittings", (ScreenReadingStore readings) =>
+            Results.Ok(readings.LatestLoadouts().Select(s => new
+            {
+                s.Shot,
+                s.ShotAt,
+                ship = s.Loadout!.Ship,
+                s.Loadout.Scope,
+                s.Loadout.Fittings,
+            })));
+
+        app.MapDelete("/api/screen/readings", (ScreenReadingStore readings) =>
+        {
+            readings.Clear();
+            return Results.Ok(new { cleared = true });
+        });
 
         app.MapPost("/api/screen/clipboard", async (
             ScreenInsightService insight,
@@ -2240,9 +2285,9 @@ public static class ServerHost
         {
             if (settings.Current.Mode != ScreenMode.Screenshots)
             {
-                return Results.Ok(new ScreenScan(
-                    null, null, null, new Dictionary<string, string>(), [], [], false,
-                    "screenshot analysis is switched off", 0));
+                return Results.Ok(new ScreenSighting(
+                    "", DateTimeOffset.UtcNow, ScreenKind.Unknown,
+                    "screenshot analysis is switched off", [], null, null, null, null, [], 0));
             }
 
             return Results.Ok(await insight.ScanNewestAsync(install?.RootPath, token));

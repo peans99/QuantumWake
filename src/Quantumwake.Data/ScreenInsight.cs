@@ -149,6 +149,7 @@ public static class ScreenInsight
     /// Every pair here came out of a real screenshot from a real install:
     /// <c>]</c> read as <c>1</c>, <c>[</c> as <c>t</c>, <c>D</c> as <c>O</c>,
     /// <c>1</c> as <c>I</c>, <c>5</c> as <c>S</c>, <c>&amp;</c> as <c>B</c>,
+    /// <c>6</c> as <c>B</c> - "MBA Cannon" for the M6A on a loadout frame -
     /// and the micro sign as <c>p</c>. Adding a pair nobody has seen is how
     /// this stops being a bounded correction and starts being a guess, so the
     /// list grows from evidence and from nothing else.
@@ -158,7 +159,7 @@ public static class ScreenInsight
         ['O'] = 'O', ['0'] = 'O', ['D'] = 'O', ['Q'] = 'O',
         ['I'] = 'I', ['1'] = 'I', ['L'] = 'I', [']'] = 'I', ['|'] = 'I',
         ['S'] = 'S', ['5'] = 'S',
-        ['B'] = 'B', ['8'] = 'B', ['&'] = 'B',
+        ['B'] = 'B', ['8'] = 'B', ['&'] = 'B', ['6'] = 'B',
         ['T'] = 'T', ['['] = 'T',
         ['U'] = 'U', ['V'] = 'U', ['μ'] = 'U', ['µ'] = 'U',
         ['Z'] = 'Z', ['2'] = 'Z',
@@ -510,11 +511,11 @@ public static class ScreenInsight
     }
 
     /// <summary>Case and punctuation removed, nothing else.</summary>
-    private static string Plain(string text) =>
+    internal static string Plain(string text) =>
         new([.. text.Where(char.IsLetterOrDigit)]);
 
     /// <summary>Plain, with the measured confusions collapsed.</summary>
-    private static string Fold(string text) =>
+    internal static string Fold(string text) =>
         new([.. Plain(text).ToUpperInvariant()
             .Select(c => Confusions.TryGetValue(c, out var to) ? to : c)]);
 }

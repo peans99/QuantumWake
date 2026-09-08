@@ -708,6 +708,178 @@ image is read and forgotten unless the pilot asks to keep the reading.
 
 ---
 
+## Step 3: the folder, the sorter and the checks
+
+Built and measured on the same eight frames, plus the app's own session data.
+The sorter is `src/Quantumwake.Data/ScreenFrame.cs`, the checks are
+`ScreenChecks.cs`, the beliefs they check against come from
+`LibraryBeliefs.cs`, and the harness is still the CLI:
+`dotnet run --project src\Quantumwake.Cli -- --screen <boxes.txt> --handle nekron`
+now prints which screen a frame is and what that screen carries before it
+asks the tooltip question.
+
+### The idea, in one sentence
+
+A screenshot is dated by its own filename, so everything it says can be set
+beside what the logs had led the app to believe **at that second** — and the
+disagreement is the useful output. The logs never carry a balance, never say
+where the pilot stood, and say nothing about what is bolted to a ship. A
+screenshot does all three.
+
+### Sorting a frame
+
+Decided from anchor text the game prints, after the whole frame is read, and
+never from where the pilot said they were:
+
+| Anchor | Screen | Frames |
+|---|---|---|
+| `Vehicle Loadout Manager` | Loadout | 6 of 8 |
+| A footer matching `place > 0.00° -155.25° 68.33GM` | Map | 1 |
+| A tooltip with labelled fields | Tooltip | 1 |
+| Six or more of the app bar's eleven words on one row | mobiGlas, unread | 0 |
+| Nothing above | Unknown | 0 |
+
+**The first version recognised no loadout frame at all.** The fold that undoes
+the measured confusions turns D into O and L into I, so a literal written in
+capitals never equals its own folded reading: `Fold("VEHICLE LOADOUT MANAGER")`
+is `VEHICIE IOAOOUT MANAGER`. Every anchor is now folded on both sides. Worth
+writing down because it will happen again to whoever adds the next anchor.
+
+The app bar — `HOME HEALTH COMMS CONTRACTS MAPS JOURNAL ASSETS REP WALLET
+LANDING VEHICLES` — read in full on every one of the seven mobiGlas frames,
+and its words sit within a line height of each other. That is what separates
+a mobiGlas screen from the same words scattered through a contract's text,
+and it is the family a screen with no reader yet is filed under.
+
+### The loadout, read
+
+The tree of ports is anchored on the tab row (`Liveries` at x=730) and taken
+to be everything under it within ten line heights of that edge; the detail
+panel starts thirty heights away. A port label and its part are paired by
+the same geometry as a tooltip's name and stats, upside down: the part is the
+line within two label heights below (measured 20–22 px under labels of
+14–19 px). A label with nothing that close beneath it has **nothing read
+under it** — which is either an empty port or a turret whose greyed heading
+the engine skipped and whose weapons are listed under it, and the frame does
+not say which, so neither does the reading.
+
+The screen decorates names, and the decoration is evidence:
+
+| Printed | Catalogue | What the decoration says |
+|---|---|---|
+| `Civ/2/C Frost-Star EX` | `Frost-Star EX` | size 2, grade C = 3 |
+| `Ind/3/A Parapet` | `Parapet` | size 3, grade A = 1 |
+| `[IR3] 'Chaos' Missile` | `'Chaos' III Missile` | size 3, the numeral spelt as a tag |
+
+Size and grade are checked against the catalogue the way a tooltip's volume
+is — same fact, other source — and they are what tell the **Torrent quantum
+drive from the Torrent point-defence gun** when the name alone cannot: both
+are size 2, only the drive is grade 3.
+
+Across the six loadout frames, 39 of 47 ports read with a part the catalogue
+names, 4 had nothing readable under them, and 4 read as text that matched
+nothing (`vanpuck se Gimbal Mount`, kept verbatim). Two readings were
+deliberately withheld:
+
+- **`MBA Cannon` was the M6A**, plainly, on the frame. With 6 read as B — a
+  confusion measured here for the first time, and now in the list — the
+  reading fits the M8A exactly as well, and the first version named the M8A
+  with a confident face. It now names neither and shows both. Confidently
+  naming the wrong gun is the one failure this feature is built not to have,
+  and it took a real frame to have it.
+- **`DUKE CORSAIR`** on one frame: the maker's word went wrong and the model's
+  did not. The ship is offered as *looks like Drake Corsair* and nothing is
+  built on it — no factory comparison, no fleet entry — because a
+  resemblance is not a reading.
+
+### The factory comparison
+
+`Community.Slots` holds the parts a ship ships with, keyed by class; the
+dataset's ship table joins the display name the screen prints to that class.
+Matching is by part name and never by port, because the screen's port labels
+are not the data's port ids and half a join would put a real part in the
+wrong hole.
+
+Run against the real data, the Corsair on these frames is **not stock**:
+
+```
+not stock: Genoa in Power Plant 1, Genoa in Power Plant 2, Parapet in Shield Generator 1
+not stock: 'Chaos' III Missile in Missile Slot 2, ...
+not stock: M5A Cannon in Slot, ...
+not stock: Scorpion GT-215 Gatling in I-sot, ...
+```
+
+against a factory fit of DayBreak, 5CA 'Akura', Arrester III and M6A/M7A.
+That is the first time the app has known anything about this ship that was
+not true of every other Corsair in the game.
+
+### The map, checked
+
+The footer resolves through the existing terminal matcher: `DUDLEY & DAUGHTERS`
+→ `RR_P6_L4`, Pyro. Two fixes on the way: a lone `B`, `6` or `8` between two
+words is the ampersand (`DUDLEY B DAUGHTERS` once, `DUDLEY 6 DAUGHTERS` the next
+time), and the degree signs the engine turns into trailing zeroes are dropped
+on the strength of the game printing exactly two decimals.
+
+The real frame was taken on 7 September at 21:30, and **no session covers that
+moment** — `Game.log` was last written on the 5th — so the honest verdict is
+*unchecked*, and that is what it says. Re-dated into the last real session
+(Orison, 28 August) it reads:
+
+```
+differs   Where you were: "PYRO > DUDLEY & DAUGHTERS"  vs  "Stanton > Orison"
+agrees    Contracts: "no accepted contracts"  vs  "none open"
+```
+
+`NO ACCEPTED CONTRACTS` is printed on the map screen, and it is a count the
+logs can be checked against: contracts accepted before the moment and not
+ended by it.
+
+### The wallet, still
+
+Every mobiGlas frame carries the balance beside the handle, the handle reads
+on every one, and the figure reads on none — the same finding as step 1, now
+said in the reading's own words rather than as an empty field. The check is
+built for the day it does read: the first figure is a **baseline**, because
+the logs carry no balance to compare it with, and every figure after that is
+checked against the last one plus the ledger's movement in between. The
+difference is money that moved without a line in the log, which is the number
+the Ledger has never been able to show.
+
+### The folder watch
+
+A listing every two seconds, not a file-system watcher: the folder does not
+exist until the first screenshot, and eight files cost nothing to list. A
+file counts once its last write is two seconds in the past — the game writes
+a JPEG over some tens of milliseconds, and reading on creation reads half a
+file. **Nothing already in the folder when the watch is switched on is read.**
+The pilot enabled reading their screenshots, not their archive, and the
+button for the newest one is still there for that. The setting names the
+folder it follows.
+
+Readings are kept, newest first, three hundred at most, dated by the
+screenshot and never by the read. A frame with no reader keeps every line the
+engine returned, because that text is what the next reader gets written from
+— every reader here was written from a dump of exactly that kind.
+
+### What is waiting on a frame
+
+Nobody has photographed these yet, so nothing reads them, and nothing here
+pretends to:
+
+| Screen | What it would confirm |
+|---|---|
+| Commodity kiosk | The commodity name the log never gives for a sale, and price per SCU as a unit check |
+| mobiGlas Assets, and the inventory screen | The Stash page, which cannot see what was moved by hand |
+| mobiGlas Contracts | The mission funnel, with rewards and reputation figures the log does not carry |
+| mobiGlas Rep | Nothing today: this would be a new signal, not a confirmation |
+| mobiGlas Wallet | Whether the balance is printed anywhere in the regular face |
+
+The last is the cheap one. If any screen prints the balance in the face the
+engine reads, the hard problem above disappears.
+
+---
+
 ## Open questions
 
 1. **Whole frame or a region?** Reading the whole screenshot is simple and
@@ -717,10 +889,9 @@ image is read and forgotten unless the pilot asks to keep the reading.
    an inspected item is what the player has centred. Cheap to try once there is
    a real frame.
 
-2. **How does a screenshot reach the app?** A watched folder is the least
-   friction — new file appears, panel updates. A drop target is more explicit
-   and needs no configuration. A watched folder also means the app is following
-   a directory the pilot may keep other things in, which wants saying out loud.
+2. ~~**How does a screenshot reach the app?**~~ **Answered** — see **Step 3**.
+   The game's own folder, listed every two seconds, switched on by the pilot,
+   named on the settings page, and reading nothing that was there before.
 
 3. **What happens with several items on screen?** An inventory screen is dozens
    of names. Listing all of them is probably right, and probably wants the same
@@ -754,15 +925,18 @@ right.
 2b. **Match on fields when there is no name.** A manufacturer and a type narrow
    26,028 items to a handful, and one measured frame has exactly that and no
    readable name. Small, and it uses only what is already here.
-3. **The panel**, showing what was read beside what it matched, with the
-   existing entity drawer behind a click. The reading is positional now, so
-   whatever does the OCR has to hand the boxes through rather than a list of
-   strings.
+3. ~~**The panel**, showing what was read beside what it matched.~~ **Done** —
+   see **Step 3**. Each reading is shown with what the logs believed beside it
+   and a verdict in words; the newest one is a card on the Now page. The entity
+   drawer behind a click is still to do.
 4. **Prices and stock**, from UEX and the dataset, reusing the commodity and
    part cards rather than drawing new ones.
-5. **Fitted loadouts for the fleet** - see above. Last in the order and first in
-   value: it is the only one of these that tells the pilot something no other
-   part of the app could ever have told them.
+5. ~~**Fitted loadouts for the fleet.**~~ **Done** — see **Step 3**. The Fleet
+   page shows what each ship was last photographed carrying, dated, with the
+   parts the factory did not fit marked as such.
+6. **Readers for the screens nobody has photographed yet** — the table at the
+   end of Step 3. Each is one function written from a dump the folder watch
+   already keeps.
 
 Step 1 was not a formality and did not go entirely the expected way: the panel
 text read better than hoped and the wallet balance did not read at all. Both of

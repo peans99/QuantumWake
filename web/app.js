@@ -4445,7 +4445,10 @@ const OVERLAY_LABELS = {
  * off until asked for, and the server enforces that as well - a panel switched
  * off should stay off however the request arrives.
  */
-let screenSettings = { mode: 'Off', watch: false, canReadScreenshots: false, canReadClipboard: false };
+let screenSettings = {
+  mode: 'Off', watch: false, watchScreenshots: false,
+  canReadScreenshots: false, canReadClipboard: false, folder: null,
+};
 
 /**
  * How long a finding stays up.
@@ -4458,6 +4461,9 @@ const SCREEN_HOLD_MS = 30000;
 
 let screenHold = null;
 let screenWatcher = null;
+
+/** The newest reading the page has seen, so the list only redraws on a new one. */
+let screenLatestShot = null;
 
 async function renderScreenPanel() {
   try {
@@ -4481,12 +4487,17 @@ async function renderScreenPanel() {
   const watch = $('#screen-watch');
   if (watch) watch.checked = !!screenSettings.watch;
 
+  const folder = $('#screen-watch-folder');
+  if (folder) folder.checked = !!screenSettings.watchScreenshots;
+
   applyScreenMode();
+  renderScreenReadings().catch(() => {});
 }
 
 /** Shows the controls the chosen mode actually has. */
 function applyScreenMode() {
   const on = screenSettings.mode !== 'Off';
+  const shots = screenSettings.mode === 'Screenshots';
 
   const controls = $('#screen-controls');
   if (controls) controls.hidden = !on;
@@ -4495,12 +4506,26 @@ function applyScreenMode() {
   // being greyed out: a control that is there and refuses is worse than one
   // that is not there yet.
   const scan = $('#screen-scan');
-  if (scan) scan.hidden = screenSettings.mode !== 'Screenshots';
+  if (scan) scan.hidden = !shots;
+
+  const folderLabel = $('#screen-watch-folder-label');
+  if (folderLabel) folderLabel.hidden = !shots;
+
+  // The folder being followed, named. The pilot is agreeing to a directory
+  // being watched and should be able to see which one.
+  const folder = $('#screen-folder');
+  if (folder) {
+    const watching = shots && screenSettings.watchScreenshots && screenSettings.folder;
+    folder.hidden = !watching;
+    folder.textContent = watching
+      ? `Reading new screenshots from ${screenSettings.folder} as they land. Nothing already there is read.`
+      : '';
+  }
 
   const status = $('#screen-mode-status');
   if (status) {
     status.textContent =
-      screenSettings.mode === 'Screenshots' ? 'clipboard and screenshots'
+      shots ? (screenSettings.watchScreenshots ? 'clipboard and every screenshot' : 'clipboard and screenshots')
       : screenSettings.mode === 'CopyOnly' ? 'clipboard only'
       : 'off';
   }
@@ -4508,22 +4533,24 @@ function applyScreenMode() {
   startScreenWatch();
 }
 
-async function saveScreenSettings(mode, watch) {
+async function saveScreenSettings(mode, watch, watchScreenshots) {
   screenSettings = {
     ...screenSettings,
     ...await getJson2(
-      `/api/screen/settings?mode=${encodeURIComponent(mode)}&watch=${watch ? 'true' : 'false'}`),
+      `/api/screen/settings?mode=${encodeURIComponent(mode)}&watch=${watch ? 'true' : 'false'}`
+      + `&watchScreenshots=${watchScreenshots ? 'true' : 'false'}`),
   };
 
   applyScreenMode();
 }
 
 /**
- * The clipboard, on a timer, when asked for.
+ * The clipboard and the readings, on a timer, when asked for.
  *
  * Polled rather than pushed because there is no event for "somebody copied
- * something" that reaches a web page. Three seconds is slower than a person
- * types /showlocation and alt-tabs, and slow enough not to be a spin.
+ * something" that reaches a web page, and the folder watch lives in the
+ * server. Three seconds is slower than a person types /showlocation and
+ * alt-tabs, and slow enough not to be a spin.
  */
 function startScreenWatch() {
   if (screenWatcher) {
@@ -4531,12 +4558,18 @@ function startScreenWatch() {
     screenWatcher = null;
   }
 
-  if (screenSettings.mode === 'Off' || !$('#screen-watch')?.checked) return;
+  if (screenSettings.mode === 'Off') return;
+
+  const clipboard = !!$('#screen-watch')?.checked;
+  const folder = screenSettings.mode === 'Screenshots' && screenSettings.watchScreenshots;
+
+  if (!clipboard && !folder) return;
 
   screenWatcher = setInterval(() => {
     // Quietly: a watcher that announced "nothing copied" every three seconds
     // would be unusable.
-    parseClipboard(true).catch(() => {});
+    if (clipboard) parseClipboard(true).catch(() => {});
+    if (folder) renderScreenReadings().catch(() => {});
   }, 3000);
 }
 
@@ -4596,28 +4629,50 @@ async function parseClipboard(quiet = false) {
   });
 }
 
-async function scanScreenshot() {
-  screenSay('reading your last screenshot…');
-  screenShow(() => {});
+/** What kind of screen a reading was, in words a pilot would use. */
+const SCREEN_KINDS = {
+  Tooltip: 'item',
+  Loadout: 'loadout',
+  Map: 'map',
+  MobiGlas: 'mobiGlas',
+  Unknown: 'unread',
+};
 
-  const scan = await getJson2('/api/screen/scan');
+/** A check's verdict, worded for a reader. */
+const SCREEN_VERDICTS = {
+  agrees: 'agrees',
+  differs: 'differs',
+  new: 'new',
+  unchecked: 'not checked',
+};
 
-  if (scan.trouble && !scan.name && !scan.named?.length) {
-    screenSay(scan.trouble);
-    return;
-  }
+/** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
+function screenCheckRow(check) {
+  const li = el('li');
+  li.append(el('span', `k ${check.verdict}`, SCREEN_VERDICTS[check.verdict] || check.verdict));
 
-  screenSay(`${scan.shot} · read in ${scan.tookMs} ms`);
+  const what = el('span', 'what', `${check.subject}: ${check.claim}`);
+  li.append(what);
 
-  screenShow((box) => {
-    if (scan.name) {
-      box.append(el('div', 'strong', scan.name));
+  // The belief is shown whatever the verdict: an agreement with nothing
+  // beside it looks like a screen that was taken on trust.
+  li.append(el('span', 'd', ` · logs: ${check.belief}`));
 
-      for (const [label, value] of Object.entries(scan.fields || {}))
+  if (check.note) li.append(el('span', 'd', ` · ${check.note}`));
+  return li;
+}
+
+/** Everything a reading says, into a box. Shared by the panel and the list. */
+function renderSighting(box, s, { full = true } = {}) {
+  if (s.item) {
+    if (s.item.name) {
+      box.append(el('div', 'strong', s.item.name));
+
+      for (const [label, value] of Object.entries(s.item.fields || {}))
         box.append(el('div', 'muted', `${label}: ${value}`));
     }
 
-    for (const match of scan.matches || []) {
+    for (const match of s.item.matches || []) {
       const line = el('div', null, match.name);
 
       if (match.agrees?.length)
@@ -4630,24 +4685,240 @@ async function scanScreenshot() {
     }
 
     // Said out loud rather than left to be inferred from an empty space.
-    if (scan.trouble) box.append(el('div', 'muted', scan.trouble));
+    if (s.item.trouble) box.append(el('div', 'muted', s.item.trouble));
 
-    const named = (scan.named || []).filter((n) => n.exact);
+    const named = (s.item.named || []).filter((n) => n.exact);
 
-    if (!scan.name && named.length) {
+    if (!s.item.name && named.length) {
       box.append(el('div', 'muted', `Also on this frame: ${named.length} named`));
       for (const line of named.slice(0, 8))
         box.append(el('div', 'muted', line.candidates[0] || line.text));
     }
-  });
+  }
+
+  if (s.loadout) {
+    const ship = s.loadout.ship
+      || (s.loadout.looksLike?.length
+        ? `read as “${s.loadout.shipRead}”, looks like ${s.loadout.looksLike.join(' or ')}`
+        : `read as “${s.loadout.shipRead || '?'}”`);
+
+    box.append(el('div', 'strong', ship));
+
+    // The game's own caveat, carried through as written: this is the ships
+    // at one place, not the fleet.
+    if (s.loadout.scope) box.append(el('div', 'muted', s.loadout.scope));
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+
+      for (const f of s.loadout.fittings || []) {
+        const li = el('li');
+        li.append(el('span', 'what', f.slot));
+
+        if (f.nothingRead) {
+          li.append(el('span', 'd', ' · nothing read under it'));
+        } else if (f.name) {
+          li.append(el('span', 'd', ` · ${f.name}`));
+          if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
+          if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
+          if (f.tier !== 'Exact') li.append(el('span', 'd', ` · read “${f.read}”`));
+        } else {
+          li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+        }
+
+        list.append(li);
+      }
+
+      box.append(list);
+    }
+  }
+
+  if (s.map) {
+    const place = s.map.placeRead
+      ? (s.map.systemRead ? `${s.map.systemRead} > ${s.map.placeRead}` : s.map.placeRead)
+      : 'no place read off the footer';
+
+    box.append(el('div', 'strong', place));
+
+    if (s.map.gigametres != null) {
+      box.append(el('div', 'muted',
+        `${s.map.latitude}° ${s.map.longitude}° · ${s.map.gigametres} Gm`));
+    }
+  }
+
+  if (s.wallet) {
+    box.append(el('div', 'muted', s.wallet.balance != null
+      ? `Wallet: ${Number(s.wallet.balance).toLocaleString()} aUEC`
+      : `Wallet: ${s.wallet.trouble}`));
+  }
+
+  if (s.kind === 'MobiGlas' || s.kind === 'Unknown') {
+    box.append(el('div', 'muted', s.summary));
+
+    // The text is the whole point for a screen with no reader: it is what a
+    // reader gets written from.
+    if (full && s.lines?.length) {
+      const text = el('details');
+      text.append(el('summary', 'muted', `${s.lines.length} lines read`));
+      for (const line of s.lines.slice(0, 60)) text.append(el('div', 'muted', line));
+      box.append(text);
+    }
+  }
+
+  if (s.checks?.length) {
+    const list = el('ul', 'feed screen-checks');
+    for (const check of s.checks) list.append(screenCheckRow(check));
+    box.append(list);
+  }
+}
+
+async function scanScreenshot() {
+  screenSay('reading your last screenshot…');
+  screenShow(() => {});
+
+  const s = await getJson2('/api/screen/scan');
+
+  if (!s.shot) {
+    screenSay(s.summary || 'nothing read');
+    return;
+  }
+
+  screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · read in ${s.tookMs} ms`);
+  screenShow((box) => renderSighting(box, s));
+  renderScreenReadings(true).catch(() => {});
+}
+
+/**
+ * What the screenshots said, newest first, on the panel and on the Now card.
+ *
+ * Redrawn only when a new one has landed, because the list is polled and a
+ * list that flickers every three seconds cannot be read.
+ */
+async function renderScreenReadings(force = false) {
+  if (screenSettings.mode !== 'Screenshots') {
+    const card = $('#now-screen-card');
+    if (card) card.hidden = true;
+    return;
+  }
+
+  const got = await getJson('/api/screen/readings?take=12');
+  const readings = got.readings || [];
+  const latest = readings[0];
+
+  if (!force && latest && latest.shot === screenLatestShot) return;
+  screenLatestShot = latest?.shot || null;
+
+  const list = $('#screen-readings');
+
+  if (list) {
+    list.textContent = '';
+
+    if (!readings.length) {
+      list.append(el('p', 'muted', 'No screenshots read yet.'));
+    } else {
+      for (const s of readings) {
+        const row = el('div', 'screen-reading');
+        row.append(el('div', 'muted',
+          `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}`));
+        renderSighting(row, s, { full: s === latest });
+        list.append(row);
+      }
+    }
+  }
+
+  renderNowScreenCard(latest);
+}
+
+/** The newest reading where a pilot is looking while they play. */
+function renderNowScreenCard(s) {
+  const card = $('#now-screen-card');
+  if (!card) return;
+
+  if (!s) {
+    card.hidden = true;
+    return;
+  }
+
+  card.hidden = false;
+  $('#now-screen-summary').textContent = s.summary;
+  $('#now-screen-when').textContent =
+    `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString()} · ${s.shot}`;
+
+  const checks = $('#now-screen-checks');
+  checks.textContent = '';
+  for (const check of s.checks || []) checks.append(screenCheckRow(check));
+
+  const differs = (s.checks || []).filter((c) => c.verdict === 'differs').length;
+
+  $('#now-screen-note').textContent =
+    differs ? `${differs} thing${differs === 1 ? '' : 's'} the screen and the logs disagree on.`
+    : (s.checks || []).length ? 'The logs and the screen agree on everything checked.'
+    : 'Nothing on this screen the logs could be checked against.';
+}
+
+/**
+ * What each ship was last photographed carrying, on the fleet page.
+ *
+ * Dated, every time: a screenshot is a moment and not a state, and a loadout
+ * from last week shown as the loadout is lying by a week.
+ */
+async function renderFleetFittings() {
+  const title = $('#fleet-fittings-title');
+  const caption = $('#fleet-fittings-caption');
+  const grid = $('#fleet-fittings');
+  if (!grid) return;
+
+  let ships = [];
+
+  try {
+    ships = await getJson('/api/screen/fittings');
+  } catch {
+    ships = [];
+  }
+
+  grid.textContent = '';
+  const any = ships.length > 0;
+  if (title) title.hidden = !any;
+  if (caption) caption.hidden = !any;
+  if (!any) return;
+
+  for (const s of ships) {
+    const card = el('article', 'ship-card');
+    card.append(el('div', 'strong', s.ship));
+    card.append(el('div', 'muted', `as photographed ${new Date(s.shotAt).toLocaleString()}`));
+    if (s.scope) card.append(el('div', 'muted', s.scope));
+
+    const list = el('ul', 'feed screen-fittings');
+
+    for (const f of s.fittings || []) {
+      const li = el('li');
+      li.append(el('span', 'what', f.slot));
+
+      if (f.nothingRead) li.append(el('span', 'd', ' · nothing read under it'));
+      else if (f.name) {
+        li.append(el('span', 'd', ` · ${f.name}`));
+        if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
+        if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
+      } else li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+
+      list.append(li);
+    }
+
+    card.append(list);
+    grid.append(card);
+  }
 }
 
 $('#screen-mode')?.addEventListener('change', async () => {
-  await saveScreenSettings($('#screen-mode').value, $('#screen-watch')?.checked);
+  await saveScreenSettings($('#screen-mode').value, $('#screen-watch')?.checked, $('#screen-watch-folder')?.checked);
 });
 
 $('#screen-watch')?.addEventListener('change', async () => {
-  await saveScreenSettings(screenSettings.mode, $('#screen-watch').checked);
+  await saveScreenSettings(screenSettings.mode, $('#screen-watch').checked, $('#screen-watch-folder')?.checked);
+});
+
+$('#screen-watch-folder')?.addEventListener('change', async () => {
+  await saveScreenSettings(screenSettings.mode, $('#screen-watch')?.checked, $('#screen-watch-folder').checked);
 });
 
 $('#screen-parse')?.addEventListener('click', async (e) => {

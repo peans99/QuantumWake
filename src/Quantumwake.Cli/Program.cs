@@ -36,7 +36,7 @@ if (install is null)
 // lets a bad match be reproduced by editing a file.
 if (GetOption(args, "--screen") is { } screenFile)
 {
-    return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"));
+    return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"), GetOption(args, "--handle"));
 }
 
 var liveOnly = args.Contains("--live-only");
@@ -164,7 +164,7 @@ static List<ScreenTextLine> Placed(IEnumerable<string> raw)
 /// in anybody's logs, and parsing 400 MB to answer it would make the harness
 /// too slow to use while iterating on the matcher.
 /// </remarks>
-static int Screen(string linesFile, string installRoot, string? catalogueQuery)
+static int Screen(string linesFile, string installRoot, string? catalogueQuery, string? handle)
 {
     if (!File.Exists(linesFile))
     {
@@ -209,6 +209,51 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery)
     }
 
     var lines = Placed(File.ReadAllLines(linesFile));
+
+    // Which screen this is, and what that screen carries, before the tooltip
+    // question is asked of it. The install types a ship as NOITEM_Vehicle, so
+    // the ship names come from the same catalogue as the parts.
+    var shipNames = items
+        .Where(i => i.Type?.Contains("Vehicle", StringComparison.OrdinalIgnoreCase) == true)
+        .Select(i => i.Name)
+        .Where(n => !string.IsNullOrWhiteSpace(n))
+        .Select(n => n!)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    var frame = ScreenFrames.Read(lines, items, shipNames, handle);
+
+    Console.WriteLine();
+    Console.WriteLine($"Screen    : {frame.Kind}");
+
+    if (frame.Wallet is { } wallet)
+        Console.WriteLine($"Wallet    : {(wallet.Balance is { } b ? $"{b:N0} aUEC" : wallet.Trouble)}");
+
+    if (frame.Map is { } map)
+    {
+        Console.WriteLine($"System    : {map.SystemRead ?? "(not read)"}");
+        Console.WriteLine($"Place     : {map.PlaceRead ?? "(not read)"}");
+        Console.WriteLine($"Position  : {map.Latitude}° {map.Longitude}° {map.Gigametres} Gm");
+        Console.WriteLine($"Contracts : {(map.NoAcceptedContracts ? "none accepted" : "(not stated)")}");
+    }
+
+    if (frame.Loadout is { } loadout)
+    {
+        Console.WriteLine($"Ship      : {loadout.Ship ?? "(not named)"}  read \"{loadout.ShipRead}\""
+            + (loadout.LooksLike.Count > 0 ? $"  looks like {string.Join(", ", loadout.LooksLike)}" : ""));
+        Console.WriteLine($"Scope     : {loadout.Scope ?? "(none)"}");
+        Console.WriteLine($"Ports     : {loadout.Fittings.Count}");
+
+        foreach (var fitting in loadout.Fittings)
+        {
+            var what = fitting.NothingRead ? "(nothing read under it)"
+                : fitting.Name is not null ? $"{fitting.Name}  [{fitting.Tier}{(fitting.Agrees.Count > 0 ? ", " + string.Join(", ", fitting.Agrees) + " agree" : "")}{(fitting.Disagrees.Count > 0 ? ", " + string.Join(", ", fitting.Disagrees) + " disagree" : "")}]"
+                : $"\"{fitting.Read}\"  [unmatched]";
+
+            Console.WriteLine($"  {fitting.Slot,-32} {what}");
+        }
+    }
+
     var result = ScreenInsight.Look(lines, items);
 
     // A frame with no tooltip on it still has names all over it, and that is

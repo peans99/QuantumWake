@@ -278,6 +278,14 @@
         <div class="note" id="now-party-note"></div>
       </article>
 
+      <article class="card span2" id="now-screen-card" data-card="screen" hidden>
+        <div class="card-label">Last screenshot</div>
+        <div class="value" id="now-screen-summary">&mdash;</div>
+        <div class="sub" id="now-screen-when"></div>
+        <ul class="feed screen-checks" id="now-screen-checks"></ul>
+        <div class="note" id="now-screen-note"></div>
+      </article>
+
       <article class="card span2" id="now-earning-card" data-card="earning" hidden>
         <div class="card-label">Trading rate</div>
         <div class="value" id="now-earning-rate">&mdash;</div>
@@ -766,6 +774,16 @@
       leave every total. Prices are UEX in-game purchase prices, when enabled.
     </p>
     <div id="fleet-ships" class="ship-grid"></div>
+
+    <h2 class="spaced" id="fleet-fittings-title" hidden>Fitted, as last photographed</h2>
+    <p class="muted caption" id="fleet-fittings-caption" hidden>
+      The logs record nothing about what is bolted to a ship, so this comes
+      from the Vehicle Loadout Manager screenshots you have taken and from
+      nowhere else. Each is a moment, not a state: it says what was fitted when
+      the shot was taken, and the date beside it is part of the answer. A part
+      marked not stock is one the ship did not ship with.
+    </p>
+    <div id="fleet-fittings" class="ship-grid"></div>
 
     <h2 class="spaced" id="fleet-vehicles-title" hidden>Ground vehicles</h2>
     <div id="fleet-vehicles" class="ship-grid"></div>
@@ -1568,10 +1586,27 @@
           <label class="muted" title="Check the clipboard on its own every few seconds">
             <input type="checkbox" id="screen-watch"> Watch the clipboard
           </label>
+          <label class="muted" id="screen-watch-folder-label" hidden
+                 title="Read each new screenshot as the game saves it. Nothing already in the folder is read.">
+            <input type="checkbox" id="screen-watch-folder"> Read each screenshot as it lands
+          </label>
         </div>
 
+        <p class="muted" id="screen-folder" hidden></p>
         <p class="muted" id="screen-status" aria-live="polite"></p>
         <div id="screen-result"></div>
+
+        <p class="muted">
+          Each screenshot is sorted into the screen it is — an item's tooltip,
+          the Vehicle Loadout Manager, the mobiGlas map — and what it says is set
+          beside what your logs had led the app to believe at that moment. The
+          logs never carry a balance, where you stood, or what is bolted to your
+          ship; a screenshot does, and the disagreement is the useful part. A
+          screen this app has no reader for yet is kept with its text, which is
+          what the next reader gets written from.
+        </p>
+
+        <div id="screen-readings"></div>
       </div>
     </div>
 

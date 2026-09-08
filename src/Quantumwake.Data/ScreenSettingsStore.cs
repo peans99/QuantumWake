@@ -9,9 +9,16 @@ namespace Quantumwake.Data;
 /// Whether the clipboard is checked on its own rather than on a button. Only
 /// meaningful when the mode is not <see cref="ScreenMode.Off"/>.
 /// </param>
+/// <param name="WatchScreenshots">
+/// Whether each new screenshot is read as it lands in the game's folder,
+/// rather than the newest one on a button. Only meaningful in
+/// <see cref="ScreenMode.Screenshots"/>, and it reads nothing that was in the
+/// folder before it was switched on.
+/// </param>
 public sealed record ScreenSettings(
     ScreenMode Mode = ScreenMode.Off,
-    bool Watch = false)
+    bool Watch = false,
+    bool WatchScreenshots = false)
 {
     /// <summary>The setting as it will actually be used, out of anything sent.</summary>
     /// <remarks>
@@ -19,11 +26,14 @@ public sealed record ScreenSettings(
     /// storing it would let the panel come back saying it is watching when it
     /// is doing nothing at all.
     /// </remarks>
-    public static ScreenSettings Clean(ScreenMode? mode, bool? watch)
+    public static ScreenSettings Clean(ScreenMode? mode, bool? watch, bool? watchScreenshots = null)
     {
         var settled = mode ?? ScreenMode.Off;
 
-        return new ScreenSettings(settled, settled != ScreenMode.Off && watch == true);
+        return new ScreenSettings(
+            settled,
+            settled != ScreenMode.Off && watch == true,
+            settled == ScreenMode.Screenshots && watchScreenshots == true);
     }
 }
 
@@ -53,9 +63,9 @@ public sealed class ScreenSettingsStore
         get { lock (_gate) return _current; }
     }
 
-    public ScreenSettings Save(ScreenMode? mode, bool? watch)
+    public ScreenSettings Save(ScreenMode? mode, bool? watch, bool? watchScreenshots = null)
     {
-        var settled = ScreenSettings.Clean(mode, watch);
+        var settled = ScreenSettings.Clean(mode, watch, watchScreenshots);
 
         lock (_gate)
         {
@@ -83,7 +93,7 @@ public sealed class ScreenSettingsStore
             if (!File.Exists(_path)) return;
 
             var read = JsonSerializer.Deserialize<ScreenSettings>(File.ReadAllText(_path), Json);
-            _current = ScreenSettings.Clean(read?.Mode, read?.Watch);
+            _current = ScreenSettings.Clean(read?.Mode, read?.Watch, read?.WatchScreenshots);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {

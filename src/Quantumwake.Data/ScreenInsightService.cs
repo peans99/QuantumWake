@@ -43,7 +43,8 @@ public sealed record ClipboardReading(
     string? Trouble);
 
 /// <summary>
-/// The screenshot feature, joined up: a file, an engine, and the catalogue.
+/// The screenshot feature, joined up: a file, an engine, the catalogue, and
+/// what the logs believed.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -59,6 +60,7 @@ public sealed record ClipboardReading(
 /// </remarks>
 public sealed class ScreenInsightService(
     LogLibrary library,
+    ScreenReadingStore readings,
     IScreenReader? reader = null,
     IClipboardReader? clipboard = null)
 {
@@ -66,61 +68,99 @@ public sealed class ScreenInsightService(
 
     public bool CanReadClipboard => clipboard is not null;
 
-    /// <summary>Reads the newest screenshot and says what it holds.</summary>
-    public async Task<ScreenScan> ScanNewestAsync(string? installRoot, CancellationToken token = default)
+    /// <summary>Why a screenshot cannot be read right now, or null when one can.</summary>
+    public string? Excuse(string? installRoot)
     {
         if (reader is null)
-            return Nothing("this copy cannot read screenshots - the overlay does that");
+            return "this copy cannot read screenshots - the overlay does that";
 
         if (installRoot is not { Length: > 0 })
-            return Nothing("no Star Citizen install found to take screenshots from");
+            return "no Star Citizen install found to take screenshots from";
 
-        if (Screenshots.Newest(installRoot) is not { } shot)
-        {
-            return Nothing(
-                "no screenshots yet - press Print Screen in the game and try again");
-        }
+        return null;
+    }
+
+    /// <summary>Reads the newest screenshot and says what it holds.</summary>
+    public async Task<ScreenSighting> ScanNewestAsync(string? installRoot, CancellationToken token = default)
+    {
+        if (Excuse(installRoot) is { } excuse)
+            return Nothing("", DateTimeOffset.UtcNow, excuse);
+
+        if (Screenshots.Newest(installRoot!) is not { } shot)
+            return Nothing("", DateTimeOffset.UtcNow, "no screenshots yet - press Print Screen in the game and try again");
+
+        return await ReadShotAsync(shot, token);
+    }
+
+    /// <summary>
+    /// Reads one screenshot, works out which screen it is, checks what it
+    /// says against the logs, and remembers the result.
+    /// </summary>
+    public async Task<ScreenSighting> ReadShotAsync(string path, CancellationToken token = default)
+    {
+        var info = new FileInfo(path);
+        var shotAt = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
+
+        if (reader is null)
+            return Nothing(info.Name, shotAt, "this copy cannot read screenshots - the overlay does that");
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         IReadOnlyList<ScreenTextLine> lines;
 
         try
         {
-            lines = await reader.ReadAsync(shot, token);
+            lines = await reader.ReadAsync(path, token);
         }
         catch (Exception e)
         {
             // A half-written file is the likely one: the game is still saving
             // the shot the pilot took a moment ago.
-            return Nothing($"could not read that screenshot ({e.GetType().Name})");
+            return Nothing(info.Name, shotAt, $"could not read that screenshot ({e.GetType().Name})");
         }
 
         watch.Stop();
 
+        var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds);
+        readings.Add(sighting);
+        return sighting;
+    }
+
+    /// <summary>Everything after the engine, with nothing written: what a frame's lines mean.</summary>
+    public ScreenSighting Understand(
+        string shot, DateTimeOffset shotAt, IReadOnlyList<ScreenTextLine> lines, long tookMs)
+    {
         var items = library.Items();
-        var result = ScreenInsight.Look(lines, items);
+        var ships = ShipNames(items);
 
-        var named = ScreenInsight.Sweep(lines, items)
-            .Select(line => new ScreenScanNamed(
-                line.Text,
-                [.. line.Candidates.Select(c => c.Item.Name ?? c.Item.ClassName)],
-                line.Named))
-            .ToList();
+        var frame = ScreenFrames.Read(lines, items, ships, library.Handle());
+        var beliefs = new LibraryBeliefs(library);
+        var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet());
 
-        var info = new FileInfo(shot);
+        // The fittings check knows which parts are stock; say so on each part
+        // as well as in the verdict, because the fleet page shows them one by one.
+        var loadout = frame.Loadout;
 
-        return new ScreenScan(
-            info.Name,
-            info.LastWriteTimeUtc,
-            result.Reading.Name,
-            result.Reading.Fields,
-            [.. result.Candidates.Select(Describe)],
-            named,
-            result.Certain,
+        if (loadout?.Ship is { } ship)
+        {
+            var stock = beliefs.StockParts(ship);
 
-            // A frame with no tooltip is not a failure when it named things.
-            result.Reading.Name is null && named.Count > 0 ? null : result.Trouble,
-            watch.ElapsedMilliseconds);
+            if (stock.Count > 0)
+            {
+                loadout = loadout with
+                {
+                    Fittings = [.. loadout.Fittings.Select(f => f.Name is null
+                        ? f
+                        : f with { Stock = stock.Contains(f.Name, StringComparer.OrdinalIgnoreCase) })],
+                };
+            }
+        }
+
+        var item = frame.Kind == ScreenKind.Tooltip ? ItemScan(shot, shotAt, frame, lines, items, tookMs) : null;
+
+        return new ScreenSighting(
+            shot, shotAt, frame.Kind,
+            Summarise(frame, loadout, item),
+            checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs);
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
@@ -145,8 +185,70 @@ public sealed class ScreenInsightService(
             true, position.X, position.Y, position.Z, position.GigametresFromCentre, null);
     }
 
-    private static ScreenScan Nothing(string trouble) =>
-        new(null, null, null, new Dictionary<string, string>(), [], [], false, trouble, 0);
+    /// <summary>
+    /// The names a ship can be read as: the dataset's, and the install's own
+    /// vehicle entries, which spell the same ship twelve ways by class and
+    /// one way by name.
+    /// </summary>
+    private IReadOnlyList<string> ShipNames(IReadOnlyList<ItemReference> items)
+    {
+        var names = library.Community.Ships.Values
+            .Select(ship => ship.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name));
+
+        // The install types a ship as NOITEM_Vehicle / Vehicle_Spaceship.
+        var vehicles = items
+            .Where(item => item.Type?.Contains("Vehicle", StringComparison.OrdinalIgnoreCase) == true)
+            .Select(item => item.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!);
+
+        return [.. names.Concat(vehicles).Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static string Summarise(ScreenFrame frame, LoadoutReading? loadout, ScreenScan? item) => frame.Kind switch
+    {
+        ScreenKind.Loadout when loadout is not null =>
+            $"{loadout.Ship ?? loadout.ShipRead ?? "a ship"}, {loadout.Fittings.Count(f => f.Name is not null)} parts named",
+        ScreenKind.Map when frame.Map is not null =>
+            frame.Map.PlaceRead is { Length: > 0 } place
+                ? frame.Map.SystemRead is { Length: > 0 } system ? $"{system} > {place}" : place
+                : "the map, with no footer read",
+        ScreenKind.Tooltip when item is not null =>
+            item.Certain && item.Matches.Count == 1 ? item.Matches[0].Name
+            : item.Name ?? (item.Named.Count > 0 ? $"{item.Named.Count} things named" : "a tooltip that named nothing"),
+        ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
+        _ => "nothing this app knows how to read",
+    };
+
+    private static ScreenScan ItemScan(
+        string shot, DateTimeOffset shotAt, ScreenFrame frame,
+        IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<ItemReference> items, long tookMs)
+    {
+        var result = frame.Tooltip!;
+
+        var named = ScreenInsight.Sweep(lines, items)
+            .Select(line => new ScreenScanNamed(
+                line.Text,
+                [.. line.Candidates.Select(c => c.Item.Name ?? c.Item.ClassName)],
+                line.Named))
+            .ToList();
+
+        return new ScreenScan(
+            shot, shotAt,
+            result.Reading.Name,
+            result.Reading.Fields,
+            [.. result.Candidates.Select(Describe)],
+            named,
+            result.Certain,
+
+            // A frame with no tooltip is not a failure when it named things.
+            result.Reading.Name is null && named.Count > 0 ? null : result.Trouble,
+            tookMs);
+    }
+
+    private static ScreenSighting Nothing(string shot, DateTimeOffset shotAt, string trouble) =>
+        new(shot, shotAt, ScreenKind.Unknown, trouble, [], null, null, null, null, [], 0);
 
     private static ScreenScanMatch Describe(ScreenCandidate candidate) =>
         new(candidate.Item.Name ?? candidate.Item.ClassName,
