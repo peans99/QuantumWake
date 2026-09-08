@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -77,6 +77,7 @@
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
+        <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
         <!-- An action, not a view. The strip's handler binds only
              button[data-view], so this is ignored by the view switcher and
@@ -89,6 +90,14 @@
   </nav>
 
   <div class="status">
+    <!-- One box across everything. Results are grouped by where they came
+         from, because a single ranked list would stop saying which of them
+         this app can stand behind. -->
+    <div class="search-box">
+      <input type="search" id="global-search" class="search" placeholder="Search everything…"
+             autocomplete="off" spellcheck="false" aria-label="Search everything">
+      <div id="global-results" class="search-results" hidden></div>
+    </div>
     <span id="install" class="muted">detecting…</span>
     <span id="link" class="dot" title="disconnected"></span>
   </div>
@@ -194,8 +203,18 @@
           <div>
             <div class="briefing-title" id="briefing-title"></div>
             <div class="briefing-sub" id="briefing-sub"></div>
+            <div class="briefing-why muted" id="briefing-why" hidden></div>
           </div>
           <div class="briefing-actions">
+            <select id="briefing-focus" class="select tiny"
+                    title="What this card leads with. Set from the ship you retrieved; change it to override.">
+              <option value="">Focus: from my ship</option>
+              <option value="freight">Focus: Freight</option>
+              <option value="mining">Focus: Mining</option>
+              <option value="combat">Focus: Combat</option>
+              <option value="explore">Focus: Exploration</option>
+              <option value="off">Focus: off</option>
+            </select>
             <button class="ghost tiny" id="briefing-add-stop">Add this stop</button>
             <button class="ghost tiny" id="briefing-map">Show on map</button>
             <button class="ghost tiny" id="briefing-overlay">Pin to overlay</button>
@@ -221,6 +240,14 @@
           <section class="briefing-section" id="briefing-stash-section">
             <div class="briefing-label">Stashed here</div>
             <div class="briefing-list" id="briefing-stash"></div>
+          </section>
+          <section class="briefing-section" id="briefing-mining-section" hidden>
+            <div class="briefing-label">Best rocks</div>
+            <div class="briefing-list" id="briefing-mining"></div>
+          </section>
+          <section class="briefing-section" id="briefing-claim-section" hidden>
+            <div class="briefing-label">If you lose it</div>
+            <div class="briefing-list" id="briefing-claim"></div>
           </section>
         </div>
       </article>
@@ -249,6 +276,30 @@
         <div class="card-label">Party</div>
         <ul class="feed" id="now-party-list"></ul>
         <div class="note" id="now-party-note"></div>
+      </article>
+
+      <article class="card span2" id="now-earning-card" data-card="earning" hidden>
+        <div class="card-label">Trading rate</div>
+        <div class="value" id="now-earning-rate">&mdash;</div>
+        <div class="sub" id="now-earning-sub"></div>
+
+        <div class="goal" id="now-goal" hidden>
+          <div class="goal-line">
+            <span id="now-goal-name"></span>
+            <b id="now-goal-eta"></b>
+          </div>
+        </div>
+
+        <form class="goal-form" id="now-goal-form">
+          <input type="text" id="now-goal-input" class="search" maxlength="40"
+                 placeholder="Saving for&hellip;" autocomplete="off">
+          <input type="number" id="now-goal-target" class="search" min="0" step="1000"
+                 placeholder="aUEC">
+          <button type="submit" class="ghost" id="now-goal-save">Set</button>
+          <button type="button" class="ghost" id="now-goal-clear" hidden>Clear</button>
+        </form>
+
+        <div class="note" id="now-earning-note"></div>
       </article>
 
       <article class="card" id="now-respawn-card" data-card="respawn" hidden>
@@ -324,6 +375,9 @@
         <button type="button" data-service="refuel" title="Places with a UEX fuel price">⛽ Refuel</button>
         <button type="button" data-service="clinic" title="Places listed with a clinic">✚ Clinic</button>
       </div>
+      <select id="map-amenity" class="select" title="Light up places the game says have this">
+        <option value="">Any facility</option>
+      </select>
       <div class="map-focus-filter" id="map-focus-filter" role="group" aria-label="Focus the map on your work">
         <button type="button" class="active" data-focus="" title="Show every place">All</button>
         <button type="button" data-focus="plan" title="Stops on the active flight plan">Plan</button>
@@ -383,22 +437,6 @@
         <div class="cargo-body" id="cargo-body"></div>
       </aside>
 
-      <aside class="map-info" id="map-info" hidden>
-        <button class="map-info-close" id="map-info-close" aria-label="Close">×</button>
-        <div class="map-info-name" id="map-info-name"></div>
-        <div class="map-info-where muted" id="map-info-where"></div>
-        <div class="map-info-row">
-          <span class="map-info-kind" id="map-info-kind"></span>
-          <span id="map-info-visits"></span>
-        </div>
-        <div class="map-info-services" id="map-info-services" hidden></div>
-        <div class="muted" id="map-info-last"></div>
-        <div id="map-info-trade" hidden></div>
-        <button class="ghost tiny wide" id="map-info-stop">Add as a stop</button>
-        <div class="map-info-notes" id="map-info-notes"></div>
-        <div class="map-info-lore muted" id="map-info-lore" hidden></div>
-        <div class="map-info-sold" id="map-info-sold" hidden></div>
-      </aside>
     </div>
     <div class="legend" id="map-legend"></div>
   </section>
@@ -496,7 +534,7 @@
       </div>
     </div>
     <p class="muted caption">
-      The people you fly with. Star Citizen 4.9 logs no party roster &mdash;
+      The people you fly with. Star Citizen 4.9 and 4.10 log no party roster &mdash;
       there is no join event carrying a member list and no player id anywhere
       &mdash; so this is built from the only lines that name anyone: the toasts
       announcing that somebody in your party came online or dropped.
@@ -547,7 +585,7 @@
       </div>
     </div>
     <p class="muted caption">
-      What dying has cost you. Star Citizen 4.9 logs no death event, so these
+      What dying has cost you. Star Citizen 4.9 and 4.10 log no death event, so these
       are counted from the corpse item-recovery bursts the game still writes,
       and a session's last known place is the closest the logs come to naming
       where it happened. Claim fees are the real expedite costs of the ships
@@ -735,8 +773,8 @@
     <h2 class="spaced">Other assets</h2>
     <p class="muted caption">
       Worn kit, stashes and claim exposure, priced the same way. Every number
-      is an estimate covering only what the price tables recognise. Needs the
-      community dataset and UEX enabled in Settings.
+      is an estimate covering only what the price tables recognise. The install
+      identifies the gear; UEX in Settings is what prices it.
     </p>
     <div class="summary-strip" id="assets-summary"></div>
 
@@ -781,6 +819,9 @@
         <select id="ledger-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
+    <!-- Built from the kinds actually present, so it never offers a toggle
+         that would empty the table. -->
+    <div class="export-row" id="ledger-kinds"></div>
     <div class="summary-strip" id="ledger-summary"></div>
     <p class="muted caption">
       Every movement the logs record, newest first. There is no wallet event in
@@ -812,20 +853,18 @@
     </div>
     <div class="summary-strip" id="cargo-summary"></div>
     <p class="muted caption" id="cargo-caption">
-      Volume, price and place come straight from the kiosk. What was in the boxes
-      does not: the log names the commodity only by an internal id that nothing
-      in the local install can resolve.
+      Volume, price and place come straight from the kiosk. The log names what was
+      in the boxes only by an internal id, which is read back into a commodity
+      name from your own install.
     </p>
     <div id="cargo-shared"></div>
 
     <div class="community-offer" id="community-offer" hidden>
       <div>
-        <b>Name the cargo?</b>
-        The community keeps the id-to-name table as a public file
-        (StarCitizenWiki / scunpacked-data). Enabling this downloads it once.
-        This one is fetched on your request and never again on its own; only
-        the market price table can be given standing leave to refresh, and only
-        if you turn that on.
+        <b>Cargo is named from your own game install</b>, so this needs no
+        download. A name still missing once Settings says your game files are
+        ready means that commodity is not in them &mdash; the community dataset
+        knows a few the install does not.
       </div>
       <button class="ghost" id="community-enable">Download community data</button>
       <span class="muted" id="community-status"></span>
@@ -894,6 +933,40 @@
         </table>
       </div>
     </div>
+
+    <h2 class="spaced">Your kits</h2>
+    <p class="muted caption">
+      A loadout worth keeping, saved so it can be put back together. Preparing
+      one compares it with what you are wearing and what your logs have seen in
+      storage &mdash; and asks you about the rest, because the game records an
+      item being <em>seen</em> in a container and never one being taken out.
+    </p>
+    <div class="export-row">
+      <input type="text" id="kit-name" class="search" placeholder="Name this kit&hellip;"
+             autocomplete="off" spellcheck="false">
+      <button class="ghost" id="kit-from-loadout" title="Save what you are wearing now as a kit">
+        Save what I am wearing
+      </button>
+    </div>
+    <span class="muted" id="kit-status"></span>
+    <div id="kit-list"></div>
+
+    <div id="kit-prepare" hidden>
+      <h2 class="spaced" id="kit-prepare-title">Preparing</h2>
+      <p class="muted caption" id="kit-prepare-rule"></p>
+      <div class="table-wrap">
+        <table id="kit-prepare-table">
+          <thead>
+            <tr><th>Item</th><th>Where it was</th><th>When</th><th>Still have it?</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="export-row">
+        <button class="primary" id="kit-shopping">Make a shopping list</button>
+        <button class="ghost" id="kit-prepare-close">Close</button>
+      </div>
+    </div>
   </section>
 
   <!-- STASH -->
@@ -951,10 +1024,16 @@
     <div class="section-bar">
       <h2>Contracts</h2>
       <div class="controls">
+        <button class="ghost stats-toggle" data-stats-toggle="contracts"
+                title="Hide the summary and go straight to the contracts"></button>
         <select id="contracts-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
+    <!-- Everything above "Every contract" that is analysis rather than the list
+         itself, so it can be folded away in one go. -->
+    <div class="page-stats" id="contracts-stats">
     <div class="summary-strip" id="contract-summary"></div>
+    <p class="muted caption" id="contract-paid-note" hidden></p>
     <h2 class="spaced">Standing</h2>
     <p class="muted caption">
       Who you have worked for and how much of it you finished. <b>This is not
@@ -983,6 +1062,8 @@
     <div id="issuers-chart" class="bars"></div>
     <h2 class="spaced">Contracts by type</h2>
     <div id="types-chart" class="bars"></div>
+
+    </div>
 
     <h2 class="spaced">Every contract</h2>
     <p class="muted caption">
@@ -1018,7 +1099,7 @@
       </div>
     </div>
 
-    <p class="muted caption">
+    <p class="muted caption" id="market-caption">
       Every commodity the community dataset knows, with your own trading record
       against each. "Sellable at" counts facilities in the game's economy
       simulation, and <em>show on map</em> lights the ones the star map can
@@ -1027,9 +1108,9 @@
 
     <div class="community-offer" id="market-offer" hidden>
       <div>
-        <b>This page needs the community dataset.</b>
-        Enable it from the Settings page — one file, downloaded once, only on
-        your click.
+        <b>This page needs your game install, or the community dataset.</b>
+        Turn on UEX in Settings and the install names every commodity by
+        itself; the dataset adds the facilities nobody has priced yet.
       </div>
     </div>
 
@@ -1208,18 +1289,17 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      Every ship component and piece of personal gear in the community digest —
-      type, size, grade, maker — with UEX in-game prices joined by entity uuid
-      where a shop stocks one. Needs the community dataset (and UEX for prices)
-      in Settings.
+    <p class="muted caption" id="parts-caption">
+      Every ship component and piece of personal gear — type, size, grade, maker
+      — with UEX in-game prices joined by entity uuid where a shop stocks one.
     </p>
     <div class="table-wrap">
       <table id="parts-table">
         <thead>
           <tr>
             <th>Item</th><th>Type</th><th>Sub-type</th>
-            <th class="num">Size</th><th class="num">Grade</th>
+            <th class="num">Size</th>
+            <th class="num" title="A is best, D is worst — the game's own scale">Grade</th>
             <th>Maker</th><th class="num">Price</th>
             <th class="num">Stocked at</th><th>Cheapest at</th>
           </tr>
@@ -1242,19 +1322,103 @@
       </div>
     </div>
     <p class="muted caption">
-      The game's own deposit tables: what spawns where, from asteroid ores to
-      cave harvestables and salvageable hulls. Chance is the spawn group's
-      probability; share is the deposit's slice within that group. Best sell
-      joins UEX prices for resources that are also commodities. Places fly to
-      the map. Needs the community dataset in Settings.
+      <span id="mining-source"></span>The game's own deposit tables, ranked by
+      what a SCU of rock is actually worth &mdash; how much of the rock is this
+      ore, times what it sells for. <em>Find</em> is how much of everything
+      spawning here is this: the group's share of the place, times this
+      deposit's share of the group. Places fly to the map.
+      <b>There is no per-hour ranking</b>, because nothing in the logs says how
+      long a rock takes to mine; respawn is how long it takes to come back,
+      which is a different question.
     </p>
+    <h3 class="spaced">Where to go</h3>
+    <p class="muted caption">
+      Every place ranked by what a rock found there is worth. <em>Rich</em> is how
+      much of an average rock here is actually ore; <em>Quality</em> is the best
+      floor on offer, starred where this place beats the usual. <em>Per rock</em>
+      multiplies the two ideas out: each ore's share of what spawns, times what a
+      SCU of it sells for. It is value per rock, <b>not per hour</b> &mdash;
+      nothing says how long a rock takes to mine, so a rich place on a two-hour
+      respawn cannot be compared with a poor one on twenty minutes. Respawn is
+      there so you can judge that yourself.
+    </p>
+    <div class="table-wrap">
+      <table id="mining-places">
+        <thead>
+          <tr>
+            <th>Place</th><th>System</th>
+            <th class="num" title="How much of an average rock here is ore">Rich</th>
+            <th class="num" title="The best quality floor available here">Quality</th>
+            <th class="num" title="What an average rock found here is worth">Per rock</th>
+            <th class="num">Ores</th>
+            <th>Mostly</th>
+            <th class="num">Respawn</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-places-note"></p>
+
+    <h3 class="spaced">What you have brought back</h3>
+    <div class="summary-strip" id="mining-mine"></div>
+    <p class="muted caption" id="mining-mine-note" hidden></p>
+
+    <p class="muted caption">
+      The game writes down no mining at all &mdash; no rock scanned, no refinery
+      job &mdash; so this half is yours to keep. Anything you record here is your
+      own note, and it is never added to the figures above, which come from your
+      logs.
+    </p>
+
+    <form class="mining-form" id="mining-log-form">
+      <input type="text" id="mining-log-resource" class="search" maxlength="30"
+             placeholder="Ore" autocomplete="off" required>
+      <input type="text" id="mining-log-place" class="search" maxlength="30"
+             placeholder="Where" autocomplete="off">
+      <input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
+             placeholder="SCU" required>
+      <input type="number" id="mining-log-quality" class="search" min="1" max="1000"
+             placeholder="Quality">
+      <input type="number" id="mining-log-revenue" class="search" min="0" step="1"
+             placeholder="Sold for">
+      <button type="submit" class="ghost">Record</button>
+    </form>
+
+    <div id="mining-pending" hidden>
+      <h4 class="spaced">Waiting on a refinery</h4>
+      <p class="muted caption" id="mining-pending-note"></p>
+      <div id="mining-pending-list"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="mining-log">
+        <thead>
+          <tr>
+            <th>When</th><th>Ore</th><th>Where</th>
+            <th class="num">SCU</th><th class="num">Back</th><th class="num">Quality</th>
+            <th class="num">Sold for</th><th>Stage</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted caption" id="mining-log-note"></p>
+
+    <h3 class="spaced">Every deposit</h3>
+
     <div class="table-wrap">
       <table id="mining-table">
         <thead>
           <tr>
-            <th>Resource</th><th>Deposit</th><th>Kind</th>
+            <th>Resource</th><th>Deposit</th>
+            <th class="num" title="How much of the rock this ore makes up">In rock</th>
+            <th class="num" title="The quality this comes out at here">Quality</th>
+            <th class="num" title="How long the slot takes to refill">Respawn</th>
+            <th>Kind</th>
             <th>Where</th><th>System</th><th>Spawn group</th>
-            <th class="num">Chance</th><th class="num">Share</th>
+            <th class="num" title="How much of what spawns here is this">Find</th>
+            <th class="num" title="What a SCU of this rock is worth once sold">Worth</th>
             <th class="num">Best sell</th>
             <th class="num" title="What the unrefined rock fetches">Raw</th>
             <th class="num" title="Best refinery yield for this ore">Yield</th>
@@ -1283,16 +1447,17 @@
       </div>
     </div>
     <p class="muted caption">
-      Every crafting blueprint in the game data: what it makes, the first-tier
+      <span id="crafting-source"></span>Every crafting blueprint in the game data: what it makes, the first-tier
       craft time and materials, and how the blueprint is obtained. "Buy
       instead" joins the crafted item's UEX shop price, so a recipe can be
-      weighed against a shopping trip. Needs the community dataset in Settings.
+      weighed against a shopping trip.
     </p>
     <div class="table-wrap">
       <table id="crafting-table">
         <thead>
           <tr>
-            <th>Makes</th><th>Type</th><th class="num">Grade</th>
+            <th>Makes</th><th>Type</th>
+            <th class="num" title="A is best, D is worst — the game's own scale">Grade</th>
             <th class="num">Time</th><th>Materials</th>
             <th>Obtained</th><th class="num">Buy instead</th><th></th>
           </tr>
@@ -1402,6 +1567,135 @@
     </div>
   </section>
 
+  <section id="view-labels" class="view">
+    <h2 class="section-title">Item labels</h2>
+    <p class="muted caption">
+      Star Citizen reads its English text from one file at startup, so replacing
+      that file changes what the game calls things. It is text only &mdash; no
+      binary, no memory, nothing the anti-cheat looks at &mdash; and it is the
+      only thing this app writes outside its own folder. Restart the game for a
+      change to take effect.
+    </p>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>StarStrings</h3>
+        <button class="ghost" id="starstrings-check">Check for a new build</button>
+        <button class="ghost" id="starstrings-install">Install</button>
+        <button class="ghost" id="starstrings-remove" hidden>Remove</button>
+      </div>
+      <p class="muted">
+        A community text mod by <b>MrKraken</b> that rewrites the game&rsquo;s English
+        text to read more usefully: contracts that award blueprints are tagged
+        <code>[BP]</code>, item names are shortened, contracts show the
+        reputation they pay, and the mining guide is sorted by rarity.
+        <a href="https://github.com/MrKraken/StarStrings" target="_blank" rel="noreferrer">github.com/MrKraken/StarStrings</a>
+        &mdash; not written by, or affiliated with, this app.
+      </p>
+      <p class="muted">
+        <b>It works alongside the labels below.</b> Both replace the same file,
+        so whichever is installed second would otherwise remove the first.
+        Install these in either order and the labels are rebuilt on top of
+        StarStrings' text, so contract reputation tags and item labels are both
+        there. Removing either one puts back exactly what it displaced.
+      </p>
+      <p class="muted warn" id="starstrings-warning">
+        <b>This writes into your game folder.</b>
+        It puts two files in your LIVE directory &mdash;
+        <code>Data\Localization\english\global.ini</code> and
+        <code>USER.cfg</code> &mdash; and nothing else; anything else in the
+        download is refused. Whatever is already there is copied aside first, and
+        <em>Remove</em> puts it back. A game patch may replace it, and then it
+        simply is not installed any more.
+      </p>
+      <span class="muted" id="starstrings-status">Not installed.</span>
+      <p class="muted" id="starstrings-note" hidden></p>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Label your items</h3>
+        <button class="ghost" id="textoverlay-install">Install</button>
+        <button class="ghost danger" id="textoverlay-remove" hidden>Remove</button>
+      </div>
+      <p class="muted">
+        Writes what this app knows into the names themselves, in one bracket at
+        the end: <code>[S2B]</code> is a size 2 grade B component,
+        <code>[H]</code> is heavy armour, and <code>*</code> means nothing is
+        known to sell it &mdash; so a thing worth carrying is obvious while you
+        are standing over it. Four characters, because the median item name is
+        already 21 and a third are over 24.
+      </p>
+
+      <div class="label-options">
+        <label class="toggle">
+          <input type="checkbox" id="label-facts" checked>
+          <span>
+            Mark size, grade and armour class
+            <em class="muted">From your install, not a download.</em>
+          </span>
+        </label>
+
+        <label class="toggle">
+          <input type="checkbox" id="label-colour">
+          <span>
+            Colour the gear nothing sells
+            <em class="muted" id="label-colour-note">
+              Uses the game&rsquo;s own emphasis styles. Off by default &mdash; whether
+              the game paints them inside an item name is the one thing here that
+              cannot be checked without launching it and looking.
+            </em>
+          </span>
+        </label>
+
+        <label class="label-level">
+          <span class="muted">Emphasis level</span>
+          <select id="label-level" class="select">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <em class="muted">
+            What each looks like is the game&rsquo;s stylesheet&rsquo;s business.
+            StarStrings uses 3 for contraband and 4 for contract tags.
+          </em>
+        </label>
+
+        <p class="muted" id="label-options-note" hidden></p>
+      </div>
+      <p class="muted warn">
+        <b>It is a floor, not a rarity rating.</b> Two things say an item is
+        sold: your own receipts, which cannot be wrong because the game charged
+        you, and UEX, which is broad but crowd-sourced &mdash; it misses 29 of
+        the 106 items these logs prove were bought at a kiosk. Nothing lists
+        what shops stock, so an unmarked item means nobody has told us
+        otherwise, never &ldquo;confirmed common&rdquo;. Ship components and
+        internals are left out: marking every name would mark most of them, and
+        a mark on almost everything says nothing.
+      </p>
+      <div class="summary-strip" id="textoverlay-summary"></div>
+      <p class="muted" id="textoverlay-source"></p>
+      <div class="controls">
+        <input type="search" id="labels-search" class="search"
+               placeholder="Find an item, a kind, or a mark&hellip;"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="table-wrap">
+        <table id="textoverlay-table">
+          <thead>
+            <tr><th>Item</th><th>Kind</th><th>Would become</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted caption" id="labels-count"></p>
+      <span class="muted" id="textoverlay-status"></span>
+    </div>
+  </section>
+
+
   <section id="view-settings" class="view">
     <h2>Settings</h2>
 
@@ -1422,35 +1716,6 @@
         <span>Check when the app starts</span>
       </label>
       <span class="muted" id="update-status"></span>
-    </div>
-
-    <div class="option-block">
-      <div class="option-head">
-        <h3>StarStrings</h3>
-        <button class="ghost" id="starstrings-check">Check for a new build</button>
-        <button class="ghost" id="starstrings-install">Install</button>
-        <button class="ghost" id="starstrings-remove" hidden>Remove</button>
-      </div>
-      <p class="muted">
-        A community text mod by <b>MrKraken</b> that rewrites the game's English
-        text to read more usefully: contracts that award blueprints are tagged
-        <code>[BP]</code>, item names are shortened, contracts show the
-        reputation they pay, and the mining guide is sorted by rarity.
-        <a href="https://github.com/MrKraken/StarStrings" target="_blank" rel="noreferrer">github.com/MrKraken/StarStrings</a>
-        &mdash; not written by, or affiliated with, this app.
-      </p>
-      <p class="muted warn" id="starstrings-warning">
-        <b>This is the only thing here that writes into your game folder.</b>
-        It puts two files in your LIVE directory &mdash;
-        <code>Data\Localization\english\global.ini</code> and
-        <code>USER.cfg</code> &mdash; and nothing else; anything else in the
-        download is refused. Whatever is already there is copied aside first, and
-        <em>Remove</em> puts it back. It changes text only: no game binary, no
-        memory, nothing the anti-cheat looks at. A game patch may replace it, and
-        then it simply is not installed any more. Restart the game for a change
-        to take effect.
-      </p>
-      <span class="muted" id="starstrings-status">Not installed.</span>
     </div>
 
     <div class="option-block">
@@ -1499,22 +1764,44 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>Community commodity names</h3>
+        <h3>Your game files</h3>
+        <span class="muted" id="gamedata-state"></span>
+      </div>
+      <p class="muted">
+        Commodity names, the item catalogue, crafting recipes, deposit tables and
+        place descriptions are read straight out of <code>Data.p4k</code>. The
+        first read after a game patch takes about half a minute and then caches,
+        so pages that use it are empty until this says ready &mdash; that is a
+        wait, not a fault, and nothing needs downloading to fix it.
+      </p>
+      <div class="summary-strip" id="gamedata-counts"></div>
+      <p class="muted warn" id="gamedata-problem" hidden></p>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Community ship and trade reference</h3>
         <button class="ghost" id="settings-community-enable" hidden>Download</button>
         <button class="ghost" id="settings-community-refresh" hidden>Refresh</button>
 
         <button class="ghost danger" id="settings-community-disable" hidden>Disable and delete</button>
       </div>
       <p class="muted" id="settings-community-copy">
-        Commodity names for your cargo, where each commodity trades, and the
-        ship and item reference for the Fleet and Loadout pages — all from
-        StarCitizenWiki / scunpacked-data. Enabling downloads a set of public
-        files (~110&nbsp;MB, kept as a few MB) into local app data. Fetched only
-        when you ask — nothing here goes out on a timer or at startup. A game
-        patch adds ships, items and commodities the dump does not have yet, so
-        this says which build it was made from and tells you when that is
-        older than the patch your logs are on. Disabling deletes the local
-        copy.
+        <b>Commodities, gear and prices no longer need this.</b> All of it is
+        read from your own install now, which is always the patch you are
+        playing — and the install describes <span id="settings-install-items">26,028</span> items where this download
+        describes 10,843. What it is still for: ship specifications, the ports a
+        ship can fit, map positions, and a fuller table of what spawns where —
+        the install covers <span id="settings-install-deposits">783</span> rows across <span id="settings-install-spawnplaces">49</span> places against this download's
+        2,642 across 234. Ship cargo, speeds and shield totals are in your install too,
+        but in files the game encrypts, so they cannot be read from there and
+        this is the honest source for them.
+        From StarCitizenWiki / scunpacked-data. Enabling downloads a set of
+        public files (~110&nbsp;MB, kept as a few MB) into local app data.
+        Fetched only when you ask — nothing here goes out on a timer or at
+        startup. A game patch adds ships the dump does not have yet, so this
+        says which build it was made from and tells you when that is older than
+        the patch your logs are on. Disabling deletes the local copy.
       </p>
       <span class="muted" id="settings-community-status"></span>
       <p class="option-stale" id="settings-community-behind" hidden></p>
@@ -1616,6 +1903,48 @@
 
     <div class="option-block">
       <div class="option-head">
+        <h3>Back up what you typed</h3>
+        <button class="ghost" id="backup-save">Save a backup</button>
+      </div>
+      <p class="muted">
+        Everything you have written down &mdash; jobs, checklists, flight plans,
+        your mining log, map notes, your goal and your settings &mdash; in one
+        file. <b>Your sessions, trades and contracts are not in it, and do not
+        need to be</b>: those come back by reading your logs again. This is for
+        the part re-reading cannot bring back.
+      </p>
+      <span class="muted" id="backup-preview"></span>
+
+      <div class="export-row">
+        <button class="ghost" id="backup-pick">Restore from a backup&hellip;</button>
+        <input type="file" id="backup-file" accept="application/json,.json" hidden>
+      </div>
+      <span class="muted" id="backup-status"></span>
+
+      <!-- The plan, once a file has been read. Nothing is written until the
+           button under it is pressed. -->
+      <div id="backup-plan" hidden>
+        <div class="restore-summary" id="backup-plan-summary"></div>
+        <div class="table-wrap">
+          <table id="backup-plan-table">
+            <thead>
+              <tr>
+                <th>Restore</th><th>What</th><th>Where</th>
+                <th>Yours</th><th>In the file</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="export-row">
+          <button class="primary" id="backup-apply">Restore</button>
+          <button class="ghost" id="backup-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
         <h3>Share what you have</h3>
         <button class="ghost" id="export-save">Save a file</button>
       </div>
@@ -1669,12 +1998,12 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>Log cache</h3>
+        <h3>Game logs</h3>
         <button class="ghost" id="settings-rescan">Re-read every log</button>
       </div>
       <p class="muted">
         Sessions are cached and only changed logs are re-read. Force a full
-        re-parse if something looks stale.
+        re-parse if something looks stale — every backup, a few seconds each.
       </p>
       <span class="muted" id="settings-rescan-status"></span>
     </div>
@@ -1760,8 +2089,10 @@
           Built on work the community published first. The log formats:
           StarLogs (Ozy311), all-slain (DimmaDont), SCStats (Maple33),
           SCPlay (ckuma), AutoTrackR2, SC-Kill-Monitor and citizenmon.
-          The <code>Data.p4k</code> format: the scdatatools lineage.
-          The optional commodity names, trade locations and ship reference:
+          The <code>Data.p4k</code> and DataCore formats, which is how this app
+          now reads commodity names and the whole item catalogue out of your own
+          install: the scdatatools lineage and unp4k's <code>unforge</code>.
+          The optional ship reference, star-map positions and place lore:
           StarCitizenWiki's <code>scunpacked-data</code>, generated with octfx's
           ScDataDumper. The optional live prices: UEX and its datarunners.
           The optional in-game text mod is <b>StarStrings</b>, written and
@@ -1803,7 +2134,7 @@
             <summary>Where did the kill counter go?</summary>
             <p>
               Removed, because it could only ever read zero. Star Citizen 4.9
-              does not write kill or vehicle-destruction lines to
+              and 4.10 do not write kill or vehicle-destruction lines to
               <code>Game.log</code> at all — checked line by line across every
               backup on this machine: not one. A counter pinned at zero reads as
               a broken feature rather than a missing one, so the honest thing is
@@ -1895,8 +2226,9 @@
     <br>
     Log-format research by the community made this possible - StarLogs (Ozy311),
     all-slain (DimmaDont), SCStats (Maple33), SCPlay (ckuma), AutoTrackR2,
-    SC-Kill-Monitor and citizenmon - with the p4k format from the scdatatools
-    lineage. Optional commodity names come from StarCitizenWiki's scunpacked-data,
+    SC-Kill-Monitor and citizenmon - with the p4k and DataCore formats from the
+    scdatatools lineage and unp4k, which is what lets this read your own install.
+    The optional ship reference comes from StarCitizenWiki's scunpacked-data,
     built with octfx's ScDataDumper. The optional text mod is StarStrings by
     MrKraken. Full attribution in docs/credits.md.
   </span>
@@ -1944,8 +2276,9 @@
         <input type="checkbox" id="setup-community">
         <div>
           <b>Community dataset <em>one download, ~110 MB</em></b>
-          <span>Names the commodities in your cargo history and adds ship and
-          item reference plus real star-map positions. From StarCitizenWiki's
+          <span>Adds ship specifications, real star-map positions, place lore,
+          mining spawns and crafting recipes. Your commodities and gear are read
+          from your install either way. From StarCitizenWiki's
           scunpacked-data.</span>
         </div>
       </label>
@@ -1994,6 +2327,33 @@
       </div>
     </div>
   </div>
+  <!-- ENTITY DRAWER: one description of a thing, wherever it was clicked.
+       Outside every view because every view opens it. -->
+  <aside class="entity-drawer" id="entity-drawer" hidden aria-label="Details">
+    <button class="entity-close" id="entity-close" aria-label="Close">&times;</button>
+    <div class="entity-kicker" id="entity-kicker"></div>
+    <div class="entity-name" id="entity-name"></div>
+    <div class="entity-sub muted" id="entity-sub"></div>
+    <div class="entity-holding" id="entity-holding" hidden></div>
+    <div class="entity-price" id="entity-price" hidden></div>
+    <div class="entity-blurb" id="entity-blurb" hidden></div>
+    <div class="entity-facts" id="entity-facts"></div>
+    <div class="part-tags" id="entity-tags" hidden></div>
+    <div class="entity-where" id="entity-where" hidden></div>
+    <div class="entity-place-extra" id="entity-place-extra" hidden>
+      <div class="map-info-services" id="map-info-services" hidden></div>
+      <div id="map-info-trade" hidden></div>
+      <div class="map-info-notes" id="map-info-notes"></div>
+      <div class="map-info-amenities" id="map-info-amenities" hidden></div>
+      <div class="map-info-lore muted" id="map-info-lore" hidden></div>
+      <div class="map-info-sold" id="map-info-sold" hidden></div>
+    </div>
+    <div class="entity-actions" id="entity-actions"></div>
+  </aside>
+  <!-- Live toasts. Outside every view because they fire whatever page is open,
+       and in the overlay they are the only thing the player will actually see. -->
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
 <script src="app.js?v=0.7.16"></script>
 </body>
 </html>

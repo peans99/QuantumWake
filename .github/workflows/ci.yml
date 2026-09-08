@@ -97,8 +97,17 @@ jobs:
           echo "$shaping" | sed 's/^/  /'
 
           # Touching SessionStore.cs is not enough - the constant has to move.
-          if git diff "$BASE"...HEAD -- src/Quantumwake.Data/SessionStore.cs \
-             | grep -qE '^\+.*PayloadVersion = [0-9]+'; then
+          # Counted, not `grep -q`. A `grep -q` quits at the first match, and
+          # `git diff` writing a large change into the closed pipe then dies
+          # of SIGPIPE - which `pipefail` turns into a failed condition, so a
+          # correctly bumped constant reads as no bump at all. It only bites
+          # once the output outgrows the pipe buffer, which is why it passed
+          # every ordinary change and failed the first release-sized one.
+          # `grep -c` reads to the end, so nothing closes the pipe early.
+          bumped=$(git diff "$BASE"...HEAD -- src/Quantumwake.Data/SessionStore.cs \
+            | grep -cE '^\+.*PayloadVersion = [0-9]+' || true)
+
+          if [ "$bumped" -gt 0 ]; then
             echo
             echo "PayloadVersion moves in this change. Caches will be retired."
             exit 0
@@ -111,7 +120,10 @@ jobs:
           # anywhere in the message: the commit that first documented this
           # waiver waived the check by explaining it, which is a poor way for a
           # guard to fail. Prose can now name the trailer without invoking it.
-          if git log "$BASE"..HEAD --format='%B' | grep -qiE '^No-payload-bump:[[:space:]]*[^[:space:]]'; then
+          waived=$(git log "$BASE"..HEAD --format='%B' \
+            | grep -ciE '^No-payload-bump:[[:space:]]*[^[:space:]]' || true)
+
+          if [ "$waived" -gt 0 ]; then
             echo
             echo "Waived by a commit trailer:"
             git log "$BASE"..HEAD --format='%B' | grep -iE '^No-payload-bump:' | sed 's/^/  /'
@@ -128,4 +140,85 @@ jobs:
           echo "::error::nothing stored actually changed, add a commit trailer on its own line:"
           echo "::error::"
           echo "::error::    No-payload-bump: renamed a private field, nothing new is read"
+          exit 1
+
+  # The same failure, one cache along. What the game files say is read once and
+  # kept under a stamp of CacheVersion and the archive's timestamp, so a change
+  # to how those files are *read* reaches nobody until Star Citizen patches: the
+  # stamp still matches and the old answers load. It shipped that way once, with
+  # 8,149 placeholder item names surviving the rule written to remove them.
+  cache-version:
+    name: Cached game data retired
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: A reader change must retire the game-data cache
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          changed=$(git diff --name-only "$BASE"...HEAD)
+
+          reading=$(echo "$changed" | grep -E '^src/Quantumwake\.Core/GameData/' || true)
+
+          if [ -z "$reading" ]; then
+            echo "No game-data reader touched; nothing to retire."
+            exit 0
+          fi
+
+          echo "Game-data readers in this change:"
+          echo "$reading" | sed 's/^/  /'
+
+          # Either cache counts. GameNames and GameCommodities keep separate
+          # caches with their own CacheVersion, and accepting only the
+          # commodities one failed an author who had correctly bumped the other
+          # - steering them to move the wrong constant, retire the wrong cache,
+          # and leave exactly the stale names this job exists to prevent.
+          # Counted, not `grep -q`. A `grep -q` quits at the first match, and
+          # `git diff` writing a large change into the closed pipe then dies
+          # of SIGPIPE - which `pipefail` turns into a failed condition, so a
+          # correctly bumped constant reads as no bump at all. It only bites
+          # once the output outgrows the pipe buffer, which is why it passed
+          # every ordinary change and failed the first release-sized one.
+          # `grep -c` reads to the end, so nothing closes the pipe early.
+          bumped=$(git diff "$BASE"...HEAD \
+              -- src/Quantumwake.Core/GameData/GameCommodities.cs \
+                 src/Quantumwake.Core/GameData/GameNames.cs \
+            | grep -cE '^\+.*CacheVersion = [0-9]+' || true)
+
+          if [ "$bumped" -gt 0 ]; then
+            echo
+            echo "CacheVersion moves in this change. Cached game data will be retired."
+            exit 0
+          fi
+
+          waived=$(git log "$BASE"..HEAD --format='%B' \
+            | grep -ciE '^No-cache-bump:[[:space:]]*[^[:space:]]' || true)
+
+          if [ "$waived" -gt 0 ]; then
+            echo
+            echo "Waived by a commit trailer:"
+            git log "$BASE"..HEAD --format='%B' | grep -iE '^No-cache-bump:' | sed 's/^/  /'
+            exit 0
+          fi
+
+          echo
+          echo "::error::This change touches how the game files are read, but no CacheVersion"
+          echo "::error::moves - neither GameCommodities.cs nor GameNames.cs. Bump the one"
+          echo "::error::whose cache your change makes stale."
+          echo "::error::"
+          echo "::error::The cache is keyed on that constant and the archive's timestamp, so"
+          echo "::error::every install that has already read its game files will keep the old"
+          echo "::error::answers until the game itself patches. Bump the constant, or, if the"
+          echo "::error::change cannot alter what was stored, add a commit trailer on its own"
+          echo "::error::line:"
+          echo "::error::"
+          echo "::error::    No-cache-bump: renamed a local, the same values are read"
           exit 1

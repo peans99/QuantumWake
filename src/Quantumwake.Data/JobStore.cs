@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -35,7 +35,23 @@ public sealed record Job(
     IReadOnlyList<JobItem> Items,
     bool Pinned = false,
     string? Destination = null,
-    string? DestinationId = null);
+    string? DestinationId = null,
+    DateTimeOffset? ModifiedAt = null) : IStamped<Job>
+{
+    public string StampId => Id;
+    /// <remarks>Pinned is view state and does not travel - see <see cref="Trip.Bare"/>.</remarks>
+    public Job Bare() => this with { ModifiedAt = null, Pinned = false };
+    public Job Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed, falling back to when it was written.</summary>
+    /// <remarks>
+    /// Optional so files written before this existed still load; a record that
+    /// has never been edited answers with its creation date, which is true.
+    /// A restore compares these to decide which side of a conflict is newer,
+    /// so a missing one must read as old rather than as now.
+    /// </remarks>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
+}
 
 /// <summary>
 /// The player's own plans, kept in a file beside the caches.
@@ -50,6 +66,9 @@ public sealed class JobStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<Job> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<Job> _jobs = [];
 
     public JobStore(string? directory = null)
@@ -214,6 +233,34 @@ public sealed class JobStore
         }
     }
 
+    /// <summary>
+    /// Puts a record back exactly as given, replacing any with the same id.
+    /// </summary>
+    /// <remarks>
+    /// For restoring a backup, and nothing else. Every other way in makes its
+    /// own record so the store owns the id and the dates; this one deliberately
+    /// does not, because a restore has to reproduce what was backed up rather
+    /// than author something new that resembles it.
+    /// </remarks>
+    public void Put(Job job)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(x => x.Id == job.Id);
+
+            // View state is this machine's and the preview promises to leave it
+            // alone, so a replacement keeps the pin or the tracking it lands on.
+            // The file never carried them - a backup strips both on the way out -
+            // so taking the record verbatim silently unpins whatever it replaced.
+            if (index >= 0) _jobs[index] = job with { Pinned = _jobs[index].Pinned };
+            else _jobs.Add(job);
+
+            // The record keeps the change time it was backed up with.
+            _stamp.Adopt(job);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try
@@ -226,11 +273,14 @@ public sealed class JobStore
             // A corrupt file must not stop the app; the user starts with none.
             _jobs = [];
         }
+
+        _stamp.Loaded(_jobs);
     }
 
     private void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_jobs));
+        _stamp.Apply(_jobs, DateTimeOffset.UtcNow);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_jobs));
     }
 }

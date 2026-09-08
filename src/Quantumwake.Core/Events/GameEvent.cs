@@ -1,3 +1,5 @@
+﻿using System.Text.RegularExpressions;
+
 namespace Quantumwake.Core.Events;
 
 /// <summary>
@@ -138,7 +140,7 @@ public sealed record ContractEvent(
 /// and is essential for deduplication: each notification fires 3-5 times with
 /// differing Action values (Next, StartFade, Remove).
 /// </summary>
-public sealed record NotificationEvent(
+public sealed partial record NotificationEvent(
     DateTimeOffset Timestamp,
     string Text,
     string NotificationId,
@@ -153,6 +155,39 @@ public sealed record NotificationEvent(
     /// <summary>True when this notification reports a contract being accepted.</summary>
     public bool IsContractAccepted =>
         Text.StartsWith("Contract Accepted", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when this notification reports a contract finishing.</summary>
+    public bool IsContractComplete =>
+        Text.StartsWith("Contract Complete", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The payout a contract just made, or null when this toast is not one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The only place the logs ever state a sum of money earned. It arrives as
+    /// its own toast - <c>Awarded 50250 aUEC:</c> - carrying no contract, no
+    /// mission id (the field is present and always zeroed) and no shop, which
+    /// is why <see cref="State.SessionBuilder"/> has to pair it with the
+    /// completion toast in front of it.
+    /// </para>
+    /// <para>
+    /// It is also rare. Across this install's 179 backups there are 14 of these
+    /// against 230 completions, and every one of the 14 follows a cargo haul -
+    /// the 90 Combat Gauntlet completions pay nothing the log admits to. So
+    /// anything built on this is a floor over hauling, not earnings, and has to
+    /// say so.
+    /// </para>
+    /// </remarks>
+    public decimal? Awarded =>
+        AwardRegex.Match(Text) is { Success: true } m
+        && decimal.TryParse(m.Groups["amount"].Value, out var amount)
+            ? amount
+            : null;
+
+    /// <summary><c>Awarded 50250 aUEC:</c>, the whole of the money signal.</summary>
+    [GeneratedRegex(@"^Awarded\s+(?<amount>\d{1,12})\s+aUEC", RegexOptions.IgnoreCase)]
+    private static partial Regex AwardRegex { get; }
 
     /// <summary>
     /// True when the player used a medical bed. The game reports that the bed
@@ -174,7 +209,7 @@ public sealed record NotificationEvent(
 /// A ship being retrieved at a hangar or landing pad.
 /// </summary>
 /// <remarks>
-/// The only signal that a ship was taken out. SC 4.9 logs no boarding event, so
+/// The only signal that a ship was taken out. SC 4.9 and 4.10 log no boarding event, so
 /// without this a ship swap goes unrecorded until the player leaves the vehicle.
 /// The line carries only an entity id - the model name arrives separately, on
 /// quantum-navigation lines - so <see cref="VehicleIdentifiedEvent"/> is what

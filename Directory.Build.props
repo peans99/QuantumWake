@@ -1,4 +1,4 @@
-<Project>
+﻿<Project>
 
   <!-- Shared assembly metadata for every project in the solution. Set here so
        authorship and version stay consistent across the server, overlay, CLI
@@ -10,9 +10,9 @@
     <Copyright>Copyright © nekron</Copyright>
     <Description>A pilot's logbook for Star Citizen: second-screen dashboard, in-game overlay, and flight-log analysis for Star Citizen, driven by Game.log.</Description>
 
-    <Version>0.8.35</Version>
-    <AssemblyVersion>0.8.35.0</AssemblyVersion>
-    <FileVersion>0.8.35.0</FileVersion>
+    <Version>0.9.56</Version>
+    <AssemblyVersion>0.9.56.0</AssemblyVersion>
+    <FileVersion>0.9.56.0</FileVersion>
 
     <RepositoryUrl>https://github.com/peans99/QuantumWake</RepositoryUrl>
     <PackageProjectUrl>https://github.com/peans99/QuantumWake</PackageProjectUrl>

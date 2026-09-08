@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -23,6 +23,12 @@ public sealed record TripStop(
 /// Game.log does not carry a cargo manifest, so action lines deliberately say
 /// what the pilot intends or confirms themselves; they are not inferred cargo.
 /// </remarks>
+/// <param name="Actual">
+/// What the action turned out to be worth, when the pilot corrects it. Kept
+/// beside <paramref name="Quantity"/> rather than replacing it: the estimate
+/// and the outcome are the comparison, and overwriting one destroys the point
+/// of recording either.
+/// </param>
 public sealed record RunAction(
     string Id,
     string Kind,
@@ -30,7 +36,8 @@ public sealed record RunAction(
     decimal? Quantity,
     string? Unit,
     bool Done,
-    DateTimeOffset? DoneAt)
+    DateTimeOffset? DoneAt,
+    decimal? Actual = null)
 {
     /// <summary>
     /// The kinds a run sheet may use, with anything else read as a plain "do".
@@ -76,13 +83,44 @@ public sealed record RunAction(
 /// the point of the card is to say where to go next, and two plans have no
 /// single next.
 /// </param>
+/// <summary>Why a run is out of the working list.</summary>
+public enum Archived
+{
+    /// <summary>It is not.</summary>
+    No,
+
+    /// <summary>The pilot finished it, or filed it themselves.</summary>
+    You,
+
+    /// <summary>It went quiet and the sweep filed it. Reversible - see TripStore.Resume.</summary>
+    Quiet
+}
+
 public sealed record Trip(
     string Id,
     string Title,
     DateTimeOffset CreatedAt,
     IReadOnlyList<TripStop> Stops,
-    bool Tracked = false)
+    bool Tracked = false,
+    DateTimeOffset? ModifiedAt = null,
+    DateTimeOffset? StartedAt = null,
+    DateTimeOffset? FinishedAt = null,
+    Archived Archived = Archived.No,
+    DateTimeOffset? ArchivedAt = null) : IStamped<Trip>
 {
+    public string StampId => Id;
+    /// <remarks>
+    /// Tracked comes off as well as the stamp. It is this machine's view state
+    /// and never travels in a backup, so a change to it is not a change a
+    /// restore could ever see - and counting it would make every trip look
+    /// edited the moment a new plan took the tracking from it.
+    /// </remarks>
+    public Trip Bare() => this with { ModifiedAt = null, Tracked = false };
+    public Trip Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
+
     /// <summary>
     /// A stop that still wants something: not yet reached, or reached with run
     /// work outstanding.
@@ -100,6 +138,20 @@ public sealed record Trip(
     public TripStop? Next => Stops.FirstOrDefault(Outstanding);
 
     public bool Done => Stops.Count > 0 && !Stops.Any(Outstanding);
+
+    /// <summary>Begun and not yet ended.</summary>
+    public bool Flying => StartedAt is not null && FinishedAt is null && Archived == Archived.No;
+
+    /// <summary>
+    /// How long the run took, or has taken so far.
+    /// </summary>
+    /// <remarks>
+    /// Measured from StartedAt, never from CreatedAt. A plan written last week
+    /// and flown tonight is a two-hour run, and reporting a week of it is the
+    /// whole reason this field exists.
+    /// </remarks>
+    public TimeSpan? Elapsed(DateTimeOffset now) =>
+        StartedAt is { } began ? (FinishedAt ?? now) - began : null;
 }
 
 /// <summary>
@@ -114,6 +166,9 @@ public sealed class TripStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<Trip> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<Trip> _trips = [];
 
     public TripStore(string? directory = null)
@@ -168,8 +223,13 @@ public sealed class TripStore
         {
             var index = _trips.FindIndex(t => t.Tracked);
 
+            // Archived as well as unfinished. Trip.Done is false whenever any
+            // stop is outstanding, so a run finished with one stop unticked
+            // still looked like the obvious place to put a new stop - and
+            // filed runs are drawn without a stop list, so the stop landed
+            // somewhere invisible while the call answered success.
             if (index < 0)
-                index = _trips.FindIndex(t => !t.Done);
+                index = _trips.FindIndex(t => t.Archived == Archived.No && !t.Done);
 
             if (index < 0)
             {
@@ -437,6 +497,241 @@ public sealed class TripStore
             _trips[i] = _trips[i] with { Tracked = _trips[i].Id == id };
     }
 
+    /// <summary>
+    /// Marks a run as begun, now.
+    /// </summary>
+    /// <remarks>
+    /// Explicit rather than inferred from the first ticked stop, because only
+    /// the pilot knows when they set off - and a plan can be edited for a week
+    /// before it is flown. Starting a run that is already going leaves its
+    /// original start alone.
+    /// </remarks>
+    public bool Start(string id, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == id);
+            if (index < 0 || _trips[index].StartedAt is not null) return false;
+
+            _trips[index] = _trips[index] with { StartedAt = now, FinishedAt = null };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Ends a run and files it, so the working list holds only what is live.
+    /// </summary>
+    public bool Finish(string id, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == id);
+            if (index < 0 || _trips[index].FinishedAt is not null) return false;
+
+            _trips[index] = _trips[index] with
+            {
+                // A run finished without ever being started still took some
+                // time, and pretending otherwise would leave the review with
+                // nothing to measure. The best guess available is when the plan
+                // was written, and it is marked as a guess by being equal.
+                StartedAt = _trips[index].StartedAt ?? _trips[index].CreatedAt,
+                FinishedAt = now,
+                Archived = Archived.You,
+                ArchivedAt = now,
+                Tracked = false,
+            };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Puts a filed run back in the working list, keeping when it began.
+    /// </summary>
+    /// <remarks>
+    /// The half that makes the quiet sweep safe. Without this, taking a
+    /// fortnight off turns a real run into a lost one; with it, the sweep only
+    /// ever costs somebody a click. StartedAt survives on purpose - the run did
+    /// begin when it began, and rewriting that to now would report a two-week
+    /// flight as a two-minute one.
+    /// </remarks>
+    public bool Resume(string id)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == id);
+            if (index < 0 || _trips[index].Archived == Archived.No) return false;
+
+            _trips[index] = _trips[index] with
+            {
+                Archived = Archived.No,
+                ArchivedAt = null,
+                FinishedAt = null,
+            };
+
+            // Saving stamps ModifiedAt, which is the clock the sweep reads - so
+            // resuming resets it and the run is not filed again tomorrow.
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Copies a run into a fresh one, ready to fly again.
+    /// </summary>
+    /// <remarks>
+    /// Everything done is cleared: a repeat is the same route, not the same
+    /// history. The copy takes the tracking, because somebody who asked to
+    /// repeat a run is about to fly it.
+    /// </remarks>
+    public Trip? Repeat(string id, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var source = _trips.FirstOrDefault(t => t.Id == id);
+            if (source is null) return null;
+
+            var copy = new Trip(
+                NewId(),
+                source.Title,
+                now,
+                [.. source.Stops.Select(stop => stop with
+                {
+                    Id = NewId(),
+                    Done = false,
+                    DoneAt = null,
+                    Actions = [.. (stop.Actions ?? []).Select(action => action with
+                    {
+                        Id = NewId(),
+                        Done = false,
+                        DoneAt = null,
+
+                        // The estimate is the plan and comes along; the
+                        // correction was the last run's outcome, and carrying
+                        // it would present that as this run's result before it
+                        // has been flown.
+                        Actual = null,
+                    })],
+                })]);
+
+            _trips.Insert(0, copy);
+            Follow(copy.Id);
+            Save();
+
+            return _trips[0];
+        }
+    }
+
+    /// <summary>
+    /// Files runs that have gone quiet, and says how many it filed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only runs that were actually begun. An unstarted plan is a backlog item
+    /// rather than an abandoned flight, and filing those would empty the list
+    /// somebody keeps their intentions in.
+    /// </para>
+    /// <para>
+    /// The clock is <see cref="Trip.ChangedAt"/> rather than a field of its own.
+    /// That is already "when the content last changed", which is what working on
+    /// a run does - ticking a stop, adding an action, renaming it - and a second
+    /// date would be one more thing that can disagree with the first.
+    /// </para>
+    /// </remarks>
+    public int SweepQuiet(TimeSpan idle, DateTimeOffset now)
+    {
+        if (idle <= TimeSpan.Zero) return 0;
+
+        lock (_gate)
+        {
+            var filed = 0;
+
+            for (var i = 0; i < _trips.Count; i++)
+            {
+                if (!_trips[i].Flying || now - _trips[i].ChangedAt < idle) continue;
+
+                _trips[i] = _trips[i] with
+                {
+                    Archived = Archived.Quiet,
+                    ArchivedAt = now,
+                    Tracked = false,
+                };
+
+                filed++;
+            }
+
+            if (filed > 0) Save();
+
+            return filed;
+        }
+    }
+
+    /// <summary>
+    /// Records what an action actually came to, leaving the estimate alone.
+    /// </summary>
+    /// <remarks>
+    /// Null clears a correction rather than setting it to zero - a stop that
+    /// turned out to be worth nothing and a stop nobody has checked yet are
+    /// different facts, and only one of them is a number.
+    /// </remarks>
+    public bool Correct(string tripId, string stopId, string actionId, decimal? actual)
+    {
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var stopIndex = stops.FindIndex(s => s.Id == stopId);
+            if (stopIndex < 0) return false;
+
+            var actions = (stops[stopIndex].Actions ?? []).ToList();
+            var actionIndex = actions.FindIndex(a => a.Id == actionId);
+            if (actionIndex < 0) return false;
+
+            actions[actionIndex] = actions[actionIndex] with
+            {
+                Actual = actual is null ? null : RunAction.CleanQuantity(actual),
+            };
+
+            stops[stopIndex] = stops[stopIndex] with { Actions = actions };
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Puts a record back exactly as given, replacing any with the same id.
+    /// </summary>
+    /// <remarks>
+    /// For restoring a backup, and nothing else. Every other way in makes its
+    /// own record so the store owns the id and the dates; this one deliberately
+    /// does not, because a restore has to reproduce what was backed up rather
+    /// than author something new that resembles it.
+    /// </remarks>
+    public void Put(Trip trip)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(x => x.Id == trip.Id);
+
+            // View state is this machine's and the preview promises to leave it
+            // alone, so a replacement keeps the pin or the tracking it lands on.
+            // The file never carried them - a backup strips both on the way out -
+            // so taking the record verbatim silently unpins whatever it replaced.
+            if (index >= 0) _trips[index] = trip with { Tracked = _trips[index].Tracked };
+            else _trips.Add(trip);
+
+            // The record keeps the change time it was backed up with.
+            _stamp.Adopt(trip);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try
@@ -449,11 +744,14 @@ public sealed class TripStore
             // A corrupt file must not stop the app; the user starts with none.
             _trips = [];
         }
+
+        _stamp.Loaded(_trips);
     }
 
     private void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_trips));
+        _stamp.Apply(_trips, DateTimeOffset.UtcNow);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_trips));
     }
 }

@@ -1,0 +1,373 @@
+﻿using System.Text;
+using Quantumwake.Core.GameData;
+using Quantumwake.Core.Logging;
+using Quantumwake.Data;
+
+namespace Quantumwake.Server;
+
+/// <summary>The overlay's state, and what installing would change.</summary>
+public sealed record TextOverlayStatus(
+    bool Installed,
+    DateTimeOffset? InstalledAt,
+    bool Layered,
+    string BaseSource,
+    int Marked,
+    int Sold,
+    int Skipped,
+    IReadOnlyList<TextOverlayLine> Changes,
+    string? Problem,
+    int Annotated = 0,
+    TextOverlayOptions? Options = null);
+
+/// <summary>
+/// Builds and installs the in-game text overlay.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This and <see cref="StarStrings"/> write the same file, so the base is chosen
+/// rather than assumed: when StarStrings is installed the overlay is layered on
+/// top of its table, and when it is not the game's own is read out of
+/// <c>Data.p4k</c>. Building on the game's file while StarStrings is present
+/// would silently revert their mod, which is the sort of thing nobody notices
+/// until a contract stops carrying its reputation tag.
+/// </para>
+/// <para>
+/// Nothing is written by asking what would change. The page shows the plan and
+/// installing is a separate, explicit act - the file lands in someone else's
+/// game folder, so it is not a thing to do on the way past.
+/// </para>
+/// </remarks>
+public sealed class TextOverlayService(
+    LogLibrary library,
+    ItemLabelStore options,
+    UexData uex,
+    TextOverlayStore store,
+    StarStringsStore starStrings,
+    ILogger<TextOverlayService> log)
+{
+    private const string LocalisationEntry = @"Data\Localization\english\global.ini";
+
+    /// <summary>Where the game reads a loose table from, relative to the install.</summary>
+    private const string LooseRelative = @"data\localization\english\global.ini";
+
+    /// <summary>
+    /// Whether anything is known to sell an item, in confidence order.
+    /// </summary>
+    /// <remarks>
+    /// A receipt settles it: the game charged for the thing. UEX is broader and
+    /// crowd-sourced, and misses 29 of the 106 items this install's logs prove
+    /// were bought at a kiosk - which is exactly why the receipts are consulted
+    /// and not merely the market table.
+    /// </remarks>
+    /// <summary>Builds against the player's own choice of marks.</summary>
+    private TextOverlayPlan Plan(string ini) =>
+        TextOverlay.Build(ini, SoldTest(), library.GameCommodities.ItemFacts, options.Current);
+
+    private Func<string, bool> SoldTest()
+    {
+        var receipts = library.Receipts();
+
+        return itemClass =>
+            receipts.ContainsKey(itemClass)
+            || uex.ItemMarket(library.ItemUuid(itemClass)).Count > 0;
+    }
+
+    /// <summary>Reads the table the overlay should be built on.</summary>
+    /// <returns>The text and a human name for where it came from, or a problem.</returns>
+    private (string? Ini, string Source, string? Problem) BaseTable(GameInstall game)
+    {
+        // What is underneath OUR file, when ours is the one installed. The live
+        // table is not the base in that case - it is this build's own output,
+        // and reading it would preview a second set of marks on every name.
+        // Install never reaches this, because it takes itself out first; Status
+        // must not, so it asks the backup instead.
+        if (store.StillPresent()
+            && store.Current?.Files.FirstOrDefault(f => f.Backup is { Length: > 0 }) is { } ours
+            && File.Exists(ours.Backup!))
+        {
+            try
+            {
+                return (GameText.WithoutBom(File.ReadAllText(ours.Backup!)),
+                    store.Current.Layered ? "StarStrings" : "the game", null);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                log.LogWarning(e, "displaced table unreadable");
+            }
+        }
+
+        // Layered: an installed text mod's file is the base, so both survive.
+        if (starStrings.StillPresent()
+            && starStrings.Current?.Files.FirstOrDefault(f =>
+                f.Path.EndsWith(".ini", StringComparison.OrdinalIgnoreCase)) is { } theirs)
+        {
+            try
+            {
+                return (GameText.WithoutBom(File.ReadAllText(theirs.Path)), "StarStrings", null);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                log.LogWarning(e, "StarStrings table unreadable");
+                return (null, "StarStrings", "StarStrings looks installed but its text file could not be read.");
+            }
+        }
+
+        var archive = P4kArchive.PathFor(game.RootPath);
+
+        if (!File.Exists(archive))
+            return (null, "the game", $"The game's data archive is not where this app expects it: {archive}");
+
+        var raw = new P4kArchive(archive).TryRead(LocalisationEntry);
+
+        return raw is null
+            ? (null, "the game", "The game's text table could not be read out of Data.p4k.")
+            : (GameText.WithoutBom(Encoding.UTF8.GetString(raw)), "the game", null);
+    }
+
+    /// <summary>What installing would change. Writes nothing.</summary>
+    public TextOverlayStatus Status(GameInstall? game)
+    {
+        var install = store.Current;
+        var installed = store.StillPresent();
+
+        if (game is null)
+            return new(installed, install?.InstalledAt, install?.Layered ?? false,
+                "the game", 0, 0, 0, [], "No game install was found, so there is nothing to build against.");
+
+        var (ini, source, problem) = BaseTable(game);
+
+        if (ini is null)
+            return new(installed, install?.InstalledAt, install?.Layered ?? false,
+                source, 0, 0, 0, [], problem);
+
+        var plan = Plan(ini);
+
+        return new(installed, install?.InstalledAt, install?.Layered ?? false,
+            source, plan.Marked, plan.Sold, plan.Skipped, plan.Changes, null, plan.Annotated,
+            options.Current);
+    }
+
+    /// <summary>Writes the overlay into the game folder.</summary>
+    /// <returns>What was installed, or a sentence saying why nothing was.</returns>
+    public (TextOverlayInstall? Install, string? Problem) Install(GameInstall? game)
+    {
+        if (game is null)
+            return (null, "No game install was found, so there is nothing to write to.");
+
+        // The same fence StarStrings is held to: judged on the path it resolves
+        // to, and refused if it lands anywhere but the two allowed places.
+        var target = StarStringsArchive.TargetFor(LooseRelative, game.RootPath);
+
+        if (target is null)
+            return (null, "The localisation path did not resolve inside the game folder, so nothing was written.");
+
+        // Out first, and before the base is read. Reading first meant a rebuild
+        // took its own last output as the table to mark up, and marked it again:
+        // the file StarStrings is recorded at is the live one, which by then had
+        // these marks in it.
+        if (!Remove())
+        {
+            return (null,
+                "The file this replaced could not be put back, so nothing new was written. "
+                + "The marks are still installed and can be removed again.");
+        }
+
+        var (ini, source, problem) = BaseTable(game);
+
+        if (ini is null)
+            return (null, problem);
+
+        var plan = Plan(ini);
+
+        if (plan.Marked == 0 && plan.Annotated == 0)
+            return (null, "Nothing would be marked, so there is no reason to write a file.");
+
+        var layered = source == "StarStrings";
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+        string? backup = null;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+
+            if (File.Exists(target))
+            {
+                backup = Path.Combine(store.BackupRoot, stamp, "global.ini");
+                Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
+                File.Copy(target, backup, overwrite: true);
+            }
+
+            // Recorded before the write: a write that fails partway through has
+            // still changed the file, and a record added only on success would
+            // leave that file - and its backup - outside the rollback.
+            var install = new TextOverlayInstall(
+                DateTimeOffset.UtcNow, game.RootPath, plan.Marked, layered,
+                [new InstalledFile(target, backup)]);
+
+            store.Record(install);
+
+            // UTF-8 with the byte order mark, because that is what the game's
+            // own file is and this one replaces it. The BOM used to depend on
+            // where the base table came from: read out of Data.p4k with
+            // Encoding.UTF8.GetString it survived into the text and was written
+            // back, but File.ReadAllText - the path taken whenever StarStrings
+            // is installed or our own backup is the base - strips the preamble,
+            // so those installs wrote a file whose first three bytes differed
+            // from the game's. Emitting it here makes the result the same
+            // whichever base was used; GameText.WithoutBom keeps the source
+            // from contributing a second one.
+            File.WriteAllText(target, plan.Content, new UTF8Encoding(true));
+
+            /*
+             * Fingerprinted after the write, so a later mod overwriting this
+             * path shows up as gone rather than as still installed - and taken
+             * with TryFingerprint, because the empty string Fingerprint returns
+             * on a locked file is not a fingerprint. Recorded as one it matched
+             * nothing ever after, so Presence() answered Ours for ever and a
+             * later Remove would have copied our backup over another mod's
+             * file. Fingerprint's own doc says callers deciding whether to
+             * discard a record must not accept it; this was one.
+             */
+            install = install with
+            {
+                Fingerprint = TextOverlayStore.TryFingerprint(target, out var written) ? written : null,
+            };
+
+            store.Record(install);
+
+            return (install, null);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.LogWarning(e, "text overlay install failed");
+            Remove();
+            return (null, "The file could not be written, so anything already changed was put back.");
+        }
+    }
+
+    /// <summary>
+    /// Runs something that rewrites the localisation file with our layer lifted
+    /// out of the way, then puts our layer back on top of whatever it left.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both this and StarStrings write one file, and each backs up whatever it
+    /// finds there. Installing StarStrings while our marks are down therefore
+    /// records the <em>marked</em> file as "the original" - so removing both
+    /// afterwards restores the marked file and leaves the game permanently
+    /// marked, with both stores reporting nothing installed. It is not
+    /// recoverable through the UI, because neither store believes it has
+    /// anything left to undo.
+    /// </para>
+    /// <para>
+    /// StarStrings already lifts its own previous install for exactly this
+    /// reason - see the comment in <c>StarStrings.InstallAsync</c>. This is the
+    /// same rule applied across the two mods rather than within one.
+    /// </para>
+    /// <para>
+    /// Failing to lift is fatal to the operation rather than a warning: going
+    /// ahead is what creates the unrecoverable state.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The work's own problem, if any, and whether our marks went back on.
+    /// </returns>
+    public async Task<(string? Problem, bool Relabelled)> WhileLiftedAsync(
+        GameInstall? game, Func<Task<string?>> work)
+    {
+        var live = store.StillPresent();
+
+        if (live && !Remove())
+        {
+            return ("The item labels could not be taken off first, so nothing was changed. "
+                + "Close the game and anything else reading its localisation file, then try again.", false);
+        }
+
+        /*
+         * try/finally, because the marks have already come off. StarStrings'
+         * InstallAsync throws InvalidDataException on a corrupt archive -
+         * outside its own catch - and without this the request 500s with the
+         * pilot's labels uninstalled and their record deleted. Whatever the
+         * work does, the layer that was lifted goes back on.
+         */
+        string? problem;
+
+        try
+        {
+            problem = await work();
+        }
+        catch
+        {
+            if (live) Install(game);
+            throw;
+        }
+
+        if (!live)
+            return (problem, false);
+
+        var (again, trouble) = Install(game);
+
+        return (problem, trouble is null && again is not null);
+    }
+
+    /// <summary>
+    /// Puts back whatever this displaced.
+    /// </summary>
+    /// <returns>
+    /// False when something could not be put back. The record is kept in that
+    /// case, because forgetting it would leave a changed file in somebody's game
+    /// folder with nothing left that knows how to undo it.
+    /// </returns>
+    public bool Remove()
+    {
+        var install = store.Current;
+
+        if (install is null)
+            return true;
+
+        var presence = store.Presence();
+
+        // Not knowing is not the same as knowing it is gone. A file held open -
+        // by the game, a text editor, a virus scanner mid-pass - reads exactly
+        // like a file somebody replaced, and forgetting the record on that
+        // leaves a marked table in the game folder with nothing left that can
+        // undo it. So the record stays and the caller is told to try again.
+        if (presence == OverlayPresence.Unreadable)
+        {
+            log.LogWarning("could not read {Path}; keeping the removal record", install.Files[0].Path);
+            return false;
+        }
+
+        // Somebody else's file is there now - StarStrings installed over this
+        // one, or a patch replaced it. The backup describes what was under OUR
+        // file, which is no longer what is under theirs, so restoring it would
+        // undo their install rather than ours.
+        if (presence != OverlayPresence.Ours)
+        {
+            store.Forget();
+            return true;
+        }
+
+        var restored = true;
+
+        foreach (var file in install.Files)
+        {
+            try
+            {
+                if (file.Backup is { } backup && File.Exists(backup))
+                    File.Copy(backup, file.Path, overwrite: true);
+                else if (File.Exists(file.Path))
+                    File.Delete(file.Path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                log.LogWarning(e, "could not restore {Path}", file.Path);
+                restored = false;
+            }
+        }
+
+        if (restored) store.Forget();
+
+        return restored;
+    }
+}

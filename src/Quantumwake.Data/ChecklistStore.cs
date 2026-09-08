@@ -1,4 +1,4 @@
-using Quantumwake.Core;
+﻿using Quantumwake.Core;
 using System.Text.Json;
 
 namespace Quantumwake.Data;
@@ -7,6 +7,11 @@ namespace Quantumwake.Data;
 public sealed record ChecklistAttachment(string Kind, string Label, string? Target = null, string? PlaceId = null);
 
 /// <summary>One authored departure task. Nothing here is inferred from the game.</summary>
+/// <param name="AddedAt">
+/// When it was written down. Null on lines from before this was recorded, which
+/// fall back to the list's own date - without it, "bought since you added this"
+/// cannot be answered and a purchase from last month would tick today's line.
+/// </param>
 public sealed record ChecklistItem(
     string Id,
     string Text,
@@ -14,7 +19,8 @@ public sealed record ChecklistItem(
     string? Note,
     IReadOnlyList<ChecklistAttachment> Attachments,
     bool Done,
-    DateTimeOffset? DoneAt);
+    DateTimeOffset? DoneAt,
+    DateTimeOffset? AddedAt = null);
 
 /// <summary>A reusable checklist, with at most one shown on Now at a time.</summary>
 public sealed record Checklist(
@@ -22,7 +28,17 @@ public sealed record Checklist(
     string Title,
     DateTimeOffset CreatedAt,
     IReadOnlyList<ChecklistItem> Items,
-    bool Pinned = false);
+    bool Pinned = false,
+    DateTimeOffset? ModifiedAt = null) : IStamped<Checklist>
+{
+    public string StampId => Id;
+    /// <remarks>Pinned is view state and does not travel - see <see cref="Trip.Bare"/>.</remarks>
+    public Checklist Bare() => this with { ModifiedAt = null, Pinned = false };
+    public Checklist Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? CreatedAt;
+}
 
 /// <summary>
 /// The pilot's own checklists, stored separately from log-derived facts.
@@ -36,6 +52,9 @@ public sealed class ChecklistStore
 {
     private readonly string _path;
     private readonly Lock _gate = new();
+
+    /// <summary>Marks what actually changed, so no mutator has to remember to.</summary>
+    private readonly ChangeStamp<Checklist> _stamp = new(r => JsonSerializer.Serialize(r));
     private List<Checklist> _lists = [];
 
     public ChecklistStore(string? directory = null)
@@ -71,7 +90,8 @@ public sealed class ChecklistStore
             if (index < 0) return null;
 
             var item = new ChecklistItem(NewId(), Clean(text, "Task"), dueAt,
-                CleanOptional(note), CleanAttachments(attachments), Done: false, DoneAt: null);
+                CleanOptional(note), CleanAttachments(attachments), Done: false, DoneAt: null,
+                AddedAt: DateTimeOffset.UtcNow);
             _lists[index] = _lists[index] with { Items = [.. _lists[index].Items, item] };
             Save();
             return _lists[index];
@@ -155,6 +175,34 @@ public sealed class ChecklistStore
 
     private static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
+    /// <summary>
+    /// Puts a record back exactly as given, replacing any with the same id.
+    /// </summary>
+    /// <remarks>
+    /// For restoring a backup, and nothing else. Every other way in makes its
+    /// own record so the store owns the id and the dates; this one deliberately
+    /// does not, because a restore has to reproduce what was backed up rather
+    /// than author something new that resembles it.
+    /// </remarks>
+    public void Put(Checklist list)
+    {
+        lock (_gate)
+        {
+            var index = _lists.FindIndex(x => x.Id == list.Id);
+
+            // View state is this machine's and the preview promises to leave it
+            // alone, so a replacement keeps the pin or the tracking it lands on.
+            // The file never carried them - a backup strips both on the way out -
+            // so taking the record verbatim silently unpins whatever it replaced.
+            if (index >= 0) _lists[index] = list with { Pinned = _lists[index].Pinned };
+            else _lists.Add(list);
+
+            // The record keeps the change time it was backed up with.
+            _stamp.Adopt(list);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try
@@ -165,11 +213,14 @@ public sealed class ChecklistStore
         {
             _lists = [];
         }
+
+        _stamp.Loaded(_lists);
     }
 
     private void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_lists));
+        _stamp.Apply(_lists, DateTimeOffset.UtcNow);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_lists));
     }
 }

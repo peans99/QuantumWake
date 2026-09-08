@@ -172,7 +172,7 @@ public sealed partial class LogEventParser
                         ? m.Groups["mission"].Value
                         : null)),
 
-            // Dormant on SC 4.9: these events are no longer emitted. Implemented
+            // Dormant on SC 4.9 and 4.10: these events are no longer emitted. Implemented
             // from the archived format so the feature revives automatically if
             // CIG restores them. See docs/findings.md.
             "Actor Death" => Match(ActorDeathRegex, line, m =>
@@ -721,7 +721,7 @@ public sealed partial class LogEventParser
         RegexOptions.Compiled)]
     private static partial Regex VehicleNameRegex { get; }
 
-    // ---- Dormant combat patterns (archived format; not emitted by SC 4.9) ----
+    // ---- Dormant combat patterns (archived format; not emitted by SC 4.9 or 4.10) ----
     //
     // These two shapes are not our discovery: they are reconstructed from
     // StarLogs' event_parser.py (https://github.com/Ozy311/StarLogs), the

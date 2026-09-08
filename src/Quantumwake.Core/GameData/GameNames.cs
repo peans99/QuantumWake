@@ -29,7 +29,7 @@ public sealed class GameNames
     private const string LocalizationEntry = @"Data\Localization\english\global.ini";
 
     /// <summary>Bumped whenever the cached shape changes.</summary>
-    private const int CacheVersion = 2;
+    private const int CacheVersion = 3;
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
@@ -45,21 +45,29 @@ public sealed class GameNames
     private readonly Dictionary<string, string> _vehicles;
     private readonly Dictionary<string, string> _places;
     private readonly Dictionary<string, string> _shops;
+    private readonly Dictionary<string, string> _commodities;
+    private readonly Dictionary<string, string> _commodityNotes;
 
     private GameNames(
         Dictionary<string, string> items,
         Dictionary<string, string> vehicles,
         Dictionary<string, string> places,
-        Dictionary<string, string> shops)
+        Dictionary<string, string> shops,
+        Dictionary<string, string> commodities,
+        Dictionary<string, string> commodityNotes)
     {
         _items = items;
         _vehicles = vehicles;
         _places = places;
         _shops = shops;
+        _commodities = commodities;
+        _commodityNotes = commodityNotes;
     }
 
     /// <summary>An empty table, used when the archive is unavailable.</summary>
     public static GameNames Empty { get; } = new(
+        new(StringComparer.OrdinalIgnoreCase),
+        new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase),
         new(StringComparer.OrdinalIgnoreCase),
@@ -79,6 +87,37 @@ public sealed class GameNames
     public int VehicleCount => _vehicles.Count;
     public int PlaceCount => _places.Count;
     public int ShopCount => _shops.Count;
+    public int CommodityCount => _commodities.Count;
+
+    /// <summary>
+    /// The game's own name for a commodity key, or null.
+    /// </summary>
+    /// <remarks>
+    /// Commodities are keyed by name rather than by the resource GUID the logs
+    /// carry, so this cannot name a cargo hold on its own - that join still
+    /// needs the community dataset, which is keyed by GUID. What it gives is the
+    /// game's current wording for a commodity the dataset has already named, and
+    /// the string an in-game text mod would have to rewrite.
+    /// </remarks>
+    public string? Commodity(string commodityKey) =>
+        !string.IsNullOrWhiteSpace(commodityKey) && _commodities.TryGetValue(commodityKey, out var name)
+            ? name
+            : null;
+
+    /// <summary>
+    /// The game's blurb for a commodity, looked up by its displayed name.
+    /// </summary>
+    /// <remarks>
+    /// By display name rather than by key, because the caller who wants a
+    /// description has come from the community dataset and holds a name. Not
+    /// every commodity has one: this install's table yields 307 commodity
+    /// names, and 174 of the community dataset's 203 commodities match one
+    /// carrying a description.
+    /// </remarks>
+    public string? CommodityDescription(string displayName) =>
+        !string.IsNullOrWhiteSpace(displayName) && _commodityNotes.TryGetValue(displayName, out var note)
+            ? note
+            : null;
     public bool IsLoaded => _items.Count > 0 || _vehicles.Count > 0;
 
     /// <summary>
@@ -225,15 +264,24 @@ public sealed class GameNames
     }
 
     /// <summary>
-    /// Pulls the name keys out of the ini. Descriptions are skipped - they run to
-    /// paragraphs and would bloat the cache for no display value.
+    /// Pulls the name keys out of the ini.
     /// </summary>
-    private static GameNames Parse(string ini)
+    /// <remarks>
+    /// Item descriptions are still skipped - they run to paragraphs across
+    /// thousands of keys and would bloat the cache for no display value.
+    /// Commodity descriptions are the exception and are kept: they cost 59 KB
+    /// on a 606 KB cache here, against thousands of item blurbs, so the set is
+    /// bounded - and a commodity is a thing the player is asked to make a
+    /// decision about.
+    /// </remarks>
+    internal static GameNames Parse(string ini)
     {
         var items = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var vehicles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var places = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var shops = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var commodities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var commodityDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var line in ini.Split('\n'))
         {
@@ -258,6 +306,22 @@ public sealed class GameNames
             if (key.StartsWith("shop_name_", StringComparison.OrdinalIgnoreCase))
                 shops.TryAdd(key["shop_name_".Length..], value);
 
+            // Commodities live under their own prefix and are keyed by name, not
+            // by the resource GUID the logs use. Tested before the item branch
+            // only for readability - "items_commodities_" cannot collide with
+            // "item_Name", which is why they were missed until now.
+            if (key.StartsWith(CommodityPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var rest = key[CommodityPrefix.Length..];
+
+                if (rest.EndsWith("_desc", StringComparison.OrdinalIgnoreCase))
+                    commodityDescriptions.TryAdd(rest[..^"_desc".Length], value);
+                else
+                    commodities.TryAdd(rest, value);
+
+                continue;
+            }
+
             // Both "item_Namexyz" and "item_Name_xyz" occur, so the separator is
             // trimmed. Missing it hides everything using the underscored form -
             // most armour, among others.
@@ -267,8 +331,21 @@ public sealed class GameNames
                 vehicles.TryAdd(key["vehicle_Name".Length..].TrimStart('_'), value);
         }
 
-        return new GameNames(items, vehicles, places, shops);
+        // Descriptions are re-keyed by display name here rather than at lookup:
+        // the caller asking for one has come from the community dataset and
+        // holds a name, never the ini key.
+        var notesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (id, name) in commodities)
+        {
+            if (commodityDescriptions.TryGetValue(id, out var note))
+                notesByName.TryAdd(name, note);
+        }
+
+        return new GameNames(items, vehicles, places, shops, commodities, notesByName);
     }
+
+    private const string CommodityPrefix = "items_commodities_";
 
     /// <summary>
     /// True for keys that name a place. Descriptive and sub-facility suffixes
@@ -312,7 +389,9 @@ public sealed class GameNames
                 new Dictionary<string, string>(cache.Items, StringComparer.OrdinalIgnoreCase),
                 new Dictionary<string, string>(cache.Vehicles, StringComparer.OrdinalIgnoreCase),
                 new Dictionary<string, string>(cache.Places, StringComparer.OrdinalIgnoreCase),
-                new Dictionary<string, string>(cache.Shops, StringComparer.OrdinalIgnoreCase));
+                new Dictionary<string, string>(cache.Shops, StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>(cache.Commodities, StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>(cache.CommodityDescriptions, StringComparer.OrdinalIgnoreCase));
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -332,7 +411,9 @@ public sealed class GameNames
                 Items = names._items,
                 Vehicles = names._vehicles,
                 Places = names._places,
-                Shops = names._shops
+                Shops = names._shops,
+                Commodities = names._commodities,
+                CommodityDescriptions = names._commodityNotes
             };
 
             File.WriteAllText(cachePath, JsonSerializer.Serialize(cache, Json));
@@ -350,5 +431,7 @@ public sealed class GameNames
         public Dictionary<string, string> Vehicles { get; set; } = [];
         public Dictionary<string, string> Places { get; set; } = [];
         public Dictionary<string, string> Shops { get; set; } = [];
+        public Dictionary<string, string> Commodities { get; set; } = [];
+        public Dictionary<string, string> CommodityDescriptions { get; set; } = [];
     }
 }

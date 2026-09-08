@@ -1,8 +1,9 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
+using Quantumwake.Core.GameData;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
 
@@ -97,6 +98,11 @@ public static class ServerHost
         builder.Services.AddSingleton<ChecklistStore>();
         builder.Services.AddSingleton<TripStore>();
         builder.Services.AddSingleton<MapNoteStore>();
+        builder.Services.AddSingleton<TombstoneStore>();
+        builder.Services.AddSingleton<BackupBuilder>();
+        builder.Services.AddSingleton<RestoreService>();
+        builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
         builder.Services.AddSingleton<UpdateStore>();
@@ -113,6 +119,12 @@ public static class ServerHost
         // app that writes outside its own data folder.
         builder.Services.AddSingleton<StarStringsStore>();
         builder.Services.AddSingleton<StarStrings>();
+        builder.Services.AddSingleton<TextOverlayStore>();
+        builder.Services.AddSingleton<ItemLabelStore>();
+        builder.Services.AddSingleton<GoalStore>();
+        builder.Services.AddSingleton<MiningLogStore>();
+        builder.Services.AddSingleton<GameDataStatus>();
+        builder.Services.AddSingleton<TextOverlayService>();
 
 
 
@@ -491,20 +503,81 @@ public static class ServerHost
             };
         });
 
-        app.MapPost("/api/starstrings/install", async (StarStrings mod) =>
+        app.MapPost("/api/starstrings/install",
+            async (StarStrings mod, TextOverlayService overlay, TextOverlayStore labels) =>
         {
             if (install is not { } game)
                 return Results.BadRequest(new { problem = "No Star Citizen install was found to write into." });
 
-            var (done, problem) = await mod.InstallAsync(game);
+            // Both mods write one file and each backs up what it finds, so our
+            // marks come off before StarStrings goes on and back on afterwards.
+            // Installing over them makes StarStrings record the marked file as
+            // the original, and removing both then leaves the game marked for
+            // ever with nothing left that knows how to undo it.
+            StarStringsInstall? done = null;
+
+            var (problem, relabelled) = await overlay.WhileLiftedAsync(game, async () =>
+            {
+                var (installed, trouble) = await mod.InstallAsync(game);
+                done = installed;
+                return trouble;
+            });
+
+            if (problem is not null || done is null)
+                return Results.BadRequest(new { problem = problem ?? "The install did not finish." });
+
+            return Results.Ok(new { done.Release, done.InstalledAt, files = done.Files.Count, relabelled });
+        });
+
+        app.MapPost("/api/starstrings/remove",
+            async (StarStrings mod, TextOverlayService overlay) =>
+        {
+            // The same ordering, for the same reason: StarStrings restores the
+            // file it backed up, which would wipe marks laid over it while the
+            // label store still believed they were installed.
+            var removed = false;
+
+            var (problem, relabelled) = await overlay.WhileLiftedAsync(install, () =>
+            {
+                removed = mod.Remove();
+                return Task.FromResult<string?>(null);
+            });
 
             return problem is null
-                ? Results.Ok(new { done!.Release, done.InstalledAt, files = done.Files.Count })
+                ? Results.Ok(new { removed, relabelled })
                 : Results.BadRequest(new { problem });
         });
 
-        app.MapPost("/api/starstrings/remove", (StarStrings mod) =>
-            Results.Ok(new { removed = mod.Remove() }));
+        // Asking what would change writes nothing. Installing is a separate
+        // call because the file lands in the player's game folder.
+        app.MapGet("/api/labels", (TextOverlayService overlay) => overlay.Status(install));
+
+        app.MapPost("/api/labels/install", (TextOverlayService overlay) =>
+        {
+            var (done, problem) = overlay.Install(install);
+
+            return problem is null
+                ? Results.Ok(new { done!.InstalledAt, done.Marked, done.Layered })
+                : Results.BadRequest(new { problem });
+        });
+
+        app.MapPost("/api/labels/remove", (TextOverlayService overlay) =>
+            overlay.Remove()
+                ? Results.Ok(new { removed = true })
+                : Results.BadRequest(new
+                {
+                    problem = "The file this replaced could not be put back - the game may be "
+                        + "running, or the folder read-only. Nothing was forgotten, so this can "
+                        + "be tried again."
+                }));
+
+        // The marks are a preference rather than part of an install, so they are
+        // stored and read back whether or not anything is installed. Changing
+        // them does not rewrite the game's file: the page says to reinstall,
+        // because writing into somebody's game folder on a checkbox is not a
+        // thing to do quietly.
+        app.MapPost("/api/labels/options", (ItemLabelStore store, TextOverlayOptions body) =>
+            Results.Ok(store.Save(body)));
 
         app.MapPost("/api/updates/check", async (UpdateStore updates, UpdateCheck check, SelfUpdate selfUpdate) =>
 
@@ -564,10 +637,33 @@ public static class ServerHost
         // stash, and opt-in market feeds. The game never writes a cargo manifest,
         // so trade rows are deliberately "buy here, sell there" leads rather than
         // pretending the player is carrying a commodity it cannot see.
+        // focus overrules what the retrieved ship implies. It is a query rather
+        // than a page-side filter because the extras below are built only for
+        // the focus that asks for them: an override the server never heard
+        // about would open a section with nothing in it.
         app.MapGet("/api/briefing", (
             LiveSessionService live, TripStore trips, JobStore jobs,
-            LogLibrary lib, UexData uex, UexFeeds feeds) =>
-            BuildBriefing(live.Current, trips, jobs, lib, uex, feeds));
+            LogLibrary lib, UexData uex, UexFeeds feeds, string? focus) =>
+            BuildBriefing(live.Current, trips, jobs, lib, uex, feeds, focus));
+
+        // One description of a thing, whichever surface it was clicked on. The
+        // panels this replaces each knew a different subset and offered a
+        // different set of actions; see EntityCards.
+        /*
+         * One box across everything. Grouped by source rather than interleaved
+         * by score: a query crosses a catalogue from the game files, sightings
+         * from the reader's own logs and their own written work, and a single
+         * ranked list would be the one place this app stopped saying which is
+         * which.
+         */
+        app.MapGet("/api/search", (string? q, LogLibrary lib, JobStore jobs,
+            ChecklistStore checklists, TripStore trips, KitStore kits, MapNoteStore notes) =>
+            Search.Run(q, lib, jobs, checklists, trips, kits, notes));
+
+        app.MapGet("/api/entity", (string? kind, string? id, LogLibrary lib, UexData uex, UexFeeds feeds) =>
+            EntityCards.Build(kind, id, lib, uex, feeds) is { } card
+                ? Results.Ok(card)
+                : Results.NotFound(new { problem = "Nothing is known about that." }));
 
         // The map reads the same deliberately limited service evidence as the
         // briefing. It receives map ids, not UEX's terminal names, so its
@@ -717,6 +813,140 @@ public static class ServerHost
             });
         });
 
+        // What trading is making per in-game hour, and how far that leaves the
+        // thing being saved for. Two windows, because a lifetime average goes
+        // stale and a recent one is thin - and the page shows which is which.
+        app.MapGet("/api/earnings", (LogLibrary lib, GoalStore goals, int? days) =>
+        {
+            var window = lib.Earnings(days ?? 30);
+            var lifetime = lib.Earnings();
+            var goal = goals.Current;
+
+            // The rate to plan with is the recent one where there is enough of
+            // it to mean anything, and the lifetime one otherwise.
+            var rate = window.PerHour > 0 ? window : lifetime;
+
+            return Results.Ok(new
+            {
+                window,
+                lifetime,
+                goal,
+                hoursToGoal = goal is not null && rate.PerHour > 0
+                    ? (double?)decimal.ToDouble(goal.Target / rate.PerHour)
+                    : null,
+                basis = rate.Days == 0 ? "lifetime" : "recent",
+            });
+        });
+
+        // Ore sold that was never bought. The logs record no mining at all - no
+        // extraction, no scan, no refinery job - so this is the only trace that
+        // somebody dug it up rather than hauled it, and it is an inference
+        // rather than an observation. Worded that way on the page.
+        app.MapGet("/api/mining/mine", (LogLibrary lib, UexData uex) =>
+            lib.Market(uex)
+                .Where(e => e.MyScuSold > 0 && e.MyScuBought == 0)
+                .Select(e => new { e.Name, scu = e.MyScuSold, revenue = e.MyRevenue, trips = e.MyTrades })
+                .OrderByDescending(e => e.revenue));
+
+        // Where to go, rather than what to shoot. Ranked in MiningPlaces, which
+        // the Now page's mining focus asks the same question of.
+        app.MapGet("/api/mining/places", (LogLibrary lib, UexData uex) => MiningPlaces(lib, uex));
+
+        // What the game says each place has. Separate from the service badges,
+        // which are UEX's account of where you can actually trade: this is the
+        // star map's own list, and the two disagree usefully often.
+        // Whether the install has been read yet. Every page backed by it is
+        // empty until this says ready, and several of them used to suggest
+        // downloading 110 MB to fix what was a thirty-second wait.
+        app.MapGet("/api/gamedata", (GameDataStatus status) => status.Snapshot());
+
+        app.MapGet("/api/map/amenities", (LogLibrary lib) =>
+            lib.GameCommodities.Places
+                .Where(p => p.Value.Amenities.Count > 0)
+                .Select(p => new { place = p.Key, amenities = p.Value.Amenities })
+                .OrderBy(p => p.place, StringComparer.OrdinalIgnoreCase));
+
+        /*
+         * Stage is worked out from the record rather than stored, so it has to
+         * be projected here - the raw record does not carry it, and a page
+         * reading run.stage off the bare list would silently get nothing.
+         */
+        app.MapGet("/api/mining/log", (MiningLogStore runs) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            return runs.All().Select(run => new
+            {
+                run.Id, run.At, run.Place, run.Resource, run.Scu, run.Quality,
+                run.Revenue, run.Note, run.Refinery, run.SoldAt,
+                Stage = run.StageAt(now),
+                run.Lost,
+            });
+        });
+
+        app.MapPost("/api/mining/log", (MiningLogStore runs, MiningRunEntry body) =>
+            runs.Add(body.Place, body.Resource, body.Scu, body.Quality, body.Revenue, body.Note)
+                is { } added
+                ? Results.Ok(added)
+                : Results.BadRequest(new { problem = "A run needs a resource and some SCU." }));
+
+        /*
+         * Deletes note a tombstone as well as removing the record. A restore
+         * otherwise cannot tell "you never had this" from "you threw this
+         * away", and the quiet answer - hand it back - is the wrong one.
+         * Recorded here rather than in the stores because this is where the
+         * pilot's intent to delete is actually expressed.
+         */
+        /*
+         * A haul from the rock to the money. Every stage is typed, because the
+         * game logs no extraction, no refinery job and no collection - so this
+         * is the pilot writing down what they did, and it stays on its own side
+         * of the wall from anything observed.
+         */
+        app.MapPost("/api/mining/log/{id}/submit",
+            (MiningLogStore runs, string id, RefineryRequest body) =>
+            runs.Submit(id, body.Place, body.Method, body.Cost, body.ExpectedAt, DateTimeOffset.UtcNow)
+                ? Results.Ok(new { id })
+                : Results.BadRequest(new { problem = "That haul is not waiting to be refined." }));
+
+        app.MapPost("/api/mining/log/{id}/collect", (MiningLogStore runs, string id, double? yield) =>
+            runs.Collect(id, yield, DateTimeOffset.UtcNow)
+                ? Results.Ok(new { id })
+                : Results.BadRequest(new { problem = "That haul is not at a refinery." }));
+
+        app.MapPost("/api/mining/log/{id}/sell", (MiningLogStore runs, string id, decimal? revenue) =>
+            runs.Sell(id, revenue, DateTimeOffset.UtcNow)
+                ? Results.Ok(new { id })
+                : Results.BadRequest(new { problem = "That haul has not been collected yet." }));
+
+        // What is owed to you right now, soonest first.
+        app.MapGet("/api/mining/pending", (MiningLogStore runs) =>
+            runs.Pending(DateTimeOffset.UtcNow).Select(run => new
+            {
+                run.Id,
+                run.Place,
+                run.Resource,
+                run.Scu,
+                Stage = run.StageAt(DateTimeOffset.UtcNow),
+                run.Refinery,
+
+                // Said rather than computed on the page, so one build cannot
+                // word this differently from another.
+                Caveat = "The game keeps the refinery timer and logs nothing about it, "
+                    + "so this is the time you told us to expect.",
+            }));
+
+        app.MapDelete("/api/mining/log/{id}", (MiningLogStore runs, TombstoneStore deleted, string id) =>
+        {
+            var removed = runs.Remove(id);
+            if (removed) deleted.Record(TombstoneStore.Kinds.Mining, id);
+
+            return Results.Ok(new { removed });
+        });
+
+        app.MapPost("/api/goal", (GoalStore goals, Goal? body) =>
+            Results.Ok(new { goal = goals.Save(body) }));
+
         app.MapGet("/api/spending", (LogLibrary lib) =>
         {
             var stats = lib.Stats();
@@ -730,6 +960,24 @@ public static class ServerHost
         });
 
         app.MapGet("/api/ledger", (LogLibrary lib, int? days) => lib.Ledger(days ?? 0));
+
+        /*
+         * Why a number is what it is: the rule that made it, the records behind
+         * it, and what was left out.
+         *
+         * A figure nobody has taught this to explain is absent rather than
+         * empty. Answering with a blank explanation would say "there is nothing
+         * behind this number", which is a far stronger claim than "no one has
+         * written that down yet".
+         */
+        app.MapGet("/api/explain", (string? figure, int? days, LogLibrary lib) =>
+            Explanations.For(figure, lib, days ?? 0) is { } explained
+                ? Results.Ok(explained)
+                : Results.NotFound(new
+                {
+                    problem = "Nothing here knows how to explain that figure yet.",
+                    known = Explanations.Known,
+                }));
 
         // Trades with the UEX comparison joined on: what the best sell was, so
         // the page can say what a sale left on the table.
@@ -787,7 +1035,7 @@ public static class ServerHost
                 {
                     var items = s.Groups.SelectMany(g => g.Items).ToList();
                     var priced = items
-                        .Select(i => uex.ItemPrice(lib.Community.Item(i.ItemClass)?.Uuid))
+                        .Select(i => uex.ItemPrice(lib.ItemUuid(i.ItemClass)))
                         .Where(p => p is not null)
                         .Select(p => p!.Value)
                         .ToList();
@@ -840,18 +1088,36 @@ public static class ServerHost
         // Items observed entering the player's inventories - the Loot page.
         // Priced at the endpoint rather than in the library, the same join the
         // stash uses: the item class names a community entry, which carries the
-        // uuid UEX prices against. Null price is normal and the page says so -
-        // UEX stocks 64 of this install's 109 looted classes.
+        // uuid UEX prices against.
+        //
+        // Two sources, in confidence order. A receipt is this install's own -
+        // the game charged for it, so it settles both the price and the fact
+        // that the thing is sold at all. UEX is broader but crowd-sourced, and
+        // misses 29 of the 106 items these logs prove were bought at a kiosk.
+        // Neither is a catalogue, so "sold" is a floor and the page says so.
         app.MapGet("/api/loot", (LogLibrary lib, UexData uex, int? days) =>
-            lib.Pickups(days ?? 0).Select(p => new
+        {
+            var receipts = lib.Receipts();
+
+            return lib.Pickups(days ?? 0).Select(p =>
             {
-                p.At,
-                p.Item,
-                p.ItemClass,
-                p.Place,
-                p.Category,
-                price = uex.TypicalItemPrice(lib.Community.Item(p.ItemClass)?.Uuid)
-            }));
+                var uuid = lib.ItemUuid(p.ItemClass);
+                var receipt = receipts.GetValueOrDefault(p.ItemClass);
+                var listed = uex.TypicalItemPrice(uuid);
+
+                return new
+                {
+                    p.At,
+                    p.Item,
+                    p.ItemClass,
+                    p.Place,
+                    p.Category,
+                    price = listed ?? receipt?.UnitPrice,
+                    pricedFrom = listed is not null ? "market" : receipt is not null ? "receipt" : null,
+                    sold = uex.ItemMarket(uuid).Count > 0 || receipt is not null
+                };
+            });
+        });
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
         // Work done per faction, and the little reputation anyone has written
@@ -875,7 +1141,7 @@ public static class ServerHost
         // live prices when that integration is on. Empty until the community
         // dataset is enabled, and the page explains that.
         app.MapGet("/api/market", (LogLibrary lib, UexData uex) =>
-            lib.Market().Select(entry => new
+            lib.Market(uex).Select(entry => new
             {
                 entry.Id,
                 entry.Name,
@@ -883,8 +1149,10 @@ public static class ServerHost
                 entry.Sold,
                 entry.Bought,
                 entry.MyScuSold,
+                entry.MyScuBought,
                 entry.MyRevenue,
                 entry.MyTrades,
+                entry.Source,
                 uex = uex.Best(entry.Name)
             }));
 
@@ -926,13 +1194,49 @@ public static class ServerHost
             // join is a contains either way round rather than an equality.
             var received = lib.Blueprints();
 
+            object Owned(string output) => new
+            {
+                owned = received.Any(r =>
+                    output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
+                    || r.Name.Contains(output, StringComparison.OrdinalIgnoreCase))
+            };
+
+            // The install describes the recipe itself; the download adds how a
+            // blueprint is obtained, which is not in the game files this reads.
+            if (lib.GameCommodities.Blueprints.Count > 0)
+            {
+                return lib.GameCommodities.Blueprints.Select(b =>
+                {
+                    var facts = lib.GameCommodities.Item(b.OutputClass);
+                    var mine = received.FirstOrDefault(r =>
+                        b.Output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
+                        || r.Name.Contains(b.Output, StringComparison.OrdinalIgnoreCase));
+
+                    return (object)new
+                    {
+                        b.Output,
+                        Type = facts?.Type,
+                        Grade = facts?.Grade ?? 0,
+                        b.Kind,
+                        b.CraftSeconds,
+                        b.Materials,
+                        @default = false,
+                        b.RewardPools,
+                        shopPrice = uex.ItemPrice(lib.ItemUuid(b.OutputClass)),
+                        owned = mine is not null,
+                        receivedAt = mine?.At,
+                        source = "install"
+                    };
+                });
+            }
+
             return lib.Community.Blueprints.Select(b =>
             {
                 var mine = received.FirstOrDefault(r =>
                     b.Output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
                     || r.Name.Contains(b.Output, StringComparison.OrdinalIgnoreCase));
 
-                return new
+                return (object)new
                 {
                     b.Output,
                     b.Type,
@@ -944,7 +1248,8 @@ public static class ServerHost
                     b.RewardPools,
                     shopPrice = uex.ItemPrice(b.OutputUuid),
                     owned = mine is not null,
-                    receivedAt = mine?.At
+                    receivedAt = mine?.At,
+                    source = "dataset"
                 };
             });
         });
@@ -954,10 +1259,25 @@ public static class ServerHost
         app.MapGet("/api/blueprints/owned", (LogLibrary lib) => lib.Blueprints());
 
         // The starmap's own paragraph about one place, for the map detail card.
+        // The install carries the star map's own account of a place - its
+        // paragraph, what it orbits, and the services it lists - so this answers
+        // without the download; the download stays the fallback for the
+        // paragraph where the install has none.
         app.MapGet("/api/map/lore", (LogLibrary lib, string name) =>
-            lib.Community.PlaceLore(name) is { } lore
-                ? Results.Ok(new { lore })
-                : Results.NotFound());
+        {
+            var place = lib.GameCommodities.Place(name);
+            var lore = place?.Description ?? lib.Community.PlaceLore(name);
+
+            if (lore is null && place is null) return Results.NotFound();
+
+            return Results.Ok(new
+            {
+                lore,
+                place?.Parent,
+                place?.Kind,
+                amenities = place?.Amenities ?? []
+            });
+        });
 
         // The game's own deposit spawn tables, with UEX's best sell joined on
         // resources that are also commodities - what to mine AND what it pays.
@@ -974,7 +1294,9 @@ public static class ServerHost
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Yield).ToList(),
                     StringComparer.OrdinalIgnoreCase);
 
-            return lib.Community.ResourceSpawns.Select(s =>
+            var spawns = SpawnMerge.Merge(lib.GameCommodities.Spawns, lib.Community.ResourceSpawns);
+
+            return spawns.Select(s =>
             {
                 var best = uex.Best(s.Resource);
                 raw.TryGetValue($"{s.Resource} (Raw)", out var rawRow);
@@ -988,12 +1310,17 @@ public static class ServerHost
                 {
                     s.Resource,
                     s.Deposit,
+                    s.MinPercent,
+                    s.MaxPercent,
                     s.Kind,
                     s.Location,
                     s.System,
                     s.Group,
                     s.GroupChance,
                     s.Share,
+                    s.Quality,
+                    s.RespawnSeconds,
+                    s.Source,
                     bestSell = best?.BestSell > 0 ? best.BestSell : (decimal?)null,
                     bestSellTerminal = best?.BestSell > 0 ? best.BestSellTerminal : null,
                     rawSell = rawRow?.Sell,
@@ -1005,30 +1332,33 @@ public static class ServerHost
         });
 
         app.MapGet("/api/reference/items", (LogLibrary lib, UexData uex) =>
-            lib.Community.Items
-                .Select(kv =>
+            lib.Items()
+                .Select(item =>
                 {
-                    var stock = uex.ItemMarket(kv.Value.Uuid);
+                    var stock = uex.ItemMarket(item.Uuid);
                     var cheapest = stock.Count > 0 ? stock.MinBy(r => r.Buy) : null;
 
                     return new
                     {
-                        className = kv.Key,
-                        kv.Value.Name,
-                        kv.Value.Type,
-                        kv.Value.SubType,
-                        kv.Value.Size,
-                        kv.Value.Grade,
-                        kv.Value.Manufacturer,
-                        price = uex.ItemPrice(kv.Value.Uuid),
+                        className = item.ClassName,
+                        item.Name,
+                        item.Type,
+                        item.SubType,
+                        item.Size,
+                        item.Grade,
+                        item.Manufacturer,
+                        item.Source,
+                        item.Description,
+                        item.Tags,
+                        item.MicroScu,
+                        price = uex.ItemPrice(item.Uuid),
                         stockedAt = stock.Count,
                         cheapestAt = cheapest?.Terminal,
                         terminals = stock.Count > 0
                             ? stock.OrderBy(r => r.Buy).Select(r => $"{r.Terminal} — {r.Buy:N0} aUEC")
                             : null
                     };
-                })
-                .OrderBy(i => i.className));
+                }));
 
         // Hauls worth flying, sized to a hold and a wallet the caller names.
         // Each end of a haul carries the map's own id for it where the terminal
@@ -1421,16 +1751,30 @@ public static class ServerHost
         app.MapPost("/api/jobs/{id}/pin", (string id, JobStore jobs) =>
             jobs.TogglePin(id) ? Results.Ok(new { id }) : Results.NotFound());
 
-        app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs) =>
-            jobs.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/jobs/{id}", (string id, JobStore jobs, TombstoneStore deleted) =>
+        {
+            if (!jobs.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Jobs, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- checklists: authored preparation, never guessed from the log ----
 
-        app.MapGet("/api/checklists", (ChecklistStore checklists, ImportStore imports, string? imported) =>
-            checklists.All().Select(list => Draw(list, null))
+        app.MapGet("/api/checklists",
+            (ChecklistStore checklists, ImportStore imports, LogLibrary lib, string? imported) =>
+        {
+            // When a line names something to buy and the logs then show it
+            // bought, the line has been done whether or not anybody ticked it.
+            // Matched on the name the app itself put on the line, which means
+            // going through the display name: purchases are logged by class.
+            var bought = lib.Bought();
+
+            return checklists.All().Select(list => Draw(list, null, bought))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Checklists ?? [])
-                        .Select(list => Draw(list, batch)))));
+                        .Select(list => Draw(list, batch, bought))));
+        });
 
         app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
             Results.Ok(checklists.Add(body.Title)));
@@ -1450,8 +1794,13 @@ public static class ServerHost
         app.MapDelete("/api/checklists/{id}/items/{itemId}", (string id, string itemId, ChecklistStore checklists) =>
             checklists.RemoveItem(id, itemId) ? Results.Ok(new { id, itemId }) : Results.NotFound());
 
-        app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists) =>
-            checklists.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/checklists/{id}", (string id, ChecklistStore checklists, TombstoneStore deleted) =>
+        {
+            if (!checklists.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Checklists, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- sharing: a file of the pilot's own, for a pilot they fly with ----
 
@@ -1563,6 +1912,61 @@ public static class ServerHost
 
         // Counts and the window, never rows: nothing leaves without a click, and
         // a click is worth more when it follows seeing what would go.
+        /*
+         * A backup: everything typed, in one file, for getting a machine back.
+         * Separate from /api/export, which is a selection offered to somebody
+         * else - the two have different rules about what may be left out, and
+         * folding them together is how a backup quietly stops being complete.
+         */
+        app.MapGet("/api/backup", (BackupBuilder backups, LogLibrary lib) =>
+        {
+            var document = backups.Build(Producer(), DateTimeOffset.UtcNow, lib.Handle());
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(document, ExportDocument.Json);
+
+            return Results.File(bytes, "application/json",
+                $"quantumwake-backup-{DateTimeOffset.Now:yyyy-MM-dd}.json");
+        });
+
+        // What it would hold, so the page can say so before anything is written.
+        app.MapGet("/api/backup/preview", (BackupBuilder backups) => backups.Preview());
+
+        /*
+         * Restoring is two calls on purpose. The first says what would change
+         * and writes nothing; the second does that and nothing else, and has to
+         * quote back the hash of the file the first one read. A file swapped
+         * between them is refused rather than quietly restored - the preview is
+         * only a promise if the thing it described is the thing that runs.
+         */
+        app.MapPost("/api/backup/plan", async (HttpRequest request, RestoreService restore) =>
+        {
+            var (contents, hash, problem) = BackupReader.Read(await Body(request));
+
+            return problem is not null
+                ? Results.Json(new { problem = problem.Message }, statusCode: problem.Status)
+                : Results.Ok(restore.Plan(contents!, hash!));
+        });
+
+        app.MapPost("/api/backup/restore", async (HttpRequest request, RestoreService restore,
+            string? hash, string? take, string? leave) =>
+        {
+            var (contents, actual, problem) = BackupReader.Read(await Body(request));
+
+            if (problem is not null)
+                return Results.Json(new { problem = problem.Message }, statusCode: problem.Status);
+
+            var plan = restore.Plan(contents!, actual!);
+
+            var result = restore.Apply(contents!, plan, hash ?? string.Empty,
+                new RestoreChoices(Keys(take), Keys(leave)));
+
+            return result is null
+                ? Results.BadRequest(new
+                {
+                    problem = "That is not the file you were shown. Check the backup and preview it again."
+                })
+                : Results.Ok(result);
+        });
+
         app.MapGet("/api/export/preview", (ExportBuilder exports,
             bool? receipts, bool? blueprints, bool? authored, int? days) =>
         {
@@ -1671,11 +2075,119 @@ public static class ServerHost
             return Results.Ok(Describe(wipe, lib));
         });
 
-        app.MapGet("/api/trips", (TripStore trips, ImportStore imports, string? imported) =>
-            trips.All().Select(trip => Draw(trip, null))
+        app.MapGet("/api/trips", (TripStore trips, ImportStore imports,
+            RunSettingsStore settings, string? imported) =>
+        {
+            // Swept here rather than on a timer: the list is the only place the
+            // result is visible, so filing on read costs nothing and cannot
+            // drift out of step with what is on screen.
+            trips.SweepQuiet(settings.Current.Idle, DateTimeOffset.UtcNow);
+
+            return trips.All().Select(trip => Draw(trip, null))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Trips ?? [])
-                        .Select(trip => Draw(trip, batch)))));
+                        .Select(trip => Draw(trip, batch))));
+        });
+
+        /*
+         * A run has a beginning and an end, and neither is inferred. Only the
+         * pilot knows when they set off, and the app has no way to tell a break
+         * from an abandonment - so it files quiet runs rather than guessing,
+         * and resuming one is a click.
+         */
+        app.MapPost("/api/trips/{id}/start", (string id, TripStore trips) =>
+            trips.Start(id, DateTimeOffset.UtcNow) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/finish", (string id, TripStore trips) =>
+            trips.Finish(id, DateTimeOffset.UtcNow) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/resume", (string id, TripStore trips) =>
+            trips.Resume(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/repeat", (string id, TripStore trips) =>
+            trips.Repeat(id, DateTimeOffset.UtcNow) is { } copy
+                ? Results.Ok(new { copy.Id, copy.Title, stops = copy.Stops.Count })
+                : Results.NotFound());
+
+        /*
+         * What a run planned against what the logs recorded while it ran.
+         * Computed, never stored: a rescan can improve the answer, and a saved
+         * one would freeze whichever reading was current when it was filed.
+         */
+        app.MapGet("/api/trips/{id}/review", (string id, TripStore trips, LogLibrary lib, UexData uex) =>
+        {
+            var trip = trips.All().FirstOrDefault(t => t.Id == id);
+
+            if (trip is null) return Results.NotFound();
+
+            return RunReviewer.Build(trip, lib.Ledger(), DateTimeOffset.UtcNow) is { } review
+                ? Results.Ok(review)
+                : Results.BadRequest(new
+                {
+                    problem = "This plan has never been started, so there is nothing to compare against yet."
+                });
+        });
+
+        // A correction sits beside the estimate rather than replacing it.
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/actual",
+            (string id, string stopId, string actionId, TripStore trips, decimal? amount) =>
+            trips.Correct(id, stopId, actionId, amount)
+                ? Results.Ok(new { id, stopId, actionId })
+                : Results.NotFound());
+
+        /*
+         * Saved kits: a loadout the pilot keeps, and what it would take to put
+         * it back together. The preparing half writes nothing - it is a reading
+         * of the logs and a set of questions only the pilot can answer.
+         */
+        app.MapGet("/api/kits", (KitStore kits) => kits.All());
+
+        app.MapPost("/api/kits", (KitStore kits, KitRequest body) =>
+            Results.Ok(kits.Add(body.Name, body.Items)));
+
+        app.MapPut("/api/kits/{id}", (string id, KitStore kits, KitRequest body) =>
+            kits.Replace(id, body.Name, body.Items) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapDelete("/api/kits/{id}", (string id, KitStore kits, TombstoneStore deleted) =>
+        {
+            if (!kits.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Kits, id);
+            return Results.Ok(new { id });
+        });
+
+        app.MapGet("/api/kits/{id}/prepare", (string id, KitStore kits, LogLibrary lib) =>
+            kits.Find(id) is { } kit
+                ? Results.Ok(KitPreparer.Prepare(kit, lib.Stats(), DateTimeOffset.UtcNow))
+                : Results.NotFound());
+
+        /*
+         * The answers to the questions come back here, and only here: a
+         * sighting the pilot has not spoken about is left as held, because the
+         * cost of that being wrong is a wasted trip rather than a purchase
+         * nobody needed.
+         */
+        app.MapPost("/api/kits/{id}/shopping",
+            (string id, KitStore kits, LogLibrary lib, JobStore jobs, string? gone) =>
+        {
+            if (kits.Find(id) is not { } kit) return Results.NotFound();
+
+            var prepared = KitPreparer.Prepare(kit, lib.Stats(), DateTimeOffset.UtcNow);
+            var wanted = KitPreparer.Shopping(prepared, Keys(gone));
+
+            if (wanted.Count == 0)
+                return Results.Ok(new { job = (string?)null, items = 0 });
+
+            var job = jobs.Add($"{kit.Name} - replacements", "list", null,
+                [.. wanted.Select(line => new JobItem(line.Name, line.Quantity))]);
+
+            return Results.Ok(new { job = job.Id, items = wanted.Count });
+        });
+
+        app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
+
+        app.MapPost("/api/runs/settings", (RunSettingsStore settings, int? days) =>
+            Results.Ok(settings.Save(days)));
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
             Results.Ok(trips.Add(body.Title, body.Stops)));
@@ -1715,8 +2227,13 @@ public static class ServerHost
         app.MapDelete("/api/trips/{id}/stops/{stopId}", (string id, string stopId, TripStore trips) =>
             trips.RemoveStop(id, stopId) ? Results.Ok(new { id }) : Results.NotFound());
 
-        app.MapDelete("/api/trips/{id}", (string id, TripStore trips) =>
-            trips.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/trips/{id}", (string id, TripStore trips, TombstoneStore deleted) =>
+        {
+            if (!trips.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Trips, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- map notes: personal POIs, deliberately not telemetry ----
 
@@ -1728,8 +2245,13 @@ public static class ServerHost
             return item is null ? Results.BadRequest(new { message = "Choose a map location first." }) : Results.Ok(item);
         });
 
-        app.MapDelete("/api/map-notes/{id}", (string id, MapNoteStore notes) =>
-            notes.Remove(id) ? Results.Ok(new { id }) : Results.NotFound());
+        app.MapDelete("/api/map-notes/{id}", (string id, MapNoteStore notes, TombstoneStore deleted) =>
+        {
+            if (!notes.Remove(id)) return Results.NotFound();
+
+            deleted.Record(TombstoneStore.Kinds.Notes, id);
+            return Results.Ok(new { id });
+        });
 
         // ---- optional UEX feeds, each switched on by itself ----
 
@@ -1818,9 +2340,23 @@ public static class ServerHost
 
             // Everything sold, by what it is and how big: one pass over the
             // catalogue rather than one per port.
-            var catalogue = lib.Community.Items.Values
-                .Where(i => i.Uuid is not null && i.Type is { Length: > 0 })
-                .GroupBy(i => (i.Type!, i.Size))
+            // Which kinds of component the game actually tags as shipped. The
+            // tag is not used evenly: 196 of 203 weapon guns carry it and not
+            // one of the 81 coolers does, so an untagged cooler means the tag
+            // was never applied to coolers rather than that the cooler is
+            // unfinished. Saying otherwise would put "not flight ready" on
+            // every cooler, shield and quantum drive in the game.
+            var tagged = lib.GameCommodities.ItemFacts.Values
+                .Where(i => i.Tags.Contains("flightReady", StringComparison.OrdinalIgnoreCase))
+                .Select(i => i.Type)
+                .Where(t => t.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Keyed by class name rather than flattened to values, because the
+            // class is what joins these to the install's own facts.
+            var catalogue = lib.Community.Items
+                .Where(i => i.Value.Uuid is not null && i.Value.Type is { Length: > 0 })
+                .GroupBy(i => (i.Value.Type!, i.Value.Size))
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var groups = slots
@@ -1834,13 +2370,31 @@ public static class ServerHost
                         .ToList();
 
                     var options = (catalogue.TryGetValue(group.Key, out var candidates) ? candidates : [])
-                        .Select(item => new
+                        .Select(entry => new
                         {
-                            item.Name,
-                            item.Manufacturer,
-                            item.Grade,
-                            price = uex.ItemPrice(item.Uuid),
-                            shops = uex.ItemMarket(item.Uuid)
+                            Item = entry.Value,
+                            Facts = lib.GameCommodities.Item(entry.Key),
+                        })
+                        .Select(row => new
+                        {
+                            row.Item,
+                            // Null where the game does not use the tag for this
+                            // kind of part at all, which is most kinds. Only a
+                            // component of a kind the tag is applied to can be
+                            // said to be missing it.
+                            Ready = row.Facts is null || !tagged.Contains(row.Facts.Type)
+                                ? (bool?)null
+                                : row.Facts.Tags.Contains(
+                                    "flightReady", StringComparison.OrdinalIgnoreCase),
+                        })
+                        .Select(row => new
+                        {
+                            row.Item.Name,
+                            row.Item.Manufacturer,
+                            row.Item.Grade,
+                            flightReady = row.Ready,
+                            price = uex.ItemPrice(row.Item.Uuid),
+                            shops = uex.ItemMarket(row.Item.Uuid)
                                 .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
                                 .Select(g => g.MinBy(r => r.Buy)!)
                                 .OrderBy(r => r.Buy)
@@ -2139,28 +2693,71 @@ public static class ServerHost
 
         // Warm the cache in the background so first paint is not blocked by a cold
         // 400 MB backfill.
-        if (install is not null)
+        var gameData = app.Services.GetRequiredService<GameDataStatus>();
+
+        if (install is null)
+        {
+            gameData.NoInstall();
+        }
+        else
         {
             _ = Task.Run(() =>
             {
                 try
                 {
                     // Names first: cheap when cached, and every view reads better with them.
+                    gameData.Begin();
                     library.LoadNames(install.RootPath);
+
+                    // Said out loud, because for the half minute this takes every
+                    // page backed by it is empty and there is otherwise no way to
+                    // tell that from a failure.
+                    gameData.Ready(new Dictionary<string, int>
+                    {
+                        ["commodities"] = library.GameCommodities.Count,
+                        ["items"] = library.GameCommodities.FactCount,
+                        ["recipes"] = library.GameCommodities.Blueprints.Count,
+                        ["deposits"] = library.GameCommodities.Spawns.Count,
+                        ["places"] = library.GameCommodities.PlaceCount,
+
+                        // Not the same as "places": the Settings copy compares
+                        // how far each source reaches, and that is the number of
+                        // distinct spots deposits sit in, not the whole gazetteer.
+                        ["spawnplaces"] = library.GameCommodities.Spawns
+                            .Select(s => s.Location)
+                            .Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    });
+
                     app.Logger.LogInformation("Game names: {Items} items, {Vehicles} vehicles.",
                         library.Names.ItemCount, library.Names.VehicleCount);
+                }
+                catch (Exception e)
+                {
+                    gameData.Failed($"The game files could not be read: {e.Message}");
+                    app.Logger.LogError(e, "Reading the game files failed.");
+                }
 
-                    var status = app.Services.GetRequiredService<ScanStatus>();
+                // Deliberately a second attempt rather than an else. Reading the
+                // game files and parsing the logs fail for unrelated reasons and
+                // neither needs the other to have worked, but they shared a catch:
+                // one unreadable backup reported the install as unreadable, which
+                // sends someone off to verify game files that were never at fault.
+                var status = app.Services.GetRequiredService<ScanStatus>();
+                try
+                {
                     status.Begin();
-
                     var parsed = library.Scan(install, Progress(status));
-                    status.Finish();
                     app.Logger.LogInformation("Library ready: {Parsed} newly parsed, {Total} sessions.",
                         parsed, library.Store.Count());
                 }
                 catch (Exception e)
                 {
                     app.Logger.LogError(e, "Initial scan failed.");
+                }
+                finally
+                {
+                    // Always: a scan left open reads on the page as one still running.
+                    status.Finish();
                 }
             });
         }
@@ -2321,17 +2918,58 @@ static int Holes(IEnumerable<ShipSlot> slots)
     }
 
     /// <summary>A checklist as a page sees it, with whose it is when it is not the reader's.</summary>
-    static object Draw(Checklist list, ImportBatch? from) => new
+    static object Draw(
+        Checklist list,
+        ImportBatch? from,
+        IReadOnlyDictionary<string, DateTimeOffset>? bought = null) => new
     {
         Id = from is null ? list.Id : SharedId(from, list.Id),
         list.Title,
         list.CreatedAt,
         Pinned = from is null && list.Pinned,
-        Items = from is null
-            ? list.Items
-            : [.. list.Items.Select(i => i with { Id = SharedId(from, i.Id) })],
+        Items = list.Items.Select(i => new
+        {
+            Id = from is null ? i.Id : SharedId(from, i.Id),
+            i.Text,
+            i.DueAt,
+            i.Note,
+            i.Attachments,
+            i.Done,
+            i.DoneAt,
+            // What the logs say about the thing this line names. Reported rather
+            // than written back: the list is the pilot's, and a name match is an
+            // observation about it, not permission to edit it.
+            Bought = BoughtSince(i, list.CreatedAt, bought),
+        }),
         imported = from is null ? null : Marker(from),
     };
+
+    /// <summary>
+    /// When the thing a line names was bought, if it was bought since the line
+    /// was written.
+    /// </summary>
+    /// <remarks>
+    /// The floor matters. Without it a rifle bought last month ticks off a line
+    /// added this morning, and the list quietly claims work nobody did.
+    /// </remarks>
+    static DateTimeOffset? BoughtSince(
+        ChecklistItem item,
+        DateTimeOffset listCreated,
+        IReadOnlyDictionary<string, DateTimeOffset>? bought)
+    {
+        if (bought is null || bought.Count == 0) return null;
+
+        var since = item.AddedAt ?? listCreated;
+
+        return item.Attachments
+            .Where(a => a.Kind is "item" or "commodity")
+            .Select(a => a.Target ?? a.Label)
+            .Where(name => name is { Length: > 0 })
+            .Select(name => bought.TryGetValue(name!, out var at) ? at : (DateTimeOffset?)null)
+            .Where(at => at >= since)
+            .OrderByDescending(at => at)
+            .FirstOrDefault();
+    }
 
     /// <summary>A flight plan as a page sees it.</summary>
     static object Draw(Trip trip, ImportBatch? from) => new
@@ -2349,6 +2987,15 @@ static int Holes(IEnumerable<ShipSlot> slots)
             })],
         trip.Next,
         trip.Done,
+
+        // The lifecycle, and only for your own runs: a shared file carries
+        // somebody else's plan, and their run being underway is not a state
+        // this machine can act on.
+        StartedAt = from is null ? trip.StartedAt : null,
+        FinishedAt = from is null ? trip.FinishedAt : null,
+        Archived = from is null ? trip.Archived : Archived.No,
+        Flying = from is null && trip.Flying,
+        ElapsedSeconds = from is null ? trip.Elapsed(DateTimeOffset.UtcNow)?.TotalSeconds : null,
         imported = from is null ? null : Marker(from),
     };
 
@@ -2455,6 +3102,129 @@ static int Holes(IEnumerable<ShipSlot> slots)
             .Where(t => t.IsSell && t.Commodity is not null && t.Scu > 0)
             .Select(t => (t.At, t.Commodity!, t.Place, t.UnitPrice, t.Scu));
 
+    /// <summary>
+    /// Where to go, rather than what to shoot. Each place is worth the sum of
+    /// what spawns there: every deposit's share of the place times what a SCU
+    /// of that rock sells for. Ranked, so the question has an answer rather
+    /// than a table to read down.
+    /// </summary>
+    /// <remarks>
+    /// Shared with the Now page's mining focus, which asks this same question
+    /// narrowed to the system the pilot is standing in. Two rankings drifting
+    /// apart would have the briefing recommending a place the Mining page does
+    /// not rate, which is the kind of disagreement nobody reports and everybody
+    /// stops trusting.
+    /// </remarks>
+    /// <summary>The whole request body as text, for the file-shaped endpoints.</summary>
+    private static async Task<string> Body(HttpRequest request)
+    {
+        using var reader = new StreamReader(request.Body, System.Text.Encoding.UTF8);
+        return await reader.ReadToEndAsync();
+    }
+
+    /// <summary>
+    /// A comma-separated list of plan keys, as the page sends its exceptions.
+    /// </summary>
+    /// <remarks>
+    /// Exceptions rather than a decision per line, so approving a long plan
+    /// untouched sends nothing - and a line this build did not know about
+    /// cannot arrive unanswered and be read as a refusal.
+    /// </remarks>
+    private static IReadOnlyList<string> Keys(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    static IEnumerable<MiningPlace> MiningPlaces(LogLibrary lib, UexData uex)
+    {
+        var spawns = lib.GameCommodities.Spawns.Count > 0
+            ? lib.GameCommodities.Spawns.Select(s => (
+                s.Location, s.System, s.Resource, s.MinPercent, s.MaxPercent,
+                Odds: s.GroupChance * s.Share, s.RespawnSeconds, s.Quality))
+            : [];
+
+        return spawns
+            .GroupBy(s => s.Location, StringComparer.OrdinalIgnoreCase)
+            .Select(place =>
+            {
+                // One line per ore. The same ore appears once per table a
+                // place has - Cave Rich, Cave Medium, Cave Poor - and listing
+                // those separately would name Hadanite three times as the
+                // three best things here.
+                var rows = place
+                    .GroupBy(s => s.Resource, StringComparer.OrdinalIgnoreCase)
+                    .Select(ore =>
+                    {
+                        // Each variant carries its own likelihood, so the ore's
+                        // figures are the average across them weighted by it -
+                        // not the best of them. Taking the maximum let a rare
+                        // rich seam stand in for every common poor one: a place
+                        // with a 90% chance of 10%-copper rock and a 10% chance
+                        // of 90%-copper reported 900 aUEC per SCU when the rock
+                        // a player actually breaks is worth 180.
+                        var weight = ore.Sum(s => s.Odds);
+                        var sell = uex.Best(ore.Key)?.BestSell is { } best && best > 0 ? best : 0m;
+
+                        // The middle of the ore range, as the table uses.
+                        var variants = ore
+                            .Select(s => s.MinPercent is { } low && s.MaxPercent is { } high
+                                ? (Share: weight > 0 ? s.Odds / weight : 0, Middle: (low + high) / 2)
+                                : (Share: weight > 0 ? s.Odds / weight : 0, Middle: 0d))
+                            .ToList();
+
+                        return new
+                        {
+                            Resource = ore.Key,
+                            Odds = weight,
+                            Worth = variants.Sum(v => (decimal)(v.Share * v.Middle / 100) * sell),
+
+                            // How much of the rock is worth having, which is a
+                            // different question from what it sells for.
+                            Ore = variants.Sum(v => v.Share * v.Middle),
+                        };
+                    })
+                    // Kept on having ore, not on having a price. UEX is
+                    // optional, and without it every worth is zero - which
+                    // used to empty this table and leave the page claiming
+                    // the deposit tables could not be read. How rich a rock
+                    // is comes from the install and is the question this
+                    // page exists to answer.
+                    .Where(r => r.Ore > 0)
+                    .ToList();
+
+                // A place draws on several tables and each is normalised
+                // within itself, so their odds sum past one. Normalising
+                // again here makes this "given you find a rock, what is it
+                // worth" - the only comparison between places the data
+                // actually supports.
+                var total = rows.Sum(r => r.Odds);
+
+                return new MiningPlace(
+                    place.Key,
+                    place.Select(s => s.System).FirstOrDefault(s => s is not null),
+                    total > 0 ? rows.Sum(r => (decimal)(r.Odds / total) * r.Worth) : 0m,
+                    // Two kinds of rich, and they are not the same. Ore is
+                    // how much of a rock is the good stuff; quality is what
+                    // grade it assays at, and a place can override the usual.
+                    total > 0 ? rows.Sum(r => r.Odds / total * r.Ore) : 0,
+                    place
+                        .Where(s => s.Quality is not null)
+                        .OrderByDescending(s => s.Quality!.Min)
+                        .Select(s => new MiningQuality(s.Quality!.Min, s.Quality.Local))
+                        .FirstOrDefault(),
+                    rows.Count,
+                    place.Select(s => s.RespawnSeconds).FirstOrDefault(r => r is > 0),
+                    [.. rows.OrderByDescending(r => r.Odds * (double)r.Worth)
+                        .Take(3)
+                        .Select(r => new MiningBest(r.Resource, r.Worth))]);
+            })
+            .Where(p => p.Ore > 0)
+            // Value first where there is any, richness otherwise, so the
+            // ranking still means something with prices switched off.
+            .OrderByDescending(p => p.PerRock)
+            .ThenByDescending(p => p.Ore);
+    }
+
     /// <summary>Builds the short list of useful things at the player's live place.</summary>
     /// <remarks>
     /// A briefing is deliberately narrower than its source pages. The next three
@@ -2463,7 +3233,8 @@ static int Holes(IEnumerable<ShipSlot> slots)
     /// what to do before leaving a hangar, not for replacing their full views.
     /// </remarks>
     static PilotBriefing BuildBriefing(
-        NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds)
+        NowState now, TripStore trips, JobStore jobs, LogLibrary lib, UexData uex, UexFeeds feeds,
+        string? chosenFocus = null)
     {
         var trip = trips.Tracked();
 
@@ -2577,9 +3348,77 @@ static int Holes(IEnumerable<ShipSlot> slots)
                 o.Commodity, o.BuyHere, o.SellThere, o.SellTerminal, o.MarginPerScu))
             .ToList();
 
+        // What the pilot came out to do, read from the ship they retrieved.
+        // NowState.Ship carries the raw log form - "DRAK Corsair" - which is
+        // the reference key with a space in it, so this lookup is exact where
+        // the Fleet page's has to try the class name first.
+        var reference = lib.Community.Ship(now.Ship);
+
+        // Named the way the Fleet page names it. The live state carries the raw
+        // log form - "ANVL Hornet F7CM Mk2" - and putting that in a sentence
+        // about the pilot's own ship reads like a parser leaking.
+        var focus = now.Ship is { Length: > 0 } flying
+            && ShipFocus.Of(reference?.Career, reference?.Role) is { } chosen
+                ? new BriefingFocus(
+                    chosen.Key, chosen.Label, reference?.Name ?? flying,
+                    reference?.Career, reference?.Role)
+                : null;
+
+        // The focus the extras are built for. The pilot's own choice wins, and
+        // "off" wins over both - a pilot who asked for the plain card must not
+        // have the next ship swap hand them one back. focus itself still
+        // reports what the ship said, so the card can name whose idea it was.
+        var wanted = chosenFocus is { Length: > 0 } ? chosenFocus : focus?.Key;
+
+        // Both extras are built only for the focus that asks for them. A combat
+        // pilot has no use for ore prices, and computing them anyway would put
+        // the whole deposit table through this call once a second.
+        var mining = wanted == ShipFocus.Mining.Key
+            ? NearbyMining(lib, uex, now.LocationSystem)
+            : [];
+
+        var claim = wanted == ShipFocus.Combat.Key && reference is not null
+            ? new BriefingClaim(
+                reference.Name,
+                reference.ExpeditedCost,
+                reference.ExpeditedClaimTime,
+                reference.StandardClaimTime)
+            : null;
+
         return new PilotBriefing(
             placeId, place, trip?.Id, trip?.Title, stops,
-            [.. shopping.Take(8)], trade, services, stashItems);
+            [.. shopping.Take(8)], trade, services, stashItems,
+            focus, mining, claim);
+    }
+
+    /// <summary>
+    /// The best places to mine, preferring the system the pilot is in.
+    /// </summary>
+    /// <remarks>
+    /// "Near you" is answerable only where the deposit table's own designation
+    /// carried a system - Stanton1a does, Aaron Halo and the Ship Graveyard do
+    /// not, which is the read GameSpawns describes. Where no
+    /// place in this system is known, the best anywhere beats an empty section,
+    /// and every row is flagged with whether it is actually here so the card
+    /// can say which of the two it is showing.
+    /// </remarks>
+    static IReadOnlyList<BriefingMining> NearbyMining(LogLibrary lib, UexData uex, string? system)
+    {
+        var places = MiningPlaces(lib, uex).ToList();
+
+        var here = system is { Length: > 0 }
+            ? places.Where(p => string.Equals(p.System, system, StringComparison.OrdinalIgnoreCase)).ToList()
+            : [];
+
+        return
+        [
+            .. (here.Count > 0 ? here : places)
+                .Take(3)
+                .Select(p => new BriefingMining(
+                    p.Place, p.System, p.PerRock, p.Ore,
+                    p.Best.FirstOrDefault()?.Resource,
+                    here.Count > 0))
+        ];
     }
 
     /// <summary>Maps service evidence onto the app's own atlas identifiers.</summary>
@@ -2677,7 +3516,52 @@ public sealed record PilotBriefing(
     IReadOnlyList<BriefingShopping> Shopping,
     IReadOnlyList<BriefingTrade> Trade,
     IReadOnlyList<BriefingService> Services,
-    IReadOnlyList<BriefingStash> Stash);
+    IReadOnlyList<BriefingStash> Stash,
+    BriefingFocus? Focus = null,
+    IReadOnlyList<BriefingMining>? Mining = null,
+    BriefingClaim? Claim = null);
+
+/// <summary>
+/// The work the retrieved ship implies, and the ship that implied it.
+/// </summary>
+/// <remarks>
+/// The ship is carried alongside the answer because the page has to say why it
+/// rearranged itself. A dashboard that quietly reorders on its own is one
+/// people stop trusting; one that says "because you took the Hermes out" is one
+/// they can correct.
+/// </remarks>
+public sealed record BriefingFocus(
+    string Key, string Label, string Ship, string? Career, string? Role);
+
+/// <summary>One place worth mining, as the deposit tables rank it.</summary>
+/// <param name="Here">
+/// Whether this is in the system the pilot is standing in. False means the
+/// section fell back to the best anywhere, which the card says out loud.
+/// </param>
+public sealed record BriefingMining(
+    string Place, string? System, decimal PerRock, double Ore, string? Best, bool Here);
+
+/// <summary>
+/// What losing this ship costs, for the pilot about to risk it.
+/// </summary>
+/// <remarks>
+/// Reference data about the hull, never a claim in progress: Game.log records
+/// no insurance claim at all, so this says what the game's own tables say a
+/// claim takes and costs, and nothing about whether one is running.
+/// </remarks>
+public sealed record BriefingClaim(
+    string Ship, decimal? ExpeditedCost, double? ExpeditedMinutes, double? StandardMinutes);
+
+/// <summary>One place ranked by what its deposit tables are worth.</summary>
+public sealed record MiningPlace(
+    string Place, string? System, decimal PerRock, double Ore,
+    MiningQuality? Quality, int Ores, int? Respawn, IReadOnlyList<MiningBest> Best);
+
+/// <summary>The grade a place assays at, and whether it overrides the usual.</summary>
+public sealed record MiningQuality(int Min, bool Local);
+
+/// <summary>One of the best things a place has, and what a SCU of it fetches.</summary>
+public sealed record MiningBest(string Resource, decimal Worth);
 
 /// <summary>One outstanding flight-plan stop, in the order it will be flown.</summary>
 /// <param name="Actions">
@@ -2728,6 +3612,13 @@ public sealed record MapNoteRequest(
     string? Note,
     List<string>? Tags);
 
+/// <summary>Body of POST /api/mining/log/{id}/submit.</summary>
+public sealed record RefineryRequest(
+    string? Place, string? Method, decimal? Cost, DateTimeOffset? ExpectedAt);
+
+/// <summary>Body of POST and PUT /api/kits.</summary>
+public sealed record KitRequest(string? Name, IReadOnlyList<KitItem>? Items);
+
 /// <summary>
 /// Body of POST /api/export: what to share, and how far back.
 /// </summary>
@@ -2771,3 +3662,134 @@ public sealed record ChecklistItemRequest(
 /// <summary>One line of the merged logbook timeline.</summary>
 public sealed record LogbookLine(
     DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount);
+
+/// <summary>What a mining-run form posts.</summary>
+public sealed record MiningRunEntry(
+    string? Place, string? Resource, double Scu, int? Quality, decimal? Revenue, string? Note);
+
+/// <summary>Compares an ore-and-place pair the way a reader would.</summary>
+/// <remarks>
+/// The two sources spell the same place differently in case alone often enough
+/// that an ordinal match loses rows that plainly belong together.
+/// </remarks>
+/// <summary>
+/// One deposit as the Mining page lists it, from either source or both.
+/// </summary>
+public sealed record MergedSpawn(
+    string Resource, string? Deposit, double? MinPercent, double? MaxPercent, string Kind,
+    string Location, string? System, string Group, double GroupChance, double Share,
+    QualityBand? Quality, int? RespawnSeconds, string Source);
+
+public static partial class SpawnMerge
+{
+    /// <summary>
+    /// Joins what the install knows about a deposit to what the download knows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Neither source is a superset. The download reaches further - 2,642 rows
+    /// across 234 places against the install's 783 across 49 - and the install
+    /// knows things the download never carried: how much of a rock each ore is,
+    /// what quality it assays at, and how long the slot takes to refill.
+    /// Choosing one threw the other away, so enabling the download silently
+    /// lost every richness and quality figure on the page.
+    /// </para>
+    /// <para>
+    /// Ore and place do not identify a deposit, which is the trap here. The same
+    /// ore sits in different rocks at one place at wildly different
+    /// concentrations: at Fuego, borase is 9.7-74.3% of a Borase (Ore) deposit
+    /// and 2-5% of a Bexalite (Raw) one. Taking whichever came first stamped one
+    /// of those onto the download's row - advertising a rich deposit at trace
+    /// concentration - and then dropped the variants it had displaced, as though
+    /// the pair were accounted for. Matching on the deposit instead is not open
+    /// to us: the download names them in its own vocabulary ("Mineable Rock
+    /// Asteroid Common"). So enrich only where there is nothing to choose
+    /// between, and keep every variant whenever there is.
+    /// </para>
+    /// </remarks>
+    public static List<MergedSpawn> Merge(
+        IReadOnlyList<GameSpawn> install, IReadOnlyList<ResourceSpawn> dataset)
+    {
+        // Only the fields enrichment actually copies across. Install rows that
+        // agree on all of them are interchangeable however many groups produced
+        // them - an ore drawn from Cave Rich, Cave Medium and Cave Poor is one
+        // deposit listed three times - and that is 542 of the 608 pairs.
+        static (string?, double?, double?, QualityBand?, int?) Copied(GameSpawn s) =>
+            (s.Deposit, s.MinPercent, s.MaxPercent, s.Quality, s.RespawnSeconds);
+
+        static MergedSpawn FromInstall(GameSpawn s) => new(
+            s.Resource, s.Deposit, s.MinPercent, s.MaxPercent, s.Kind, s.Location, s.System,
+            s.Group, s.GroupChance, s.Share, s.Quality, s.RespawnSeconds, "install");
+
+        if (dataset.Count == 0) return [.. install.Select(FromInstall)];
+
+        var byPair = install
+            .GroupBy(s => (s.Resource, s.Location), ResourcePlaceComparer.Instance)
+            .ToDictionary(g => g.Key, g => g.ToList(), ResourcePlaceComparer.Instance);
+
+        var covered = new HashSet<GameSpawn>();
+        var merged = new List<MergedSpawn>(dataset.Count);
+
+        foreach (var s in dataset)
+        {
+            GameSpawn? extra = null;
+            if (byPair.TryGetValue((s.Resource, s.Location), out var variants)
+                && variants.Select(Copied).Distinct().Count() == 1)
+            {
+                extra = variants[0];
+                foreach (var variant in variants) covered.Add(variant);
+            }
+
+            merged.Add(new MergedSpawn(
+                s.Resource, s.Deposit ?? extra?.Deposit, extra?.MinPercent, extra?.MaxPercent,
+                s.Kind, s.Location, s.System, s.Group, s.GroupChance, s.Share,
+                extra?.Quality, extra?.RespawnSeconds, extra is not null ? "both" : "dataset"));
+        }
+
+        // Rows the download does not have, and variants it could not be joined
+        // to, are kept rather than dropped: the point of merging is that neither
+        // side is complete.
+        merged.AddRange(install.Where(s => !covered.Contains(s)).Select(FromInstall));
+        return merged;
+    }
+}
+
+public sealed class ResourcePlaceComparer : IEqualityComparer<(string Resource, string Location)>
+{
+    public static readonly ResourcePlaceComparer Instance = new();
+
+    public bool Equals((string Resource, string Location) a, (string Resource, string Location) b) =>
+        Ore(a.Resource) == Ore(b.Resource)
+        && string.Equals(a.Location, b.Location, StringComparison.OrdinalIgnoreCase);
+
+    public int GetHashCode((string Resource, string Location) key) =>
+        HashCode.Combine(Ore(key.Resource), key.Location.ToLowerInvariant());
+
+    /// <summary>
+    /// One ore, however the two sources choose to name it.
+    /// </summary>
+    /// <remarks>
+    /// The install writes "Copper Ore" and prefixes some with how they are
+    /// mined - "GroundVehicle Beradom" - where the download writes plain
+    /// "Copper". Matching on the raw strings joined 164 rows; on these it joins
+    /// far more, and the ones left over are genuinely different ores rather than
+    /// the same ore spelled differently. Spelling itself is left alone: the
+    /// install says Aluminium and the download says Aluminum, and quietly
+    /// treating those as one would be a guess rather than a normalisation.
+    /// </remarks>
+    private static string Ore(string name)
+    {
+        var trimmed = name.Trim();
+
+        foreach (var prefix in new[] { "GroundVehicle ", "FPS ", "ShipMining " })
+        {
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                trimmed = trimmed[prefix.Length..];
+        }
+
+        if (trimmed.EndsWith(" Ore", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4];
+
+        return trimmed.Trim().ToLowerInvariant();
+    }
+}

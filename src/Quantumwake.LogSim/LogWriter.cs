@@ -328,7 +328,7 @@ public sealed class LogWriter : IDisposable
     // ---------------- dormant combat ----------------
 
     /// <summary>
-    /// Emits the archived <c>&lt;Actor Death&gt;</c> format. Star Citizen 4.9 does
+    /// Emits the archived <c>&lt;Actor Death&gt;</c> format. Star Citizen 4.9 and 4.10 do
     /// not produce this any more; the simulator can, which is the only way to
     /// exercise the dormant combat parser end to end.
     /// </summary>

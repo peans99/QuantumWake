@@ -56,7 +56,7 @@ Console.WriteLine();
 Console.WriteLine($"Fake install : {liveDirectory}");
 Console.WriteLine($"Handle       : {options.Handle}");
 if (selectedScenario is null)
-    Console.WriteLine($"Combat       : {(options.Combat ? "enabled (exercises the dormant parser)" : "off, matching real 4.9 logs")}");
+    Console.WriteLine($"Combat       : {(options.Combat ? "enabled (exercises the dormant parser)" : "off, matching real 4.9 and 4.10 logs")}");
 else
     Console.WriteLine($"Scenario     : {selectedScenario.Name} - {selectedScenario.Description}");
 Console.WriteLine();
@@ -293,7 +293,7 @@ internal sealed record Args
               --speed <x>       Live mode: simulated seconds per real second (default: 60)
               --legs <n>        Trips per session (default: 6)
               --combat          Emit kill and vehicle-destruction events.
-                                Real 4.9 logs contain none; this exercises the dormant parser.
+                                Real 4.9 and 4.10 logs contain none; this exercises the dormant parser.
               --list-scenarios  List focused, deterministic test stories
               --scenario <name> Write one focused scenario instead of random sessions
               --start <date>    Scenario timestamp (ISO 8601; default: today at 20:00)

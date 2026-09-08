@@ -32,7 +32,7 @@ public sealed record ChannelNote(
 /// </summary>
 /// <remarks>
 /// <para>
-/// The only line in a 4.9 log that puts a person inside a particular vehicle.
+/// The only line in a 4.9 or 4.10 log that puts a person inside a particular vehicle.
 /// The party channel says who was online while grouped with you; this says who
 /// was actually aboard, and whose ship it was.
 /// </para>

@@ -167,8 +167,10 @@ jobs:
 
           ### What it does not do
 
-          Reads ``Game.log`` only. Nothing is written to the game directory, no memory is
-          touched, and nothing is injected. The app connects to the internet only where
+          Reads your logs and your game's own data files. No memory is touched and
+          nothing is injected. The one thing it can write to the game folder is the
+          English text file, and only when you install item labels or StarStrings
+          from the Item labels page - both are undone from the same page. The app connects to the internet only where
           you have said it may, from the Settings page - the optional datasets, and the
           two that can go out unattended: the version check and the market-price
           refresh, both off until you turn them on.

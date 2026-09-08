@@ -1,4 +1,4 @@
-using Quantumwake.Core.Events;
+﻿using Quantumwake.Core.Events;
 using Quantumwake.Core.Locations;
 
 namespace Quantumwake.Core.State;
@@ -9,7 +9,7 @@ namespace Quantumwake.Core.State;
 /// metric and should lead in any UI.
 /// </param>
 /// <param name="EstimatedTime">
-/// Approximate time aboard. SC 4.9 logs no seat-entry event at all - 497 of 497
+/// Approximate time aboard. SC 4.9 and 4.10 log no seat-entry event at all - 552 of 552
 /// vehicle events are <c>ClearDriver</c> - so this is inferred as the span from
 /// the last known ground anchor (a location visit, spawn, or previous flight)
 /// to the moment control was released, capped to avoid absurd values across
@@ -57,6 +57,25 @@ public enum ContractOutcome
 /// rather than the class - so the catalogue is matched by name, loosely.
 /// </summary>
 public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
+
+/// <summary>
+/// Money a contract paid out, as the game reported it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The award toast names no contract, so <paramref name="Contract"/> is the
+/// title off the completion toast immediately before it - the words the player
+/// actually saw, not the id-derived name a <see cref="ContractRecord"/> carries.
+/// The two vocabularies do not join, which is why this is not a field on the
+/// contract: pairing them would be a guess dressed as a fact.
+/// </para>
+/// <para>
+/// Null when no completion toast was close enough to attribute it to. The
+/// amount is still true and still belongs in the ledger; only the "for what"
+/// is missing, and it says so rather than borrowing the nearest title.
+/// </para>
+/// </remarks>
+public sealed record ContractPayout(DateTimeOffset At, string? Contract, decimal Amount);
 
 /// <summary>
 /// Where the player turned up after dying.
@@ -258,6 +277,12 @@ public sealed record SessionSummary
     /// <summary>Crafting blueprints the game said were received this session.</summary>
     public IReadOnlyList<BlueprintReceipt> Blueprints { get; init; } = [];
 
+    /// <summary>
+    /// Contract payouts. A floor over cargo hauling rather than session income:
+    /// see <see cref="ContractPayout"/> and <c>NotificationEvent.Awarded</c>.
+    /// </summary>
+    public IReadOnlyList<ContractPayout> Payouts { get; init; } = [];
+
     /// <summary>Where the player woke after dying - inferred, never stated.</summary>
     public IReadOnlyList<RespawnRecord> Respawns { get; init; } = [];
 
@@ -265,7 +290,7 @@ public sealed record SessionSummary
     public IReadOnlyList<MedicalBedVisit> MedicalBeds { get; init; } = [];
 
     /// <summary>
-    /// Party notifications, the only lines in a 4.9 log naming another player.
+    /// Party notifications, the only lines in a 4.9 or 4.10 log naming another player.
     /// Not a roster - see <see cref="Party"/> for the difference.
     /// </summary>
     public IReadOnlyList<PartyNote> PartyNotes { get; init; } = [];

@@ -1,4 +1,4 @@
-/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
+﻿/* Quantumwake - styled after Star Citizen's in-game HUD and mobiGlas.
  *
  * The look leans on four devices: chamfered (not rounded) corners, thin glowing
  * cyan rules, wide-tracked uppercase labels, and corner brackets on panels.
@@ -681,6 +681,9 @@ h2.spaced { margin-top: 32px; }
 
 .feed .k.session { color: var(--cyan); border-color: var(--cyan-deep); }
 .feed .k.sold { color: var(--green); border-color: #1f5c3d; }
+
+/* Money earned, not money moved: same green as a sale. */
+.feed .k.payout { color: var(--green); border-color: #1f5c3d; }
 .feed .k.bought { color: var(--amber); border-color: #6d4715; }
 .feed .k.loot { color: var(--violet); border-color: #4a3670; }
 
@@ -2867,6 +2870,75 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 }
 
 /* The detail card sits inside the map, so it never pushes the layout around. */
+/* The one detail surface. Fixed rather than absolute inside the map, because
+   every view opens it and only one of them is the map. */
+/* The names it searches run long - the median is 21 characters - so the box is
+   given room for one rather than the width a bare flex child works out to. */
+#labels-search { min-width: 28ch; }
+
+.entity-drawer {
+  position: fixed;
+  top: 64px;
+  right: 14px;
+  width: 268px;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+  padding: 13px 15px;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .97), rgba(6, 12, 20, .96));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  font-size: 12px;
+  line-height: 1.55;
+  z-index: 40;
+}
+.entity-drawer[hidden] { display: none; }
+/* The drawer takes room rather than covering: it used to be an absolute card
+   inside the map, and floating it over the page put it on top of the map's own
+   right-hand controls - Follow, Your location, Reset view - which are exactly
+   the ones wanted while a place is open. */
+body.entity-open .view { padding-right: 296px; }
+.entity-close {
+  position: absolute;
+  top: 6px;
+  right: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.entity-close:hover { color: var(--text); }
+.entity-kicker { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; }
+.entity-name { font-size: 15px; font-weight: 600; color: var(--cyan-hot); padding-right: 16px; margin-top: 2px; }
+.entity-sub { font-size: 11px; margin-bottom: 8px; }
+.entity-holding { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-holding b { color: var(--green); font-size: 11.5px; }
+.entity-price { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-amount { color: var(--text); font-size: 15px; }
+.entity-detail { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 1px; }
+.entity-blurb { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-facts { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-fact { display: flex; justify-content: space-between; gap: 9px; padding: 2px 0; min-width: 0; }
+.entity-fact-label { color: var(--dim); font-size: 10px; white-space: nowrap; }
+.entity-fact-value { color: var(--text); font-size: 11px; text-align: right; overflow-wrap: anywhere; }
+/* The source rides under the value it is answerable for, never beside it: the
+   claim and who made it have to stay together when the value wraps. */
+.entity-source { display: block; color: var(--dim); font-size: 8.5px; letter-spacing: .05em; }
+.entity-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 4px; }
+.entity-where { border-top: 1px solid var(--rule); padding-top: 7px; margin-top: 7px; }
+.entity-where-row { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; min-width: 0; }
+.entity-where-name { overflow-wrap: anywhere; }
+.entity-link { border: 0; background: transparent; color: var(--cyan-hot); cursor: pointer; font: inherit; font-size: 11.5px; padding: 0; text-align: left; }
+.entity-link:hover { text-decoration: underline; }
+/* No rule of its own: the blocks inside carry their own separators, and an
+   empty one drew a line under nothing whenever the drawer was opened from
+   somewhere other than the map. */
+.entity-place-extra { margin-top: 7px; }
+.entity-place-extra[hidden] { display: none; }
+.entity-actions { display: flex; flex-wrap: wrap; gap: 5px; border-top: 1px solid var(--rule); padding-top: 9px; margin-top: 9px; }
+
 .map-info {
   position: absolute;
   top: 14px;
@@ -3042,7 +3114,7 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 /* Trades and blueprints from other people, in a block of their own so nothing
    here can be mistaken for one of the reader's totals. */
 .shared-block {
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   border-left: 3px solid var(--amber, #d8a03d);
   border-radius: 6px;
   padding: 10px 12px;
@@ -3067,7 +3139,7 @@ tr:hover .drill, .drill:focus-visible { opacity: 1; }
 /* Shared files: a card per import, shaped like the job cards it sits near so a
    file somebody else wrote does not get a visual language of its own. */
 .import-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   border-left: 3px solid var(--cyan);
   border-radius: 6px;
   padding: 10px 12px;
@@ -3248,6 +3320,8 @@ button.ghost.tiny.wide { width: 100%; padding: 5px; margin: 2px 0 6px; }
 .briefing-title { color: var(--cyan-hot); font-size: 17px; font-weight: 600; }
 .briefing-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .briefing-actions { display: flex; justify-content: flex-end; gap: 5px; flex-wrap: wrap; padding-right: 58px; }
+.briefing-why { color: var(--cyan); font-size: 10px; margin-top: 4px; }
+.briefing-actions .select { min-width: 0; font-size: 10px; padding: 3px 5px; }
 .briefing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 9px; }
 .briefing-section { min-width: 0; border: 1px solid var(--rule); background: rgba(53, 200, 240, .025); padding: 8px 9px; }
 .briefing-label { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
@@ -3438,3 +3512,501 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
 .map-tip .goods.hint { color: var(--cyan); font-size: 10px; letter-spacing: .06em; margin-top: 2px; }
 .map-result .name.good { color: var(--green); }
 .sold-count { width: 100%; font-size: 10.5px; margin-bottom: 5px; }
+
+/* The game's own words about an item, opened from the parts table. */
+#parts-table tr.expanded > td { border-bottom: 0; }
+#parts-table tr.part-detail > td {
+  padding: 2px 15px 14px;
+  background: rgba(0, 0, 0, .25);
+}
+.part-blurb,
+.part-volume {
+  margin: 0 0 6px;
+  max-width: 78ch;
+  color: var(--dim);
+  line-height: 1.5;
+}
+.part-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.part-tags .tag {
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* What the game itself says a place has, on the map card. */
+.map-info-amenities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  font-size: 11.5px;
+}
+.map-info-amenities .amenity {
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--dim);
+}
+
+/* Item-label choices, on the page that writes them. */
+.label-options {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 12px 0 4px;
+}
+.label-level {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.label-level em { flex: 1 1 22ch; }
+
+/* The note under a toggle is a sentence, not a suffix. Left inline it ran off
+   the right edge of the block and lost its last four words. */
+.label-options .toggle em {
+  display: block;
+  margin-top: 2px;
+  max-width: 72ch;
+}
+
+/* Saving-for, on the Now page. */
+.goal { margin: 8px 0 2px; }
+.goal-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.goal-line b { color: var(--cyan-hot); }
+.goal-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 2px;
+}
+.goal-form .search { flex: 1 1 9ch; min-width: 0; }
+
+/* Recording a haul, on the page that plans them. */
+.mining-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px 0 14px;
+}
+.mining-form .search { flex: 1 1 9ch; min-width: 0; }
+
+/* A component the game defines but has not marked as shipped. */
+.not-ready { font-size: 10.5px; opacity: .75; }
+
+/* A shopping line the logs show was bought. Dimmed rather than ticked: the
+   list is the pilot's, and this is an observation about it. */
+.checklist-item.bought .checklist-item-text { opacity: .55; text-decoration: line-through; }
+.checklist-bought { font-size: 11px; color: var(--cyan); }
+/* ---------- live toasts ----------
+ *
+ * Bottom-right so they sit clear of the tab strip at the top and of the
+ * overlay's own header. Pointer events are on the cards, not the stack: a
+ * full-height column catching clicks would make the page behind it dead in
+ * the overlay, where the window is click-through only when nothing wants
+ * the mouse. */
+.toasts {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: min(380px, 78vw);
+  padding: 10px 14px;
+  background: linear-gradient(158deg, var(--panel-2) 0%, var(--deep) 100%);
+  border: 1px solid var(--rule-hot);
+  border-left: 3px solid var(--cyan);
+  clip-path: var(--chamfer);
+  box-shadow: 0 6px 22px #0009;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: toast-in 180ms ease-out;
+}
+
+/* Money reads green, the same as it does in the ledger. */
+.toast.payout {
+  border-left-color: var(--green);
+}
+
+.toast-text {
+  font-family: var(--display);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.toast-detail {
+  font-size: 12px;
+  color: var(--muted);
+
+  /* Contract titles run long and carry StarStrings' own markup; two lines is
+     enough to recognise one without the toast becoming a paragraph. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The overlay is 360px wide at rest, so the stack tucks in and the cards give
+   up their own margin rather than overflowing the window. */
+body.overlay .toasts {
+  right: 10px;
+  bottom: 10px;
+}
+
+body.overlay .toast {
+  max-width: calc(100vw - 20px);
+}
+
+/* The summary/standing/charts block a page can fold away. Only the button needs
+   styling: the panel is toggled with [hidden], so nothing here has to know what
+   is inside it. */
+.stats-toggle {
+  font-size: 11px;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+
+/* ---------- restore preview ----------
+ *
+ * The one screen in the app that overwrites work somebody did, so the counts
+ * lead and the table explains them. Deliberately not cards: these are five
+ * readings of one number, not five separate objects. */
+.restore-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
+  margin: 14px 0 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.restore-count {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.restore-count b {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--cyan);
+  margin-right: 2px;
+}
+
+/* A tick here means "write over this", so the column reads as a decision
+   rather than as a row selector. */
+#backup-plan-table td:first-child { width: 60px; text-align: center; }
+#backup-plan-table input { cursor: pointer; }
+#backup-plan { margin-top: 6px; }
+
+/* How long a run has been going. Its own line under the buttons rather than a
+   badge, because the caveat beside it is the point: this is time since Start,
+   not since the plan was written. */
+.trip-elapsed {
+  font-size: 11.5px;
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
+/* ---------- run review ----------
+ *
+ * Two figures lead, because "what did this run make" is the question that
+ * opened the page. Everything under them is the answer to "why", and stays
+ * folded until somebody doubts the number. */
+.run-figure {
+  border-top: 1px solid var(--rule);
+  padding: 10px 0;
+}
+
+.run-figure-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* All three hold their line. The button's label is long, and letting it wrap
+   pushed the figure onto two lines - a headline number broken across a line
+   break stops reading as one number. */
+.run-figure-head > * { white-space: nowrap; }
+
+.run-figure-value {
+  font-family: var(--display);
+  font-size: 19px;
+  color: var(--text);
+  margin-left: auto;
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-why {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--rule-hot);
+}
+
+/* What was left out. Amber rather than the panel's cyan: this is the app
+   saying what it does not know, which is a different kind of statement. */
+.run-excluded {
+  font-size: 11.5px;
+  color: var(--amber);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+.run-stop {
+  border-top: 1px solid var(--rule);
+  padding: 9px 0;
+}
+
+.run-stop-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.run-claim, .run-planned {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11.5px;
+  padding: 3px 0;
+}
+
+.run-claim .amount, .run-planned .amount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Money the run moved but no stop can account for. Deliberately not the green
+   that counted income wears: it is on the page because it is real, and muted
+   because it is not in the figure above. */
+.run-claim .amount.loose { color: var(--muted); margin-left: auto; }
+
+.run-planned .planned-was { white-space: nowrap; }
+
+.run-claim .amount.in { color: var(--green); }
+.run-claim .amount.out { color: var(--amber); }
+
+.run-planned .run-actual {
+  margin-left: auto;
+  width: 84px;
+  font-size: 11px;
+  padding: 2px 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  color: var(--text);
+}
+
+.run-from { margin-top: 6px; }
+
+/* ---------- saved kits ---------- */
+.kit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.kit-row-main { flex: 1 1 auto; min-width: 0; }
+.kit-row-main .name { color: var(--text); font-size: 13px; }
+.kit-row-main .sub { font-size: 11px; }
+
+/* Something the app knows it has to buy, or the pilot has just said is gone.
+   Amber rather than red: this is a shopping line, not a fault. */
+#kit-prepare-table .want,
+#kit-prepare-table button.want { color: var(--amber); }
+
+#kit-prepare-table td:last-child { width: 120px; }
+
+/* ---------- refining a haul ---------- */
+.mining-waiting {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+}
+
+.mining-waiting .name { color: var(--text); }
+
+/* The time sits right whichever state it is in. Hanging the alignment off the
+   amber class put waiting hauls and overdue ones in different columns, which
+   read as two kinds of row rather than one list. */
+.mining-waiting > :last-child { margin-left: auto; }
+.mining-waiting .want { color: var(--amber); }
+
+/* A haul the app believes is due back. Amber because it is the app noticing
+   your own estimate has passed, not the game telling it anything. */
+#mining-log td.want { color: var(--amber); }
+
+.mining-stage-form td { background: var(--panel-2); }
+.mining-stage-form .mining-form { padding: 6px 0; }
+
+/* ---------- why this number ----------
+ *
+ * Small and quiet on the tile: it is there for the moment somebody doubts a
+ * figure, and invisible weight the rest of the time. */
+.tile { position: relative; }
+
+.tile .why {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  line-height: 1;
+  font-size: 11px;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+.tile .why:hover { color: var(--cyan); border-color: var(--cyan-deep); }
+
+/* Spans the whole strip: it is a row under the tiles, not a thing inside one.
+   Anything narrower wraps a sentence of provenance into a column of fragments. */
+.why-panel {
+  grid-column: 1 / -1;
+  padding: 12px 16px;
+  background: linear-gradient(158deg, var(--panel-2), var(--deep));
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan);
+  clip-path: var(--chamfer);
+  text-align: left;
+}
+
+.why-rule {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* What was left out, in the colour the app uses for saying what it cannot
+   stand behind. */
+.why-excluded {
+  font-size: 11.5px;
+  color: var(--amber);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+.why-records { margin-top: 8px; }
+
+.why-record {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+/* Dates hold their line; the description takes whatever is left. */
+.why-record > :first-child { white-space: nowrap; }
+.why-record > :nth-child(2) { flex: 1 1 auto; min-width: 0; }
+
+.why-record .amount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- search everything ---------- */
+.search-box { position: relative; }
+
+.search-box .search { width: 200px; }
+
+/* Over the page rather than pushing it: a search panel that moved the layout
+   would shift whatever the reader was about to click. */
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 380px;
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 50;
+  background: linear-gradient(158deg, var(--panel-2), var(--deep));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+  padding: 8px 0;
+}
+
+.search-source {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 8px 14px 4px;
+}
+
+.search-hit {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 5px 14px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: var(--text);
+  font-size: 12px;
+
+  /* Buttons in this app are uppercase labels; these are names. "PEMBROKE
+     LIGHT ARMOUR" is not what the item is called, and reads as shouting. */
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+button.search-hit { cursor: pointer; }
+button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
+
+/* The name takes the room and the reason gives it up: a name broken across
+   three lines is unreadable, and "seen in storage" wrapping is merely untidy. */
+.search-hit .name { flex: 1 1 auto; min-width: 0; }
+.search-hit .why { flex: 0 1 auto; text-align: right; font-size: 11px; }
+
+.search-empty { padding: 10px 14px; font-size: 12px; color: var(--muted); }
+
+/* A ledger kind switched off. Dimmed rather than removed: the reader has to
+   see what they have hidden to turn it back on. */
+#ledger-kinds .ghost.off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+#ledger-kinds { flex-wrap: wrap; align-items: baseline; }

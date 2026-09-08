@@ -1,4 +1,4 @@
-/* Quantumwake dashboard.
+﻿/* Quantumwake dashboard.
  *
  * No framework and no external requests: the page is served by the local
  * process and also loaded by the overlay's WebView2, so it stays dependency
@@ -166,13 +166,32 @@ function showView(name) {
   // fragment with Market still on screen.
   if (name !== 'commodity') openCommodityName = null;
 
+  // The text overlay reads the game folder and rebuilds its plan, so it is read
+  // on entry rather than cached: StarStrings may have been installed since, and
+  // the plan is layered on whatever is actually there.
+  if (name === 'labels') loadTextOverlay().catch(() => {});
+
+  // The trading rate moves only when a session ends, so it is read on entry
+  // rather than on every tick of the live stream.
+  if (name === 'now') loadEarnings().catch(() => {});
+  if (name === 'mining') {
+    loadGameData().catch(() => {});
+    loadMiningPlaces().catch(() => {});
+    loadLikelyMined().catch(() => {});
+    loadMiningLog().catch(() => {});
+  }
+
   // Settings reflects live state (the tray can change it), so re-read on entry.
-  if (name === 'settings') renderSettings().catch(() => {});
+  if (name === 'settings') {
+    renderSettings().catch(() => {});
+    loadGameData().catch(() => {});
+  }
 
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
+  if (name === 'loadout') loadKits().catch(() => {});
   if (name === 'commodities') renderSharedReceipts().catch(() => {});
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
@@ -279,6 +298,62 @@ window.scOverlayExpanded = (on) => {
   // Fullscreen shows everything; going back re-applies the chosen few.
   if (isOverlay) applyOverlayLayout().catch(() => {});
 };
+
+/* ---------- page stats collapse ----------
+ *
+ * A page whose analysis sits above its table pushes the newest rows below the
+ * fold - Contracts leads with four tiles, a standing table with a paragraph of
+ * caveat, and two charts before the first contract. Folding that away is a
+ * per-reader preference, so it lives in localStorage next to the Now page's
+ * card collapse rather than in server settings.
+ *
+ * Markup declares both halves: a button carrying data-stats-toggle="<name>"
+ * and the panel it folds at id "<name>-stats". Adding this to another page is
+ * then two attributes and no JavaScript. */
+
+const STATS_COLLAPSED_KEY = 'qw-collapsed-page-stats';
+let collapsedPageStats = new Set();
+
+try {
+  const saved = JSON.parse(localStorage.getItem(STATS_COLLAPSED_KEY) || '[]');
+  if (Array.isArray(saved)) collapsedPageStats = new Set(saved);
+} catch { /* a bad preference must not hide a page's summary for ever */ }
+
+function saveCollapsedPageStats() {
+  try { localStorage.setItem(STATS_COLLAPSED_KEY, JSON.stringify([...collapsedPageStats])); } catch { /* optional */ }
+}
+
+function initPageStatsCollapsers() {
+  for (const button of $$('[data-stats-toggle]')) {
+    const name = button.dataset.statsToggle;
+    const panel = $(`#${name}-stats`);
+    if (!name || !panel) continue;
+
+    const apply = (collapsed) => {
+      panel.hidden = collapsed;
+
+      // Named rather than an arrow, because a button reading "Summary" gives no
+      // clue which way it goes - and the summary is gone when it matters most.
+      button.textContent = collapsed ? 'Show summary' : 'Hide summary';
+      button.title = collapsed
+        ? 'Show the summary, standing and charts again'
+        : 'Hide the summary and go straight to the contracts';
+      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-expanded', String(!collapsed));
+    };
+
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      const collapsed = !panel.hidden;
+      if (collapsed) collapsedPageStats.add(name);
+      else collapsedPageStats.delete(name);
+      saveCollapsedPageStats();
+      apply(collapsed);
+    });
+
+    apply(collapsedPageStats.has(name));
+  }
+}
 
 /* ---------- Now card collapse ---------- */
 
@@ -615,16 +690,18 @@ function renderNow(state) {
 
   // Be explicit about what each number is and is not. Deaths are inferred, so
   // the note is permanent rather than conditional: there is no state of the
-  // game in which it stops being true. Kills are not shown at all - 4.9 logs
+  // game in which it stops being true. Kills are not shown at all - 4.9 and 4.10 log
   // nothing that names a killer, and a counter stuck at zero reads as broken
   // rather than absent. The About page says where they went.
   $('#combat-note').textContent =
-    'Deaths are inferred from corpse item-recovery bursts — 4.9 no longer writes '
+    'Deaths are inferred from corpse item-recovery bursts — 4.9 and 4.10 no longer write '
     + '<Actor Death>, and an Incapacitated notification is not always raised.';
 
   sessionStarted = state.sessionStarted || null;
 
   renderNowParty(state);
+
+  raiseToasts(state.recentEvents);
 
   const feed = $('#now-feed');
   feed.textContent = '';
@@ -640,10 +717,119 @@ function renderNow(state) {
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, entry.kind));
       li.append(el('span', 'x', entry.text));
-      if (entry.detail) li.append(el('span', 'd', entry.detail));
+      if (entry.detail) li.append(el('span', 'd', withoutMarkup(entry.detail)));
       feed.append(li);
     }
   }
+}
+
+/* ---------- live toasts ---------- */
+
+/**
+ * A contract title with StarStrings' markup taken off.
+ *
+ * The mod writes its additions inside the game's own <EM> tags, and the log
+ * records the title with the tags still in it - so a contract reads as
+ * "Rookie | <EM3>DIRECT</EM3> Extra Small Haul" everywhere the title is shown.
+ * The bracket tags stay: "[BP]*" and "[150 Rep]" are the research the mod
+ * exists for, and a player glancing at a toast wants them.
+ */
+function withoutMarkup(text) {
+  return typeof text === 'string' ? text.replace(/<\/?EM\d*>/gi, '').trim() : text;
+}
+
+const TOAST_MS = 9000;
+
+/**
+ * Timeline kinds worth interrupting somebody for, and what to call them.
+ *
+ * Deliberately short. The feed carries everything; a toast is for the two
+ * moments a player wants to see without looking away from the game, and a
+ * notifier that fires on arrivals and medbeds trains people to ignore it.
+ */
+const TOAST_KINDS = {
+  'contract-done': 'Contract complete',
+  payout: 'Paid',
+};
+
+/**
+ * The newest entry already toasted, as "at|kind|text".
+ *
+ * Null until the first frame lands, which is the whole point: the stream opens
+ * with up to 40 entries of history, and a client that toasted what it found
+ * would replay the last hour of the session every time the page was refreshed
+ * or the overlay reloaded.
+ */
+let lastToastKey = null;
+
+function toastKey(entry) {
+  return `${entry.at}|${entry.kind}|${entry.text}`;
+}
+
+/**
+ * Toast whatever arrived since the last frame.
+ *
+ * recentEvents is newest-first, so this walks forward to the previously seen
+ * entry and then fires what it passed in the order it happened. Falling off the
+ * end means more than 40 entries landed between frames - it toasts nothing
+ * rather than the whole window, since the point is the moment, not the backlog.
+ */
+function raiseToasts(entries) {
+  if (!entries || entries.length === 0) return;
+
+  const newest = toastKey(entries[0]);
+
+  if (lastToastKey === null) {
+    lastToastKey = newest;
+    return;
+  }
+
+  if (lastToastKey === newest) return;
+
+  const fresh = [];
+  let anchored = false;
+
+  for (const entry of entries) {
+    if (toastKey(entry) === lastToastKey) {
+      anchored = true;
+      break;
+    }
+
+    fresh.push(entry);
+  }
+
+  lastToastKey = newest;
+
+  // The anchor is gone, so more happened between frames than the window holds -
+  // after an EventSource reconnect, that is an hour of history. Toast nothing
+  // rather than the whole window, which is what the rule above says and what
+  // this had stopped doing.
+  if (!anchored) return;
+
+  for (const entry of fresh.reverse()) {
+    const label = TOAST_KINDS[entry.kind];
+    if (label) toast(entry.kind, entry.text, entry.detail);
+  }
+}
+
+/**
+ * One toast. Click dismisses; otherwise it fades on its own.
+ *
+ * The node is removed rather than hidden so a long session does not accumulate
+ * a thousand dead divs behind the overlay.
+ */
+function toast(kind, text, detail) {
+  const host = $('#toasts');
+  if (!host) return;
+
+  const card = el('div', `toast ${kind}`);
+  card.append(el('span', 'toast-text', text));
+  if (detail) card.append(el('span', 'toast-detail', withoutMarkup(detail)));
+
+  card.addEventListener('click', () => card.remove());
+  host.append(card);
+
+  setTimeout(() => card.remove(), TOAST_MS);
 }
 
 /**
@@ -659,6 +845,145 @@ function renderNow(state) {
  * flying alone and flying with a silent party look identical from here, and a
  * bare 0 would claim to tell them apart.
  */
+/**
+ * What trading makes per in-game hour, and how far that leaves the goal.
+ *
+ * The rate is deliberately not called credits per hour. Commodity sales are the
+ * only income the logs carry - no contract, bounty or mission reward is written
+ * anywhere - so for a hauler this is close to their whole rate and for someone
+ * running contracts it is a fraction of it. Naming it "trading" is the
+ * difference between a floor and a claim.
+ */
+async function loadEarnings() {
+  const card = $('#now-earning-card');
+  if (!card) return;
+
+  const state = await getJson('/api/earnings').catch(() => null);
+  if (!state) { card.hidden = true; return; }
+
+  const rate = state.basis === 'recent' ? state.window : state.lifetime;
+
+  // Nothing traded means no rate. A zero here would read as "you earn nothing
+  // an hour" rather than "nothing has been sold yet".
+  const noRate = !rate || rate.perHour <= 0;
+
+  for (const id of ['#now-earning-rate', '#now-earning-sub', '#now-earning-note'])
+    $(id).hidden = noRate;
+
+  /*
+   * The card stays, because the goal lives inside it. Hiding the whole thing
+   * meant somebody who had never sold a commodity could not set a goal at all -
+   * and a goal already set became invisible with no way to clear it. The rate
+   * is what is missing here, not the card.
+   */
+  card.hidden = false;
+
+  if (noRate) {
+    $('#now-earning-rate').hidden = false;
+    $('#now-earning-rate').textContent = 'No trading yet';
+    renderGoal(state);
+    return;
+  }
+
+  $('#now-earning-rate').textContent = `${money(rate.perHour)}/h`;
+  $('#now-earning-sub').textContent = state.basis === 'recent'
+    ? `trading profit, last ${rate.days} days · ${hoursOf(rate.inGame)} in game`
+    : `trading profit, all time · ${hoursOf(rate.inGame)} in game`;
+
+  $('#now-earning-note').textContent =
+    'Commodity sales are the only income the logs record, so contracts, bounties '
+    + 'and mission rewards are not in this. It is a floor on what you earn, and '
+    + 'menu time is left out of the hours.';
+
+  renderGoal(state);
+}
+
+/** Turns an ISO-ish duration from the server into hours a person reads. */
+function hoursOf(span) {
+  const hours = typeof span === 'string' ? spanHours(span) : Number(span) || 0;
+  return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
+}
+
+/** "1.02:03:04" and "02:03:04" both mean hours here. */
+function spanHours(text) {
+  const days = text.includes('.') && text.indexOf('.') < text.indexOf(':')
+    ? Number(text.slice(0, text.indexOf('.'))) || 0
+    : 0;
+  const clock = days ? text.slice(text.indexOf('.') + 1) : text;
+  const [h = 0, m = 0, sec = 0] = clock.split(':').map(Number);
+  return days * 24 + h + m / 60 + (sec || 0) / 3600;
+}
+
+/**
+ * The goal, as a distance in hours rather than a date nobody can hold to.
+ *
+ * There is deliberately no progress bar. The logs never state a balance, so how
+ * far along you are is not something this can know - only how much trading the
+ * whole thing is worth. A bar would have drawn a number that looks like progress
+ * and is not.
+ */
+function renderGoal(state) {
+  const goal = state.goal;
+  const block = $('#now-goal');
+  const form = $('#now-goal-form');
+  const clear = $('#now-goal-clear');
+
+  block.hidden = !goal;
+  clear.hidden = !goal;
+
+  if (!goal) {
+    form.hidden = false;
+    return;
+  }
+
+  form.hidden = true;
+  $('#now-goal-input').value = goal.name;
+  $('#now-goal-target').value = goal.target;
+
+  $('#now-goal-name').textContent = `${goal.name} · ${money(goal.target)}`;
+
+  // Hours of flying, not a calendar date. The app has no idea how often
+  // somebody plays, and a date would be inventing that.
+  $('#now-goal-eta').textContent = state.hoursToGoal
+    ? `${hoursOf(state.hoursToGoal)} of trading`
+    : 'no rate yet';
+
+}
+
+$('#now-goal-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const body = {
+    name: $('#now-goal-input').value.trim(),
+    target: Number($('#now-goal-target').value) || 0,
+    setAt: new Date().toISOString(),
+  };
+
+  if (!body.name || body.target <= 0) return;
+
+  await fetch('/api/goal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+
+  await loadEarnings().catch(() => {});
+});
+
+$('#now-goal-clear')?.addEventListener('click', async () => {
+  await fetch('/api/goal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: 'null',
+  }).catch(() => {});
+
+  $('#now-goal-input').value = '';
+  $('#now-goal-target').value = '';
+  $('#now-goal-form').hidden = false;
+
+  await loadEarnings().catch(() => {});
+});
+
 function renderNowParty(state) {
   const card = $('#now-party-card');
   if (!card) return;
@@ -691,8 +1016,14 @@ function renderNowParty(state) {
  */
 async function refreshPilotBriefing(state) {
   const card = $('#now-briefing-card');
+
+  // The ship is part of the key, not just the place. Swapping ships is
+  // something you do standing still in your own hangar, so a key made only of
+  // where you are meant the most common way to change the focus was the one
+  // way that could not refresh it: the card kept the last ship's lane until
+  // the pilot happened to fly somewhere else.
   const key = state?.inGame && state.location
-    ? `${state.locationId || ''}|${state.location}`
+    ? `${state.locationId || ''}|${state.location}|${state.ship || ''}`
     : null;
 
   if (!key) {
@@ -712,7 +1043,10 @@ async function refreshPilotBriefing(state) {
 
   let briefing;
   try {
-    briefing = await getJson('/api/briefing');
+    // The chosen focus goes with the request: the mining and claim extras are
+    // built server-side for whichever focus asked for them.
+    briefing = await getJson('/api/briefing'
+      + (briefingFocus ? `?focus=${encodeURIComponent(briefingFocus)}` : ''));
   } catch (err) {
     if (briefingFor === key) {
       briefingFor = null;
@@ -721,7 +1055,7 @@ async function refreshPilotBriefing(state) {
     throw err;
   }
 
-  if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}`) return;
+  if (key !== `${nowState?.locationId || ''}|${nowState?.location || ''}|${nowState?.ship || ''}`) return;
 
   renderPilotBriefing(briefing);
 }
@@ -757,13 +1091,26 @@ async function addBriefingStop() {
 
 async function pinBriefingToOverlay() {
   const button = $('#briefing-overlay');
+  const label = button.textContent;
   button.disabled = true;
+
   try {
-    await fetch('/api/overlay', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visible: true }) });
+    // visible is bound from the query, not from a body. And a refusal - which
+    // is what the bare server always answers, having no overlay to show - is a
+    // normal response rather than a thrown one, so it has to be looked at.
+    const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
+
+    button.textContent = response.ok ? '✓ pinned' : 'no overlay';
+    button.title = response.ok ? '' : 'The dashboard is running without the overlay.';
+  } catch {
+    button.textContent = 'failed';
   } finally {
     button.disabled = false;
   }
+
+  // Long enough to be read, short enough that the button is a button again
+  // before the next place is worth pinning.
+  setTimeout(() => { button.textContent = label; button.title = ''; }, 4000);
 }
 
 function briefingStopRow(briefing, stop) {
@@ -817,6 +1164,192 @@ function briefingShoppingRow(item) {
   });
   row.append(map);
   return row;
+}
+
+/* ---------- briefing focus ---------- */
+
+/**
+ * What the briefing leads with, and whose idea that was.
+ *
+ * The retrieved ship is the signal because nothing else is one: the logs carry
+ * no mining, no salvage and no cargo, so what came out of the hangar is the
+ * only statement of intent the app ever sees. That makes it a guess about
+ * intent rather than a record of work, which is why the card says out loud what
+ * it read and this chooser can overrule it. "off" is kept distinct from unset:
+ * a pilot who wants the plain page must not have a ship swap hand them a focus
+ * back.
+ */
+const BRIEFING_FOCUS_KEY = 'qw-briefing-focus';
+
+let briefingFocus = '';
+try {
+  briefingFocus = localStorage.getItem(BRIEFING_FOCUS_KEY) || '';
+} catch { /* a bad preference must not blank the briefing */ }
+
+const FOCUS_LABELS = {
+  freight: 'Freight',
+  mining: 'Mining',
+  combat: 'Combat',
+  explore: 'Exploration',
+};
+
+/**
+ * The sections each focus leads with. Deliberately partial: naming only the
+ * two or three that change the answer leaves the rest in the order the markup
+ * gives them, so a section added in a later version still appears rather than
+ * being dropped by every focus that predates it.
+ */
+const BRIEFING_LEADS = {
+  freight: ['trade', 'stops', 'shopping'],
+  mining: ['mining', 'stops', 'services'],
+  combat: ['claim', 'services', 'stops'],
+  explore: ['stops', 'services', 'trade'],
+};
+
+/** Markup order, which is the arrangement with no focus in force. */
+const BRIEFING_SECTIONS = ['stops', 'shopping', 'trade', 'services', 'stash', 'mining', 'claim'];
+
+/** The order to draw the briefing's sections in, for one focus. */
+function briefingOrder(focus) {
+  const leads = BRIEFING_LEADS[focus] || [];
+  return [...leads, ...BRIEFING_SECTIONS.filter((name) => !leads.includes(name))];
+}
+
+/** The focus in force: the pilot's choice, else the ship's, else none. */
+function focusInForce(briefing) {
+  if (briefingFocus === 'off') return null;
+  return briefingFocus || briefing?.focus?.key || null;
+}
+
+/**
+ * Reorders the sections rather than the cards.
+ *
+ * The Now grid is arranged by hand and that arrangement is saved; a focus that
+ * moved cards would silently overwrite it every time the pilot changed ship.
+ * Inside this one card there is no such promise to keep.
+ */
+function applyBriefingOrder(focus) {
+  const grid = $('.briefing-grid');
+  if (!grid) return;
+
+  for (const name of briefingOrder(focus)) {
+    const section = $(`#briefing-${name}-section`);
+    if (section) grid.append(section);
+  }
+}
+
+/**
+ * Records the pilot's own choice of focus and draws the card again with it.
+ *
+ * Goes back through the briefing rather than re-rendering what is on screen:
+ * the extras are built server-side for the focus that asked for them, so
+ * switching to mining has to ask for the rocks rather than discover the card
+ * has none.
+ */
+async function chooseBriefingFocus(value) {
+  briefingFocus = value;
+  try { localStorage.setItem(BRIEFING_FOCUS_KEY, value); } catch { /* optional */ }
+  await reloadPilotBriefing();
+}
+
+function renderBriefingFocus(briefing) {
+  const chooser = $('#briefing-focus');
+  if (chooser) chooser.value = briefingFocus;
+
+  const focus = focusInForce(briefing);
+  const why = $('#briefing-why');
+  const chosen = briefingFocus && briefingFocus !== 'off';
+
+  if (!focus) {
+    why.textContent = '';
+  } else if (chosen) {
+    why.textContent = `${FOCUS_LABELS[focus] || focus} — your choice, not your ship's.`;
+  } else {
+    // "a light mining ship", not "a light mining". The dataset's roles are noun
+    // phrases that need the word after them, and the compound ones - "Starter /
+    // Pathfinder" - need the slash spelled out to read as a sentence at all.
+    const from = briefing.focus;
+    const role = from.role ? from.role.toLowerCase().replaceAll(' / ', ' or ') : null;
+
+    why.textContent = `${from.label} — you retrieved ${from.ship}`
+      + (role ? `, a ${role} ship.` : '.');
+  }
+
+  why.hidden = !why.textContent;
+  applyBriefingOrder(focus);
+  return focus;
+}
+
+/**
+ * Where to mine, for a mining ship.
+ *
+ * Never a claim that anything was mined. The rows are the game's own deposit
+ * tables ranked by what a rock is worth, and the caveat says which question was
+ * answered: the tables name a system for a body and nothing at all for the
+ * Aaron Halo, so "best here" quietly becomes "best anywhere" often enough that
+ * it has to be visible when it does.
+ */
+function renderBriefingMining(briefing, focus) {
+  const section = $('#briefing-mining-section');
+  const rows = focus === 'mining' ? (briefing.mining || []) : [];
+
+  section.hidden = rows.length === 0;
+  if (section.hidden) return;
+
+  const list = $('#briefing-mining');
+  list.textContent = '';
+
+  for (const place of rows) {
+    const row = el('div', 'briefing-row');
+    const main = el('div', 'briefing-main');
+    main.append(el('b', null, place.place));
+    main.append(el('div', 'briefing-detail', [
+      place.system,
+      place.best ? `best: ${place.best}` : null,
+      `${Math.round(place.ore)}% ore`,
+    ].filter(Boolean).join(' · ')));
+    row.append(main);
+    row.append(el('span', 'inward', `${money(place.perRock)}/rock`));
+    list.append(row);
+  }
+
+  list.append(el('div', 'briefing-caveat', rows[0].here
+    ? 'What a rock is worth, from the game’s own deposit tables.'
+    : 'The deposit tables place nothing in this system — these are the best anywhere.'));
+}
+
+/**
+ * What losing this hull costs, for a combat ship.
+ *
+ * The one number 4.9 can honestly put in front of a fighter pilot. Kills are
+ * not logged and deaths are inferred, so a scoreboard would be invention; a
+ * claim fee and a wait are in the game's own tables and are the thing actually
+ * worth knowing before undocking.
+ */
+function renderBriefingClaim(briefing, focus) {
+  const section = $('#briefing-claim-section');
+  const claim = focus === 'combat' ? briefing.claim : null;
+
+  section.hidden = !claim;
+  if (!claim) return;
+
+  const list = $('#briefing-claim');
+  list.textContent = '';
+
+  const row = el('div', 'briefing-row');
+  const main = el('div', 'briefing-main');
+  main.append(el('b', null, claim.ship));
+  main.append(el('div', 'briefing-detail', [
+    claim.standardMinutes ? `standard ~${Math.round(claim.standardMinutes)}m` : null,
+    claim.expeditedMinutes ? `expedited ~${Math.round(claim.expeditedMinutes)}m` : null,
+  ].filter(Boolean).join(' · ') || 'The reference data gives no claim time.'));
+  row.append(main);
+  if (claim.expeditedCost) row.append(el('span', 'outward', money(claim.expeditedCost)));
+  list.append(row);
+
+  list.append(el('div', 'briefing-caveat',
+    'From the game’s own tables. Game.log records no insurance claim, '
+    + 'so this is what one costs — not one in progress.'));
 }
 
 function renderPilotBriefing(briefing) {
@@ -892,6 +1425,12 @@ function renderPilotBriefing(briefing) {
   }
   $('#briefing-stash-section').hidden = !(briefing.stash || []).length;
 
+  const focus = renderBriefingFocus(briefing);
+  renderBriefingMining(briefing, focus);
+  renderBriefingClaim(briefing, focus);
+
+  $('#briefing-focus').onchange = () => chooseBriefingFocus($('#briefing-focus').value);
+
   $('#briefing-map').onclick = () => briefingMap(briefing.locationId, briefing.location);
   $('#briefing-add-stop').onclick = addBriefingStop;
   $('#briefing-overlay').onclick = pinBriefingToOverlay;
@@ -915,6 +1454,367 @@ function connectStream() {
     // EventSource reconnects on its own; nothing to do here.
   };
 }
+
+/* ---------- entity drawer ---------- */
+
+/**
+ * One description of a thing, wherever it was clicked.
+ *
+ * Every view used to grow its own detail panel, and they disagreed: the map's
+ * place card knew about visits and notes, the parts row knew about size and
+ * volume, and neither could say whether you already owned the thing or add it
+ * to a plan. This is the one surface, and the server builds the same shape for
+ * every kind - what is known and who says so, whether it is already yours, what
+ * it costs and how old that is, where to go, and what can be done now.
+ *
+ * A section with no answer is hidden rather than shown empty. "Not reported" is
+ * a fact worth stating; a blank row is not.
+ */
+let entityShown = null;
+
+let entityRequest = 0;
+
+/**
+ * Stamps a request, and answers whether its reply is still wanted.
+ *
+ * Two clicks in a row are two requests, and the first can land second - which
+ * had the panel describing whatever was clicked before. Closing counts as
+ * moving on too, so a reply still in flight cannot reopen a drawer the pilot
+ * has just dismissed.
+ *
+ * A function rather than a comparison at the call site because that is the
+ * half of this that can be tested: the stub answers in the order it is asked,
+ * so the out-of-order landing itself cannot be staged here.
+ */
+function entityTicket() {
+  const token = ++entityRequest;
+  return () => token === entityRequest;
+}
+
+/** The map-only parts of a place card, which no other kind fills in. */
+const PLACE_ONLY_NODES = [
+  '#map-info-services', '#map-info-trade', '#map-info-notes',
+  '#map-info-amenities', '#map-info-lore', '#map-info-sold',
+];
+
+const ENTITY_KICKER = {
+  place: 'Place',
+  commodity: 'Commodity',
+  ship: 'Ship',
+  part: 'Component',
+};
+
+async function openEntity(kind, id) {
+  if (!kind || !id) return false;
+
+  // Forgotten here rather than left pointing at whoever was open before: a note
+  // typed into a place reached from search would otherwise be filed against the
+  // last place opened from the map.
+  mapInfoLocation = null;
+
+  const drawer = $('#entity-drawer');
+
+  // Clicking the same thing again closes it, which is what a second click on
+  // an open panel has always meant here.
+  if (entityShown === `${kind}|${id}` && !drawer.hidden) {
+    closeEntity();
+    return false;
+  }
+
+  const wanted = entityTicket();
+
+  let card;
+  try {
+    card = await getJson(`/api/entity?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`);
+  } catch {
+    // Nothing known is not an error worth a dialog: the click simply has no
+    // answer, and leaving the previous card up would answer for the wrong
+    // thing. A failure for a request already superseded says nothing at all.
+    if (wanted()) closeEntity();
+    return false;
+  }
+
+  if (!wanted()) return false;
+
+  entityShown = `${kind}|${id}`;
+  renderEntity(card);
+  return true;
+}
+
+function closeEntity() {
+  entityRequest++;
+  $('#entity-drawer').hidden = true;
+  document.body.classList.remove('entity-open');
+  entityShown = null;
+
+  if ($('#view-map').classList.contains('active')) drawMap();
+}
+
+function renderEntity(card) {
+  $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] || card.kind;
+  $('#entity-name').textContent = card.name;
+  $('#entity-sub').textContent = card.subtitle || '';
+
+  renderEntityHolding(card);
+  renderEntityPrice(card);
+  renderEntityBlurb(card);
+  renderEntityFacts(card);
+  renderEntityWhere(card);
+  renderEntityActions(card);
+
+  // Cleared every time, not only when the section is hidden. These renderers
+  // append, and only showMapInfo refills them - so a place opened from search,
+  // which calls openEntity directly, drew the new place's name over the last
+  // place's services, lore and notes.
+  const extra = $('#entity-place-extra');
+  extra.hidden = card.kind !== 'place';
+  for (const id of PLACE_ONLY_NODES) $(id).textContent = '';
+
+  $('#entity-drawer').hidden = false;
+  document.body.classList.add('entity-open');
+
+  // The map sizes itself from the space it has, so it has to be told the space
+  // just changed - otherwise the dots stay where they were and the place that
+  // was clicked ends up under the drawer that describes it.
+  if ($('#view-map').classList.contains('active')) drawMap();
+}
+
+/** Whether it is already yours, which changes every decision about it. */
+function renderEntityHolding(card) {
+  const node = $('#entity-holding');
+  node.textContent = '';
+  node.hidden = !card.holding;
+  if (node.hidden) return;
+
+  node.append(el('b', null, card.holding.status));
+  if (card.holding.detail) node.append(el('div', 'entity-detail', card.holding.detail));
+}
+
+/**
+ * The price, and how old it is.
+ *
+ * The age is not decoration. Every price here is somebody else's report of a
+ * counter that may have moved since, and it is the one number on this card that
+ * can cost real money if it is trusted further than it deserves.
+ */
+function renderEntityPrice(card) {
+  const node = $('#entity-price');
+  node.textContent = '';
+  node.hidden = card.price === null || card.price === undefined
+    || card.price.amount === null || card.price.amount === undefined;
+  if (node.hidden) return;
+
+  const price = card.price;
+  node.append(el('b', 'entity-amount',
+    `${money(price.amount)}${price.unit === 'aUEC/SCU' ? '/SCU' : ''}`));
+
+  const detail = [
+    price.where ? `at ${price.where}` : null,
+    price.asOf ? `${price.source}, ${ageWord(price.asOf)}` : price.source,
+  ].filter(Boolean).join(' · ');
+
+  node.append(el('div', 'entity-detail', detail));
+}
+
+/** "collected 3 days ago", so a stale table reads as stale rather than as fact. */
+function ageWord(at) {
+  const days = Math.floor((Date.now() - new Date(at).getTime()) / 86400000);
+  if (!Number.isFinite(days) || days < 0) return 'age unknown';
+  if (days === 0) return 'collected today';
+  if (days === 1) return 'collected yesterday';
+  return `collected ${days} days ago`;
+}
+
+/**
+ * What is known, each line carrying who is answerable for it.
+ *
+ * The source label is the whole point. This install's own logs and a community
+ * price table deserve very different amounts of trust, and a card that mixed
+ * them silently would give up the thing that makes the app worth having.
+ */
+function renderEntityFacts(card) {
+  const list = $('#entity-facts');
+  list.textContent = '';
+
+  for (const fact of card.facts || []) {
+    const row = el('div', 'entity-fact');
+    row.append(el('span', 'entity-fact-label', fact.label));
+    const value = el('span', 'entity-fact-value', fact.value);
+    value.append(el('span', 'entity-source', fact.source));
+    row.append(value);
+    list.append(row);
+  }
+}
+
+/**
+ * What the game says about the thing, in its own words.
+ *
+ * Kept because the parts table had it and losing it would make this drawer a
+ * downgrade for the one view it replaces first. The game writes these with a
+ * literal backslash-n between the header lines, which is why the split is
+ * looking for both.
+ */
+function renderEntityBlurb(card) {
+  const blurb = $('#entity-blurb');
+  blurb.textContent = '';
+  blurb.hidden = !card.blurb;
+
+  if (card.blurb) {
+    for (const line of card.blurb.split(RegExp('\\\\n|\n'))) {
+      if (line.trim()) blurb.append(el('p', 'part-blurb', line.trim()));
+    }
+  }
+
+  const tags = $('#entity-tags');
+  tags.textContent = '';
+  tags.hidden = !(card.tags || []).length;
+  for (const tag of card.tags || []) tags.append(el('span', 'tag', tag));
+}
+
+function renderEntityWhere(card) {
+  const node = $('#entity-where');
+  const places = card.places || [];
+  node.textContent = '';
+  node.hidden = places.length === 0;
+  if (node.hidden) return;
+
+  node.append(el('div', 'entity-label', 'Where'));
+
+  for (const place of places) {
+    const row = el('div', 'entity-where-row');
+
+    // Only a place the atlas can actually find becomes a link; the rest are
+    // UEX terminal names, which the map has no dot for.
+    if (place.placeId) {
+      const link = el('button', 'entity-link', place.name);
+      link.type = 'button';
+      link.title = 'Show this on the map';
+      link.addEventListener('click', () => entityMap(place.placeId, place.name));
+      row.append(link);
+    } else {
+      row.append(el('span', 'entity-where-name', place.name));
+    }
+
+    if (place.note) row.append(el('span', 'entity-detail', place.note));
+    node.append(row);
+  }
+}
+
+function entityMap(placeId, name) {
+  showView('map');
+  if (placeId) centreOn(placeId);
+  else if (name) jumpToPlace(name);
+}
+
+/**
+ * Where "show on map" goes, which is a different question for each kind.
+ *
+ * Only a place has a dot of its own; passing a commodity name or an item class
+ * to centreOn looks for a place id that was never going to exist, and the
+ * button did nothing at all. A commodity goes through the map's own commodity
+ * search, which is what colours the counters that trade it. A component has no
+ * dot either, so it goes to the nearest thing the map can find - the cheapest
+ * seller the catalogue named - and is not offered the button without one.
+ */
+function showEntityOnMap(card) {
+  showView('map');
+
+  if (card.kind === 'place') {
+    centreOn(card.id);
+    return;
+  }
+
+  // searchCommodity rather than writing the box: it also drops whatever the
+  // cargo panel was describing. Setting the term alone recoloured the map and
+  // left the panel beside it still describing the station opened before.
+  if (card.kind === 'commodity') {
+    searchCommodity(card.name);
+    return;
+  }
+
+  // A seller is a UEX terminal name and the atlas holds place names - "Platinum
+  // Bay, Baijini Point" against "Baijini Point" - so an exact search finds
+  // nothing. centreOnTerminal is the loose match the shading already joins on.
+  const seller = (card.places || [])[0];
+  if (seller) centreOnTerminal(seller.name, seller.placeId);
+}
+
+const ENTITY_ACTION_LABEL = {
+  map: 'Show on map',
+  stop: 'Add as a stop',
+  shopping: 'Add to shopping',
+  overlay: 'Pin to overlay',
+  details: 'Open details',
+};
+
+function renderEntityActions(card) {
+  const bar = $('#entity-actions');
+  bar.textContent = '';
+
+  for (const action of card.actions || []) {
+    // The overlay is already the pinned window; it has nothing to pin into.
+    if (action === 'overlay' && isOverlay) continue;
+
+    const button = el('button', 'ghost tiny', ENTITY_ACTION_LABEL[action] || action);
+    button.type = 'button';
+    button.addEventListener('click', () => runEntityAction(action, card, button));
+    bar.append(button);
+  }
+}
+
+async function runEntityAction(action, card, button) {
+  if (action === 'map') return showEntityOnMap(card);
+  if (action === 'details') return openEntityDetails(card);
+
+  button.disabled = true;
+  try {
+    if (action === 'stop') {
+      await fetch('/api/trips/stops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placeId: card.id, place: card.name, note: null }),
+      });
+      await loadTrips();
+      button.textContent = '✓ added';
+      return;
+    }
+
+    if (action === 'shopping') {
+      const result = await fetch('/api/jobs/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: card.name, needed: 1, unit: '' }),
+      }).then((r) => r.json());
+
+      button.textContent = '✓ added';
+      button.title = `On "${result.title}"`;
+      return;
+    }
+
+    if (action === 'overlay') {
+      // The endpoint binds visible from the query, so a JSON body was ignored
+      // and answered 400 - which fetch does not throw for, so the button said
+      // it had worked every time.
+      const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
+      if (!response.ok) throw new Error('overlay refused');
+
+      button.textContent = '✓ pinned';
+    }
+  } catch {
+    button.textContent = 'failed';
+    button.disabled = false;
+  }
+}
+
+/** The full page for this kind, which the drawer summarises rather than replaces. */
+function openEntityDetails(card) {
+  if (card.kind === 'commodity') return openCommodity(card.name);
+  if (card.kind === 'ship') return showView('fleet');
+  if (card.kind === 'part') return showView('parts');
+  return entityMap(card.id, card.name);
+}
+
+$('#entity-close')?.addEventListener('click', closeEntity);
 
 /* ---------- charts ---------- */
 
@@ -1015,6 +1915,11 @@ async function loadHistory() {
   loadLedger().catch((e) => console.error('ledger', e));
   loadLogbook().catch((e) => console.error('logbook', e));
   await loadManufacturers();
+
+  // Awaited, so the catalogue fetches below know whether the game files are
+  // ready yet - and so the poll that refills them is running even for someone
+  // who never opens Settings or Mining, which is where it used to start.
+  await loadGameData().catch(() => {});
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
   loadMiningRef().catch((e) => console.error('mining', e));
@@ -1044,6 +1949,8 @@ function renderContracts(stats) {
       ? `${Math.round((stats.contractsCompleted / stats.contractsSeen) * 100)}%`
       : '—'],
   ]);
+
+  renderContractsPaid(stats).catch(() => {});
 
   bars('#issuers-chart',
     stats.contractIssuers.slice(0, 15).map((c) => ({ label: c.name, value: c.count })),
@@ -1583,9 +2490,58 @@ const LEDGER_PER_PAGE = 40;
 let ledgerEntries = [];
 let ledgerPage = 0;
 
+/** Kinds the reader has switched off. Empty means everything, which is the default. */
+let ledgerHidden = new Set();
+
+/**
+ * The kinds present, in the order the ledger itself uses.
+ *
+ * Built from the rows rather than from a fixed list: a toggle for something
+ * that never happens is a control that empties the table and teaches nothing.
+ */
+function ledgerKinds() {
+  return [...new Set(ledgerEntries.map((entry) => entry.kind))].sort();
+}
+
+function renderLedgerKinds() {
+  const row = $('#ledger-kinds');
+  if (!row) return;
+
+  row.textContent = '';
+
+  const kinds = ledgerKinds();
+
+  // One kind is not a choice.
+  if (kinds.length < 2) return;
+
+  for (const kind of kinds) {
+    const on = !ledgerHidden.has(kind);
+    const button = el('button', on ? 'ghost' : 'ghost off', kind);
+    button.type = 'button';
+    button.dataset.kind = kind;
+    button.title = on ? `Hide ${kind}` : `Show ${kind}`;
+
+    button.addEventListener('click', () => {
+      if (on) ledgerHidden.add(kind);
+      else ledgerHidden.delete(kind);
+
+      ledgerPage = 0;
+      renderLedger();
+    });
+
+    row.append(button);
+  }
+}
+
 async function loadLedger() {
   const days = Number($('#ledger-period').value) || 0;
   ledgerEntries = await getJson(`/api/ledger?days=${days}`);
+
+  // A filter is an answer about the rows currently on screen. Keeping it when
+  // the period fetches a different set can hide the only kind in that range;
+  // with one kind there is no toggle to bring it back, so the page would say
+  // there were no transactions when it had just fetched one.
+  ledgerHidden.clear();
   ledgerPage = 0;
   renderLedger();
 }
@@ -1594,24 +2550,47 @@ function renderLedger() {
   const body = $('#ledger-table tbody');
   body.textContent = '';
 
-  const inbound = ledgerEntries.filter((e) => e.amount > 0);
-  const outbound = ledgerEntries.filter((e) => e.amount < 0);
+  renderLedgerKinds();
+
+  const visible = ledgerEntries.filter((entry) => !ledgerHidden.has(entry.kind));
+
+  const inbound = visible.filter((e) => e.amount > 0);
+  const outbound = visible.filter((e) => e.amount < 0);
 
   const sum = (rows) => rows.reduce((total, e) => total + Number(e.amount), 0);
-  const net = sum(ledgerEntries);
+  const net = sum(visible);
+
+  const days = Number($('#ledger-period').value) || 0;
+
+  /*
+   * The totals follow the filter, because a contract total is the reason to
+   * filter at all - but the "why this number?" does not. The server explains
+   * the whole figure, and offering it over a filtered one would answer a
+   * question nobody asked with records that do not add up to what is on
+   * screen. So the control is there when everything is shown and gone when it
+   * is not, and the line below says why.
+   */
+  const filtered = ledgerHidden.size > 0;
 
   tiles('#ledger-summary', [
-    ['Money in', money(sum(inbound))],
-    ['Money out', money(Math.abs(sum(outbound)))],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net))],
-    ['Movements', ledgerEntries.length],
+    ['Money in', money(sum(inbound)), filtered ? null : 'ledger.in', days],
+    ['Money out', money(Math.abs(sum(outbound))), filtered ? null : 'ledger.out', days],
+    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net)), filtered ? null : 'ledger.net', days],
+    ['Movements', visible.length],
   ]);
 
-  const pages = Math.max(1, Math.ceil(ledgerEntries.length / LEDGER_PER_PAGE));
+  const filterNote = $('#ledger-kinds');
+
+  if (filtered && filterNote) {
+    filterNote.append(el('span', 'muted',
+      'Totals cover only what is shown. Turn everything back on to ask where a figure came from.'));
+  }
+
+  const pages = Math.max(1, Math.ceil(visible.length / LEDGER_PER_PAGE));
   ledgerPage = Math.min(Math.max(0, ledgerPage), pages - 1);
 
   const start = ledgerPage * LEDGER_PER_PAGE;
-  const page = ledgerEntries.slice(start, start + LEDGER_PER_PAGE);
+  const page = visible.slice(start, start + LEDGER_PER_PAGE);
 
   if (!page.length) {
     const tr = el('tr');
@@ -1640,17 +2619,17 @@ function renderLedger() {
     body.append(tr);
   }
 
-  renderLedgerPager(pages, start, page.length);
+  renderLedgerPager(pages, start, page.length, visible.length);
 }
 
-function renderLedgerPager(pages, start, shown) {
+function renderLedgerPager(pages, start, shown, total) {
   const pager = $('#ledger-pager');
   pager.textContent = '';
 
-  if (!ledgerEntries.length) return;
+  if (!total) return;
 
   pager.append(el('span', 'pager-info',
-    `${start + 1}–${start + shown} of ${ledgerEntries.length}`));
+    `${start + 1}–${start + shown} of ${total}`));
 
   const nav = el('div', 'pager-nav');
   const step = (label, delta, disabled) => {
@@ -1686,9 +2665,10 @@ async function refreshCommunityOffer() {
 
   if (community.enabled) {
     $('#cargo-caption').textContent =
-      'Volume, price and place come straight from the kiosk. Commodity names '
-      + `come from the community dataset (${community.commodities} commodities, `
-      + 'StarCitizenWiki / scunpacked-data), fetched once at your request.';
+      'Volume, price and place come straight from the kiosk. Commodity names come '
+      + 'from your own install, falling back to the community dataset '
+      + `(${community.commodities} commodities, StarCitizenWiki / scunpacked-data) `
+      + 'for anything it does not name.';
   }
 }
 
@@ -2149,8 +3129,28 @@ async function renderMarketDetail(entry, cell) {
     + 'Nothing in the game logs threat, so this is where a place is, not what happened there.'));
 }
 
+// What the two sources can each answer, said plainly. The install list is the
+// counters UEX has actually seen a price at, which is a floor; the dataset
+// lists the economy simulation's own facilities, priced or not. Showing the
+// shorter list under the longer list's wording would read as a shrinking
+// economy rather than a narrower source.
+const MARKET_CAPTIONS = {
+  install: 'Every commodity your game install names, with your own trading record '
+    + 'against each. "Sellable at" counts the counters UEX has seen a price at, so it '
+    + 'is a floor and it moves. Enable the community dataset in Settings to also see '
+    + 'facilities nobody has priced yet, and to group commodities.',
+  dataset: 'Every commodity the community dataset knows, with your own trading record '
+    + 'against each. Sellable at counts facilities in the economy simulation itself, '
+    + 'and show on map lights the ones the star map can place. Static availability, not '
+    + 'live prices.',
+};
+
 function renderMarket() {
   $('#market-offer').hidden = marketEntries.length > 0;
+
+  const caption = $('#market-caption');
+  const source = marketEntries[0]?.source;
+  if (caption && MARKET_CAPTIONS[source]) caption.textContent = MARKET_CAPTIONS[source];
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
   const group = $('#market-group').value;
@@ -2176,7 +3176,7 @@ function renderMarket() {
     const tr = el('tr');
     const td = el('td', 'muted', marketEntries.length
       ? 'No commodities match that search.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : 'Enable UEX, or the community dataset, on the Settings page to fill this in.');
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -2527,7 +3527,7 @@ function renderShipsRef() {
     const td = el('td', 'muted', shipCatalogue.length
       ? 'No ships match that filter.'
       : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 13;
+    td.colSpan = 14;
     tr.append(td);
     body.append(tr);
     return;
@@ -2583,7 +3583,40 @@ async function loadPartsRef() {
   for (const type of types) select.append(new Option(prettyType(type), type));
   if (types.includes(previous)) select.value = previous;
 
+  // The two sources agree item for item, so the caption says which is answering
+  // rather than warning about a difference there is not one of. What does
+  // change is the size of the list: the install describes more than twice what
+  // the download does, and a reader comparing counts deserves to know why.
+  const caption = $('#parts-caption');
+  if (caption && partCatalogue.length) {
+    caption.textContent = partCatalogue[0].source === 'install'
+      ? `${partCatalogue.length.toLocaleString()} ship components and pieces of personal gear, `
+        + `read from your game install with type, size, grade and maker, and UEX in-game `
+        + `prices where a shop stocks one.`
+      : `Every ship component and piece of personal gear in the community digest, with type, `
+        + `size, grade and maker, and UEX in-game prices where a shop stocks one.`;
+  }
+
   renderPartsRef();
+}
+
+/**
+ * A component grade as the game writes it: A, B, C, D.
+ *
+ * The files store an ordinal and the game shows a letter, so a page printing
+ * the ordinal is asking the reader to know a mapping nobody published. "G3"
+ * beside "S2" reads like a second size, and gives no clue that lower is better.
+ *
+ * The mapping was checked rather than assumed: the AEGS coolers come out 1, 2,
+ * 3, 4 exactly where StarStrings independently calls them A, B, C and D. Only
+ * those four are translated. A handful of items carry 5 and above, which is
+ * outside anything the game shows, so those keep their number instead of being
+ * given a letter that means nothing.
+ */
+function gradeLetter(grade) {
+  const n = Number(grade) || 0;
+  if (n < 1) return '—';
+  return n <= 4 ? 'ABCD'[n - 1] : String(n);
 }
 
 /** "Char_Clothing_Hat" -> "Clothing Hat": the digest's type keys, made legible. */
@@ -2620,7 +3653,7 @@ function renderPartsRef() {
     const tr = el('tr');
     const td = el('td', 'muted', partCatalogue.length
       ? 'Nothing matches that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : gameDataExcuse() || 'No parts were found in your game files.');
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -2635,14 +3668,24 @@ function renderPartsRef() {
     // shares the cell rather than claiming a tenth column.
     const shown = part.name || prettyItem(part.className);
     const label = el('td', 'with-track');
-    label.append(el('span', null, shown));
+
+    // Every part has a card now - what it is, whether it is already yours, what
+    // it costs and where - so the name always opens one, where it used to open
+    // only for the items the game happened to write a paragraph about.
+    const open = el('button', 'place-link commodity-open', shown);
+    open.title = 'What Quantum Wake knows about this';
+    open.addEventListener('click', () => openEntity('part', part.className));
+    label.append(open);
+
     label.append(trackButton(shown));
     if (part.name) label.title = part.className;
     tr.append(label);
     tr.append(el('td', 'muted', prettyType(part.type)));
-    tr.append(el('td', 'muted', part.subType ?? '—'));
+    // An item with no sub-type arrives as an empty string from the install and
+    // as null from the download, and both mean the same nothing.
+    tr.append(el('td', 'muted', part.subType || '—'));
     tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
-    tr.append(el('td', 'num', part.grade > 0 ? String(part.grade) : '—'));
+    tr.append(el('td', 'num', gradeLetter(part.grade)));
     tr.append(el('td', 'muted', part.manufacturer ?? '—'));
     tr.append(el('td', part.price ? 'num' : 'num muted', part.price ? money(part.price) : '—'));
 
@@ -2656,6 +3699,26 @@ function renderPartsRef() {
   }
 }
 
+/**
+ * The game's own paragraph about an item, and its own labels for it.
+ *
+ * Opened rather than shown inline because 9,401 of the 26,028 items carry one
+ * and they run to several lines. The tags are the game's, not ours: flightReady
+ * is how it marks what has actually shipped, which is worth seeing beside a
+ * price for something you cannot buy yet.
+ */
+/**
+ * Room taken, from millionths of an SCU into something readable.
+ *
+ * A pistol is a few thousand of these and a ship component is millions, so one
+ * unit cannot serve both without printing either 0.000004 SCU or 12,000,000.
+ */
+function volume(microScu) {
+  if (microScu >= 1e6) return `${(microScu / 1e6).toFixed(microScu >= 1e7 ? 0 : 2)} SCU`;
+  if (microScu >= 1e4) return `${(microScu / 1e4).toFixed(1)} centiSCU`;
+  return `${microScu.toLocaleString()} µSCU`;
+}
+
 onInput('#ships-search', renderShipsRef);
 $('#ships-career')?.addEventListener('change', renderShipsRef);
 onInput('#parts-search', renderPartsRef);
@@ -2665,12 +3728,359 @@ $('#parts-type')?.addEventListener('change', renderPartsRef);
 
 let miningCatalogue = [];
 
+/**
+ * What a SCU of a rock is worth once it is sold.
+ *
+ * The middle of the ore range times the best price anything pays. Deliberately
+ * the middle rather than the top: ice runs 9.7% to 84.3% depending on the rock,
+ * and quoting the ceiling would rank every wide band above every reliable one.
+ *
+ * There is no per-hour version of this, and there cannot be one from here -
+ * nothing in the logs says how long a rock takes to mine. Respawn is how long
+ * it takes to come back, which is a different question and has its own column.
+ */
+function oreWorth(spawn) {
+  if (!spawn.bestSell || spawn.minPercent == null || spawn.maxPercent == null) return null;
+
+  const middle = (spawn.minPercent + spawn.maxPercent) / 2;
+  return middle > 0 ? (middle / 100) * spawn.bestSell : null;
+}
+
 const KIND_LABELS = {
   mineable: 'Mineable',
   cave_harvestable: 'Cave harvestable',
   harvestable: 'Harvestable',
   salvageable: 'Salvageable',
 };
+
+/**
+ * Ore sold that was never bought.
+ *
+ * The logs record no mining whatsoever - no extraction, no scan, no refinery
+ * job - so this is the only trace that something was dug up rather than hauled.
+ * It is an inference and the note says so: buying somewhere the app never read
+ * a log for would look exactly the same.
+ */
+/**
+ * Where the rocks are rich, and what one is worth when you find it.
+ *
+ * Rich and valuable are different questions and both are answered: a place can
+ * be full of ore nobody pays for, or hold a trace of something precious. Per
+ * rock multiplies them out, and is per rock rather than per hour because
+ * nothing says how long a rock takes to mine.
+ */
+/**
+ * The mining record the pilot keeps, because the game keeps none.
+ *
+ * Kept visibly apart from everything else on the page. The figures above are
+ * read from logs and can be checked; these are typed from memory, and adding
+ * the two together would make one number out of two different kinds of claim.
+ */
+/**
+ * What a haul is waiting on, and what to press next.
+ *
+ * Stage is the server's word; these are the reader's. "Ready" in particular
+ * needs saying carefully - the app has not been told the job finished, it has
+ * only noticed that the time the pilot expected has gone by.
+ */
+const MINING_STAGE = {
+  Extracted: ['In your hold', 'Send to a refinery'],
+  Submitted: ['At a refinery', 'Collect it'],
+  Ready: ['Due back by now', 'Collect it'],
+  Collected: ['Back in your hold', 'Record what it sold for'],
+  Sold: ['Sold', null],
+};
+
+async function loadMiningPending() {
+  const panel = $('#mining-pending');
+  if (!panel) return;
+
+  const waiting = await getJson('/api/mining/pending').catch(() => []);
+
+  panel.hidden = waiting.length === 0;
+  if (!waiting.length) return;
+
+  $('#mining-pending-note').textContent = waiting[0].caveat;
+
+  const list = $('#mining-pending-list');
+  list.textContent = '';
+
+  for (const run of waiting) {
+    const row = el('div', 'mining-waiting');
+
+    row.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
+    row.append(el('span', 'muted', run.refinery.place));
+
+    // The two states read differently on purpose: one is waiting, the other is
+    // the app pointing out that your own estimate has passed.
+    row.append(el('span', run.stage === 'Ready' ? 'want' : 'muted',
+      run.refinery.expectedAt
+        ? (run.stage === 'Ready'
+          ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
+          : `due ${dateOf(run.refinery.expectedAt)}`)
+        : 'no time given'));
+
+    list.append(row);
+  }
+}
+
+/**
+ * The inline form for whichever stage comes next.
+ *
+ * A row rather than a dialog: a browser prompt blocks everything, and the
+ * overlay's WebView is the worst place in the app to find that out.
+ */
+function miningStageForm(run) {
+  const row = el('tr', 'mining-stage-form');
+  const cell = el('td');
+  cell.colSpan = 9;
+
+  const form = el('div', 'mining-form');
+  const inputs = {};
+
+  function field(key, placeholder, type = 'text') {
+    const input = el('input', 'search');
+    input.type = type;
+    input.placeholder = placeholder;
+    if (type === 'number') input.step = 'any';
+    inputs[key] = input;
+    form.append(input);
+    return input;
+  }
+
+  if (run.stage === 'Extracted') {
+    field('place', 'Refinery');
+    field('method', 'Method');
+    field('cost', 'Cost', 'number');
+    field('expectedAt', 'Back by (yyyy-mm-dd hh:mm)');
+  } else if (run.stage === 'Submitted' || run.stage === 'Ready') {
+    field('yield', 'SCU that came back', 'number');
+  } else if (run.stage === 'Collected') {
+    field('revenue', 'Sold for', 'number');
+  }
+
+  const save = el('button', 'ghost', 'Save');
+
+  save.addEventListener('click', async () => {
+    if (run.stage === 'Extracted') {
+      const when = inputs.expectedAt.value.trim();
+      const expected = when ? new Date(when.replace(' ', 'T')) : null;
+
+      await fetch(`/api/mining/log/${encodeURIComponent(run.id)}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          place: inputs.place.value.trim(),
+          method: inputs.method.value.trim(),
+          cost: inputs.cost.value === '' ? null : Number(inputs.cost.value),
+
+          // An unreadable date is sent as nothing rather than as now: a job
+          // with no expected time never claims to be ready, which is the
+          // honest state when nobody has said when it is due.
+          expectedAt: expected && !isNaN(expected) ? expected.toISOString() : null,
+        }),
+      });
+    } else if (run.stage === 'Collected') {
+      const value = inputs.revenue.value.trim();
+      await fetch(`/api/mining/log/${encodeURIComponent(run.id)}/sell`
+        + (value === '' ? '' : `?revenue=${encodeURIComponent(value)}`), { method: 'POST' });
+    } else {
+      const value = inputs.yield.value.trim();
+      await fetch(`/api/mining/log/${encodeURIComponent(run.id)}/collect`
+        + (value === '' ? '' : `?yield=${encodeURIComponent(value)}`), { method: 'POST' });
+    }
+
+    await loadMiningLog().catch(() => {});
+    await loadMiningPending().catch(() => {});
+  });
+
+  form.append(save);
+  cell.append(form);
+  row.append(cell);
+  return row;
+}
+
+async function loadMiningLog() {
+  loadMiningPending().catch(() => {});
+
+  const body = $('#mining-log tbody');
+  const note = $('#mining-log-note');
+  if (!body) return;
+
+  const runs = await getJson('/api/mining/log').catch(() => []);
+  body.textContent = '';
+
+  if (!runs.length) {
+    note.textContent = 'Nothing recorded yet.';
+    return;
+  }
+
+  for (const run of runs) {
+    const tr = el('tr');
+    tr.append(el('td', 'muted', dayOf(run.at)));
+    tr.append(el('td', null, run.resource));
+    tr.append(el('td', 'muted', run.place));
+    tr.append(el('td', 'num', String(run.scu)));
+
+    // What went in stays beside what came back: the difference is the number
+    // worth knowing, and a single column would hide it.
+    tr.append(el('td', 'num muted',
+      run.refinery?.yield === null || run.refinery?.yield === undefined
+        ? '—'
+        : String(run.refinery.yield)));
+
+    tr.append(el('td', 'num muted', run.quality ? String(run.quality) : '—'));
+    tr.append(el('td', run.revenue ? 'num inward' : 'num muted',
+      run.revenue ? money(run.revenue) : '—'));
+
+    const [words, next] = MINING_STAGE[run.stage] || [run.stage, null];
+
+    const stage = el('td', run.stage === 'Ready' ? 'want' : 'muted', words);
+    tr.append(stage);
+
+    const step = el('td');
+
+    if (next) {
+      let form = null;
+      const advance = el('button', 'ghost small', next);
+
+      advance.addEventListener('click', () => {
+        // Toggling rather than stacking: pressing it twice should close the
+        // form, not leave two of them arguing over the same haul. The open one
+        // is held here rather than found by walking siblings, which is both
+        // shorter and does not care what else the table inserts.
+        if (form) {
+          form.remove();
+          form = null;
+          return;
+        }
+
+        form = miningStageForm(run);
+        tr.after(form);
+      });
+
+      step.append(advance);
+    }
+
+    tr.append(step);
+
+    const drop = el('td', 'num');
+    const remove = el('button', 'ghost small', 'Remove');
+    remove.addEventListener('click', async () => {
+      await fetch(`/api/mining/log/${run.id}`, { method: 'DELETE' }).catch(() => {});
+      await loadMiningLog().catch(() => {});
+    });
+    drop.append(remove);
+    tr.append(drop);
+
+    body.append(tr);
+  }
+
+  const scu = runs.reduce((sum, r) => sum + r.scu, 0);
+  const earned = runs.reduce((sum, r) => sum + (r.revenue || 0), 0);
+
+  const waiting = runs.filter((r) => r.stage === 'Submitted' || r.stage === 'Ready').length;
+
+  note.textContent = `${runs.length} run${runs.length === 1 ? '' : 's'}, `
+    + `${scu.toLocaleString()} SCU`
+    + (earned > 0 ? `, ${money(earned)}` : '')
+    + (waiting > 0 ? `, ${waiting} still at a refinery` : '')
+    + ' — your own record, kept apart from the log-derived figures above.';
+}
+
+$('#mining-log-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const body = {
+    resource: $('#mining-log-resource').value.trim(),
+    place: $('#mining-log-place').value.trim(),
+    scu: Number($('#mining-log-scu').value) || 0,
+    quality: Number($('#mining-log-quality').value) || null,
+    revenue: Number($('#mining-log-revenue').value) || null,
+  };
+
+  if (!body.resource || body.scu <= 0) return;
+
+  await fetch('/api/mining/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+
+  for (const id of ['#mining-log-resource', '#mining-log-place', '#mining-log-scu',
+    '#mining-log-quality', '#mining-log-revenue']) {
+    $(id).value = '';
+  }
+
+  await loadMiningLog().catch(() => {});
+});
+
+async function loadMiningPlaces() {
+  const body = $('#mining-places tbody');
+  const note = $('#mining-places-note');
+  if (!body) return;
+
+  const places = await getJson('/api/mining/places').catch(() => []);
+  body.textContent = '';
+
+  if (!places.length) {
+    note.textContent = gameDataExcuse()
+      ?? 'No deposit tables could be read from your install.';
+    return;
+  }
+
+  // Worth needs UEX; richness does not. Saying which is missing beats a column
+  // of dashes that looks like the page failed.
+  const priced = places.some((p) => p.perRock > 0);
+
+  for (const place of places.slice(0, 40)) {
+    const tr = el('tr');
+    tr.append(tdPlace(place.place));
+    tr.append(el('td', 'muted', place.system || '—'));
+    tr.append(el('td', 'num', `${place.ore.toFixed(place.ore >= 10 ? 0 : 1)}%`));
+
+    // A place that beats the usual floor is the interesting one, so it is
+    // marked the same way the deposit table marks it.
+    const quality = el('td', place.quality?.local ? 'num' : 'num muted',
+      place.quality ? `${place.quality.min}+${place.quality.local ? '*' : ''}` : '—');
+    tr.append(quality);
+
+    tr.append(el('td', place.perRock > 0 ? 'num inward' : 'num muted',
+      place.perRock > 0 ? money(place.perRock) : '—'));
+    tr.append(el('td', 'num muted', String(place.ores)));
+    tr.append(el('td', 'muted', place.best.map((b) => b.resource).join(', ')));
+    tr.append(el('td', 'num muted', place.respawn ? craftTime(place.respawn) : '—'));
+    body.append(tr);
+  }
+
+  note.textContent = `${places.length} places, read from your install. `
+    + 'The community dataset knows 234, so this is the part of the map your game '
+    + 'files describe rather than all of it.'
+    + (priced ? '' : ' Turn on UEX in Settings to price what a rock is worth; '
+      + 'how rich the rocks are needs nothing but your install.');
+}
+
+async function loadLikelyMined() {
+  const strip = $('#mining-mine');
+  const note = $('#mining-mine-note');
+  if (!strip || !note) return;
+
+  const rows = await getJson('/api/mining/mine').catch(() => []);
+
+  if (!rows.length) {
+    strip.textContent = '';
+    note.hidden = true;
+    return;
+  }
+
+  tiles('#mining-mine', rows.slice(0, 4).map((r) => [r.name, `${r.scu} SCU`]));
+
+  const total = rows.reduce((sum, r) => sum + r.revenue, 0);
+  note.textContent = `${money(total)} from ore you sold and never bought — `
+    + 'the closest thing to a mining record these logs allow, since nothing '
+    + 'writes down a rock being mined. Bought somewhere unread, it would look the same.';
+  note.hidden = false;
+}
 
 async function loadMiningRef() {
   try {
@@ -2708,6 +4118,17 @@ function renderMiningRef() {
   const body = $('#mining-table tbody');
   body.textContent = '';
 
+  // The two sources mean different things by "chance". The download carried a
+  // real probability; the game stores a weight whose scale is its own business,
+  // so the install's is that group's share of what spawns at the place. Both
+  // are useful and neither is the other.
+  const note = $('#mining-source');
+  if (note && miningCatalogue.length) {
+    note.textContent = miningCatalogue[0].source === 'install'
+      ? 'Read from your game install; chance is the group’s share of what spawns there. '
+      : 'From the community dataset; chance is the spawn group’s own probability. ';
+  }
+
   const rows = miningCatalogue.filter((s) =>
     (!kind || s.kind === kind)
     && (!system || s.system === system)
@@ -2716,8 +4137,10 @@ function renderMiningRef() {
       || s.location.toLowerCase().includes(term)
       || (s.deposit || '').toLowerCase().includes(term)))
 
-    // Payers first, then the likeliest finds - the order a miner plans in.
-    .sort((a, b) => (b.bestSell ?? 0) - (a.bestSell ?? 0)
+    // What a SCU of the rock is worth, then how likely it is to be there. A
+    // high price on an ore that is 2% of the rock is not a good rock, which is
+    // what sorting on best sell alone used to say.
+    .sort((a, b) => (oreWorth(b) ?? 0) - (oreWorth(a) ?? 0)
       || (b.groupChance * b.share) - (a.groupChance * a.share));
 
   const counter = $('#mining-count');
@@ -2729,14 +4152,29 @@ function renderMiningRef() {
     const tr = el('tr');
     const td = el('td', 'muted', miningCatalogue.length
       ? 'Nothing matches that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
-    td.colSpan = 11;
+      : gameDataExcuse() || 'No deposits were found in your game files.');
+    td.colSpan = 13;
     tr.append(td);
     body.append(tr);
     return;
   }
 
   const percent = (v) => `${(v * 100).toFixed(v * 100 >= 10 ? 0 : 1)}%`;
+
+  // A band rather than a number, because it is one: the game gives a rock a
+  // range and rolls within it. A single figure would read as a promise.
+  // Everything tops out at 1000, so the ceiling says nothing and the floor says
+  // most of it: ship mining never yields below 501, hand mining below 201, and
+  // ground mining or gathering can give you anything at all.
+  const qualityFloor = (spawn) =>
+    (spawn.quality ? `${spawn.quality.min}+${spawn.quality.local ? '*' : ''}` : '—');
+
+  const oreShare = (spawn) => {
+    if (spawn.minPercent == null || spawn.maxPercent == null) return '—';
+    const low = spawn.minPercent.toFixed(spawn.minPercent >= 10 ? 0 : 1);
+    const high = spawn.maxPercent.toFixed(spawn.maxPercent >= 10 ? 0 : 1);
+    return low === high ? `${high}%` : `${low}–${high}%`;
+  };
 
   for (const spawn of rows.slice(0, MINING_CAP)) {
     const tr = el('tr');
@@ -2748,12 +4186,47 @@ function renderMiningRef() {
     name.append(trackButton(spawn.resource, 1, spawn.kind === 'mineable' ? 'SCU' : ''));
     tr.append(name);
     tr.append(el('td', 'muted', spawn.deposit ?? '—'));
+
+    // How much of the rock this ore is. Only the install knows it, and only for
+    // mineables, so everything else is a dash rather than a zero.
+    tr.append(el('td', 'num muted', oreShare(spawn)));
+
+    // The floor is the number a recipe's quality requirement is measured
+    // against, so it leads; the rest of the distribution rides the tooltip. A
+    // place that overrides the class default is marked, because that is the
+    // whole point - it means here is not the same as everywhere.
+    const quality = el('td', spawn.quality?.local ? 'num' : 'num muted', qualityFloor(spawn));
+    if (spawn.quality) {
+      quality.title = `${spawn.quality.min}–${spawn.quality.max}, `
+        + `average ${Math.round(spawn.quality.mean)}, spread ${Math.round(spawn.quality.spread)}`
+        + (spawn.quality.local ? ' — this place differs from the usual' : '');
+    }
+    tr.append(quality);
+
+    // Worth its own column rather than a footnote: it is the difference between
+    // planning a circuit and planning a stop.
+    tr.append(el('td', 'num muted',
+      spawn.respawnSeconds ? craftTime(spawn.respawnSeconds) : '—'));
+
     tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
     tr.append(tdPlace(spawn.location));
     tr.append(el('td', 'muted', spawn.system ?? '—'));
     tr.append(el('td', 'muted', spawn.group));
-    tr.append(el('td', 'num', percent(spawn.groupChance)));
-    tr.append(el('td', 'num muted', percent(spawn.share)));
+    // The two odds multiplied: what share of everything spawning here is this.
+    // Kept as one number with the parts on the tooltip, because a miner asks
+    // "how much of this place is Tin", not "what is the group probability".
+    const find = el('td', 'num muted', percent(spawn.groupChance * spawn.share));
+    find.title = `${percent(spawn.groupChance)} of what spawns here is `
+      + `${spawn.group}, and ${percent(spawn.share)} of that is this`;
+    tr.append(find);
+
+    const worth = oreWorth(spawn);
+    const worthCell = el('td', worth ? 'num inward' : 'num muted', worth ? money(worth) : '—');
+    if (worth) {
+      worthCell.title = 'A SCU of this rock, at the middle of its ore range, '
+        + 'sold at the best price UEX knows';
+    }
+    tr.append(worthCell);
 
     const sell = el('td', spawn.bestSell ? 'num inward' : 'num muted',
       spawn.bestSell ? money(spawn.bestSell) : '—');
@@ -2808,6 +4281,9 @@ const CRAFTING_CAP = 500;
 /** "540 s" is nobody's unit; craft times read as minutes and hours. */
 function craftTime(seconds) {
   if (seconds <= 0) return '—';
+  // Rounding a ten-second recipe to minutes printed "0m", which reads as a
+  // missing number rather than as something that is quick.
+  if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.round((seconds % 3600) / 60);
@@ -2815,6 +4291,17 @@ function craftTime(seconds) {
 }
 
 function renderCraftingRef() {
+  // Both sources describe the same recipes, so this says which is answering
+  // rather than warning about a difference. The install is current with the
+  // patch, which is the part that matters here: two recipes on this install
+  // have already changed since the download was built.
+  const note = $('#crafting-source');
+  if (note && craftingCatalogue.length) {
+    note.textContent = craftingCatalogue[0].source === 'install'
+      ? 'Read from your game install. '
+      : 'From the community dataset. ';
+  }
+
   const term = ($('#crafting-search').value || '').trim().toLowerCase();
   const type = $('#crafting-type').value;
   const obtained = $('#crafting-obtained').value;
@@ -2840,7 +4327,7 @@ function renderCraftingRef() {
     const tr = el('tr');
     const td = el('td', 'muted', craftingCatalogue.length
       ? 'Nothing matches that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      : gameDataExcuse() || 'No recipes were found in your game files.');
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -2863,7 +4350,7 @@ function renderCraftingRef() {
     }
     tr.append(makes);
     tr.append(el('td', 'muted', prettyType(bp.type)));
-    tr.append(el('td', 'num', bp.grade > 0 ? String(bp.grade) : '—'));
+    tr.append(el('td', 'num', gradeLetter(bp.grade)));
     tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
     tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.join(', ') : '—'));
 
@@ -4715,7 +6202,13 @@ function showChecklistAttachment(attachment) {
 }
 
 function checklistItemRow(list, item, compact = false) {
-  const row = el('li', `checklist-item${item.done ? ' done' : ''}`);
+  // Bought since the line was written. Shown as done rather than ticked in the
+  // store: the list belongs to whoever wrote it, and a name matching a receipt
+  // is something the logs observed about it, not licence to edit it.
+  const bought = !item.done && item.bought;
+
+  const row = el('li',
+    `checklist-item${item.done ? ' done' : ''}${bought ? ' bought' : ''}`);
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = item.done;
@@ -4727,6 +6220,13 @@ function checklistItemRow(list, item, compact = false) {
   main.append(el('div', 'checklist-item-text', item.text));
   if (!compact && item.note) main.append(el('div', 'muted checklist-note', item.note));
   if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
+
+  if (bought) {
+    const note = el('div', 'checklist-bought', `bought ${dayOf(item.bought)}`);
+    note.title = 'Your logs show this was bought after you wrote this line. '
+      + 'Tick it to take it off for good.';
+    main.append(note);
+  }
 
   const attachments = item.attachments || [];
   if (attachments.length) {
@@ -4986,6 +6486,220 @@ async function loadStarStrings(check = false) {
   $('#starstrings-install').disabled = !state.gameRoot;
 }
 
+/**
+ * What marking the game's text would change, and the state of the one that is
+ * installed.
+ *
+ * Shows the plan before anything is written, because the file lands in someone
+ * else's game folder: the counts, where the text is being built from, and a
+ * sample of the actual renames. The caveat is permanent rather than shown on a
+ * short list - a tidy table of names is exactly what gets mistaken for a
+ * complete rarity rating, and this is a floor over two incomplete sources.
+ */
+/**
+ * Puts the stored marking choices onto the page.
+ *
+ * The level only matters while colour is on, so it is disabled rather than
+ * hidden when it is off - a control that vanishes reads as a bug, and one that
+ * greys out reads as a consequence.
+ */
+function applyLabelOptions(options) {
+  const facts = $('#label-facts');
+  const colour = $('#label-colour');
+  const level = $('#label-level');
+  if (!facts || !colour || !level) return;
+
+  facts.checked = options ? options.facts !== false : true;
+  colour.checked = !!(options && options.colour);
+  level.value = String((options && options.level) || 3);
+  level.disabled = !colour.checked;
+}
+
+/** Stores a marking choice, and says what it does not do. */
+async function saveLabelOptions() {
+  const body = {
+    colour: $('#label-colour').checked,
+    level: Number($('#label-level').value) || 3,
+    facts: $('#label-facts').checked,
+  };
+
+  $('#label-level').disabled = !body.colour;
+
+  await fetch('/api/labels/options', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+
+  // Changing a mark does not touch the game folder. Saying so is the difference
+  // between a preference and a surprise.
+  const note = $('#label-options-note');
+  if (note) {
+    note.textContent = 'Saved. Install again to write it into the game, then restart the game.';
+    note.hidden = false;
+  }
+
+  await loadTextOverlay().catch(() => {});
+}
+
+for (const id of ['#label-facts', '#label-colour', '#label-level']) {
+  $(id)?.addEventListener('change', () => { saveLabelOptions().catch(() => {}); });
+}
+
+async function loadTextOverlay() {
+  const status = $('#textoverlay-status');
+  if (!status) return;
+
+  const state = await getJson('/api/labels').catch(() => null);
+
+  if (!state) {
+    status.textContent = 'Could not read the game text.';
+    return;
+  }
+
+  applyLabelOptions(state.options);
+
+  $('#textoverlay-remove').hidden = !state.installed;
+  $('#textoverlay-install').textContent = state.installed ? 'Rebuild and install' : 'Install';
+  $('#textoverlay-install').disabled = !!state.problem;
+
+  if (state.problem) {
+    status.textContent = state.problem;
+    tiles('#textoverlay-summary', []);
+    $('#textoverlay-table tbody').textContent = '';
+    return;
+  }
+
+  tiles('#textoverlay-summary', [
+    ['Would be marked', state.marked],
+    ['Something sells', state.sold],
+    ['Size or class marked', state.annotated],
+    ['Not gear you shop for', state.skipped],
+  ]);
+
+  // Which file it builds on decides whether another mod survives, so it is
+  // stated rather than assumed.
+  $('#textoverlay-source').textContent = state.baseSource === 'StarStrings'
+    ? 'Built on top of the StarStrings text, so both survive.'
+    : "Built on the game's own text.";
+
+  labelChanges = state.changes || [];
+  renderLabelChanges();
+
+  const bits = [];
+  if (state.installed) {
+    bits.push(`Installed${state.installedAt ? ` ${relative(state.installedAt)}` : ''}`);
+    if (state.layered) bits.push('layered over StarStrings');
+    bits.push('restart Star Citizen to see it');
+  } else {
+    bits.push('Nothing is written until you install.');
+  }
+
+  status.textContent = bits.join(' · ');
+}
+
+/* Kept so typing in the box re-renders without asking the server to rebuild the
+   whole localisation file again. */
+let labelChanges = [];
+
+/** The table is thousands of rows; rendering caps so typing stays quick. */
+const LABELS_CAP = 400;
+
+/**
+ * The rows a search term matches.
+ *
+ * Searched across all three columns, because all three are things somebody
+ * would look for: the name they are holding, the kind of thing it is, and the
+ * mark itself - "[S2B]" or "[*]" - which is how you answer "what does the star
+ * actually get put on?" without reading four thousand rows.
+ */
+function matchingLabelChanges(term) {
+  const wanted = (term || '').trim().toLowerCase();
+  if (!wanted) return labelChanges;
+
+  return labelChanges.filter((line) =>
+    line.was.toLowerCase().includes(wanted)
+    || line.becomes.toLowerCase().includes(wanted)
+    || (line.category || '').toLowerCase().includes(wanted));
+}
+
+function renderLabelChanges() {
+  const body = $('#textoverlay-table tbody');
+  if (!body) return;
+
+  const term = $('#labels-search')?.value || '';
+  const rows = matchingLabelChanges(term);
+
+  body.textContent = '';
+
+  for (const line of rows.slice(0, LABELS_CAP)) {
+    const tr = el('tr');
+    tr.append(el('td', null, line.was));
+    tr.append(el('td', 'muted', line.category));
+    tr.append(el('td', null, line.becomes));
+    body.append(tr);
+  }
+
+  const counter = $('#labels-count');
+  if (!counter) return;
+
+  if (labelChanges.length === 0) {
+    counter.textContent = '';
+    return;
+  }
+
+  // The total is what the page is answering for, so it is always said - a bare
+  // "400 rows" would read as the whole plan when it is a tenth of it.
+  if (rows.length === 0) {
+    counter.textContent = `Nothing matches "${term.trim()}" among ${labelChanges.length.toLocaleString()} renames.`;
+  } else if (rows.length > LABELS_CAP) {
+    counter.textContent =
+      `Showing ${LABELS_CAP} of ${rows.length.toLocaleString()} matches, `
+      + `out of ${labelChanges.length.toLocaleString()} renames — narrow the search to see the rest.`;
+  } else if (term.trim()) {
+    counter.textContent =
+      `${rows.length.toLocaleString()} of ${labelChanges.length.toLocaleString()} renames match.`;
+  } else {
+    counter.textContent = `${labelChanges.length.toLocaleString()} renames.`;
+  }
+}
+
+function initTextOverlay() {
+  const install = $('#textoverlay-install');
+  if (!install) return;
+
+  onInput('#labels-search', renderLabelChanges);
+
+  install.addEventListener('click', async () => {
+    $('#textoverlay-status').textContent = 'Writing…';
+
+    const answer = await fetch('/api/labels/install', { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => ({ problem: 'The write did not finish.' }));
+
+    if (answer.problem) {
+      $('#textoverlay-status').textContent = answer.problem;
+      return;
+    }
+
+    await loadTextOverlay();
+    alertLine($('#textoverlay-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+  });
+
+  $('#textoverlay-remove').addEventListener('click', async () => {
+    $('#textoverlay-status').textContent = 'Putting the old text back…';
+    // A removal that could not put the old file back leaves the marks installed,
+    // so saying "removed" would be a lie the page then contradicts on reload.
+    const answer = await fetch('/api/labels/remove', { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => ({ problem: 'The removal could not be started.' }));
+
+    if (answer.problem) $('#textoverlay-status').textContent = answer.problem;
+
+    await loadTextOverlay();
+  });
+}
+
 function initStarStrings() {
   const install = $('#starstrings-install');
   if (!install) return;
@@ -5011,7 +6725,18 @@ function initStarStrings() {
     }
 
     await loadStarStrings(true);
-    alertLine($('#starstrings-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+    await loadTextOverlay().catch(() => {});
+
+    // Both write the same file, so the marks are laid over StarStrings' table
+    // again rather than being quietly lost under it. Stated on a line that
+    // stays, not a notice that fades: a second thing changing on one click is
+    // exactly what somebody will want to re-read.
+    const note = $('#starstrings-note');
+    note.textContent = answer.relabelled
+      ? 'Installed, and your item labels were put back on top of it. '
+        + 'Restart Star Citizen to see them.'
+      : 'Installed. Restart Star Citizen to see it.';
+    note.hidden = false;
   });
 
   $('#starstrings-remove').addEventListener('click', async () => {
@@ -5204,6 +6929,7 @@ async function renderSettings() {
   await renderUexFeeds();
   await renderSignals();
   await renderExportPreview();
+  await renderBackupPreview();
   await renderDiagnostics();
 }
 
@@ -5645,6 +7371,273 @@ async function renderExportPreview() {
  * history at once. So the blob comes back from fetch and is clicked into the
  * downloads folder here.
  */
+/* ---------- backup and restore ---------- */
+
+/**
+ * The file being restored and the plan for it, held between preview and apply.
+ *
+ * The text is kept rather than re-read because the apply has to send the same
+ * bytes the plan was computed from: the server hashes what it is given and
+ * refuses when it disagrees with what was approved. Reading the picker a second
+ * time would be a fresh read of a file that may have changed underneath.
+ */
+let restoreFile = null;
+let restorePlan = null;
+
+async function renderBackupPreview() {
+  const line = $('#backup-preview');
+  if (!line) return;
+
+  // A count nobody asked for must not be able to take the rest of Settings
+  // down with it: everything below this on the page is more important.
+  let counts;
+
+  try {
+    counts = await getJson('/api/backup/preview');
+  } catch {
+    line.textContent = '';
+    return;
+  }
+
+  // Only what is actually there, so an empty install does not read as a list of
+  // zeroes somebody has to be told to ignore.
+  const parts = [
+    [counts.jobs, 'job'], [counts.checklists, 'checklist'], [counts.trips, 'flight plan'],
+    [counts.miningRuns, 'mining haul'], [counts.notes, 'map note'],
+  ].filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+
+  if (counts.goal) parts.push('your goal');
+  if (counts.wipe) parts.push('your wipe line');
+
+  line.textContent = parts.length
+    ? `Would save ${parts.join(', ')}.`
+    : 'Nothing typed yet — a backup would be empty.';
+}
+
+async function saveBackup() {
+  const button = $('#backup-save');
+  const status = $('#backup-status');
+
+  button.disabled = true;
+  status.textContent = 'Building the file…';
+
+  let url = null;
+
+  try {
+    const response = await fetch('/api/backup');
+
+    if (!response.ok) {
+      status.textContent = 'The backup could not be built.';
+      return;
+    }
+
+    const name = /filename="?([^";]+)"?/i.exec(
+      response.headers.get('content-disposition') || '')?.[1] || 'quantumwake-backup.json';
+
+    const blob = await response.blob();
+    url = URL.createObjectURL(blob);
+
+    const link = el('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+
+    status.textContent = `Saved ${name} — ${Math.round(blob.size / 1024).toLocaleString()} KB.`;
+  } catch {
+    status.textContent = 'The backup could not be built.';
+  } finally {
+    // Revoking frees the blob; doing it before the click lands cancels the save.
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 30000);
+    button.disabled = false;
+  }
+}
+
+/**
+ * Why each kind of line is on the list, in the reader's terms.
+ *
+ * "Conflict" is the code's word and would be the wrong one here: nothing has
+ * gone wrong, the copy on this machine is simply newer, and the reader is being
+ * asked whether to overwrite their own more recent work.
+ */
+const RESTORE_WHY = {
+  Add: 'not on this machine',
+  Replace: 'yours is older',
+  Conflict: 'yours is newer',
+  Deleted: 'you deleted this',
+  Same: 'already the same',
+};
+
+async function planRestore(text) {
+  const status = $('#backup-status');
+  status.textContent = 'Reading the file…';
+
+  const response = await fetch('/api/backup/plan', { method: 'POST', body: text });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    status.textContent = body?.problem || 'That file could not be read.';
+    return;
+  }
+
+  restoreFile = text;
+  restorePlan = body;
+  status.textContent = '';
+  renderRestorePlan();
+}
+
+function renderRestorePlan() {
+  const panel = $('#backup-plan');
+  panel.hidden = !restorePlan;
+  if (!restorePlan) return;
+
+  const acting = restorePlan.lines.filter((line) => line.action !== 'Same');
+
+  const summary = $('#backup-plan-summary');
+  summary.textContent = '';
+
+  const counts = [
+    [restorePlan.adds, 'to bring back'],
+    [restorePlan.replaces, 'to replace'],
+    [restorePlan.conflicts, 'newer here'],
+    [restorePlan.deleted, 'you deleted'],
+    [restorePlan.unchanged, 'already the same'],
+  ].filter(([n]) => n > 0);
+
+  for (const [n, word] of counts) {
+    const tile = el('span', 'restore-count');
+    tile.append(el('b', null, String(n)));
+    tile.append(el('span', 'muted', ` ${word}`));
+    summary.append(tile);
+  }
+
+  // Said even when it is zero-shaped news: "what happened to my pins" is a
+  // question somebody will ask of a screen that rewrote their jobs.
+  if (restorePlan.ignored > 0) {
+    summary.append(el('span', 'restore-count muted',
+      `${restorePlan.ignored} pinned or tracked — left alone either way`));
+  }
+
+  const body = $('#backup-plan-table').querySelector('tbody');
+  body.textContent = '';
+
+  for (const line of acting) {
+    const row = el('tr');
+
+    const cell = el('td');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = line.takenByDefault;
+    box.dataset.key = line.key;
+    box.title = line.takenByDefault ? 'Untick to leave this alone' : 'Tick to take the copy in the file';
+    cell.append(box);
+    row.append(cell);
+
+    const what = el('td');
+    what.append(el('span', null, line.label));
+    what.append(el('span', 'note-inline muted', ` ${RESTORE_WHY[line.action] || line.action}`));
+    row.append(what);
+
+    row.append(el('td', 'muted', line.store));
+    row.append(el('td', 'muted', line.yours ? dateOf(line.yours) : '—'));
+    row.append(el('td', 'muted', line.theirs ? dateOf(line.theirs) : '—'));
+
+    body.append(row);
+  }
+
+  // Nothing to do is worth saying outright, rather than showing an empty table
+  // above a button that would do nothing.
+  $('#backup-apply').disabled = acting.length === 0;
+
+  if (acting.length === 0) {
+    summary.append(el('span', 'restore-count muted',
+      'Nothing to do — this file matches what you have.'));
+  }
+}
+
+async function applyRestore() {
+  const button = $('#backup-apply');
+  const status = $('#backup-status');
+
+  // Sent as exceptions to the plan's own defaults, so approving it untouched
+  // sends nothing at all - and a line this page did not know how to draw cannot
+  // arrive unanswered and be read as a refusal.
+  const take = [];
+  const leave = [];
+
+  for (const box of $('#backup-plan-table').querySelectorAll('input')) {
+    const line = restorePlan.lines.find((l) => l.key === box.dataset.key);
+    if (!line) continue;
+
+    if (box.checked && !line.takenByDefault) take.push(line.key);
+    if (!box.checked && line.takenByDefault) leave.push(line.key);
+  }
+
+  button.disabled = true;
+  status.textContent = 'Restoring…';
+
+  // Built the way the rest of the app builds a query, rather than through
+  // URLSearchParams: the keys are store:id pairs and both halves need escaping.
+  let query = `hash=${encodeURIComponent(restorePlan.hash)}`;
+  if (take.length) query += `&take=${encodeURIComponent(take.join(','))}`;
+  if (leave.length) query += `&leave=${encodeURIComponent(leave.join(','))}`;
+
+  try {
+    const response = await fetch(`/api/backup/restore?${query}`, { method: 'POST', body: restoreFile });
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      status.textContent = body?.problem || 'Nothing was restored.';
+      return;
+    }
+
+    // A refused write is not a smaller restore. Saying "nothing was restored"
+    // over a half-finished one is the most misleading thing this screen could
+    // do, so a failure says what it was and whether it went back.
+    if (body.failed) {
+      status.textContent = body.rolledBack
+        ? 'A file could not be written, so nothing was restored — everything was put back as it was.'
+        : 'A file could not be written, and not all of it could be put back. '
+          + 'Check your jobs, plans and mining log before restoring again.';
+      return;
+    }
+
+    status.textContent = body.restored === 0
+      ? 'Nothing was restored — every line was left alone.'
+      : `Restored ${body.restored} record${body.restored === 1 ? '' : 's'}.`
+        + (body.skipped ? ` Left ${body.skipped} alone.` : '');
+
+    closeRestore();
+    await renderBackupPreview().catch(() => {});
+  } catch {
+    status.textContent = 'Nothing was restored.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function closeRestore() {
+  restoreFile = null;
+  restorePlan = null;
+  $('#backup-plan').hidden = true;
+  $('#backup-file').value = '';
+}
+
+$('#backup-save')?.addEventListener('click', () => saveBackup().catch(() => {}));
+$('#backup-pick')?.addEventListener('click', () => $('#backup-file').click());
+$('#backup-cancel')?.addEventListener('click', closeRestore);
+$('#backup-apply')?.addEventListener('click', () => applyRestore().catch(() => {}));
+
+$('#backup-file')?.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    await planRestore(await file.text());
+  } catch {
+    $('#backup-status').textContent = 'That file could not be read.';
+  }
+});
+
 async function saveExport() {
   const button = $('#export-save');
   const status = $('#export-status');
@@ -5966,18 +7959,44 @@ $('#settings-rescan').addEventListener('click', async (e) => {
   const status = $('#settings-rescan-status');
 
   button.disabled = true;
-  status.textContent = 'rescanning…';
+  status.textContent = rescanLine({ running: true });
+
+  // The page's bar is at the top of the document and this button is near the
+  // bottom of a long Settings page, so from here it is off-screen. The count is
+  // repeated beside the button that started it.
+  const poll = setInterval(async () => {
+    try {
+      status.textContent = rescanLine(await getJson('/api/scan/status'));
+    } catch { /* the result below is the answer that matters */ }
+  }, 500);
 
   try {
     const result = await getJson2('/api/scan?force=true');
     status.textContent = `${result.sessions} sessions from a full re-read`;
-    await loadHistory();
+
+    // The re-read is what the button promised, and it is already done. A reload
+    // that fails afterwards leaves the views stale, which is a smaller problem
+    // than telling somebody their rescan failed when it did not.
+    await loadHistory().catch(() => {});
   } catch (err) {
     status.textContent = `failed: ${err.message}`;
   } finally {
+    clearInterval(poll);
     button.disabled = false;
   }
 });
+
+/**
+ * What the Settings line says while a forced rescan runs.
+ *
+ * Files rather than a percentage: this is a re-read of every backup, and "112
+ * of 160" says how much is left in a way "70%" does not.
+ */
+function rescanLine(scan) {
+  return scan.running && scan.total > 0
+    ? `${scan.done} / ${scan.total} logs · ${scan.elapsedSeconds}s`
+    : 'rescanning…';
+}
 
 /** POST that expects JSON back; getJson is GET-only. */
 async function getJson2(url) {
@@ -6131,16 +8150,169 @@ function compareCells(rowA, rowB, index) {
 
 makeTablesSortable();
 
+/* ---------- what contracts paid ---------- */
+
+/**
+ * What the game said your contracts paid, and how little of it that is.
+ *
+ * The figure and its explanation come from the same call on purpose. A tile
+ * summing the ledger itself and a "why?" answered by the server would be two
+ * readings of one number, and the day they disagreed the page would be arguing
+ * with itself.
+ */
+async function renderContractsPaid(stats) {
+  const note = $('#contract-paid-note');
+  if (!note) return;
+
+  let paid;
+
+  try {
+    paid = await getJson('/api/explain?figure=contracts.paid&days=0');
+  } catch {
+    note.hidden = true;
+    return;
+  }
+
+  // Nothing priced is not nothing earned, and a zero here would say the second.
+  if (!paid.records.length) {
+    note.hidden = false;
+    note.textContent = 'The game has never stated what one of your contracts paid. '
+      + 'It prices a completion only now and then, and only for hauling.';
+    return;
+  }
+
+  const strip = $('#contract-summary');
+
+  const tile = el('div', 'tile');
+  tile.append(el('div', 'n', money(paid.value)));
+  tile.append(el('div', 'l', 'Stated payouts'));
+
+  // The strip's shared panel is the last child tiles() appended.
+  const panel = strip.children[strip.children.length - 1];
+  explainable(tile, panel, 'contracts.paid', 0);
+
+  // Appended, then the panel is appended again to move it back to last.
+  // Appending a node that already has a parent moves it, in a browser and in
+  // the test DOM alike, so the explanation stays the row under the tiles.
+  strip.append(tile);
+  strip.append(panel);
+
+  note.hidden = false;
+  note.textContent = `From ${paid.records.length} of your ${stats.contractsCompleted} completed `
+    + 'contracts — the only ones the game put a price on. A floor, not your contract income.';
+}
+
+/* ---------- why this number ---------- */
+
+/**
+ * Attaches "why?" to a figure, and folds the answer under it.
+ *
+ * Folded by default because a number nobody is questioning does not want three
+ * lines of provenance beneath it - and a number somebody is questioning wants
+ * all of them. The same trade the run review panel settled on.
+ *
+ * The wording all comes from the server. A page that reworded a rule would be a
+ * second copy of it, and the two would drift apart in exactly the direction
+ * that makes a caveat stop being true.
+ */
+function explainable(tile, panel, figure, days = 0) {
+  const why = el('button', 'why', '?');
+  why.type = 'button';
+  why.title = 'Where this number came from';
+  why.setAttribute('aria-label', 'Where this number came from');
+
+  why.addEventListener('click', async () => {
+    // One panel for the whole strip, so pressing a second question swaps the
+    // answer rather than opening a competing one.
+    if (!panel.hidden && panel.dataset.figure === figure) {
+      panel.hidden = true;
+      return;
+    }
+
+    panel.hidden = false;
+    panel.dataset.figure = figure;
+    panel.textContent = 'Working it out…';
+
+    await fillExplanation(panel, figure, days);
+  });
+
+  tile.append(why);
+  return tile;
+}
+
+async function fillExplanation(panel, figure, days) {
+  let explained;
+
+  try {
+    explained = await getJson(`/api/explain?figure=${encodeURIComponent(figure)}&days=${days}`);
+  } catch {
+    // A figure this build cannot explain says so. Silence would read as "there
+    // is nothing behind this number", which is a much bigger claim.
+    panel.textContent = '';
+    panel.append(el('div', 'why-rule', 'Nothing here knows how to explain that one yet.'));
+    return;
+  }
+
+  panel.textContent = '';
+  panel.append(el('div', 'why-rule', explained.rule));
+
+  for (const line of explained.excluded) panel.append(el('div', 'why-excluded', line));
+
+  // Empty is a real answer and a different one from "no records matched", so
+  // it is worded rather than left as a blank space under the exclusions.
+  if (!explained.records.length) {
+    panel.append(el('div', 'why-rule muted',
+      'This figure has no underlying records — only the rule above.'));
+    return;
+  }
+
+  const list = el('div', 'why-records');
+
+  // A long list is folded to a readable head; the count says what is under it,
+  // so a page of four hundred receipts does not bury the rule that matters.
+  for (const record of explained.records.slice(0, 12)) {
+    const row = el('div', 'why-record');
+    row.append(el('span', 'muted', dateOf(record.at)));
+    row.append(el('span', null, record.where ? `${record.what} at ${record.where}` : record.what));
+    row.append(el('span', 'amount', record.amount === null ? '' : money(record.amount)));
+    list.append(row);
+  }
+
+  if (explained.records.length > 12) {
+    list.append(el('div', 'why-rule muted',
+      `and ${(explained.records.length - 12).toLocaleString()} more.`));
+  }
+
+  panel.append(list);
+}
+
 function tiles(container, entries) {
   const node = $(container);
   node.textContent = '';
 
-  for (const [label, value] of entries) {
+  /*
+   * The explanation lives under the strip rather than inside a tile, and that
+   * is not decoration. The strip is a grid, so a panel inside one tile stretches
+   * every other tile to match it - three empty boxes as tall as the answer - and
+   * a paragraph of provenance in a 155px column wraps every line to three.
+   */
+  const panel = el('div', 'why-panel');
+  panel.hidden = true;
+
+  for (const [label, value, figure, days] of entries) {
     const tile = el('div', 'tile');
     tile.append(el('div', 'n', String(value)));
     tile.append(el('div', 'l', label));
+
+    // Only the figures the server can actually answer for. A control on
+    // everything would promise an explanation for numbers nobody has written
+    // one down for yet.
+    if (figure) explainable(tile, panel, figure, days || 0);
+
     node.append(tile);
   }
+
+  node.append(panel);
 }
 
 /* Manufacturer prefixes as they appear in vehicle ids. */
@@ -6544,9 +8716,21 @@ function fillUpgradeOptions(body, group) {
 
   for (const option of group.options) {
     const tr = el('tr');
-    tr.append(el('td', null, option.name));
+    const part = el('td');
+    part.append(el('span', null, option.name));
+
+    // The game's own flag for a component that has actually shipped. Shown as
+    // the absence of a caveat rather than a badge on everything: most options
+    // carry it, so marking those would be noise and marking the rest is news.
+    if (option.flightReady === false) {
+      const draft = el('span', 'muted not-ready', ' not flight ready');
+      draft.title = 'The game defines this but does not mark it as shipped';
+      part.append(draft);
+    }
+
+    tr.append(part);
     tr.append(el('td', 'muted', option.manufacturer || '—'));
-    tr.append(el('td', 'num muted', option.grade ? `G${option.grade}` : '—'));
+    tr.append(el('td', 'num muted', gradeLetter(option.grade)));
     tr.append(el('td', 'num', option.price ? money(option.price) : '—'));
 
     // One shop on the row and the rest in the tooltip: the choice of counter
@@ -6843,7 +9027,7 @@ function loadoutItemFacts(item) {
   const kind = [ref.type, ref.subType].filter(Boolean).join(' / ');
   if (kind) facts.push(kind);
   if (ref.size > 0) facts.push(`S${ref.size}`);
-  if (ref.grade > 0) facts.push(`Grade ${ref.grade}`);
+  if (ref.grade > 0) facts.push(`Grade ${gradeLetter(ref.grade)}`);
   return { text: facts.join(' · ') || 'Catalogue entry has no extra specification', known: true };
 }
 
@@ -7106,7 +9290,15 @@ async function renderStash(stats) {
 
       if (!groups.length) return null;
 
-      return { ...place, groups, itemCount: groups.reduce((n, g) => n + g.items.length, 0) };
+      return {
+        ...place,
+        groups,
+        itemCount: groups.reduce((n, g) => n + g.items.length, 0),
+        // Recomputed from what survived the filter, so a narrowed view does not
+        // keep quoting the whole stash's volume.
+        microScu: groups.reduce(
+          (n, g) => n + g.items.reduce((v, i) => v + (i.microScu || 0), 0), 0),
+      };
     })
     .filter(Boolean);
 
@@ -7118,7 +9310,13 @@ async function renderStash(stats) {
   for (const place of places) {
     const card = el('article', 'card');
     { const label = el('div', 'card-label'); label.append(placeLink(place.name)); card.append(label); }
-    card.append(el('div', 'sub', `${place.itemCount} item types · last seen ${dateOf(place.lastSeen)}`));
+    // Volume as well as a count. A count says how much stuff; this says whether
+    // it fits, which is the question a hold asks. Only 9,000 of the install's
+    // items carry a real one, so it is left off rather than shown as nothing.
+    const measured = place.microScu > 0 ? ` · ${volume(place.microScu)}` : '';
+
+    card.append(el('div', 'sub',
+      `${place.itemCount} item types${measured} · last seen ${dateOf(place.lastSeen)}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
@@ -7274,6 +9472,129 @@ const serviceKey = (name) => ({
 }[name] || '');
 
 const servicesAt = (location) => mapServicesByPlace.get(location.rawId) || [];
+
+/**
+ * What the game itself says a place has, by place name.
+ *
+ * Deliberately not merged into the service badges above. Those are UEX's
+ * account of where you can actually trade today; this is the star map's own
+ * list of facilities, and the two disagree usefully often. Keyed by name
+ * because that is what the star map keys it by - there is no map id in the
+ * game's own data to join on.
+ */
+const amenitiesByPlace = new Map();
+let mapAmenityFilter = '';
+
+/**
+ * Whether the install has been read yet.
+ *
+ * Kept because "empty" and "broken" look identical for the half minute the
+ * first read takes, and several pages resolved that ambiguity by suggesting a
+ * 110 MB download to fix a wait.
+ */
+let gameDataState = null;
+
+async function loadGameData() {
+  const state = await getJson('/api/gamedata').catch(() => null);
+  const was = gameDataState?.state;
+  gameDataState = state;
+
+  // Still reading means still changing, so the page comes back for the answer
+  // rather than leaving a count that was true a moment ago. Scheduled up here
+  // because the early return below skips it on any page whose panel is absent,
+  // and this poll is the only thing that notices the reading has finished.
+  if (state?.state === 'reading') setTimeout(() => { loadGameData().catch(() => {}); }, 3000);
+
+  // Parts, Mining and Crafting are fetched once, at startup. On a cold install
+  // that is half a minute before the game files have been read, so they came
+  // back empty and stayed empty until the browser was reloaded: the app looked
+  // like it held no data rather than like it was still reading. Refill them the
+  // moment there is something to fetch.
+  if (state?.state === 'ready' && was && was !== 'ready') {
+    loadPartsRef().catch((e) => console.error('parts refill', e));
+    loadMiningRef().catch((e) => console.error('mining refill', e));
+    loadCraftingRef().catch((e) => console.error('crafting refill', e));
+    loadMiningPlaces().catch(() => {});
+
+    // The map is on the same footing and was missed: its places come from the
+    // install's own gazetteer, and the amenities filter is built entirely from
+    // it. Both loaded once at startup, so a cold start left the map holding
+    // whatever had been read by then.
+    loadAtlas().catch((e) => console.error('map refill', e));
+    loadMapAmenities().catch(() => {});
+  }
+
+  const label = $('#gamedata-state');
+  const problem = $('#gamedata-problem');
+  if (!label) return state;
+
+  label.textContent = {
+    reading: state?.seconds ? `reading… ${Math.round(state.seconds)}s` : 'reading…',
+    ready: 'ready',
+    failed: 'could not be read',
+    noinstall: 'no install found',
+  }[state?.state] || '';
+
+  if (problem) {
+    problem.textContent = state?.problem || '';
+    problem.hidden = !state?.problem;
+  }
+
+  const counts = state?.counts || {};
+  const count = (n) => (n || 0).toLocaleString();
+
+  // The Settings copy quotes install figures to compare the two sources. They
+  // move with every patch, so they are filled from the counts rather than typed
+  // into the page and left to rot - three of them were already out of date.
+  const quote = (id, n) => { const node = $(id); if (node && n) node.textContent = n.toLocaleString(); };
+  quote('#settings-install-items', counts.items);
+  quote('#settings-install-deposits', counts.deposits);
+  quote('#settings-install-spawnplaces', counts.spawnplaces);
+
+  tiles('#gamedata-counts', [
+    ['Commodities', count(counts.commodities)],
+    ['Items', count(counts.items)],
+    ['Recipes', count(counts.recipes)],
+    ['Deposits', count(counts.deposits)],
+    ['Places', count(counts.places)],
+  ]);
+
+  return state;
+}
+
+/** What to say to a page that has nothing to show yet. */
+function gameDataExcuse() {
+  if (gameDataState?.state === 'reading') {
+    return 'Still reading your game files — this takes about half a minute after a patch.';
+  }
+
+  if (gameDataState?.state === 'noinstall') return 'No game install was found.';
+  if (gameDataState?.state === 'failed') return gameDataState.problem;
+
+  return null;
+}
+
+async function loadMapAmenities() {
+  const select = $('#map-amenity');
+  if (!select || amenitiesByPlace.size) return;
+
+  const places = await getJson('/api/map/amenities').catch(() => []);
+  const counts = new Map();
+
+  for (const place of places) {
+    amenitiesByPlace.set(place.place.toLowerCase(), place.amenities);
+    for (const amenity of place.amenities) counts.set(amenity, (counts.get(amenity) || 0) + 1);
+  }
+
+  // Rarest first: a facility six places have is the one worth searching for,
+  // and one that 231 places have barely narrows anything.
+  for (const [amenity, count] of [...counts].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])))
+    select.append(new Option(`${amenity} (${count})`, amenity));
+}
+
+/** Whether the game lists a facility at a place, matched on the readable name. */
+const hasAmenity = (location, amenity) =>
+  (amenitiesByPlace.get((location.name || '').toLowerCase()) || []).includes(amenity);
 
 // Service is a property of a place, not its identity. Badges sit outside the
 // location glyph so a clinic at a station still reads as a station first.
@@ -8182,6 +10503,13 @@ function initMap() {
   for (const button of $$('#map-focus-filter button'))
     button.addEventListener('click', () => selectMapFocus(button.dataset.focus));
 
+  loadMapAmenities().catch(() => {});
+
+  $('#map-amenity')?.addEventListener('change', (event) => {
+    mapAmenityFilter = event.target.value;
+    drawMap();
+  });
+
   const labelDensity = $('#map-label-density');
   try { labelDensity.value = localStorage.getItem(MAP_LABEL_DENSITY_KEY) || 'auto'; } catch { /* private mode */ }
   labelDensity.addEventListener('change', () => {
@@ -8220,8 +10548,7 @@ function initMap() {
   });
 
   // Clicking empty map space dismisses the detail card.
-  map.addEventListener('click', () => $('#map-info').hidden = true);
-  $('#map-info-close').addEventListener('click', () => $('#map-info').hidden = true);
+  map.addEventListener('click', closeEntity);
 
   // The Goods checkbox: one switch for goods on hover tips and on the detail
   // card, remembered per browser.
@@ -8868,7 +11195,7 @@ function showStation(rawId, name) {
   cargo.trip = false;
   cargo.place = { id: rawId, name: name || location?.name || rawId, location };
   $('#map-window').hidden = false;
-  $('#map-info').hidden = true;
+  closeEntity();
   renderStationPanel();
 }
 
@@ -8918,11 +11245,6 @@ function initCargoPanel() {
   $('#map-plan').addEventListener('click', () => {
     showTripPanel();
     drawMap();
-  });
-
-  // The detail card can put the place it is describing on the plan.
-  $('#map-info-stop').addEventListener('click', () => {
-    if (mapInfoLocation) addStop(mapInfoLocation.rawId, mapInfoLocation.name, null);
   });
 
   $('#cargo-close').addEventListener('click', () => {
@@ -9230,6 +11552,11 @@ function renderTripPanel() {
     body.append(el('div', 'cargo-empty',
       'Double-click a place, or use Add stop on its card, to start a plan. '
       + 'A trade route or a shopping list can start one for you.'));
+
+    // Finishing your only run leaves nothing tracked, and the runs you have
+    // flown are exactly what you want to see at that moment - so the filed
+    // list is drawn on this path too, not only when a plan is open.
+    renderFiledRuns(body);
     return;
   }
 
@@ -9276,6 +11603,22 @@ function renderTripPanel() {
 
   const actions = el('div', 'trip-actions');
 
+  // A run has a beginning and an end and neither is guessed: the app cannot
+  // tell setting off from opening the page, so it asks once and then knows.
+  if (trip.archived === 'No' || trip.archived === undefined) {
+    const lifecycle = el('button', trip.flying ? 'primary' : 'ghost',
+      trip.flying ? 'Finish run' : 'Start run');
+
+    lifecycle.title = trip.flying
+      ? 'Stop the clock and file this run'
+      : 'Start the clock — elapsed time is measured from here, not from when you wrote the plan';
+
+    lifecycle.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/${trip.flying ? 'finish' : 'start'}`));
+
+    actions.append(lifecycle);
+  }
+
   const track = el('button', 'ghost', trip.tracked ? 'Stop tracking' : 'Track');
   track.title = 'Show this plan on the Now page';
   track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
@@ -9292,8 +11635,13 @@ function renderTripPanel() {
 
   body.append(actions);
 
+  if (trip.flying) {
+    body.append(el('div', 'trip-elapsed muted',
+      `Running for ${spanOf(trip.elapsedSeconds)} — since you pressed Start, not since you wrote it.`));
+  }
+
   // Other plans, so one can be picked up again without a management screen.
-  const others = trips.filter((t) => t !== trip);
+  const others = trips.filter((t) => t !== trip && !isFiled(t));
 
   if (others.length) {
     body.append(el('div', 'cargo-h', 'Other plans'));
@@ -9313,7 +11661,459 @@ function renderTripPanel() {
       body.append(row);
     }
   }
+
+  renderFiledRuns(body);
 }
+
+/**
+ * Runs that are out of the working list, and the two ways back.
+ *
+ * A run filed by the sweep and a run you finished are listed together but do
+ * not read the same: one is over, the other only went quiet, and offering
+ * "resume" on both would suggest the app knows which of them you meant to stop.
+ */
+function renderFiledRuns(body) {
+  const filed = trips.filter(isFiled);
+  if (!filed.length) return;
+
+  body.append(el('div', 'cargo-h', 'Finished and filed'));
+
+  for (const run of filed) {
+    const row = el('div', 'cargo-row');
+    row.append(el('span', 'swatch'));
+
+    const main = el('div', 'cargo-row-main');
+    main.append(el('div', 'name', run.title));
+
+    const done = run.stops.filter((s) => s.done).length;
+    main.append(el('div', 'sub', run.archived === 'Quiet'
+      ? `${done} of ${run.stops.length} stops — filed itself after going quiet`
+      : `${done} of ${run.stops.length} stops — ${spanOf(run.elapsedSeconds)}`));
+
+    row.append(main);
+
+    const tools = el('div', 'trip-tools');
+
+    // Only offered on the ones the app filed on its own. A run you finished is
+    // finished, and a button undoing that would make the sweep and the pilot
+    // look like the same decision.
+    if (run.archived === 'Quiet') {
+      const resume = el('button', 'ghost tiny', 'Resume');
+      resume.title = 'Put this back — it keeps the time it started';
+      resume.addEventListener('click', () => tripCall(`/api/trips/${run.id}/resume`));
+      tools.append(resume);
+    }
+
+    const look = el('button', 'ghost tiny', 'Review');
+    look.title = 'What this run planned, against what your logs recorded';
+    look.addEventListener('click', () => showRunReview(run.id).catch(() => {}));
+    tools.append(look);
+
+    const again = el('button', 'ghost tiny', 'Repeat');
+    again.title = 'Fly the same route again, with nothing ticked off';
+    again.addEventListener('click', () => tripCall(`/api/trips/${run.id}/repeat`));
+    tools.append(again);
+
+    row.append(tools);
+    body.append(row);
+  }
+}
+
+/** Out of the working list, however it got there. */
+function isFiled(trip) {
+  return trip.archived === 'You' || trip.archived === 'Quiet';
+}
+
+/** A duration in the shortest words that stay honest about it. */
+function spanOf(seconds) {
+  if (!seconds || seconds < 0) return 'no time at all';
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  if (hours < 24) return rest ? `${hours}h ${rest}m` : `${hours}h`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+/* ---------- run review ---------- */
+
+/**
+ * What a run planned, against what the logs recorded while it ran.
+ *
+ * Opened from a filed run rather than living on its own page: a review is about
+ * one run, and the list of runs is where you already are when you want one.
+ */
+async function showRunReview(id) {
+  cargo.place = null;
+  cargo.trip = false;
+
+  const body = cargoPanelHead('Run review', 'Reading the logs…');
+
+  let review;
+
+  try {
+    review = await getJson(`/api/trips/${encodeURIComponent(id)}/review`);
+  } catch {
+    cargoPanelHead('Run review', 'Nothing to review')
+      .append(el('div', 'cargo-empty',
+        'This plan has never been started, so there is nothing to compare against yet.'));
+    return;
+  }
+
+  renderRunReview(review);
+}
+
+function renderRunReview(review) {
+  const body = cargoPanelHead('Run review', review.title);
+
+  const when = [
+    review.startedAt ? `Started ${dateOf(review.startedAt)}` : null,
+    review.elapsedSeconds ? `took ${spanOf(review.elapsedSeconds)}` : null,
+  ].filter(Boolean).join(' · ');
+
+  if (when) body.append(el('div', 'sub muted', when));
+
+  body.append(runFigure('Money in', review.earned));
+  body.append(runFigure('Money out', review.spent));
+
+  body.append(el('div', 'cargo-h', 'Stop by stop'));
+
+  for (const stop of review.stops) {
+    const block = el('div', 'run-stop');
+
+    const head = el('div', 'run-stop-head');
+    head.append(el('span', 'name', stop.place));
+    head.append(el('span', 'muted', stop.doneAt ? dateOf(stop.doneAt) : 'never reached'));
+    block.append(head);
+
+    if (stop.note) block.append(el('div', 'sub muted', stop.note));
+
+    for (const action of stop.planned) block.append(runPlannedRow(review, stop, action));
+
+    for (const claim of stop.claimed) {
+      const row = el('div', 'run-claim');
+      row.append(el('span', 'muted', claim.kind));
+      row.append(el('span', null, claim.what));
+      row.append(el('span', claim.amount >= 0 ? 'amount in' : 'amount out', money(claim.amount)));
+      block.append(row);
+    }
+
+    // Said rather than left blank: most stops move no money, and an empty space
+    // reads as a gap in the data instead of an ordinary stop.
+    if (!stop.planned.length && !stop.claimed.length) {
+      block.append(el('div', 'sub muted', 'Nothing planned, and no money moved here.'));
+    }
+
+    body.append(block);
+  }
+
+  if (review.unclaimed.length) {
+    body.append(el('div', 'cargo-h', 'During the run, but not at a stop'));
+    body.append(el('div', 'sub muted',
+      'Money that moved while this run was going that no stop can account for. '
+      + 'Listed rather than added in — attaching it to the nearest stop would be a guess.'));
+
+    for (const claim of review.unclaimed) {
+      const row = el('div', 'run-claim');
+      row.append(el('span', 'muted', dateOf(claim.at)));
+      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+
+      // Muted, not green: this money is real and is not in the figure above,
+      // and colouring it like counted income would say otherwise.
+      row.append(el('span', 'amount loose', money(claim.amount)));
+      body.append(row);
+    }
+  }
+}
+
+/**
+ * One figure, and the button that says where it came from.
+ *
+ * The explanation is folded away rather than absent: a number nobody is
+ * questioning does not need three lines of provenance under it, and a number
+ * somebody is questioning needs all of it.
+ */
+function runFigure(label, figure) {
+  const block = el('div', 'run-figure');
+
+  const head = el('div', 'run-figure-head');
+  head.append(el('span', 'muted', label));
+  head.append(el('span', 'run-figure-value', money(figure.value)));
+
+  const why = el('button', 'ghost tiny', 'Why this number?');
+  const detail = el('div', 'run-why');
+  detail.hidden = true;
+
+  why.addEventListener('click', () => {
+    detail.hidden = !detail.hidden;
+    why.textContent = detail.hidden ? 'Why this number?' : 'Hide';
+  });
+
+  head.append(why);
+  block.append(head);
+
+  detail.append(el('div', 'sub muted', figure.rule));
+
+  for (const line of figure.excluded) detail.append(el('div', 'run-excluded', line));
+
+  if (figure.from.length) {
+    const list = el('div', 'run-from');
+
+    for (const claim of figure.from) {
+      const row = el('div', 'run-claim');
+      row.append(el('span', 'muted', dateOf(claim.at)));
+      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+      row.append(el('span', 'amount', money(claim.amount)));
+      list.append(row);
+    }
+
+    detail.append(list);
+  } else {
+    detail.append(el('div', 'sub muted', 'No records behind this one — nothing was matched to a stop.'));
+  }
+
+  block.append(detail);
+  return block;
+}
+
+/**
+ * A planned action, with room to say what it actually came to.
+ *
+ * The estimate stays on screen beside the correction. Replacing one with the
+ * other would leave nothing to compare, which is the entire reason a review
+ * records both.
+ */
+function runPlannedRow(review, stop, action) {
+  const row = el('div', 'run-planned');
+
+  row.append(el('span', 'muted', action.kind));
+  row.append(el('span', null, action.text));
+
+  const planned = action.quantity === null || action.quantity === undefined
+    ? '—'
+    : `${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`;
+
+  row.append(el('span', 'muted planned-was', `planned ${planned}`));
+
+  const actual = el('input', 'run-actual');
+  actual.type = 'number';
+  actual.placeholder = 'actual';
+  actual.title = 'What it came to. Leave empty if you have not checked.';
+  if (action.actual !== null && action.actual !== undefined) actual.value = String(action.actual);
+
+  actual.addEventListener('change', async () => {
+    const value = actual.value.trim();
+    const query = value === '' ? '' : `?amount=${encodeURIComponent(value)}`;
+
+    await fetch(
+      `/api/trips/${encodeURIComponent(review.tripId)}/stops/${encodeURIComponent(stop.stopId)}`
+      + `/actions/${encodeURIComponent(action.id)}/actual${query}`,
+      { method: 'POST' });
+  });
+
+  row.append(actual);
+  return row;
+}
+
+/* ---------- saved kits ---------- */
+
+let kits = [];
+let preparing = null;
+
+/**
+ * What each holding means, in the reader's terms.
+ *
+ * "Seen" and "Stale" are the same fact at two ages, and both are questions. The
+ * wording has to carry that: a page that says "in your stash" about a sighting
+ * is making the claim this whole feature exists to avoid.
+ */
+const KIT_HOLDING = {
+  Equipped: ['You are wearing it', false],
+  Seen: ['Last seen in storage', true],
+  Stale: ['Not seen for a while', true],
+  Missing: ['Never seen anywhere', false],
+};
+
+async function loadKits() {
+  kits = await getJson('/api/kits');
+  renderKits();
+}
+
+function renderKits() {
+  const list = $('#kit-list');
+  if (!list) return;
+
+  list.textContent = '';
+
+  if (!kits.length) {
+    list.append(el('p', 'muted', 'No kits yet. Save what you are wearing to make one.'));
+    return;
+  }
+
+  for (const kit of kits) {
+    const row = el('div', 'kit-row');
+
+    const main = el('div', 'kit-row-main');
+    main.append(el('div', 'name', kit.name));
+    main.append(el('div', 'sub muted',
+      `${kit.items.length} item${kit.items.length === 1 ? '' : 's'}`));
+    row.append(main);
+
+    const prepare = el('button', 'ghost tiny', 'Prepare');
+    prepare.title = 'Compare this kit with what you have';
+    prepare.addEventListener('click', () => prepareKit(kit.id).catch(() => {}));
+    row.append(prepare);
+
+    const drop = el('button', 'ghost tiny danger', '×');
+    drop.title = 'Delete this kit';
+    drop.addEventListener('click', async () => {
+      await fetch(`/api/kits/${encodeURIComponent(kit.id)}`, { method: 'DELETE' });
+      if (preparing?.kitId === kit.id) closeKitPrepare();
+      await loadKits();
+    });
+    row.append(drop);
+
+    list.append(row);
+  }
+}
+
+/**
+ * Saves what the character is wearing as a kit.
+ *
+ * Built from the loadout the page already has rather than asking the server
+ * again: this is the same list on screen, and a second read could disagree with
+ * what the pilot is looking at.
+ */
+async function saveWornAsKit() {
+  const status = $('#kit-status');
+  const name = $('#kit-name').value.trim();
+
+  const items = (libraryStats?.loadout || [])
+    .flatMap((slot) => slot.items || [])
+    .map((item) => ({ name: item.name, quantity: item.count || 1, optional: false }));
+
+  if (!items.length) {
+    status.textContent = 'Nothing is showing in your loadout yet, so there is nothing to save.';
+    return;
+  }
+
+  await fetch('/api/kits', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || 'Kit', items }),
+  });
+
+  $('#kit-name').value = '';
+  status.textContent = `Saved ${items.length} item${items.length === 1 ? '' : 's'}.`;
+  await loadKits();
+}
+
+async function prepareKit(id) {
+  preparing = await getJson(`/api/kits/${encodeURIComponent(id)}/prepare`);
+  renderKitPrepare();
+}
+
+function renderKitPrepare() {
+  const panel = $('#kit-prepare');
+  panel.hidden = !preparing;
+  if (!preparing) return;
+
+  $('#kit-prepare-title').textContent = `Preparing ${preparing.name}`;
+  $('#kit-prepare-rule').textContent = preparing.rule;
+
+  const body = $('#kit-prepare-table').querySelector('tbody');
+  body.textContent = '';
+
+  for (const line of preparing.lines) {
+    const [words, asks] = KIT_HOLDING[line.holding] || [line.holding, false];
+
+    const row = el('tr');
+
+    const name = el('td');
+    name.append(el('span', null, line.name));
+    if (line.quantity > 1) name.append(el('span', 'note-inline muted', ` ×${line.quantity}`));
+    if (line.optional) name.append(el('span', 'note-inline muted', ' optional'));
+    row.append(name);
+
+    // Where it was only matters for the lines that need answering. Equipped
+    // already carries its own place in the wording, and "You are wearing it —
+    // on you" says the same thing twice.
+    // A known shortfall is neither a missing item nor a question. Calling one
+    // medpen in a kit of four "never seen anywhere" discards the useful fact
+    // that one is on the character, then leaves the pilot unable to tell why
+    // the shopping list has three rather than four.
+    const holding = line.short > 0
+      ? `${line.held} on you · ${line.short} still needed`
+      : asks && line.where ? `${words} — ${line.where}` : words;
+    row.append(el('td', line.holding === 'Missing' ? 'muted want' : 'muted', holding));
+
+    row.append(el('td', 'muted', line.lastSeen ? dateOf(line.lastSeen) : '—'));
+
+    const answer = el('td');
+
+    // Only the uncertain lines get a control. Offering one against something
+    // the game actually reported would invite an answer the app should not
+    // take, and offering one against "never seen" asks about nothing.
+    if (asks) {
+      const gone = el('button', 'ghost tiny');
+      gone.textContent = 'I have it';
+      gone.dataset.name = line.name;
+      gone.dataset.gone = 'false';
+
+      gone.addEventListener('click', () => {
+        const isGone = gone.dataset.gone !== 'true';
+        gone.dataset.gone = String(isGone);
+        gone.textContent = isGone ? 'It is gone' : 'I have it';
+        gone.classList.toggle('want', isGone);
+      });
+
+      answer.append(gone);
+    } else {
+      answer.append(el('span', 'muted', line.holding === 'Missing' ? 'on the list' : 'settled'));
+    }
+
+    row.append(answer);
+    body.append(row);
+  }
+}
+
+async function makeKitShopping() {
+  const status = $('#kit-status');
+
+  // Only what the pilot actually said is gone. Silence is left as held, which
+  // is the direction that costs a trip rather than a purchase.
+  const gone = Array.from($('#kit-prepare-table').querySelectorAll('button'))
+    .filter((button) => button.dataset.gone === 'true')
+    .map((button) => button.dataset.name);
+
+  const query = gone.length ? `?gone=${encodeURIComponent(gone.join(','))}` : '';
+
+  const response = await fetch(
+    `/api/kits/${encodeURIComponent(preparing.kitId)}/shopping${query}`, { method: 'POST' });
+
+  const answer = await response.json();
+
+  status.textContent = answer.items === 0
+    ? 'Nothing to buy — everything in this kit is either on you or accounted for.'
+    : `Made a list of ${answer.items} item${answer.items === 1 ? '' : 's'}. It is on the Jobs page.`;
+
+  closeKitPrepare();
+  await loadJobs().catch(() => {});
+}
+
+function closeKitPrepare() {
+  preparing = null;
+  $('#kit-prepare').hidden = true;
+}
+
+$('#kit-from-loadout')?.addEventListener('click', () => saveWornAsKit().catch(() => {}));
+$('#kit-shopping')?.addEventListener('click', () => makeKitShopping().catch(() => {}));
+$('#kit-prepare-close')?.addEventListener('click', closeKitPrepare);
 
 /* ---------- the plan on the map ---------- */
 
@@ -10142,23 +12942,20 @@ function renderMapInfoSold() {
   list.hidden = false;
 }
 
-/** The card that opens when a node is clicked. */
-function showMapInfo(location) {
+/**
+ * The card that opens when a node is clicked - the shared drawer, plus the
+ * parts only a place on this map has.
+ *
+ * The name, where it is, its kind and how often you have been are the drawer's
+ * own facts now, so they are not written twice. Notes, lore, amenities, the
+ * sold list and the commodity-search verdict stay here: they are answers about
+ * a dot on this map rather than about the place in general.
+ */
+async function showMapInfo(location) {
+  // Claimed after openEntity, which forgets whatever was open before it.
+  if (!await openEntity('place', location.rawId)) return;
+
   mapInfoLocation = location;
-  const info = $('#map-info');
-
-  $('#map-info-name').textContent = location.name;
-  $('#map-info-where').textContent =
-    [location.body, location.system].filter(Boolean).join(' · ') || 'unmapped';
-  $('#map-info-kind').textContent = location.kind.replace(/([a-z])([A-Z])/g, '$1 $2');
-
-  $('#map-info-visits').textContent = location.visits > 0
-    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
-    : 'never visited';
-
-  $('#map-info-last').textContent = location.lastVisit
-    ? `last there ${relative(location.lastVisit)}`
-    : '';
 
   renderMapInfoServices(location);
   renderMapInfoNotes(location);
@@ -10178,24 +12975,48 @@ function showMapInfo(location) {
 
   // The starmap's own paragraph about this place, fetched on first open and
   // cached; the card must not wait for it.
+  renderMapInfoPlace(location);
+}
+
+/**
+ * What the star map itself says about a place: its paragraph, what it orbits,
+ * and the services it lists.
+ *
+ * Fetched on first open and cached, because the card must not wait for it. The
+ * amenities are deliberately separate from the service chips above: those come
+ * from UEX and say where you can actually trade today, while these are what the
+ * game says the place has, and the two disagree usefully often.
+ */
+function renderMapInfoPlace(location) {
   const loreNode = $('#map-info-lore');
+  const amenityNode = $('#map-info-amenities');
   loreNode.hidden = true;
+  amenityNode.hidden = true;
 
   if (!loreCache.has(location.name)) {
     loreCache.set(location.name,
       getJson(`/api/map/lore?name=${encodeURIComponent(location.name)}`)
-        .then((r) => r.lore)
         .catch(() => null));
   }
 
-  loreCache.get(location.name).then((lore) => {
-    if (lore && mapInfoLocation === location) {
-      loreNode.textContent = lore;
+  return loreCache.get(location.name).then((found) => {
+    if (!found || mapInfoLocation !== location) return;
+
+    if (found.lore) {
+      loreNode.textContent = found.lore;
       loreNode.hidden = false;
     }
-  });
 
-  info.hidden = false;
+    if (found.amenities?.length) {
+      amenityNode.textContent = '';
+      amenityNode.append(
+        el('span', 'muted', found.parent ? `In ${found.parent} · has ` : 'Has '));
+
+      for (const amenity of found.amenities) amenityNode.append(el('span', 'amenity', amenity));
+
+      amenityNode.hidden = false;
+    }
+  });
 }
 
 /** Service facts on a place card use the same map-id join as the filter. */
@@ -10324,7 +13145,14 @@ function drawMap() {
 
   highlightIds = null;
 
-  if (sites) {
+  // A chosen facility lights the places that have it, the same way a search
+  // does, rather than filtering the rest away: seeing which twenty-four of the
+  // map refine is the point, and a filtered map cannot show where they sit.
+  if (mapAmenityFilter) {
+    highlightIds = new Set(atlas
+      .filter((l) => hasAmenity(l, mapAmenityFilter))
+      .map((l) => l.rawId));
+  } else if (sites) {
     highlightIds = new Set(atlas
       .filter((l) => {
         const compact = `${l.name} ${l.rawId}`.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -11165,6 +13993,87 @@ function onInput(selector, handler) {
   node.addEventListener('change', handler);
 }
 
+/* ---------- search everything ---------- */
+
+/**
+ * Where each kind of hit goes when it is clicked.
+ *
+ * The four the entity drawer already describes open there; the rest are the
+ * reader's own work and belong on the page that owns them. A hit with nowhere
+ * to go is not offered as a link, because a result that does nothing when
+ * pressed is worse than one that is plainly just an answer.
+ */
+const SEARCH_OPENS = {
+  place: (hit) => openEntity('place', hit.id),
+  ship: (hit) => openEntity('ship', hit.id),
+  part: (hit) => openEntity('part', hit.id),
+  commodity: (hit) => openEntity('commodity', hit.id),
+  job: () => showView('jobs'),
+  checklist: () => showView('checklists'),
+  kit: () => showView('loadout'),
+  note: () => showView('map'),
+  run: () => showView('map'),
+};
+
+async function runGlobalSearch() {
+  const box = $('#global-search');
+  const panel = $('#global-results');
+  const q = box.value.trim();
+
+  if (q.length < 2) {
+    panel.hidden = true;
+    return;
+  }
+
+  const results = await getJson(`/api/search?q=${encodeURIComponent(q)}`);
+
+  panel.hidden = false;
+  panel.textContent = '';
+
+  // Nothing matching is an answer, and saying it beats an empty frame the
+  // reader has to work out for themselves.
+  if (results.nothing) {
+    panel.append(el('div', 'search-empty', `Nothing matches “${q}”.`));
+    return;
+  }
+
+  for (const group of results.groups) {
+    if (!group.hits.length) continue;
+
+    panel.append(el('div', 'search-source', group.source));
+
+    for (const hit of group.hits) {
+      const open = SEARCH_OPENS[hit.kind];
+      const row = el(open ? 'button' : 'div', 'search-hit');
+
+      row.append(el('span', 'name', hit.name));
+      row.append(el('span', 'why muted', hit.why));
+
+      if (open) {
+        row.type = 'button';
+        row.addEventListener('click', () => {
+          panel.hidden = true;
+          box.value = '';
+          open(hit);
+        });
+      }
+
+      panel.append(row);
+    }
+  }
+}
+
+onInput('#global-search', () => runGlobalSearch().catch(() => {}));
+
+$('#global-search')?.addEventListener('keydown', (event) => {
+  // Escape puts the page back rather than leaving a panel over it.
+  if (event.key === 'Escape') {
+    $('#global-results').hidden = true;
+    $('#global-search').value = '';
+  }
+});
+
+
 /**
  * Re-fetches totals for one view's chosen window and re-renders just that view.
  *
@@ -11516,7 +14425,13 @@ async function runUpdateCheck({ quiet, announce = false }) {
     return;
   }
 
-  renderUpdateSettings().catch(() => { /* the toggle is still right */ });
+  // Awaited, and not fired off: this refreshes the Settings block from the
+  // server, and the last thing it does is rewrite the very status line the
+  // answer below is about to write. Left un-awaited it lands one microtask
+  // later and overwrites the answer with "never checked" - which is what a
+  // real browser did all along, since a fetch cannot resolve before the
+  // synchronous line after it. The old engine drained it eagerly and hid this.
+  await renderUpdateSettings().catch(() => { /* the toggle is still right */ });
 
   if (!result.newer) {
     if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
@@ -11770,6 +14685,7 @@ initWipe();
 initWipePrompt();
 initUpdates();
 initStarStrings();
+initTextOverlay();
 
 /* ---------- scan progress ---------- */
 
@@ -11781,7 +14697,6 @@ initStarStrings();
  * broken.
  */
 async function watchScan() {
-  const panel = $('#scan');
   let sawRunning = false;
 
   for (;;) {
@@ -11793,36 +14708,91 @@ async function watchScan() {
       continue;
     }
 
-    if (status.running) {
-      sawRunning = true;
-      panel.hidden = false;
+    const finished = paintScan(status, sawRunning);
+    sawRunning = status.running;
 
-      $('#scan-fill').style.width = `${status.percent}%`;
-      $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
-      $('#scan-file').textContent = status.file || '';
-
-      $('#scan-label').textContent = status.parsed > 0
-        ? `Parsing logs — ${status.parsed} new`
-        : 'Checking logs…';
-    } else if (sawRunning) {
-      // Finished: fill the bar, then reload the views with the new data.
-      $('#scan-fill').style.width = '100%';
-      $('#scan-label').textContent = 'Scan complete';
-      $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
-      $('#scan-file').textContent = '';
-
+    if (finished) {
+      // The bar holds on "complete" long enough to be read, then goes.
       await wait(1200);
-      panel.hidden = true;
+      $('#scan').hidden = true;
 
       try {
         await loadHistory();
       } catch { /* the retry loop in boot covers this */ }
-
-      return;
     }
 
+    // Never returns. The forced rescan on the Settings page re-reads all 400 MB
+    // and is by far the slowest scan there is; a watcher that stopped at the
+    // end of the boot scan left that one with no bar at all, and only a
+    // "rescanning…" line beside the button.
     await wait(status.running ? 400 : 1000);
   }
+}
+
+/**
+ * Draws one poll of the scan status on the bar.
+ *
+ * Split from the loop so the transitions can be asserted: the loop is paced by
+ * setTimeout, and a test has no way to advance it.
+ *
+ * @returns true when this is the poll that finished a scan, so the caller can
+ *   retire the bar and reload the views behind it.
+ */
+function paintScan(status, sawRunning) {
+  const panel = $('#scan');
+
+  if (status.running) {
+    panel.hidden = false;
+
+    $('#scan-fill').style.width = `${status.percent}%`;
+    $('#scan-count').textContent = `${status.done} / ${status.total} · ${status.elapsedSeconds}s`;
+    $('#scan-file').textContent = status.file || '';
+
+    $('#scan-label').textContent = status.parsed > 0
+      ? `Parsing logs — ${status.parsed} new`
+      : 'Checking logs…';
+
+    return false;
+  }
+
+  // An idle server is not a finished scan. Without this the bar would announce
+  // "scan complete" on the first poll of every load, for a scan that ended
+  // before the page was open — or never ran.
+  if (!sawRunning)
+    return false;
+
+  $('#scan-fill').style.width = '100%';
+  $('#scan-label').textContent = 'Scan complete';
+  $('#scan-count').textContent = `${status.parsed} parsed · ${status.elapsedSeconds}s`;
+  $('#scan-file').textContent = '';
+
+  return true;
+}
+
+/**
+ * The wizard's own copy of the bar.
+ *
+ * The wizard is a fixed, opaque sheet over the whole page, so the bar beneath
+ * it cannot be seen — and first run is the one time the scan has half a minute
+ * of real work to show.
+ */
+function paintSetupScan(status) {
+  if (status.running) {
+    $('#setup-scan-fill').style.width = `${status.percent}%`;
+
+    // Files, not events: ScanStatus counts one per log it had to parse, and a
+    // wizard promising events while counting files overstated it by thousands.
+    $('#setup-scan-label').textContent = status.parsed > 0
+      ? `Reading logs — ${status.parsed} new`
+      : 'Checking logs…';
+
+    $('#setup-scan-count').textContent = `${status.done} / ${status.total} files`;
+    return;
+  }
+
+  $('#setup-scan-fill').style.width = '100%';
+  $('#setup-scan-label').textContent = 'Logs read — history ready';
+  $('#setup-scan-count').textContent = '';
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -11924,23 +14894,9 @@ async function maybeShowSetup() {
     syncFeeds();
   } catch { /* no feed list; the wizard still works */ }
 
-  // The wizard has its own copy of the scan bar - the page's one sits
-  // underneath it where nobody can see it.
   const poll = setInterval(async () => {
     try {
-      const status = await getJson('/api/scan/status');
-
-      if (status.running) {
-        $('#setup-scan-fill').style.width = `${status.percent}%`;
-        $('#setup-scan-label').textContent = status.parsed > 0
-          ? `Reading logs — ${status.parsed} events so far`
-          : 'Checking logs…';
-        $('#setup-scan-count').textContent = `${status.done} / ${status.total} files`;
-      } else {
-        $('#setup-scan-fill').style.width = '100%';
-        $('#setup-scan-label').textContent = 'Logs read — history ready';
-        $('#setup-scan-count').textContent = '';
-      }
+      paintSetupScan(await getJson('/api/scan/status'));
     } catch { /* server between restarts; the next tick answers */ }
   }, 700);
 
@@ -12007,6 +14963,7 @@ async function maybeShowSetup() {
 
 async function boot() {
   initNowCardCollapsers();
+  initPageStatsCollapsers();
 
   if (isOverlay) {
     document.body.classList.add('overlay');

@@ -1,4 +1,4 @@
-using Quantumwake.Core.GameData;
+﻿using Quantumwake.Core.GameData;
 using Quantumwake.Core.Parsing;
 using Quantumwake.Core.Locations;
 using Quantumwake.Core.Logging;
@@ -120,6 +120,12 @@ public sealed record PickupRecord(
     string ItemClass,
     string Place,
     string Category = ItemCategories.Other);
+
+/// <summary>What this install has actually been charged for one item.</summary>
+/// <param name="UnitPrice">Median of what the game quoted per unit.</param>
+/// <param name="Times">How many confirmed purchases stand behind it.</param>
+/// <param name="Last">When it was last bought.</param>
+public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset Last);
 
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
@@ -244,8 +250,30 @@ public sealed record MarketEntry(
     IReadOnlyList<string> Sold,
     IReadOnlyList<string> Bought,
     int MyScuSold,
+    int MyScuBought,
     decimal MyRevenue,
-    int MyTrades);
+    int MyTrades,
+    string Source = "dataset");
+
+/// <summary>One item in the reference catalogue, and where it came from.</summary>
+/// <param name="Source">
+/// <c>install</c> or <c>dataset</c>. They agree - all 10,843 of the dataset's
+/// items match the install on type, sub-type, size and grade - but the install
+/// knows 26,028, so which one is answering changes how much is listed.
+/// </param>
+public sealed record ItemReference(
+    string ClassName,
+    string? Name,
+    string? Type,
+    string? SubType,
+    int Size,
+    int Grade,
+    string? Manufacturer,
+    string? Uuid,
+    string Source,
+    string? Description = null,
+    string? Tags = null,
+    long MicroScu = 0);
 
 /// <summary>One money movement.</summary>
 /// <param name="Amount">Negative for money out, positive for money in.</param>
@@ -452,18 +480,28 @@ public static class LoadoutCategories
 
 /// <summary>One item in a stash, with when it was last seen there.</summary>
 /// <param name="ItemClass">Engine class, kept so prices can join precisely.</param>
-public sealed record StashItem(string Name, DateTimeOffset LastSeen, string? ItemClass = null);
+/// <param name="MicroScu">
+/// The room it takes up, in millionths of an SCU, or 0 where the install says
+/// nothing worth saying.
+/// </param>
+public sealed record StashItem(
+    string Name, DateTimeOffset LastSeen, string? ItemClass = null, long MicroScu = 0);
 
 /// <summary>Items of one kind, within a stash or elsewhere.</summary>
 public sealed record ItemGroup(string Category, IReadOnlyList<StashItem> Items);
 
 /// <summary>Items seen stored at one location, grouped by kind.</summary>
+/// <param name="MicroScu">
+/// What the whole stash takes up. A count of items answers "how much stuff";
+/// this answers "will it fit", which is the question a hold asks.
+/// </param>
 public sealed record StashLocation(
     string LocationId,
     string Name,
     DateTimeOffset LastSeen,
     int ItemCount,
-    IReadOnlyList<ItemGroup> Groups);
+    IReadOnlyList<ItemGroup> Groups,
+    long MicroScu = 0);
 
 /// <summary>
 /// Sorts item class names into recognisable kinds.
@@ -571,18 +609,26 @@ public static class ItemCategories
     /// "P4-AR Boneyard Rifle" does not contain the word "rifle" reliably, but
     /// <c>behr_rifle_ballistic_01</c> does.
     /// </param>
+    /// <param name="volume">
+    /// How much room a class takes up, in millionths of an SCU. Optional, since
+    /// only an install can answer it and callers without one still want groups.
+    /// </param>
     public static IReadOnlyList<ItemGroup> Group(
         IEnumerable<(string ItemClass, DateTimeOffset SeenAt)> items,
-        Func<string, string>? display = null)
+        Func<string, string>? display = null,
+        Func<string, long>? volume = null)
     {
         display ??= x => x;
+        volume ??= _ => 0;
 
         return [.. items
             .GroupBy(x => Of(x.ItemClass), StringComparer.Ordinal)
             .Select(g => new ItemGroup(
                 g.Key,
                 [.. g.GroupBy(x => display(x.ItemClass), StringComparer.OrdinalIgnoreCase)
-                     .Select(i => new StashItem(i.Key, i.Max(x => x.SeenAt), i.First().ItemClass))
+                     .Select(i => new StashItem(
+                         i.Key, i.Max(x => x.SeenAt), i.First().ItemClass,
+                         i.Sum(x => volume(x.ItemClass))))
                      .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)]))
             .OrderBy(g => Rank(g.Category))];
     }
@@ -652,6 +698,35 @@ public sealed class LogLibrary : IDisposable
     public CommunityData Community { get; set; } = new();
 
     /// <summary>
+    /// Commodity names read from the install itself, needing no download.
+    /// </summary>
+    public GameCommodities GameCommodities { get; private set; } = GameCommodities.Empty;
+
+    /// <summary>
+    /// What the game calls a logged resource id.
+    /// </summary>
+    /// <remarks>
+    /// The install is asked first and the dataset second, because the install is
+    /// the patch actually being played while a dump is as old as whenever it was
+    /// built. They agree in practice - 185 of the dataset's 203 word for word,
+    /// with no disagreements - and where the wording differs the game's own is
+    /// the one to show.
+    /// </remarks>
+    public string? CommodityName(string? resourceId) =>
+        GameCommodities.Commodity(resourceId) ?? Community.Commodity(resourceId);
+
+    /// <summary>
+    /// The id UEX prices an item class under.
+    /// </summary>
+    /// <remarks>
+    /// Every one of the community dump's 10,843 item ids turns out to be a
+    /// record id in the install, so the install answers this exactly. The dump
+    /// stays as a fallback for anyone whose archive cannot be read.
+    /// </remarks>
+    public string? ItemUuid(string? itemClass) =>
+        GameCommodities.ItemUuid(itemClass) ?? Community.Item(itemClass ?? "")?.Uuid;
+
+    /// <summary>
     /// Loads display names for an install. Safe to skip - every lookup falls
     /// back to the raw identifier.
     /// </summary>
@@ -662,6 +737,12 @@ public sealed class LogLibrary : IDisposable
             "names.json");
 
         Names = GameNames.Load(installRoot, cache);
+
+        // The blob is 316 MB and takes a few seconds cold, so the answer is
+        // cached beside the names and stamped with the archive's write time.
+        GameCommodities = GameCommodities.Load(
+            installRoot,
+            Path.Combine(Path.GetDirectoryName(cache)!, "commodities.json"));
 
         // Let the resolver prefer the game's own place names, and drop anything
         // resolved before they were available.
@@ -881,6 +962,110 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>
+    /// Every item class this install has been charged for, with what the game
+    /// quoted per unit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// First-party and exact: the price comes off the kiosk line the game wrote,
+    /// so unlike a crowd-sourced table it cannot be wrong about whether the thing
+    /// is sold at all. Its weakness is the opposite one - it only ever covers
+    /// what this player personally bought, which is a floor and nothing more.
+    /// </para>
+    /// <para>
+    /// Per unit, not per line. The logged price is the whole transaction, so a
+    /// stack of 41 MedPens reads as 10,865 rather than 265, and taking it as a
+    /// unit price puts an item forty times over its worth. The median across
+    /// purchases absorbs a one-off discount without being dragged by it.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// What has been bought and when, by the name a person would write down.
+    /// </summary>
+    /// <remarks>
+    /// Purchases are logged by class - <c>behr_rifle_ballistic_01_mag</c> - and
+    /// a shopping list is written in names. Going through the install's own
+    /// naming is what lets a line saying "P4-AR Magazine" know it has been
+    /// bought. Only confirmed purchases count: the game logs a request before it
+    /// logs a sale, and a request is somebody looking at a price.
+    /// </remarks>
+    public IReadOnlyDictionary<string, DateTimeOffset> Bought()
+    {
+        var latest = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var session in Counted(WipeScope.Money))
+        {
+            foreach (var purchase in session.Purchases)
+            {
+                if (!purchase.Confirmed || purchase.Item is not { Length: > 0 } itemClass)
+                    continue;
+
+                var name = GameCommodities.Item(itemClass)?.Name
+                    ?? GameCommodities.Item($"{itemClass}_SCItem")?.Name
+                    ?? Names.Item(itemClass);
+
+                if (name is not { Length: > 0 }) continue;
+
+                if (!latest.TryGetValue(name, out var seen) || purchase.At > seen)
+                    latest[name] = purchase.At;
+            }
+
+            // Cargo is bought at a commodity terminal, not a kiosk, so it never
+            // reaches Purchases - and a shopping line naming an ore or a good
+            // could not be crossed off however many SCU of it you carried home.
+            foreach (var trade in session.Trades)
+            {
+                if (trade.IsSell) continue;
+
+                var name = CommodityName(trade.ResourceId);
+                if (name is not { Length: > 0 }) continue;
+
+                if (!latest.TryGetValue(name, out var seen) || trade.At > seen)
+                    latest[name] = trade.At;
+            }
+        }
+
+        return latest;
+    }
+
+    public IReadOnlyDictionary<string, ReceiptPrice> Receipts()
+    {
+        var byClass = new Dictionary<string, List<PurchaseRecord>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var session in Counted(WipeScope.Money))
+        {
+            foreach (var purchase in session.Purchases)
+            {
+                if (!purchase.Confirmed || purchase.Item is not { Length: > 0 } item)
+                    continue;
+
+                if (!byClass.TryGetValue(item, out var list))
+                    byClass[item] = list = [];
+
+                list.Add(purchase);
+            }
+        }
+
+        var result = new Dictionary<string, ReceiptPrice>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (item, records) in byClass)
+        {
+            var units = records.Select(r => r.UnitPrice).Where(p => p > 0).Order().ToArray();
+            if (units.Length == 0)
+                continue;
+
+            var middle = units.Length / 2;
+
+            result[item] = new ReceiptPrice(
+                units.Length % 2 == 1 ? units[middle] : (units[middle - 1] + units[middle]) / 2,
+                records.Count,
+                records.Max(r => r.At));
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Every money movement, newest first, with a running net.
     /// </summary>
     /// <remarks>
@@ -909,10 +1094,28 @@ public sealed class LogLibrary : IDisposable
                     -purchase.Total, purchase.Quantity, purchase.Confirmed));
             }
 
+            foreach (var payout in session.Payouts)
+            {
+                // The only income in the ledger that is not a sale. Titles keep
+                // the game's own wording but lose StarStrings' annotations -
+                // "[150 Rep]" on a money row is noise, and the rep it names is
+                // not what was paid.
+                var what = ContractTags.Clean(payout.Contract) is { Length: > 0 } title
+                    ? title
+                    : "Contract payout";
+
+                movements.Add((payout.At, "Contract paid", what,
+                    PlaceAt(session, payout.At), string.Empty,
+                    payout.Amount, 0,
+
+                    // The game stated the sum outright; nothing needs confirming.
+                    true));
+            }
+
             foreach (var trade in session.Trades)
             {
                 // "Waste · 304 SCU" with the community dataset, "304 SCU" without.
-                var what = Community.Commodity(trade.ResourceId) is { } commodity
+                var what = CommodityName(trade.ResourceId) is { } commodity
                     ? $"{commodity} · {trade.Quantity} SCU"
                     : $"{trade.Quantity} SCU";
 
@@ -1154,7 +1357,7 @@ public sealed class LogLibrary : IDisposable
                     t.Amount,
                     t.Quantity > 0 ? t.Amount / t.Quantity : 0,
                     t.Mode,
-                    Community.Commodity(t.ResourceId),
+                    CommodityName(t.ResourceId),
                     t.ResourceId);
             }))
             .OrderByDescending(t => t.At)];
@@ -1348,7 +1551,7 @@ public sealed class LogLibrary : IDisposable
             Count("Beds used", "Casualties", s => s.MedicalBeds.Count),
             Count("Incapacitations", "Casualties", s => s.Incapacitations),
             Count("Deaths", "Casualties", s => s.Deaths,
-                "Inferred from corpse item-recovery bursts: 4.9 logs no death event."),
+                "Inferred from corpse item-recovery bursts: 4.9 and 4.10 log no death event."),
             Count("Kills", "Casualties", s => s.Kills,
                 "Not logged at all since 4.9. The parser is written and dormant, "
                 + "and this fills in by itself if CIG restore the events."),
@@ -1532,14 +1735,16 @@ public sealed class LogLibrary : IDisposable
                     .Select(i => i.MaxBy(e => e.SeenAt))
                     .ToList();
 
-                var groups = ItemCategories.Group(items, Names.Item);
+                var groups = ItemCategories.Group(
+                    items, Names.Item, c => GameCommodities.Item(c)?.MicroScu ?? 0);
 
                 return new StashLocation(
                     g.Key,
                     g.First().LocationName,
                     latest,
                     groups.Sum(x => x.Items.Count),
-                    groups);
+                    groups,
+                    groups.Sum(x => x.Items.Sum(i => i.MicroScu)));
             })
             .OrderByDescending(l => l.ItemCount)
     ];
@@ -1622,10 +1827,22 @@ public sealed class LogLibrary : IDisposable
     /// every commodity the dataset knows, with this install's volume and
     /// revenue against each. Empty when the dataset is disabled.
     /// </summary>
-    public IReadOnlyList<MarketEntry> Market()
+    /// <summary>
+    /// Every commodity known, with this install's own trading record against
+    /// each.
+    /// </summary>
+    /// <remarks>
+    /// Two sources answer this, and they answer differently. The community
+    /// dataset lists the economy simulation's own facilities; without it the
+    /// game install still names every commodity and UEX still knows which
+    /// counters it has seen prices at. The second is a floor rather than a
+    /// roster, so each entry carries which one it came from and the page says
+    /// so - the alternative is a shorter list that looks like the same list.
+    /// </remarks>
+    public IReadOnlyList<MarketEntry> Market(UexData? uex = null)
     {
         if (!Community.IsEnabled)
-            return [];
+            return uex is { IsEnabled: true } ? FromInstall(uex) : [];
 
         var trades = Counted(WipeScope.Money)
             .SelectMany(s => s.Trades)
@@ -1645,8 +1862,172 @@ public sealed class LogLibrary : IDisposable
                     pair.Value.Sold,
                     pair.Value.Bought,
                     mine?.Where(t => t.IsSell).Sum(t => t.Quantity) ?? 0,
+                    mine?.Where(t => !t.IsSell).Sum(t => t.Quantity) ?? 0,
                     mine?.Where(t => t.IsSell).Sum(t => t.Amount) ?? 0m,
                     mine?.Count ?? 0);
+            })
+            .OrderByDescending(e => e.MyRevenue)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// The install's commodity records, reduced to one row per commodity.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two things the download had already done for us, and the install has not.
+    /// The game keeps unfinished rows in the same table as real goods and they
+    /// carry their own display name, so a row reading "&lt;= PLACEHOLDER =&gt;"
+    /// turns up beside Tin and the page looks broken.
+    /// </para>
+    /// <para>
+    /// And several records display the same name - a resource type and its
+    /// commodity entity both say "Agricium" - which listed the commodity twice
+    /// with identical numbers. One commodity is one row, and a caller sums the
+    /// player's own trades across every id behind the name, because which record
+    /// a sale logged against is not a distinction anybody made.
+    /// </para>
+    /// <para>
+    /// Both were found by looking at the rendered page rather than the diff.
+    /// </para>
+    /// </remarks>
+    public static IEnumerable<IGrouping<string, KeyValuePair<string, string>>> TradeableRows(
+        IReadOnlyDictionary<string, string> named) =>
+        named
+            .Where(pair => !Unfinished(pair.Value))
+            .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a display name is the game's own marker for unwritten text.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the wrapper rather than the word. The game writes
+    /// <c>&lt;= PLACEHOLDER =&gt;</c> and <c>&lt;-=MISSING=-&gt;</c>: different
+    /// text inside, both wrapped in angle brackets, and it is the brackets that
+    /// mean "nobody filled this in". Matching the word alone would throw away a
+    /// real commodity called Placeholder Alloy, which a game about mining could
+    /// plausibly ship.
+    /// </remarks>
+    private static bool Unfinished(string name)
+    {
+        var trimmed = name.AsSpan().Trim();
+
+        return trimmed.Length > 1 && trimmed[0] == '<' && trimmed[^1] == '>';
+    }
+
+    /// <summary>
+    /// How fast trading is making money, per hour actually in the game.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two things about this number have to be said wherever it is shown, or it
+    /// is worse than no number.
+    /// </para>
+    /// <para>
+    /// It is trading only. Commodity sales are the sole income the logs record -
+    /// no contract pays out in a log line, no bounty, no mission reward - so for
+    /// somebody who hauls this is close to their whole rate, and for somebody who
+    /// runs contracts it is a fraction of it. It is a floor on earnings, never a
+    /// measure of them.
+    /// </para>
+    /// <para>
+    /// It is profit rather than revenue: what the cargo sold for, less what it
+    /// cost to buy. Revenue per hour would flatter a trader who buys high, and
+    /// the question being asked is how fast money accumulates.
+    /// </para>
+    /// <para>
+    /// The hours are in-game hours. Sitting in the menu is not earning time, and
+    /// counting it would quietly halve the rate of anybody who leaves the game
+    /// open.
+    /// </para>
+    /// </remarks>
+    /// <param name="days">Only sessions this recent. Zero means all of them.</param>
+    public EarningRate Earnings(int days = 0)
+    {
+        var stats = Stats(days);
+        var earned = stats.Income - stats.CommoditySpend;
+        var hours = stats.InGameTime.TotalHours;
+
+        // Below a few minutes the division says more about the rounding than
+        // about the trading, so it is reported as no rate rather than a wild one.
+        var perHour = hours >= 0.1 ? earned / (decimal)hours : 0m;
+
+        return new EarningRate(earned, stats.InGameTime, perHour, days);
+    }
+
+    /// <summary>
+    /// Every item the reference page can show, from whichever source has them.
+    /// </summary>
+    /// <remarks>
+    /// The install is preferred because it is both larger and current with the
+    /// patch, and it needs no download. The dataset stays the fallback for an
+    /// install this cannot read - a moved folder, a machine with no game on it.
+    /// </remarks>
+    public IReadOnlyList<ItemReference> Items()
+    {
+        if (GameCommodities.ItemFacts.Count > 0)
+        {
+            return [.. GameCommodities.ItemFacts
+                .Select(kv => new ItemReference(
+                    kv.Key,
+                    kv.Value.Name,
+                    kv.Value.Type,
+                    kv.Value.SubType,
+                    kv.Value.Size,
+                    kv.Value.Grade,
+                    kv.Value.Manufacturer is { Length: > 0 } maker ? maker : null,
+                    ItemUuid(kv.Key),
+                    "install",
+                    kv.Value.Description is { Length: > 0 } about ? about : null,
+                    kv.Value.Tags is { Length: > 0 } tags ? tags : null,
+                    kv.Value.MicroScu))
+                .OrderBy(i => i.ClassName, StringComparer.OrdinalIgnoreCase)];
+        }
+
+        return [.. Community.Items
+            .Select(kv => new ItemReference(
+                kv.Key, kv.Value.Name, kv.Value.Type, kv.Value.SubType,
+                kv.Value.Size, kv.Value.Grade, kv.Value.Manufacturer, kv.Value.Uuid, "dataset"))
+            .OrderBy(i => i.ClassName, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// The same list built from the game install and UEX, with no download.
+    /// </summary>
+    private IReadOnlyList<MarketEntry> FromInstall(UexData uex)
+    {
+        var trades = Counted(WipeScope.Money)
+            .SelectMany(s => s.Trades)
+            .Where(t => t.ResourceId is not null)
+            .GroupBy(t => t.ResourceId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return [.. TradeableRows(GameCommodities.All)
+            .Select(group =>
+            {
+                var mine = group
+                    .Select(pair => trades.GetValueOrDefault(pair.Key))
+                    .Where(list => list is not null)
+                    .SelectMany(list => list!)
+                    .ToList();
+
+                var (sells, buys) = uex.TradeLocations(group.Key);
+
+                return new MarketEntry(
+                    // The id that carries the trades, so opening the row still
+                    // finds them; otherwise any of them will do.
+                    group.FirstOrDefault(pair => trades.ContainsKey(pair.Key)).Key ?? group.First().Key,
+                    group.Key,
+                    // The install names a commodity without grouping it, and an
+                    // invented grouping would filter worse than none.
+                    [],
+                    sells,
+                    buys,
+                    mine.Where(t => t.IsSell).Sum(t => t.Quantity),
+                    mine.Where(t => !t.IsSell).Sum(t => t.Quantity),
+                    mine.Where(t => t.IsSell).Sum(t => t.Amount),
+                    mine.Count,
+                    "install");
             })
             .OrderByDescending(e => e.MyRevenue)
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)];
