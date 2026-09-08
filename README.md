@@ -25,29 +25,102 @@ explicit install click.
 
 ## Install
 
+No installer, no separate .NET runtime, no account. One file.
+
+### 1. Download it
+
 **[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)**
-and run it. There is no installer and no separate .NET runtime to add.
+from the latest release. The `.zip` beside it holds the same executable plus the
+command-line parser, the README and the licence, and is only worth taking if you
+want those.
 
-Quantum Wake finds LIVE, PTU and EPTU installs on fixed drives. It starts in the
-notification area; right-click the tray icon to open the dashboard or overlay,
-check for updates, or quit. The dashboard is also available at
-<http://127.0.0.1:31337>.
+### 2. Get past the unknown-publisher warning
 
-Windows may show an unknown-publisher warning because the executable is not
-code-signed. Choose **More info → Run anyway** if you downloaded it from this
-repository's release page.
+The executable is not code-signed, so Windows will not vouch for it. If you
+downloaded it from the release page above, choose **More info → Run anyway**.
 
-The overlay starts disabled. Star Citizen must use **Borderless Windowed** for
-it to appear. Click the overlay's pin button to let mouse input pass through;
-use the tray icon or `Ctrl+Alt+O` to bring it back.
+SmartScreen stops warning once enough people have run a given build, so a fresh
+release warns and a fortnight-old one usually does not. That is a measure of the
+release's age and not of its safety.
+
+### 3. Put it somewhere it can stay
+
+Anywhere you can write to — `C:\Tools`, your user folder, a games drive. Two
+things to avoid:
+
+- **Not `Program Files`.** The app updates itself in place and cannot write
+  there without a prompt every time.
+- **Not the Downloads folder**, if you are the sort of person who empties it.
+
+The app updates itself, so where you put it is where it stays.
+
+### 4. Run it
+
+It starts in the notification area rather than opening a window. Right-click the
+tray icon to open the dashboard or overlay, check for updates, or quit. The
+dashboard is also at <http://127.0.0.1:31337> in any browser on the same PC.
+
+There is nothing to configure. Quantum Wake finds LIVE, PTU and EPTU installs on
+fixed drives by itself. If yours is somewhere unusual, `QuantumWake.exe --path
+"D:\...\StarCitizen\LIVE"` points it straight at one.
+
+### 5. Wait for the first read
+
+The first start reads every log the game has kept — around 180 files and 400 MB
+on an install that has been played for a while. It takes a few seconds to a
+couple of minutes depending on the drive, and the page says what it is doing
+while it works.
+
+Everything after that is incremental: only the current `Game.log` is watched,
+and it is read as the game writes it.
+
+**Where things end up:**
+
+| | |
+|---|---|
+| Your data | `%LOCALAPPDATA%\Quantumwake` |
+| Read from | `<StarCitizen>\LIVE\Game.log` and `\logbackups\` |
+| Dashboard | <http://127.0.0.1:31337> |
+
+Nothing is written inside the game folder unless you install item labels or
+StarStrings, which are the two features that replace the game's English text
+file and both need an explicit click.
+
+### 6. Turn the overlay on, if you want one
+
+It starts disabled. Star Citizen must use **Borderless Windowed** for it to
+appear at all — in fullscreen it is behind the game and you will not see it.
+
+Click the overlay's pin button to let mouse clicks pass through to the game;
+the tray icon or `Ctrl+Alt+O` brings it back. `Ctrl+Alt+←/→` changes page and
+`Ctrl+Alt+F` goes fullscreen.
+
+### Updating
+
+The tray icon checks for updates when you ask it to, downloads the new build and
+restarts into it. Nothing is checked until you allow it, and the choice is
+remembered.
+
+**Some updates re-read your whole history on the first start afterwards**, which
+makes that one start slow. This is deliberate and is how a fix reaches sessions
+that were summarised before it existed — 0.9.57 and 0.9.58 both did it, to give
+past contracts their real completion times. The release notes say so when it
+applies.
+
+### Uninstalling
+
+Delete `QuantumWake.exe` and delete `%LOCALAPPDATA%\Quantumwake`. That is all of
+it: nothing is written to the registry, no service is installed, and the game
+folder is untouched unless you installed item labels — in which case remove
+those from the app first, or the game keeps the marked text file.
+
+## What is included
 
 ![The star map](docs/images/map.png)
 
 *Visited places are solid and sized by visit count. Empty nodes are known but
 unvisited. The map uses logged locations and quantum travel; it is not a live
 position tracker.*
-
-## What is included
 
 | View | What it answers |
 |---|---|
@@ -245,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.60
+### 0.9.61
 
 - **The overlay can read what you copy, and the screenshots you take.** New on
   the Overlay page, off until you switch it on, and in two steps rather than
