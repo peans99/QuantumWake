@@ -245,23 +245,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.54
+### 0.9.0
 
-- Backup and restore, saved kits, and refinery hauls now have full endpoint
-  scenarios behind them: a backup brings a deleted job back only when the same
-  file was previewed, a missing kit item becomes a shopping job at the right
-  quantity, and a haul can reach Sold through the routes the page uses.
-
-### 0.9.53
-
-- The Ledger now resets its kind filters when you choose a different time
-  range. A filter could otherwise hide the sole kind in the new range, leaving
-  a fetched transaction invisible and no toggle to bring it back.
-
-- A saved kit now says when it can account for some, but not all, of an item:
-  “1 on you · 3 still needed” rather than claiming the item was never seen.
-
-### 0.9.52
+The first release since 0.8.35, and everything below is new since it. If you
+are updating from there, this is a big one: contracts finally say what they
+paid, the Ledger can be taken apart by kind, everything you have typed can be
+backed up and restored, and a run can be reviewed against what your logs say
+actually happened.
 
 - **Labelling your items no longer wipes the game's text.** The file this
   writes is the one the game reads all of its English out of at startup, and it
@@ -537,7 +527,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
   **A kit asks for the number of things you wrote down.** One medpen no
   longer satisfies a kit that wants four; the shopping list asks for the
-  three you are short.
+  three you are short. It also says so in those words —
+  “1 on you · 3 still needed” — rather than reporting an item it has
+  half of as one it has never seen.
 
   **Repeating a run no longer carries the last run's figures.** The copy kept
   what you had recorded as the previous run's outcome.
@@ -607,6 +599,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   payouts each get a toggle, built from what is actually in the list rather
   than a fixed set — so switching everything else off shows what your
   contracts paid, on its own, which was not previously possible.
+
+  The filters reset when you choose a different time range. Left standing,
+  a filter could hide the only kind present in the new range — a fetched
+  transaction with nothing on screen to bring it back.
 
   The totals follow the filter, because that is the point of it. The
   **?** beside them does not: it explains the whole figure, and offering it
