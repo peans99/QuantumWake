@@ -183,7 +183,7 @@ reaching for only if the game's font defeats the in-box engine.
 
 ## Measured
 
-Step 1 has been done. Seven screenshots from this install went through the
+Step 1 has been done. Nine screenshots from this install went through the
 in-box engine; every number below came out of that run rather than out of an
 expectation.
 
@@ -250,6 +250,81 @@ more.** Not general fuzziness: a scorer loose enough to fix `MSO` to `MSD` is
 loose enough to confuse `P4-AR` with `P8-AR`, and that is the failure mode this
 app cannot afford.
 
+### The tooltip, which is the case the feature is for
+
+An eighth screenshot arrived afterwards and is the most useful of the set: a
+**looting view** with an item hovered, so the game's own tooltip is open. That
+is the moment the whole feature targets — standing over a body, deciding
+whether the rifle is worth the slot.
+
+The tooltip crop is 470x490. It read in **47 ms**, 19 lines:
+
+```
+Arlington Rifle
+Volume: 13000 pscu
+Manufacturer. Hedeby Gunworks
+Item Type: Rifle
+Class: Ballistic
+Magazine Size: 20
+Rate Of Fire: 320 rpm
+Effective Range: SO m
+Attachments: Optics (S2). Barrel (S2),
+Underbarrel (S3)
+```
+
+Every field the panel would want to key on is there, and the name —
+`Arlington Rifle` — is again character-perfect. The errors are the same
+confined class as before plus two new members:
+
+| Read as | Should be | What happened |
+|---|---|---|
+| `pscu` | `μSCU` | mu has no ASCII neighbour, so it guessed `p` |
+| `Manufacturer.` | `Manufacturer:` | colon flattened to a full stop |
+| `SO m` | `50 m` | zero/O, five/S, in one two-character token |
+| `(S2).` | `(S2),` | comma flattened to a full stop |
+
+`SO m` is the one that matters, because it is a **number** being misread rather
+than punctuation, and a number is what a price or a rating would be. It is also
+the shortest token in the block — two characters with no word around them to
+constrain the guess. That is the argument for reading tooltips **by label**
+(`Effective Range:` → take the rest of the line) rather than scraping loose
+numbers off the frame: the label survives, and it says what the number means.
+
+The lore paragraph below the stats came back partially eaten (`accura
+marksmanship`, `equall it f r the nt as`) because it is set over the item's
+render and the contrast collapses. That is fine — nothing needs the lore.
+
+### The map footer gives the place away for free
+
+A ninth screenshot is the **mobiGlas Maps** view, inside a hangar. Its footer
+strip reads, at full resolution and in one line:
+
+```
+PYRO > DUDLEY & DAUGHTERS   0.00° -155.25° 68.33GM
+```
+
+OCR returns that as:
+
+```
+9 PYRO DUDLEY B DAUGHTERS > 0.000 -155.250 68.33GM
+```
+
+System name, location name, and all three figures — correct. `&` became `B`,
+and the degree signs merged into the numbers as trailing zeroes. `68.33GM` came
+through exactly.
+
+This is a direct answer to a question left open in
+[precise-poi.md](precise-poi.md): `/showlocation` gives coordinates with no
+name, and the app has to guess the place from the nearest catalogue body. **The
+map footer gives the name and the position together**, which is the pairing that
+turns one reading into a labelled point of interest.
+
+Two cautions before anything is built on it. The trailing-zero problem means
+`-155.250` has to be parsed as `-155.25°` — which is safe only because the
+degree symbol is the *only* thing that can sit there. And upscaling made this
+line **worse**, not better: at 3x the engine dropped `DUDLEY` entirely. Native
+resolution is the right input, here and everywhere else measured so far.
+
 ### The one thing it will not read
 
 **The wallet balance.** `1,971,263` sits at the bottom of the mobiGlas in an
@@ -267,6 +342,10 @@ wallet_3x_bw.png ->  NEKRON
 
 The regular UI face reads perfectly at 12 pixels; the italic face does not read
 at 42. **It is the typeface, not the resolution.**
+
+Confirmed a second time on the Maps screenshot, which is a different screen on a
+different day with a different balance — same result: `NEKRON` reads at 1x and
+at 3x, the number reads at neither.
 
 This is the honest ceiling of the in-box engine, and it is worth knowing which
 side of the line each ambition falls on:

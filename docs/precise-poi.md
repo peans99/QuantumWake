@@ -143,6 +143,34 @@ So a saved point is three things from three sources, and the card should say so:
 | System | the app's own location inference | carries a confidence |
 | Name | the pilot | theirs |
 
+### The map screen names the system out loud
+
+Measured while testing OCR for [screen-insight.md](screen-insight.md), on a
+mobiGlas Maps screenshot from this install. The footer strip reads:
+
+```
+PYRO > DUDLEY & DAUGHTERS   0.00° -155.25° 68.33GM
+```
+
+System, place and position, together, on one line the engine read correctly at
+native resolution in a single pass.
+
+That does not change the channel this feature uses — the clipboard is still
+exact where OCR is a guess, and the rule in
+[screen-insight.md](screen-insight.md) is that a screenshot is a file the pilot
+saved, never a screen being watched. But it does two useful things.
+
+It **proves the system name is on screen at the moment the pilot would be
+saving a point**, which means the middle row of the table above has a second
+source when the log inference is uncertain — a saved screenshot the pilot
+supplies, read once, rather than a permanent guess.
+
+And the two figures are not the same measurement. `/showlocation` gives metres
+in a system-centred frame; the map footer gives a bearing pair and a distance in
+gigametres. **They are not interchangeable, and nothing should silently convert
+one into the other.** If both are ever shown on the same card, they are two
+readings that agree, not one number in two dresses.
+
 ---
 
 ## Shape
@@ -187,7 +215,9 @@ coordinate does not have one.
 
 1. **Does `/showlocation` say anything but the coordinates?** The reading in
    hand is three numbers. If the game also names the system, the join above gets
-   simpler and more certain. One more reading answers it.
+   simpler and more certain. One more reading answers it. Partly answered from
+   the other direction: the *map* names the system, but that is a different
+   screen and a different channel, so the question about the command stands.
 2. **How near is "at" a POI?** A metre is absurd, a gigametre is useless, and
    the right answer probably differs between a cave mouth and a belt. Worth
    deciding from real readings rather than from taste.
@@ -197,7 +227,8 @@ coordinate does not have one.
 4. **What happens when the system is unknown?** The app's location confidence
    is sometimes none. Refusing to save is hostile; saving without a system is a
    point that means nothing later. Probably: save it, mark it, and let the pilot
-   name the system.
+   name the system. A screenshot of the map is a third
+   option, now that the footer is known to read — offered, never required.
 
 ---
 
