@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.55
+### 0.9.56
 
 The first release since 0.8.35, and everything below is new since it. If you
 are updating from there, this is a big one: contracts finally say what they
@@ -592,8 +592,9 @@ actually happened.
   Also: item descriptions split their lines properly again; a live-feed
   reconnect no longer replays an hour of toasts at once; a locked file during
   a label install can no longer leave a record that outlives the file it
-  describes; and CI accepts a bump to either game-data cache rather than
-  steering you to move the wrong one.
+  describes; CI accepts a bump to either game-data cache rather than
+  steering you to move the wrong one, and no longer reads a bump it was given
+  as no bump at all once a change grows past a certain size.
 
 - **The Ledger can be filtered by kind.** Cargo, purchases and contract
   payouts each get a toggle, built from what is actually in the list rather
