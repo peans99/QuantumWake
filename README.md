@@ -245,7 +245,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.9.54
+### 0.9.55
 
 The first release since 0.8.35, and everything below is new since it. If you
 are updating from there, this is a big one: contracts finally say what they
@@ -609,6 +609,12 @@ actually happened.
   over a filtered one would answer with records that do not add up to what is
   on screen. It comes back when everything is shown again, and the line under
   the toggles says so.
+
+- **Checking for updates leaves the answer on screen.** Pressing **Check for
+  updates** wrote what it found and then, a moment later, overwrote it with
+  “last checked …” — or with “never checked”, on a copy that had never
+  checked before, which read as though the check had not happened. The refresh
+  of the Settings block now finishes first, so the answer is what stays.
 
 - **The Contracts page says what the game said your contracts paid**, with the
   same **?** behind it. The figure and its explanation come from one call, so

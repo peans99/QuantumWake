@@ -14425,7 +14425,13 @@ async function runUpdateCheck({ quiet, announce = false }) {
     return;
   }
 
-  renderUpdateSettings().catch(() => { /* the toggle is still right */ });
+  // Awaited, and not fired off: this refreshes the Settings block from the
+  // server, and the last thing it does is rewrite the very status line the
+  // answer below is about to write. Left un-awaited it lands one microtask
+  // later and overwrites the answer with "never checked" - which is what a
+  // real browser did all along, since a fetch cannot resolve before the
+  // synchronous line after it. The old engine drained it eagerly and hid this.
+  await renderUpdateSettings().catch(() => { /* the toggle is still right */ });
 
   if (!result.newer) {
     if (!quiet) $('#update-status').textContent = `up to date — ${result.current} is the newest`;
