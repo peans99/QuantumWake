@@ -4,7 +4,9 @@ using System.Text.Json.Serialization;
 using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.Parsing;
+using Quantumwake.Core.GameData;
 using Quantumwake.Core.State;
+using Quantumwake.Data;
 
 // Quantumwake CLI - backfill and verification harness.
 //
@@ -22,6 +24,17 @@ if (install is null)
 {
     Console.Error.WriteLine("No Star Citizen install found. Pass --path <StarCitizen\\LIVE>.");
     return 1;
+}
+
+// Step 2 of docs/screen-insight.md. Takes the lines an OCR engine returned -
+// a text file, one per line - and says what the catalogue thinks they are.
+//
+// Text in and not an image, because reading a frame and naming what was read
+// are separate problems and only the first needs Windows. It is also what
+// lets a bad match be reproduced by editing a file.
+if (GetOption(args, "--screen") is { } screenFile)
+{
+    return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"));
 }
 
 var liveOnly = args.Contains("--live-only");
@@ -102,6 +115,126 @@ static string? GetOption(string[] args, string name)
 {
     var index = Array.IndexOf(args, name);
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+}
+
+/// <summary>Prints what a screenshot's text was matched to, and why.</summary>
+/// <remarks>
+/// The catalogue is loaded straight from the install rather than through
+/// <c>LogLibrary</c>: naming a thing on screen has nothing to do with what is
+/// in anybody's logs, and parsing 400 MB to answer it would make the harness
+/// too slow to use while iterating on the matcher.
+/// </remarks>
+static int Screen(string linesFile, string installRoot, string? catalogueQuery)
+{
+    if (!File.Exists(linesFile))
+    {
+        Console.Error.WriteLine($"No such file: {linesFile}");
+        return 1;
+    }
+
+    var cache = Path.Combine(
+        Path.GetDirectoryName(SessionStore.DatabasePathFor(installRoot))!,
+        "commodities.json");
+
+    var game = GameCommodities.Load(installRoot, cache);
+
+    var items = game.ItemFacts
+        .Select(kv => new ItemReference(
+            kv.Key, kv.Value.Name, kv.Value.Type, kv.Value.SubType,
+            kv.Value.Size, kv.Value.Grade,
+            kv.Value.Manufacturer is { Length: > 0 } maker ? maker : null,
+            null, "install", MicroScu: kv.Value.MicroScu))
+        .ToList();
+
+    Console.WriteLine($"Catalogue : {items.Count} items from the install");
+
+    // A plain substring dump, so the catalogue's own wording for a thing can
+    // be read next to the tooltip's. The two disagree more than expected.
+    if (catalogueQuery is { Length: > 0 })
+    {
+        Console.WriteLine();
+        Console.WriteLine($"Catalogue entries matching \"{catalogueQuery}\":");
+
+        foreach (var item in items
+            .Where(i => i.Name?.Contains(catalogueQuery, StringComparison.OrdinalIgnoreCase) == true)
+            .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(20))
+        {
+            Console.WriteLine($"  {item.Name}");
+            Console.WriteLine($"      class    {item.ClassName}");
+            Console.WriteLine($"      type     {item.Type} / {item.SubType}");
+            Console.WriteLine($"      maker    {item.Manufacturer ?? "(none)"}");
+            Console.WriteLine($"      size {item.Size}  grade {item.Grade}  {item.MicroScu} uSCU");
+        }
+    }
+
+    var lines = File.ReadAllLines(linesFile);
+    var result = ScreenInsight.Look(lines, items);
+
+    // A frame with no tooltip on it still has names all over it, and that is
+    // the commoner shape by a distance: six of the nine screenshots measured
+    // for this were loadout screens. A tooltip whose name matched nothing gets
+    // the same treatment rather than a dead end - on the component tooltip
+    // measured here the name was not in the reading at all.
+    if (result.Reading.Name is null || result.Candidates.Count == 0)
+    {
+        if (result.Reading.Name is not null)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"Name read : {result.Reading.Name}");
+
+            foreach (var (label, value) in result.Reading.Fields.OrderBy(f => f.Key, StringComparer.Ordinal))
+                Console.WriteLine($"  {label,-16} {value}");
+
+            Console.WriteLine();
+            Console.WriteLine($"Not certain: {result.Trouble}");
+        }
+
+        var swept = ScreenInsight.Sweep(lines, items);
+
+        Console.WriteLine();
+        Console.WriteLine($"No tooltip. Swept {lines.Length} lines, {swept.Count} named something:");
+
+        foreach (var line in swept)
+        {
+            var how = line.Named
+                ? "exact"
+                : $"{line.Candidates.Count} x {line.Candidates[0].Tier}";
+
+            Console.WriteLine();
+            Console.WriteLine($"  \"{line.Text}\"  [{how}]");
+
+            foreach (var candidate in line.Candidates.Take(4))
+                Console.WriteLine($"      {candidate.Item.Name}  ({candidate.Item.ClassName})");
+        }
+
+        return 0;
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"Name read : {result.Reading.Name}");
+
+    foreach (var (label, value) in result.Reading.Fields.OrderBy(f => f.Key, StringComparer.Ordinal))
+        Console.WriteLine($"  {label,-16} {value}");
+
+    Console.WriteLine();
+    Console.WriteLine(result.Certain
+        ? "Certain."
+        : $"Not certain: {result.Trouble}");
+
+    foreach (var candidate in result.Candidates.Take(10))
+    {
+        Console.WriteLine();
+        Console.WriteLine($"  {candidate.Item.Name}  [{candidate.Tier}]");
+        Console.WriteLine($"      class    {candidate.Item.ClassName}");
+        Console.WriteLine($"      type     {candidate.Item.Type} / {candidate.Item.SubType}");
+        Console.WriteLine($"      maker    {candidate.Item.Manufacturer ?? "(none)"}");
+        Console.WriteLine($"      {candidate.Item.MicroScu} uSCU");
+        Console.WriteLine($"      agrees   {(candidate.Agrees.Count == 0 ? "(nothing)" : string.Join(", ", candidate.Agrees))}");
+        Console.WriteLine($"      against  {(candidate.Disagrees.Count == 0 ? "(nothing)" : string.Join(", ", candidate.Disagrees))}");
+    }
+
+    return 0;
 }
 
 /// <summary>Aggregates parsed events into the figures worth eyeballing.</summary>

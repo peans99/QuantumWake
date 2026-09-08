@@ -360,6 +360,102 @@ Which is a shame, because the balance is a genuinely new signal: `Game.log`
 records what was spent and earned and **never the total**, so the Ledger has a
 running sum it has never once been able to check against the truth.
 
+### Step 2: what the catalogue makes of it
+
+Built and measured on the same eight screenshots. The matcher is
+`src/Quantumwake.Data/ScreenInsight.cs`; the harness is
+`dotnet run --project src\Quantumwake.Cli -- --screen <lines.txt>`, which takes
+the engine's output as plain text so a bad match can be reproduced by editing a
+file. Reading a frame needs Windows; naming what was read does not, and keeping
+them apart is what lets the matching be tested at all.
+
+**The looting-view tooltip resolves to one item, certain**, against the 26,028
+items this install holds:
+
+```
+Arlington Rifle  [Exact]
+    class    hdgw_rifle_ballistic_01
+    agrees   manufacturer, volume, item type, class
+    against  (nothing)
+```
+
+Four independent agreements, and the volume is the good one: the tooltip prints
+13000 μSCU and the catalogue holds 13000 micro-SCU, in the same unit, from a
+completely different source. That is the same kind of check that caught the
+centi-SCU error in commodity buying.
+
+**`MSO-423` finds `MSD-423`**, which was the whole point of folding anything.
+The measured confusions are undone and the comparison stays an equality - no
+edit distance, because a scorer loose enough to repair `MSO` is loose enough to
+read `P4-AR` as `P8-AR`, and there is a test holding that line.
+
+#### Three things the catalogue does not say the way the screen says it
+
+**The tooltip's words for what a thing is are not the catalogue's.** The
+Arlington's tooltip says `Item Type: Rifle` and `Class: Ballistic`. The
+catalogue's own `Type` and `SubType` for the same weapon are `WeaponPersonal`
+and **`Medium`** - a size class, not an ammunition class. Comparing them
+directly reported a contradiction on a candidate that was correct.
+
+Those words do appear, in the *class name*: `hdgw_rifle_ballistic_01` carries
+both "rifle" and "ballistic". So they are looked for there, and they can only
+ever vouch for a candidate, never convict one - a class name is an id and owes
+no particular words to anybody. Manufacturer and volume are the two fields that
+can convict, because those the catalogue holds in the same words and the same
+unit.
+
+**The loadout screen does not print catalogue names.** It shows
+`[IR3] 'Chaos' Missile`; the catalogue calls the same missile
+`'Chaos' III Missile`. That is not a misreading - the screen decorates the name
+with a tag the catalogue spells out in the class name instead
+(`MISL_S03_IR_VNCL_Chaos` is infrared, size 3). No amount of glyph folding
+bridges it, and it is why the missiles on those frames match nothing while the
+racks beside them match exactly.
+
+**"Available" is an item.** The catalogue holds entries named `Available` -
+empty rack slots - so the loadout screen's own `Available:` heading matched
+three of them exactly. A line ending in a colon introduces something rather
+than naming it, and no longer counts.
+
+#### A frame is usually not a tooltip
+
+Six of the eight screenshots are loadout screens: thirty names, no labels to
+anchor on, no stats to corroborate with, and no single thing the frame is
+about. So there are two questions, not one. A tooltip is read and matched with
+its fields; a frame is swept line by line, and a sweep refuses partial matches
+outright, because with no manufacturer and no volume to check a guess against
+half a name is not evidence.
+
+| Frame | Result |
+|---|---|
+| Looting view, item hovered | one item, **certain** |
+| Loadout × 5 | 14 lines named exactly, 21 ambiguous |
+| Loadout, component tooltip | 2 named |
+| mobiGlas map | nothing named, correctly |
+
+The ambiguous ones are almost all honest ties: `DRAKE CORSAIR` matches twelve
+catalogue entries all named "Drake Corsair" - `DRAK_Corsair`,
+`DRAK_Corsair_Exec_Military`, and ten more. Reporting twelve is the right
+answer. Picking one would be a coin toss with a confident face on.
+
+#### The limit step 3 inherits
+
+**OCR line order is not layout order.** The rule that the name is the line
+directly above the first labelled line works on the looting tooltip and fails
+on the component tooltip, where the engine returned `MAPS` - the toolbar item
+at the bottom of the screen - immediately before `Manufacturer: Drake
+Interplanetary`. They are 334 pixels and half a screen apart.
+
+The engine gives a bounding box for every line and this step threw them away.
+It has to stop doing that: the name is the nearest line *above and in the same
+column*, which is a geometric question and not an ordinal one. Step 3 does its
+own OCR and has the boxes to hand.
+
+Worth noting what that frame did carry: `Manufacturer: Drake Interplanetary`
+and `Type: Flight Blade`, and **no name at all** - the component's name is not
+in the reading. Two fields with no name still narrow the catalogue a great
+deal, which is an answer this design could give and does not yet.
+
 ### What this settles
 
 The feature is viable, with the in-box engine, on unmodified JPEGs, at full
@@ -486,10 +582,15 @@ right.
 1. ~~**Read a file and print what OCR saw.**~~ **Done** — see **Measured**
    above. 170 ms for a full frame, names character-perfect, and one hard limit
    found in the italic display face.
-2. **Match lines to the catalogues**, with scores, and a CLI or endpoint that
-   prints the candidates. Still no UI.
+2. ~~**Match lines to the catalogues**, with scores, and a CLI or endpoint
+   that prints the candidates.~~ **Done** - see **Step 2** above. One tooltip
+   resolves certain, the loadout frames name what they can and tie where they
+   should, and three places where the screen and the catalogue disagree about
+   what a thing is called are written down.
 3. **The panel**, showing what was read beside what it matched, with the
-   existing entity drawer behind a click.
+   existing entity drawer behind a click. It must keep the bounding boxes -
+   see the limit above; picking the name by list order is already known to be
+   wrong.
 4. **Prices and stock**, from UEX and the dataset, reusing the commodity and
    part cards rather than drawing new ones.
 
