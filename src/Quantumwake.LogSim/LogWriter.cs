@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 
 namespace Quantumwake.LogSim;
@@ -280,6 +280,31 @@ public sealed class LogWriter : IDisposable
         Line(at, $"[Notice] <ObjectiveUpserted> Received ObjectiveUpserted push message for: " +
                  $"mission_id {missionId} - objective_id {objectiveId} - state {state} " +
                  $"- created 0 - flags={(shownInLog ? "ShowInLog|" : "Internal|")} [Team_Missions]");
+
+    /// <summary>
+    /// A contract ending, said the two ways the game says it.
+    /// </summary>
+    /// <remarks>
+    /// Both, because the real logs carry both for every completion and a
+    /// simulated install that wrote only one would let a reader that handles
+    /// only the other pass its tests.
+    /// </remarks>
+    public void MissionEnded(
+        DateTimeOffset at,
+        string missionId,
+        string state,
+        string completionType,
+        string reason = "Objectives complete")
+    {
+        Line(at, $"[Notice] <MissionEnded> Received MissionEnded push message for: " +
+                 $"mission_id {missionId} - mission_state {state} " +
+                 $"[Team_GameServices][Missions]");
+
+        Line(at, $"[Notice] <EndMission> Ending mission for player. MissionId[{missionId}] " +
+                 $"Player[nekron] PlayerId[9730519752057] " +
+                 $"CompletionType[{completionType}] Reason[{reason}] " +
+                 $"[Team_MissionFeatures][Missions]");
+    }
 
     /// <summary>
     /// A notification and its follow-up Action lines. The repeats are the point:

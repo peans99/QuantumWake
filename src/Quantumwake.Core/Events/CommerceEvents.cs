@@ -154,6 +154,64 @@ public sealed record MissionObjectiveEvent(
     public override string Kind => "mission.objective";
 }
 
+/// <summary>How a contract actually finished.</summary>
+/// <remarks>
+/// <see cref="Abandoned"/> and <see cref="Failed"/> are kept apart because the
+/// game keeps them apart, and they are different stories: 64 walked away from
+/// against 5 lost, across the 179 backups in this install.
+/// </remarks>
+public enum MissionEnding
+{
+    Unknown,
+    Completed,
+    Abandoned,
+    Failed
+}
+
+/// <summary>
+/// A contract ending - the moment it is actually over.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The game says this twice, from two subsystems, and both carry the mission
+/// id that objectives are already tracked by:
+/// </para>
+/// <code>
+/// &lt;MissionEnded&gt; Received MissionEnded push message for:
+///   mission_id 0f5d986f-7b2d-41ff-9d20-61f6eb573e06
+///   mission_state MISSION_STATE_COMPLETED [Team_GameServices][Missions]
+///
+/// &lt;EndMission&gt; Ending mission for player. MissionId[cbb50710-...]
+///   Player[nekron] PlayerId[9730519752057]
+///   CompletionType[Abandon] Reason[Player left] [Team_MissionFeatures][Missions]
+/// </code>
+/// <para>
+/// This exists because the objective stream cannot answer the question. A
+/// contract with a pickup and a dropoff completes its pickup objective first,
+/// and reading that as the contract completing finished a hauling run the
+/// moment it was loaded. Across this install 96 of 212 missions complete more
+/// than one objective, and the last lands a median of 521 seconds after the
+/// first - the worst by 3 hours 25 minutes.
+/// </para>
+/// <para>
+/// The two tags agree exactly here - 230 completions each - and
+/// <c>MissionEnded</c> never once precedes the first objective completion, so
+/// this can only ever move a completion later and never earlier.
+/// </para>
+/// </remarks>
+/// <param name="Reason">
+/// Only <c>EndMission</c> carries one - "Player left", and the like. Null from
+/// the other tag, which gives the state and nothing about why.
+/// </param>
+public sealed record MissionEndedEvent(
+    DateTimeOffset Timestamp,
+    string MissionId,
+    MissionEnding Ending,
+    string? Reason = null) : GameEvent(Timestamp)
+{
+    public override string Kind => "mission.ended";
+}
+
 /// <summary>
 /// An item attached to a character slot - armour, weapon, magazine, optic.
 /// </summary>
