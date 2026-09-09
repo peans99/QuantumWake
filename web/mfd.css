@@ -68,9 +68,9 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
 .crosshair::before { left: 50%; top: 0; height: 100%; width: 1px; }
 .crosshair::after { top: 50%; left: 0; width: 100%; height: 1px; }
 /* Small on purpose: the readings are the answer, the plan is the shape of it. */
-#map { margin: 0 0 4%; flex: 0 0 auto; text-align: center; }
+#map { margin: 0 0 2%; flex: 0 0 auto; text-align: center; }
 #map[hidden] { display: none; }
-#map svg { display: block; width: 100%; max-width: 34cqh; height: auto; aspect-ratio: 1; margin: 0 auto; }
+#map svg { display: block; width: 100%; max-width: 22cqh; height: auto; aspect-ratio: 1; margin: 0 auto; }
 #map-note { font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-top: 2%; }
 .orbit { fill: none; stroke: var(--line-hot); stroke-width: .006; }
 .star { fill: var(--hot); }
@@ -97,3 +97,31 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
    and neither is ever louder than a reading. */
 #brand { height: clamp(9px, 2.4cqw, 19px); width: auto; opacity: .8; align-self: center; }
 footer #device { margin-right: auto; padding-left: 2%; }
+
+/* ---------- the fixed action strip ---------- */
+/* What a press will do, what it is asking, or what it just did. Pinned so it
+   cannot scroll away behind the list it is asking about. */
+#action { flex: 0 0 auto; margin-top: 3%; padding: 2.5% 3%; border: 1px solid var(--line-hot);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+#action[hidden] { display: none; }
+#action b { display: block; font-weight: 500; font-size: calc(clamp(10px, 2.6cqw, 20px) * var(--text-scale));
+  color: var(--ink); overflow-wrap: anywhere; }
+#action span { display: block; font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin-top: 2%; }
+#action.armed { border-color: var(--glow); background: rgba(53, 200, 240, .14); }
+#action.armed b { color: var(--hot); }
+#action.saved { border-color: var(--amber); }
+#action.saved b { color: var(--amber); }
+
+/* ---------- a small opening ---------- */
+/* At 220 px the frame has room for the readings or the decoration, not both.
+   Shorter captions come from the command table; the rest goes here. */
+.compact #map { display: none; }
+.compact h1 { font-size: clamp(13px, 3.4cqw, 20px); letter-spacing: .12em; margin: 3% 0; }
+.compact .reading { padding-bottom: 4%; }
+.compact .reading h2 { letter-spacing: .1em; }
+.compact header, .compact footer { letter-spacing: .06em; }
+.compact #brand, .compact #maker { display: none; }
+.compact .edge button { letter-spacing: .02em; padding: 1%; }
+.compact .edge button svg { width: 1.35em; height: 1.35em; margin-bottom: .1em; }
+.compact #action span { display: none; }

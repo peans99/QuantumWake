@@ -4036,3 +4036,10 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .feed .k.screen-differs { color: var(--amber); border-color: #6d4715; }
 .toast.screen-differs { border-left-color: var(--amber); }
 .feed.screen-fittings .what { color: var(--text); font-size: 12px; }
+
+/* The MFD block is documentation, not settings: every control it describes is
+   in the tray window. Numbered steps rather than prose, because "where do I
+   click" is the question it exists to answer. */
+.mfd-steps { margin: 10px 0 12px; padding-left: 20px; font-size: 12.5px; line-height: 1.6; }
+.mfd-steps li { margin-bottom: 5px; }
+.mfd-steps li::marker { color: var(--cyan); font-size: 11px; }

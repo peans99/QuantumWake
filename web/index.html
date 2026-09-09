@@ -1554,17 +1554,40 @@
       </p>
     </div>
 
+    <!--
+      Nothing here is a setting, and it stopped pretending to be one. Every
+      control that changes MFD mode lives in the tray window, because that is
+      the only place that can see your monitors, read the USB frames or write
+      mfd.json - so this block explains how to get there and what you will find,
+      and says plainly that the two links are previews rather than the thing.
+    -->
     <div class="option-block" id="option-mfd">
       <div class="option-head"><h3>Cougar MFD displays</h3></div>
       <p class="muted">Optional cockpit displays for Thrustmaster MFD Cougar frames.
-        Open <b>MFD setup…</b> from the Quantum Wake tray icon to place the left and
-        right displays on one monitor or separate monitors, test the USB buttons and
-        reassign any of them, and save the layout. Six pages: where you are, your next
-        planned task, the work outstanding at that stop, planned load against what the
-        commodity counters recorded, the contract you took this session, and where all
-        of it came from. MFD displays are off until you enable them.</p>
+        <b>They are set up from the tray, not from here</b> — this page cannot see your
+        monitors or read a USB frame. Off until you turn them on.</p>
+      <ol class="mfd-steps muted">
+        <li>Right-click the <b>Quantum Wake</b> tray icon (under the <code>^</code> arrow if
+          it is hidden) and choose <b>MFD setup…</b></li>
+        <li>Drag the left and right rectangles onto the monitor behind your frames, and
+          resize them to the openings. <b>Show alignment preview</b> puts them on the real
+          screen and follows you as you drag.</li>
+        <li>Press each Cougar button to light up its row, and bind anything you want
+          differently. The four rockers ship unassigned because nothing states which
+          rocker reports which number — press one and the tester names it.</li>
+        <li>Set screen brightness and text size, tick <b>Enable MFD displays</b>, and
+          <b>Save layout</b>.</li>
+      </ol>
+      <p class="muted">Ten pages, one button each: where you are and the route,
+        your next planned task, the work outstanding at that stop and a way to tick it
+        off, planned load against what the commodity counters recorded, the contract you
+        took this session, the live log, who the party channel named, your trading rate,
+        your shopping lists, and where all of it came from.</p>
+      <p class="muted">The links below open the pages in this browser, where there is no
+        Windows to ask and no frame to read: they show an example layout and a preview of
+        a display, and can save nothing.</p>
       <div class="option-head">
-        <a class="ghost" href="mfd-setup.html" target="_blank" rel="noopener">Try the placement editor</a>
+        <a class="ghost" href="mfd-setup.html" target="_blank" rel="noopener">Preview the placement editor</a>
         <a class="ghost" href="mfd.html" target="_blank" rel="noopener">Preview an MFD page</a>
       </div>
     </div>

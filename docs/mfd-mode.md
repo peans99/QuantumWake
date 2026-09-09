@@ -86,6 +86,29 @@ The default cockpit pairs Nav on the left with Task on the right. Fleet
 catalogues, market browsing, historical tables and settings stay on the
 dashboard.
 
+### Two bugs the page rules could not have caught
+
+Both were reported off a real panel, and both were the input failing to ask a
+rule that was already right.
+
+**Dimming was not refusing.** `dormant` decides which buttons have nothing to do
+on the page in front of the pilot, and the only thing consulting it was a CSS
+class. Done looked dead on Nav and still marked a task off, drawing its
+confirmation on a page nobody was looking at. One rule now answers both the face
+and the input, so what is shown and what is done cannot disagree.
+
+**An index is not an identity.** The plan is re-read every five seconds, so the
+line the cursor was on when Done was armed could be a different job by the second
+press - which confirmed whatever was there. The arming press now records what it
+was pointing at, and a second press against anything else stands down and says
+the plan moved. A press while a write is in flight is swallowed as well: a toggle
+sent twice puts the line back exactly where it started.
+
+Neither was reachable from a test of the page rules, because the rules were
+correct. `Panel` runs `mfd.js` itself under the same DOM stub the dashboard's
+harness uses, and that stub already carries a fetch recorder - which answers the
+only question either bug was ever about: did that press write to my flight plan?
+
 **Act writes, and says so.** Confirming marks a line in the pilot's own flight
 plan and tells the game nothing, which the page states on every visit. A press
 arms; a second press on the same button commits; any other button stands it

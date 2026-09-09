@@ -37,7 +37,8 @@ class El {
     this.children = [];
     this.attrs = {};
     this.dataset = {};
-    this.style = {};
+    // setProperty for the custom properties the MFD sets its text scale with.
+    this.style = { setProperty(name, value) { this[name] = value; } };
     this.classList = new ClassList();
     this.listeners = {};
     this.own = '';
@@ -97,6 +98,14 @@ class El {
       }
       this.children.push(node);
     }
+  }
+
+  /* The MFD redraws its readings wholesale rather than diffing them, which is
+     what a four-row panel should do and what the dashboard never needed. */
+  replaceChildren(...nodes) {
+    for (const child of this.children) if (child instanceof El) child.parentElement = null;
+    this.children = [];
+    this.append(...nodes);
   }
 
   prepend(node) {
@@ -294,6 +303,11 @@ globalThis.document = {
   addEventListener() {},
   removeEventListener() {},
 
+  /* The dashboard reaches for everything through querySelector, so this was
+     never needed until the MFD panel came under the same harness - it addresses
+     its twenty buttons and its readings by id. */
+  getElementById(id) { return node('#' + id); },
+
   querySelector(selector) {
     const group = GROUPS[selector];
     return group ? node(group[0]) : node(selector);
@@ -419,6 +433,11 @@ globalThis.clearTimeout = () => {};
 globalThis.setInterval = () => 0;
 globalThis.clearInterval = () => {};
 globalThis.requestAnimationFrame = () => 0;
+
+/* Every fetch the MFD makes carries a timeout signal. Without this the calls
+   threw before they were made and landed in their own catch, which reads as a
+   server that answered nothing rather than a stub missing a global. */
+globalThis.AbortSignal = { timeout: () => null };
 globalThis.cancelAnimationFrame = () => {};
 
 globalThis.EventSource = class {

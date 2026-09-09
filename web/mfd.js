@@ -27,6 +27,14 @@ let extra = {};
 let state = null;
 let briefing = null, briefingUnavailable = false, briefingBusy = false;
 let selected = 0, armed = false;
+/* What the arming press was actually pointing at, and whether a write is in
+   flight. An index is not an identity: the plan is re-read every five seconds,
+   so the line under the cursor when DONE was armed may not be the line under it
+   when DONE is pressed again. */
+let armedTask = null, confirming = false, saved = '';
+/* Below this the edge captions have room for about six characters and the map
+   is taking space the readings need. Measured, not guessed. */
+let compact = false;
 let lastRows = '';
 let stream;
 const byId = id => document.getElementById(id);
@@ -35,16 +43,20 @@ byId('identity').textContent = panelId.toUpperCase() + ' MFD';
 // are input only: setup names them, and this face has nothing to draw for them.
 const edges = { top: [1, 2, 3, 4, 5], right: [6, 7, 8, 9, 10], bottom: [15, 14, 13, 12, 11], left: [20, 19, 18, 17, 16] };
 const osbs = Object.values(edges).flat();
+const face = {};
 for (const [edge, numbers] of Object.entries(edges)) {
   for (const number of numbers) {
     const button = document.createElement('button');
     button.id = 'osb-' + number;
     const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     glyph.setAttribute('viewBox', '0 0 24 24');
-    glyph.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
-    button.append(glyph, document.createElement('b'));
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    glyph.append(shape);
+    const text = document.createElement('b');
+    button.append(glyph, text);
     button.onclick = () => press(number);
     byId(edge).append(button);
+    face[number] = { button, glyph, path: shape, text };
   }
 }
 /* An icon over the caption, and nothing whatever over an unassigned button.
@@ -54,12 +66,14 @@ for (const [edge, numbers] of Object.entries(edges)) {
    still on the hover title, and the setup tester is where numbers matter. */
 function drawLabels() {
   for (const number of osbs) {
-    const button = byId('osb-' + number);
-    const caption = QwMfd.caption(bindings[number]);
+    // The pieces were made here, so they are held rather than looked up again
+    // on every draw - twenty buttons times three queries, several times a press.
+    const { button, glyph, path: shape, text } = face[number];
+    const caption = QwMfd.caption(bindings[number], compact);
     const path = QwMfd.icon(bindings[number]);
-    button.querySelector('b').textContent = caption || '';
-    button.querySelector('path').setAttribute('d', path || '');
-    button.querySelector('svg').style.visibility = path ? '' : 'hidden';
+    text.textContent = caption || '';
+    shape.setAttribute('d', path || '');
+    glyph.style.visibility = path ? '' : 'hidden';
     button.disabled = !caption;
     button.title = 'Cougar button ' + number + (caption ? ': ' + caption : ': unassigned');
   }
@@ -73,7 +87,7 @@ function render() {
   byId('mfd').style.setProperty('--text-scale', textScale);
   byId('title').textContent = QwMfd.pages[page];
   const showing = QwMfd.pageIds[page];
-  for (const number of osbs) byId('osb-' + number).classList.toggle('selected', bindings[number] === showing);
+  for (const number of osbs) face[number].button.classList.toggle('selected', bindings[number] === showing);
   // One view model, drawn as a plan and quoted as a row: the picture and the
   // number must not be able to disagree about where you are going.
   const plan = QwMfd.mapView(atlas, state, briefing);
@@ -105,13 +119,33 @@ function render() {
      answer, so it is measured here and handed to the rule rather than guessed
      at from a row count. Outside the redraw, because an unchanged page still
      needs its face marked after a page change. */
-  const idle = QwMfd.dormant(showing, {
-    tasks: QwMfd.tasks(briefing).length,
-    scrollable: readings.scrollHeight > readings.clientHeight + 1
-  });
+  drawAction(QwMfd.actionLine(showing, { briefing, selected, armed, saved }));
+  const idle = idleNow(readings.scrollHeight > readings.clientHeight + 1);
   for (const number of osbs)
-    byId('osb-' + number).classList.toggle('dormant', idle.includes(bindings[number]));
+    face[number].button.classList.toggle('dormant', idle.includes(bindings[number]));
 }
+/* Pinned under the readings rather than appended to them. The row that asked
+   "confirm this?" used to sit at the end of the task list and scroll away
+   behind the very list it was asking about. */
+function drawAction(line) {
+  const strip = byId('action');
+  strip.hidden = !line;
+  if (!line) return;
+  strip.className = line.state;
+  byId('action-text').textContent = line.text;
+  byId('action-note').textContent = line.note || '';
+}
+/* An opening this small has room for about six characters on an edge button and
+   nothing to spare for a map. Measured on load and on resize, because the host
+   moves these windows without reloading them. */
+function measure() {
+  const small = window.innerWidth < 320 || window.innerHeight < 320;
+  if (small === compact) return;
+  compact = small;
+  byId('mfd').classList.toggle('compact', compact);
+  drawLabels(); lastMap = ''; lastRows = ''; render();
+}
+window.addEventListener('resize', measure);
 /* The maker's mark for the ship the logs last saw retrieved, in the corner of
    every page. It stays where it is rather than moving with the page, because a
    badge that comes and goes is one more thing changing in the corner of a
@@ -176,19 +210,33 @@ function drawMap(visible, view) {
   }
 }
 function note(text) { byId('last-input').textContent = text; }
+/* One rule for what is idle, asked by the face when it dims a button and by the
+   input before it acts on one. */
+function idleNow(scrollable) {
+  return QwMfd.dormant(QwMfd.pageIds[page], { tasks: QwMfd.tasks(briefing).length, scrollable });
+}
+function isIdle(commandId) {
+  const readings = byId('readings');
+  return idleNow(readings.scrollHeight > readings.clientHeight + 1).includes(commandId);
+}
+function standDown() { armed = false; armedTask = null; lastRows = ''; }
 function press(number) {
   note('BTN ' + String(number).padStart(2, '0'));
-  const button = byId('osb-' + number);
+  const button = face[number]?.button;
   if (button) { button.classList.add('pressed'); setTimeout(() => button.classList.remove('pressed'), 180); }
   const action = QwMfd.action(number, bindings);
   if (!action) return;
+  /* A dimmed button does nothing. Dimming and refusing were two rules and only
+     the face's ran, so DONE looked dead on Nav and still marked a task off -
+     with the confirmation drawn on a page nobody was looking at. */
+  if (isIdle(bindings[number])) { note('BTN ' + String(number).padStart(2, '0') + ' · NOT HERE'); return; }
   // Anything but DONE stands a live confirmation down. A pilot reaching for
   // another page must not leave one armed behind them.
-  if (!action.confirm && armed) { armed = false; lastRows = ''; }
+  if (!action.confirm && armed) standDown();
   if (action.confirm) { confirmSelected(); return; }
   if (action.page !== undefined || action.cycle) {
     page = action.page ?? (page + action.cycle + QwMfd.pages.length) % QwMfd.pages.length;
-    selected = 0; lastRows = ''; byId('readings').scrollTop = 0;
+    selected = 0; saved = ''; lastRows = ''; byId('readings').scrollTop = 0;
   }
   if (action.text) textScale = QwMfd.clamp(textScale + action.text * .1, .8, 1.5);
   if (action.brightness) brightness = QwMfd.clamp(brightness + action.brightness * .1, .3, 1);
@@ -211,11 +259,29 @@ function step(direction) {
 /* Press once to arm, again to commit. A single press that ticks work off is a
    glove-width away from a page button, and the plan is the pilot's own record. */
 async function confirmSelected() {
+  // One write at a time. Two quick presses used to be two POSTs, and a toggle
+  // sent twice puts the line back exactly where it started.
+  if (confirming) return;
   const list = QwMfd.tasks(briefing);
   const target = list[QwMfd.clamp(selected, 0, list.length - 1)];
   if (!target?.tripId) { note('NOTHING TO CONFIRM'); return; }
-  if (!armed) { armed = true; lastRows = ''; render(); return; }
-  armed = false; lastRows = '';
+
+  if (!armed) { armed = true; armedTask = target; saved = ''; lastRows = ''; render(); return; }
+
+  /* The plan is re-read every five seconds. If it moved under the pilot between
+     arming and confirming, the line their thumb was pointing at is not the line
+     the cursor is on any more - so the press stands down rather than ticking
+     off whatever happens to be there now. */
+  if (!QwMfd.sameTask(armedTask, target)) {
+    standDown();
+    note('PLAN CHANGED · NOT MARKED');
+    render();
+    return;
+  }
+
+  const marking = target.label;
+  standDown();
+  confirming = true;
   render();
   const path = target.kind === 'stop'
     ? `stops/${encodeURIComponent(target.stopId)}/toggle`
@@ -225,9 +291,13 @@ async function confirmSelected() {
       { method: 'POST', signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error('Not saved');
     note('MARKED DONE');
+    saved = 'Marked done: ' + marking;
     selected = 0;
     await refreshBriefing();
-  } catch { note('NOT SAVED · CHECK THE DASHBOARD'); }
+  } catch {
+    note('NOT SAVED · CHECK THE DASHBOARD');
+    saved = 'Not saved: ' + marking;
+  } finally { confirming = false; lastRows = ''; render(); }
 }
 window.chrome?.webview?.addEventListener('message', ({ data }) => {
   if (data.type === 'button') press(data.button);
@@ -286,6 +356,7 @@ async function loadMakers() {
   finally { lastMaker = ''; render(); }
 }
 async function bootMfd() {
+  measure();
   drawLabels();
   render();
   refreshBriefing();

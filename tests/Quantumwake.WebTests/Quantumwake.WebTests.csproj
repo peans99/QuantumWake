@@ -29,6 +29,8 @@
     <None Include="..\..\web\index.html" Link="web\index.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="dom.js" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\mfd-core.js" Link="web\mfd-core.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\mfd.js" Link="web\mfd.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\mfd.html" Link="web\mfd.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

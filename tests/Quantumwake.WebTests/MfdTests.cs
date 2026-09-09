@@ -201,11 +201,12 @@ public class MfdTests
     [Fact]
     public void ConfirmIsArmedBeforeItCommitsAndSaysWhatItWrites()
     {
-        Assert.Contains("changes nothing in the game", Act(Engine()));
+        // The wording moved to the pinned strip - see the action-strip test.
+        // What the list itself still has to do is say which line is which.
+        Assert.Contains("\"cursor\"", Act(Engine()));
         var armed = Act(Engine(), "{selected:0,armed:true}");
-        Assert.Contains("CONFIRM?", armed);
-        Assert.Contains("Press DONE again", armed);
         Assert.Contains("\"armed\"", armed);
+        Assert.DoesNotContain("\"cursor\"", armed);
     }
 
     [Fact]
@@ -344,7 +345,7 @@ public class MfdTests
     public void RouteChainsEveryPlannedStopAndMeasuresEachLeg()
     {
         var e = Engine();
-        const string plan = "{stops:[{placeId:'STAN_HUR_L1'},{placeId:'RR_MIC_LEO'}]}";
+        const string plan = "{stops:[{placeId:'STAN_HUR_L1',place:'Everus Harbor'},{placeId:'RR_MIC_LEO'}]}";
         e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp'}},{plan});");
 
         Assert.Equal(2, e.Evaluate("v.legs.length").AsNumber());
@@ -357,12 +358,13 @@ public class MfdTests
         Assert.Equal(87.94, e.Evaluate("v.gm").AsNumber(), 1);
         Assert.Equal("87.9 Gm to microTech over 2 legs", e.Evaluate("QwMfd.routeLine(v)").AsString());
         Assert.True(e.Evaluate("v.bodies.find(b => b.name === 'microTech').onRoute").AsBoolean());
-        Assert.Contains("not a fix or a route", e.Evaluate("v.note").AsString());
+        Assert.Contains("straight line, not a fix", e.Evaluate("v.note").AsString());
 
-        // And the Nav rows quote the same view rather than measuring again.
-        Assert.Contains("87.9 Gm to microTech over 2 legs",
+        // And the Nav headline quotes the same view rather than measuring again,
+        // on the destination's own line rather than a row below it.
+        Assert.Contains("Everus Harbor · 87.9 Gm over 2 legs",
             e.Evaluate($"JSON.stringify(QwMfd.rows(0,{{}},{plan},false,{{map:v}}))").AsString());
-        Assert.DoesNotContain("DISTANCE", e.Evaluate("JSON.stringify(QwMfd.rows(0,{}))").AsString());
+        Assert.DoesNotContain("Gm", e.Evaluate("JSON.stringify(QwMfd.rows(0,{}))").AsString());
     }
 
     /// <summary>
@@ -619,6 +621,113 @@ public class MfdTests
         Assert.DoesNotContain("WAKE UP AT", Page(e, "status", now, "null", "{extra:{respawn:{known:false}}}"));
         Assert.DoesNotContain("WAKE UP AT", Page(e, "status", now));
         Assert.Contains("No session start recorded", Page(e, "status"));
+    }
+
+    /// <summary>
+    /// An index is not an identity. The plan is re-read every five seconds, so
+    /// the line the cursor was on when DONE was armed can be a different job by
+    /// the time DONE is pressed again - and the second press must not tick off
+    /// whatever happens to be sitting there now.
+    /// </summary>
+    [Fact]
+    public void AConfirmationIsTiedToTheTaskItWasArmedAgainst()
+    {
+        var e = Engine();
+        e.Execute($"var before = QwMfd.tasks({Plan});");
+
+        // The same plan re-read: same identities, so the press still stands.
+        Assert.True(e.Evaluate($"QwMfd.sameTask(before[0], QwMfd.tasks({Plan})[0])").AsBoolean());
+
+        // The first instruction got done elsewhere, so index 0 is now the second
+        // one. Same cursor, different job - and sameTask sees it.
+        const string moved = "{tripId:'t1',stops:[{id:'s1',place:'Baijini Point',actions:["
+            + "{id:'a1',kind:'load',quantity:32,unit:'SCU',text:'Titanium',done:true},"
+            + "{id:'a2',kind:'refuel',text:'Top up quantum',done:false}]}]}";
+        Assert.False(e.Evaluate($"QwMfd.sameTask(before[0], QwMfd.tasks({moved})[0])").AsBoolean());
+
+        // A stop crossed off is identified by its stop, not by a null action id.
+        const string bare = "{tripId:'t1',stops:[{id:'s1',place:'Baijini Point',actions:[]}]}";
+        Assert.True(e.Evaluate($"QwMfd.sameTask(QwMfd.tasks({bare})[0], QwMfd.tasks({bare})[0])").AsBoolean());
+        Assert.False(e.Evaluate($"QwMfd.sameTask(QwMfd.tasks({bare})[0], before[0])").AsBoolean());
+
+        // Nothing is never the same as anything, including nothing.
+        Assert.True(e.Evaluate("QwMfd.sameTask(null, null) === false").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.sameTask(undefined, before[0]) === false").AsBoolean());
+    }
+
+    /// <summary>
+    /// The confirmation used to be the last row of the very list it was asking
+    /// about, so it scrolled out of sight. It has a strip of its own now, and
+    /// the strip is silent anywhere it would have nothing to say.
+    /// </summary>
+    [Fact]
+    public void TheActionStripNamesTheTaskAtEveryStage()
+    {
+        var e = Engine();
+        string Strip(string view) => e.Evaluate($"JSON.stringify(QwMfd.actionLine('act',{view}))").AsString();
+
+        var ready = Strip($"{{briefing:{Plan},selected:0}}");
+        Assert.Contains("\"ready\"", ready);
+        Assert.Contains("DONE marks: load · 32 SCU · Titanium", ready);
+        Assert.Contains("Tells the game nothing", ready);
+
+        var armed = Strip($"{{briefing:{Plan},selected:1,armed:true}}");
+        Assert.Contains("\"armed\"", armed);
+        Assert.Contains("Confirm: refuel · Top up quantum?", armed);
+
+        var saved = Strip($"{{briefing:{Plan},saved:'Marked done: refuel · Top up quantum'}}");
+        Assert.Contains("\"saved\"", saved);
+        Assert.Contains("Marked done: refuel", saved);
+
+        // Nothing to act on, and nowhere but Act.
+        Assert.Equal("null", Strip("{briefing:{stops:[]}}"));
+        Assert.Equal("null", e.Evaluate($"JSON.stringify(QwMfd.actionLine('nav',{{briefing:{Plan}}}))").AsString());
+
+        // The confirmation is no longer a row that can scroll away.
+        Assert.DoesNotContain("CONFIRM", Act(e));
+    }
+
+    /// <summary>
+    /// A nav page exists to say where you are going. It was saying it third,
+    /// under a map, off the bottom of a 480 px panel.
+    /// </summary>
+    [Fact]
+    public void NavLeadsWithTheDestinationAndItsDistance()
+    {
+        var e = Engine();
+        e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp'}},"
+            + "{stops:[{placeId:'STAN_HUR_L1',place:'Everus Harbor'}]});");
+        var rows = e.Evaluate("QwMfd.rows(0,{location:'Area18',ship:'RSI Hermes'},"
+            + "{stops:[{placeId:'STAN_HUR_L1',place:'Everus Harbor'}]},false,{map:v})").AsArray();
+
+        Assert.Equal("NEXT STOP", rows[0].AsArray()[0].AsString());
+        Assert.Equal("Everus Harbor · 31.6 Gm", rows[0].AsArray()[1].AsString());
+        Assert.Equal("LOCATION", rows[1].AsArray()[0].AsString());
+
+        // A quantum destination still takes the headline, and multi-leg says so.
+        var json = e.Evaluate("JSON.stringify(QwMfd.rows(0,{travelling:true,travellingTo:'Port Tressler'},"
+            + "{stops:[]},false,{map:{legs:[1,2],gm:87.94,target:'microTech'}}))").AsString();
+        Assert.Contains("QUANTUM DESTINATION", json);
+        Assert.Contains("Port Tressler · 87.9 Gm over 2 legs", json);
+
+        // No plan, no invented distance.
+        Assert.Contains("No outstanding stop",
+            e.Evaluate("JSON.stringify(QwMfd.rows(0,{},{stops:[]}))").AsString());
+    }
+
+    [Fact]
+    public void ASmallOpeningGetsShortCaptionsRatherThanClippedOnes()
+    {
+        var e = Engine();
+        Assert.Equal("CNTRCT", e.Evaluate("QwMfd.caption('contract')").AsString());
+        Assert.Equal("CNTR", e.Evaluate("QwMfd.caption('contract', true)").AsString());
+        Assert.Equal("CRGO", e.Evaluate("QwMfd.caption('cargo', true)").AsString());
+        Assert.Equal("STAT", e.Evaluate("QwMfd.caption('status', true)").AsString());
+
+        // Every command has one, and none of them is longer than the frame fits.
+        Assert.True(e.Evaluate("QwMfd.commands.every(c => c.short && c.short.length <= 4)").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.commands.every(c => QwMfd.caption(c.id, true).length <= 4)").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.caption('nope', true) === null").AsBoolean());
     }
 
     [Fact]

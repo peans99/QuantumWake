@@ -44,40 +44,40 @@ window.QwMfd = (() => {
      Windows ships with are a lottery at 14 px. `currentColor` means a pressed
      button inverts its icon along with its caption for free. */
   const commands = [
-    { id: 'nav', label: 'Page · Nav', caption: 'NAV',
+    { id: 'nav', label: 'Page · Nav', caption: 'NAV', short: 'NAV',
       icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 7.5a4.5 4.5 0 1 0 .1 0M12 12l3.5-3.5' },
-    { id: 'task', label: 'Page · Task', caption: 'TASK',
+    { id: 'task', label: 'Page · Task', caption: 'TASK', short: 'TASK',
       icon: 'M4 6.5h10M4 12h10M4 17.5h6M16.5 16l2 2 3.5-4' },
-    { id: 'act', label: 'Page · Act', caption: 'ACT',
+    { id: 'act', label: 'Page · Act', caption: 'ACT', short: 'ACT',
       icon: 'M4 5h16v14H4zM8 12l3 3 5-6' },
-    { id: 'cargo', label: 'Page · Cargo', caption: 'CARGO',
+    { id: 'cargo', label: 'Page · Cargo', caption: 'CARGO', short: 'CRGO',
       icon: 'M3 8l9-4 9 4v8l-9 4-9-4zM3 8l9 4 9-4M12 12v8' },
-    { id: 'contract', label: 'Page · Contract', caption: 'CNTRCT',
+    { id: 'contract', label: 'Page · Contract', caption: 'CNTRCT', short: 'CNTR',
       icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6' },
-    { id: 'status', label: 'Page · Status', caption: 'STATUS',
+    { id: 'status', label: 'Page · Status', caption: 'STATUS', short: 'STAT',
       icon: 'M12 3a9 9 0 1 0 .1 0M12 7.5v.5M12 11v6' },
-    { id: 'feed', label: 'Page · Feed', caption: 'FEED',
+    { id: 'feed', label: 'Page · Feed', caption: 'FEED', short: 'FEED',
       icon: 'M4 18a14 14 0 0 1 14 0M4 18h.01M5 13.5a9.5 9.5 0 0 1 13 0M5 9a15 15 0 0 1 15 0' },
-    { id: 'crew', label: 'Page · Crew', caption: 'CREW',
+    { id: 'crew', label: 'Page · Crew', caption: 'CREW', short: 'CREW',
       icon: 'M9 11a3.2 3.2 0 1 0 .1 0M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5M16 5.4a3.2 3.2 0 0 1 0 6.2M17.5 15.4c2 .8 3 2.4 3 4.6' },
-    { id: 'money', label: 'Page · Money', caption: 'MONEY',
+    { id: 'money', label: 'Page · Money', caption: 'MONEY', short: 'MNY',
       icon: 'M12 2.5v19M8 7h6.5a2.75 2.75 0 0 1 0 5.5h-5a2.75 2.75 0 0 0 0 5.5H16' },
-    { id: 'list', label: 'Page · List', caption: 'LIST',
+    { id: 'list', label: 'Page · List', caption: 'LIST', short: 'LIST',
       icon: 'M9 6.5h11M9 12h11M9 17.5h11M4 6l1.2 1.2L7.5 4.5M4 17.5l1.2 1.2 2.3-2.7' },
-    { id: 'prev', label: 'Previous page', caption: 'PREV', icon: 'M15 4L7 12l8 8' },
-    { id: 'next', label: 'Next page', caption: 'NEXT', icon: 'M9 4l8 8-8 8' },
-    { id: 'home', label: 'Home (Nav)', caption: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
-    { id: 'up', label: 'Up · select or scroll', caption: 'UP', icon: 'M4 15l8-8 8 8' },
-    { id: 'down', label: 'Down · select or scroll', caption: 'DOWN', icon: 'M4 9l8 8 8-8' },
-    { id: 'text-up', label: 'Text size larger', caption: 'TEXT +',
+    { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
+    { id: 'next', label: 'Next page', caption: 'NEXT', short: 'NXT', icon: 'M9 4l8 8-8 8' },
+    { id: 'home', label: 'Home (Nav)', caption: 'HOME', short: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
+    { id: 'up', label: 'Up · select or scroll', caption: 'UP', short: 'UP', icon: 'M4 15l8-8 8 8' },
+    { id: 'down', label: 'Down · select or scroll', caption: 'DOWN', short: 'DN', icon: 'M4 9l8 8 8-8' },
+    { id: 'text-up', label: 'Text size larger', caption: 'TEXT +', short: 'A+',
       icon: 'M2 19L8 5l6 14M4.2 14.5h7.6M18 9v8M14 13h8' },
-    { id: 'text-down', label: 'Text size smaller', caption: 'TEXT −',
+    { id: 'text-down', label: 'Text size smaller', caption: 'TEXT −', short: 'A-',
       icon: 'M2 19L8 5l6 14M4.2 14.5h7.6M14 13h8' },
-    { id: 'bright-up', label: 'Screen brighter', caption: 'BRIGHT',
+    { id: 'bright-up', label: 'Screen brighter', caption: 'BRIGHT', short: 'BRT',
       icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2 2M17.4 17.4l2 2M19.4 4.6l-2 2M6.6 17.4l-2 2' },
-    { id: 'bright-down', label: 'Screen dimmer', caption: 'DIM',
+    { id: 'bright-down', label: 'Screen dimmer', caption: 'DIM', short: 'DIM',
       icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2' },
-    { id: 'confirm', label: 'Confirm the selected task', caption: 'DONE',
+    { id: 'confirm', label: 'Confirm the selected task', caption: 'DONE', short: 'DONE',
       icon: 'M4 12.5l5.5 5.5L20 6' }
   ];
 
@@ -116,7 +116,21 @@ window.QwMfd = (() => {
     }
     return map;
   }
-  const caption = id => commands.find(c => c.id === id)?.caption || null;
+  /* A 220 px opening leaves an edge button about six characters. The long
+     caption is what to read on a full-size panel; the short one is what
+     survives a small one, because clipping CNTRCT to "CNTRC" is worse than
+     either of them. */
+  const caption = (id, compact) => {
+    const command = commands.find(c => c.id === id);
+    return command ? (compact && command.short) || command.caption : null;
+  };
+
+  /* What a confirmation was armed against, rather than where the cursor was.
+     The plan is re-read every five seconds, so an index that meant "load 32 SCU"
+     when the pilot armed it can mean "refuel" by the time they press again. */
+  const taskId = task => task
+    ? [task.tripId, task.stopId, task.actionId || task.kind].join('/') : null;
+  const sameTask = (a, b) => taskId(a) !== null && taskId(a) === taskId(b);
   const icon = id => commands.find(c => c.id === id)?.icon || null;
 
   /* The makers with a logo file in web/assets/manufacturers. A copy of app.js's
@@ -269,7 +283,7 @@ window.QwMfd = (() => {
     // would draw the same circle four times over a 150 px panel.
     const rings = [...new Set(bodies.map(b => Math.round(b.radius * 50) / 50))].filter(r => r > .04);
     const note = [system.toUpperCase(),
-      here ? 'bodies, not a fix or a route' : 'body not identified',
+      here ? 'straight line, not a fix' : 'body not identified',
       elsewhere ? `${elsewhere} stop${elsewhere > 1 ? 's' : ''} outside this system` : null]
       .filter(Boolean).join(' · ');
     return { system, here, next, target, bodies, rings, legs, gm, elsewhere, note };
@@ -304,16 +318,26 @@ window.QwMfd = (() => {
       ? [['PLAN UNAVAILABLE', 'Cannot read the flight plan. Check the dashboard connection.']]
       : !briefing ? [['FLIGHT PLAN', 'Loading your tracked plan…']] : null;
     switch (pageIds[page]) {
-      case 'nav': return [
-        ['LOCATION', s.location || 'Location not yet identified'],
-        [s.travelling ? 'QUANTUM DESTINATION' : (briefingUnavailable ? 'PLAN UNAVAILABLE' : 'NEXT PLANNED STOP'),
-          s.travelling ? (s.travellingTo || 'Destination not identified')
-            : briefingUnavailable ? 'Open the dashboard to check your route.'
-              : !briefing ? 'Loading your tracked plan…' : stop?.place || 'No outstanding stop in the tracked plan'],
-        ...(routeLine(view.map) ? [['DISTANCE', routeLine(view.map)]] : []),
-        ['SHIP', s.ship || 'No ship identified in the logs'],
-        ['LOCATION SOURCE', s.location ? `${s.confidence || 'Unknown'} confidence · game logs` : 'Waiting for a location signal']
-      ];
+      /* Where you are going, then where you are. A nav page exists for the
+         first of those and it had been sitting third - below the plan, under
+         the map, off the bottom of a 480 px panel that left 53 pixels of
+         readings. The distance rides on that same line rather than taking one
+         of its own: it is a property of the destination, not a fact beside it. */
+      case 'nav': {
+        const legs = view.map?.legs?.length || 0, far = view.map?.gm;
+        const reach = legs ? ` · ${far >= 100 ? far.toFixed(0) : far.toFixed(1)} Gm`
+          + (legs > 1 ? ` over ${legs} legs` : '') : '';
+        return [
+          [s.travelling ? 'QUANTUM DESTINATION' : (briefingUnavailable ? 'PLAN UNAVAILABLE' : 'NEXT STOP'),
+            s.travelling ? (s.travellingTo || 'Destination not identified') + reach
+              : briefingUnavailable ? 'Open the dashboard to check your route.'
+                : !briefing ? 'Loading your tracked plan…'
+                  : stop?.place ? stop.place + reach : 'No outstanding stop in the tracked plan'],
+          ['LOCATION', s.location || 'Location not yet identified'],
+          ['SHIP', s.ship || 'No ship identified in the logs'],
+          ['LOCATION SOURCE', s.location ? `${s.confidence || 'Unknown'} confidence · game logs` : 'Waiting for a location signal']
+        ];
+      }
       case 'task': {
         if (planMissing) return planMissing;
         if (!stop) return [['NO OUTSTANDING STOP', 'Track a flight plan in the dashboard to show the next task here.']];
@@ -329,15 +353,15 @@ window.QwMfd = (() => {
         if (!list.length) return [['NOTHING TO CONFIRM',
           'Track a flight plan in the dashboard to tick its work off from here.']];
         const selected = clamp(integer(view.selected, 0), 0, list.length - 1);
+        // The confirmation is no longer the last row: it used to scroll out of
+        // sight behind the very list it was asking about. It has a fixed strip
+        // of its own now - see actionLine.
         return [
           ['STOP', list[0].place],
           ...list.map((task, i) => [
             task.kind === 'stop' ? 'CROSS OFF THE STOP' : `TASK ${i + 1} OF ${list.length}`,
             task.label, null,
-            i !== selected ? null : view.armed ? 'armed' : 'cursor']),
-          [view.armed ? 'CONFIRM?' : 'CONFIRM', view.armed
-            ? 'Press DONE again to tick this off. Any other button cancels.'
-            : 'DONE marks the selected line in your own plan. It changes nothing in the game.']
+            i !== selected ? null : view.armed ? 'armed' : 'cursor'])
         ];
       }
       case 'cargo': {
@@ -458,6 +482,23 @@ window.QwMfd = (() => {
     }
   }
 
+  /* The fixed strip under the readings on Act: what a press will do, what it
+     is asking, or what it just did. Pinned rather than appended to the list,
+     because the row that asked "confirm this?" used to scroll away behind the
+     list it was asking about. Null anywhere it would say nothing. */
+  function actionLine(pageId, view) {
+    if (pageId !== 'act') return null;
+    if (view?.saved) return { state: 'saved', text: view.saved };
+    const list = tasks(view?.briefing);
+    if (!list.length) return null;
+    const task = list[clamp(integer(view.selected, 0), 0, list.length - 1)];
+    return view.armed
+      ? { state: 'armed', text: `Confirm: ${task.label}?`,
+          note: 'DONE again to mark it. Any other button cancels.' }
+      : { state: 'ready', text: `DONE marks: ${task.label}`,
+          note: 'Writes to your plan. Tells the game nothing.' };
+  }
+
   const aUEC = n => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 
   /* Whole minutes. The clock is on a page that re-renders whenever anything
@@ -490,6 +531,6 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant,
+  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
 })();

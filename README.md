@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1651 tests](https://img.shields.io/badge/tests-1651%20passing-4fd48a)
+![1662 tests](https://img.shields.io/badge/tests-1662%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,36 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.15
+### 0.10.16
+
+- **Done no longer acts where it looks dead.** It is dimmed on every page but
+  Act, and dimming was all that happened: two presses elsewhere still marked a
+  task off your flight plan, with the confirmation drawn on a page you were not
+  looking at. Dimming a button and refusing its press are one rule now.
+
+- **A confirmation stays attached to the task it was armed against.** Your plan
+  is re-read every few seconds, so the line under the cursor when you armed
+  **DONE** could be a different job by the time you pressed again — and the
+  second press took whatever was there. It now stands down and says the plan
+  moved. A second press while the first is still saving is ignored rather than
+  sent twice, which would have put the line back where it started.
+
+- **Nav leads with where you are going.** The destination and its distance were
+  third, under the map, off the bottom of the panel. They are the headline now,
+  with your location beneath and the map shrunk to a supporting picture.
+
+- **The confirmation on Act has a fixed strip of its own.** It used to be the
+  last row of the very list it was asking about, and scrolled out of sight. It
+  reads *Confirm: load · 32 SCU · Titanium?*, then says what was marked.
+
+- **A small opening gets a layout of its own.** Below 320 px the captions switch
+  to short forms rather than clipping, the map and the corner marks step aside,
+  and the spacing tightens.
+
+- **The MFD section on the Overlay page is documentation now.** It was shaped
+  like settings and could change nothing: everything that configures MFD mode is
+  in the tray window, because that is the only place that can see your monitors
+  or read a frame. It now says how to get there, in order.
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
