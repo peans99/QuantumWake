@@ -927,11 +927,73 @@ is read.
 factory fit; its systems tab differs on every port - Lotus power plants,
 Hemera drive, 7MA shields - which is what an upgraded ship looks like.
 
+### The commodity kiosk, and the one measurement not from this install
+
+The kiosk is the screen this feature most wanted, because it is the only
+place a shop's own price appears at all: `Game.log` records what was paid and
+how much moved, and never what was asked.
+
+**The frame is not from this install.** No kiosk on this machine has been
+photographed, so the reader was written from a screenshot of somebody else's
+terminal, shared publicly. Every other number in this document came from the
+logs and screenshots here, and this one did not, which is why it is fenced
+off in its own section. What it establishes is the shape of the screen. It
+establishes nothing about this pilot's trades.
+
+The buy side, at 3177 pixels wide, read in 407 ms:
+
+| Row | Name | Stock | Price | State |
+|---|---|---|---|---|
+| 1 | Hephaestanite | 5,000 SCU | `¤2.19700002K/UNITS` | MAX INVENTORY |
+| 2 | Corundum | 6,000 SCU | `¤296/SCU` | MAX INVENTORY |
+| 3 | Titanium | 6,000 SCU | did not read | MAX INVENTORY |
+| 4 | Carbon | its heading misread, so no row | | |
+
+**Two commodities on one screen, priced in two different quantities.** One per
+SCU and one per unit. That is the centi-SCU trap with a new face, and the
+rule this reader is built on is that the unit is welded to the price and
+nothing converts one into the other. What a unit is worth in SCU is not
+stated on the screen, so it is not stated here either.
+
+**`2.19700002K` is the game's own float noise** for 2,197. The suffix is
+multiplied and the noise left where it is: the order of magnitude and the
+unit are what the reading is good for, and the last decimal of a number the
+game itself printed wrong is not worth defending.
+
+**Titanium's price did not read and is absent**, rather than inherited from
+the row above. Three of four names read, three of four stock figures, two of
+four prices.
+
+Two traps, both from this one frame:
+
+- **A kiosk has two panels and they share their rows.** The pilot's inventory
+  on the left prints the ship and its cargo grid at the very heights the shop
+  prints its commodities, and reading across both named a cargo grid as a
+  commodity, at a price. The name is now taken from inside the shop's panel
+  only - the same lesson as the two-tooltip rule, learned again.
+- **The ship rendered behind the glass leaves words on the rows.** A stray
+  `Ton` seventeen pixels off the Titanium heading beat the Titanium itself,
+  five pixels off, when the rule was "leftmost". It is now "nearest to the
+  heading's own row".
+
+**The balance is printed here too, and abbreviated**: `¤1,583M AUEC`. It is
+read and kept verbatim and deliberately never turned into a number. What the
+suffix multiplies is not established from one frame, and a rounded figure
+taken as a wallet baseline would make every later drift wrong by whatever the
+rounding hid. The mobiGlas bar prints the balance in full and is where that
+number comes from.
+
+**The sell side has been seen and is not read.** The only frame of it is 640
+pixels wide - a photograph of a screen - and the engine refused the file
+outright. It lists the hold rather than the shop and has no `SHOP QUANTITY`
+to anchor on. A sell-side kiosk is filed as a kiosk and kept whole, and
+claims no rows.
+
 ### What is still waiting on a frame
 
 | Screen | What it would confirm |
 |---|---|
-| Commodity kiosk | The commodity name the log never gives for a sale, and price per SCU as a unit check |
+| A commodity kiosk on this install, both sides | Everything above, against this pilot's own trades - and the sell side, which nothing reads yet |
 | The Wallet app, past its start screen | Whether the balance is printed anywhere in a face that reads every time |
 
 **The inventory screen carries no names.** Photographed with a location's
@@ -1002,10 +1064,16 @@ right.
 5. ~~**Fitted loadouts for the fleet.**~~ **Done** — see **Step 3**. The Fleet
    page shows what each ship was last photographed carrying, dated, with the
    parts the factory did not fit marked as such.
-6. ~~**Readers for the screens nobody has photographed yet.**~~ **Mostly
-   done** — see **The second night**. Contracts, Rep, the Fleet Manager and
-   its estimate read; the kiosk and the inventory screen are still waiting on
-   a frame.
+6. ~~**Readers for the screens nobody has photographed yet.**~~ **Done** —
+   see **The second night** and **The commodity kiosk**. Contracts, Rep, the
+   Fleet Manager, its estimate and a kiosk's buy side all read. The inventory
+   screen turned out to carry no names at all, and a kiosk's sell side is
+   waiting on a frame big enough to read.
+7. **A price is a fact with a date on it.** A kiosk reading is the only price
+   in this app that is first-hand, and it is worth setting beside UEX's for
+   the same commodity with both ages attached. Not built: it wants a kiosk
+   frame from this install first, because the join is to a terminal and this
+   one is somebody else's.
 
 Step 1 was not a formality and did not go entirely the expected way: the panel
 text read better than hoped and the wallet balance did not read at all. Both of

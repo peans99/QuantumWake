@@ -29,7 +29,8 @@ public sealed record ScreenSighting(
     long TookMs,
     ContractsReading? Contracts = null,
     FleetReading? Fleet = null,
-    ReputationReading? Reputation = null);
+    ReputationReading? Reputation = null,
+    KioskReading? Kiosk = null);
 
 /// <summary>
 /// Remembers what the screenshots said.

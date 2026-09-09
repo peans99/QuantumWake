@@ -281,6 +281,33 @@ public class ScreenAppTests
         Assert.Equal("Fuse", loadout.Fittings.Single(f => f.Slot == "Misc.").Name);
     }
 
+    // ---- the kiosk, filed and not read ----
+
+    /// <summary>
+    /// The words come from a photograph of a kiosk, not a frame, so this
+    /// defends only the filing: the frame is kept whole for the reader to be
+    /// written from once one lands.
+    /// </summary>
+    [Fact]
+    public void A_commodity_kiosk_is_filed_as_such_and_its_text_kept()
+    {
+        var frame = Read(
+        [
+            new("COMMODITIES", 100, 40, 40),
+            new("YOUR INVENTORIES", 70, 155, 18),
+            new("DRAKE CATERPILLAR", 90, 210, 16),
+            new("CARGO CAPACITY", 62, 335, 14),
+            new("67 / 576 SCU", 460, 335, 14),
+            new("DYMANTIUM", 160, 473, 16),
+            new("8 SCU", 470, 473, 16),
+            new("¤ 1/SCU", 470, 500, 12),
+        ]);
+
+        Assert.Equal(ScreenKind.Kiosk, frame.Kind);
+        Assert.Contains("DYMANTIUM", frame.Lines);
+        Assert.Null(frame.Loadout);
+    }
+
     // ---- empty ports ----
 
     [Fact]

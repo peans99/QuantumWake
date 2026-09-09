@@ -221,7 +221,8 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery, 
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    var frame = ScreenFrames.Read(lines, items, shipNames, handle);
+    var commodities = game.All.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    var frame = ScreenFrames.Read(lines, items, shipNames, handle, commodities);
 
     Console.WriteLine();
     Console.WriteLine($"Screen    : {frame.Kind}");
@@ -235,6 +236,21 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery, 
         Console.WriteLine($"Place     : {map.PlaceRead ?? "(not read)"}");
         Console.WriteLine($"Position  : {map.Latitude}° {map.Longitude}° {map.Gigametres} Gm");
         Console.WriteLine($"Contracts : {(map.AcceptedContracts switch { false => "none accepted", true => "some accepted", _ => "(not stated)" })}");
+    }
+
+    if (frame.Kiosk is { } kiosk)
+    {
+        Console.WriteLine($"Side      : {(kiosk.Buying == false ? "selling" : kiosk.Buying == true ? "buying" : "(not read)")}");
+        Console.WriteLine($"Ship      : {kiosk.Ship ?? kiosk.ShipRead ?? "(not read)"}  cargo {kiosk.CargoUsed}/{kiosk.CargoCapacity} SCU");
+        Console.WriteLine($"Balance   : {kiosk.BalanceRead ?? "(not read)"}  (abbreviated, so no number is taken from it)");
+
+        foreach (var row in kiosk.Rows)
+        {
+            Console.WriteLine($"  {row.Commodity ?? $"\"{row.Read}\""}"
+                + $"  stock {row.Quantity?.ToString("N0") ?? "?"} {row.QuantityUnit ?? ""}"
+                + $"  price {row.Price?.ToString("N0") ?? "?"} per {row.PriceUnit ?? "?"}"
+                + $"  {row.State ?? ""}");
+        }
     }
 
     if (frame.Contracts is { } contracts)

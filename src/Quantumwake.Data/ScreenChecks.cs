@@ -91,6 +91,9 @@ public static class ScreenChecks
         if (frame.Reputation is { } reputation)
             checks.Add(Reputation(reputation));
 
+        if (frame.Kiosk is { } kiosk)
+            checks.Add(Kiosk(kiosk));
+
         if (frame.Loadout is { } loadout)
             checks.Add(Fittings(loadout, beliefs));
 
@@ -252,6 +255,36 @@ public static class ScreenChecks
 
         return new ScreenCheck(subject, claim, belief, "new",
             $"never flown in the logs: {string.Join(", ", never)}");
+    }
+
+    /// <summary>
+    /// A kiosk's prices and stock, which the logs never carry either.
+    /// </summary>
+    /// <remarks>
+    /// The logs record what was paid and how much moved, never what a shop was
+    /// asking. So a kiosk is new information, and the one thing worth checking
+    /// is the reading against itself: a price is per SCU or per unit, and the
+    /// kiosk says which. Anything that converts one to the other without the
+    /// game saying so is the centi-SCU error again.
+    /// </remarks>
+    private static ScreenCheck Kiosk(KioskReading kiosk)
+    {
+        var priced = kiosk.Rows.Where(r => r.Price is not null).ToList();
+        var named = kiosk.Rows.Count(r => r.Commodity is not null);
+
+        var claim = $"{kiosk.Rows.Count} commodit{(kiosk.Rows.Count == 1 ? "y" : "ies")} listed"
+            + (named < kiosk.Rows.Count ? $", {named} named" : "")
+            + (priced.Count > 0
+                ? ": " + string.Join(", ", priced.Take(3).Select(r => $"{r.Commodity ?? r.Read} at {r.Price:N0} per {r.PriceUnit}"))
+                : "");
+
+        var units = priced.Select(r => r.PriceUnit).Distinct().ToList();
+
+        var note = units.Count > 1
+            ? $"this kiosk prices in {string.Join(" and ", units)} on the same screen, so the two are kept apart and never converted"
+            : "the logs record what was paid, never what was asked";
+
+        return new ScreenCheck("Kiosk", claim, "nothing - the logs never carry a shop's price", "new", note);
     }
 
     /// <summary>Reputation is nothing the logs carry, so the reading can only be new.</summary>

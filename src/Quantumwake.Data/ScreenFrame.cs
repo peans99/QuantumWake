@@ -37,6 +37,9 @@ public enum ScreenKind
 
     /// <summary>The mobiGlas Rep app, one organisation open.</summary>
     Reputation,
+
+    /// <summary>A commodity kiosk: what the shop stocks, and at what price.</summary>
+    Kiosk,
 }
 
 /// <summary>One port on the loadout screen and what the frame says is in it.</summary>
@@ -125,7 +128,8 @@ public sealed record ScreenFrame(
     WalletReading? Wallet,
     ContractsReading? Contracts = null,
     FleetReading? Fleet = null,
-    ReputationReading? Reputation = null);
+    ReputationReading? Reputation = null,
+    KioskReading? Kiosk = null);
 
 /// <summary>
 /// Sorts a frame into the screen it is and reads what that screen carries.
@@ -182,11 +186,16 @@ public static partial class ScreenFrames
     private const double TreeColumn = 10.0;
 
     /// <summary>Reads a frame whose boxes were kept.</summary>
+    /// <param name="commodityNames">
+    /// What the game calls its commodities, for a kiosk's list. Defaulted
+    /// because every other screen is read without them.
+    /// </param>
     public static ScreenFrame Read(
         IReadOnlyList<ScreenTextLine> lines,
         IReadOnlyList<ItemReference> items,
         IReadOnlyList<string> shipNames,
-        string? handle)
+        string? handle,
+        IReadOnlyList<string>? commodityNames = null)
     {
         var all = lines
             .Select(line => line with { Text = line.Text.Trim() })
@@ -224,6 +233,9 @@ public static partial class ScreenFrames
 
         if (ReadReputation(all) is { } reputation)
             return new ScreenFrame(ScreenKind.Reputation, texts, null, null, null, wallet, Reputation: reputation);
+
+        if (ReadKiosk(all, commodityNames ?? [], shipNames) is { } kiosk)
+            return new ScreenFrame(ScreenKind.Kiosk, texts, null, null, null, wallet, Kiosk: kiosk);
 
         if (hasTooltip)
             return new ScreenFrame(ScreenKind.Tooltip, texts, tooltip, null, null, wallet);

@@ -4637,6 +4637,7 @@ const SCREEN_KINDS = {
   Contracts: 'contracts',
   Fleet: 'fleet',
   Reputation: 'reputation',
+  Kiosk: 'kiosk',
   MobiGlas: 'mobiGlas',
   Unknown: 'unread',
 };
@@ -4736,6 +4737,44 @@ function renderSighting(box, s, { full = true } = {}) {
 
       box.append(list);
     }
+  }
+
+  if (s.kiosk) {
+    const k = s.kiosk;
+    const rows = k.rows || [];
+    box.append(el('div', 'strong',
+      `a kiosk ${k.buying === false ? 'selling' : 'buying'}, ${rows.length} commodit${rows.length === 1 ? 'y' : 'ies'}`));
+
+    if (k.ship || k.cargoCapacity != null) {
+      box.append(el('div', 'muted',
+        `${k.ship || k.shipRead || 'a ship'}${k.cargoCapacity != null ? ` · ${k.cargoUsed ?? 0} / ${k.cargoCapacity} SCU` : ''}`));
+    }
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+
+      for (const row of rows) {
+        const li = el('li');
+        li.append(el('span', 'what', row.commodity || `read as “${row.read}”`));
+
+        // The unit stays welded to the price. They are not the same quantity
+        // and nothing here converts one into the other.
+        if (row.price != null)
+          li.append(el('span', 'd', ` · ${Number(row.price).toLocaleString()} per ${row.priceUnit}`));
+
+        if (row.quantity != null)
+          li.append(el('span', 'd', ` · ${Number(row.quantity).toLocaleString()} ${row.quantityUnit || ''} in stock`));
+
+        if (row.state) li.append(el('span', 'd', ` · ${row.state.toLowerCase()}`));
+        list.append(li);
+      }
+
+      box.append(list);
+    }
+
+    // Said out loud: the kiosk rounds this one and the mobiGlas bar does not.
+    if (k.balanceRead)
+      box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
   }
 
   if (s.contracts) {

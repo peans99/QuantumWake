@@ -132,7 +132,7 @@ public sealed class ScreenInsightService(
         var items = library.Items();
         var ships = ShipNames(items);
 
-        var frame = ScreenFrames.Read(lines, items, ships, library.Handle());
+        var frame = ScreenFrames.Read(lines, items, ships, library.Handle(), CommodityNames());
         var beliefs = new LibraryBeliefs(library);
         var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet());
 
@@ -161,7 +161,7 @@ public sealed class ScreenInsightService(
             shot, shotAt, frame.Kind,
             Summarise(frame, loadout, item),
             checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs,
-            frame.Contracts, frame.Fleet, frame.Reputation);
+            frame.Contracts, frame.Fleet, frame.Reputation, frame.Kiosk);
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
@@ -207,6 +207,13 @@ public sealed class ScreenInsightService(
         return [.. names.Concat(vehicles).Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
+    /// <summary>What the game calls its commodities, install first.</summary>
+    private IReadOnlyList<string> CommodityNames() =>
+        [.. library.GameCommodities.All.Values
+            .Concat(library.Community.All.Values.Select(c => c.Name))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
     private static string Summarise(ScreenFrame frame, LoadoutReading? loadout, ScreenScan? item) => frame.Kind switch
     {
         ScreenKind.Loadout when loadout is not null =>
@@ -226,6 +233,8 @@ public sealed class ScreenInsightService(
             frame.Reputation.Organisation is { Length: > 0 } org
                 ? $"reputation with {org}" + (frame.Reputation.Standing is { Length: > 0 } s ? $": {s}" : "")
                 : "the Rep app",
+        ScreenKind.Kiosk when frame.Kiosk is not null =>
+            $"a kiosk {(frame.Kiosk.Buying == false ? "selling" : "buying")}, {frame.Kiosk.Rows.Count} commodities listed",
         ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
         _ => "nothing this app knows how to read",
     };

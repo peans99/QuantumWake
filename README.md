@@ -318,7 +318,28 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.3
+### 0.10.4
+
+- **Commodity kiosks read.** Point a screenshot at a shop terminal and the
+  buy side comes back as a list: what it stocks, how much of it, and what it
+  is asking. Your logs record what you paid and never what was asked, so
+  every one of those prices is new.
+
+  **The unit stays welded to the price.** One kiosk priced Hephaestanite per
+  unit and Corundum per SCU on the same screen. Those are not the same
+  quantity, nothing here converts one into the other, and each price is
+  shown with the word the kiosk printed beside it.
+
+  **What it will not do.** A kiosk abbreviates your balance — ¤1,583M — and
+  that figure is shown as printed and never taken as a number, because a
+  rounded balance used as a starting point would put every later reading out
+  by whatever the rounding hid. A price that did not read is missing rather
+  than borrowed from the row above. The sell side is kept whole but not read.
+
+- **The inventory screen carries no names.** Photographed with a location’s
+  stash open: the items are icons, and the only text on a tile is a stack
+  count. So a stash can be confirmed one hovered item at a time, which
+  already works, and not a screen at a time.
 
 - **Four more screens read: the Contracts app, the Rep app, the Fleet
   Manager and its loadout estimate.** The Contracts tab’s own count and
