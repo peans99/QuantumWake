@@ -29,3 +29,10 @@ footer { position: fixed; z-index: 5; bottom: 0; left: 50%; transform: translate
 .primary { background: #a1ebc7; border-color: #a1ebc7; color: #082418; font-weight: 600; }
 .notice { padding: 12px; background: #302818; border: 1px solid #6f5a36; } #status.error { color: #ffa998; }
 @media(max-width: 800px) { main { padding: 20px 20px 180px; } .workspace { grid-template-columns: minmax(0, 1fr) 190px; gap: 16px; } aside { padding-left: 16px; } footer { padding: 14px 20px; align-items: flex-start; flex-direction: column; } }
+.assignments { margin-top: 24px; border: 1px solid #24343f; border-radius: 6px; padding: 16px; }
+.assignments .hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0 0; }
+.assignments .section-title + .hint { margin-bottom: 4px; }
+.bindings { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 14px; margin: 10px 0 18px; }
+.bindings label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; font: 12px Consolas, monospace; color: #7f96a4; }
+.bindings label select { margin: 0; padding: 5px; font-size: 12px; }
+.bindings label.hit { border-color: #7ce4b3; color: #9ee8c4; background: #10241b; }

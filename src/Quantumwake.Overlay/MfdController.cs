@@ -127,6 +127,11 @@ internal sealed class MfdController : IDisposable
                 var created = window;
                 window.Ready += () => {
                     created.Send(new { type = "alignment", enabled = _preview, panel = panel.Id });
+                    // On Ready as well as on every Apply: a window that has just
+                    // finished navigating missed the send that placed it, and a
+                    // frame drawing the shipped captions over a custom profile
+                    // is a frame whose labels lie.
+                    created.Send(new { type = "buttons", buttons = _active.Buttons });
                     SendDeviceStatus();
                 };
                 _windows[panel.Id] = window;
@@ -134,6 +139,7 @@ internal sealed class MfdController : IDisposable
             }
             window.Place(panel, monitor);
             window.Send(new { type = "alignment", enabled = preview, panel = panel.Id });
+            window.Send(new { type = "buttons", buttons = layout.Buttons });
         }
         if (layout.Enabled || preview || _setup is not null) EnsureInput();
         else { _input?.Dispose(); _input = null; }

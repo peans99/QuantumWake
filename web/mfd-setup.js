@@ -2,7 +2,7 @@
 const setupElement = id => document.getElementById(id);
 const host = window.chrome?.webview;
 let monitors = [{ id: 'example', x: 0, y: 0, width: 1920, height: 1080, primary: true }];
-let layout = { enabled: false, panels: [
+let layout = { enabled: false, buttons: null, panels: [
   { id: 'left', monitor: 'example', x: 360, y: 280, width: 480, height: 480, cougar: 1 },
   { id: 'right', monitor: 'example', x: 960, y: 280, width: 480, height: 480, cougar: 2 }
 ] };
@@ -111,6 +111,51 @@ setupElement('separate').onclick = () => {
   const pair = [first, monitors.find(m => m.id !== first.id)];
   layout.panels = layout.panels.map((p, i) => QwMfd.fit({ ...p, monitor: pair[i].id, x: 0, y: 0 }, pair[i])); changed();
 };
+/* Rebuilt only when the whole profile changes, never on a single dropdown:
+   redrawing the grid under the pilot's hand would take the focus off the row
+   they were part-way through setting. */
+const groups = [
+  { title: 'OPTICAL BUTTONS 1–' + QwMfd.OSBS, from: 1, to: QwMfd.OSBS,
+    hint: 'The buttons around the screen, numbered clockwise from the top left.' },
+  { title: 'ROCKERS ' + (QwMfd.OSBS + 1) + '–' + QwMfd.BUTTONS, from: QwMfd.OSBS + 1, to: QwMfd.BUTTONS,
+    hint: 'The four two-way rockers. Press one to find out which number it is.' }
+];
+function drawButtons() {
+  const map = QwMfd.buttons(layout.buttons);
+  const panel = setupElement('buttons');
+  panel.replaceChildren();
+  for (const group of groups) {
+    const title = document.createElement('div'); title.className = 'section-title'; title.textContent = group.title;
+    const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = group.hint;
+    const grid = document.createElement('div'); grid.className = 'bindings';
+    for (let number = group.from; number <= group.to; number++) {
+      const row = document.createElement('label');
+      row.id = 'bind-' + number;
+      row.append(String(number).padStart(2, '0'));
+      const select = document.createElement('select');
+      select.add(new Option('Unassigned', ''));
+      for (const command of QwMfd.commands) select.add(new Option(command.label, command.id));
+      select.value = map[number] || '';
+      select.setAttribute('aria-label', 'Cougar button ' + number);
+      select.onchange = () => {
+        const next = QwMfd.buttons(layout.buttons);
+        if (select.value) next[number] = select.value; else delete next[number];
+        layout.buttons = next;
+        if (previewing) send('preview');
+        status('Button ' + number + ': ' + (select.selectedOptions[0].text) + '. Save to keep it.');
+      };
+      row.append(select);
+      grid.append(row);
+    }
+    panel.append(title, hint, grid);
+  }
+}
+setupElement('restore').onclick = () => {
+  layout.buttons = null;
+  drawButtons();
+  if (previewing) send('preview');
+  status('Shipped button profile restored. Save to keep it.');
+};
 setupElement('preview').onclick = () => { previewing = true; send('preview'); };
 setupElement('stop-preview').onclick = () => { previewing = false; send('stopPreview'); status('Preview stopped. Saved placement restored.'); };
 setupElement('save').onclick = () => { previewing = false; send('save'); };
@@ -119,14 +164,23 @@ function showDevices(devices) {
   if (new Set(devices).size !== devices.length) setupElement('devices').textContent += ' · Duplicate numbers: input is paused for those devices.';
 }
 host?.addEventListener('message', ({ data }) => {
-  if (data.type === 'setup') { monitors = data.monitors; layout = data.layout; previewing = false; showDevices(data.devices); draw(); }
+  if (data.type === 'setup') {
+    monitors = data.monitors; layout = data.layout; previewing = false;
+    showDevices(data.devices); drawButtons(); draw();
+  }
   if (data.type === 'monitors') {
     monitors = data.monitors;
     layout.panels = layout.panels.map(p => QwMfd.fit(p, monitors.find(m => m.id === p.monitor)));
     draw(); status('Monitor layout changed. Check placement before saving.');
   }
   if (data.type === 'devices') showDevices(data.devices);
-  if (data.type === 'button') setupElement('button-test').textContent = `F16 MFD ${data.cougar} → BUTTON ${String(data.button).padStart(2, '0')}`;
+  if (data.type === 'button') {
+    setupElement('button-test').textContent = `F16 MFD ${data.cougar} → BUTTON ${String(data.button).padStart(2, '0')}`;
+    // The only way to find out which rocker is which: press it and watch its
+    // row light up, then bind the number that answered.
+    for (const lit of document.querySelectorAll('.bindings label.hit')) lit.classList.remove('hit');
+    setupElement('bind-' + data.button)?.classList.add('hit');
+  }
   if (data.type === 'result') status(data.message, !data.ok);
 });
 if (!host) {
@@ -135,4 +189,5 @@ if (!host) {
   setupElement('devices').textContent = 'USB input is available in the desktop app.';
 }
 new ResizeObserver(draw).observe(desktop);
+drawButtons();
 draw();

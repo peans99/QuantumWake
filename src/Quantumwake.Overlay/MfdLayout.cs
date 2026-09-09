@@ -18,7 +18,28 @@ internal sealed record MfdLayout
 {
     public bool Enabled { get; init; }
     public MfdPanel[] Panels { get; init; } = [];
+
+    /// <summary>
+    /// Cougar button number to command, or null for the shipped profile.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Shared by both frames rather than kept per panel: they are the same
+    /// physical device, and the one thing that differs between them - which
+    /// page each is showing - the displays already remember for themselves.
+    /// </para>
+    /// <para>
+    /// A stored map is the whole answer, so a button the pilot cleared stays
+    /// cleared. Only a missing map means "use the defaults", which is why this
+    /// is nullable rather than an empty dictionary.
+    /// </para>
+    /// </remarks>
+    public Dictionary<int, string>? Buttons { get; init; }
+
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+    /// <summary>The Cougar's 20 optical buttons and its four two-way rockers.</summary>
+    public const int ButtonCount = 28;
 
     public static MfdLayout Default(IReadOnlyList<MfdMonitor> monitors)
     {
@@ -37,7 +58,7 @@ internal sealed record MfdLayout
             throw new ArgumentException("The layout needs a left and a right MFD.");
         if (Panels[0].Cougar == Panels[1].Cougar)
             throw new ArgumentException("Assign a different Cougar number to each MFD.");
-        return this with { Panels = Panels.Select(p =>
+        return this with { Buttons = CleanButtons(), Panels = Panels.Select(p =>
         {
             if (p.Cougar is < 1 or > 8 || string.IsNullOrWhiteSpace(p.Monitor))
                 throw new ArgumentException("Choose a monitor and a Cougar number for each MFD.");
@@ -50,6 +71,31 @@ internal sealed record MfdLayout
                 X = Math.Clamp(p.X, 0, m.Width - width), Y = Math.Clamp(p.Y, 0, m.Height - height) };
         }).ToArray() };
     }
+
+    /// <summary>
+    /// The binding map with anything unusable dropped. Null stays null, which
+    /// is the only thing that reads as "use the shipped profile".
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A map that cleans down to nothing stays an empty map rather than
+    /// becoming null: a pilot who unassigns every button gets a blank frame and
+    /// can see every dropdown in setup saying so. Handing the defaults back
+    /// instead would be the app quietly overruling them, and there would be
+    /// nothing on screen to explain it.
+    /// </para>
+    /// <para>
+    /// Shape only. What the command names mean is the display's business, and
+    /// <c>QwMfd.buttons</c> already ignores one it does not know, so repeating
+    /// the vocabulary here would only give it somewhere to drift: a command
+    /// added to the page would be refused by a file this never heard about.
+    /// </para>
+    /// </remarks>
+    private Dictionary<int, string>? CleanButtons() =>
+        Buttons?
+            .Where(b => b.Key is >= 1 and <= ButtonCount
+                && !string.IsNullOrWhiteSpace(b.Value) && b.Value.Length <= 32)
+            .ToDictionary(b => b.Key, b => b.Value);
 }
 
 internal sealed class CougarEdges

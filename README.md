@@ -318,16 +318,37 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.6
+### 0.10.7
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
   Drag and resize the areas, preview alignment behind the frames, and save the
-  placement. The default Cougar USB profile supplies page navigation, scrolling,
-  text size and screen brightness, with a button tester in setup. The first
-  HUD pages focus on navigation, the next planned task and source status, with
-  screenshot readings labelled by capture time. MFD mode starts off; the regular overlay keeps its
-  own settings.
+  placement. Six pages: where you are, the next planned task, the outstanding
+  work at that stop, what you planned to load against what the commodity
+  counters recorded, the contract you accepted this session, and where all of
+  it came from. MFD mode starts off; the regular overlay keeps its own
+  settings.
+
+- **Tick work off from the frame.** The Act page lists what is still to be done
+  at your next stop and marks one done with the **DONE** button — pressed once
+  to arm it and again to confirm, so a glove on the wrong button costs nothing.
+  It writes to your own flight plan and tells the game nothing.
+
+- **Every button can be reassigned, rockers included.** Setup now carries the
+  full button map, shared by both frames. The four rocker switches report as
+  buttons 21–28 and ship unassigned, because which rocker is which number is
+  not something a datasheet answers: press one, watch the tester name it, and
+  bind it. **Restore defaults** puts the shipped profile back.
+
+- **Cargo, honestly.** The game logs no cargo hold, so the Cargo page shows what
+  your plan says to load and what the commodity counters actually recorded this
+  session, each labelled as what it is. It never claims to know what is aboard.
+
+- **Screenshots of the Contracts app are checked properly now.** Reading a
+  mobiGlas Contracts screenshot compared it against a list that was always
+  empty, so a photograph of five accepted contracts reported "the tab says 5,
+  the logs say 0" and marked every one of them as unseen. It now compares
+  against the contracts the logs actually carry.
 
 - **Readings now reach the overlay, and tell you when something is off.**
   The last screenshot read appears on the Now card in the dashboard and in

@@ -12,10 +12,12 @@ Feature branch: `codex/cougar-mfd`, based on `dev0100`.
 - [x] Add a full-size alignment preview, USB button tester and saved placement.
 - [x] Start with focused Nav, Task and Status HUD pages, using the existing live
   stream and briefing API. Default left to navigation and right to the next task.
+- [x] Extend the compact pages to flight-plan actions, cargo and contracts.
+- [x] Make every button reassignable, with the rockers bindable rather than
+  guessed at.
 - [ ] Verify physical frame alignment and default USB inputs on the cockpit.
-- [ ] Extend the compact pages to contracts, cargo and flight-plan actions.
-- [ ] Add configurable action bindings and rocker assignments after the initial
-  profile has been tested on hardware.
+- [ ] Name the four rockers once hardware says which number each one reports,
+  and decide whether any of them earns a default.
 
 ## HUD design
 
@@ -29,14 +31,44 @@ pilot's control; a detected ship must not silently rearrange the buttons.
 - **Task:** what do I do next? Show the first outstanding stop and its next
   unfinished instruction, including the quantity and unit the pilot entered.
   Planned loads are never presented as detected cargo in the hold.
+- **Act:** the same stop's outstanding work as a list, with a cursor, so one
+  line can be ticked off from the frame. Up and down move the cursor here
+  rather than scrolling. A stop with nothing left offers itself instead, since
+  crossing the stop off is then the only thing to confirm there.
+- **Cargo:** what did I mean to carry, and what did a counter actually record?
+  Never a manifest — see below.
+- **Contract:** which contract am I on, and how many objectives are left? This
+  session only, because that is the only session the store cannot answer for.
 - **Status:** can I trust the source? Keep session state and the latest
   screenshot reading with its capture time. No fabricated fuel or shields.
 
 The default cockpit pairs Nav on the left with Task on the right. Fleet
 catalogues, market browsing, historical tables, full party lists and settings
 stay on the dashboard. Unused OSBs remain unassigned rather than offering
-pages that are not useful at this size. Context actions such as confirming
-work can be added once their input and feedback are tested on the hardware.
+pages that are not useful at this size.
+
+**Act writes, and says so.** Confirming marks a line in the pilot's own flight
+plan and tells the game nothing, which the page states on every visit. A press
+arms; a second press on the same button commits; any other button stands it
+down. One button rather than two, and no timer: a confirmation that expires on
+a clock is one that expires while the pilot is being shot at. The instruction
+they are confirming stays on screen the whole time.
+
+**Cargo cannot be a manifest.** Game.log never states what is in a hold, so the
+page shows two things that are not that and labels both: what the plan still
+says to load, and what the commodity counters recorded this session. Quantities
+are added up only where the pilot wrote SCU on them, and anything else is
+counted beside the total rather than folded into it — two units are two
+numbers. A haul bought last session, transferred from another ship or blown out
+of the back is invisible to all of it, and the page says so rather than
+implying a full hold with a confident figure.
+
+**Contract is session-scoped on purpose.** `/api/contracts` reads the store,
+and the store gains a session when the log rotates — so the contract being
+flown right now is the one thing that report cannot show. The page carries the
+open ones from the live session and points at the dashboard for the rest. A
+contract with no journal objectives says the journal was quiet rather than
+showing "0 of 0", which would read as no work left.
 
 ## Use
 
@@ -52,6 +84,10 @@ or closing setup restores the saved state. Tick **Enable MFD displays** and
 choose **Save layout** to keep them. Settings live in `mfd.json` under the
 Quantum Wake data directory. Each display remembers its own page, text size
 and screen brightness in the WebView profile.
+
+**Button assignments** below the tester rebinds any button. Changes reach a
+running alignment preview immediately, so a rebinding can be tried on the frame
+before it is saved; **Save layout** keeps them along with the placement.
 
 Disconnected monitors retain their saved placement and their panels stay
 hidden. They are not moved onto the primary monitor. Changes in monitor
@@ -70,13 +106,34 @@ assignments without changing the firmware.
 
 | Buttons | Quantum Wake action |
 | --- | --- |
-| 1–3 | Nav, Task, Status |
+| 1–5 | Nav, Task, Act, Cargo, Contract |
+| 16 | Status |
 | 15 / 11 | Previous / next page |
-| 14 / 12 | Scroll up / down |
+| 14 / 12 | Up / down — the cursor on Act, the panel elsewhere |
 | 13 | Home (Nav) |
 | 6 / 7 | Increase / decrease text size |
+| 8 | Done — arm, then confirm, the selected flight-plan line |
 | 20 / 19 | Increase / decrease screen brightness |
-| Other OSBs and rockers | Unassigned; shown in the button tester |
+| 9, 10, 17, 18 | Unassigned |
+| 21–28 (rockers) | Unassigned; see below |
+
+Every one of those is a default rather than a rule. **Button assignments** in
+setup rebinds any of the 28 buttons to any page or action, shared by both
+frames — they are the same physical device, and the one thing that differs
+between them, the page each is showing, the displays already remember for
+themselves. **Restore defaults** puts the shipped profile back.
+
+A saved map is the whole answer, not a patch over the defaults: a button the
+pilot clears stays cleared, and clearing every one of them leaves a blank frame
+with every dropdown in setup saying so. Falling back per button would mean an
+unassignment quietly undoing itself on the next reload, which is the one thing
+that would make a custom profile untrustworthy.
+
+**The four rockers ship unassigned, deliberately.** They report as buttons
+21–28, and nothing in the leaflet or the manual says which rocker is which
+number — so a default here would be a guess printed as a fact. Press one, watch
+the setup tester name the number that answered, and bind it. The row lights up
+as it is pressed, which is the whole discovery procedure.
 
 Screen brightness changes the rendered page, not the Cougar LEDs. Native
 USB reads use Windows `joyGetPosEx` and do not consume game inputs or send
@@ -117,6 +174,55 @@ returned **Microsoft PC-joystick driver** for every occupied slot on this
 machine. Matching that field alone detected no Cougars. Resolving the slot's
 OEM registry entry produced the actual MFD names and detected both devices.
 
+### The Act, Cargo and Contract pages, and the button map
+
+Verified on 2026-09-09, against two servers: one on a copy of this install's
+real data, one on a generated install so the counters and journal had something
+in them.
+
+- All three suites pass: 1,105 core/data tests, 511 web tests, 6 OCR tests.
+  `Quantumwake.Cli` against the real corpus reports **0 unmatched known tags**.
+- Headless Chrome drove the real page against the real server. Act listed the
+  two outstanding instructions at Baijini Point from a tracked plan, moved its
+  cursor, armed on **DONE** and stood down again on any other button. The
+  second **DONE** posted
+  `/api/trips/778bd611/stops/86f33f3a/actions/73efdfb7/toggle` - the right trip,
+  stop and instruction. That exact request was then sent for real: HTTP 200, and
+  the briefing dropped the instruction from its outstanding list.
+- Cargo read "96 SCU across 2 stops · planned, not detected" from the plan, and
+  "Sold 80 SCU · Admin lt base g · 132,509 aUEC" with its capture time from the
+  parsed logs, over "The game logs no cargo hold". With neither, it says which
+  one is missing rather than showing a zero.
+- Contract read a real parsed contract and said "The journal reported no
+  objective steps for this one" rather than "0 of 0".
+- The setup editor round-tripped a profile through the host message channel: a
+  rocker press lit row 21, binding it saved `"21": "bright-up"`, clearing button
+  8 removed the key rather than restoring its default, and **Restore defaults**
+  posted `buttons: null`. A profile delivered from the host relabelled the frame
+  live - OSB 1 read `CNTRCT`, unmapped buttons went to `—` and disabled.
+- Rendered at 220 × 220, the minimum panel, inside an iframe. Headless Chrome
+  will not open a window narrower than about 500 px on this machine, so a
+  `--window-size=220,220` screenshot is a crop of a 500-wide page and looks like
+  a broken layout when nothing is wrong. Frame it instead.
+
+**The negative result from this round:** `ContractRecord.Accepted` is never set
+by anything. Filtering on it - which both this page and
+`LibraryBeliefs.OpenContractsAt` did - returns an empty list for every session
+ever recorded, which is why the first live run found no contracts in a log
+carrying 24 acceptance toasts. The acceptance toast and the objective marker
+name a contract in two vocabularies that do not join, so nothing ever fills it
+in. Being in the list is already what "taken" means: the game raises an
+objective marker for a mission in the journal. Both call sites now say so, and
+the field carries a warning rather than being removed, since dropping it would
+retire every cached session to change nothing that is stored.
+
+That bug was also reaching the screenshot cross-check: the mobiGlas Contracts
+app was compared against a permanently empty list, so a photograph of five
+accepted contracts read "the tab says 5, the logs say 0" and filed all five as
+"on screen but not in the logs".
+
 Physical button presses while the game has focus, frame alignment, and
 mixed-DPI monitor behavior still need a cockpit run. The native checks read
-device state but did not synthesize a physical press or change the game.
+device state but did not synthesize a physical press or change the game. The
+four rockers cannot be given defaults until that run says which number each
+one reports.

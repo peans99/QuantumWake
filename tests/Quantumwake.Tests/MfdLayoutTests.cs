@@ -56,6 +56,57 @@ public class MfdLayoutTests
         Assert.Throws<ArgumentException>(() => new MfdLayout { Panels = [null!, null!] }.Validate(Monitors));
     }
 
+    /// <summary>
+    /// Absent means "use the shipped profile"; present means the pilot's map is
+    /// the whole answer, empty included. Handing the defaults back to someone
+    /// who cleared every button would be the app overruling them silently.
+    /// </summary>
+    [Fact]
+    public void OnlyAnAbsentButtonMapMeansTheShippedProfile()
+    {
+        var layout = MfdLayout.Default(Monitors);
+        Assert.Null(layout.Validate(Monitors).Buttons);
+        Assert.Empty((layout with { Buttons = [] }).Validate(Monitors).Buttons!);
+    }
+
+    /// <summary>
+    /// Shape only: what a command name means is the display's business, so an
+    /// unknown one survives the file and is dropped where it is read.
+    /// </summary>
+    [Fact]
+    public void ButtonMapKeepsUnknownCommandsAndDropsImpossibleButtons()
+    {
+        var stored = new Dictionary<int, string>
+        {
+            [0] = "nav", [1] = "nav", [28] = "confirm", [29] = "nav",
+            [7] = "  ", [8] = new string('x', 33), [9] = "a-command-added-later"
+        };
+        var kept = (MfdLayout.Default(Monitors) with { Buttons = stored }).Validate(Monitors).Buttons!;
+        Assert.Equal([1, 9, 28], kept.Keys.Order());
+        Assert.Equal("a-command-added-later", kept[9]);
+    }
+
+    /// <summary>
+    /// The map is written by a web page and read back into a dictionary keyed
+    /// by number, so the file's string keys have to survive the trip both ways.
+    /// </summary>
+    [Fact]
+    public void ButtonMapSurvivesTheJsonRoundTripTheSetupPageUses()
+    {
+        var saved = (MfdLayout.Default(Monitors) with
+        {
+            Buttons = new() { [1] = "nav", [8] = "confirm", [21] = "bright-up" }
+        }).Validate(Monitors);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(saved, MfdLayout.JsonOptions);
+        Assert.Contains("\"21\": \"bright-up\"", json);
+
+        var read = System.Text.Json.JsonSerializer
+            .Deserialize<MfdLayout>(json, MfdLayout.JsonOptions)!.Validate(Monitors);
+        Assert.Equal(saved.Buttons, read.Buttons);
+        Assert.Equal("confirm", read.Buttons![8]);
+    }
+
     [Fact]
     public void ButtonEdgesIgnoreInitialHeldButtonAndRepeatThenAcceptRepress()
     {

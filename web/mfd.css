@@ -30,3 +30,7 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .16em; margin: 5% 0; fo
 .crosshair::before, .crosshair::after { content: ''; position: absolute; background: #488b66; }
 .crosshair::before { left: 50%; top: 0; height: 100%; width: 1px; }
 .crosshair::after { top: 50%; left: 0; width: 100%; height: 1px; }
+.edge button b { display: block; font-weight: normal; }
+.reading.cursor, .reading.armed { border-left: 3px solid var(--ink); padding-left: 3%; }
+.reading.armed { background: #103b26; }
+.reading.armed h2 { color: var(--ink); }
