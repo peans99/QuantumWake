@@ -701,6 +701,7 @@ function renderNow(state) {
   sessionStarted = state.sessionStarted || null;
 
   renderNowParty(state);
+  renderNowScreenCard(state.screen);
 
   raiseToasts(state.recentEvents);
 
@@ -751,6 +752,10 @@ const TOAST_MS = 9000;
 const TOAST_KINDS = {
   'contract-done': 'Contract complete',
   payout: 'Paid',
+
+  // Only disagreements. A pilot photographing a loadout takes several frames
+  // in a row, and a toast apiece would teach them to ignore the toasts.
+  'screen-differs': 'Screenshot differs',
 };
 
 /**
@@ -4491,7 +4496,7 @@ async function renderScreenPanel() {
   if (folder) folder.checked = !!screenSettings.watchScreenshots;
 
   applyScreenMode();
-  renderScreenReadings().catch(() => {});
+  renderScreenLog().catch(() => {});
 }
 
 /** Shows the controls the chosen mode actually has. */
@@ -4560,16 +4565,15 @@ function startScreenWatch() {
 
   if (screenSettings.mode === 'Off') return;
 
-  const clipboard = !!$('#screen-watch')?.checked;
-  const folder = screenSettings.mode === 'Screenshots' && screenSettings.watchScreenshots;
-
-  if (!clipboard && !folder) return;
+  // Only the clipboard is polled. Screenshots arrive on the live stream,
+  // because the server watches the folder and the snapshot carries the
+  // newest reading to every client, widget included.
+  if (!$('#screen-watch')?.checked) return;
 
   screenWatcher = setInterval(() => {
     // Quietly: a watcher that announced "nothing copied" every three seconds
     // would be unusable.
-    if (clipboard) parseClipboard(true).catch(() => {});
-    if (folder) renderScreenReadings().catch(() => {});
+    parseClipboard(true).catch(() => {});
   }, 3000);
 }
 
@@ -4627,6 +4631,8 @@ async function parseClipboard(quiet = false) {
     box.append(el('div', 'muted',
       'Which system this is in comes from your logs, not from the reading.'));
   });
+
+  renderScreenLog().catch(() => {});
 }
 
 /** What kind of screen a reading was, in words a pilot would use. */
@@ -4885,7 +4891,7 @@ async function scanScreenshot() {
 
   screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · read in ${s.tookMs} ms`);
   screenShow((box) => renderSighting(box, s));
-  renderScreenReadings(true).catch(() => {});
+  renderScreenLog().catch(() => {});
 }
 
 /**
@@ -4894,39 +4900,80 @@ async function scanScreenshot() {
  * Redrawn only when a new one has landed, because the list is polled and a
  * list that flickers every three seconds cannot be read.
  */
-async function renderScreenReadings(force = false) {
-  if (screenSettings.mode !== 'Screenshots') {
-    const card = $('#now-screen-card');
-    if (card) card.hidden = true;
+/**
+ * The log: everything the app has been shown, newest first.
+ *
+ * One list for both, because to the pilot a paste and a screenshot are the
+ * same act - a thing they showed the app - and only the app cares that one
+ * came through an engine and the other through the clipboard. The newest
+ * entry is shown in full and the rest as a line each, so a session's worth
+ * can be scanned without scrolling past one reading's detail.
+ *
+ * Not polled. It is redrawn when the page is opened, after a scan or a paste,
+ * and when the live stream reports a shot this page has not seen.
+ */
+async function renderScreenLog() {
+  const list = $('#screen-readings');
+  if (!list) return;
+
+  let got;
+
+  try {
+    got = await getJson('/api/screen/readings?take=50');
+  } catch {
     return;
   }
 
-  const got = await getJson('/api/screen/readings?take=12');
-  const readings = got.readings || [];
-  const latest = readings[0];
+  const entries = [
+    ...(got.readings || []).map((s) => ({ at: s.shotAt, shot: s })),
+    ...(got.clipboard || []).map((c) => ({ at: c.at, paste: c })),
+  ].sort((a, b) => new Date(b.at) - new Date(a.at));
 
-  if (!force && latest && latest.shot === screenLatestShot) return;
-  screenLatestShot = latest?.shot || null;
+  screenLatestShot = (got.readings || [])[0]?.shot || null;
 
-  const list = $('#screen-readings');
+  list.textContent = '';
 
-  if (list) {
-    list.textContent = '';
+  const counts = $('#screen-log-counts');
 
-    if (!readings.length) {
-      list.append(el('p', 'muted', 'No screenshots read yet.'));
-    } else {
-      for (const s of readings) {
-        const row = el('div', 'screen-reading');
-        row.append(el('div', 'muted',
-          `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}`));
-        renderSighting(row, s, { full: s === latest });
-        list.append(row);
-      }
-    }
+  if (counts) {
+    counts.textContent = entries.length
+      ? `${got.total} screenshot${got.total === 1 ? '' : 's'} read, ${got.pastes} paste${got.pastes === 1 ? '' : 's'}`
+      : '';
   }
 
-  renderNowScreenCard(latest);
+  if (!entries.length) {
+    list.append(el('p', 'muted', 'Nothing read yet. Screenshots and pastes both land here.'));
+    return;
+  }
+
+  let first = true;
+
+  for (const entry of entries) {
+    const row = el('div', 'screen-reading');
+
+    if (entry.paste) {
+      const p = entry.paste;
+      row.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted`));
+      row.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
+
+      // The raw numbers are the exact part and the only part.
+      row.append(el('div', 'muted',
+        `x ${Math.round(p.x).toLocaleString()} · y ${Math.round(p.y).toLocaleString()} · z ${Math.round(p.z).toLocaleString()}`));
+
+      // Where the logs put you then. The reading itself names nowhere.
+      row.append(el('div', 'muted', p.believed
+        ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
+        : 'Your logs had no session running, so there is nothing to place it against.'));
+    } else {
+      const s = entry.shot;
+      row.append(el('div', 'muted',
+        `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}`));
+      renderSighting(row, s, { full: first });
+      first = false;
+    }
+
+    list.append(row);
+  }
 }
 
 /** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
@@ -4958,6 +5005,12 @@ function renderNowScreenCard(s) {
   }
 
   card.hidden = false;
+
+  // The log is not polled, so a reading arriving on the stream is what tells
+  // it to redraw - and only when somebody is looking at it.
+  if (s.shot !== screenLatestShot && $('#view-overlay')?.classList.contains('active'))
+    renderScreenLog().catch(() => {});
+
   $('#now-screen-summary').textContent = s.summary;
   $('#now-screen-when').textContent =
     `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString()} · ${s.shot}`;
@@ -5060,6 +5113,32 @@ async function renderFleetBerths() {
   for (const row of rows) feed.append(fleetRow(row));
   list.append(feed);
 }
+
+$('#screen-log-refresh')?.addEventListener('click', () => {
+  renderScreenLog().catch(() => {});
+});
+
+/**
+ * Clearing is deliberate and immediate.
+ *
+ * No confirmation: everything in the log can be produced again by taking the
+ * screenshot again, and a dialog in front of a harmless button is the kind of
+ * thing that trains people to click through the ones that matter.
+ */
+$('#screen-log-clear')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await fetch('/api/screen/readings', { method: 'DELETE' });
+    screenLatestShot = null;
+    await renderScreenLog();
+  } catch {
+    screenSay('could not clear the log');
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $('#screen-mode')?.addEventListener('change', async () => {
   await saveScreenSettings($('#screen-mode').value, $('#screen-watch')?.checked, $('#screen-watch-folder')?.checked);

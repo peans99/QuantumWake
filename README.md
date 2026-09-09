@@ -318,7 +318,24 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.4
+### 0.10.5
+
+- **Readings now reach the overlay, and tell you when something is off.**
+  The last screenshot read appears on the Now card in the dashboard and in
+  the in-game widget, without your having to open the settings first. Before
+  this it only updated after a visit to the Overlay page, so the widget never
+  showed a reading at all.
+
+  **A toast when the screen and your logs disagree**, and only then. Taking
+  six shots of a loadout should not put six notifications on your screen, so
+  a reading that agrees updates the card quietly and says nothing.
+
+- **A log of everything you have shown it**, on the Overlay page. Every
+  screenshot read and every location pasted, newest first, with what your
+  logs said at that moment beside it. A pasted location is kept with the
+  place your logs had you at the time, because the reading itself names
+  nowhere and three numbers are unreadable a week later. It stays on this
+  machine, and there is a button to clear it.
 
 - **Commodity kiosks read.** Point a screenshot at a shop terminal and the
   buy side comes back as a list: what it stocks, how much of it, and what it

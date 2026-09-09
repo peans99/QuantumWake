@@ -36,10 +36,17 @@ public class ScreenKioskPanelTests
              "canReadScreenshots":true,"canReadClipboard":true,"folder":"E:\\shots"}
             """);
 
-        page.Serve("/api/screen/readings?take=12", $$"""{"readings":[{{KioskSighting}}],"total":1}""");
+        page.Serve("/api/screen/readings?take=50",
+            $$"""{"readings":[{{KioskSighting}}],"clipboard":[],"total":1,"pastes":0}""");
+
+        page.Serve("/api/briefing", "{}");
+        page.Serve("/api/trips", "[]");
         page.Do("await renderScreenPanel();");
         return page;
     }
+
+    private static void Frame(Page page) =>
+        page.Do($"renderNow({{ connected:true, inGame:true, confidence:'None', recentEvents:[], screen:{KioskSighting} }});");
 
     [Fact]
     public void A_kiosk_reading_lists_each_commodity_with_its_price_and_stock()
@@ -90,6 +97,7 @@ public class ScreenKioskPanelTests
     public void The_Now_card_carries_the_kiosk_as_a_new_finding()
     {
         var page = Panel();
+        Frame(page);
 
         Assert.False(page.Truth("__dom.node('#now-screen-card').hidden"));
         Assert.Contains("a kiosk buying", page.NodeText("#now-screen-summary"));

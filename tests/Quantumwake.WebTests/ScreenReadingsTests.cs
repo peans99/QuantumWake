@@ -39,7 +39,7 @@ public class ScreenReadingsTests
          "lines":[]}
         """;
 
-    private static Page Panel(string mode = "Screenshots", bool watchScreenshots = false, string readings = "[]")
+    private static Page Panel(string mode = "Screenshots", bool watchScreenshots = false, string readings = "")
     {
         var page = new Page();
 
@@ -49,10 +49,20 @@ public class ScreenReadingsTests
              "folder":"E:\\rsi\\StarCitizen\\LIVE\\screenshots"}
             """);
 
-        page.Serve("/api/screen/readings?take=12", $$"""{"readings":{{readings}},"total":1}""");
+        page.Serve("/api/screen/readings?take=50",
+            $$"""{"readings":[{{readings}}],"clipboard":[],"total":1,"pastes":0}""");
+        page.Serve("/api/briefing", "{}");
+        page.Serve("/api/trips", "[]");
         page.Do("await renderScreenPanel();");
         return page;
     }
+
+    /// <summary>
+    /// The card is fed by the live stream, not by the settings page, which is
+    /// what makes it work in the widget and before anyone opens the settings.
+    /// </summary>
+    private static void Frame(Page page, string? screen) =>
+        page.Do($"renderNow({{ connected:true, inGame:true, confidence:'None', recentEvents:[], screen:{screen ?? "null"} }});");
 
     [Fact]
     public void The_folder_watch_is_offered_only_with_screenshots_allowed()
@@ -95,7 +105,7 @@ public class ScreenReadingsTests
     [Fact]
     public void A_reading_shows_the_claim_the_belief_and_the_verdict_in_words()
     {
-        var page = Panel(readings: $"[{MapSighting}]");
+        var page = Panel(readings: MapSighting);
 
         var list = page.NodeText("#screen-readings");
 
@@ -112,7 +122,8 @@ public class ScreenReadingsTests
     [Fact]
     public void The_Now_card_carries_the_newest_reading_and_counts_the_disagreements()
     {
-        var page = Panel(readings: $"[{MapSighting}]");
+        var page = Panel(readings: MapSighting);
+        Frame(page, MapSighting);
 
         Assert.False(page.Truth("__dom.node('#now-screen-card').hidden"));
         Assert.Equal("PYRO > DUDLEY & DAUGHTERS", page.NodeText("#now-screen-summary"));
@@ -123,16 +134,17 @@ public class ScreenReadingsTests
     [Fact]
     public void With_nothing_read_the_Now_card_stays_hidden()
     {
-        var page = Panel();
+        var page = Panel(readings: "");
+        Frame(page, null);
 
         Assert.True(page.Truth("__dom.node('#now-screen-card').hidden"));
-        Assert.Contains("No screenshots read yet", page.NodeText("#screen-readings"));
+        Assert.Contains("Nothing read yet", page.NodeText("#screen-readings"));
     }
 
     [Fact]
     public void A_loadout_reading_lists_each_port_and_says_which_parts_are_not_stock()
     {
-        var page = Panel(readings: $"[{LoadoutSighting}]");
+        var page = Panel(readings: LoadoutSighting);
 
         var list = page.NodeText("#screen-readings");
 

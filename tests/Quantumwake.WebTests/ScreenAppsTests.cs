@@ -51,10 +51,17 @@ public class ScreenAppsTests
              "canReadScreenshots":true,"canReadClipboard":true,"folder":"E:\\shots"}
             """);
 
-        page.Serve("/api/screen/readings?take=12", $$"""{"readings":[{{readings}}],"total":1}""");
+        page.Serve("/api/screen/readings?take=50",
+            $$"""{"readings":[{{readings}}],"clipboard":[],"total":1,"pastes":0}""");
+
+        page.Serve("/api/briefing", "{}");
+        page.Serve("/api/trips", "[]");
         page.Do("await renderScreenPanel();");
         return page;
     }
+
+    private static void Frame(Page page, string screen) =>
+        page.Do($"renderNow({{ connected:true, inGame:true, confidence:'None', recentEvents:[], screen:{screen} }});");
 
     [Fact]
     public void A_contracts_reading_lists_the_cards_and_the_selected_contract()
@@ -76,6 +83,7 @@ public class ScreenAppsTests
     public void A_fleet_reading_shows_each_ship_or_what_was_read_instead()
     {
         var page = Panel(FleetSighting);
+        Frame(page, FleetSighting);
 
         var list = page.NodeText("#screen-readings");
 

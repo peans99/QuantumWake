@@ -91,6 +91,68 @@ public class ScreenReadingStoreTests : IDisposable
         Assert.Equal("Frost-Star EX", latest.Loadout!.Fittings[0].Name);
     }
 
+    // ---- what was pasted ----
+
+    private static ClipboardSighting Paste(DateTimeOffset at, string? believed = "Ruin Station") =>
+        new(at, -9641671346.9, -11490734321.2, -91805.1, 14.99996, believed, believed is null ? null : "Pyro");
+
+    [Fact]
+    public void Pastes_come_back_newest_first_and_survive_a_restart()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At.AddMinutes(-5)));
+        store.AddClipboard(Paste(At));
+
+        var again = new ScreenReadingStore(_dir);
+
+        Assert.Equal([At, At.AddMinutes(-5)], again.Clipboards().Select(p => p.At));
+        Assert.Equal("Ruin Station", again.Clipboards()[0].Believed);
+    }
+
+    /// <summary>
+    /// Its own file: a paste and a screenshot have nothing in common but the
+    /// panel they end up on, and one being unreadable must not take the other.
+    /// </summary>
+    [Fact]
+    public void A_ruined_screenshot_file_does_not_take_the_pastes_with_it()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("a.jpg", At));
+        store.AddClipboard(Paste(At));
+
+        File.WriteAllText(Path.Combine(_dir, "screen-readings.json"), "{ not json");
+
+        var again = new ScreenReadingStore(_dir);
+
+        Assert.Empty(again.All());
+        Assert.Single(again.Clipboards());
+    }
+
+    [Fact]
+    public void The_paste_history_is_bounded_like_the_rest()
+    {
+        var store = new ScreenReadingStore(_dir);
+
+        for (var i = 0; i < ScreenReadingStore.Keep + 10; i++)
+            store.AddClipboard(Paste(At.AddSeconds(i)));
+
+        Assert.Equal(ScreenReadingStore.Keep, store.Clipboards().Count);
+    }
+
+    [Fact]
+    public void Clearing_takes_both_halves()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("a.jpg", At));
+        store.AddClipboard(Paste(At));
+
+        store.Clear();
+
+        Assert.Empty(store.All());
+        Assert.Empty(store.Clipboards());
+        Assert.Empty(new ScreenReadingStore(_dir).Clipboards());
+    }
+
     [Fact]
     public void Screenshot_watching_is_only_a_setting_in_the_mode_that_allows_it()
     {

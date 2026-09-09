@@ -32,8 +32,24 @@ public sealed record ScreenSighting(
     ReputationReading? Reputation = null,
     KioskReading? Kiosk = null);
 
+/// <summary>One <c>/showlocation</c> reading the pilot pasted.</summary>
+/// <param name="At">When it was parsed, which for a paste is the only time there is.</param>
+/// <param name="Believed">
+/// Where the logs put the pilot at that moment, so the reading can be read
+/// back later beside what the app thought. The reading itself names no place
+/// and no system, which is the whole reason this field is here.
+/// </param>
+public sealed record ClipboardSighting(
+    DateTimeOffset At,
+    double X,
+    double Y,
+    double Z,
+    double Gigametres,
+    string? Believed,
+    string? System);
+
 /// <summary>
-/// Remembers what the screenshots said.
+/// Remembers what the screenshots said, and what was pasted.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -53,12 +69,15 @@ public sealed class ScreenReadingStore
     public const int Keep = 300;
 
     private readonly string _path;
+    private readonly string _clipboardPath;
     private readonly Lock _gate = new();
     private List<ScreenSighting> _sightings = [];
+    private List<ClipboardSighting> _clipboard = [];
 
     public ScreenReadingStore(string? directory = null)
     {
         _path = Path.Combine(directory ?? AppPaths.Root, "screen-readings.json");
+        _clipboardPath = Path.Combine(directory ?? AppPaths.Root, "screen-clipboard.json");
         Load();
     }
 
@@ -71,6 +90,25 @@ public sealed class ScreenReadingStore
     public ScreenSighting? Latest
     {
         get { lock (_gate) return _sightings.FirstOrDefault(); }
+    }
+
+    /// <summary>Every paste, newest first.</summary>
+    public IReadOnlyList<ClipboardSighting> Clipboards()
+    {
+        lock (_gate) return [.. _clipboard];
+    }
+
+    public void AddClipboard(ClipboardSighting paste)
+    {
+        lock (_gate)
+        {
+            _clipboard.Insert(0, paste);
+
+            if (_clipboard.Count > Keep)
+                _clipboard.RemoveRange(Keep, _clipboard.Count - Keep);
+
+            SaveClipboard();
+        }
     }
 
     /// <summary>The newest Fleet Manager reading, for the fleet page.</summary>
@@ -132,11 +170,19 @@ public sealed class ScreenReadingStore
         lock (_gate)
         {
             _sightings.Clear();
+            _clipboard.Clear();
             Save();
+            SaveClipboard();
         }
     }
 
     private void Load()
+    {
+        LoadSightings();
+        LoadClipboard();
+    }
+
+    private void LoadSightings()
     {
         try
         {
@@ -150,6 +196,44 @@ public sealed class ScreenReadingStore
             // A file that will not read is a file that gets rewritten by the
             // next screenshot. Losing the history beats refusing to start.
             _sightings = [];
+        }
+    }
+
+    /// <summary>
+    /// The pastes, from their own file.
+    /// </summary>
+    /// <remarks>
+    /// Its own file and its own method. A paste and a screenshot have nothing
+    /// in common but the panel they end up on, and neither an unreadable file
+    /// nor an absent one should take the other with it - which is exactly what
+    /// happened when this shared a method and an early return with the
+    /// screenshots.
+    /// </remarks>
+    private void LoadClipboard()
+    {
+        try
+        {
+            if (!File.Exists(_clipboardPath)) return;
+
+            _clipboard = JsonSerializer.Deserialize<List<ClipboardSighting>>(File.ReadAllText(_clipboardPath), Json) ?? [];
+            _clipboard.Sort((a, b) => b.At.CompareTo(a.At));
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            _clipboard = [];
+        }
+    }
+
+    private void SaveClipboard()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_clipboardPath)!);
+            File.WriteAllText(_clipboardPath, JsonSerializer.Serialize(_clipboard, Json));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Kept in memory for the session; the next paste tries again.
         }
     }
 

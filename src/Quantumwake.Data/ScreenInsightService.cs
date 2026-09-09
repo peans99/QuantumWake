@@ -182,6 +182,16 @@ public sealed class ScreenInsightService(
                 "what you copied is not a location - type /showlocation in the game first");
         }
 
+        // Kept, with where the logs put the pilot at the time. The reading
+        // names no place and no system, so without that it is three numbers
+        // nobody can place a week later.
+        var now = DateTimeOffset.UtcNow;
+        var believed = new LibraryBeliefs(library).WhereAt(now);
+
+        readings.AddClipboard(new ClipboardSighting(
+            now, position.X, position.Y, position.Z, position.GigametresFromCentre,
+            believed?.Name, believed?.System));
+
         return new ClipboardReading(
             true, position.X, position.Y, position.Z, position.GigametresFromCentre, null);
     }

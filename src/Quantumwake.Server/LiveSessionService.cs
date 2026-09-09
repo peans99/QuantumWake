@@ -50,6 +50,26 @@ public sealed record NowState
 
     /// <summary>True once a "Party Disbanded" toast has been seen this session.</summary>
     public bool PartyDisbanded { get; init; }
+
+    /// <summary>The newest screenshot reading, or null when none has been taken.</summary>
+    public NowScreen? Screen { get; init; }
+}
+
+/// <summary>The newest screenshot reading, for the Now card and the widget.</summary>
+/// <remarks>
+/// Without the frame's own text, deliberately. This rides a snapshot pushed
+/// every second to every client, and seventy lines of OCR per push is a great
+/// deal of nothing. The full reading is a fetch away on the settings page.
+/// </remarks>
+public sealed record NowScreen(
+    string Shot,
+    DateTimeOffset ShotAt,
+    string Kind,
+    string Summary,
+    IReadOnlyList<ScreenCheck> Checks)
+{
+    /// <summary>How many checks the screen and the logs disagreed on.</summary>
+    public int Differs => Checks.Count(c => c.Verdict == "differs");
 }
 
 /// <summary>The last thing the party channel said about one player.</summary>
@@ -88,6 +108,21 @@ public sealed class LiveSessionService : BackgroundService
     /// <summary>Where the player was last seen, so an arrival fires once.</summary>
     private string? _lastPlace;
 
+    private readonly ScreenReadingStore? _screen;
+
+    /// <summary>The newest screenshot already accounted for.</summary>
+    private string? _lastScreenShot;
+
+    /// <summary>
+    /// Disagreements worth announcing, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the session's own timeline rather than in it: a screenshot
+    /// is not something that happened in the game, and it must not end up in
+    /// a saved session's history.
+    /// </remarks>
+    private readonly List<TimelineEntry> _screenNotes = [];
+
     /// <param name="install">
     /// Defaulted so the container can still build this service on a machine
     /// where no install was found: the live tail has nothing to follow, and
@@ -97,19 +132,31 @@ public sealed class LiveSessionService : BackgroundService
     /// Optional, so the container can build this service before flight plans
     /// exist as a concept - the live tail works with or without one.
     /// </param>
+    /// <param name="screen">
+    /// What the screenshots said. Optional for the same reason as the rest:
+    /// a server with no reader has none, and the Now card then stays hidden.
+    /// </param>
     public LiveSessionService(
         IHubContext<LiveHub> hub,
         LogLibrary library,
         ILogger<LiveSessionService> logger,
         GameInstall? install = null,
-        TripStore? trips = null)
+        TripStore? trips = null,
+        ScreenReadingStore? screen = null)
     {
         _hub = hub;
         _library = library;
         _install = install;
         _logger = logger;
         _trips = trips;
+        _screen = screen;
         _builder = new SessionBuilder(install?.GameLogPath ?? "live");
+
+        // Whatever was already read is not news. Seeding this here is what
+        // stops the app announcing a week-old disagreement the moment it
+        // starts, which is the same mistake the toast code guards against on
+        // the other side of the wire.
+        _lastScreenShot = screen?.Latest?.Shot;
     }
 
     /// <summary>Current snapshot, also served over REST for first paint.</summary>
@@ -228,11 +275,51 @@ public sealed class LiveSessionService : BackgroundService
             Incapacitations = summary.Incapacitations,
             Deaths = summary.Deaths,
             Kills = summary.Kills,
-            RecentEvents = [.. _recent],
+            RecentEvents = Feed(),
+            Screen = ScreenNow(),
             Party = ReadParty(summary.PartyNotes),
             PartyDisbanded = summary.PartyNotes.Count > 0
                 && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded
         };
+    }
+
+    /// <summary>
+    /// The session's own timeline and the screen's notes, newest first.
+    /// </summary>
+    private IReadOnlyList<TimelineEntry> Feed() =>
+        [.. _recent.Concat(_screenNotes).OrderByDescending(entry => entry.At).Take(40)];
+
+    /// <summary>
+    /// The newest reading, and a note when it is the first sight of one that
+    /// disagrees with the logs.
+    /// </summary>
+    /// <remarks>
+    /// Only disagreements are announced. A pilot photographing a loadout takes
+    /// several frames in a row, and a toast apiece would teach them to ignore
+    /// the toasts - which is the one thing a notification cannot afford. A
+    /// reading that agrees updates the card and says nothing.
+    /// </remarks>
+    private NowScreen? ScreenNow()
+    {
+        if (_screen?.Latest is not { } latest) return null;
+
+        if (!string.Equals(latest.Shot, _lastScreenShot, StringComparison.OrdinalIgnoreCase))
+        {
+            _lastScreenShot = latest.Shot;
+
+            if (latest.Checks.FirstOrDefault(check => check.Verdict == "differs") is { } differs)
+            {
+                _screenNotes.Add(new TimelineEntry(
+                    latest.ShotAt,
+                    "screen-differs",
+                    $"{differs.Subject}: {differs.Claim}",
+                    differs.Note ?? differs.Belief));
+
+                if (_screenNotes.Count > 10) _screenNotes.RemoveAt(0);
+            }
+        }
+
+        return new NowScreen(latest.Shot, latest.ShotAt, latest.Kind.ToString(), latest.Summary, latest.Checks);
     }
 
     /// <summary>

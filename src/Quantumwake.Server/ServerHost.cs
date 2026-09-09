@@ -2238,12 +2238,22 @@ public static class ServerHost
         // beside each. The whole store: it is bounded, and a page that has to
         // page through three hundred one-line readings is not a page anybody
         // wants.
+        // Both halves of the history: what was photographed and what was
+        // pasted. One list on the page, because to the pilot they are the same
+        // act - a thing they showed the app - and only the app cares that one
+        // came through an engine and the other through the clipboard.
         app.MapGet("/api/screen/readings", (ScreenReadingStore readings, int? take) =>
-            Results.Ok(new
+        {
+            var many = take is > 0 ? take.Value : 50;
+
+            return Results.Ok(new
             {
-                readings = readings.All().Take(take is > 0 ? take.Value : 50),
+                readings = readings.All().Take(many),
+                clipboard = readings.Clipboards().Take(many),
                 total = readings.All().Count,
-            }));
+                pastes = readings.Clipboards().Count,
+            });
+        });
 
         // The newest loadout read for each ship, for the fleet page - dated,
         // because a screenshot is a moment and never a state.

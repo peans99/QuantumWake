@@ -27,7 +27,7 @@ public class ScreenPanelTests
              "canReadClipboard":{{(desktop ? "true" : "false")}}}
             """);
 
-        page.Serve("/api/screen/readings?take=12", """{"readings":[],"total":0}""");
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"total":0,"pastes":0}""");
         page.Do("await renderScreenPanel();");
         return page;
     }

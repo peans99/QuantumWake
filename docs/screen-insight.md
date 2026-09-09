@@ -989,6 +989,54 @@ outright. It lists the hold rather than the shop and has no `SHOP QUANTITY`
 to anchor on. A sell-side kiosk is filed as a kiosk and kept whole, and
 claims no rows.
 
+### How the feature is driven
+
+Worth writing down, because the first arrangement was wrong in a way that was
+invisible: the readings only refreshed after the Overlay settings page had
+been opened, since that page was the one thing that started them. The widget
+never opens that page, so the widget never showed a reading at all.
+
+**There is one live channel and everything rides it.** The server pushes a
+snapshot every second and both the dashboard and the widget already consume
+it. The newest reading is a field on that snapshot, so the card works in both
+hosts, works before anyone visits the settings, and needs no polling. The
+snapshot carries the reading's summary and its checks and deliberately not
+the frame's own text: seventy lines of OCR pushed every second to every
+client is a great deal of nothing.
+
+**Only disagreements are announced.** The toast machinery already existed and
+already fired in the widget. A toast per screenshot would be noise, because a
+pilot photographing a loadout takes several frames in a row, and a
+notification that fires on everything teaches people to ignore the one that
+matters. A reading whose check says the screen and the logs differ raises a
+toast. Everything else updates the card quietly.
+
+Two guards against announcing history. The client sets its anchor on the first
+frame and toasts nothing it arrived with, which it already did. And the server
+seeds the last-seen screenshot in its constructor, so a reading taken days ago
+is not news the moment the app starts.
+
+**The clipboard is still polled from the page**, three seconds apart, and only
+while a page is open. That is the same flaw the screenshot watch had before it
+moved into the server, and it is the obvious next thing to move.
+
+### The log
+
+Every reading and every paste, newest first, on the settings page, with what
+the logs said at that moment beside it. One list for both, because to the
+pilot they are the same act - a thing they showed the app - and only the app
+cares that one came through an engine and the other through the clipboard.
+
+A paste is stored with the place the logs put the pilot at the time. Without
+that it is three numbers nobody can place a week later, since the reading
+itself names no place and no system. That is the same pairing
+[precise-poi.md](precise-poi.md) describes from the other direction.
+
+The two halves are two files. A paste and a screenshot have nothing in common
+but the panel they end up on, and neither an unreadable file nor an absent one
+should take the other with it - which is precisely what happened when they
+shared a loader and an early return.
+
 ### What is still waiting on a frame
 
 | Screen | What it would confirm |
@@ -1069,7 +1117,13 @@ right.
    Fleet Manager, its estimate and a kiosk's buy side all read. The inventory
    screen turned out to carry no names at all, and a kiosk's sell side is
    waiting on a frame big enough to read.
-7. **A price is a fact with a date on it.** A kiosk reading is the only price
+7. ~~**Drive it from the live stream, and notify on disagreement.**~~
+   **Done** — see **How the feature is driven**.
+8. **Move the clipboard watch into the server**, the way the screenshot watch
+   already moved. It would then work whenever the app runs rather than only
+   while a page is open, and the paste log would fill without anyone watching
+   it.
+9. **A price is a fact with a date on it.** A kiosk reading is the only price
    in this app that is first-hand, and it is worth setting beside UEX's for
    the same commodity with both ages attached. Not built: it wants a kiosk
    frame from this install first, because the join is to a terminal and this

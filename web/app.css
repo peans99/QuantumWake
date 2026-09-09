@@ -4019,4 +4019,6 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .feed .k.differs { color: var(--amber); border-color: #6d4715; }
 .feed .k.new { color: var(--cyan); border-color: var(--cyan-deep); }
 .feed .k.unchecked { color: var(--dim); border-color: var(--rule-hot); }
+.feed .k.screen-differs { color: var(--amber); border-color: #6d4715; }
+.toast.screen-differs { border-left-color: var(--amber); }
 .feed.screen-fittings .what { color: var(--text); font-size: 12px; }
