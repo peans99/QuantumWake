@@ -4,14 +4,20 @@
 <body><main id="mfd">
   <nav id="top" class="edge top" aria-label="MFD pages"></nav>
   <nav id="left" class="edge left" aria-label="Left buttons"></nav>
-  <section class="display"><header><img id="maker" alt="" hidden><span id="identity">MFD</span><span id="connection">CONNECTING</span></header>
+  <!--
+    One header line and no footer. The frame is 480 px square with edges taking
+    28% of it, so a second strip of chrome was costing a reading. Everything the
+    footer carried that a pilot needs - which frame this is, which Cougar drives
+    it - is identity, and identity belongs at the top with the rest of it.
+  -->
+  <section class="display">
+    <header><img id="brand" src="assets/mark.svg" alt="Quantum Wake"><img id="maker" alt="" hidden>
+      <span id="identity">MFD</span><span id="connection">CONNECTING</span></header>
     <h1 id="title">NAV</h1>
     <figure id="map" hidden><svg id="map-plot" viewBox="-1.18 -1.18 2.36 2.36" aria-hidden="true"></svg>
       <figcaption id="map-note"></figcaption></figure>
     <div id="readings" tabindex="0"></div>
     <div id="action" hidden><b id="action-text"></b><span id="action-note"></span></div>
-    <footer><img id="brand" src="assets/mark.svg" alt="Quantum Wake">
-      <span id="device">Browser · click edge labels</span><span id="last-input"></span></footer>
   </section>
   <nav id="right" class="edge right" aria-label="Right buttons"></nav>
   <nav id="bottom" class="edge bottom" aria-label="Navigation buttons"></nav>

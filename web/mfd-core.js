@@ -355,7 +355,7 @@ window.QwMfd = (() => {
         return [['NEXT STOP', stop.place],
           ['NEXT ACTION', next ? describe(next) : stop.note || 'Travel to this stop'],
           ['PLAN', briefing.tripTitle || 'Tracked flight plan'],
-          ['PLAN ONLY', 'Not a detected cargo manifest.']];
+          ['PLAN ONLY', 'Not a detected manifest.']];
       }
       case 'act': {
         if (planMissing) return planMissing;
@@ -391,15 +391,14 @@ window.QwMfd = (() => {
           ...(briefing?.trade?.length ? [['TRADE FROM HERE', briefing.trade.slice(0, 2)
             .map(t => `${t.commodity} · +${Math.round(t.marginPerScu).toLocaleString()}/SCU at ${t.sellTerminal}`)
             .join('  |  ')]] : []),
-          ['NOT A MANIFEST', 'The game logs no cargo hold. This is what the counters recorded '
-            + 'this session, what you planned, and where a price is better - never what is aboard.']
+          ['NOT A MANIFEST', 'Counter receipts and your plan. Never the hold.']
         ];
       }
       case 'contract': {
         const open = s.contracts || [];
         if (!open.length) return [
           ['NO OPEN CONTRACT', 'Nothing accepted in this session that the logs have not since closed.'],
-          ['SESSION ONLY', 'Earlier contracts are in the dashboard logbook, not here.']];
+          ['SESSION ONLY', 'Earlier ones are in the logbook.']];
         const c = open[0];
         // Without a text mod the game's own title is already "issuer · type ·
         // difficulty", so an issuer row would print the line above it twice.
@@ -429,7 +428,7 @@ window.QwMfd = (() => {
           ...(wake ? [['WAKE UP AT', wake.place, wake.at], ['HOW SURE', wake.why]] : []),
           ...(s.screen ? [['LAST SCREENSHOT', s.screen.summary, s.screen.shotAt]]
             : [['NO SCREENSHOT READING', 'Read a screenshot in the dashboard to add a cross-check.']]),
-          ['INSTRUMENTS', 'Screenshot readings are saved observations. Live shields, fuel and power are not supplied.']
+          ['INSTRUMENTS', 'Saved readings. No live shields, fuel or power.']
         ];
       }
       /* The live timeline, newest first. The one page that answers "what just
@@ -438,7 +437,7 @@ window.QwMfd = (() => {
         const feed = s.recentEvents || [];
         if (!feed.length) return [['NOTHING YET',
           'The log has said nothing this session. Entries appear here as the game writes them.']];
-        return feed.slice(0, 14).map(entry => [
+        return feed.slice(0, 8).map(entry => [
           String(entry.kind || 'event').replace(/-/g, ' ').toUpperCase(),
           [entry.text, entry.detail].filter(Boolean).join(' · '), entry.at]);
       }
@@ -447,11 +446,10 @@ window.QwMfd = (() => {
          never dropped produces no toast at all, so absence means nothing. */
       case 'crew': {
         const party = s.party || [];
-        const floor = ['A FLOOR, NOT A ROSTER', 'Only pilots the party channel named. '
-          + 'Anyone already grouped up who never dropped is invisible, so being absent here means nothing.'];
+        const floor = ['A FLOOR', 'Named by the party channel. Absence means nothing.'];
         if (!party.length) return [['NOBODY NAMED', 'The party channel has not named anyone this session.'], floor];
         return [
-          ...party.slice(0, 8).map(p => [String(p.handle).toUpperCase(), p.moment, p.at]),
+          ...party.slice(0, 6).map(p => [String(p.handle).toUpperCase(), p.moment, p.at]),
           ...(s.partyDisbanded ? [['DISBANDED', 'The channel said the group broke up.']] : []),
           floor
         ];
@@ -470,8 +468,7 @@ window.QwMfd = (() => {
                ['AT THIS RATE', money.hoursToGoal != null
                  ? hours(money.hoursToGoal) + ' of flying' : 'No rate to divide the goal by']]
             : [['NO GOAL SET', 'Set one in the dashboard and the flying time to reach it shows here.']]),
-          ['TRADING ONLY', 'Commodity sales less what buying them cost. Nothing else the logs record '
-            + 'is counted, so this is a trading rate rather than everything you earned.']
+          ['TRADING ONLY', 'Commodity sales less their cost. Nothing else.']
         ];
       }
       case 'list': {
@@ -481,11 +478,10 @@ window.QwMfd = (() => {
         if (!open.length) return [['NO LIST IN HAND',
           'Make a shopping list in the dashboard and its progress shows here.']];
         return [
-          ...open.slice(0, 6).map(job => [
+          ...open.slice(0, 4).map(job => [
             (job.pinned ? '★ ' : '') + String(job.title).toUpperCase(),
             [`${job.haveCount} of ${job.totalCount} held`, job.destination].filter(Boolean).join(' · ')]),
-          ['HELD, NOT COUNTED', 'A stash listing records that a thing is somewhere and never how many, '
-            + 'so "held" means seen rather than enough.']
+          ['HELD', 'Seen in a stash listing, not counted.']
         ];
       }
       /* What am I flying, what is it for, and what does losing it cost? All
@@ -505,8 +501,7 @@ window.QwMfd = (() => {
               ['OR WAIT', claim.standardMinutes
                 ? `${Math.round(claim.standardMinutes)} min and no fee` : 'Not stated']]
             : [['CLAIM', 'No claim figures for this hull in the installed tables.']]),
-          ['REFERENCE, NOT A CLAIM', 'Game.log records no insurance claim of any kind. This is what '
-            + 'the game’s own tables say one costs, never whether one is running.']
+          ['REFERENCE', 'What the tables say a claim costs. Never a live one.']
         ];
       }
       /* The page for the moment after landing: what this place can do for you,
@@ -522,9 +517,8 @@ window.QwMfd = (() => {
           ...(shopping.length ? [['ON YOUR LIST, IN STOCK', shopping.slice(0, 3)
             .map(i => `${i.name} · ${i.needed} ${i.unit} · ${aUEC(i.price)}`).join('  |  ')]] : []),
           ...(stash.length ? [['LAST SEEN HERE',
-            stash.slice(0, 5).map(i => i.name).join(' · '), stash[0].lastSeen]] : []),
-          ['A SIGHTING, NOT A COUNT', 'A stash listing records that something was here, never how '
-            + 'many, and never that it still is.']
+            stash.slice(0, 4).map(i => i.name).join(' · '), stash[0].lastSeen]] : []),
+          ['LAST SEEN', 'A sighting. Not a count, and not still here.']
         ];
       }
       case 'ledger': {
@@ -533,14 +527,13 @@ window.QwMfd = (() => {
         if (!ledger.length) return [['NOTHING PRICED',
           'No confirmed transaction in the last few days.']];
         return [
-          ...ledger.slice(0, 10).map(entry => [
+          ...ledger.slice(0, 4).map(entry => [
             String(entry.kind || 'entry').toUpperCase(),
             [entry.what, entry.amount != null
               ? `${entry.amount > 0 ? '+' : ''}${aUEC(entry.amount)}` : null,
               entry.where].filter(Boolean).join(' · '),
             entry.at]),
-          ['CONFIRMED ONLY', 'Only what the server answered for. A request the game never '
-            + 'confirmed is not money that moved.']
+          ['CONFIRMED ONLY', 'What the server answered for.']
         ];
       }
       case 'mine': {
@@ -549,13 +542,12 @@ window.QwMfd = (() => {
         if (!mining.length) return [['NOTHING RANKED', 'The deposit tables rank nothing here, or '
           + 'the community dataset is switched off.']];
         return [
-          ...mining.slice(0, 5).map(place => [
+          ...mining.slice(0, 4).map(place => [
             place.here ? String(place.place).toUpperCase()
               : `${String(place.place).toUpperCase()} · ${place.system || 'another system'}`,
             [`${aUEC(place.perRock)} a rock`, place.best].filter(Boolean).join(' · ')]),
-          ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY',
-            'Some of these are the best anywhere rather than the best near you.']] : []),
-          ['TABLES, NOT SIGHTINGS', 'What the deposit tables rank, not rocks anyone has seen.']
+          ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY', 'Some are the best anywhere, not the best near you.']] : []),
+          ['TABLES', 'Ranked by the deposit tables. Not sightings.']
         ];
       }
       default: return [];

@@ -38,7 +38,17 @@ let compact = false;
 let lastRows = '';
 let stream;
 const byId = id => document.getElementById(id);
-byId('identity').textContent = panelId.toUpperCase() + ' MFD';
+/* Which frame this is and which Cougar drives it, in one line at the top. The
+   footer used to carry the device and a BTN-nn readout of the last press; the
+   press is under the pilot's own thumb, so the readout was a label for
+   something they had just done, costing a strip of a 480 px panel to say it. */
+let cougar = null, usb = false, connection = 'CONNECTING';
+function drawIdentity() {
+  byId('identity').textContent = cougar
+    ? `${panelId.toUpperCase()} · MFD ${cougar}` : panelId.toUpperCase() + ' MFD';
+  byId('connection').textContent = connection + (cougar && !usb ? ' · NO USB' : '');
+}
+drawIdentity();
 // The frame's own numbering. The four rockers carry no printed button, so they
 // are input only: setup names them, and this face has nothing to draw for them.
 const edges = { top: [1, 2, 3, 4, 5], right: [6, 7, 8, 9, 10], bottom: [15, 14, 13, 12, 11], left: [20, 19, 18, 17, 16] };
@@ -129,11 +139,15 @@ function render() {
    behind the very list it was asking about. */
 function drawAction(line) {
   const strip = byId('action');
-  strip.hidden = !line;
-  if (!line) return;
-  strip.className = line.state;
-  byId('action-text').textContent = line.text;
-  byId('action-note').textContent = line.note || '';
+  // A message about the press that just happened outranks the standing prompt,
+  // and off Act it is the only thing the strip has to say. Cleared by the next
+  // press, so it never outlives the thing it is reporting.
+  const showing = notice ? { state: 'note', text: notice } : line;
+  strip.hidden = !showing;
+  if (!showing) return;
+  strip.className = showing.state;
+  byId('action-text').textContent = showing.text;
+  byId('action-note').textContent = showing.note || '';
 }
 /* An opening this small has room for about six characters on an edge button and
    nothing to spare for a map. Measured on load and on resize, because the host
@@ -209,7 +223,11 @@ function drawMap(visible, view) {
     label.textContent = body.name;
   }
 }
-function note(text) { byId('last-input').textContent = text; }
+/* What just happened, in the strip rather than a footer of its own. It clears
+   on the next render that has something else to say, so a message about a press
+   never outlives the press. */
+let notice = '';
+function note(text) { notice = text; drawAction(QwMfd.actionLine(QwMfd.pageIds[page], { briefing, selected, armed, saved })); }
 /* One rule for what is idle, asked by the face when it dims a button and by the
    input before it acts on one. */
 function idleNow(scrollable) {
@@ -221,7 +239,8 @@ function isIdle(commandId) {
 }
 function standDown() { armed = false; armedTask = null; lastRows = ''; }
 function press(number) {
-  note('BTN ' + String(number).padStart(2, '0'));
+  // Each press starts clean, so a message only ever describes this one.
+  notice = '';
   const button = face[number]?.button;
   if (button) { button.classList.add('pressed'); setTimeout(() => button.classList.remove('pressed'), 180); }
   const action = QwMfd.action(number, bindings);
@@ -229,7 +248,7 @@ function press(number) {
   /* A dimmed button does nothing. Dimming and refusing were two rules and only
      the face's ran, so DONE looked dead on Nav and still marked a task off -
      with the confirmation drawn on a page nobody was looking at. */
-  if (isIdle(bindings[number])) { note('BTN ' + String(number).padStart(2, '0') + ' · NOT HERE'); return; }
+  if (isIdle(bindings[number])) { note('Nothing for that button on this page'); render(); return; }
   // Anything but DONE stands a live confirmation down. A pilot reaching for
   // another page must not leave one armed behind them.
   if (!action.confirm && armed) standDown();
@@ -264,7 +283,7 @@ async function confirmSelected() {
   if (confirming) return;
   const list = QwMfd.tasks(briefing);
   const target = list[QwMfd.clamp(selected, 0, list.length - 1)];
-  if (!target?.tripId) { note('NOTHING TO CONFIRM'); return; }
+  if (!target?.tripId) { note('Nothing to confirm here'); render(); return; }
 
   if (!armed) { armed = true; armedTask = target; saved = ''; lastRows = ''; render(); return; }
 
@@ -274,7 +293,7 @@ async function confirmSelected() {
      off whatever happens to be there now. */
   if (!QwMfd.sameTask(armedTask, target)) {
     standDown();
-    note('PLAN CHANGED · NOT MARKED');
+    note('The plan changed. Nothing was marked.');
     render();
     return;
   }
@@ -290,12 +309,11 @@ async function confirmSelected() {
     const response = await fetch(`/api/trips/${encodeURIComponent(target.tripId)}/${path}`,
       { method: 'POST', signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error('Not saved');
-    note('MARKED DONE');
     saved = 'Marked done: ' + marking;
     selected = 0;
     await refreshBriefing();
   } catch {
-    note('NOT SAVED · CHECK THE DASHBOARD');
+    note('Not saved. Check the dashboard.');
     saved = 'Not saved: ' + marking;
   } finally { confirming = false; lastRows = ''; render(); }
 }
@@ -307,8 +325,7 @@ window.chrome?.webview?.addEventListener('message', ({ data }) => {
     if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
     drawLabels(); lastRows = ''; render();
   }
-  if (data.type === 'device') byId('device').textContent = data.connected
-    ? 'F16 MFD ' + data.cougar + ' · USB' : 'F16 MFD ' + data.cougar + ' · not available';
+  if (data.type === 'device') { cougar = data.cougar; usb = !!data.connected; drawIdentity(); }
   if (data.type === 'alignment') {
     byId('alignment').hidden = !data.enabled;
     byId('alignment-name').textContent = panelId.toUpperCase() + ' MFD';
@@ -368,8 +385,8 @@ async function bootMfd() {
       const response = await fetch('/api/now');
       if (!response.ok) throw new Error('No snapshot');
       state = await response.json();
-      byId('connection').textContent = 'SNAPSHOT'; render();
-    } catch { byId('connection').textContent = 'SERVER UNAVAILABLE'; }
+      connection = 'SNAPSHOT'; drawIdentity(); render();
+    } catch { connection = 'SERVER UNAVAILABLE'; drawIdentity(); }
     return;
   }
   stream = new EventSource('/api/stream');
@@ -378,11 +395,12 @@ async function bootMfd() {
   stream.onmessage = event => {
     try {
       state = JSON.parse(event.data);
-      byId('connection').textContent = state.connected ? (state.inGame ? 'LIVE LOG' : 'GAME MENUS') : 'WAITING FOR GAME';
+      connection = state.connected ? (state.inGame ? 'LIVE LOG' : 'GAME MENUS') : 'WAITING FOR GAME';
+      drawIdentity();
       render();
-    } catch { byId('connection').textContent = 'INVALID UPDATE'; }
+    } catch { connection = 'INVALID UPDATE'; drawIdentity(); }
   };
-  stream.onerror = () => { byId('connection').textContent = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; };
+  stream.onerror = () => { connection = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; drawIdentity(); };
   window.addEventListener('beforeunload', () => {
     stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer);
   });

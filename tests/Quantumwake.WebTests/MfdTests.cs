@@ -102,7 +102,7 @@ public class MfdTests
         var e = Engine();
         e.Execute("var status = QwMfd.pageIds.indexOf('status');");
         Assert.Contains("not yet identified", e.Evaluate("JSON.stringify(QwMfd.rows(0,{}))").AsString());
-        Assert.Contains("not supplied", e.Evaluate("JSON.stringify(QwMfd.rows(status,{}))").AsString());
+        Assert.Contains("No live shields, fuel or power", e.Evaluate("JSON.stringify(QwMfd.rows(status,{}))").AsString());
         Assert.Contains("NO SCREENSHOT", e.Evaluate("JSON.stringify(QwMfd.rows(status,{}))").AsString());
         Assert.Contains("Loading", e.Evaluate("JSON.stringify(QwMfd.rows(1,{}))").AsString());
         Assert.Contains("NO OUTSTANDING", e.Evaluate("JSON.stringify(QwMfd.rows(1,{},{stops:[]}))").AsString());
@@ -115,7 +115,7 @@ public class MfdTests
         var json = e.Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('status'),{screen:{summary:'At Lorville',shotAt:'2026-09-09T12:00:00Z'}}))").AsString();
         Assert.Contains("2026-09-09T12:00:00Z", json);
         Assert.Contains("At Lorville", json);
-        Assert.Contains("saved observations", json);
+        Assert.Contains("Saved readings", json);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class MfdTests
     {
         var json = Engine().Evaluate("JSON.stringify(QwMfd.rows(1,{},{tripTitle:'Medical run',stops:[{place:'Baijini Point',actions:[{done:true,text:'Old instruction'},{kind:'load',quantity:32,unit:'SCU',text:'Medical supplies',done:false},{kind:'sell',text:'Later instruction',done:false}]}]}))").AsString();
         Assert.Contains("load · 32 SCU · Medical supplies", json);
-        Assert.Contains("Not a detected cargo manifest", json);
+        Assert.Contains("Not a detected manifest", json);
         Assert.DoesNotContain("Old instruction", json);
         Assert.DoesNotContain("Later instruction", json);
     }
@@ -221,7 +221,7 @@ public class MfdTests
         Assert.Contains("Bought 96 SCU · Agricium · Area18 TDD", json);
         Assert.Contains("2026-09-09T12:00:00Z", json);
         Assert.Contains("96 SCU bought · 0 SCU sold", json);
-        Assert.Contains("The game logs no cargo hold", json);
+        Assert.Contains("Counter receipts and your plan. Never the hold.", json);
     }
 
     [Fact]
@@ -537,7 +537,7 @@ public class MfdTests
     public void CrewIsAlwaysLabelledAFloorRatherThanARoster()
     {
         var e = Engine();
-        Assert.Contains("A FLOOR, NOT A ROSTER", Page(e, "crew"));
+        Assert.Contains("Absence means nothing", Page(e, "crew"));
         Assert.Contains("NOBODY NAMED", Page(e, "crew"));
 
         var json = Page(e, "crew", "{party:[{handle:'nekron',moment:'joined',at:'2026-09-09T12:00:00Z'}],"
@@ -545,7 +545,7 @@ public class MfdTests
         Assert.Contains("NEKRON", json);
         Assert.Contains("joined", json);
         Assert.Contains("DISBANDED", json);
-        Assert.Contains("A FLOOR, NOT A ROSTER", json);
+        Assert.Contains("Absence means nothing", json);
     }
 
     [Fact]
@@ -561,7 +561,7 @@ public class MfdTests
         Assert.Contains("the last 30 days", json);
         Assert.Contains("A Cutlass · 1,200,000 aUEC", json);
         Assert.Contains("50 h of flying", json);
-        Assert.Contains("Commodity sales less what buying them cost", json);
+        Assert.Contains("Commodity sales less their cost", json);
 
         // No rate at all is said, not shown as zero.
         Assert.Contains("Too little recorded flying time",
@@ -584,7 +584,7 @@ public class MfdTests
         Assert.Contains("2 of 5 held · Lorville", json);
         Assert.Contains("ARMOUR", json);
         Assert.DoesNotContain("FINISHED LIST", json);
-        Assert.Contains("never how many", json);
+        Assert.Contains("Seen in a stash listing, not counted", json);
 
         Assert.Contains("NO LIST IN HAND", Page(e, "list", "{}", "null", "{extra:{jobs:[]}}"));
         Assert.Contains("Reading your lists", Page(e, "list"));
@@ -744,7 +744,7 @@ public class MfdTests
         Assert.Contains("Freight · Transporter · Medium Freight", json);
         Assert.Contains("12,500 aUEC expedited · 5 min", json);
         Assert.Contains("22 min and no fee", json);
-        Assert.Contains("records no insurance claim of any kind", json);
+        Assert.Contains("Never a live one", json);
 
         // No claim tables for this hull: said, not implied by an empty row.
         Assert.Contains("No claim figures for this hull",
@@ -766,7 +766,7 @@ public class MfdTests
         Assert.Contains("Medical supplies · 4 units · 2,100 aUEC", json);
         Assert.Contains("MedPen", json);
         Assert.Contains("2026-09-08T22:39:22Z", json);
-        Assert.Contains("never how many, and never that it still is", json);
+        Assert.Contains("Not a count, and not still here", json);
 
         // A place the installed data cannot describe says so.
         Assert.Contains("Nothing the installed data can identify",
@@ -782,7 +782,7 @@ public class MfdTests
         var json = Page(e, "ledger", "{}", "null", money);
         Assert.Contains("ITEM BOUGHT", json);
         Assert.Contains("MedPen (Hemozal) · -1,855 aUEC · Pyro Gateway", json);
-        Assert.Contains("is not money that moved", json);
+        Assert.Contains("What the server answered for", json);
 
         Assert.Contains("NOTHING PRICED", Page(e, "ledger", "{}", "null", "{extra:{ledger:[]}}"));
         Assert.Contains("Reading what the logs priced", Page(e, "ledger"));
@@ -799,7 +799,7 @@ public class MfdTests
         Assert.Contains("18,400 aUEC a rock · Quantainium", json);
         Assert.Contains("YELA BELT · Stanton", json);
         Assert.Contains("NOT ALL NEARBY", json);
-        Assert.Contains("not rocks anyone has seen", json);
+        Assert.Contains("Not sightings", json);
 
         Assert.Contains("NOTHING RANKED", Page(e, "mine", "{}", "{mining:[]}"));
     }
@@ -815,7 +815,7 @@ public class MfdTests
         Assert.Contains("TRADE FROM HERE", json);
         Assert.Contains("Agricium · +412/SCU at Area18 TDD", json);
         Assert.DoesNotContain("Gold", json);
-        Assert.Contains("never what is aboard", json);
+        Assert.Contains("Never the hold", json);
         Assert.DoesNotContain("TRADE FROM HERE", Page(e, "cargo", "{}", "{stops:[]}"));
     }
 
@@ -824,6 +824,6 @@ public class MfdTests
     {
         var json = Engine().Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('contract'),{}))").AsString();
         Assert.Contains("NO OPEN CONTRACT", json);
-        Assert.Contains("Earlier contracts are in the dashboard logbook", json);
+        Assert.Contains("Earlier ones are in the logbook", json);
     }
 }

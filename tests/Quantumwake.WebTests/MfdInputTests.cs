@@ -29,11 +29,11 @@ public class MfdInputTests
         panel.Press(8).Press(8);
 
         Assert.Empty(panel.Writes());
-        Assert.Contains("NOT HERE", panel.Footer);
         Assert.Equal("NAV", panel.Title);
 
-        // And the strip that would have carried a confirmation stays silent.
-        Assert.True((bool)panel.Eval("__dom.node('#action').hidden")!);
+        // It says so in the one place the frame answers, rather than silently.
+        Assert.Equal("note", panel.StripState);
+        Assert.Contains("Nothing for that button on this page", panel.Strip);
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public class MfdInputTests
         panel.Press(8);
 
         Assert.Empty(panel.Writes());
-        Assert.Contains("PLAN CHANGED", panel.Footer);
-        Assert.Equal("ready", panel.StripState);
+        Assert.Equal("note", panel.StripState);
+        Assert.Contains("The plan changed. Nothing was marked.", panel.Strip);
     }
 
     /// <summary>Any other button stands a live confirmation down.</summary>
@@ -109,7 +109,6 @@ public class MfdInputTests
         Assert.Single(panel.Writes());
         Assert.Equal("saved", panel.StripState);
         Assert.Contains("Marked done: load · 32 SCU · Titanium", panel.Strip);
-        Assert.Contains("MARKED DONE", panel.Footer);
     }
 
     /// <summary>
@@ -142,6 +141,27 @@ public class MfdInputTests
         panel.Press(8).Press(8);
 
         Assert.Empty(panel.Writes());
-        Assert.True((bool)panel.Eval("__dom.node('#action').hidden")!);
+        // With nothing outstanding, Done is idle - so the refusal is the general
+        // one rather than a special case, which is the point of one rule.
+        Assert.Contains("Nothing for that button on this page", panel.Strip);
+    }
+
+    /// <summary>
+    /// The header carries which frame this is and which Cougar drives it. The
+    /// footer that used to carry it - and a readout of the press the pilot had
+    /// just made with their own thumb - cost a reading on a 480 px panel.
+    /// </summary>
+    [Fact]
+    public void TheHeaderNamesTheFrameAndItsCougar()
+    {
+        var panel = new Panel(Plan);
+        Assert.Equal("LEFT MFD", panel.Text("__dom.node('#identity').textContent"));
+
+        panel.Do("cougar = 1; usb = true; drawIdentity();");
+        Assert.Equal("LEFT · MFD 1", panel.Text("__dom.node('#identity').textContent"));
+
+        // A frame the USB reader cannot find says so beside the connection.
+        panel.Do("usb = false; connection = 'LIVE LOG'; drawIdentity();");
+        Assert.Equal("LIVE LOG · NO USB", panel.Text("__dom.node('#connection').textContent"));
     }
 }

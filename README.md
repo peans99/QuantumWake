@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1667 tests](https://img.shields.io/badge/tests-1667%20passing-4fd48a)
+![1668 tests](https://img.shields.io/badge/tests-1668%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.17
+### 0.10.18
+
+- **One strip of chrome instead of two.** The frame said which MFD it was at the
+  bottom, next to a readout of the button you had just pressed with your own
+  thumb — two things costing a whole reading on a 480 px panel. Which frame it
+  is and which Cougar drives it are at the top with the rest of the identity now,
+  and the footer is gone.
+
+- **Shorter words on the frame.** The qualifiers that keep each page honest were
+  turning into paragraphs. They say the same thing in a phrase — *"Counter
+  receipts and your plan. Never the hold."*, *"Held: seen in a stash listing, not
+  counted."* — and the lists are cut to what you read at a glance rather than
+  what a report would show.
 
 - **Four more pages, from data the panel was already downloading.** **Ship**
   says what you are flying, what it is for, and what the game’s own tables say

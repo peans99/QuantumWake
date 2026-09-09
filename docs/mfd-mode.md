@@ -109,6 +109,25 @@ catalogues, market browsing, historical tables and settings stay on the
 dashboard - what came across is the question a pilot asks in the seat, never the
 report behind it.
 
+### One strip of chrome, and words a frame can carry
+
+The display had a header and a footer. The footer carried which frame this was,
+which Cougar drove it, and a BTN-nn readout of the last press - a label for a
+thing the pilot had just done with their own thumb, on a button printed in front
+of them. On a 480 px panel whose edges already take 28%, that strip cost a whole
+reading. Identity moved to the header where the rest of the identity already
+was, and the footer went. What the frame has to say about a press now goes to
+the action strip, which is pinned and was there anyway.
+
+The qualifiers that keep each page honest had grown into paragraphs. They make
+the same claim in a phrase now: *Counter receipts and your plan. Never the
+hold.* / *Held: seen in a stash listing, not counted.* / *Reference: what the
+tables say a claim costs. Never a live one.* Nothing was dropped, only
+shortened - a HUD can carry a qualifier and cannot carry an explanation, and the
+explanations live in this file and on the settings page. The lists came down
+with them: four ledger entries rather than ten, eight feed lines rather than
+fourteen.
+
 ### Two bugs the page rules could not have caught
 
 Both were reported off a real panel, and both were the input failing to ask a

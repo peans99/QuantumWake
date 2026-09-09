@@ -105,9 +105,9 @@ public sealed class Panel
             .Select(c => c?.ToString() ?? string.Empty)
             .ToList();
 
-    /// <summary>The pinned action strip, and the footer the frame answers on.</summary>
+    /// <summary>The pinned strip, which is the only place the frame answers on.</summary>
     public string Strip => Text("__dom.node('#action-text').textContent");
     public string StripState => Text("__dom.node('#action').className");
-    public string Footer => Text("__dom.node('#last-input').textContent");
+    public bool StripHidden => (bool)Eval("__dom.node('#action').hidden")!;
     public string Title => Text("__dom.node('#title').textContent");
 }
