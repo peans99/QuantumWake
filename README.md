@@ -318,7 +318,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.1
+### 0.10.2
+
+- **Four more screens read: the Contracts app, the Rep app, the Fleet
+  Manager and its loadout estimate.** The Contracts tab’s own count and
+  every card on it are checked against the contracts your logs have open,
+  by number and by name. The Fleet Manager says where each of your ships is
+  stored, which nothing in the logs has ever said, and a ship it lists that
+  you have never flown is filed as new rather than as a mistake. The Rep app
+  gives an organisation and your standing with it; the rank is drawn as a
+  highlight and does not read, and the reading says so.
+
+  **The wallet read.** On three of the twenty-two frames from the second
+  night the balance came back, and two readings a minute apart reconciled
+  against the ledger. On the other nineteen it did not, from the same bar,
+  so a reading is a gift rather than a promise — and a screenshot taken
+  while the game is logging is checked against where you actually were.
 
 - **Every screenshot you take can be read as it lands, and checked against
   your logs.** Tick **Read each screenshot as it lands** on the Overlay page

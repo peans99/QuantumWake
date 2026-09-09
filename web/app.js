@@ -4634,6 +4634,9 @@ const SCREEN_KINDS = {
   Tooltip: 'item',
   Loadout: 'loadout',
   Map: 'map',
+  Contracts: 'contracts',
+  Fleet: 'fleet',
+  Reputation: 'reputation',
   MobiGlas: 'mobiGlas',
   Unknown: 'unread',
 };
@@ -4717,6 +4720,8 @@ function renderSighting(box, s, { full = true } = {}) {
 
         if (f.nothingRead) {
           li.append(el('span', 'd', ' · nothing read under it'));
+        } else if (f.tier === 'Empty') {
+          li.append(el('span', 'd', ' · empty, so the game says'));
         } else if (f.name) {
           li.append(el('span', 'd', ` · ${f.name}`));
           if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
@@ -4733,12 +4738,68 @@ function renderSighting(box, s, { full = true } = {}) {
     }
   }
 
+  if (s.contracts) {
+    const c = s.contracts;
+    box.append(el('div', 'strong',
+      c.accepted != null ? `${c.accepted} accepted${c.capacity != null ? ` of ${c.capacity}` : ''}` : `${(c.cards || []).length} contracts read`));
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+
+      for (const card of c.cards || []) {
+        const li = el('li');
+        li.append(el('span', 'what', card.title));
+        if (card.reward) li.append(el('span', 'd', ` · ${card.reward}`));
+        if (card.issuer) li.append(el('span', 'd', ` · ${card.issuer}`));
+        list.append(li);
+      }
+
+      box.append(list);
+
+      if (c.selectedTitle) {
+        box.append(el('div', null, c.selectedTitle));
+        const facts = [];
+        if (c.selectedReward != null) facts.push(`${Number(c.selectedReward).toLocaleString()} aUEC`);
+        if (c.selectedIssuer) facts.push(`by ${c.selectedIssuer}`);
+        if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
+        for (const o of c.objectives || []) box.append(el('div', 'muted', `◇ ${o}`));
+      }
+    }
+  }
+
+  if (s.fleet) {
+    const rows = s.fleet.ships || [];
+    box.append(el('div', 'strong', `${rows.length} ship${rows.length === 1 ? '' : 's'} at the Fleet Manager`));
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const row of rows) list.append(fleetRow(row));
+      box.append(list);
+    }
+  }
+
+  if (s.reputation) {
+    const r = s.reputation;
+    box.append(el('div', 'strong', r.organisation
+      ? `${r.organisation}${r.standing ? `: ${r.standing}` : ''}`
+      : 'the Rep app'));
+
+    // Said in words: the rank is a highlighted card, and a highlight is not text.
+    box.append(el('div', 'muted', 'The rank is drawn as a highlight and does not read.'));
+
+    if (full && r.organisations?.length)
+      box.append(el('div', 'muted', `Listed: ${r.organisations.join(', ')}`));
+  }
+
   if (s.map) {
     const place = s.map.placeRead
       ? (s.map.systemRead ? `${s.map.systemRead} > ${s.map.placeRead}` : s.map.placeRead)
       : 'no place read off the footer';
 
     box.append(el('div', 'strong', place));
+
+    // The trail down to the place, when the footer printed one.
+    if (s.map.pathRead) box.append(el('div', 'muted', s.map.pathRead));
 
     if (s.map.gigametres != null) {
       box.append(el('div', 'muted',
@@ -4829,6 +4890,24 @@ async function renderScreenReadings(force = false) {
   renderNowScreenCard(latest);
 }
 
+/** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
+function fleetRow(row) {
+  const li = el('li');
+  li.append(el('span', 'what', row.ship || `read as “${row.read}”`));
+
+  const facts = [];
+  if (row.location) facts.push(`at ${row.location}`);
+  if (row.state) facts.push(row.state.toLowerCase());
+  if (row.focus) facts.push(row.focus);
+  if (row.cargo != null) facts.push(`${row.cargo} SCU`);
+  if (facts.length) li.append(el('span', 'd', ` · ${facts.join(' · ')}`));
+
+  if (!row.ship && row.looksLike?.length)
+    li.append(el('span', 'd', ` · looks like ${row.looksLike.join(' or ')}`));
+
+  return li;
+}
+
 /** The newest reading where a pilot is looking while they play. */
 function renderNowScreenCard(s) {
   const card = $('#now-screen-card');
@@ -4880,6 +4959,9 @@ async function renderFleetFittings() {
   const any = ships.length > 0;
   if (title) title.hidden = !any;
   if (caption) caption.hidden = !any;
+
+  renderFleetBerths().catch(() => {});
+
   if (!any) return;
 
   for (const s of ships) {
@@ -4907,6 +4989,37 @@ async function renderFleetFittings() {
     card.append(list);
     grid.append(card);
   }
+}
+
+/**
+ * Where each ship was, the last time the Fleet Manager was photographed.
+ *
+ * Nothing in the logs says where a ship is stored, so this is the only
+ * source, and it is dated for the same reason the fittings are.
+ */
+async function renderFleetBerths() {
+  const title = $('#fleet-berths-title');
+  const list = $('#fleet-berths');
+  if (!list) return;
+
+  let got = { ships: [] };
+
+  try {
+    got = await getJson('/api/screen/fleet');
+  } catch {
+    got = { ships: [] };
+  }
+
+  list.textContent = '';
+  const rows = got.ships || [];
+  if (title) title.hidden = rows.length === 0;
+  if (!rows.length) return;
+
+  list.append(el('p', 'muted', `As photographed ${new Date(got.shotAt).toLocaleString()} · ${got.shot}`));
+
+  const feed = el('ul', 'feed screen-fittings');
+  for (const row of rows) feed.append(fleetRow(row));
+  list.append(feed);
 }
 
 $('#screen-mode')?.addEventListener('change', async () => {

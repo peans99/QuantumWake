@@ -160,7 +160,8 @@ public sealed class ScreenInsightService(
         return new ScreenSighting(
             shot, shotAt, frame.Kind,
             Summarise(frame, loadout, item),
-            checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs);
+            checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs,
+            frame.Contracts, frame.Fleet, frame.Reputation);
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
@@ -217,6 +218,14 @@ public sealed class ScreenInsightService(
         ScreenKind.Tooltip when item is not null =>
             item.Certain && item.Matches.Count == 1 ? item.Matches[0].Name
             : item.Name ?? (item.Named.Count > 0 ? $"{item.Named.Count} things named" : "a tooltip that named nothing"),
+        ScreenKind.Contracts when frame.Contracts is not null =>
+            frame.Contracts.Accepted is { } n ? $"{n} contracts accepted" : $"{frame.Contracts.Cards.Count} contracts read",
+        ScreenKind.Fleet when frame.Fleet is not null =>
+            $"{frame.Fleet.Ships.Count} ships at the Fleet Manager",
+        ScreenKind.Reputation when frame.Reputation is not null =>
+            frame.Reputation.Organisation is { Length: > 0 } org
+                ? $"reputation with {org}" + (frame.Reputation.Standing is { Length: > 0 } s ? $": {s}" : "")
+                : "the Rep app",
         ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
         _ => "nothing this app knows how to read",
     };

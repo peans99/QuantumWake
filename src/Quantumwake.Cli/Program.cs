@@ -234,8 +234,31 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery, 
         Console.WriteLine($"System    : {map.SystemRead ?? "(not read)"}");
         Console.WriteLine($"Place     : {map.PlaceRead ?? "(not read)"}");
         Console.WriteLine($"Position  : {map.Latitude}° {map.Longitude}° {map.Gigametres} Gm");
-        Console.WriteLine($"Contracts : {(map.NoAcceptedContracts ? "none accepted" : "(not stated)")}");
+        Console.WriteLine($"Contracts : {(map.AcceptedContracts switch { false => "none accepted", true => "some accepted", _ => "(not stated)" })}");
     }
+
+    if (frame.Contracts is { } contracts)
+    {
+        Console.WriteLine($"Accepted  : {contracts.Accepted} of {contracts.Capacity}");
+        foreach (var card in contracts.Cards)
+            Console.WriteLine($"  card     {card.Title}  [{card.Reward ?? "?"}]  {card.Issuer ?? "(issuer not read)"}");
+        Console.WriteLine($"Selected  : {contracts.SelectedTitle}  reward {contracts.SelectedReward}  by {contracts.SelectedIssuer}");
+        foreach (var o in contracts.Objectives) Console.WriteLine($"  objective {o}");
+    }
+
+    if (frame.Fleet is { } fleet)
+    {
+        foreach (var row in fleet.Ships)
+            Console.WriteLine($"  ship     {row.Ship ?? "?"}  read \"{row.Read}\"  at {row.Location ?? "?"}  {row.State ?? "?"}  {row.Focus ?? "?"}  cargo {row.Cargo}" + (row.LooksLike.Count > 0 ? $"  looks like {string.Join(", ", row.LooksLike)}" : ""));
+    }
+
+    if (frame.Reputation is { } rep)
+    {
+        Console.WriteLine($"Org       : {rep.Organisation}  standing {rep.Standing}  rank {rep.Rank ?? "(not readable)"}");
+        Console.WriteLine($"Orgs      : {string.Join(", ", rep.Organisations)}");
+    }
+
+    if (frame.Map is { } m2 && m2.PathRead is not null) Console.WriteLine($"Path      : {m2.PathRead}");
 
     if (frame.Loadout is { } loadout)
     {
@@ -247,6 +270,7 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery, 
         foreach (var fitting in loadout.Fittings)
         {
             var what = fitting.NothingRead ? "(nothing read under it)"
+                : fitting.IsEmpty ? "(empty, so the game says)"
                 : fitting.Name is not null ? $"{fitting.Name}  [{fitting.Tier}{(fitting.Agrees.Count > 0 ? ", " + string.Join(", ", fitting.Agrees) + " agree" : "")}{(fitting.Disagrees.Count > 0 ? ", " + string.Join(", ", fitting.Disagrees) + " disagree" : "")}]"
                 : $"\"{fitting.Read}\"  [unmatched]";
 

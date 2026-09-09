@@ -26,7 +26,10 @@ public sealed record ScreenSighting(
     MapReading? Map,
     WalletReading? Wallet,
     IReadOnlyList<string> Lines,
-    long TookMs);
+    long TookMs,
+    ContractsReading? Contracts = null,
+    FleetReading? Fleet = null,
+    ReputationReading? Reputation = null);
 
 /// <summary>
 /// Remembers what the screenshots said.
@@ -67,6 +70,12 @@ public sealed class ScreenReadingStore
     public ScreenSighting? Latest
     {
         get { lock (_gate) return _sightings.FirstOrDefault(); }
+    }
+
+    /// <summary>The newest Fleet Manager reading, for the fleet page.</summary>
+    public ScreenSighting? LatestFleet()
+    {
+        lock (_gate) return _sightings.FirstOrDefault(s => s.Fleet is not null);
     }
 
     /// <summary>Whether this file has been read already, so a folder scan does not read it twice.</summary>

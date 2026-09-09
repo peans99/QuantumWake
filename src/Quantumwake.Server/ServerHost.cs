@@ -2257,6 +2257,14 @@ public static class ServerHost
                 s.Loadout.Fittings,
             })));
 
+        // The newest Fleet Manager reading: where each ship was, the last time
+        // the terminal was photographed. Nothing in the logs says where a
+        // ship sits, so this is the only source.
+        app.MapGet("/api/screen/fleet", (ScreenReadingStore readings) =>
+            readings.LatestFleet() is { } s
+                ? Results.Ok(new { s.Shot, s.ShotAt, ships = s.Fleet!.Ships })
+                : Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<FleetRow>() }));
+
         app.MapDelete("/api/screen/readings", (ScreenReadingStore readings) =>
         {
             readings.Clear();

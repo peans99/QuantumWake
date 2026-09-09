@@ -25,6 +25,9 @@ public interface IScreenBeliefs
 
     /// <summary>The parts a ship ships with, by name; empty when the reference data has none.</summary>
     IReadOnlyList<string> StockParts(string ship);
+
+    /// <summary>Every ship the logs have seen the pilot fly, by display name.</summary>
+    IReadOnlyList<string> FlownShips();
 }
 
 /// <summary>
@@ -75,9 +78,18 @@ public static class ScreenChecks
         {
             checks.Add(Place(map, shotAt, beliefs));
 
-            if (map.NoAcceptedContracts)
-                checks.Add(Contracts(shotAt, beliefs));
+            if (map.AcceptedContracts is { } any)
+                checks.Add(ContractsOnMap(any, shotAt, beliefs));
         }
+
+        if (frame.Contracts is { } contracts)
+            checks.Add(ContractsApp(contracts, shotAt, beliefs));
+
+        if (frame.Fleet is { } fleet)
+            checks.Add(Fleet(fleet, beliefs));
+
+        if (frame.Reputation is { } reputation)
+            checks.Add(Reputation(reputation));
 
         if (frame.Loadout is { } loadout)
             checks.Add(Fittings(loadout, beliefs));
@@ -135,11 +147,11 @@ public static class ScreenChecks
             agrees ? null : $"the footer reads as {named.Value.Name}");
     }
 
-    /// <summary>"No accepted contracts" against the contracts the logs had open.</summary>
-    private static ScreenCheck Contracts(DateTimeOffset at, IScreenBeliefs beliefs)
+    /// <summary>The map's word on accepted contracts - some or none - against the contracts the logs had open.</summary>
+    private static ScreenCheck ContractsOnMap(bool any, DateTimeOffset at, IScreenBeliefs beliefs)
     {
         const string subject = "Contracts";
-        const string claim = "no accepted contracts";
+        var claim = any ? "accepted contracts listed" : "no accepted contracts";
 
         var open = beliefs.OpenContractsAt(at);
 
@@ -147,13 +159,110 @@ public static class ScreenChecks
             return new ScreenCheck(subject, claim, "nothing - no session covers that moment", "unchecked",
                 "the logs have no session running when this was taken");
 
-        if (open.Count == 0)
-            return new ScreenCheck(subject, claim, "none open", "agrees");
+        var belief = open.Count == 0 ? "none open"
+            : $"{open.Count} open: {string.Join(", ", open.Take(4))}{(open.Count > 4 ? ", …" : "")}";
 
-        return new ScreenCheck(subject, claim,
-            $"{open.Count} open: {string.Join(", ", open.Take(4))}{(open.Count > 4 ? ", …" : "")}",
-            "differs",
-            "the game says none; the logs may have missed an ending");
+        if (any == open.Count > 0)
+            return new ScreenCheck(subject, claim, belief, "agrees");
+
+        return new ScreenCheck(subject, claim, belief, "differs",
+            any ? "the game lists some; the logs saw no acceptance" : "the game says none; the logs may have missed an ending");
+    }
+
+    /// <summary>The Contracts app's accepted tab against the contracts the logs had open, by count and by name.</summary>
+    /// <remarks>
+    /// The tab prints its own count, which is the exact claim. The names are
+    /// compared as well, because a count that agrees can still hide one
+    /// contract the logs missed and one they never saw end.
+    /// </remarks>
+    private static ScreenCheck ContractsApp(ContractsReading app, DateTimeOffset at, IScreenBeliefs beliefs)
+    {
+        const string subject = "Contracts";
+
+        var claim = app.Accepted is { } n
+            ? $"{n} accepted" + (app.Capacity is { } of ? $" of {of}" : "")
+            : $"{app.Cards.Count} cards read";
+
+        if (app.Cards.Count > 0)
+            claim += ": " + string.Join(", ", app.Cards.Take(3).Select(c => c.Title)) + (app.Cards.Count > 3 ? ", …" : "");
+
+        var open = beliefs.OpenContractsAt(at);
+
+        if (open is null)
+            return new ScreenCheck(subject, claim, "nothing - no session covers that moment", "unchecked",
+                "the logs have no session running when this was taken");
+
+        var belief = open.Count == 0 ? "none open"
+            : $"{open.Count} open: {string.Join(", ", open.Take(4))}{(open.Count > 4 ? ", …" : "")}";
+
+        var unseen = app.Cards
+            .Where(card => !open.Any(name => ScreenFrames.SameContract(card.Title, name)))
+            .Select(card => card.Title)
+            .ToList();
+
+        var notes = new List<string>();
+
+        if (unseen.Count > 0)
+            notes.Add($"on screen but not in the logs: {string.Join(", ", unseen.Take(3))}");
+
+        if (app.Accepted is { } count && count != open.Count)
+            notes.Add($"the tab says {count}, the logs say {open.Count}");
+
+        var agrees = notes.Count == 0 && (app.Accepted is null || app.Accepted == open.Count);
+
+        return new ScreenCheck(subject, claim, belief, agrees ? "agrees" : "differs",
+            notes.Count == 0 ? null : string.Join("; ", notes));
+    }
+
+    /// <summary>The Fleet Manager's list against the ships the logs have seen flown.</summary>
+    /// <remarks>
+    /// The logs know a ship only once it has been flown, so a ship the terminal
+    /// lists and the logs never saw is new information rather than a
+    /// contradiction, and is filed as such. Where each ship is stored is new
+    /// on every row: nothing in the logs says where a ship sits.
+    /// </remarks>
+    private static ScreenCheck Fleet(FleetReading fleet, IScreenBeliefs beliefs)
+    {
+        const string subject = "Fleet";
+
+        var named = fleet.Ships.Where(row => row.Ship is not null).ToList();
+        var unread = fleet.Ships.Count - named.Count;
+
+        var claim = $"{fleet.Ships.Count} ship{(fleet.Ships.Count == 1 ? "" : "s")} listed"
+            + (named.Count > 0 ? ": " + string.Join(", ", named.Take(4).Select(r => r.Location is { Length: > 0 } ? $"{r.Ship} at {r.Location}" : r.Ship!)) : "")
+            + (unread > 0 ? $" ({unread} name{(unread == 1 ? "" : "s")} did not read)" : "");
+
+        var flown = beliefs.FlownShips();
+
+        if (flown.Count == 0)
+            return new ScreenCheck(subject, claim, "nothing - the logs have not seen a ship flown yet", "unchecked");
+
+        var belief = $"{flown.Count} ship{(flown.Count == 1 ? "" : "s")} flown";
+
+        var never = named
+            .Where(row => !flown.Contains(row.Ship!, StringComparer.OrdinalIgnoreCase))
+            .Select(row => row.Ship!)
+            .ToList();
+
+        if (named.Count == 0)
+            return new ScreenCheck(subject, claim, belief, "unchecked", "no ship name read well enough to compare");
+
+        if (never.Count == 0)
+            return new ScreenCheck(subject, claim, belief, "agrees", "where each is stored is new: the logs never say");
+
+        return new ScreenCheck(subject, claim, belief, "new",
+            $"never flown in the logs: {string.Join(", ", never)}");
+    }
+
+    /// <summary>Reputation is nothing the logs carry, so the reading can only be new.</summary>
+    private static ScreenCheck Reputation(ReputationReading rep)
+    {
+        var claim = rep.Organisation is { Length: > 0 } org
+            ? rep.Standing is { Length: > 0 } standing ? $"{org}: {standing}" : org
+            : $"{rep.Organisations.Count} organisations listed";
+
+        return new ScreenCheck("Reputation", claim, "nothing - the logs never carry reputation", "new",
+            "the rank is a highlighted card among identical ones, and a highlight is not text, so it does not read");
     }
 
     /// <summary>The parts read off the loadout screen against the ship's factory fit.</summary>
@@ -169,10 +278,12 @@ public static class ScreenChecks
         const string subject = "Fitted parts";
 
         var named = loadout.Fittings.Where(f => f.Name is not null).ToList();
-        var unread = loadout.Fittings.Count(f => !f.NothingRead && f.Name is null);
+        var empty = loadout.Fittings.Count(f => f.IsEmpty);
+        var unread = loadout.Fittings.Count(f => !f.NothingRead && !f.IsEmpty && f.Name is null);
         var bare = loadout.Fittings.Count(f => f.NothingRead);
 
         var claim = $"{named.Count} part{(named.Count == 1 ? "" : "s")} named"
+            + (empty > 0 ? $", {empty} port{(empty == 1 ? "" : "s")} empty" : "")
             + (bare > 0 ? $", {bare} port{(bare == 1 ? "" : "s")} with nothing read under {(bare == 1 ? "it" : "them")}" : "")
             + (unread > 0 ? $", {unread} not matched" : "");
 

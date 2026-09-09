@@ -140,6 +140,7 @@ public static class ScreenInsight
     [
         "Volume", "Manufacturer", "Item Type", "Class", "Type",
         "Magazine Size", "Rate Of Fire", "Effective Range", "Attachments",
+        "Attachment Point", "Size", "Grade",
     ];
 
     /// <summary>

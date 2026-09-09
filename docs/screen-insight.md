@@ -862,21 +862,81 @@ screenshot and never by the read. A frame with no reader keeps every line the
 engine returned, because that text is what the next reader gets written from
 — every reader here was written from a dump of exactly that kind.
 
-### What is waiting on a frame
+### The second night: 22 more frames
 
-Nobody has photographed these yet, so nothing reads them, and nothing here
-pretends to:
+Taken on 8 September, and every reader below was written from their dumps
+the same way the first ones were. What each frame is, and what it yielded:
+
+| Screen | Frames | Yielded |
+|---|---|---|
+| mobiGlas Contracts, Accepted tab | 1 | the tab's own count, all 5 cards, the selected contract with its reward, issuer and 4 objectives |
+| mobiGlas Rep | 2 | the organisation and its standing; 6 organisations listed; the rank, which does not read |
+| mobiGlas Maps, with contracts | 1 | the footer in five pieces, reassembled: `PYRO > TERMINUS > RUIN STATION` |
+| Fleet Manager terminal | 2 | 5 ships with where each is stored, its state, role and cargo; 2 of 5 names read |
+| Loadout Estimate popup | 1 | all 11 rows of the Hermes' manifest, with quantities |
+| Vehicle Loadout Manager, Hermes | 7 | 21 ports across the tabs, two of them printed `Empty` |
+| Looting view | 4 | the Arlington again, and an attachment tooltip half covered by the cursor |
+| mobiGlas Home, Assets, Wallet | 3 | nothing readable, and filed as such |
+
+**The wallet read.** On three of the 22 frames the balance came back -
+`2,108.600` on the Rep app, the same on the Contracts app and the Assets
+map - and on the other nineteen it did not, from the same bar in the same
+face. So the earlier finding was too strong: the face is marginal rather
+than unreadable, and the check built for the day it reads had that day the
+first night it was tried. Two readings a minute apart reconciled against a
+ledger that had not moved.
+
+**The Contracts app is the richest screen so far.** The tab prints
+`ACCEPTED (5/10)`, which is an exact count; each card prints a title, a
+rounded reward and an issuer, and the reputation bracket under every hauling
+contract closes a title reliably enough to pair on. The bars in a title -
+`Junior | Stellar Small Haul | to Stanton Gateway` - read as `I` or `1`
+in capitals, and a lone I is never a word in a title, so titles are compared
+with those dropped. The check compares the count and the names both, because
+a count that agrees can hide one contract the logs missed and one they never
+saw end.
+
+**The Fleet Manager says where every ship is**, which nothing in the logs
+does, and says it in a CRT face the engine reads badly: `Drake Corsair` and
+`Drake Clipper` clean, `Anvil CÉX "PiSCésÉxpéd!tiori` for the Pisces and
+`,MJSCUStårtaFér` for the Starfarer. The fields are found under their column
+headings and beside their name, so a row whose name did not read still says
+where it is stored. A ship listed that the logs never saw flown is filed as
+new, not as a contradiction: the logs know a ship only once it has flown.
+
+**The Loadout Estimate is the same fact in a better shape.** A table of parts
+with quantities and types, no ports, and it cuts names to fit its column:
+`VariPuck S4 Gimbal`, `Civ/2/A 7MA`. A prefix is a weak claim, so it counts
+only when it is long or when the size and grade beside it vouch, and it is
+still subject to the tie rule. It reads as a loadout so the fleet page and
+the factory comparison need no second path.
+
+**The Rep app's rank does not read, and the reading says so.** Eight
+identical cards with one highlighted; the engine returns eight labels and no
+highlight. The organisation and its standing read because they are set
+large.
+
+**Two corrections to earlier rules.** The game prints `Empty` in a port with
+nothing in it - the Hermes' flair ports - and that is a claim the reading now
+carries rather than a part it fails to match. And the map footer is not
+always one line: the second night's engine returned it as five, `p YRO`
+included, so the row the figures sit on is gathered left to right before it
+is read.
+
+**The Hermes checks clean where it should.** Its missile racks agree with the
+factory fit; its systems tab differs on every port - Lotus power plants,
+Hemera drive, 7MA shields - which is what an upgraded ship looks like.
+
+### What is still waiting on a frame
 
 | Screen | What it would confirm |
 |---|---|
 | Commodity kiosk | The commodity name the log never gives for a sale, and price per SCU as a unit check |
-| mobiGlas Assets, and the inventory screen | The Stash page, which cannot see what was moved by hand |
-| mobiGlas Contracts | The mission funnel, with rewards and reputation figures the log does not carry |
-| mobiGlas Rep | Nothing today: this would be a new signal, not a confirmation |
-| mobiGlas Wallet | Whether the balance is printed anywhere in the regular face |
+| The inventory screen at a location | The Stash page, which cannot see what was moved by hand |
+| mobiGlas Wallet, past its start screen | Whether the balance is printed anywhere in a face that reads every time |
 
-The last is the cheap one. If any screen prints the balance in the face the
-engine reads, the hard problem above disappears.
+The Wallet app's start screen was photographed and holds no figure; the
+screen behind **BEGIN** was not.
 
 ---
 
@@ -934,9 +994,10 @@ right.
 5. ~~**Fitted loadouts for the fleet.**~~ **Done** — see **Step 3**. The Fleet
    page shows what each ship was last photographed carrying, dated, with the
    parts the factory did not fit marked as such.
-6. **Readers for the screens nobody has photographed yet** — the table at the
-   end of Step 3. Each is one function written from a dump the folder watch
-   already keeps.
+6. ~~**Readers for the screens nobody has photographed yet.**~~ **Mostly
+   done** — see **The second night**. Contracts, Rep, the Fleet Manager and
+   its estimate read; the kiosk and the inventory screen are still waiting on
+   a frame.
 
 Step 1 was not a formality and did not go entirely the expected way: the panel
 text read better than hoped and the wallet balance did not read at all. Both of

@@ -110,6 +110,12 @@ public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
         return [];
     }
 
+    public IReadOnlyList<string> FlownShips() =>
+        [.. library.Stats().Ships
+            .Select(ship => ship.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
     private SessionSummary? Session(DateTimeOffset at) =>
         library.Sessions().FirstOrDefault(s => s.StartedAt <= at && at <= s.EndedAt.AddMinutes(5));
 }

@@ -29,11 +29,13 @@ public class ScreenChecksTests
         public IReadOnlyList<string>? OpenContractsAt(DateTimeOffset at) => Open;
         public decimal? LedgerRunningAt(DateTimeOffset at) => Running(at);
         public IReadOnlyList<string> StockParts(string ship) => Stock;
+        public IReadOnlyList<string> FlownShips() => [];
     }
 
-    private static ScreenFrame MapFrame(bool noContracts = true) =>
+    /// <param name="accepted">What the map said about contracts: false is "NO ACCEPTED CONTRACTS", null is nothing at all.</param>
+    private static ScreenFrame MapFrame(bool? accepted = false) =>
         new(ScreenKind.Map, [], null, null,
-            new MapReading("PYRO", "DUDLEY & DAUGHTERS", 0, -155.25, 68.33, noContracts), null);
+            new MapReading("PYRO", "DUDLEY & DAUGHTERS", 0, -155.25, 68.33, accepted), null);
 
     private static ScreenFrame LoadoutFrame(string? ship, params (string Slot, string? Name)[] parts) =>
         new(ScreenKind.Loadout, [], null,
@@ -128,7 +130,7 @@ public class ScreenChecksTests
     [Fact]
     public void A_map_that_does_not_mention_contracts_is_not_checked_for_them()
     {
-        var checks = ScreenChecks.Check(MapFrame(noContracts: false), At, new Beliefs { Open = [] }, null);
+        var checks = ScreenChecks.Check(MapFrame(accepted: null), At, new Beliefs { Open = [] }, null);
 
         Assert.DoesNotContain(checks, c => c.Subject == "Contracts");
     }

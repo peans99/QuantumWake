@@ -28,6 +28,15 @@ public enum ScreenKind
     /// family away; which app is open does not read from the bar alone.
     /// </summary>
     MobiGlas,
+
+    /// <summary>The mobiGlas Contracts app, on its Accepted tab.</summary>
+    Contracts,
+
+    /// <summary>The Fleet Manager terminal, listing the ships and where they are.</summary>
+    Fleet,
+
+    /// <summary>The mobiGlas Rep app, one organisation open.</summary>
+    Reputation,
 }
 
 /// <summary>One port on the loadout screen and what the frame says is in it.</summary>
@@ -40,7 +49,7 @@ public enum ScreenKind
 /// </param>
 /// <param name="Name">The catalogue's name for it, when exactly one name fits.</param>
 /// <param name="ClassName">The class, when exactly one class fits. Three gimbal classes share one name.</param>
-/// <param name="Tier">How the name was matched: Exact, Confusable, Decorated, or None.</param>
+/// <param name="Tier">How the name was matched: Exact, Confusable, Decorated, None - or Empty, which is what the game prints in a port with nothing in it.</param>
 /// <param name="Agrees">What the screen's own decoration vouched for: "size", "grade".</param>
 /// <param name="Disagrees">What it contradicted. A kept candidate with a contradiction is shown, not hidden.</param>
 /// <param name="Stock">Whether this is the part the ship ships with; null when nobody knows.</param>
@@ -55,6 +64,9 @@ public sealed record ScreenFitting(
     bool? Stock = null)
 {
     public bool NothingRead => Read is null;
+
+    /// <summary>The game said the port is empty, in so many words.</summary>
+    public bool IsEmpty => Tier == "Empty";
 }
 
 /// <summary>What a Vehicle Loadout Manager frame said.</summary>
@@ -77,13 +89,22 @@ public sealed record LoadoutReading(
 /// are undone here on the strength of the format being fixed: the game prints
 /// two decimals and a degree sign, and nothing else can sit there.
 /// </remarks>
+/// <param name="PathRead">The whole trail between the system and the figures, as printed: "TERMINUS > RUIN STATION".</param>
+/// <param name="AcceptedContracts">
+/// True when the map lists accepted contracts, false when it says there are
+/// none, null when it says neither. Both wordings were seen on real frames.
+/// </param>
 public sealed record MapReading(
     string? SystemRead,
     string? PlaceRead,
     double? Latitude,
     double? Longitude,
     double? Gigametres,
-    bool NoAcceptedContracts);
+    bool? AcceptedContracts,
+    string? PathRead = null)
+{
+    public bool NoAcceptedContracts => AcceptedContracts == false;
+}
 
 /// <summary>What the mobiGlas bar said the wallet holds.</summary>
 /// <param name="Balance">The figure, or null when the engine returned none.</param>
@@ -101,7 +122,10 @@ public sealed record ScreenFrame(
     ScreenMatchResult? Tooltip,
     LoadoutReading? Loadout,
     MapReading? Map,
-    WalletReading? Wallet);
+    WalletReading? Wallet,
+    ContractsReading? Contracts = null,
+    FleetReading? Fleet = null,
+    ReputationReading? Reputation = null);
 
 /// <summary>
 /// Sorts a frame into the screen it is and reads what that screen carries.
@@ -185,8 +209,21 @@ public static partial class ScreenFrames
                 ReadLoadout(all, items, shipNames), null, wallet);
         }
 
+        // The Fleet Manager's estimate reads as a loadout: same facts, other shape.
+        if (ReadManifest(all, items, shipNames) is { } manifest)
+            return new ScreenFrame(ScreenKind.Loadout, texts, null, manifest, null, wallet);
+
+        if (ReadFleet(all, shipNames) is { } fleet)
+            return new ScreenFrame(ScreenKind.Fleet, texts, null, null, null, wallet, Fleet: fleet);
+
         if (ReadMap(all) is { } map)
             return new ScreenFrame(ScreenKind.Map, texts, null, null, map, wallet);
+
+        if (ReadContracts(all) is { } contracts)
+            return new ScreenFrame(ScreenKind.Contracts, texts, null, null, null, wallet, Contracts: contracts);
+
+        if (ReadReputation(all) is { } reputation)
+            return new ScreenFrame(ScreenKind.Reputation, texts, null, null, null, wallet, Reputation: reputation);
 
         if (hasTooltip)
             return new ScreenFrame(ScreenKind.Tooltip, texts, tooltip, null, null, wallet);
@@ -273,54 +310,53 @@ public static partial class ScreenFrames
     // ---- the map ----
 
     /// <summary>The map footer's place and position, or null when the frame has no footer.</summary>
-    private static MapReading? ReadMap(IReadOnlyList<ScreenTextLine> lines)
+private static MapReading? ReadMap(IReadOnlyList<ScreenTextLine> lines)
     {
-        ScreenTextLine? footer = null;
-        Match? match = null;
+        // The figures anchor the footer. The engine returned the whole footer
+        // as one line on one frame and as five on the next - "p YRO",
+        // "TERMINUS", ">", "RUIN STATION", "0.000 134.770 68.32GM" - so the
+        // row the figures sit on is gathered left to right and read as one.
+        var figures = lines.FirstOrDefault(line => FiguresRegex().IsMatch(line.Text));
+        if (figures is null) return null;
 
-        foreach (var line in lines)
-        {
-            var m = FooterRegex().Match(line.Text);
-            if (!m.Success) continue;
+        var row = lines
+            .Where(line => Math.Abs(line.Top - figures.Top) <= figures.Height * 1.2)
+            .OrderBy(line => line.Left)
+            .ToList();
 
-            footer = line;
-            match = m;
-            break;
-        }
+        var match = FooterRegex().Match(string.Join(' ', row.Select(line => line.Text)));
+        if (!match.Success) return null;
 
-        if (footer is null || match is null) return null;
-
-        var place = match.Groups["place"].Value.Trim();
+        var path = match.Groups["place"].Value.Trim();
         string? system = null;
 
-        // The system either leads the footer's own line or sits on a line of
-        // its own to the left of it: both were seen, on the same screenshot
-        // read twice.
-        if (LeadingSystem(place) is { } inline)
+        if (LeadingSystem(path) is { } inline)
         {
             system = inline.System;
-            place = inline.Remainder;
-        }
-        else
-        {
-            system = lines
-                .Where(line => line != footer)
-                .Where(line => Math.Abs(line.Top - footer.Top) <= footer.Height)
-                .Where(line => line.Left < footer.Left)
-                .Select(line => SystemNamed(line.Text))
-                .FirstOrDefault(name => name is not null);
+            path = inline.Remainder;
         }
 
-        var noContracts = lines.Any(line => Is(line.Text, "NO ACCEPTED CONTRACTS"));
+        // What is left is the trail down to the place: "TERMINUS > RUIN
+        // STATION", or just "DUDLEY & DAUGHTERS". The place is its last step.
+        var steps = path.Split('>', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(TidyPlace)
+            .Where(step => step.Length > 0)
+            .ToList();
+
+        bool? accepted =
+            lines.Any(line => Is(line.Text, "NO ACCEPTED CONTRACTS")) ? false
+            : lines.Any(line => Is(line.Text, "ACCEPTED CONTRACTS")) ? true
+            : null;
 
         return new MapReading(
             system,
-            TidyPlace(place),
+            steps.LastOrDefault(),
             Degrees(match.Groups["lat"].Value),
             Degrees(match.Groups["lon"].Value),
             double.TryParse(match.Groups["gm"].Value, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var gm) ? gm : null,
-            noContracts);
+            accepted,
+            steps.Count > 1 ? string.Join(" > ", steps) : null);
     }
 
     /// <summary>The systems the game has, as their names read.</summary>
@@ -342,6 +378,10 @@ public static partial class ScreenFrames
         {
             if (SystemNamed(words[i]) is { } system && i + 1 < words.Length)
                 return (system, string.Join(' ', words[(i + 1)..]));
+
+            // "p YRO": the system split in two by the pin beside it.
+            if (i + 2 < words.Length && SystemNamed(words[i] + words[i + 1]) is { } joined)
+                return (joined, string.Join(' ', words[(i + 2)..]));
         }
 
         return null;
@@ -382,9 +422,12 @@ public static partial class ScreenFrames
     // G came back as a 6. Two decimals are what the game prints, so the third
     // digit is the degree sign and is dropped.
     [GeneratedRegex(
-        @"^(?<place>.*?)\s*>\s*(?<lat>-?\d+\.\d{2})[°0oO]?\s+(?<lon>-?\d+\.\d{2})[°0oO]?\s+(?<gm>\d+\.\d{2})\s*[G6]?M\b",
+        @"^(?<place>.*?)\s*>?\s*(?<lat>-?\d+\.\d{2})[°0oO]?\s+(?<lon>-?\d+\.\d{2})[°0oO]?\s+(?<gm>\d+\.\d{2})\s*[G6]?M\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex FooterRegex();
+
+    [GeneratedRegex(@"-?\d+\.\d{2}[°0oO]?\s+-?\d+\.\d{2}[°0oO]?\s+\d+\.\d{2}\s*[G6]?M\b", RegexOptions.IgnoreCase)]
+    private static partial Regex FiguresRegex();
 
     // ---- the loadout ----
 
@@ -520,6 +563,11 @@ public static partial class ScreenFrames
     /// <summary>A port and the part read under it, matched to the catalogue.</summary>
     private static ScreenFitting Fitting(string slot, string read, IReadOnlyList<ItemReference> items)
     {
+        // The game prints "Empty" in a port with nothing in it - measured on
+        // the Hermes' flair ports - and that is a claim, not a part.
+        if (Is(read, "Empty"))
+            return new ScreenFitting(slot, read, null, null, "Empty", [], []);
+
         var (name, size, grade) = Undecorate(read);
 
         var hits = new List<(ItemReference Item, string Tier)>();
@@ -540,6 +588,8 @@ public static partial class ScreenFrames
                 hits.Add((item, "Confusable"));
             else if (ScreenInsight.Fold(WithoutNumeral(known)) == folded && WithoutNumeral(known) != known)
                 hits.Add((item, "Decorated"));
+            else if (Truncated(folded, ScreenInsight.Fold(known), size, grade))
+                hits.Add((item, "Truncated"));
         }
 
         if (hits.Count == 0)
@@ -590,8 +640,29 @@ public static partial class ScreenFrames
         "Exact" => 0,
         "Confusable" => 1,
         "Decorated" => 2,
-        _ => 3,
+        "Truncated" => 3,
+        _ => 4,
     };
+
+    /// <summary>
+    /// Whether a read name is the start of a catalogue name, cut short by
+    /// the column it was printed in.
+    /// </summary>
+    /// <remarks>
+    /// The Fleet Manager's estimate prints "VariPuck S4 Gimbal" for the
+    /// VariPuck S4 Gimbal Mount and "Civ/2/A 7MA" for the 7MA 'Lorica'. A
+    /// prefix is a weak claim on its own, so it counts only when it is long,
+    /// or when the screen's own size or grade vouches for it - and what it
+    /// yields is still subject to the tie rule, so "7MA" against two 7MAs
+    /// names neither.
+    /// </remarks>
+    private static bool Truncated(string folded, string known, int? size, int? grade)
+    {
+        if (folded.Length < 3 || folded.Length >= known.Length) return false;
+        if (!known.StartsWith(folded, StringComparison.Ordinal)) return false;
+
+        return folded.Length >= 10 || size is not null || grade is not null;
+    }
 
     /// <summary>
     /// The part's name with the screen's decoration taken off, and what the
