@@ -36,6 +36,7 @@ public partial class App : System.Windows.Application
     private string[] _arguments = [];
     private TrayPresence? _tray;
     private MainWindow? _overlay;
+    private MfdController? _mfd;
     private Settings _settings = new();
 
     /// <summary>Set while shutting down, so a closing overlay is not mistaken for the user turning it off.</summary>
@@ -64,8 +65,14 @@ public partial class App : System.Windows.Application
         _tray.SetInstallFolderRequested += PickInstallFolder;
         _tray.CheckForUpdatesRequested += CheckForUpdates;
         _tray.QuitRequested += Quit;
+        _tray.MfdSetupRequested += () => _mfd?.OpenSetup();
 
         await StartServerAsync(e.Args);
+
+        var mfdRoot = _server?.Urls.FirstOrDefault() is { } address
+            ? new UriBuilder(address) { Host = "127.0.0.1" }.Uri.AbsoluteUri
+            : DashboardUrl;
+        _mfd = new MfdController(mfdRoot, message => _tray?.Notify(message));
 
         _overlay = CreateOverlay();
 
@@ -336,6 +343,7 @@ public partial class App : System.Windows.Application
         // Close the window before stopping the server: closing is what saves the
         // overlay's geometry, and it should not race a shutting-down host.
         _overlay?.Close();
+        _mfd?.Dispose();
 
         if (_server is not null)
         {

@@ -318,7 +318,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.5
+### 0.10.6
+
+- **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
+  independent left and right displays on a shared monitor or separate monitors.
+  Drag and resize the areas, preview alignment behind the frames, and save the
+  placement. The default Cougar USB profile supplies page navigation, scrolling,
+  text size and screen brightness, with a button tester in setup. The first
+  HUD pages focus on navigation, the next planned task and source status, with
+  screenshot readings labelled by capture time. MFD mode starts off; the regular overlay keeps its
+  own settings.
 
 - **Readings now reach the overlay, and tell you when something is off.**
   The last screenshot read appears on the Now card in the dashboard and in

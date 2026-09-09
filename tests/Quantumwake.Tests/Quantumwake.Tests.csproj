@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="..\..\src\Quantumwake.Overlay\MfdLayout.cs" Link="MfdLayout.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quantum Wake · MFD setup</title><link rel="stylesheet" href="mfd-setup.css"></head><body>
+<main><header><div class="eyebrow">QUANTUM WAKE / COCKPIT</div><h1>Place your MFDs</h1>
+<p>Drag each display onto a monitor. Resize it from the corner to match the opening in your Cougar frame.</p></header>
+<p id="host-note" class="notice" hidden>Open <b>MFD setup…</b> from the Quantum Wake tray icon to detect your monitors, save placement and read USB buttons. This browser page shows an example layout only.</p>
+<div class="workspace"><section><div class="section-title">YOUR MONITORS <span>Positions follow Windows display settings</span></div>
+<div id="desktop" aria-label="Monitor layout"></div>
+<p class="hint">Select an MFD, then drag it or use arrow keys. Shift + arrow moves it farther. Dimensions below are in screen pixels.</p>
+<div class="toolbar"><button id="together">Both on selected monitor</button><button id="separate">One per monitor</button><button id="swap">Swap Cougar assignments</button></div>
+</section><aside><h2 id="selected-title">Left MFD</h2>
+<label>Monitor<select id="monitor"></select></label>
+<div class="fields"><label>X<input id="x" type="number" step="1"></label><label>Y<input id="y" type="number" step="1"></label>
+<label>Width<input id="width" type="number" min="220" step="1"></label><label>Height<input id="height" type="number" min="220" step="1"></label></div>
+<label>Default Cougar device<select id="cougar"></select></label>
+<p id="placement-note" class="hint"></p>
+</aside></div>
+<section class="input-test"><div><div class="section-title">COUGAR BUTTON TEST</div><p id="devices">Checking for F16 MFD devices…</p>
+<p class="hint">Default USB profile · no keyboard mapping required. Inputs also remain available to the game.</p></div>
+<output id="button-test" aria-live="polite">Press a button on either frame</output></section>
+<details><summary>Default button assignments</summary><p>Top buttons 1–3: Nav, Task, Status. Nav shows location, destination and ship. Task shows the next planned stop and action. Status keeps the latest screenshot reading with its capture time. Bottom 15 / 11: previous / next page; 14 / 12: scroll up / down; 13: Home. Right 6 / 7: text size. Left 20 / 19: screen brightness. Remaining buttons and rocker switches are unassigned in this first profile and appear in the tester.</p>
+<p>USB detection uses Windows joystick slots 1–16 and the default F16 MFD names. If a device is missing, check the Thrustmaster driver and close any T.A.R.G.E.T. profile that replaces the devices with a virtual controller. Duplicate MFD numbers must be changed in the Thrustmaster control panel.</p></details>
+<footer><label class="enabled"><input id="enabled" type="checkbox"> Enable MFD displays</label><div class="actions"><button id="preview">Show alignment preview</button><button id="stop-preview">Stop preview</button><button id="save" class="primary">Save layout</button></div>
+<p id="status" role="status">MFD mode is optional. Your regular overlay has its own settings.</p></footer>
+</main><script src="mfd-core.js"></script><script src="mfd-setup.js"></script></body></html>
