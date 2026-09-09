@@ -80,12 +80,23 @@ from the corner; the rectangles represent the visible screen openings. The
 monitor dropdown and pixel fields also allow precise placement. Arrow keys
 move a focused rectangle; Shift increases the step.
 
-**Show alignment preview** displays the rectangles at their real positions.
-Changes in the editor update that preview when a drag finishes. **Stop preview**
-or closing setup restores the saved state. Tick **Enable MFD displays** and
-choose **Save layout** to keep them. Settings live in `mfd.json` under the
-Quantum Wake data directory. Each display remembers its own page, text size
-and screen brightness in the WebView profile.
+**Show alignment preview** displays the rectangles at their real positions, and
+from then on the frames follow the editor: dragging moves them under your hand,
+coalesced to one update a frame. **Saving does not stop the preview** - it
+writes the file and the frames keep following. **Stop preview** or closing setup
+restores the saved state. Tick **Enable MFD displays** and choose **Save layout**
+to keep them. Settings live in `mfd.json` under the Quantum Wake data directory.
+Each display remembers its own page, text size and screen brightness in the
+WebView profile.
+
+Both halves of that were wrong once, and together they made the editor feel
+dead. Updates only reached the frames when a drag ended, so aligning to a few
+pixels meant dropping the rectangle, looking up, and starting again; and `save`
+cleared the previewing flag on the page while the controller separately dropped
+back to a non-preview apply, so after one save nothing else arrived at all and
+every later change needed another save to be seen. The page keeps previewing
+across a save, and the controller keeps applying as a preview while `_preview`
+is set.
 
 **Button assignments** below the tester rebinds any button. Changes reach a
 running alignment preview immediately, so a rebinding can be tried on the frame

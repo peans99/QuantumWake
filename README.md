@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.9
+### 0.10.10
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -328,6 +328,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   counters recorded, the contract you accepted this session, and where all of
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
+
+- **The alignment preview follows the editor as you drag.** It updated only
+  when you let go of a rectangle, and — worse — saving switched it off, so after
+  one save nothing you changed reached the frames until you saved again. The
+  preview now moves under your hand and keeps running after a save; **Stop
+  preview** or closing setup puts the saved placement back.
 
 - **MFD mode looks like the rest of Quantum Wake.** The placement editor had
   grown a palette and typeface of its own; it now uses the dashboard's own

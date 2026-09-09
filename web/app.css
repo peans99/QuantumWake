@@ -968,7 +968,16 @@ h2.spaced { margin-top: 32px; }
  * one added later" that stays true, so the default is now correct and the
  * exceptions say they are exceptions.
  */
-button {
+/*
+ * `a.ghost` rides along with the buttons rather than restating them. A few
+ * actions have to be links because they open a page in a new tab - the MFD
+ * placement editor and preview - and a bare anchor in a row of HUD buttons is
+ * the same "from another application" problem as the grey Windows button this
+ * rule was written to stop. Sharing the selector is what keeps them in step:
+ * a change to the button look reaches them without anybody remembering to.
+ */
+button,
+a.ghost {
   background: linear-gradient(160deg, rgba(23, 41, 60, .5), rgba(7, 12, 20, .5));
   border: 1px solid var(--rule);
   color: var(--muted);
@@ -982,20 +991,25 @@ button {
   transition: border-color .14s, color .14s, background .14s;
 }
 
-button:hover:not(:disabled) {
+a.ghost { display: inline-block; text-decoration: none; }
+
+button:hover:not(:disabled),
+a.ghost:hover {
   border-color: var(--cyan-deep);
   background: linear-gradient(160deg, rgba(53, 200, 240, .16), rgba(13, 92, 120, .1));
   color: var(--cyan-hot);
 }
 
 /* Pressed reads as pressed: the lift goes away rather than deepening. */
-button:active:not(:disabled) {
+button:active:not(:disabled),
+a.ghost:active {
   background: rgba(53, 200, 240, .05);
   color: var(--cyan);
 }
 
 /* Keyboard focus has to survive the clipped corner, which crops an outline. */
-button:focus-visible {
+button:focus-visible,
+a.ghost:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--cyan);
   color: var(--cyan-hot);

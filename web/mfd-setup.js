@@ -11,7 +11,17 @@ const desktop = setupElement('desktop');
 const selectedPanel = () => layout.panels[selected];
 function send(type) { host?.postMessage({ type, layout }); }
 function status(text, error = false) { setupElement('status').textContent = text; setupElement('status').classList.toggle('error', error); }
-function changed() { draw(); if (previewing) send('preview'); }
+/* Coalesced to one send a frame. A drag raises pointermove far faster than a
+   window can be moved, and each message crosses into the host, repositions two
+   displays and recuts a full-screen backdrop; sending them all would queue up
+   work the pilot has already dragged past. */
+let previewQueued = false;
+function pushPreview() {
+  if (previewQueued || !previewing) return;
+  previewQueued = true;
+  requestAnimationFrame(() => { previewQueued = false; if (previewing) send('preview'); });
+}
+function changed() { draw(); pushPreview(); }
 function fillEditor() {
   const panel = selectedPanel();
   setupElement('selected-title').textContent = panel.id === 'left' ? 'Left MFD' : 'Right MFD';
@@ -76,7 +86,10 @@ desktop.addEventListener('pointermove', event => {
   layout.panels[selected] = d.resize
     ? QwMfd.fit({ ...d.original, width: d.original.width + dx, height: d.original.height + dy }, d.monitor)
     : QwMfd.move(layout.panels[selected], d.monitor.x + d.original.x + dx, d.monitor.y + d.original.y + dy, monitors);
-  draw();
+  // Under the hand, not on release. Aligning a frame is a matter of a few
+  // pixels, and a preview that only catches up when you let go means dropping
+  // it, looking up, and starting again.
+  draw(); pushPreview();
 });
 function endDrag(event) {
   if (!dragging || event.pointerId !== dragging.pointer) return;
@@ -171,7 +184,11 @@ setupElement('restore').onclick = () => {
 };
 setupElement('preview').onclick = () => { previewing = true; send('preview'); };
 setupElement('stop-preview').onclick = () => { previewing = false; send('stopPreview'); status('Preview stopped. Saved placement restored.'); };
-setupElement('save').onclick = () => { previewing = false; send('save'); };
+/* Saving keeps the preview running. Turning it off here was the bug that made
+   the whole editor feel dead: after one save nothing else reached the displays,
+   so every later change needed another save to be seen at all. Saving writes
+   the file; it is not a reason to stop looking at the thing. */
+setupElement('save').onclick = () => send('save');
 function showDevices(devices) {
   setupElement('devices').textContent = devices.length ? devices.map(n => 'F16 MFD ' + n).join(' · ') : 'No default Cougar devices detected. Check the driver and USB connection.';
   if (new Set(devices).size !== devices.length) setupElement('devices').textContent += ' · Duplicate numbers: input is paused for those devices.';

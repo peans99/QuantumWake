@@ -39,11 +39,22 @@ internal sealed class MfdBlackout : Window
         SourceInitialized += (_, _) => NativeWindowStyles.ApplyBackdropStyles(this);
     }
 
+    /// <summary>The geometry currently cut, so an unchanged re-apply costs nothing.</summary>
+    private string _shape = "";
+
     /// <summary>Covers one monitor, less the openings its panels occupy.</summary>
     public void Cover(MfdMonitor monitor, IReadOnlyList<MfdPanel> panels)
     {
         var handle = new WindowInteropHelper(this).Handle;
         if (handle == IntPtr.Zero) return;
+
+        // Dragging a panel in setup re-applies the whole layout every frame, and
+        // recutting a full-screen region repaints a full-screen window. Skip the
+        // backdrops that did not move; only the monitor being dragged on pays.
+        var shape = string.Join(";", panels.Select(p => $"{p.X},{p.Y},{p.Width},{p.Height}"))
+            + $"|{monitor.X},{monitor.Y},{monitor.Width},{monitor.Height}";
+        if (shape == _shape) return;
+        _shape = shape;
 
         // Physical pixels, the same way MfdWindow.Place works, so the holes and
         // the panels are measured in one coordinate system rather than two.

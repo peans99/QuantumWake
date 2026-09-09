@@ -87,9 +87,18 @@ internal sealed class MfdController : IDisposable
                 File.Move(_path + ".tmp", _path, overwrite: true);
                 _saved = layout;
             }
-            Apply(layout, type == "preview");
-            _setup?.Send(new { type = "result", ok = true, message = type == "save"
-                ? "Layout saved." : "Alignment preview is visible. Drag the areas here to adjust it." });
+            // A save while the preview is up leaves it up. Writing the file is
+            // not a reason to take the picture away, and dropping the preview
+            // here is what made every change after the first save invisible
+            // until the pilot saved again.
+            var previewing = type == "preview" || _preview;
+            Apply(layout, previewing);
+            _setup?.Send(new { type = "result", ok = true, message = type switch
+            {
+                "save" when previewing => "Layout saved. The preview is still following the editor.",
+                "save" => "Layout saved.",
+                _ => "Alignment preview is visible. It follows the editor as you drag."
+            } });
         }
         catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException
             or KeyNotFoundException or IOException or UnauthorizedAccessException)
