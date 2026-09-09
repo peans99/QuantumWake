@@ -4,8 +4,11 @@
 <body><main id="mfd">
   <nav id="top" class="edge top" aria-label="MFD pages"></nav>
   <nav id="left" class="edge left" aria-label="Left buttons"></nav>
-  <section class="display"><header><span id="identity">MFD</span><span id="connection">CONNECTING</span></header>
-    <h1 id="title">NAV</h1><div id="readings" tabindex="0"></div>
+  <section class="display"><header><img id="maker" alt="" hidden><span id="identity">MFD</span><span id="connection">CONNECTING</span></header>
+    <h1 id="title">NAV</h1>
+    <figure id="map" hidden><svg id="map-plot" viewBox="-1.18 -1.18 2.36 2.36" aria-hidden="true"></svg>
+      <figcaption id="map-note"></figcaption></figure>
+    <div id="readings" tabindex="0"></div>
     <footer><span id="device">Browser · click edge labels</span><span id="last-input"></span></footer>
   </section>
   <nav id="right" class="edge right" aria-label="Right buttons"></nav>

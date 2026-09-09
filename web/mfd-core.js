@@ -33,23 +33,38 @@ window.QwMfd = (() => {
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
      means what the pilot chose if the pages are ever reordered. */
+  /* Icons are stroked paths on a 24-box, drawn here rather than pulled from a
+     font: standalone mode makes no outbound request, and the two glyph sets
+     Windows ships with are a lottery at 14 px. `currentColor` means a pressed
+     button inverts its icon along with its caption for free. */
   const commands = [
-    { id: 'nav', label: 'Page · Nav', caption: 'NAV' },
-    { id: 'task', label: 'Page · Task', caption: 'TASK' },
-    { id: 'act', label: 'Page · Act', caption: 'ACT' },
-    { id: 'cargo', label: 'Page · Cargo', caption: 'CARGO' },
-    { id: 'contract', label: 'Page · Contract', caption: 'CNTRCT' },
-    { id: 'status', label: 'Page · Status', caption: 'STATUS' },
-    { id: 'prev', label: 'Previous page', caption: 'PREV' },
-    { id: 'next', label: 'Next page', caption: 'NEXT' },
-    { id: 'home', label: 'Home (Nav)', caption: 'HOME' },
-    { id: 'up', label: 'Up · select or scroll', caption: 'UP' },
-    { id: 'down', label: 'Down · select or scroll', caption: 'DOWN' },
-    { id: 'text-up', label: 'Text size larger', caption: 'TEXT +' },
-    { id: 'text-down', label: 'Text size smaller', caption: 'TEXT −' },
-    { id: 'bright-up', label: 'Screen brighter', caption: 'BRIGHT' },
-    { id: 'bright-down', label: 'Screen dimmer', caption: 'DIM' },
-    { id: 'confirm', label: 'Confirm the selected task', caption: 'DONE' }
+    { id: 'nav', label: 'Page · Nav', caption: 'NAV',
+      icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 7.5a4.5 4.5 0 1 0 .1 0M12 12l3.5-3.5' },
+    { id: 'task', label: 'Page · Task', caption: 'TASK',
+      icon: 'M4 6.5h10M4 12h10M4 17.5h6M16.5 16l2 2 3.5-4' },
+    { id: 'act', label: 'Page · Act', caption: 'ACT',
+      icon: 'M4 5h16v14H4zM8 12l3 3 5-6' },
+    { id: 'cargo', label: 'Page · Cargo', caption: 'CARGO',
+      icon: 'M3 8l9-4 9 4v8l-9 4-9-4zM3 8l9 4 9-4M12 12v8' },
+    { id: 'contract', label: 'Page · Contract', caption: 'CNTRCT',
+      icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6' },
+    { id: 'status', label: 'Page · Status', caption: 'STATUS',
+      icon: 'M12 3a9 9 0 1 0 .1 0M12 7.5v.5M12 11v6' },
+    { id: 'prev', label: 'Previous page', caption: 'PREV', icon: 'M15 4L7 12l8 8' },
+    { id: 'next', label: 'Next page', caption: 'NEXT', icon: 'M9 4l8 8-8 8' },
+    { id: 'home', label: 'Home (Nav)', caption: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
+    { id: 'up', label: 'Up · select or scroll', caption: 'UP', icon: 'M4 15l8-8 8 8' },
+    { id: 'down', label: 'Down · select or scroll', caption: 'DOWN', icon: 'M4 9l8 8 8-8' },
+    { id: 'text-up', label: 'Text size larger', caption: 'TEXT +',
+      icon: 'M2 19L8 5l6 14M4.2 14.5h7.6M18 9v8M14 13h8' },
+    { id: 'text-down', label: 'Text size smaller', caption: 'TEXT −',
+      icon: 'M2 19L8 5l6 14M4.2 14.5h7.6M14 13h8' },
+    { id: 'bright-up', label: 'Screen brighter', caption: 'BRIGHT',
+      icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2 2M17.4 17.4l2 2M19.4 4.6l-2 2M6.6 17.4l-2 2' },
+    { id: 'bright-down', label: 'Screen dimmer', caption: 'DIM',
+      icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2' },
+    { id: 'confirm', label: 'Confirm the selected task', caption: 'DONE',
+      icon: 'M4 12.5l5.5 5.5L20 6' }
   ];
 
   /* The shipped profile, on the official clockwise numbering: top 1-5, right
@@ -76,6 +91,43 @@ window.QwMfd = (() => {
     return map;
   }
   const caption = id => commands.find(c => c.id === id)?.caption || null;
+  const icon = id => commands.find(c => c.id === id)?.icon || null;
+
+  /* The makers with a logo file in web/assets/manufacturers. A copy of app.js's
+     MANUFACTURERS, because the panel cannot load fourteen thousand lines of
+     dashboard to read sixteen names - and a copy is only safe because a test
+     loads both files and fails when they disagree. Do not add a code here
+     without adding the PNG. */
+  const makers = {
+    DRAK: 'Drake Interplanetary', ANVL: 'Anvil Aerospace', RSI: 'Roberts Space Industries',
+    MISC: 'MISC', ORIG: 'Origin Jumpworks', AEGS: 'Aegis Dynamics',
+    CRUS: 'Crusader Industries', CNOU: 'Consolidated Outland', TMBL: 'Tumbril',
+    ESPR: 'Esperia', BANU: 'Banu', KRIG: 'Kruger Intergalactic',
+    ARGO: 'ARGO Astronautics', AOPO: 'Aopoa', GATS: 'Gatac', MRAI: 'Mirai',
+  };
+
+  /* Which maker a ship name announces, by code and by name, longest match
+     first - "Consolidated Outland" has to beat "Consolidated". The logs used to
+     write the code ("DRAK Corsair") and the community dataset now resolves the
+     real name ("Drake Corsair"), so both have to hit; matching the code alone
+     is the bug that once left every maker whose code is not its name without a
+     badge. `table` is the community code-to-name map when it is available, and
+     may only teach new aliases for codes that already have a logo. */
+  function makerOf(shipName, table) {
+    if (!shipName) return null;
+    const alias = new Map();
+    const learn = (from, code) => { if (from) alias.set(String(from).toLowerCase(), code); };
+    for (const [code, name] of Object.entries({ ...makers, ...(table || {}) })) {
+      if (!(code in makers)) continue;
+      learn(code, code); learn(name, code); learn(String(name).split(' ')[0], code);
+    }
+    const words = String(shipName).trim().split(/\s+/);
+    for (let take = Math.min(3, words.length); take >= 1; take--) {
+      const code = alias.get(words.slice(0, take).join(' ').toLowerCase());
+      if (code) return { code, name: makers[code], model: words.slice(take).join(' ') || shipName };
+    }
+    return null;
+  }
 
   function effect(id) {
     const page = pageIds.indexOf(id);
@@ -128,6 +180,45 @@ window.QwMfd = (() => {
       }
     }
     return { scu, stops, unmeasured };
+  }
+
+  /* A top-down plan of the system you are standing in, from the community
+     starmap's own body coordinates - real geometry rather than an even ring.
+     Coordinates come back normalised to the outermost body, so the renderer
+     needs no idea how many gigametres it is drawing.
+
+     It marks a body, never a point. The logs name the place you are at and the
+     body it sits on; where you are on that body is not something Game.log ever
+     says, and a dot placed on a surface would be an invention. The caption says
+     so on the panel itself. */
+  function mapView(atlas, state, briefing) {
+    const s = state || {};
+    if (!atlas) return { note: 'Loading the star map…' };
+    const system = s.locationSystem || '';
+    const positions = atlas.positions?.[system.toLowerCase()];
+    if (!system) return { note: 'No system identified in the logs yet' };
+    if (!positions || !Object.keys(positions).length)
+      return { system, note: `No body positions for ${system}` };
+
+    const bodyOf = id => id ? (atlas.nodes || []).find(n => n.rawId === id)?.body || null : null;
+    const here = s.locationBody || null;
+    // A quantum destination outranks the plan here for the same reason it does
+    // on the Nav rows: it is where the ship is actually pointed.
+    const target = bodyOf(s.travellingToId) || bodyOf(briefing?.stops?.[0]?.placeId);
+
+    const entries = Object.entries(positions);
+    const far = Math.max(...entries.map(([, p]) => Math.sqrt(p.x * p.x + p.y * p.y))) || 1;
+    const bodies = entries.map(([name, p]) => {
+      const radius = Math.sqrt(p.x * p.x + p.y * p.y) / far;
+      return { name, x: p.x / far, y: p.y / far, radius,
+        here: name === here, target: name === target && name !== here };
+    });
+
+    // Moons sit within a rounding of their planet's orbit, so one ring each
+    // would draw the same circle four times over a 150 px panel.
+    const rings = [...new Set(bodies.map(b => Math.round(b.radius * 50) / 50))].filter(r => r > .04);
+    return { system, here, target, bodies, rings,
+      note: here ? `${system.toUpperCase()} · body positions, not a fix` : `${system.toUpperCase()} · body not identified` };
   }
 
   function loadLine(load) {
@@ -229,6 +320,6 @@ window.QwMfd = (() => {
       default: return [];
     }
   }
-  return { fit, move, extent, action, buttons, caption, commands, defaults,
+  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, makerOf, makers,
     pages, pageIds, rows, tasks, describe, plannedLoad, clamp, OSBS, BUTTONS };
 })();

@@ -274,6 +274,133 @@ public class MfdTests
         Assert.DoesNotContain("0 of 0", quiet);
     }
 
+    private const string Atlas =
+        "{positions:{stanton:{Hurston:{x:12850457093,y:0},Crusader:{x:0,y:19151568440},"
+        + "microTech:{x:-43443771120,y:0},ArcCorp:{x:0,y:-28917482763}}},"
+        + "nodes:[{rawId:'RR_MIC_LEO',name:'Port Tressler',body:'microTech'},"
+        + "{rawId:'STAN_HUR_L1',name:'Everus Harbor',body:'Hurston'}]}";
+
+    [Fact]
+    public void MapPlotsRealBodyGeometryNormalisedToTheOutermostBody()
+    {
+        var e = Engine();
+        e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'Hurston'}});");
+        Assert.Equal(4, e.Evaluate("v.bodies.length").AsNumber());
+
+        // microTech is the far one, so it lands on the edge and everything else
+        // falls inside it in the proportion the coordinates actually have.
+        Assert.Equal(1, e.Evaluate("v.bodies.find(b => b.name === 'microTech').radius").AsNumber(), 6);
+        Assert.Equal(-1, e.Evaluate("v.bodies.find(b => b.name === 'microTech').x").AsNumber(), 6);
+        Assert.Equal(0.2958, e.Evaluate("v.bodies.find(b => b.name === 'Hurston').radius").AsNumber(), 3);
+        Assert.True(e.Evaluate("v.bodies.every(b => Math.abs(b.x) <= 1 && Math.abs(b.y) <= 1)").AsBoolean());
+        Assert.True(e.Evaluate("v.bodies.find(b => b.name === 'Hurston').here").AsBoolean());
+    }
+
+    /// <summary>
+    /// The logs name the body, never a point on it. A quantum destination wins
+    /// over the plan, exactly as the Nav rows have it.
+    /// </summary>
+    [Fact]
+    public void MapMarksTheBodyAndPrefersAQuantumDestinationOverThePlan()
+    {
+        var e = Engine();
+        const string plan = "{stops:[{placeId:'STAN_HUR_L1'}]}";
+        e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp',"
+            + "travellingToId:'RR_MIC_LEO'}," + plan + ");");
+        Assert.Equal("microTech", e.Evaluate("v.target").AsString());
+        Assert.Contains("not a fix", e.Evaluate("v.note").AsString());
+
+        e.Execute($"var p = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp'}},{plan});");
+        Assert.Equal("Hurston", e.Evaluate("p.target").AsString());
+
+        // Standing on the destination is not a leg to fly.
+        e.Execute($"var s = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'Hurston'}},{plan});");
+        Assert.True(e.Evaluate("s.bodies.every(b => !b.target)").AsBoolean());
+    }
+
+    [Fact]
+    public void MapSaysWhatIsMissingRatherThanDrawingAnInventedSystem()
+    {
+        var e = Engine();
+        Assert.Contains("Loading", e.Evaluate("QwMfd.mapView(null,{}).note").AsString());
+        Assert.True(e.Evaluate($"QwMfd.mapView({Atlas},{{}}).bodies === undefined").AsBoolean());
+        Assert.Contains("No system", e.Evaluate($"QwMfd.mapView({Atlas},{{}}).note").AsString());
+        Assert.Contains("No body positions for Pyro",
+            e.Evaluate($"QwMfd.mapView({Atlas},{{locationSystem:'Pyro'}}).note").AsString());
+        Assert.Contains("not identified",
+            e.Evaluate($"QwMfd.mapView({Atlas},{{locationSystem:'Stanton'}}).note").AsString());
+    }
+
+    /// <summary>
+    /// Moons orbit within a rounding of their planet, and one ring each would
+    /// draw the same circle four times over on a panel this size.
+    /// </summary>
+    [Fact]
+    public void OrbitRingsCollapseBodiesSharingAnOrbit()
+    {
+        var e = Engine();
+        const string moons = "{positions:{stanton:{Crusader:{x:0,y:19151568440},"
+            + "Daymar:{x:0,y:19110000000},Cellin:{x:0,y:19180000000},"
+            + "microTech:{x:-43443771120,y:0}}},nodes:[]}";
+        e.Execute($"var v = QwMfd.mapView({moons},{{locationSystem:'Stanton',locationBody:'Daymar'}});");
+        Assert.Equal(4, e.Evaluate("v.bodies.length").AsNumber());
+        Assert.Equal(2, e.Evaluate("v.rings.length").AsNumber());
+    }
+
+    /// <summary>
+    /// The panel keeps its own copy of the sixteen makers that have a logo,
+    /// because it cannot load the dashboard to read them. This is what makes
+    /// the copy safe: both files are loaded here, and a name changed in one
+    /// and not the other fails rather than quietly dropping a badge.
+    /// </summary>
+    [Fact]
+    public void TheMfdMakerTableMatchesTheDashboardsOwn()
+    {
+        var page = new Page();
+        page.Do(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "mfd-core.js")));
+        Assert.Equal(
+            page.Text("JSON.stringify(Object.entries(MANUFACTURERS).sort())"),
+            page.Text("JSON.stringify(Object.entries(QwMfd.makers).sort())"));
+        Assert.Equal(
+            page.Text("JSON.stringify([...MANUFACTURER_LOGOS].sort())"),
+            page.Text("JSON.stringify(Object.keys(QwMfd.makers).sort())"));
+    }
+
+    [Theory]
+    [InlineData("DRAK Corsair", "DRAK")]              // the code, as the logs used to write it
+    [InlineData("Drake Corsair", "DRAK")]             // the resolved name, as they do now
+    [InlineData("Drake Interplanetary Cutter", "DRAK")]
+    [InlineData("RSI Hermes", "RSI")]
+    [InlineData("Consolidated Outland Nomad", "CNOU")] // must beat a bare "Consolidated"
+    [InlineData("Origin 400i", "ORIG")]
+    public void AShipFindsItsBadgeByCodeOrByName(string ship, string code)
+    {
+        Assert.Equal(code, Engine().Evaluate($"QwMfd.makerOf('{ship}').code").AsString());
+    }
+
+    [Fact]
+    public void AnUnknownOrAbsentShipGetsNoBadgeRatherThanAWrongOne()
+    {
+        var e = Engine();
+        Assert.True(e.Evaluate("QwMfd.makerOf('Greycat ROC') === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.makerOf(null) === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.makerOf('') === null").AsBoolean());
+
+        // The community table may teach an alias, never a new logo.
+        Assert.True(e.Evaluate("QwMfd.makerOf('Greycat ROC',{GRIN:'Greycat Industrial'}) === null").AsBoolean());
+        Assert.Equal("MRAI", e.Evaluate("QwMfd.makerOf('Mirai Fury',{MRAI:'Mirai'}).code").AsString());
+    }
+
+    [Fact]
+    public void EveryAssignedButtonHasAnIconAndAnUnassignedOneHasNothing()
+    {
+        var e = Engine();
+        Assert.True(e.Evaluate("QwMfd.commands.every(c => typeof c.icon === 'string' && c.icon.length > 4)").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.icon('nav') !== null && QwMfd.caption('nav') !== null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.icon(undefined) === null && QwMfd.caption(undefined) === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.icon('not-a-command') === null").AsBoolean());
+    }
+
     [Fact]
     public void ContractPageSaysNothingIsOpenRatherThanLookingEmpty()
     {

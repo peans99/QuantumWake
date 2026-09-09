@@ -14,6 +14,7 @@
   --dim: #46617a;
   --glow: #35c8f0;
   --hot: #7fe4ff;
+  --amber: #ffab3d;
   --display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", Consolas, "Segoe UI Mono", ui-monospace, monospace;
   --text-scale: 1;
@@ -31,12 +32,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .edge button { min-width: 0; min-height: 0; padding: 2%; border: 1px solid transparent; background: transparent;
   color: var(--muted); letter-spacing: .1em; font-size: clamp(8px, 2.3cqw, 19px);
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
-.edge button span { display: block; font-size: .65em; color: var(--dim); margin-bottom: .25em; font-family: var(--mono); letter-spacing: 0; }
+.edge button svg { display: block; width: 1.7em; height: 1.7em; margin: 0 auto .18em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .edge button b { display: block; font-weight: 500; }
 .edge button.selected { border-color: var(--glow); background: rgba(53, 200, 240, .14); color: var(--hot); }
 .edge button.pressed, .edge button:focus-visible { background: var(--glow); color: #041018; outline: none; }
-.edge button.pressed span, .edge button:focus-visible span { color: #04101880; }
-.edge button:disabled { cursor: default; opacity: .3; }
+
+/* Unassigned draws nothing at all - no icon, no caption, no placeholder. */
+.edge button:disabled { cursor: default; }
 .display { min-height: 0; min-width: 0; grid-area: 2 / 2; display: flex; flex-direction: column; padding: 3%;
   border: 1px solid var(--line-hot); background: linear-gradient(158deg, var(--panel), var(--void)); position: relative; }
 /* The mobiGlas panel tell, same bracket the dashboard's cards carry. */
@@ -65,3 +67,22 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
 .crosshair::before, .crosshair::after { content: ''; position: absolute; background: #0d5c78; }
 .crosshair::before { left: 50%; top: 0; height: 100%; width: 1px; }
 .crosshair::after { top: 50%; left: 0; width: 100%; height: 1px; }
+/* Small on purpose: the readings are the answer, the plan is the shape of it. */
+#map { margin: 0 0 4%; flex: 0 0 auto; text-align: center; }
+#map[hidden] { display: none; }
+#map svg { display: block; width: 100%; max-width: 34cqh; height: auto; aspect-ratio: 1; margin: 0 auto; }
+#map-note { font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-top: 2%; }
+.orbit { fill: none; stroke: var(--line-hot); stroke-width: .006; }
+.star { fill: var(--hot); }
+.body { fill: var(--dim); }
+.body.here { fill: var(--glow); }
+.body.target { fill: var(--amber); }
+.halo { fill: none; stroke: var(--glow); stroke-width: .012; }
+.leg { stroke: var(--amber); stroke-width: .01; stroke-dasharray: .05 .04; }
+.name { font-size: .11px; letter-spacing: .02px; text-anchor: middle; fill: var(--muted); }
+.name.here { fill: var(--hot); }
+.name.target { fill: var(--amber); }
+/* The maker's mark, small and in the corner, never louder than a reading. */
+#maker { height: clamp(11px, 3.2cqw, 26px); width: auto; max-width: 30%; object-fit: contain;
+  opacity: .75; margin-right: auto; align-self: center; }
+#maker[hidden] { display: none; }

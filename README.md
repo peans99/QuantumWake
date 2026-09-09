@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.10
+### 0.10.11
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -328,6 +328,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   counters recorded, the contract you accepted this session, and where all of
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
+
+- **A system plan on the Nav page.** Small, above the words: the star, the
+  bodies at their real coordinates, the one you are at ringed, and a dashed leg
+  to wherever you are headed. It marks a body and says so — the logs name the
+  place you are at, never where you are on it.
+
+- **The maker's mark of the ship you are flying**, in the top-left corner of
+  every page. Nothing shows for a maker with no logo, or before a ship has been
+  identified.
+
+- **Icons above the button captions**, and a blank where a button does nothing.
+  The number used to sit there, labelling a button the pilot is looking straight
+  at; a blank position now reads as blank, the way a real MFD's does.
 
 - **The alignment preview follows the editor as you drag.** It updated only
   when you let go of a rectangle, and — worse — saving switched it off, so after

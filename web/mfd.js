@@ -8,6 +8,15 @@ let page = Number.isInteger(preferences.page) ? QwMfd.clamp(preferences.page, 0,
 let brightness = Number.isFinite(preferences.brightness) ? QwMfd.clamp(preferences.brightness, .3, 1) : 1;
 let textScale = Number.isFinite(preferences.textScale) ? QwMfd.clamp(preferences.textScale, .8, 1.5) : 1;
 let bindings = QwMfd.buttons(null);
+/* Body coordinates and the place gazetteer. Fetched once and kept: it is
+   reference data that only changes when the game does, and re-pulling 294
+   places every five seconds to draw a plan that has not moved would be waste
+   on a panel that is meant to be left running. */
+let atlas = null;
+/* Community code-to-name, so a ship that arrives as "Drake Corsair" finds the
+   same badge as one that arrives as "DRAK Corsair". Absent is fine: the
+   sixteen built-in names already cover the fleet anyone flies. */
+let makerNames = null;
 let state = null;
 let briefing = null, briefingUnavailable = false, briefingBusy = false;
 let selected = 0, armed = false;
@@ -23,18 +32,27 @@ for (const [edge, numbers] of Object.entries(edges)) {
   for (const number of numbers) {
     const button = document.createElement('button');
     button.id = 'osb-' + number;
-    const index = document.createElement('span');
-    index.textContent = String(number).padStart(2, '0');
-    button.append(index, document.createElement('b'));
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    glyph.setAttribute('viewBox', '0 0 24 24');
+    glyph.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+    button.append(glyph, document.createElement('b'));
     button.onclick = () => press(number);
     byId(edge).append(button);
   }
 }
+/* An icon over the caption, and nothing whatever over an unassigned button.
+   The number used to sit there, which was a label for a thing the pilot is
+   looking straight at - the button is under their thumb, printed on the frame.
+   A blank position reads as blank, the way a real MFD's does; the number is
+   still on the hover title, and the setup tester is where numbers matter. */
 function drawLabels() {
   for (const number of osbs) {
     const button = byId('osb-' + number);
     const caption = QwMfd.caption(bindings[number]);
-    button.querySelector('b').textContent = caption || '—';
+    const path = QwMfd.icon(bindings[number]);
+    button.querySelector('b').textContent = caption || '';
+    button.querySelector('path').setAttribute('d', path || '');
+    button.querySelector('svg').style.visibility = path ? '' : 'hidden';
     button.disabled = !caption;
     button.title = 'Cougar button ' + number + (caption ? ': ' + caption : ': unassigned');
   }
@@ -48,6 +66,8 @@ function render() {
   byId('title').textContent = QwMfd.pages[page];
   const showing = QwMfd.pageIds[page];
   for (const number of osbs) byId('osb-' + number).classList.toggle('selected', bindings[number] === showing);
+  drawMap(showing === 'nav');
+  drawMaker();
   const rows = QwMfd.rows(page, state, briefing, briefingUnavailable, { selected, armed });
   const key = JSON.stringify(rows);
   if (key === lastRows) return;
@@ -68,6 +88,66 @@ function render() {
   // Instant, not smooth: a running scroll animation is one of the things that
   // keeps a headless render from ever settling, and this fires on every press.
   readings.querySelector('.cursor, .armed')?.scrollIntoView({ block: 'nearest' });
+}
+/* The maker's mark for the ship the logs last saw retrieved, in the corner of
+   every page. It stays where it is rather than moving with the page, because a
+   badge that comes and goes is one more thing changing in the corner of a
+   pilot's eye. A maker with no logo file, or no ship at all, shows nothing -
+   the ship is named in words on Nav either way. */
+let lastMaker = '';
+function drawMaker() {
+  const badge = byId('maker');
+  const maker = QwMfd.makerOf(state?.ship, makerNames);
+  const key = maker?.code || '';
+  if (key === lastMaker) return;
+  lastMaker = key;
+  badge.hidden = !key;
+  if (!key) return;
+  badge.src = 'assets/manufacturers/' + key + '.png';
+  badge.alt = maker.name;
+  badge.title = state.ship;
+  // A file that is not there must not leave a broken-image glyph on a HUD.
+  badge.onerror = () => { badge.hidden = true; };
+}
+/* The system plan on the Nav page, kept deliberately small: it is there to say
+   which way round the system you are, beside the words that say where. The
+   readings are the answer; this is the shape of it. */
+const svgns = 'http://www.w3.org/2000/svg';
+let lastMap = '';
+function drawMap(visible) {
+  byId('map').hidden = !visible;
+  if (!visible) return;
+  const view = QwMfd.mapView(atlas, state, briefing);
+  const key = JSON.stringify(view);
+  if (key === lastMap) return;
+  lastMap = key;
+  byId('map-note').textContent = view.note || '';
+  const plot = byId('map-plot');
+  plot.replaceChildren();
+  if (!view.bodies) return;
+  const add = (name, attrs, className) => {
+    const node = document.createElementNS(svgns, name);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    if (className) node.setAttribute('class', className);
+    plot.append(node);
+    return node;
+  };
+  for (const radius of view.rings) add('circle', { cx: 0, cy: 0, r: radius }, 'orbit');
+  const from = view.bodies.find(b => b.here), to = view.bodies.find(b => b.target);
+  // The leg the ship is actually flying, when both ends are known.
+  if (from && to) add('line', { x1: from.x, y1: from.y, x2: to.x, y2: to.y }, 'leg');
+  add('circle', { cx: 0, cy: 0, r: .05 }, 'star');
+  for (const body of view.bodies) {
+    add('circle', { cx: body.x, cy: body.y, r: body.here || body.target ? .06 : .035 },
+      body.here ? 'body here' : body.target ? 'body target' : 'body');
+    if (body.here) add('circle', { cx: body.x, cy: body.y, r: .13 }, 'halo');
+  }
+  // Only the two that matter carry a name; a 150 px plan cannot hold sixteen.
+  for (const body of [from, to]) {
+    if (!body) continue;
+    const label = add('text', { x: body.x, y: body.y - .19 }, body.here ? 'name here' : 'name target');
+    label.textContent = body.name;
+  }
 }
 function note(text) { byId('last-input').textContent = text; }
 function press(number) {
@@ -143,10 +223,30 @@ async function refreshBriefing() {
   } catch { briefingUnavailable = true; }
   finally { briefingBusy = false; render(); }
 }
+/* Failing quietly is the right answer: the Nav rows carry the location in
+   words either way, and a panel that loses its plan should not lose its
+   readings with it. mapView says what it is missing. */
+async function loadAtlas() {
+  try {
+    const response = await fetch('/api/map', { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('No atlas');
+    atlas = await response.json();
+  } catch { atlas = { nodes: [], positions: {} }; }
+  finally { lastMap = ''; render(); }
+}
+async function loadMakers() {
+  try {
+    const response = await fetch('/api/manufacturers', { signal: AbortSignal.timeout(15000) });
+    if (response.ok) makerNames = await response.json();
+  } catch { /* the built-in sixteen stand on their own */ }
+  finally { lastMaker = ''; render(); }
+}
 async function bootMfd() {
   drawLabels();
   render();
   refreshBriefing();
+  loadAtlas();
+  loadMakers();
   if (mfdParams.has('snapshot')) {
     try {
       const response = await fetch('/api/now');

@@ -29,7 +29,8 @@ and controls aligned to the physical buttons. Page changes stay under the
 pilot's control; a detected ship must not silently rearrange the buttons.
 
 - **Nav:** where am I, where am I going, and which ship did the logs identify?
-  A quantum destination takes priority over the next planned stop.
+  A quantum destination takes priority over the next planned stop. A small
+  system plan sits above the words - see below.
 - **Task:** what do I do next? Show the first outstanding stop and its next
   unfinished instruction, including the quantity and unit the pilot entered.
   Planned loads are never presented as detected cargo in the hold.
@@ -101,6 +102,46 @@ is set.
 **Button assignments** below the tester rebinds any button. Changes reach a
 running alignment preview immediately, so a rebinding can be tried on the frame
 before it is saved; **Save layout** keeps them along with the placement.
+
+## The plan on Nav, and the corner of the frame
+
+The map is small on purpose. The readings answer "where am I"; the plan is only
+the shape of it, so it takes about a third of the panel's height and the words
+keep the rest.
+
+It is real geometry. `/api/map` carries the community starmap's own body
+coordinates - 16 bodies in Stanton, 12 in Pyro, 3 in Nyx - normalised to the
+outermost body so the renderer never needs to know it is drawing 43 gigametres.
+Bodies sharing an orbit collapse to one ring, or Yela, Daymar and Cellin would
+draw Crusader's circle four times over on a 150-pixel plan. Only the body you
+are at and the one you are headed for carry a name.
+
+**It marks a body, never a point.** Game.log names the place you are at and the
+body it sits on; where you are on that body is not something it ever says, and
+a dot on a surface would be an invention. The caption under the plan says so.
+With no body positions - the community dataset off, or a system nobody has
+mapped - it names the system it cannot draw rather than falling back to an even
+ring that would look like geometry.
+
+The atlas is fetched once and kept: reference data that changes when the game
+does, and re-pulling 294 places every five seconds to redraw a plan that has
+not moved is not what a panel left running all evening should be doing.
+
+**The maker's mark** of the ship the logs last saw sits in the top-left corner
+of every page, from the same sixteen logos the Fleet page uses. `mfd-core.js`
+keeps its own copy of that table, because the panel cannot load fourteen
+thousand lines of dashboard to read sixteen names - and the copy is safe only
+because a test loads both files and fails when they disagree. Matching by code
+alone is the bug that once left every maker whose code is not its name without
+a badge, so codes and names both resolve, longest match first.
+
+**The button faces carry an icon over the caption, and nothing at all where a
+button does nothing.** The number used to sit there, labelling a button the
+pilot is looking directly at - it is printed on the frame under their thumb. A
+blank position now reads as blank. The icons are stroked paths rather than a
+font: standalone mode makes no outbound request, and the glyph sets Windows
+ships with are a lottery at 14 px. They inherit `currentColor`, so a pressed
+button inverts its icon along with its caption for nothing.
 
 ## The backdrop
 
