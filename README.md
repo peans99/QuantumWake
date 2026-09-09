@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1645 tests](https://img.shields.io/badge/tests-1645%20passing-4fd48a)
+![1651 tests](https://img.shields.io/badge/tests-1651%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.13
+### 0.10.14
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -328,6 +328,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   counters recorded, the contract you accepted this session, and where all of
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
+
+- **A calmer frame.** Brightness and text size are sliders in **MFD setup** now
+  rather than four buttons on the face, and previous/next page and Home ship
+  unassigned — with a button for every page, cycling was a second way to do the
+  same thing and a bottom row of five navigation keys was the most confusing
+  part of it. Thirteen buttons instead of twenty, and the three that are left —
+  up, down and **DONE** — dim on a page where they have nothing to act on. Every
+  one of those commands is still there to bind if you want it.
 
 - **The Now page, broken across the frame.** Ten pages now, each with its own
   button: Nav, Task, Act, Cargo, Contract, Status, and four new ones — **Feed**

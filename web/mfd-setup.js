@@ -2,7 +2,7 @@
 const setupElement = id => document.getElementById(id);
 const host = window.chrome?.webview;
 let monitors = [{ id: 'example', x: 0, y: 0, width: 1920, height: 1080, primary: true }];
-let layout = { enabled: false, blackout: true, buttons: null, panels: [
+let layout = { enabled: false, blackout: true, brightness: 1, textScale: 1, buttons: null, panels: [
   { id: 'left', monitor: 'example', x: 360, y: 280, width: 480, height: 480, cougar: 1 },
   { id: 'right', monitor: 'example', x: 960, y: 280, width: 480, height: 480, cougar: 2 }
 ] };
@@ -35,6 +35,7 @@ function fillEditor() {
   for (const key of ['x', 'y', 'width', 'height', 'cougar']) setupElement(key).value = panel[key];
   setupElement('enabled').checked = layout.enabled;
   setupElement('blackout').checked = layout.blackout !== false;
+  showScreen();
   setupElement('separate').disabled = monitors.length < 2;
 }
 function draw() {
@@ -124,6 +125,22 @@ for (let n = 1; n <= 8; n++) setupElement('cougar').add(new Option('F16 MFD ' + 
 setupElement('cougar').onchange = event => { selectedPanel().cougar = Number(event.target.value); changed(); };
 setupElement('enabled').onchange = event => { layout.enabled = event.target.checked; };
 setupElement('blackout').onchange = event => { layout.blackout = event.target.checked; changed(); };
+/* Percentages on the slider, fractions in the file: a pilot reads 70%, and the
+   display multiplies by .7. */
+function showScreen() {
+  const bright = Math.round((layout.brightness ?? 1) * 100), text = Math.round((layout.textScale ?? 1) * 100);
+  setupElement('brightness').value = bright;
+  setupElement('brightness-value').textContent = bright + '%';
+  setupElement('text-scale').value = text;
+  setupElement('text-scale-value').textContent = text + '%';
+}
+for (const [id, key] of [['brightness', 'brightness'], ['text-scale', 'textScale']])
+  setupElement(id).oninput = event => {
+    layout[key] = Number(event.target.value) / 100;
+    showScreen();
+    // Under the hand, like a drag: the preview is what you are judging it by.
+    pushPreview();
+  };
 setupElement('swap').onclick = () => { [layout.panels[0].cougar, layout.panels[1].cougar] = [layout.panels[1].cougar, layout.panels[0].cougar]; changed(); };
 setupElement('together').onclick = () => {
   const m = monitors.find(m => m.id === selectedPanel().monitor) || monitors[0];

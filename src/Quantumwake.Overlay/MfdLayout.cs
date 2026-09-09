@@ -31,6 +31,28 @@ internal sealed record MfdLayout
     /// </remarks>
     public bool Blackout { get; init; } = true;
 
+    /// <summary>
+    /// How bright the rendered page is, and how large its text.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// In setup rather than on the frame. They are set once when the frames go
+    /// on the monitor and then almost never touched, and doing it from the face
+    /// cost four of the twenty buttons - a fifth of it - for two settings. The
+    /// commands stay bindable for anyone who wants them under a thumb, and a
+    /// rocker is their natural home once a cockpit run says which rocker
+    /// reports which number.
+    /// </para>
+    /// <para>
+    /// Shared by both frames, like the button map and for the same reason: one
+    /// device, one cockpit. Which page each frame shows is the thing that
+    /// genuinely differs, and the displays still remember that themselves.
+    /// </para>
+    /// </remarks>
+    public double Brightness { get; init; } = 1;
+
+    public double TextScale { get; init; } = 1;
+
     public MfdPanel[] Panels { get; init; } = [];
 
     /// <summary>
@@ -72,7 +94,12 @@ internal sealed record MfdLayout
             throw new ArgumentException("The layout needs a left and a right MFD.");
         if (Panels[0].Cougar == Panels[1].Cougar)
             throw new ArgumentException("Assign a different Cougar number to each MFD.");
-        return this with { Buttons = CleanButtons(), Panels = Panels.Select(p =>
+        return this with {
+            Buttons = CleanButtons(),
+            // A slider cannot send a bad number, but a hand-edited file can.
+            Brightness = double.IsFinite(Brightness) ? Math.Clamp(Brightness, .3, 1) : 1,
+            TextScale = double.IsFinite(TextScale) ? Math.Clamp(TextScale, .8, 1.5) : 1,
+            Panels = Panels.Select(p =>
         {
             if (p.Cougar is < 1 or > 8 || string.IsNullOrWhiteSpace(p.Monitor))
                 throw new ArgumentException("Choose a monitor and a Cougar number for each MFD.");

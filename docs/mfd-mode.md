@@ -123,8 +123,9 @@ coalesced to one update a frame. **Saving does not stop the preview** - it
 writes the file and the frames keep following. **Stop preview** or closing setup
 restores the saved state. Tick **Enable MFD displays** and choose **Save layout**
 to keep them. Settings live in `mfd.json` under the Quantum Wake data directory.
-Each display remembers its own page, text size and screen brightness in the
-WebView profile.
+Each display remembers only which page it is showing, in the WebView profile -
+that is the one thing that genuinely differs between two frames in one cockpit.
+Brightness and text size are shared and saved with the layout.
 
 Both halves of that were wrong once, and together they made the editor feel
 dead. Updates only reached the frames when a drag ended, so aligning to a few
@@ -134,6 +135,9 @@ back to a non-preview apply, so after one save nothing else arrived at all and
 every later change needed another save to be seen. The page keeps previewing
 across a save, and the controller keeps applying as a preview while `_preview`
 is set.
+
+**Screen** carries brightness and text size, shared by both frames and saved
+with the layout. They used to be four buttons on the face.
 
 **Button assignments** below the tester rebinds any button. Changes reach a
 running alignment preview immediately, so a rebinding can be tried on the frame
@@ -240,13 +244,27 @@ assignments without changing the firmware.
 | 1–5 | Nav, Task, Act, Cargo, Contract |
 | 9 / 10 | Money, List |
 | 16 / 17 / 18 | Status, Feed, Crew |
-| 15 / 11 | Previous / next page |
-| 14 / 12 | Up / down — the cursor on Act, the panel elsewhere |
-| 13 | Home (Nav) |
-| 6 / 7 | Increase / decrease text size |
-| 8 | Done — arm, then confirm, the selected flight-plan line |
-| 20 / 19 | Increase / decrease screen brightness |
+| 14 / 12 | Up / down — the cursor on Act, the panel elsewhere. Dim where neither applies |
+| 8 | Done — arm, then confirm, the selected line. Dim off Act |
 | 21–28 (rockers) | Unassigned; see below |
+
+**Thirteen buttons, not twenty.** Previous page, next page and Home ship
+unassigned: every page has a button of its own, so cycling is a second way to do
+the same thing whose shape the pilot cannot see, and a bottom row of five
+overlapping navigation keys was the most confusing thing on the frame. Screen
+brightness and text size are sliders in setup - they are set once when the
+frames go on, and adjusting them from the face cost four of the twenty
+positions. All five commands stay in the list for anyone who wants them under a
+thumb, and the rockers are their natural home once a cockpit run names them.
+
+**Three buttons dim when they have nothing to act on.** Up and Down have nothing
+to move on a page that already fits and carries no cursor; Done has nothing to
+confirm anywhere but Act, and had been sitting lit on nine pages where it did
+nothing. Dimmed rather than blanked: a bound button that is idle here is
+different information from a position carrying nothing at all, which stays
+blank. Page buttons never dim - a way out that disappears is worse than a
+redundant one. Whether a page can scroll is measured from the laid-out panel and
+handed to the rule, rather than guessed from a row count.
 
 Every one of those is a default rather than a rule. **Button assignments** in
 setup rebinds any of the 28 buttons to any page or action, shared by both

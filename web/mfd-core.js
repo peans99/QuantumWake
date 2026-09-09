@@ -86,10 +86,22 @@ window.QwMfd = (() => {
      start unassigned - see the note above. */
   const defaults = {
     1: 'nav', 2: 'task', 3: 'act', 4: 'cargo', 5: 'contract',
-    6: 'text-up', 7: 'text-down', 8: 'confirm', 9: 'money', 10: 'list',
-    11: 'next', 12: 'down', 13: 'home', 14: 'up', 15: 'prev',
-    16: 'status', 17: 'feed', 18: 'crew', 19: 'bright-down', 20: 'bright-up'
+    8: 'confirm', 9: 'money', 10: 'list',
+    12: 'down', 14: 'up',
+    16: 'status', 17: 'feed', 18: 'crew'
   };
+
+  /* Which commands do nothing on the page in front of the pilot. Only three are
+     ever in doubt: Up and Down have nothing to move on a page that already
+     fits, and Done has nothing to confirm anywhere but Act. A page button never
+     dims - a way out that disappears is worse than one that is redundant. */
+  function dormant(pageId, context) {
+    const idle = [];
+    const tasks = context?.tasks || 0;
+    if (!(context?.scrollable || (pageId === 'act' && tasks > 1))) idle.push('up', 'down');
+    if (!(pageId === 'act' && tasks > 0)) idle.push('confirm');
+    return idle;
+  }
 
   /* A stored map is the whole answer, so a button the pilot cleared stays
      cleared. Only a missing or unreadable map falls back to the defaults -
@@ -478,6 +490,6 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers,
+  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
 })();

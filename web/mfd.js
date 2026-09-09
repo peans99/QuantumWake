@@ -5,8 +5,10 @@ const mfdKey = 'qw-mfd-' + panelId;
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem(mfdKey) || '{}') || {}; } catch { }
 let page = Number.isInteger(preferences.page) ? QwMfd.clamp(preferences.page, 0, QwMfd.pages.length - 1) : (panelId === 'right' ? 1 : 0);
-let brightness = Number.isFinite(preferences.brightness) ? QwMfd.clamp(preferences.brightness, .3, 1) : 1;
-let textScale = Number.isFinite(preferences.textScale) ? QwMfd.clamp(preferences.textScale, .8, 1.5) : 1;
+/* Set in MFD setup and pushed from the host. A bound button can still nudge
+   them - they stay in the vocabulary - but the nudge lasts until the panel
+   reloads, because setup is where a setting is kept. */
+let brightness = 1, textScale = 1;
 let bindings = QwMfd.buttons(null);
 /* Body coordinates and the place gazetteer. Fetched once and kept: it is
    reference data that only changes when the game does, and re-pulling 294
@@ -63,7 +65,8 @@ function drawLabels() {
   }
 }
 function savePreferences() {
-  try { localStorage.setItem(mfdKey, JSON.stringify({ page, brightness, textScale })); } catch { }
+  // Only the page. Brightness and text size belong to the saved layout now.
+  try { localStorage.setItem(mfdKey, JSON.stringify({ page })); } catch { }
 }
 function render() {
   byId('mfd').style.filter = `brightness(${brightness})`;
@@ -79,24 +82,35 @@ function render() {
   const rows = QwMfd.rows(page, state, briefing, briefingUnavailable,
     { selected, armed, map: plan, extra, now: Date.now() });
   const key = JSON.stringify(rows);
-  if (key === lastRows) return;
-  lastRows = key;
   const readings = byId('readings');
-  const scroll = readings.scrollTop;
-  readings.replaceChildren();
-  for (const [label, value, at, mark] of rows) {
-    const row = document.createElement('article'); row.className = 'reading';
-    if (mark) row.classList.add(mark);
-    const heading = document.createElement('h2'); heading.textContent = label;
-    const text = document.createElement('p'); text.textContent = value || 'Not recorded';
-    row.append(heading, text);
-    if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(); row.append(time); }
-    readings.append(row);
+  if (key !== lastRows) {
+    lastRows = key;
+    const scroll = readings.scrollTop;
+    readings.replaceChildren();
+    for (const [label, value, at, mark] of rows) {
+      const row = document.createElement('article'); row.className = 'reading';
+      if (mark) row.classList.add(mark);
+      const heading = document.createElement('h2'); heading.textContent = label;
+      const text = document.createElement('p'); text.textContent = value || 'Not recorded';
+      row.append(heading, text);
+      if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(); row.append(time); }
+      readings.append(row);
+    }
+    readings.scrollTop = scroll;
+    // Instant, not smooth: a running scroll animation is one of the things that
+    // keeps a headless render from ever settling, and this fires on every press.
+    readings.querySelector('.cursor, .armed')?.scrollIntoView({ block: 'nearest' });
   }
-  readings.scrollTop = scroll;
-  // Instant, not smooth: a running scroll animation is one of the things that
-  // keeps a headless render from ever settling, and this fires on every press.
-  readings.querySelector('.cursor, .armed')?.scrollIntoView({ block: 'nearest' });
+  /* Whether the panel can scroll is a question only the laid-out page can
+     answer, so it is measured here and handed to the rule rather than guessed
+     at from a row count. Outside the redraw, because an unchanged page still
+     needs its face marked after a page change. */
+  const idle = QwMfd.dormant(showing, {
+    tasks: QwMfd.tasks(briefing).length,
+    scrollable: readings.scrollHeight > readings.clientHeight + 1
+  });
+  for (const number of osbs)
+    byId('osb-' + number).classList.toggle('dormant', idle.includes(bindings[number]));
 }
 /* The maker's mark for the ship the logs last saw retrieved, in the corner of
    every page. It stays where it is rather than moving with the page, because a
@@ -217,7 +231,12 @@ async function confirmSelected() {
 }
 window.chrome?.webview?.addEventListener('message', ({ data }) => {
   if (data.type === 'button') press(data.button);
-  if (data.type === 'buttons') { bindings = QwMfd.buttons(data.buttons); drawLabels(); lastRows = ''; render(); }
+  if (data.type === 'display') {
+    bindings = QwMfd.buttons(data.buttons);
+    if (Number.isFinite(data.brightness)) brightness = QwMfd.clamp(data.brightness, .3, 1);
+    if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
+    drawLabels(); lastRows = ''; render();
+  }
   if (data.type === 'device') byId('device').textContent = data.connected
     ? 'F16 MFD ' + data.cougar + ' · USB' : 'F16 MFD ' + data.cougar + ' · not available';
   if (data.type === 'alignment') {

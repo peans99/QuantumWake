@@ -87,3 +87,7 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
   opacity: .75; margin-right: auto; align-self: center; }
 #maker[hidden] { display: none; }
 .body.stop { fill: none; stroke: var(--amber); stroke-width: .022; }
+/* Bound, but with nothing to act on while this page is showing. Dimmed rather
+   than blanked: the pilot should be able to tell a button that does nothing
+   here from a position that carries nothing at all. */
+.edge button.dormant { opacity: .28; }

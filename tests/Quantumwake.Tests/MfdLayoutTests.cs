@@ -31,11 +31,39 @@ public class MfdLayoutTests
             MfdLayout.JsonOptions)!.Validate(Monitors);
         Assert.True(older.Blackout);
 
+        // Screen settings live beside it, and a file written before they existed
+        // reads as untouched rather than as pitch black at zero.
+        Assert.Equal(1, older.Brightness);
+        Assert.Equal(1, older.TextScale);
+
         var off = (MfdLayout.Default(Monitors) with { Blackout = false }).Validate(Monitors);
         Assert.False(off.Blackout);
         Assert.False(System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(
             System.Text.Json.JsonSerializer.Serialize(off, MfdLayout.JsonOptions),
             MfdLayout.JsonOptions)!.Blackout);
+    }
+
+    /// <summary>
+    /// A slider can only send what it can reach; a hand-edited file cannot be
+    /// allowed to leave the frame unreadable at 5% or scaled off the panel.
+    /// </summary>
+    [Fact]
+    public void ScreenSettingsAreClampedToWhatTheSlidersCanReach()
+    {
+        var wild = (MfdLayout.Default(Monitors) with { Brightness = 12, TextScale = double.NaN })
+            .Validate(Monitors);
+        Assert.Equal(1, wild.Brightness);
+        Assert.Equal(1, wild.TextScale);
+
+        Assert.Equal(.3, (MfdLayout.Default(Monitors) with { Brightness = -4 }).Validate(Monitors).Brightness);
+        Assert.Equal(1.5, (MfdLayout.Default(Monitors) with { TextScale = 9 }).Validate(Monitors).TextScale);
+
+        var kept = (MfdLayout.Default(Monitors) with { Brightness = .7, TextScale = 1.2 }).Validate(Monitors);
+        Assert.Equal(.7, kept.Brightness);
+        Assert.Equal(1.2, kept.TextScale);
+        Assert.Equal(.7, System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(
+            System.Text.Json.JsonSerializer.Serialize(kept, MfdLayout.JsonOptions),
+            MfdLayout.JsonOptions)!.Brightness);
     }
 
     [Fact]

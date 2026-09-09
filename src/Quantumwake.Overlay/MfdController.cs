@@ -122,6 +122,13 @@ internal sealed class MfdController : IDisposable
         };
     }
 
+    /// <summary>Everything a display draws itself from: its map and its screen.</summary>
+    private static object Display(MfdLayout layout) => new
+    {
+        type = "display", buttons = layout.Buttons,
+        brightness = layout.Brightness, textScale = layout.TextScale
+    };
+
     private void SendDeviceStatus()
     {
         foreach (var p in _active.Panels)
@@ -152,7 +159,7 @@ internal sealed class MfdController : IDisposable
                     // finished navigating missed the send that placed it, and a
                     // frame drawing the shipped captions over a custom profile
                     // is a frame whose labels lie.
-                    created.Send(new { type = "buttons", buttons = _active.Buttons });
+                    created.Send(Display(_active));
                     SendDeviceStatus();
                 };
                 _windows[panel.Id] = window;
@@ -160,7 +167,7 @@ internal sealed class MfdController : IDisposable
             }
             window.Place(panel, monitor);
             window.Send(new { type = "alignment", enabled = preview, panel = panel.Id });
-            window.Send(new { type = "buttons", buttons = layout.Buttons });
+            window.Send(Display(layout));
         }
         Backdrops(layout);
         if (layout.Enabled || preview || _setup is not null) EnsureInput();

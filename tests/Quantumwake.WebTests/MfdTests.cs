@@ -45,18 +45,27 @@ public class MfdTests
 
     [Theory]
     [InlineData(1, "page", 0)] [InlineData(3, "page", 2)]
-    [InlineData(11, "cycle", 1)] [InlineData(15, "cycle", -1)]
+    [InlineData(9, "page", 8)] [InlineData(16, "page", 5)]
     [InlineData(12, "scroll", 1)] [InlineData(14, "scroll", -1)]
     public void DefaultButtonsFollowCougarClockwiseNumbering(int button, string action, int value)
     {
         Assert.Equal(value, Engine().Evaluate($"QwMfd.action({button}).{action}").AsNumber());
     }
 
+    /// <summary>Cycling still works; it is simply nobody's default any more.</summary>
+    [Theory]
+    [InlineData("next", "cycle", 1)] [InlineData("prev", "cycle", -1)]
+    [InlineData("bright-up", "brightness", 1)] [InlineData("text-down", "text", -1)]
+    public void TheCommandsOffTheShippedProfileStillWorkWhenBound(string id, string action, int value)
+    {
+        Assert.Equal(value, Engine().Evaluate($"QwMfd.action(21,{{21:'{id}'}}).{action}").AsNumber());
+    }
+
     [Fact]
     public void ReservedButtonsAndInvalidInputHaveNoAction()
     {
         var e = Engine();
-        Assert.True(e.Evaluate("[0,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
+        Assert.True(e.Evaluate("[0,6,7,11,13,15,19,20,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
     }
 
     /// <summary>
@@ -465,6 +474,43 @@ public class MfdTests
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => Object.values(QwMfd.defaults).includes(id))").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.icon(id) && QwMfd.caption(id))").AsBoolean());
+
+        // Page cycling, Home, brightness and text size stay in the vocabulary
+        // and out of the shipped profile: every page has a button of its own, so
+        // cycling is a second invisible way to do the same thing, and two
+        // settings were costing four of the twenty positions to adjust.
+        Assert.True(e.Evaluate("['prev','next','home','text-up','text-down','bright-up','bright-down']"
+            + ".every(id => QwMfd.commands.some(c => c.id === id)"
+            + " && !Object.values(QwMfd.defaults).includes(id))").AsBoolean());
+        Assert.Equal(13, e.Evaluate("Object.keys(QwMfd.defaults).length").AsNumber());
+    }
+
+    /// <summary>
+    /// A frame that lights a button doing nothing has to be learned; one that
+    /// dims it can be read. Only Up, Down and Done are ever in doubt.
+    /// </summary>
+    [Fact]
+    public void OnlyTheThreeContextualButtonsEverGoDormant()
+    {
+        var e = Engine();
+        string Idle(string page, string ctx = "{}") =>
+            e.Evaluate($"JSON.stringify(QwMfd.dormant('{page}',{ctx}))").AsString();
+
+        // A page that fits, with no cursor: nothing to move, nothing to confirm.
+        Assert.Equal("[\"up\",\"down\",\"confirm\"]", Idle("nav"));
+
+        // Long enough to scroll, so up and down wake - but Done still cannot act.
+        Assert.Equal("[\"confirm\"]", Idle("feed", "{scrollable:true}"));
+
+        // Act with work on it: Done is live, and a cursor needs two to move between.
+        Assert.Equal("[\"up\",\"down\"]", Idle("act", "{tasks:1}"));
+        Assert.Equal("[]", Idle("act", "{tasks:3}"));
+        Assert.Equal("[\"up\",\"down\",\"confirm\"]", Idle("act", "{tasks:0}"));
+
+        // A page button is never dimmed: a way out that vanishes is worse than
+        // a redundant one.
+        Assert.True(e.Evaluate(
+            "QwMfd.pageIds.every(id => !QwMfd.dormant('nav',{}).includes(id))").AsBoolean());
     }
 
     [Fact]
