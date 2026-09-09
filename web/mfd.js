@@ -101,7 +101,8 @@ function render() {
   // One view model, drawn as a plan and quoted as a row: the picture and the
   // number must not be able to disagree about where you are going.
   const plan = QwMfd.mapView(atlas, state, briefing);
-  drawMap(showing === 'nav', plan);
+  // Small beside the words on Nav, and the whole panel on Map.
+  drawMap(showing === 'nav' || showing === 'map', plan, showing === 'map');
   drawMaker();
   const rows = QwMfd.rows(page, state, briefing, briefingUnavailable,
     { selected, armed, map: plan, extra, now: Date.now() });
@@ -114,10 +115,17 @@ function render() {
     for (const [label, value, at, mark] of rows) {
       const row = document.createElement('article'); row.className = 'reading';
       if (mark) row.classList.add(mark);
+      const glyph = document.createElementNS(svgns, 'svg');
+      glyph.setAttribute('viewBox', '0 0 24 24');
+      const shape = document.createElementNS(svgns, 'path');
+      shape.setAttribute('d', QwMfd.rowIcon(label));
+      glyph.append(shape);
       const heading = document.createElement('h2'); heading.textContent = label;
+      const body = document.createElement('div'); body.className = 'value';
       const text = document.createElement('p'); text.textContent = value || 'Not recorded';
-      row.append(heading, text);
-      if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(); row.append(time); }
+      body.append(text);
+      if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(); body.append(time); }
+      row.append(glyph, heading, body);
       readings.append(row);
     }
     readings.scrollTop = scroll;
@@ -185,8 +193,10 @@ function drawMaker() {
    readings are the answer; this is the shape of it. */
 const svgns = 'http://www.w3.org/2000/svg';
 let lastMap = '';
-function drawMap(visible, view) {
-  byId('map').hidden = !visible;
+function drawMap(visible, view, big) {
+  const figure = byId('map');
+  figure.hidden = !visible;
+  figure.classList.toggle('big', !!big);
   if (!visible) return;
   const key = JSON.stringify(view);
   if (key === lastMap) return;

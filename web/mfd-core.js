@@ -34,9 +34,9 @@ window.QwMfd = (() => {
      own, because a page is a question a pilot asks, not a card on a dashboard
      they are scanning at rest. */
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine'];
+    'ship', 'here', 'ledger', 'mine', 'map'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -74,6 +74,8 @@ window.QwMfd = (() => {
       icon: 'M4 20.5V10M9.5 20.5V3.5M15 20.5v-7M20.5 20.5V6.5' },
     { id: 'mine', label: 'Page · Mine', caption: 'MINE', short: 'MINE',
       icon: 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4' },
+    { id: 'map', label: 'Page · Map', caption: 'MAP', short: 'MAP',
+      icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
     { id: 'next', label: 'Next page', caption: 'NEXT', short: 'NXT', icon: 'M9 4l8 8-8 8' },
     { id: 'home', label: 'Home (Nav)', caption: 'HOME', short: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
@@ -97,7 +99,7 @@ window.QwMfd = (() => {
   const defaults = {
     1: 'nav', 2: 'task', 3: 'act', 4: 'cargo', 5: 'contract',
     6: 'ship', 7: 'here', 8: 'confirm', 9: 'money', 10: 'list',
-    12: 'down', 14: 'up',
+    12: 'down', 13: 'map', 14: 'up',
     16: 'status', 17: 'feed', 18: 'crew', 19: 'ledger', 20: 'mine'
   };
 
@@ -130,6 +132,29 @@ window.QwMfd = (() => {
      caption is what to read on a full-size panel; the short one is what
      survives a small one, because clipping CNTRCT to "CNTRC" is worse than
      either of them. */
+  /* One glyph per kind of reading, so a page scans as a HUD rather than as a
+     list of sentences. Keyed off the label because the labels are a closed
+     vocabulary written in this file - and anything unmapped gets the neutral
+     mark rather than a blank, so a column of icons stays a column. */
+  const glyphs = [
+    [/LOCATION|PLACE|SEEN HERE|WAKE UP/, 'M12 21.2s6.8-6.4 6.8-11.2a6.8 6.8 0 1 0-13.6 0c0 4.8 6.8 11.2 6.8 11.2zM12 7.6a2.4 2.4 0 1 0 .1 0'],
+    [/NEXT STOP|DESTINATION|PLAN UNAVAILABLE|FLIGHT PLAN|ROUTE/, 'M3 12h13M12 6l6 6-6 6'],
+    [/SHIP|WHAT IT IS FOR/, 'M12 2.6c2.7 2.7 4.2 6.4 4.2 10l-4.2 3.8-4.2-3.8c0-3.6 1.5-7.3 4.2-10zM12 9.6a1.6 1.6 0 1 0 .1 0'],
+    [/RATE|EARNED|GOAL|AUEC|BOUGHT|SOLD|PRICED/, 'M12 3v18M8.5 7.4h6a2.5 2.5 0 0 1 0 5h-4.6a2.5 2.5 0 0 0 0 5h6.1'],
+    [/SERVICES/, 'M14.6 6.2a4.2 4.2 0 0 0-5.7 5.2L3.6 16.7l2.9 2.9 5.3-5.3a4.2 4.2 0 0 0 5.2-5.7l-2.6 2.6-2.1-2.1z'],
+    [/TASK|STOP|CROSS OFF|CONFIRM|ON YOUR LIST/, 'M4.5 5.5h15v13h-15zM8.5 12l2.5 2.5 4.5-5'],
+    [/CONTRACT|OBJECTIVES|ISSUER|TAKEN|ALSO OPEN/, 'M6.5 3h7l4 4v14h-11zM13.5 3v4h4M9.5 12h5M9.5 16h5'],
+    [/SESSION|ELAPSED|TAKEN/, 'M12 3a9 9 0 1 0 .1 0M12 7.2V12l3.4 2'],
+    [/PILOT|CREW|FLOOR|DISBANDED|NOBODY/, 'M12 11.4a3.4 3.4 0 1 0 .1 0M5 20.4c0-3.2 3.1-5.4 7-5.4s7 2.2 7 5.4'],
+    [/CARGO|LOAD|COUNTER|MANIFEST|SCU/, 'M3.5 8 12 4.2 20.5 8v8L12 19.8 3.5 16zM3.5 8l8.5 3.8L20.5 8M12 11.8v8'],
+    [/CONTRACT DONE|BOUGHT|SOLD|FEED|NOTHING YET/, 'M4 18a13 13 0 0 1 13 0M5 13.5a9 9 0 0 1 12 0M5.5 9.2a14 14 0 0 1 13.5 0'],
+    [/SCREEN|NO SCREENSHOT/, 'M3.5 5h17v11h-17zM9 20h6M12 16v4'],
+    [/DEATH|INCAPACIT|THIS SESSION/, 'M12 3.4 21 19.4H3zM12 9.6v4.2M12 16.4v.4'],
+    [/MINE|ROCK|RANKED|NEARBY/, 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4'],
+  ];
+  const rowIcon = label => (glyphs.find(([test]) => test.test(String(label || '')))
+    || [, 'M6.5 12h11'])[1];
+
   const caption = (id, compact) => {
     const command = commands.find(c => c.id === id);
     return command ? (compact && command.short) || command.caption : null;
@@ -355,7 +380,7 @@ window.QwMfd = (() => {
         return [['NEXT STOP', stop.place],
           ['NEXT ACTION', next ? describe(next) : stop.note || 'Travel to this stop'],
           ['PLAN', briefing.tripTitle || 'Tracked flight plan'],
-          ['PLAN ONLY', 'Not a detected manifest.']];
+        ];
       }
       case 'act': {
         if (planMissing) return planMissing;
@@ -379,7 +404,7 @@ window.QwMfd = (() => {
         return [
           ['PLANNED LOAD', briefingUnavailable ? 'Cannot read the flight plan.'
             : !briefing ? 'Loading your tracked plan…' : loadLine(plannedLoad(briefing))],
-          ['LAST COUNTER MOVE', last
+          ['LAST COUNTER', last
             ? [`${last.sell ? 'Sold' : 'Bought'} ${last.scu} SCU`, last.commodity, last.shop,
               `${Math.round(last.amount).toLocaleString()} aUEC`].filter(Boolean).join(' · ')
             : 'No commodity counter used in this session', last?.at],
@@ -411,7 +436,7 @@ window.QwMfd = (() => {
             : 'The journal reported no objective steps for this one'],
           ...(about.length ? [['ISSUER', about.join(' · ')]] : []),
           ['TAKEN', 'This session', c.since],
-          ...(open.length > 1 ? [['ALSO OPEN', `${open.length - 1} more still open`]] : [])
+          ...(open.length > 1 ? [['ALSO OPEN', `${open.length - 1} more`]] : [])
         ];
       }
       /* Session, Handle, "This session" and "Wake up at" all fold in here: two
@@ -426,9 +451,8 @@ window.QwMfd = (() => {
           ['THIS SESSION', `${s.deaths || 0} death${s.deaths === 1 ? '' : 's'} · `
             + `${s.incapacitations || 0} incapacitation${s.incapacitations === 1 ? '' : 's'}`],
           ...(wake ? [['WAKE UP AT', wake.place, wake.at], ['HOW SURE', wake.why]] : []),
-          ...(s.screen ? [['LAST SCREENSHOT', s.screen.summary, s.screen.shotAt]]
+          ...(s.screen ? [['SCREEN READING', s.screen.summary, s.screen.shotAt]]
             : [['NO SCREENSHOT READING', 'Read a screenshot in the dashboard to add a cross-check.']]),
-          ['INSTRUMENTS', 'Saved readings. No live shields, fuel or power.']
         ];
       }
       /* The live timeline, newest first. The one page that answers "what just
@@ -446,7 +470,9 @@ window.QwMfd = (() => {
          never dropped produces no toast at all, so absence means nothing. */
       case 'crew': {
         const party = s.party || [];
-        const floor = ['A FLOOR', 'Named by the party channel. Absence means nothing.'];
+        // The one qualifier that survives on the frame: absence here means nothing,
+        // and a pilot who reads this list as a roster is reading it wrong.
+        const floor = ['A FLOOR', 'Absence means nothing.'];
         if (!party.length) return [['NOBODY NAMED', 'The party channel has not named anyone this session.'], floor];
         return [
           ...party.slice(0, 6).map(p => [String(p.handle).toUpperCase(), p.moment, p.at]),
@@ -459,7 +485,7 @@ window.QwMfd = (() => {
         if (!money) return [['EARNINGS', 'Reading what the ledger recorded…']];
         const rate = money.basis === 'recent' ? money.window : money.lifetime;
         return [
-          ['RATE', rate?.perHour > 0 ? `${aUEC(rate.perHour)} per hour`
+          ['TRADING RATE', rate?.perHour > 0 ? `${aUEC(rate.perHour)} per hour`
             : 'Too little recorded flying time to state a rate'],
           ['FROM', money.basis === 'recent' ? `the last ${money.window.days} days` : 'every session on record'],
           ['EARNED', rate ? aUEC(rate.earned) : 'Nothing recorded'],
@@ -468,7 +494,6 @@ window.QwMfd = (() => {
                ['AT THIS RATE', money.hoursToGoal != null
                  ? hours(money.hoursToGoal) + ' of flying' : 'No rate to divide the goal by']]
             : [['NO GOAL SET', 'Set one in the dashboard and the flying time to reach it shows here.']]),
-          ['TRADING ONLY', 'Commodity sales less their cost. Nothing else.']
         ];
       }
       case 'list': {
@@ -480,8 +505,7 @@ window.QwMfd = (() => {
         return [
           ...open.slice(0, 4).map(job => [
             (job.pinned ? '★ ' : '') + String(job.title).toUpperCase(),
-            [`${job.haveCount} of ${job.totalCount} held`, job.destination].filter(Boolean).join(' · ')]),
-          ['HELD', 'Seen in a stash listing, not counted.']
+            [`${job.haveCount} of ${job.totalCount} seen`, job.destination].filter(Boolean).join(' · ')]),
         ];
       }
       /* What am I flying, what is it for, and what does losing it cost? All
@@ -494,14 +518,13 @@ window.QwMfd = (() => {
           ...(focus ? [['WHAT IT IS FOR',
             [focus.label, focus.career, focus.role].filter(Boolean).join(' · ')]] : []),
           ...(claim
-            ? [['IF YOU LOSE IT', [
+            ? [['CLAIM, PER THE TABLES', [
                 claim.expeditedCost ? `${aUEC(claim.expeditedCost)} expedited` : null,
                 claim.expeditedMinutes ? `${Math.round(claim.expeditedMinutes)} min` : null
               ].filter(Boolean).join(' · ') || 'The tables carry no figure for this hull'],
               ['OR WAIT', claim.standardMinutes
                 ? `${Math.round(claim.standardMinutes)} min and no fee` : 'Not stated']]
-            : [['CLAIM', 'No claim figures for this hull in the installed tables.']]),
-          ['REFERENCE', 'What the tables say a claim costs. Never a live one.']
+            : [['CLAIM, PER THE TABLES', 'Nothing for this hull.']]),
         ];
       }
       /* The page for the moment after landing: what this place can do for you,
@@ -516,9 +539,8 @@ window.QwMfd = (() => {
             : 'Nothing the installed data can identify here'],
           ...(shopping.length ? [['ON YOUR LIST, IN STOCK', shopping.slice(0, 3)
             .map(i => `${i.name} · ${i.needed} ${i.unit} · ${aUEC(i.price)}`).join('  |  ')]] : []),
-          ...(stash.length ? [['LAST SEEN HERE',
+          ...(stash.length ? [['SEEN HERE BEFORE',
             stash.slice(0, 4).map(i => i.name).join(' · '), stash[0].lastSeen]] : []),
-          ['LAST SEEN', 'A sighting. Not a count, and not still here.']
         ];
       }
       case 'ledger': {
@@ -533,7 +555,6 @@ window.QwMfd = (() => {
               ? `${entry.amount > 0 ? '+' : ''}${aUEC(entry.amount)}` : null,
               entry.where].filter(Boolean).join(' · '),
             entry.at]),
-          ['CONFIRMED ONLY', 'What the server answered for.']
         ];
       }
       case 'mine': {
@@ -547,7 +568,15 @@ window.QwMfd = (() => {
               : `${String(place.place).toUpperCase()} · ${place.system || 'another system'}`,
             [`${aUEC(place.perRock)} a rock`, place.best].filter(Boolean).join(' · ')]),
           ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY', 'Some are the best anywhere, not the best near you.']] : []),
-          ['TABLES', 'Ranked by the deposit tables. Not sightings.']
+        ];
+      }
+      case 'map': {
+        const plan = view.map;
+        if (!plan?.bodies) return [['MAP', plan?.note || 'No system to draw yet']];
+        return [
+          ['LOCATION', s.location || plan.here || 'Not identified'],
+          ...(plan.next ? [['NEXT STOP', plan.next + (plan.gm
+            ? ` · ${plan.gm >= 100 ? plan.gm.toFixed(0) : plan.gm.toFixed(1)} Gm` : '')]] : [])
         ];
       }
       default: return [];
@@ -603,6 +632,6 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId,
+  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
 })();

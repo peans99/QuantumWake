@@ -318,7 +318,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.18
+### 0.10.19
+
+- **The readings read like an instrument.** Every line is a glyph, a short label
+  and the value, all on one line, at a smaller size — instead of a label stacked
+  over a value that wrapped constantly. All four Nav readings now fit a 480 px
+  panel without scrolling; they used to run off the bottom.
+
+- **The disclaimers are gone from the frame.** A qualifier nobody reads is not
+  doing its job, so the claim moved into the label that *is* read — the rate is
+  **TRADING RATE**, a list says **2 of 5 seen** rather than "held", a claim is
+  **CLAIM, PER THE TABLES**. The two that prevent a genuinely dangerous
+  misreading stay: Cargo still says *Never the hold*, Crew still says *Absence
+  means nothing*. The full explanations live in the docs and on the settings
+  page, where there is room to read them.
+
+- **A MAP page**, on the button between **UP** and **DOWN**: the system plan at
+  full size, with where you are and where you are going underneath it.
 
 - **One strip of chrome instead of two.** The frame said which MFD it was at the
   bottom, next to a readout of the button you had just pressed with your own

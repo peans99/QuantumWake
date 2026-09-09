@@ -65,7 +65,7 @@ public class MfdTests
     public void ReservedButtonsAndInvalidInputHaveNoAction()
     {
         var e = Engine();
-        Assert.True(e.Evaluate("[0,11,13,15,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
+        Assert.True(e.Evaluate("[0,11,15,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
     }
 
     /// <summary>
@@ -102,7 +102,7 @@ public class MfdTests
         var e = Engine();
         e.Execute("var status = QwMfd.pageIds.indexOf('status');");
         Assert.Contains("not yet identified", e.Evaluate("JSON.stringify(QwMfd.rows(0,{}))").AsString());
-        Assert.Contains("No live shields, fuel or power", e.Evaluate("JSON.stringify(QwMfd.rows(status,{}))").AsString());
+        Assert.Contains("NO SCREENSHOT", e.Evaluate("JSON.stringify(QwMfd.rows(status,{}))").AsString());
         Assert.Contains("NO SCREENSHOT", e.Evaluate("JSON.stringify(QwMfd.rows(status,{}))").AsString());
         Assert.Contains("Loading", e.Evaluate("JSON.stringify(QwMfd.rows(1,{}))").AsString());
         Assert.Contains("NO OUTSTANDING", e.Evaluate("JSON.stringify(QwMfd.rows(1,{},{stops:[]}))").AsString());
@@ -115,7 +115,7 @@ public class MfdTests
         var json = e.Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('status'),{screen:{summary:'At Lorville',shotAt:'2026-09-09T12:00:00Z'}}))").AsString();
         Assert.Contains("2026-09-09T12:00:00Z", json);
         Assert.Contains("At Lorville", json);
-        Assert.Contains("Saved readings", json);
+        Assert.Contains("SCREEN READING", json);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class MfdTests
     {
         var json = Engine().Evaluate("JSON.stringify(QwMfd.rows(1,{},{tripTitle:'Medical run',stops:[{place:'Baijini Point',actions:[{done:true,text:'Old instruction'},{kind:'load',quantity:32,unit:'SCU',text:'Medical supplies',done:false},{kind:'sell',text:'Later instruction',done:false}]}]}))").AsString();
         Assert.Contains("load · 32 SCU · Medical supplies", json);
-        Assert.Contains("Not a detected manifest", json);
+        Assert.Contains("Baijini Point", json);
         Assert.DoesNotContain("Old instruction", json);
         Assert.DoesNotContain("Later instruction", json);
     }
@@ -266,7 +266,7 @@ public class MfdTests
         Assert.Contains("Recover the cargo", json);
         Assert.Contains("3 of 5 done", json);
         Assert.Contains("Hurston Dynamics · Delivery · Medium", json);
-        Assert.Contains("1 more still open", json);
+        Assert.Contains("1 more", json);
 
         // The game's own title is already "issuer · type · difficulty" when no
         // text mod has replaced it, and printing that twice wastes the panel.
@@ -472,7 +472,7 @@ public class MfdTests
     public void EveryPageHasAButtonRatherThanOnlyACycle()
     {
         var e = Engine();
-        Assert.Equal(14, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(15, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => Object.values(QwMfd.defaults).includes(id))").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.icon(id) && QwMfd.caption(id))").AsBoolean());
@@ -484,7 +484,7 @@ public class MfdTests
         Assert.True(e.Evaluate("['prev','next','home','text-up','text-down','bright-up','bright-down']"
             + ".every(id => QwMfd.commands.some(c => c.id === id)"
             + " && !Object.values(QwMfd.defaults).includes(id))").AsBoolean());
-        Assert.Equal(17, e.Evaluate("Object.keys(QwMfd.defaults).length").AsNumber());
+        Assert.Equal(18, e.Evaluate("Object.keys(QwMfd.defaults).length").AsNumber());
     }
 
     /// <summary>
@@ -561,7 +561,7 @@ public class MfdTests
         Assert.Contains("the last 30 days", json);
         Assert.Contains("A Cutlass · 1,200,000 aUEC", json);
         Assert.Contains("50 h of flying", json);
-        Assert.Contains("Commodity sales less their cost", json);
+        Assert.Contains("TRADING RATE", json);
 
         // No rate at all is said, not shown as zero.
         Assert.Contains("Too little recorded flying time",
@@ -581,10 +581,12 @@ public class MfdTests
             + "{title:'Armour',done:false,haveCount:0,totalCount:2}]}}";
         var json = Page(e, "list", "{}", "null", jobs);
         Assert.Contains("★ MINING KIT", json);
-        Assert.Contains("2 of 5 held · Lorville", json);
+        Assert.Contains("2 of 5 seen · Lorville", json);
         Assert.Contains("ARMOUR", json);
         Assert.DoesNotContain("FINISHED LIST", json);
-        Assert.Contains("Seen in a stash listing, not counted", json);
+        // "seen" rather than "held": a stash listing records presence, never a count,
+        // and the word carries that now the qualifier row is gone.
+        Assert.DoesNotContain("held", json);
 
         Assert.Contains("NO LIST IN HAND", Page(e, "list", "{}", "null", "{extra:{jobs:[]}}"));
         Assert.Contains("Reading your lists", Page(e, "list"));
@@ -744,10 +746,10 @@ public class MfdTests
         Assert.Contains("Freight · Transporter · Medium Freight", json);
         Assert.Contains("12,500 aUEC expedited · 5 min", json);
         Assert.Contains("22 min and no fee", json);
-        Assert.Contains("Never a live one", json);
+        Assert.Contains("CLAIM, PER THE TABLES", json);
 
         // No claim tables for this hull: said, not implied by an empty row.
-        Assert.Contains("No claim figures for this hull",
+        Assert.Contains("Nothing for this hull",
             Page(e, "ship", "{ship:'Greycat ROC'}", "{focus:null}"));
         Assert.Contains("No ship identified", Page(e, "ship"));
     }
@@ -766,7 +768,7 @@ public class MfdTests
         Assert.Contains("Medical supplies · 4 units · 2,100 aUEC", json);
         Assert.Contains("MedPen", json);
         Assert.Contains("2026-09-08T22:39:22Z", json);
-        Assert.Contains("Not a count, and not still here", json);
+        Assert.Contains("SEEN HERE BEFORE", json);
 
         // A place the installed data cannot describe says so.
         Assert.Contains("Nothing the installed data can identify",
@@ -782,7 +784,7 @@ public class MfdTests
         var json = Page(e, "ledger", "{}", "null", money);
         Assert.Contains("ITEM BOUGHT", json);
         Assert.Contains("MedPen (Hemozal) · -1,855 aUEC · Pyro Gateway", json);
-        Assert.Contains("What the server answered for", json);
+        Assert.Contains("MedPen (Hemozal)", json);
 
         Assert.Contains("NOTHING PRICED", Page(e, "ledger", "{}", "null", "{extra:{ledger:[]}}"));
         Assert.Contains("Reading what the logs priced", Page(e, "ledger"));
@@ -798,8 +800,8 @@ public class MfdTests
         Assert.Contains("AARON HALO", json);
         Assert.Contains("18,400 aUEC a rock · Quantainium", json);
         Assert.Contains("YELA BELT · Stanton", json);
-        Assert.Contains("NOT ALL NEARBY", json);
-        Assert.Contains("Not sightings", json);
+        Assert.Contains("YELA BELT", json);
+        Assert.Contains("18,400 aUEC a rock", json);
 
         Assert.Contains("NOTHING RANKED", Page(e, "mine", "{}", "{mining:[]}"));
     }

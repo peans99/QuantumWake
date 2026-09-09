@@ -109,6 +109,32 @@ catalogues, market browsing, historical tables and settings stay on the
 dashboard - what came across is the question a pilot asks in the seat, never the
 report behind it.
 
+### The HUD format
+
+Every reading was a label stacked over a value, at a size that wrapped nearly
+every line - which read as a list of sentences rather than an instrument, and
+ran Nav's four readings off the bottom of a 480 px panel. A reading is one line
+now: a glyph, a short label at 30% of the width, and the value. The type came
+down with it.
+
+The glyph is looked up from the label, which is safe only because the labels are
+a closed vocabulary written in this file. Anything unmapped gets a neutral mark
+rather than a blank, so a column of icons stays a column.
+
+**The disclaimer rows are gone.** A qualifier a pilot never reads is not doing
+its job, and on a frame read in a second none of them were. The claim moved into
+the label that *is* read - **TRADING RATE** rather than RATE with a footnote,
+"2 of 5 seen" rather than "held" with an explanation of what held means,
+**CLAIM, PER THE TABLES** rather than a paragraph about insurance. Two survive
+on the frame, because misreading either would have a pilot act on something
+false: Cargo says *Never the hold*, and Crew says *Absence means nothing*.
+Everything else is in this file and on the settings page, where there is room to
+read it.
+
+**Map is a page.** The same plan Nav carries small, at full size, on the button
+between Up and Down - with where you are and where you are going underneath,
+because those are the two facts a picture cannot state.
+
 ### One strip of chrome, and words a frame can carry
 
 The display had a header and a footer. The footer carried which frame this was,

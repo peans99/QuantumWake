@@ -51,13 +51,22 @@ header { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-siz
 #identity { margin-right: auto; }
 h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; font-weight: 400; color: var(--hot); }
 #readings { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; flex: 1; }
-.reading { padding: 0 0 6%; overflow-wrap: anywhere; }
-.reading h2 { margin: 0 0 2%; font-size: calc(clamp(9px, 2.2cqw, 17px) * var(--text-scale)); letter-spacing: .22em;
-  text-transform: uppercase; color: var(--dim); font-weight: 400; }
-.reading p { margin: 0; font-family: var(--mono); font-size: calc(clamp(12px, 3.4cqw, 27px) * var(--text-scale)); line-height: 1.25; }
-.reading time { display: block; color: var(--muted); font-size: clamp(8px, 1.9cqw, 15px); margin-top: 3%; }
+/* A glyph, a label and a value on one line. Stacked label-over-value read as a
+   list of sentences and wrapped constantly; an instrument puts the name and the
+   number side by side, and the type came down with it. */
+.reading { display: flex; align-items: baseline; gap: 2.5%; padding: 0 0 2.6%; overflow-wrap: anywhere; }
+.reading svg { flex: 0 0 auto; width: 1.15em; height: 1.15em; fill: none; stroke: var(--dim);
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  font-size: calc(clamp(9px, 2.1cqw, 15px) * var(--text-scale)); transform: translateY(.15em); }
+.reading h2 { flex: 0 0 30%; margin: 0; font-size: calc(clamp(8px, 1.9cqw, 13px) * var(--text-scale));
+  letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 400; }
+.reading .value { flex: 1; min-width: 0; }
+.reading p { margin: 0; font-family: var(--mono);
+  font-size: calc(clamp(10px, 2.4cqw, 18px) * var(--text-scale)); line-height: 1.3; }
+.reading time { display: block; color: var(--muted); font-size: clamp(7px, 1.6cqw, 12px); margin-top: 1%; }
+.reading.cursor svg, .reading.armed svg { stroke: var(--glow); }
 /* The line a press would act on, and the line a press has armed. */
-.reading.cursor, .reading.armed { border-left: 2px solid var(--glow); padding-left: 3%; }
+.reading.cursor, .reading.armed { border-left: 2px solid var(--glow); padding-left: 2.5%; }
 .reading.armed { background: rgba(53, 200, 240, .12); }
 .reading.armed h2 { color: var(--hot); }
 #alignment { position: absolute; inset: 1%; z-index: 2; border: 3px solid var(--glow); background: #04070ceb;
@@ -73,6 +82,10 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
 #map { margin: 0 0 2%; flex: 0 0 auto; text-align: center; }
 #map[hidden] { display: none; }
 #map svg { display: block; width: 100%; max-width: 22cqh; height: auto; aspect-ratio: 1; margin: 0 auto; }
+/* Big, but not greedy: the two lines under it are the facts a picture cannot
+   state, and a map that took the whole panel pushed them off it. */
+#map.big { flex: 0 0 auto; margin-bottom: 3%; }
+#map.big svg { max-width: min(100%, 42cqh); }
 #map-note { font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-top: 2%; }
 .orbit { fill: none; stroke: var(--line-hot); stroke-width: .006; }
 .star { fill: var(--hot); }
@@ -121,8 +134,9 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
    Shorter captions come from the command table; the rest goes here. */
 .compact #map { display: none; }
 .compact h1 { font-size: clamp(13px, 3.4cqw, 20px); letter-spacing: .12em; margin: 3% 0; }
-.compact .reading { padding-bottom: 4%; }
-.compact .reading h2 { letter-spacing: .1em; }
+.compact .reading { padding-bottom: 3%; gap: 2%; }
+.compact .reading h2 { flex-basis: 34%; letter-spacing: .04em; }
+.compact .reading svg { width: 1em; height: 1em; }
 .compact header { letter-spacing: .06em; }
 .compact #brand, .compact #maker { display: none; }
 .compact .edge button { letter-spacing: .02em; padding: 1%; }
