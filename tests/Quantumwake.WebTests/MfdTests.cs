@@ -56,7 +56,7 @@ public class MfdTests
     public void ReservedButtonsAndInvalidInputHaveNoAction()
     {
         var e = Engine();
-        Assert.True(e.Evaluate("[0,9,10,17,18,29,1.5,'1'].every(n => QwMfd.action(n) === null)").AsBoolean());
+        Assert.True(e.Evaluate("[0,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
     }
 
     /// <summary>
@@ -452,6 +452,142 @@ public class MfdTests
         Assert.True(e.Evaluate("QwMfd.icon('nav') !== null && QwMfd.caption('nav') !== null").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.icon(undefined) === null && QwMfd.caption(undefined) === null").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.icon('not-a-command') === null").AsBoolean());
+    }
+
+    private static string Page(Engine e, string id, string state = "{}", string plan = "null", string view = "{}") =>
+        e.Evaluate($"JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('{id}'),{state},{plan},false,{view}))").AsString();
+
+    [Fact]
+    public void EveryPageHasAButtonRatherThanOnlyACycle()
+    {
+        var e = Engine();
+        Assert.Equal(10, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.True(e.Evaluate(
+            "QwMfd.pageIds.every(id => Object.values(QwMfd.defaults).includes(id))").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.icon(id) && QwMfd.caption(id))").AsBoolean());
+    }
+
+    [Fact]
+    public void FeedShowsTheNewestEntriesAndSaysWhenTheLogHasBeenQuiet()
+    {
+        var e = Engine();
+        const string feed = "{recentEvents:[{at:'2026-09-09T12:02:00Z',kind:'contract-done',"
+            + "text:'Contract completed',detail:'Recover the cargo'},"
+            + "{at:'2026-09-09T12:00:00Z',kind:'bought',text:'Bought 96 SCU',detail:'Area18 TDD'}]}";
+        var json = Page(e, "feed", feed);
+        Assert.Contains("CONTRACT DONE", json);
+        Assert.Contains("Contract completed · Recover the cargo", json);
+        Assert.Contains("2026-09-09T12:02:00Z", json);
+        Assert.Contains("NOTHING YET", Page(e, "feed"));
+    }
+
+    /// <summary>
+    /// The party channel names people; it does not enumerate them. The page has
+    /// to say that, because a silent crewmate looks identical to no crewmate.
+    /// </summary>
+    [Fact]
+    public void CrewIsAlwaysLabelledAFloorRatherThanARoster()
+    {
+        var e = Engine();
+        Assert.Contains("A FLOOR, NOT A ROSTER", Page(e, "crew"));
+        Assert.Contains("NOBODY NAMED", Page(e, "crew"));
+
+        var json = Page(e, "crew", "{party:[{handle:'nekron',moment:'joined',at:'2026-09-09T12:00:00Z'}],"
+            + "partyDisbanded:true}");
+        Assert.Contains("NEKRON", json);
+        Assert.Contains("joined", json);
+        Assert.Contains("DISBANDED", json);
+        Assert.Contains("A FLOOR, NOT A ROSTER", json);
+    }
+
+    [Fact]
+    public void MoneyQuotesTheRateItUsedAndWhatItLeavesOut()
+    {
+        var e = Engine();
+        const string earnings = "{extra:{earnings:{basis:'recent',"
+            + "window:{earned:250000,perHour:24215.86,days:30},"
+            + "lifetime:{earned:3865786,perHour:100,days:0},"
+            + "goal:{name:'A Cutlass',target:1200000},hoursToGoal:49.55}}}";
+        var json = Page(e, "money", "{}", "null", earnings);
+        Assert.Contains("24,216 aUEC per hour", json);
+        Assert.Contains("the last 30 days", json);
+        Assert.Contains("A Cutlass · 1,200,000 aUEC", json);
+        Assert.Contains("50 h of flying", json);
+        Assert.Contains("Commodity sales less what buying them cost", json);
+
+        // No rate at all is said, not shown as zero.
+        Assert.Contains("Too little recorded flying time",
+            Page(e, "money", "{}", "null", "{extra:{earnings:{basis:'lifetime',lifetime:{earned:0,perHour:0,days:0}}}}"));
+        Assert.Contains("NO GOAL SET",
+            Page(e, "money", "{}", "null", "{extra:{earnings:{basis:'lifetime',lifetime:{earned:1,perHour:5,days:0}}}}"));
+        Assert.Contains("Reading what the ledger recorded", Page(e, "money"));
+    }
+
+    [Fact]
+    public void ListShowsProgressAndSaysHeldIsNotACount()
+    {
+        var e = Engine();
+        const string jobs = "{extra:{jobs:["
+            + "{title:'Mining kit',done:false,pinned:true,haveCount:2,totalCount:5,destination:'Lorville'},"
+            + "{title:'Finished list',done:true,haveCount:3,totalCount:3},"
+            + "{title:'Armour',done:false,haveCount:0,totalCount:2}]}}";
+        var json = Page(e, "list", "{}", "null", jobs);
+        Assert.Contains("★ MINING KIT", json);
+        Assert.Contains("2 of 5 held · Lorville", json);
+        Assert.Contains("ARMOUR", json);
+        Assert.DoesNotContain("FINISHED LIST", json);
+        Assert.Contains("never how many", json);
+
+        Assert.Contains("NO LIST IN HAND", Page(e, "list", "{}", "null", "{extra:{jobs:[]}}"));
+        Assert.Contains("Reading your lists", Page(e, "list"));
+    }
+
+    /// <summary>
+    /// Session, Handle, "This session" and "Wake up at" all landed on Status
+    /// rather than each taking a page of their own.
+    /// </summary>
+    [Fact]
+    public void StatusCarriesTheFoldedInNowCards()
+    {
+        var e = Engine();
+        const string now = "{sessionStarted:'2026-09-09T10:00:00Z',handle:'nekron',deaths:1,incapacitations:3}";
+        const string view = "{now:1788956400000,extra:{respawn:{known:true,place:'Seraphim Station',"
+            + "at:'2026-08-22T04:23:57Z',agreeing:1,of:4,"
+            + "bed:{place:'Pyro Gateway',at:'2026-09-09T02:35:00Z',times:203}}}}";
+        var json = Page(e, "status", now, "null", view);
+        Assert.Contains("2h 20m", json);
+        Assert.Contains("1 death · 3 incapacitations", json);
+
+        // The bed is the newer sighting, so it is the answer - and the page
+        // says how thin that evidence is either way.
+        Assert.Contains("Pyro Gateway", json);
+        Assert.Contains("A medical bed used 203 times", json);
+        Assert.Contains("never states a regen point", json);
+
+        // Older bed than the last death: the death wins, with its own tally.
+        Assert.Contains("1 of 4 deaths woke there", Page(e, "status", now, "null",
+            "{extra:{respawn:{known:true,place:'Seraphim Station',at:'2026-09-09T04:00:00Z',"
+            + "agreeing:1,of:4,bed:{place:'Pyro Gateway',at:'2026-08-01T02:35:00Z',times:203}}}}"));
+
+        // Nothing known, nothing claimed.
+        Assert.DoesNotContain("WAKE UP AT", Page(e, "status", now, "null", "{extra:{respawn:{known:false}}}"));
+        Assert.DoesNotContain("WAKE UP AT", Page(e, "status", now));
+        Assert.Contains("No session start recorded", Page(e, "status"));
+    }
+
+    [Fact]
+    public void CargoCarriesTradeLeadsWithoutCallingThemCargo()
+    {
+        var e = Engine();
+        const string plan = "{stops:[],trade:[{commodity:'Agricium',marginPerScu:412,sellTerminal:'Area18 TDD'},"
+            + "{commodity:'Titanium',marginPerScu:88,sellTerminal:'Lorville'},"
+            + "{commodity:'Gold',marginPerScu:12,sellTerminal:'Orison'}]}";
+        var json = Page(e, "cargo", "{}", plan);
+        Assert.Contains("TRADE FROM HERE", json);
+        Assert.Contains("Agricium · +412/SCU at Area18 TDD", json);
+        Assert.DoesNotContain("Gold", json);
+        Assert.Contains("never what is aboard", json);
+        Assert.DoesNotContain("TRADE FROM HERE", Page(e, "cargo", "{}", "{stops:[]}"));
     }
 
     [Fact]

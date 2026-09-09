@@ -17,6 +17,11 @@ let atlas = null;
    same badge as one that arrives as "DRAK Corsair". Absent is fine: the
    sixteen built-in names already cover the fleet anyone flies. */
 let makerNames = null;
+/* Earnings, lists and the regen hint: three pages worth of answers that change
+   slowly, so they ride a 30-second timer rather than the five-second briefing
+   poll. A panel left running all evening should not be asking the ledger for a
+   rate twelve times a minute. */
+let extra = {};
 let state = null;
 let briefing = null, briefingUnavailable = false, briefingBusy = false;
 let selected = 0, armed = false;
@@ -71,7 +76,8 @@ function render() {
   const plan = QwMfd.mapView(atlas, state, briefing);
   drawMap(showing === 'nav', plan);
   drawMaker();
-  const rows = QwMfd.rows(page, state, briefing, briefingUnavailable, { selected, armed, map: plan });
+  const rows = QwMfd.rows(page, state, briefing, briefingUnavailable,
+    { selected, armed, map: plan, extra, now: Date.now() });
   const key = JSON.stringify(rows);
   if (key === lastRows) return;
   lastRows = key;
@@ -240,6 +246,19 @@ async function loadAtlas() {
   } catch { atlas = { nodes: [], positions: {} }; }
   finally { lastMap = ''; render(); }
 }
+/* Each one is allowed to fail on its own: a page whose figure is missing says
+   so, and must not take the other two down with it. */
+async function refreshExtras() {
+  const grab = async (url, key) => {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (response.ok) extra = { ...extra, [key]: await response.json() };
+    } catch { /* the page it feeds says what it is missing */ }
+  };
+  await Promise.all([grab('/api/earnings?days=30', 'earnings'), grab('/api/jobs', 'jobs'),
+    grab('/api/respawn', 'respawn')]);
+  lastRows = ''; render();
+}
 async function loadMakers() {
   try {
     const response = await fetch('/api/manufacturers', { signal: AbortSignal.timeout(15000) });
@@ -253,6 +272,7 @@ async function bootMfd() {
   refreshBriefing();
   loadAtlas();
   loadMakers();
+  refreshExtras();
   if (mfdParams.has('snapshot')) {
     try {
       const response = await fetch('/api/now');
@@ -264,6 +284,7 @@ async function bootMfd() {
   }
   stream = new EventSource('/api/stream');
   const briefingTimer = setInterval(refreshBriefing, 5000);
+  const extraTimer = setInterval(refreshExtras, 30000);
   stream.onmessage = event => {
     try {
       state = JSON.parse(event.data);
@@ -272,6 +293,8 @@ async function bootMfd() {
     } catch { byId('connection').textContent = 'INVALID UPDATE'; }
   };
   stream.onerror = () => { byId('connection').textContent = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; };
-  window.addEventListener('beforeunload', () => { stream.close(); clearInterval(briefingTimer); });
+  window.addEventListener('beforeunload', () => {
+    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer);
+  });
 }
 bootMfd();

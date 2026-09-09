@@ -42,13 +42,49 @@ pilot's control; a detected ship must not silently rearrange the buttons.
   Never a manifest — see below.
 - **Contract:** which contract am I on, and how many objectives are left? This
   session only, because that is the only session the store cannot answer for.
-- **Status:** can I trust the source? Keep session state and the latest
-  screenshot reading with its capture time. No fabricated fuel or shields.
+- **Status:** can I trust the source, and what state am I in? Session, elapsed
+  time, pilot, this session's deaths and incapacitations, where the logs suggest
+  you would wake, and the latest screenshot reading with its capture time. No
+  fabricated fuel or shields.
+- **Feed:** what just happened? The live timeline, newest first - the question a
+  pilot has after looking away.
+- **Crew:** who has the party channel named? A floor and never a roster: anyone
+  already grouped up who never dropped produces no toast at all, so being absent
+  means nothing. The page says so every time.
+- **Money:** what is my trading rate, and how far is a goal at it? Commodity
+  sales less what buying them cost, and nothing else the logs record - a trading
+  rate rather than everything earned, which the page states.
+- **List:** what am I shopping for, and how much of it am I holding? "Held"
+  means seen in a stash listing, which records presence and never a count.
+
+### Breaking the Now page apart
+
+The dashboard's Now page carries fifteen cards, and they do not map one to one.
+A card is something you scan at rest with a mouse; an MFD page answers one
+question you already have, in four lines, with a glove on a button. So five of
+them thickened a page that already existed rather than earning one:
+
+| Now card | Where it went |
+| --- | --- |
+| Location, Ship | Nav |
+| Flight plan, What to do next | Task and Act |
+| Trade from here | folded into **Cargo** - a lead about the counter you are standing at |
+| Session, Handle, This session, Wake up at | folded into **Status** - two counters and a regen hint do not each earn a page |
+| Live feed, Party, Trading rate, Job in hand + Checklist | **Feed, Crew, Money, List** |
+
+Fifteen cards became four new pages and five fold-ins, landing at ten - which is
+exactly what the frame can select directly. Every page has its own button and
+Prev/Next is the fallback, because cycling through ten to reach the tenth is not
+something to do in flight. A flat list rather than F-16 master modes: grouping
+only pays above about fifteen pages and costs the pilot a mental model.
+
+The goal form, the card show/hide controls and anything needing typed input stay
+on the dashboard. The panels are click-through - there is no pointer, and there
+never will be.
 
 The default cockpit pairs Nav on the left with Task on the right. Fleet
-catalogues, market browsing, historical tables, full party lists and settings
-stay on the dashboard. Unused OSBs remain unassigned rather than offering
-pages that are not useful at this size.
+catalogues, market browsing, historical tables and settings stay on the
+dashboard.
 
 **Act writes, and says so.** Confirming marks a line in the pilot's own flight
 plan and tells the game nothing, which the page states on every visit. A press
@@ -202,14 +238,14 @@ assignments without changing the firmware.
 | Buttons | Quantum Wake action |
 | --- | --- |
 | 1–5 | Nav, Task, Act, Cargo, Contract |
-| 16 | Status |
+| 9 / 10 | Money, List |
+| 16 / 17 / 18 | Status, Feed, Crew |
 | 15 / 11 | Previous / next page |
 | 14 / 12 | Up / down — the cursor on Act, the panel elsewhere |
 | 13 | Home (Nav) |
 | 6 / 7 | Increase / decrease text size |
 | 8 | Done — arm, then confirm, the selected flight-plan line |
 | 20 / 19 | Increase / decrease screen brightness |
-| 9, 10, 17, 18 | Unassigned |
 | 21–28 (rockers) | Unassigned; see below |
 
 Every one of those is a default rather than a rule. **Button assignments** in

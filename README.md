@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1638 tests](https://img.shields.io/badge/tests-1638%20passing-4fd48a)
+![1645 tests](https://img.shields.io/badge/tests-1645%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.12
+### 0.10.13
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -328,6 +328,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   counters recorded, the contract you accepted this session, and where all of
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
+
+- **The Now page, broken across the frame.** Ten pages now, each with its own
+  button: Nav, Task, Act, Cargo, Contract, Status, and four new ones — **Feed**
+  (what just happened, straight off the live log), **Crew** (who the party
+  channel has named, and why that is a floor rather than a roster), **Money**
+  (your trading rate and how long a goal will take at it) and **List** (shopping
+  lists and how much of each you are holding). Session time, deaths, your handle
+  and where you would wake up folded into Status; where a price is better folded
+  into Cargo. Nothing on the frame is unassigned any more.
 
 - **A system plan on the Nav page, with the whole route on it.** Small, above
   the words: the star, the bodies at their real coordinates, the one you are at

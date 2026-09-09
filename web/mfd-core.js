@@ -27,8 +27,14 @@ window.QwMfd = (() => {
      rocker is which number cannot be had from a datasheet, so they are
      bindable and named by the setup tester rather than guessed at here. */
   const OSBS = 20, BUTTONS = 28;
-  const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status'];
-  const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS'];
+  /* Ten pages, and a direct button for every one of them - the frame has the
+     positions, and cycling through ten to reach the tenth is not something to
+     do in flight. The Now page's fifteen cards do not map one to one: five of
+     them thicken a page that already exists rather than earning one of their
+     own, because a page is a question a pilot asks, not a card on a dashboard
+     they are scanning at rest. */
+  const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list'];
+  const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -50,6 +56,14 @@ window.QwMfd = (() => {
       icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6' },
     { id: 'status', label: 'Page · Status', caption: 'STATUS',
       icon: 'M12 3a9 9 0 1 0 .1 0M12 7.5v.5M12 11v6' },
+    { id: 'feed', label: 'Page · Feed', caption: 'FEED',
+      icon: 'M4 18a14 14 0 0 1 14 0M4 18h.01M5 13.5a9.5 9.5 0 0 1 13 0M5 9a15 15 0 0 1 15 0' },
+    { id: 'crew', label: 'Page · Crew', caption: 'CREW',
+      icon: 'M9 11a3.2 3.2 0 1 0 .1 0M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5M16 5.4a3.2 3.2 0 0 1 0 6.2M17.5 15.4c2 .8 3 2.4 3 4.6' },
+    { id: 'money', label: 'Page · Money', caption: 'MONEY',
+      icon: 'M12 2.5v19M8 7h6.5a2.75 2.75 0 0 1 0 5.5h-5a2.75 2.75 0 0 0 0 5.5H16' },
+    { id: 'list', label: 'Page · List', caption: 'LIST',
+      icon: 'M9 6.5h11M9 12h11M9 17.5h11M4 6l1.2 1.2L7.5 4.5M4 17.5l1.2 1.2 2.3-2.7' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', icon: 'M15 4L7 12l8 8' },
     { id: 'next', label: 'Next page', caption: 'NEXT', icon: 'M9 4l8 8-8 8' },
     { id: 'home', label: 'Home (Nav)', caption: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
@@ -72,9 +86,9 @@ window.QwMfd = (() => {
      start unassigned - see the note above. */
   const defaults = {
     1: 'nav', 2: 'task', 3: 'act', 4: 'cargo', 5: 'contract',
-    6: 'text-up', 7: 'text-down', 8: 'confirm',
+    6: 'text-up', 7: 'text-down', 8: 'confirm', 9: 'money', 10: 'list',
     11: 'next', 12: 'down', 13: 'home', 14: 'up', 15: 'prev',
-    16: 'status', 19: 'bright-down', 20: 'bright-up'
+    16: 'status', 17: 'feed', 18: 'crew', 19: 'bright-down', 20: 'bright-up'
   };
 
   /* A stored map is the whole answer, so a button the pilot cleared stays
@@ -326,8 +340,13 @@ window.QwMfd = (() => {
           ['THIS SESSION', cargo
             ? `${cargo.boughtScu} SCU bought · ${cargo.soldScu} SCU sold`
             : 'Nothing bought or sold at a commodity counter yet'],
+          // The dashboard's "Trade from here" card, folded in: it is a lead
+          // about the counter you are standing at, which is this page's subject.
+          ...(briefing?.trade?.length ? [['TRADE FROM HERE', briefing.trade.slice(0, 2)
+            .map(t => `${t.commodity} · +${Math.round(t.marginPerScu).toLocaleString()}/SCU at ${t.sellTerminal}`)
+            .join('  |  ')]] : []),
           ['NOT A MANIFEST', 'The game logs no cargo hold. This is what the counters recorded '
-            + 'this session and what you planned - never what is aboard.']
+            + 'this session, what you planned, and where a price is better - never what is aboard.']
         ];
       }
       case 'contract': {
@@ -350,16 +369,115 @@ window.QwMfd = (() => {
           ...(open.length > 1 ? [['ALSO OPEN', `${open.length - 1} more still open`]] : [])
         ];
       }
-      case 'status': return [
-        ['SESSION', s.inGame ? (s.gameRules || 'In game') : 'Menus / no active game session'],
-        ['PILOT', s.handle || 'Waiting for pilot identity'],
-        ...(s.screen ? [['LAST SCREENSHOT', s.screen.summary, s.screen.shotAt]]
-          : [['NO SCREENSHOT READING', 'Read a screenshot in the dashboard to add a cross-check.']]),
-        ['INSTRUMENTS', 'Screenshot readings are saved observations. Live shields, fuel and power are not supplied.']
-      ];
+      /* Session, Handle, "This session" and "Wake up at" all fold in here: two
+         counters and a regen hint do not each earn a page, and this one already
+         answers "what state am I in, and can I trust it". */
+      case 'status': {
+        const wake = wakeUpAt(view.extra?.respawn);
+        return [
+          ['SESSION', s.inGame ? (s.gameRules || 'In game') : 'Menus / no active game session'],
+          ['ELAPSED', elapsed(s.sessionStarted, view.now) || 'No session start recorded'],
+          ['PILOT', s.handle || 'Waiting for pilot identity'],
+          ['THIS SESSION', `${s.deaths || 0} death${s.deaths === 1 ? '' : 's'} · `
+            + `${s.incapacitations || 0} incapacitation${s.incapacitations === 1 ? '' : 's'}`],
+          ...(wake ? [['WAKE UP AT', wake.place, wake.at], ['HOW SURE', wake.why]] : []),
+          ...(s.screen ? [['LAST SCREENSHOT', s.screen.summary, s.screen.shotAt]]
+            : [['NO SCREENSHOT READING', 'Read a screenshot in the dashboard to add a cross-check.']]),
+          ['INSTRUMENTS', 'Screenshot readings are saved observations. Live shields, fuel and power are not supplied.']
+        ];
+      }
+      /* The live timeline, newest first. The one page that answers "what just
+         happened", which is the question a pilot has after looking away. */
+      case 'feed': {
+        const feed = s.recentEvents || [];
+        if (!feed.length) return [['NOTHING YET',
+          'The log has said nothing this session. Entries appear here as the game writes them.']];
+        return feed.slice(0, 14).map(entry => [
+          String(entry.kind || 'event').replace(/-/g, ' ').toUpperCase(),
+          [entry.text, entry.detail].filter(Boolean).join(' · '), entry.at]);
+      }
+      /* A floor and never a roster, exactly as the dashboard's Crew page has
+         it: a party member who was already grouped up when you logged in and
+         never dropped produces no toast at all, so absence means nothing. */
+      case 'crew': {
+        const party = s.party || [];
+        const floor = ['A FLOOR, NOT A ROSTER', 'Only pilots the party channel named. '
+          + 'Anyone already grouped up who never dropped is invisible, so being absent here means nothing.'];
+        if (!party.length) return [['NOBODY NAMED', 'The party channel has not named anyone this session.'], floor];
+        return [
+          ...party.slice(0, 8).map(p => [String(p.handle).toUpperCase(), p.moment, p.at]),
+          ...(s.partyDisbanded ? [['DISBANDED', 'The channel said the group broke up.']] : []),
+          floor
+        ];
+      }
+      case 'money': {
+        const money = view.extra?.earnings;
+        if (!money) return [['EARNINGS', 'Reading what the ledger recorded…']];
+        const rate = money.basis === 'recent' ? money.window : money.lifetime;
+        return [
+          ['RATE', rate?.perHour > 0 ? `${aUEC(rate.perHour)} per hour`
+            : 'Too little recorded flying time to state a rate'],
+          ['FROM', money.basis === 'recent' ? `the last ${money.window.days} days` : 'every session on record'],
+          ['EARNED', rate ? aUEC(rate.earned) : 'Nothing recorded'],
+          ...(money.goal
+            ? [['GOAL', `${money.goal.name || 'Saving up'} · ${aUEC(money.goal.target)}`],
+               ['AT THIS RATE', money.hoursToGoal != null
+                 ? hours(money.hoursToGoal) + ' of flying' : 'No rate to divide the goal by']]
+            : [['NO GOAL SET', 'Set one in the dashboard and the flying time to reach it shows here.']]),
+          ['TRADING ONLY', 'Commodity sales less what buying them cost. Nothing else the logs record '
+            + 'is counted, so this is a trading rate rather than everything you earned.']
+        ];
+      }
+      case 'list': {
+        const jobs = view.extra?.jobs;
+        if (!jobs) return [['SHOPPING LISTS', 'Reading your lists…']];
+        const open = jobs.filter(job => !job.done);
+        if (!open.length) return [['NO LIST IN HAND',
+          'Make a shopping list in the dashboard and its progress shows here.']];
+        return [
+          ...open.slice(0, 6).map(job => [
+            (job.pinned ? '★ ' : '') + String(job.title).toUpperCase(),
+            [`${job.haveCount} of ${job.totalCount} held`, job.destination].filter(Boolean).join(' · ')]),
+          ['HELD, NOT COUNTED', 'A stash listing records that a thing is somewhere and never how many, '
+            + 'so "held" means seen rather than enough.']
+        ];
+      }
       default: return [];
     }
   }
+
+  const aUEC = n => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
+
+  /* Whole minutes. The clock is on a page that re-renders whenever anything
+     changes, and a seconds field would rewrite it every second for no reader. */
+  function elapsed(from, now) {
+    if (!from) return null;
+    const minutes = Math.floor(((now || Date.now()) - new Date(from).getTime()) / 60000);
+    if (!Number.isFinite(minutes) || minutes < 0) return null;
+    return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  }
+
+  function hours(value) {
+    const total = Number(value);
+    if (!Number.isFinite(total) || total < 0) return 'Not a figure this can divide';
+    return total < 1 ? `${Math.round(total * 60)} min` : `${total.toFixed(total < 10 ? 1 : 0)} h`;
+  }
+
+  /* Where the last death put you, or the bed you last used, whichever the logs
+     saw more recently - which is as close as they get to a regen point. The
+     game states one nowhere, so the page carries how thin the evidence is
+     rather than presenting a place as a fact. */
+  function wakeUpAt(respawn) {
+    if (!respawn?.known) return null;
+    const bed = respawn.bed;
+    const bedIsNewer = bed && (!respawn.at || new Date(bed.at) > new Date(respawn.at));
+    const place = bedIsNewer ? bed.place : (respawn.place || bed?.place);
+    if (!place) return null;
+    return { place, at: bedIsNewer ? bed.at : respawn.at,
+      why: bedIsNewer
+        ? `A medical bed used ${bed.times} times · the game never states a regen point`
+        : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
+  }
   return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers,
-    pages, pageIds, rows, tasks, describe, plannedLoad, clamp, OSBS, BUTTONS };
+    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
 })();
