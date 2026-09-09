@@ -10,6 +10,7 @@ internal sealed class MfdController : IDisposable
     private readonly Action<string> _notify;
     private readonly string _path = Core.AppPaths.In("mfd.json");
     private readonly Dictionary<string, MfdWindow> _windows = [];
+    private readonly Dictionary<string, MfdBlackout> _blackouts = [];
     private readonly DispatcherTimer _displays = new() { Interval = TimeSpan.FromSeconds(2) };
     private MfdMonitor[] _monitors = MfdWindow.Monitors();
     private MfdLayout _saved;
@@ -17,6 +18,9 @@ internal sealed class MfdController : IDisposable
     private CougarInput? _input;
     private MfdWindow? _setup;
     private bool _preview;
+
+    /// <summary>The monitor the backdrop is currently keeping clear for setup.</summary>
+    private string? _busy;
 
     public MfdController(string root, Action<string> notify)
     {
@@ -51,8 +55,16 @@ internal sealed class MfdController : IDisposable
         _setup.Ready += SendState;
         _setup.Message += Receive;
         _setup.Closed += (_, _) => { _setup = null; Apply(_saved, false); };
+        // Dragged onto the cockpit monitor, setup takes that monitor's backdrop
+        // down with it; dragged off again, it comes back. Only on a change of
+        // monitor - a drag raises this on every pixel.
+        _setup.LocationChanged += (_, _) =>
+        {
+            if (_setup?.MonitorId(_monitors) != _busy) Backdrops(_active);
+        };
         EnsureInput();
         _setup.Show();
+        Backdrops(_active);
     }
 
     private void SendState() => _setup?.Send(new {
@@ -141,9 +153,45 @@ internal sealed class MfdController : IDisposable
             window.Send(new { type = "alignment", enabled = preview, panel = panel.Id });
             window.Send(new { type = "buttons", buttons = layout.Buttons });
         }
+        Backdrops(layout);
         if (layout.Enabled || preview || _setup is not null) EnsureInput();
         else { _input?.Dispose(); _input = null; }
         SendDeviceStatus();
+    }
+
+    /// <summary>
+    /// One black backdrop per monitor showing a panel, with the openings cut
+    /// out of it. See <see cref="MfdBlackout"/> for why the frames need one.
+    /// </summary>
+    /// <remarks>
+    /// The monitor the setup window is on is left alone while setup is open.
+    /// Somebody placing a panel on the monitor they are working on would
+    /// otherwise cover their own setup window with the thing they just switched
+    /// on, and the way back out would be underneath it.
+    /// </remarks>
+    private void Backdrops(MfdLayout layout)
+    {
+        var busy = _busy = _setup?.MonitorId(_monitors);
+        var wanted = layout.Blackout
+            ? layout.Panels
+                .Where(p => _windows.ContainsKey(p.Id) && p.Monitor != busy)
+                .GroupBy(p => p.Monitor)
+                .Where(g => _monitors.Any(m => m.Id == g.Key))
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<MfdPanel>)[.. g])
+            : [];
+
+        foreach (var id in _blackouts.Keys.ToArray())
+            if (!wanted.ContainsKey(id) && _blackouts.Remove(id, out var gone)) gone.Close();
+
+        foreach (var (id, panels) in wanted)
+        {
+            if (!_blackouts.TryGetValue(id, out var backdrop))
+            {
+                _blackouts[id] = backdrop = new MfdBlackout();
+                backdrop.Show();
+            }
+            backdrop.Cover(_monitors.First(m => m.Id == id), panels);
+        }
     }
 
     public void Dispose()
@@ -153,5 +201,7 @@ internal sealed class MfdController : IDisposable
         _input?.Dispose();
         foreach (var window in _windows.Values) window.Close();
         _windows.Clear();
+        foreach (var backdrop in _blackouts.Values) backdrop.Close();
+        _blackouts.Clear();
     }
 }

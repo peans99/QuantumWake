@@ -16,6 +16,28 @@ public class MfdLayoutTests
         Assert.True(layout.Panels[0].X + layout.Panels[0].Width <= layout.Panels[1].X);
     }
 
+    /// <summary>
+    /// The backdrop is what the frames are for, so it is on unless the pilot
+    /// says otherwise - including for a file written before it existed, where
+    /// the key is simply absent.
+    /// </summary>
+    [Fact]
+    public void BlackoutIsOnUnlessTheFileTurnsItOff()
+    {
+        Assert.True(MfdLayout.Default(Monitors).Blackout);
+
+        var older = System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(
+            """{"enabled":true,"panels":[{"id":"left","monitor":"cockpit"},{"id":"right","monitor":"cockpit","cougar":2}]}""",
+            MfdLayout.JsonOptions)!.Validate(Monitors);
+        Assert.True(older.Blackout);
+
+        var off = (MfdLayout.Default(Monitors) with { Blackout = false }).Validate(Monitors);
+        Assert.False(off.Blackout);
+        Assert.False(System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(
+            System.Text.Json.JsonSerializer.Serialize(off, MfdLayout.JsonOptions),
+            MfdLayout.JsonOptions)!.Blackout);
+    }
+
     [Fact]
     public void SharedAndSeparateMonitorsKeepIndependentGeometry()
     {

@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.7
+### 0.10.8
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -328,6 +328,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   counters recorded, the contract you accepted this session, and where all of
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
+
+- **The monitor behind the frames goes black.** A Cougar frame covers part of a
+  monitor, and the rest of it keeps glowing around the bezel — wallpaper, the
+  taskbar, whatever was there — which in a dark cockpit washes out the
+  instrument inside the opening. Quantum Wake now fills those monitors with
+  black around the openings. Turn it off with **Black out the rest of those
+  monitors** if a panel is sitting in the corner of a screen you are still
+  using. The monitor you have setup open on is left alone until you close it.
 
 - **Tick work off from the frame.** The Act page lists what is still to be done
   at your next stop and marks one done with the **DONE** button — pressed once

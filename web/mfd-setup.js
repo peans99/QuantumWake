@@ -2,7 +2,7 @@
 const setupElement = id => document.getElementById(id);
 const host = window.chrome?.webview;
 let monitors = [{ id: 'example', x: 0, y: 0, width: 1920, height: 1080, primary: true }];
-let layout = { enabled: false, buttons: null, panels: [
+let layout = { enabled: false, blackout: true, buttons: null, panels: [
   { id: 'left', monitor: 'example', x: 360, y: 280, width: 480, height: 480, cougar: 1 },
   { id: 'right', monitor: 'example', x: 960, y: 280, width: 480, height: 480, cougar: 2 }
 ] };
@@ -24,6 +24,7 @@ function fillEditor() {
     : 'This MFD stays hidden until its monitor returns or you choose another monitor.';
   for (const key of ['x', 'y', 'width', 'height', 'cougar']) setupElement(key).value = panel[key];
   setupElement('enabled').checked = layout.enabled;
+  setupElement('blackout').checked = layout.blackout !== false;
   setupElement('separate').disabled = monitors.length < 2;
 }
 function draw() {
@@ -37,7 +38,10 @@ function draw() {
     left: (transform.x + x * scale) + 'px', top: (transform.y + y * scale) + 'px',
     width: width * scale + 'px', height: height * scale + 'px' });
   monitors.forEach((m, i) => {
-    const node = document.createElement('div'); node.className = 'monitor';
+    // A monitor showing a panel is drawn the way it will look: black, with
+    // the openings the only thing on it. The switch below explains itself.
+    const dark = layout.blackout !== false && layout.panels.some(p => p.monitor === m.id);
+    const node = document.createElement('div'); node.className = dark ? 'monitor blacked' : 'monitor';
     const label = document.createElement('span'); label.textContent = `${i + 1} · ${m.width} × ${m.height}${m.primary ? ' · primary' : ''}`;
     node.append(label); place(node, m.x, m.y, m.width, m.height); desktop.append(node);
   });
@@ -99,6 +103,7 @@ for (const key of ['x', 'y', 'width', 'height']) setupElement(key).onchange = ev
 for (let n = 1; n <= 8; n++) setupElement('cougar').add(new Option('F16 MFD ' + n, n));
 setupElement('cougar').onchange = event => { selectedPanel().cougar = Number(event.target.value); changed(); };
 setupElement('enabled').onchange = event => { layout.enabled = event.target.checked; };
+setupElement('blackout').onchange = event => { layout.blackout = event.target.checked; changed(); };
 setupElement('swap').onclick = () => { [layout.panels[0].cougar, layout.panels[1].cougar] = [layout.panels[1].cougar, layout.panels[0].cougar]; changed(); };
 setupElement('together').onclick = () => {
   const m = monitors.find(m => m.id === selectedPanel().monitor) || monitors[0];
@@ -185,7 +190,7 @@ host?.addEventListener('message', ({ data }) => {
 });
 if (!host) {
   setupElement('host-note').hidden = false;
-  for (const id of ['save', 'preview', 'stop-preview', 'enabled']) setupElement(id).disabled = true;
+  for (const id of ['save', 'preview', 'stop-preview', 'enabled', 'blackout']) setupElement(id).disabled = true;
   setupElement('devices').textContent = 'USB input is available in the desktop app.';
 }
 new ResizeObserver(draw).observe(desktop);

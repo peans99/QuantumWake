@@ -24,6 +24,7 @@
 <p>Bottom 15 / 11: previous / next page; 14 / 12: up and down, which move the cursor on Act and scroll everywhere else; 13: Home. Right 6 / 7: text size; 8: DONE. Left 20 / 19: screen brightness.</p>
 <p>The four rocker switches report as buttons 21–28, and which rocker is which number is not something a datasheet answers — so they ship unassigned. Press one, watch the tester name its number, and bind it above.</p>
 <p>USB detection uses Windows joystick slots 1–16 and the default F16 MFD names. If a device is missing, check the Thrustmaster driver and close any T.A.R.G.E.T. profile that replaces the devices with a virtual controller. Duplicate MFD numbers must be changed in the Thrustmaster control panel.</p></details>
-<footer><label class="enabled"><input id="enabled" type="checkbox"> Enable MFD displays</label><div class="actions"><button id="preview">Show alignment preview</button><button id="stop-preview">Stop preview</button><button id="save" class="primary">Save layout</button></div>
+<footer><label class="enabled"><input id="enabled" type="checkbox"> Enable MFD displays</label>
+<label class="enabled" title="Fills those monitors with black around the openings, so the desktop stops glowing around the edge of the frame. The monitor this window is on is left alone while setup is open."><input id="blackout" type="checkbox"> Black out the rest of those monitors</label><div class="actions"><button id="preview">Show alignment preview</button><button id="stop-preview">Stop preview</button><button id="save" class="primary">Save layout</button></div>
 <p id="status" role="status">MFD mode is optional. Your regular overlay has its own settings.</p></footer>
 </main><script src="mfd-core.js"></script><script src="mfd-setup.js"></script></body></html>

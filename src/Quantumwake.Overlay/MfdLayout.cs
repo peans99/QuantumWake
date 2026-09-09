@@ -17,6 +17,20 @@ internal sealed record MfdPanel
 internal sealed record MfdLayout
 {
     public bool Enabled { get; init; }
+
+    /// <summary>
+    /// Whether to fill the monitors carrying panels with black, around the
+    /// openings. On unless the pilot turns it off.
+    /// </summary>
+    /// <remarks>
+    /// On by default because it is what the frames are for: a bezel screwed
+    /// over part of a monitor leaves the rest of that monitor glowing around
+    /// its edge, and in a dark cockpit that washes out the instrument inside
+    /// it. Off is for anyone who put a panel in the corner of a monitor they
+    /// are still using, and would rather keep the desktop than the contrast.
+    /// </remarks>
+    public bool Blackout { get; init; } = true;
+
     public MfdPanel[] Panels { get; init; } = [];
 
     /// <summary>

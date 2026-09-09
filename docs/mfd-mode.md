@@ -15,6 +15,8 @@ Feature branch: `codex/cougar-mfd`, based on `dev0100`.
 - [x] Extend the compact pages to flight-plan actions, cargo and contracts.
 - [x] Make every button reassignable, with the rockers bindable rather than
   guessed at.
+- [x] Black out the rest of a monitor carrying panels, so the desktop stops
+  glowing around the edge of the frame.
 - [ ] Verify physical frame alignment and default USB inputs on the cockpit.
 - [ ] Name the four rockers once hardware says which number each one reports,
   and decide whether any of them earns a default.
@@ -88,6 +90,32 @@ and screen brightness in the WebView profile.
 **Button assignments** below the tester rebinds any button. Changes reach a
 running alignment preview immediately, so a rebinding can be tried on the frame
 before it is saved; **Save layout** keeps them along with the placement.
+
+## The backdrop
+
+A Cougar frame is a bezel with a square hole in it, screwed over part of a
+monitor. Everything the frame does not cover still glows - wallpaper, the
+taskbar, whatever window is behind it - and in a dark cockpit that light leaks
+around the edge of the bezel and washes out the instrument inside. **Black out
+the rest of those monitors** fills every monitor carrying a panel with black,
+around the openings. It is on unless you turn it off, and the monitor layout in
+setup draws itself the way the monitor will look, so the switch explains itself.
+
+Off is for anyone who put a panel in the corner of a monitor they are still
+using and would rather keep the desktop than the contrast.
+
+The openings are cut out with a **window region** rather than left to z-order.
+Two topmost windows have no guaranteed order between them, and if the backdrop
+ever won that race the pilot would get a black square where the instrument
+should be - a failure that looks exactly like a crash. A window with holes in it
+is not in that race. They are holes to the mouse as well: the backdrop is
+click-through, and an opening is not the backdrop at all.
+
+**The monitor the setup window is on keeps its backdrop off while setup is
+open**, and takes it back when setup is closed or dragged elsewhere. Somebody
+placing a panel on the monitor they are working on would otherwise cover their
+own setup window with the thing they had just switched on, and the way back out
+would be underneath it.
 
 Disconnected monitors retain their saved placement and their panels stay
 hidden. They are not moved onto the primary monitor. Changes in monitor
@@ -204,6 +232,23 @@ in them.
   will not open a window narrower than about 500 px on this machine, so a
   `--window-size=220,220` screenshot is a crop of a 500-wide page and looks like
   a broken layout when nothing is wrong. Frame it instead.
+
+### The backdrop
+
+Verified on 2026-09-09, with an offscreen native run: an `MfdBlackout` covering
+a monitor placed at (-9000, 40), so nothing appeared on any real screen.
+
+- `GetWindowRect` returned the requested `-9000,40 1920x1080`, and
+  `GetWindowRgnBox` the full 1920 × 1080 the region spans.
+- `WindowFromPoint` answered the backdrop everywhere except inside the two
+  openings - including the gap between them, and one pixel outside an opening's
+  corner while one pixel inside was clear. The holes are exact, and they are
+  holes to the mouse as well as to the eye.
+- Moving a panel moved its hole: the old opening came back under the backdrop
+  and the new one was clear.
+- The setup editor round-tripped the switch: only the monitor carrying panels
+  drew as blacked, never the desk monitor beside it, and saving carried
+  `blackout` both ways.
 
 **The negative result from this round:** `ContractRecord.Accepted` is never set
 by anything. Filtering on it - which both this page and

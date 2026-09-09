@@ -106,9 +106,38 @@ internal sealed class MfdWindow : Window
         finally { if (previous != IntPtr.Zero) SetThreadDpiAwarenessContext(previous); }
     }
 
+    /// <summary>
+    /// The monitor this window is sitting on, or null if it is nowhere known.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the setup window, so the backdrop can leave that monitor alone
+    /// while the pilot is working on it. By the window's own centre, because a
+    /// window dragged across a boundary belongs to whichever monitor holds most
+    /// of it - the same answer Windows itself gives.
+    /// </remarks>
+    public string? MonitorId(IReadOnlyList<MfdMonitor> monitors)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var previous = SetThreadDpiAwarenessContext(new IntPtr(-4));
+        try
+        {
+            if (handle == IntPtr.Zero || !GetWindowRect(handle, out var rect)) return null;
+            int x = (rect.Left + rect.Right) / 2, y = (rect.Top + rect.Bottom) / 2;
+            return monitors.FirstOrDefault(m =>
+                x >= m.X && y >= m.Y && x < m.X + m.Width && y < m.Y + m.Height)?.Id;
+        }
+        finally { if (previous != IntPtr.Zero) SetThreadDpiAwarenessContext(previous); }
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowRect { public int Left, Top, Right, Bottom; }
 }
