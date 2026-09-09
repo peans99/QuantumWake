@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.2
+### 0.10.3
 
 - **Four more screens read: the Contracts app, the Rep app, the Fleet
   Manager and its loadout estimate.** The Contracts tab’s own count and

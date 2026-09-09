@@ -932,8 +932,16 @@ Hemera drive, 7MA shields - which is what an upgraded ship looks like.
 | Screen | What it would confirm |
 |---|---|
 | Commodity kiosk | The commodity name the log never gives for a sale, and price per SCU as a unit check |
-| The inventory screen at a location | The Stash page, which cannot see what was moved by hand |
-| mobiGlas Wallet, past its start screen | Whether the balance is printed anywhere in a face that reads every time |
+| The Wallet app, past its start screen | Whether the balance is printed anywhere in a face that reads every time |
+
+**The inventory screen carries no names.** Photographed with a location's
+stash open beside the personal one: 24 lines read, and every one of them is
+furniture - `LOCAL / LOCAL`, `CAPACITY: 5K/5G`, `MOVE ALL`, `7/20`. The
+items are icons, and a stack count like `7x` is the only text on a tile.
+So the Stash page cannot be confirmed from a frame of the inventory; it can
+only be confirmed one item at a time, by hovering, which is the tooltip
+reader that already exists. Written down so nobody photographs the inventory
+again expecting a list.
 
 The Wallet app's start screen was photographed and holds no figure; the
 screen behind **BEGIN** was not.
