@@ -91,3 +91,9 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
    than blanked: the pilot should be able to tell a button that does nothing
    here from a position that carries nothing at all. */
 .edge button.dormant { opacity: .28; }
+/* The app's own mark, bottom left. It already carries the HUD's cyan, so it
+   needs no recolouring - and it is a comet at 16px by design, which is the size
+   a footer has to offer. The maker's mark has the top corner; this has this one,
+   and neither is ever louder than a reading. */
+#brand { height: clamp(9px, 2.4cqw, 19px); width: auto; opacity: .8; align-self: center; }
+footer #device { margin-right: auto; padding-left: 2%; }

@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.14
+### 0.10.15
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -328,6 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   counters recorded, the contract you accepted this session, and where all of
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
+
+- **Quantum Wake's own mark, small, in the corner of the frame.** Bottom left,
+  beside the device line — the ship maker's mark already has the top corner.
 
 - **A calmer frame.** Brightness and text size are sliders in **MFD setup** now
   rather than four buttons on the face, and previous/next page and Home ship

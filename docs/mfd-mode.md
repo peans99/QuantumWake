@@ -190,6 +190,12 @@ because a test loads both files and fails when they disagree. Matching by code
 alone is the bug that once left every maker whose code is not its name without
 a badge, so codes and names both resolve, longest match first.
 
+**The app's own mark** sits in the bottom-left of the display. It needed no
+recolouring: mark.svg was already drawn in the same cyan the instrument uses,
+and it is a comet at 16 px by design, which is the size a footer can offer. The
+maker's mark has the top corner and this has the bottom one, and neither is
+ever louder than a reading.
+
 **The button faces carry an icon over the caption, and nothing at all where a
 button does nothing.** The number used to sit there, labelling a button the
 pilot is looking directly at - it is printed on the frame under their thumb. A
