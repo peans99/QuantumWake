@@ -1,40 +1,120 @@
-:root { color-scheme: dark; font-family: 'Segoe UI', sans-serif; background: #0a1117; color: #d7e4ed; }
-* { box-sizing: border-box; } body { margin: 0; } main { max-width: 1300px; padding: 28px 34px 160px; margin: auto; }
-.eyebrow, .section-title { font-size: 11px; letter-spacing: .14em; color: #7ccdac; font-weight: 600; }
-h1 { font-weight: 500; font-size: 32px; margin: 8px 0; } h2 { margin: 0 0 20px; font-size: 19px; font-weight: 500; }
-p { color: #9bafbc; font-size: 13px; line-height: 1.5; } .hint { font-size: 12px; } .section-title span { float: right; font-size: 10px; letter-spacing: 0; color: #9bafbc; }
-.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 24px; margin-top: 24px; }
-#desktop { height: 300px; position: relative; margin-top: 14px; overflow: hidden; background: radial-gradient(#254033 1px, transparent 1px) 0 0 / 16px 16px, #060c10; border: 1px solid #24343f; border-radius: 8px; }
-.monitor { position: absolute; border: 1px solid #547282; background: #18252d; pointer-events: none; }
-.monitor span { position: absolute; left: 0; top: -20px; white-space: nowrap; font-size: 11px; color: #a0b8c6; }
-.mfd-area { position: absolute; border: 2px solid #57c394; background: #133d2dce; color: #bbf5d9; padding: 0; touch-action: none; cursor: grab; border-radius: 3px; font: 11px 'Segoe UI', sans-serif; }
-.mfd-area.right { border-color: #e5b36e; background: #503b20ce; color: #fbe0b8; }
-.mfd-area.selected { outline: 2px solid #e2f4ed; outline-offset: 3px; z-index: 2; }
-.resize { position: absolute; width: 16px; height: 16px; right: 0; bottom: 0; border-right: 3px solid currentColor; border-bottom: 3px solid currentColor; cursor: nwse-resize; }
-aside { border-left: 1px solid #24343f; padding-left: 24px; }
-label { display: block; font-size: 12px; color: #9bafbc; margin-bottom: 12px; }
-input, select, button { font: inherit; color: #d7e4ed; border: 1px solid #354b57; background: #121f28; border-radius: 4px; }
-input, select { display: block; padding: 8px; margin-top: 5px; width: 100%; }
-.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
-button { cursor: pointer; font-size: 12px; padding: 9px 12px; } button:hover { border-color: #91c2ac; } button:disabled { opacity: .4; cursor: default; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #7ce4b3; outline-offset: 2px; }
-.toolbar, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.input-test { margin-top: 24px; border: 1px solid #294034; border-radius: 6px; padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.input-test p { margin-bottom: 0; } output { color: #9ee8c4; font: 14px Consolas, monospace; text-align: right; }
-details { font-size: 12px; color: #9bafbc; margin-top: 18px; } summary { cursor: pointer; }
-footer { position: fixed; z-index: 5; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 1300px;
-  background: #0a1117; padding: 16px 34px; border-top: 1px solid #24343f; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-#status { width: 100%; margin: 0; font-size: 12px; }
-.enabled { display: flex; align-items: center; gap: 8px; margin: 0; color: #d7e4ed; } .enabled input { width: auto; margin: 0; }
-.primary { background: #a1ebc7; border-color: #a1ebc7; color: #082418; font-weight: 600; }
-.notice { padding: 12px; background: #302818; border: 1px solid #6f5a36; } #status.error { color: #ffa998; }
-@media(max-width: 800px) { main { padding: 20px 20px 180px; } .workspace { grid-template-columns: minmax(0, 1fr) 190px; gap: 16px; } aside { padding-left: 16px; } footer { padding: 14px 20px; align-items: flex-start; flex-direction: column; } }
-.assignments { margin-top: 24px; border: 1px solid #24343f; border-radius: 6px; padding: 16px; }
-.assignments .hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0 0; }
-.assignments .section-title + .hint { margin-bottom: 4px; }
-.bindings { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 14px; margin: 10px 0 18px; }
-.bindings label { display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; font: 12px Consolas, monospace; color: #7f96a4; }
-.bindings label select { margin: 0; padding: 5px; font-size: 12px; }
-.bindings label.hit { border-color: #7ce4b3; color: #9ee8c4; background: #10241b; }
-.monitor.blacked { background: #000; border-color: #3c525f; }
-.monitor.blacked span { color: #7f96a4; }
+/* The placement editor rides app.css - the same tokens, chamfers, cyan rules
+ * and Bahnschrift as every other page - so it cannot drift into a second look
+ * for the same product. Only what is unique to dropping rectangles onto
+ * monitors lives here, and it is written in those tokens rather than in
+ * colours of its own. */
+
+main { max-width: 1300px; padding: 22px 26px 160px; }
+
+.eyebrow {
+  font-size: 9.5px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 6px;
+}
+h1 {
+  font-size: 27px; font-weight: 400; letter-spacing: .04em;
+  margin: 0 0 6px; color: var(--text);
+}
+header p { margin: 0 0 4px; font-size: 13px; }
+
+/* The section heading keeps app.css's tick mark and adds a trailing aside. */
+h2 span {
+  float: right; font-size: 9.5px; letter-spacing: .12em;
+  text-transform: none; color: var(--dim); font-weight: 400;
+}
+p { font-size: 13px; line-height: 1.55; }
+.hint { font-size: 11.5px; }
+
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: var(--gap); margin-top: var(--gap); }
+
+/* ---------- the desktop the monitors are drawn on ---------- */
+
+#desktop {
+  height: 300px; position: relative; margin: 4px 0 12px; overflow: hidden;
+  background: radial-gradient(rgba(53, 200, 240, .13) 1px, transparent 1px) 0 0 / 16px 16px, var(--void);
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+.monitor {
+  position: absolute; pointer-events: none;
+  border: 1px solid var(--rule-hot); background: var(--panel-2);
+}
+.monitor span {
+  position: absolute; left: 0; top: -19px; white-space: nowrap;
+  font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim);
+}
+/* Drawn the way the monitor will actually look once the backdrop is on. */
+.monitor.blacked { background: var(--void); border-color: var(--rule); }
+/* Nothing was detected, so nothing here is the reader's own hardware. */
+.monitor.example { border-style: dashed; background: rgba(255, 171, 61, .05); border-color: var(--amber); }
+.monitor.example span { color: var(--amber); }
+
+.mfd-area {
+  position: absolute; padding: 0; touch-action: none; cursor: grab;
+  border: 1px solid var(--cyan); background: rgba(53, 200, 240, .13); color: var(--cyan-hot);
+  font: 500 10px/1 var(--display); letter-spacing: .16em; text-transform: uppercase;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: none;
+}
+/* Two openings, told apart the way the dashboard tells two series apart. */
+.mfd-area.right { border-color: var(--amber); background: rgba(255, 171, 61, .12); color: var(--amber); }
+.mfd-area.selected { box-shadow: 0 0 0 1px var(--text), 0 0 14px rgba(53, 200, 240, .35); z-index: 2; }
+.mfd-area:hover:not(:disabled) { background: rgba(53, 200, 240, .2); color: var(--cyan-hot); }
+.mfd-area.right:hover:not(:disabled) { background: rgba(255, 171, 61, .2); color: var(--amber); }
+.resize {
+  position: absolute; right: 0; bottom: 0; width: 15px; height: 15px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; cursor: nwse-resize;
+}
+
+/* ---------- the editor beside it ---------- */
+
+aside label { display: block; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-bottom: 11px; }
+aside .select, aside .search { display: block; width: 100%; min-width: 0; margin-top: 4px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.toolbar, .actions { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* ---------- tester and assignments ---------- */
+
+.input-test { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: var(--gap); }
+.input-test p { margin: 0 0 4px; }
+#devices { font-size: 12px; color: var(--text); }
+output { font: 13px var(--mono); letter-spacing: .06em; color: var(--cyan-hot); text-align: right; }
+
+.assignments { margin-top: var(--gap); }
+.assignments .hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 4px; }
+.assignments .group {
+  font-size: 9.5px; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--dim); margin: 14px 0 2px;
+}
+.bindings { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 4px 14px; margin: 8px 0 6px; }
+.bindings label {
+  display: flex; align-items: center; gap: 10px; margin: 0; padding: 3px 6px;
+  border: 1px solid transparent; font: 11px var(--mono); color: var(--dim);
+}
+.bindings .select { min-width: 0; flex: 1; font-size: 11px; padding: 4px 7px; }
+/* Lit by a real press, which is the only way to find out which rocker is which. */
+.bindings label.hit { border-color: var(--cyan-deep); color: var(--cyan-hot); background: rgba(53, 200, 240, .08); }
+
+details { font-size: 12px; margin-top: 18px; }
+summary { cursor: pointer; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+details p { font-size: 12px; }
+
+/* ---------- the bar that saves it ---------- */
+
+footer {
+  position: fixed; z-index: 5; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 1300px;
+  background: linear-gradient(0deg, var(--void) 60%, rgba(4, 7, 12, .92));
+  border-top: 1px solid var(--rule-hot);
+  padding: 13px 26px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+}
+footer .toggle { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+#status { width: 100%; margin: 0; font-size: 11.5px; }
+#status.error { color: var(--red); }
+
+@media (max-width: 860px) {
+  main { padding: 18px 16px 190px; }
+  .workspace { grid-template-columns: minmax(0, 1fr) 200px; gap: 12px; }
+  .input-test { flex-direction: column; align-items: flex-start; }
+  output { text-align: left; }
+  footer { padding: 12px 16px; align-items: flex-start; flex-direction: column; }
+}

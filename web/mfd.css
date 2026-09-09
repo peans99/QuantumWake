@@ -1,6 +1,25 @@
-:root { color-scheme: dark; --ink: #9df4c4; --muted: #6aab88; --line: #285d43; --text-scale: 1; }
+/* The instrument, in the dashboard's own palette rather than a phosphor green
+ * of its own. The values are app.css's tokens copied rather than linked: this
+ * page is 480 px square, two of them are up the whole time, and pulling 130 KB
+ * of nav, tables and map styling into each one to read six colours out of it
+ * would be the wrong trade. Keep them in step with app.css :root by hand. */
+:root {
+  color-scheme: dark;
+  --void: #04070c;
+  --panel: #0a121c;
+  --line: #17293c;
+  --line-hot: #1e4763;
+  --ink: #cfe4f5;
+  --muted: #7796b0;
+  --dim: #46617a;
+  --glow: #35c8f0;
+  --hot: #7fe4ff;
+  --display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Segoe UI Mono", ui-monospace, monospace;
+  --text-scale: 1;
+}
 * { box-sizing: border-box; }
-html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #020805; color: var(--ink); font-family: Consolas, monospace; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--display); }
 button { font: inherit; color: inherit; cursor: pointer; }
 #mfd { container-type: size; display: grid; grid-template-columns: 14% 1fr 14%; grid-template-rows: 12% 1fr 12%; width: 100%; height: 100%; padding: 2%; position: relative; }
 .edge { display: grid; gap: 3%; }
@@ -8,29 +27,41 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .top { grid-row: 1; } .bottom { grid-row: 3; }
 .left, .right { grid-template-rows: repeat(5, minmax(0, 1fr)); grid-row: 2; }
 .left { grid-column: 1; } .right { grid-column: 3; }
-.edge button { min-width: 0; min-height: 0; padding: 2%; border: 1px solid transparent; background: transparent; font-size: clamp(8px, 2.3cqw, 19px); }
-.edge button span { display: block; font-size: .65em; color: var(--muted); margin-bottom: .25em; }
-.edge button.selected { border-color: var(--ink); background: #103b26; }
-.edge button.pressed, .edge button:focus-visible { background: var(--ink); color: #07140d; outline: none; }
-.edge button:disabled { cursor: default; opacity: .35; }
-.display { min-height: 0; min-width: 0; grid-area: 2 / 2; display: flex; flex-direction: column; padding: 3%; border: 1px solid var(--line); }
-header, footer { display: flex; gap: 8px; justify-content: space-between; font-size: clamp(8px, 1.8cqw, 14px); color: var(--muted); }
+/* Chamfered like every other button in the app, at a size that survives 220 px. */
+.edge button { min-width: 0; min-height: 0; padding: 2%; border: 1px solid transparent; background: transparent;
+  color: var(--muted); letter-spacing: .1em; font-size: clamp(8px, 2.3cqw, 19px);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+.edge button span { display: block; font-size: .65em; color: var(--dim); margin-bottom: .25em; font-family: var(--mono); letter-spacing: 0; }
+.edge button b { display: block; font-weight: 500; }
+.edge button.selected { border-color: var(--glow); background: rgba(53, 200, 240, .14); color: var(--hot); }
+.edge button.pressed, .edge button:focus-visible { background: var(--glow); color: #041018; outline: none; }
+.edge button.pressed span, .edge button:focus-visible span { color: #04101880; }
+.edge button:disabled { cursor: default; opacity: .3; }
+.display { min-height: 0; min-width: 0; grid-area: 2 / 2; display: flex; flex-direction: column; padding: 3%;
+  border: 1px solid var(--line-hot); background: linear-gradient(158deg, var(--panel), var(--void)); position: relative; }
+/* The mobiGlas panel tell, same bracket the dashboard's cards carry. */
+.display::before { content: ''; position: absolute; top: -1px; left: 8%; width: 22%; height: 2px;
+  background: var(--glow); box-shadow: 0 0 8px var(--glow); }
+header, footer { display: flex; gap: 8px; justify-content: space-between; font-size: clamp(8px, 1.8cqw, 14px);
+  color: var(--dim); letter-spacing: .14em; text-transform: uppercase; }
 header { flex-wrap: wrap; } footer { padding-top: 3%; border-top: 1px solid var(--line); margin-top: auto; }
-h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .16em; margin: 5% 0; font-weight: normal; }
-#readings { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; flex: 1; }
+h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; font-weight: 400; color: var(--hot); }
+#readings { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; flex: 1; }
 .reading { padding: 0 0 6%; overflow-wrap: anywhere; }
-.reading h2 { margin: 0 0 2%; font-size: calc(clamp(9px, 2.2cqw, 17px) * var(--text-scale)); letter-spacing: .08em; color: var(--muted); font-weight: normal; }
-.reading p { margin: 0; font-size: calc(clamp(12px, 3.4cqw, 27px) * var(--text-scale)); line-height: 1.25; }
+.reading h2 { margin: 0 0 2%; font-size: calc(clamp(9px, 2.2cqw, 17px) * var(--text-scale)); letter-spacing: .22em;
+  text-transform: uppercase; color: var(--dim); font-weight: 400; }
+.reading p { margin: 0; font-family: var(--mono); font-size: calc(clamp(12px, 3.4cqw, 27px) * var(--text-scale)); line-height: 1.25; }
 .reading time { display: block; color: var(--muted); font-size: clamp(8px, 1.9cqw, 15px); margin-top: 3%; }
-#alignment { position: absolute; inset: 1%; z-index: 2; border: 3px solid #9df4c4; background: #06170feb; text-align: center; padding: 25% 12% 5%; pointer-events: none; }
+/* The line a press would act on, and the line a press has armed. */
+.reading.cursor, .reading.armed { border-left: 2px solid var(--glow); padding-left: 3%; }
+.reading.armed { background: rgba(53, 200, 240, .12); }
+.reading.armed h2 { color: var(--hot); }
+#alignment { position: absolute; inset: 1%; z-index: 2; border: 3px solid var(--glow); background: #04070ceb;
+  text-align: center; padding: 25% 12% 5%; pointer-events: none; }
 #alignment[hidden] { display: none; }
-#alignment strong { font-size: 8cqw; letter-spacing: .1em; }
-#alignment p { font-size: 3cqw; }
-.crosshair { position: absolute; inset: 8%; border: 1px dashed #488b66; }
-.crosshair::before, .crosshair::after { content: ''; position: absolute; background: #488b66; }
+#alignment strong { font-size: 8cqw; letter-spacing: .16em; color: var(--hot); }
+#alignment p { font-size: 3cqw; color: var(--muted); }
+.crosshair { position: absolute; inset: 8%; border: 1px dashed #0d5c78; }
+.crosshair::before, .crosshair::after { content: ''; position: absolute; background: #0d5c78; }
 .crosshair::before { left: 50%; top: 0; height: 100%; width: 1px; }
 .crosshair::after { top: 50%; left: 0; width: 100%; height: 1px; }
-.edge button b { display: block; font-weight: normal; }
-.reading.cursor, .reading.armed { border-left: 3px solid var(--ink); padding-left: 3%; }
-.reading.armed { background: #103b26; }
-.reading.armed h2 { color: var(--ink); }

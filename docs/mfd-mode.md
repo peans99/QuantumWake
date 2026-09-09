@@ -173,8 +173,28 @@ devices; duplicate MFD numbers pause input for those numbers. Held buttons
 do not repeat, and buttons held during connection are ignored until released.
 
 The browser links on the Overlay page preview the layout and data without
-native USB input. The placement editor labels its example monitor clearly
-and cannot save desktop settings outside the desktop host.
+native USB input. Opened that way the editor has nothing to detect, so it draws
+one invented monitor - and says so on the rectangle itself, not only in the
+banner above it. That is worth the words: an example drawn like a detected
+monitor reads as "Quantum Wake can only see one of my three", and did exactly
+that on a three-monitor machine. It cannot save desktop settings outside the
+desktop host either.
+
+## The look
+
+The placement editor loads `app.css`, the dashboard's own stylesheet, and adds
+only what is unique to dropping rectangles onto monitors. It had grown a palette
+and a typeface of its own, which is the failure this arrangement prevents
+happening twice: one stylesheet, one set of tokens, no second look for the same
+product.
+
+`mfd.css` copies app.css's `:root` values rather than linking it. The instrument
+is 480 px square and two of them are up the whole time, so pulling 130 KB of
+nav, table and map styling into each one to read six colours out of it is the
+wrong trade - but that means **those values have to be kept in step with
+app.css by hand**. The instrument sits on the same cyan HUD palette as
+everything else. A phosphor green is what a real F-16 MFD does, and beside this
+app's own screens it read as a different program.
 
 ## Verification
 

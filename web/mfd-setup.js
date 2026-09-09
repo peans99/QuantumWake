@@ -41,8 +41,15 @@ function draw() {
     // A monitor showing a panel is drawn the way it will look: black, with
     // the openings the only thing on it. The switch below explains itself.
     const dark = layout.blackout !== false && layout.panels.some(p => p.monitor === m.id);
-    const node = document.createElement('div'); node.className = dark ? 'monitor blacked' : 'monitor';
-    const label = document.createElement('span'); label.textContent = `${i + 1} · ${m.width} × ${m.height}${m.primary ? ' · primary' : ''}`;
+    const node = document.createElement('div');
+    // Without the desktop app there is nothing to detect, and the stand-in is
+    // drawn as one: an example that looked like a detected monitor read as
+    // "Quantum Wake can only see one of my three".
+    node.className = ['monitor', dark ? 'blacked' : '', host ? '' : 'example'].filter(Boolean).join(' ');
+    const label = document.createElement('span');
+    label.textContent = host
+      ? `${i + 1} · ${m.width} × ${m.height}${m.primary ? ' · primary' : ''}`
+      : `Example only · ${m.width} × ${m.height} · not one of your monitors`;
     node.append(label); place(node, m.x, m.y, m.width, m.height); desktop.append(node);
   });
   layout.panels.forEach((p, i) => {
@@ -130,14 +137,15 @@ function drawButtons() {
   const panel = setupElement('buttons');
   panel.replaceChildren();
   for (const group of groups) {
-    const title = document.createElement('div'); title.className = 'section-title'; title.textContent = group.title;
-    const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = group.hint;
+    const title = document.createElement('div'); title.className = 'group'; title.textContent = group.title;
+    const hint = document.createElement('p'); hint.className = 'hint muted'; hint.textContent = group.hint;
     const grid = document.createElement('div'); grid.className = 'bindings';
     for (let number = group.from; number <= group.to; number++) {
       const row = document.createElement('label');
       row.id = 'bind-' + number;
       row.append(String(number).padStart(2, '0'));
       const select = document.createElement('select');
+      select.className = 'select';
       select.add(new Option('Unassigned', ''));
       for (const command of QwMfd.commands) select.add(new Option(command.label, command.id));
       select.value = map[number] || '';
@@ -192,6 +200,12 @@ if (!host) {
   setupElement('host-note').hidden = false;
   for (const id of ['save', 'preview', 'stop-preview', 'enabled', 'blackout']) setupElement(id).disabled = true;
   setupElement('devices').textContent = 'USB input is available in the desktop app.';
+  // "Your monitors" over a single invented rectangle reads as a detection that
+  // found one monitor, which is the wrong thing to be told when you have three.
+  setupElement('monitors-title').replaceChildren('Example layout');
+  const aside = document.createElement('span');
+  aside.textContent = 'Your own monitors are only detected in the desktop app';
+  setupElement('monitors-title').append(aside);
 }
 new ResizeObserver(draw).observe(desktop);
 drawButtons();
