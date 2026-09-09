@@ -33,8 +33,10 @@ window.QwMfd = (() => {
      them thicken a page that already exists rather than earning one of their
      own, because a page is a question a pilot asks, not a card on a dashboard
      they are scanning at rest. */
-  const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list'];
-  const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST'];
+  const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
+    'ship', 'here', 'ledger', 'mine'];
+  const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
+    'SHIP', 'HERE', 'LEDGER', 'MINE'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -64,6 +66,14 @@ window.QwMfd = (() => {
       icon: 'M12 2.5v19M8 7h6.5a2.75 2.75 0 0 1 0 5.5h-5a2.75 2.75 0 0 0 0 5.5H16' },
     { id: 'list', label: 'Page · List', caption: 'LIST', short: 'LIST',
       icon: 'M9 6.5h11M9 12h11M9 17.5h11M4 6l1.2 1.2L7.5 4.5M4 17.5l1.2 1.2 2.3-2.7' },
+    { id: 'ship', label: 'Page · Ship', caption: 'SHIP', short: 'SHIP',
+      icon: 'M12 2.2c3 3 4.6 7 4.6 11l-4.6 4.2-4.6-4.2c0-4 1.6-8 4.6-11zM12 9.4a1.7 1.7 0 1 0 .1 0M7.6 15.2 5 19.6l4.2-1.2M16.4 15.2l2.6 4.4-4.2-1.2' },
+    { id: 'here', label: 'Page · Here', caption: 'HERE', short: 'HERE',
+      icon: 'M12 21.2s6.8-6.4 6.8-11.2a6.8 6.8 0 1 0-13.6 0c0 4.8 6.8 11.2 6.8 11.2zM12 7.6a2.4 2.4 0 1 0 .1 0' },
+    { id: 'ledger', label: 'Page · Ledger', caption: 'LEDGER', short: 'LEDG',
+      icon: 'M4 20.5V10M9.5 20.5V3.5M15 20.5v-7M20.5 20.5V6.5' },
+    { id: 'mine', label: 'Page · Mine', caption: 'MINE', short: 'MINE',
+      icon: 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
     { id: 'next', label: 'Next page', caption: 'NEXT', short: 'NXT', icon: 'M9 4l8 8-8 8' },
     { id: 'home', label: 'Home (Nav)', caption: 'HOME', short: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
@@ -86,9 +96,9 @@ window.QwMfd = (() => {
      start unassigned - see the note above. */
   const defaults = {
     1: 'nav', 2: 'task', 3: 'act', 4: 'cargo', 5: 'contract',
-    8: 'confirm', 9: 'money', 10: 'list',
+    6: 'ship', 7: 'here', 8: 'confirm', 9: 'money', 10: 'list',
     12: 'down', 14: 'up',
-    16: 'status', 17: 'feed', 18: 'crew'
+    16: 'status', 17: 'feed', 18: 'crew', 19: 'ledger', 20: 'mine'
   };
 
   /* Which commands do nothing on the page in front of the pilot. Only three are
@@ -476,6 +486,76 @@ window.QwMfd = (() => {
             [`${job.haveCount} of ${job.totalCount} held`, job.destination].filter(Boolean).join(' · ')]),
           ['HELD, NOT COUNTED', 'A stash listing records that a thing is somewhere and never how many, '
             + 'so "held" means seen rather than enough.']
+        ];
+      }
+      /* What am I flying, what is it for, and what does losing it cost? All
+         three come off the briefing the panel already had: focus and claim were
+         being fetched every five seconds and thrown away. */
+      case 'ship': {
+        const focus = briefing?.focus, claim = briefing?.claim;
+        return [
+          ['SHIP', s.ship || 'No ship identified in the logs'],
+          ...(focus ? [['WHAT IT IS FOR',
+            [focus.label, focus.career, focus.role].filter(Boolean).join(' · ')]] : []),
+          ...(claim
+            ? [['IF YOU LOSE IT', [
+                claim.expeditedCost ? `${aUEC(claim.expeditedCost)} expedited` : null,
+                claim.expeditedMinutes ? `${Math.round(claim.expeditedMinutes)} min` : null
+              ].filter(Boolean).join(' · ') || 'The tables carry no figure for this hull'],
+              ['OR WAIT', claim.standardMinutes
+                ? `${Math.round(claim.standardMinutes)} min and no fee` : 'Not stated']]
+            : [['CLAIM', 'No claim figures for this hull in the installed tables.']]),
+          ['REFERENCE, NOT A CLAIM', 'Game.log records no insurance claim of any kind. This is what '
+            + 'the game’s own tables say one costs, never whether one is running.']
+        ];
+      }
+      /* The page for the moment after landing: what this place can do for you,
+         what on your list it stocks, and what you left here last time. */
+      case 'here': {
+        if (planMissing) return planMissing;
+        const services = briefing.services || [], shopping = briefing.shopping || [], stash = briefing.stash || [];
+        return [
+          ['PLACE', briefing.location || s.location || 'Not identified'],
+          ['SERVICES', services.length
+            ? services.map(v => `${v.name}: ${v.status}`).join(' · ')
+            : 'Nothing the installed data can identify here'],
+          ...(shopping.length ? [['ON YOUR LIST, IN STOCK', shopping.slice(0, 3)
+            .map(i => `${i.name} · ${i.needed} ${i.unit} · ${aUEC(i.price)}`).join('  |  ')]] : []),
+          ...(stash.length ? [['LAST SEEN HERE',
+            stash.slice(0, 5).map(i => i.name).join(' · '), stash[0].lastSeen]] : []),
+          ['A SIGHTING, NOT A COUNT', 'A stash listing records that something was here, never how '
+            + 'many, and never that it still is.']
+        ];
+      }
+      case 'ledger': {
+        const ledger = view.extra?.ledger;
+        if (!ledger) return [['LEDGER', 'Reading what the logs priced…']];
+        if (!ledger.length) return [['NOTHING PRICED',
+          'No confirmed transaction in the last few days.']];
+        return [
+          ...ledger.slice(0, 10).map(entry => [
+            String(entry.kind || 'entry').toUpperCase(),
+            [entry.what, entry.amount != null
+              ? `${entry.amount > 0 ? '+' : ''}${aUEC(entry.amount)}` : null,
+              entry.where].filter(Boolean).join(' · '),
+            entry.at]),
+          ['CONFIRMED ONLY', 'Only what the server answered for. A request the game never '
+            + 'confirmed is not money that moved.']
+        ];
+      }
+      case 'mine': {
+        if (planMissing) return planMissing;
+        const mining = briefing.mining || [];
+        if (!mining.length) return [['NOTHING RANKED', 'The deposit tables rank nothing here, or '
+          + 'the community dataset is switched off.']];
+        return [
+          ...mining.slice(0, 5).map(place => [
+            place.here ? String(place.place).toUpperCase()
+              : `${String(place.place).toUpperCase()} · ${place.system || 'another system'}`,
+            [`${aUEC(place.perRock)} a rock`, place.best].filter(Boolean).join(' · ')]),
+          ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY',
+            'Some of these are the best anywhere rather than the best near you.']] : []),
+          ['TABLES, NOT SIGHTINGS', 'What the deposit tables rank, not rocks anyone has seen.']
         ];
       }
       default: return [];

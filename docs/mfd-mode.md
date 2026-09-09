@@ -17,6 +17,8 @@ Feature branch: `codex/cougar-mfd`, based on `dev0100`.
   guessed at.
 - [x] Black out the rest of a monitor carrying panels, so the desktop stops
   glowing around the edge of the frame.
+- [x] Read what the briefing already carries: focus, claim, services, shopping,
+  stash and mining were fetched every poll and discarded.
 - [ ] Verify physical frame alignment and default USB inputs on the cockpit.
 - [ ] Name the four rockers once hardware says which number each one reports,
   and decide whether any of them earns a default.
@@ -56,6 +58,18 @@ pilot's control; a detected ship must not silently rearrange the buttons.
   rate rather than everything earned, which the page states.
 - **List:** what am I shopping for, and how much of it am I holding? "Held"
   means seen in a stash listing, which records presence and never a count.
+- **Ship:** what am I flying, what is it for, and what does losing it cost?
+  The focus and the claim tables, both of which the briefing was already
+  carrying. Reference and never a claim in progress - Game.log records no
+  insurance claim of any kind.
+- **Here:** the moment after landing. What this place can do for you, what on
+  your shopping list it stocks, and what you left here last time. A stash
+  listing is a sighting and never a count, which the page says.
+- **Ledger:** what the logs actually priced, confirmed only. A request the game
+  never answered for is not money that moved.
+- **Mine:** where the deposit tables rank a rock highest. Tables, not sightings,
+  and it says when a suggestion is the best anywhere rather than the best near
+  you.
 
 ### Breaking the Now page apart
 
@@ -71,12 +85,20 @@ them thickened a page that already existed rather than earning one:
 | Trade from here | folded into **Cargo** - a lead about the counter you are standing at |
 | Session, Handle, This session, Wake up at | folded into **Status** - two counters and a regen hint do not each earn a page |
 | Live feed, Party, Trading rate, Job in hand + Checklist | **Feed, Crew, Money, List** |
+| Fleet and the ship card, Spending and Ledger, Mining, the place itself | **Ship, Ledger, Mine, Here** |
 
-Fifteen cards became four new pages and five fold-ins, landing at ten - which is
-exactly what the frame can select directly. Every page has its own button and
-Prev/Next is the fallback, because cycling through ten to reach the tenth is not
-something to do in flight. A flat list rather than F-16 master modes: grouping
-only pays above about fifteen pages and costs the pilot a mental model.
+**Six of the briefing's nine fields were being fetched every five seconds and
+thrown away.** The panel pulled `focus`, `claim`, `services`, `shopping`,
+`stash` and `mining` on every poll and read none of them - which is why Ship,
+Here and Mine cost no new call at all. Only Ledger needed one, and it rides the
+thirty-second timer with the rest.
+
+Fourteen pages, and the frame has a button for every one of them. Prev/Next is
+the fallback rather than the way in, because cycling through fourteen to reach
+the fourteenth is not something to do in flight. A flat list rather than F-16
+master modes: grouping only pays above about fifteen pages and costs the pilot a
+mental model - which is also the ceiling this is now close to. The next page
+worth adding is the one that argues for grouping.
 
 The goal form, the card show/hide controls and anything needing typed input stay
 on the dashboard. The panels are click-through - there is no pointer, and there
@@ -84,7 +106,8 @@ never will be.
 
 The default cockpit pairs Nav on the left with Task on the right. Fleet
 catalogues, market browsing, historical tables and settings stay on the
-dashboard.
+dashboard - what came across is the question a pilot asks in the seat, never the
+report behind it.
 
 ### Two bugs the page rules could not have caught
 
@@ -271,13 +294,15 @@ assignments without changing the firmware.
 | Buttons | Quantum Wake action |
 | --- | --- |
 | 1–5 | Nav, Task, Act, Cargo, Contract |
+| 6 / 7 | Ship, Here |
 | 9 / 10 | Money, List |
 | 16 / 17 / 18 | Status, Feed, Crew |
+| 19 / 20 | Ledger, Mine |
 | 14 / 12 | Up / down — the cursor on Act, the panel elsewhere. Dim where neither applies |
 | 8 | Done — arm, then confirm, the selected line. Dim off Act |
 | 21–28 (rockers) | Unassigned; see below |
 
-**Thirteen buttons, not twenty.** Previous page, next page and Home ship
+**Seventeen buttons, and the three that are left over.** Previous page, next page and Home ship
 unassigned: every page has a button of its own, so cycling is a second way to do
 the same thing whose shape the pilot cannot see, and a bottom row of five
 overlapping navigation keys was the most confusing thing on the frame. Screen

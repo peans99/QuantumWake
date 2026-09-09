@@ -45,7 +45,7 @@ public class MfdTests
 
     [Theory]
     [InlineData(1, "page", 0)] [InlineData(3, "page", 2)]
-    [InlineData(9, "page", 8)] [InlineData(16, "page", 5)]
+    [InlineData(9, "page", 8)] [InlineData(16, "page", 5)] [InlineData(20, "page", 13)]
     [InlineData(12, "scroll", 1)] [InlineData(14, "scroll", -1)]
     public void DefaultButtonsFollowCougarClockwiseNumbering(int button, string action, int value)
     {
@@ -65,7 +65,7 @@ public class MfdTests
     public void ReservedButtonsAndInvalidInputHaveNoAction()
     {
         var e = Engine();
-        Assert.True(e.Evaluate("[0,6,7,11,13,15,19,20,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
+        Assert.True(e.Evaluate("[0,11,13,15,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
     }
 
     /// <summary>
@@ -472,7 +472,7 @@ public class MfdTests
     public void EveryPageHasAButtonRatherThanOnlyACycle()
     {
         var e = Engine();
-        Assert.Equal(10, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(14, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => Object.values(QwMfd.defaults).includes(id))").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.icon(id) && QwMfd.caption(id))").AsBoolean());
@@ -484,7 +484,7 @@ public class MfdTests
         Assert.True(e.Evaluate("['prev','next','home','text-up','text-down','bright-up','bright-down']"
             + ".every(id => QwMfd.commands.some(c => c.id === id)"
             + " && !Object.values(QwMfd.defaults).includes(id))").AsBoolean());
-        Assert.Equal(13, e.Evaluate("Object.keys(QwMfd.defaults).length").AsNumber());
+        Assert.Equal(17, e.Evaluate("Object.keys(QwMfd.defaults).length").AsNumber());
     }
 
     /// <summary>
@@ -728,6 +728,80 @@ public class MfdTests
         Assert.True(e.Evaluate("QwMfd.commands.every(c => c.short && c.short.length <= 4)").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.commands.every(c => QwMfd.caption(c.id, true).length <= 4)").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.caption('nope', true) === null").AsBoolean());
+    }
+
+    /// <summary>
+    /// Six of the briefing's nine fields were being fetched every five seconds
+    /// and discarded. These pages read them; none of them needed a new call.
+    /// </summary>
+    [Fact]
+    public void ShipReadsTheFocusAndClaimTheBriefingAlreadyCarried()
+    {
+        var e = Engine();
+        const string full = "{focus:{label:'Freight',career:'Transporter',role:'Medium Freight'},"
+            + "claim:{ship:'RSI Hermes',expeditedCost:12500,expeditedMinutes:5,standardMinutes:22}}";
+        var json = Page(e, "ship", "{ship:'RSI Hermes'}", full);
+        Assert.Contains("Freight · Transporter · Medium Freight", json);
+        Assert.Contains("12,500 aUEC expedited · 5 min", json);
+        Assert.Contains("22 min and no fee", json);
+        Assert.Contains("records no insurance claim of any kind", json);
+
+        // No claim tables for this hull: said, not implied by an empty row.
+        Assert.Contains("No claim figures for this hull",
+            Page(e, "ship", "{ship:'Greycat ROC'}", "{focus:null}"));
+        Assert.Contains("No ship identified", Page(e, "ship"));
+    }
+
+    [Fact]
+    public void HereAnswersWhatThisPlaceOffersAndWhatWasLeftAtIt()
+    {
+        var e = Engine();
+        const string place = "{location:'Port Tressler',"
+            + "services:[{name:'Refuel',status:'listed'},{name:'Repair',status:'not listed'}],"
+            + "shopping:[{name:'Medical supplies',needed:4,unit:'units',price:2100,jobTitle:'Kit'}],"
+            + "stash:[{name:'MedPen',category:'Medical',lastSeen:'2026-09-08T22:39:22Z'}]}";
+        var json = Page(e, "here", "{}", place);
+        Assert.Contains("Port Tressler", json);
+        Assert.Contains("Refuel: listed · Repair: not listed", json);
+        Assert.Contains("Medical supplies · 4 units · 2,100 aUEC", json);
+        Assert.Contains("MedPen", json);
+        Assert.Contains("2026-09-08T22:39:22Z", json);
+        Assert.Contains("never how many, and never that it still is", json);
+
+        // A place the installed data cannot describe says so.
+        Assert.Contains("Nothing the installed data can identify",
+            Page(e, "here", "{}", "{location:'Somewhere'}"));
+    }
+
+    [Fact]
+    public void LedgerShowsOnlyWhatTheServerConfirmed()
+    {
+        var e = Engine();
+        const string money = "{extra:{ledger:[{at:'2026-09-08T22:39:22Z',kind:'Item bought',"
+            + "what:'MedPen (Hemozal)',where:'Pyro Gateway',amount:-1855,confirmed:true}]}}";
+        var json = Page(e, "ledger", "{}", "null", money);
+        Assert.Contains("ITEM BOUGHT", json);
+        Assert.Contains("MedPen (Hemozal) · -1,855 aUEC · Pyro Gateway", json);
+        Assert.Contains("is not money that moved", json);
+
+        Assert.Contains("NOTHING PRICED", Page(e, "ledger", "{}", "null", "{extra:{ledger:[]}}"));
+        Assert.Contains("Reading what the logs priced", Page(e, "ledger"));
+    }
+
+    [Fact]
+    public void MineRanksPlacesAndSaysTheyAreTablesRatherThanSightings()
+    {
+        var e = Engine();
+        const string rocks = "{mining:[{place:'Aaron Halo',system:'Stanton',perRock:18400,best:'Quantainium',here:true},"
+            + "{place:'Yela belt',system:'Stanton',perRock:9200,best:'Bexalite',here:false}]}";
+        var json = Page(e, "mine", "{}", rocks);
+        Assert.Contains("AARON HALO", json);
+        Assert.Contains("18,400 aUEC a rock · Quantainium", json);
+        Assert.Contains("YELA BELT · Stanton", json);
+        Assert.Contains("NOT ALL NEARBY", json);
+        Assert.Contains("not rocks anyone has seen", json);
+
+        Assert.Contains("NOTHING RANKED", Page(e, "mine", "{}", "{mining:[]}"));
     }
 
     [Fact]

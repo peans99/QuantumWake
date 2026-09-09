@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1662 tests](https://img.shields.io/badge/tests-1662%20passing-4fd48a)
+![1667 tests](https://img.shields.io/badge/tests-1667%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.16
+### 0.10.17
+
+- **Four more pages, from data the panel was already downloading.** **Ship**
+  says what you are flying, what it is for, and what the game’s own tables say
+  losing it costs. **Here** is the moment after landing: what this place can do
+  for you, what on your shopping list it stocks, and what you left here last
+  time. **Ledger** is what the logs actually priced, confirmed only. **Mine**
+  is where the deposit tables rank a rock highest.
+
+  Six of the nine things the panel fetches every five seconds were being thrown
+  away, so three of those four pages cost no extra request at all.
 
 - **Done no longer acts where it looks dead.** It is dimmed on every page but
   Act, and dimming was all that happened: two presses elsewhere still marked a
