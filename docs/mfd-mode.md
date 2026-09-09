@@ -116,6 +116,21 @@ Bodies sharing an orbit collapse to one ring, or Yela, Daymar and Cellin would
 draw Crusader's circle four times over on a 150-pixel plan. Only the body you
 are at and the one you are headed for carry a name.
 
+**The whole plan is drawn, not just the next hop**: a quantum destination goes
+in front of the tracked stops, because that is where the ship is actually
+pointed and the plan resumes from wherever it puts you. Two stops at one body is
+two jobs and one arrival, so consecutive repeats collapse rather than becoming a
+leg of no length, and a stop in another system is counted in the caption rather
+than drawn somewhere it is not.
+
+The Nav rows quote the distance off that same view rather than measuring again,
+so the picture and the number cannot disagree about where you are going. It is
+**a straight line between body centres** - not a flight path, and not a quantum
+route, because the game plots those and never writes one down. The caption says
+so before the pilot has a chance to trust it. Travel *time* is deliberately
+absent for the same reason: it would need a speed the logs do not carry, and an
+estimate dressed as a reading is the one thing this app does not do.
+
 **It marks a body, never a point.** Game.log names the place you are at and the
 body it sits on; where you are on that body is not something it ever says, and
 a dot on a surface would be an invention. The caption under the plan says so.

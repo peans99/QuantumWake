@@ -86,3 +86,4 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
 #maker { height: clamp(11px, 3.2cqw, 26px); width: auto; max-width: 30%; object-fit: contain;
   opacity: .75; margin-right: auto; align-self: center; }
 #maker[hidden] { display: none; }
+.body.stop { fill: none; stroke: var(--amber); stroke-width: .022; }

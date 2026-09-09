@@ -202,23 +202,62 @@ window.QwMfd = (() => {
 
     const bodyOf = id => id ? (atlas.nodes || []).find(n => n.rawId === id)?.body || null : null;
     const here = s.locationBody || null;
-    // A quantum destination outranks the plan here for the same reason it does
-    // on the Nav rows: it is where the ship is actually pointed.
-    const target = bodyOf(s.travellingToId) || bodyOf(briefing?.stops?.[0]?.placeId);
+
+    /* The whole plan, in the order it will be flown, rather than only the next
+       hop. A quantum destination goes in front of it: it is where the ship is
+       actually pointed, and the plan resumes from wherever it puts you. */
+    const planned = (briefing?.stops || []).map(stop => bodyOf(stop.placeId));
+    const ahead = [];
+    if (s.travelling) { const jump = bodyOf(s.travellingToId); if (jump) ahead.push(jump); }
+    ahead.push(...planned);
+
+    // Consecutive repeats are one place, not a leg of no length: two stops at
+    // the same body is two jobs, one arrival.
+    const route = [];
+    for (const body of [here, ...ahead])
+      if (body && positions[body] && route[route.length - 1] !== body) route.push(body);
+    const elsewhere = ahead.filter(body => !body || !positions[body]).length;
+
+    /* Straight-line, body centre to body centre. It is not a flight path and
+       not a quantum route - the game plots those and never writes them down -
+       so the caption says what the number is before the pilot trusts it. */
+    const legs = [];
+    for (let i = 1; i < route.length; i++) {
+      const a = positions[route[i - 1]], b = positions[route[i]];
+      const dx = a.x - b.x, dy = a.y - b.y;
+      legs.push({ from: route[i - 1], to: route[i], gm: Math.sqrt(dx * dx + dy * dy) / 1e9 });
+    }
+    const gm = legs.reduce((total, leg) => total + leg.gm, 0);
+    const next = route[1] || null, target = route[route.length - 1] || null;
 
     const entries = Object.entries(positions);
     const far = Math.max(...entries.map(([, p]) => Math.sqrt(p.x * p.x + p.y * p.y))) || 1;
     const bodies = entries.map(([name, p]) => {
       const radius = Math.sqrt(p.x * p.x + p.y * p.y) / far;
       return { name, x: p.x / far, y: p.y / far, radius,
-        here: name === here, target: name === target && name !== here };
+        here: name === here, next: name === next,
+        onRoute: route.indexOf(name) > 0 };
     });
 
     // Moons sit within a rounding of their planet's orbit, so one ring each
     // would draw the same circle four times over a 150 px panel.
     const rings = [...new Set(bodies.map(b => Math.round(b.radius * 50) / 50))].filter(r => r > .04);
-    return { system, here, target, bodies, rings,
-      note: here ? `${system.toUpperCase()} · body positions, not a fix` : `${system.toUpperCase()} · body not identified` };
+    const note = [system.toUpperCase(),
+      here ? 'bodies, not a fix or a route' : 'body not identified',
+      elsewhere ? `${elsewhere} stop${elsewhere > 1 ? 's' : ''} outside this system` : null]
+      .filter(Boolean).join(' · ');
+    return { system, here, next, target, bodies, rings, legs, gm, elsewhere, note };
+  }
+
+  /* The distance the plan adds up to, for the Nav rows. Named for what it
+     measures: a straight line between body centres, which is the only thing
+     the coordinates support. */
+  function routeLine(map) {
+    if (!map?.legs?.length) return null;
+    const total = map.gm >= 100 ? map.gm.toFixed(0) : map.gm.toFixed(1);
+    return map.legs.length === 1
+      ? `${total} Gm to ${map.target}`
+      : `${total} Gm to ${map.target} over ${map.legs.length} legs`;
   }
 
   function loadLine(load) {
@@ -245,6 +284,7 @@ window.QwMfd = (() => {
           s.travelling ? (s.travellingTo || 'Destination not identified')
             : briefingUnavailable ? 'Open the dashboard to check your route.'
               : !briefing ? 'Loading your tracked plan…' : stop?.place || 'No outstanding stop in the tracked plan'],
+        ...(routeLine(view.map) ? [['DISTANCE', routeLine(view.map)]] : []),
         ['SHIP', s.ship || 'No ship identified in the logs'],
         ['LOCATION SOURCE', s.location ? `${s.confidence || 'Unknown'} confidence · game logs` : 'Waiting for a location signal']
       ];
@@ -320,6 +360,6 @@ window.QwMfd = (() => {
       default: return [];
     }
   }
-  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, makerOf, makers,
+  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers,
     pages, pageIds, rows, tasks, describe, plannedLoad, clamp, OSBS, BUTTONS };
 })();

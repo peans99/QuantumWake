@@ -66,9 +66,12 @@ function render() {
   byId('title').textContent = QwMfd.pages[page];
   const showing = QwMfd.pageIds[page];
   for (const number of osbs) byId('osb-' + number).classList.toggle('selected', bindings[number] === showing);
-  drawMap(showing === 'nav');
+  // One view model, drawn as a plan and quoted as a row: the picture and the
+  // number must not be able to disagree about where you are going.
+  const plan = QwMfd.mapView(atlas, state, briefing);
+  drawMap(showing === 'nav', plan);
   drawMaker();
-  const rows = QwMfd.rows(page, state, briefing, briefingUnavailable, { selected, armed });
+  const rows = QwMfd.rows(page, state, briefing, briefingUnavailable, { selected, armed, map: plan });
   const key = JSON.stringify(rows);
   if (key === lastRows) return;
   lastRows = key;
@@ -114,10 +117,9 @@ function drawMaker() {
    readings are the answer; this is the shape of it. */
 const svgns = 'http://www.w3.org/2000/svg';
 let lastMap = '';
-function drawMap(visible) {
+function drawMap(visible, view) {
   byId('map').hidden = !visible;
   if (!visible) return;
-  const view = QwMfd.mapView(atlas, state, briefing);
   const key = JSON.stringify(view);
   if (key === lastMap) return;
   lastMap = key;
@@ -133,17 +135,21 @@ function drawMap(visible) {
     return node;
   };
   for (const radius of view.rings) add('circle', { cx: 0, cy: 0, r: radius }, 'orbit');
-  const from = view.bodies.find(b => b.here), to = view.bodies.find(b => b.target);
-  // The leg the ship is actually flying, when both ends are known.
-  if (from && to) add('line', { x1: from.x, y1: from.y, x2: to.x, y2: to.y }, 'leg');
+  // The whole plan, leg by leg, not just the next hop.
+  const at = name => view.bodies.find(b => b.name === name);
+  for (const leg of view.legs) {
+    const a = at(leg.from), b = at(leg.to);
+    if (a && b) add('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y }, 'leg');
+  }
   add('circle', { cx: 0, cy: 0, r: .05 }, 'star');
   for (const body of view.bodies) {
-    add('circle', { cx: body.x, cy: body.y, r: body.here || body.target ? .06 : .035 },
-      body.here ? 'body here' : body.target ? 'body target' : 'body');
+    add('circle', { cx: body.x, cy: body.y, r: body.here || body.onRoute ? .06 : .035 },
+      body.here ? 'body here' : body.next ? 'body target' : body.onRoute ? 'body stop' : 'body');
     if (body.here) add('circle', { cx: body.x, cy: body.y, r: .13 }, 'halo');
   }
   // Only the two that matter carry a name; a 150 px plan cannot hold sixteen.
-  for (const body of [from, to]) {
+  // The rest of the route is named in the Distance row instead.
+  for (const body of [at(view.here), at(view.next)]) {
     if (!body) continue;
     const label = add('text', { x: body.x, y: body.y - .19 }, body.here ? 'name here' : 'name target');
     label.textContent = body.name;

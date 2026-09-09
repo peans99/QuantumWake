@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1124 tests](https://img.shields.io/badge/tests-1124%20passing-4fd48a)
+![1638 tests](https://img.shields.io/badge/tests-1638%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.11
+### 0.10.12
 
 - **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
   independent left and right displays on a shared monitor or separate monitors.
@@ -329,10 +329,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   it came from. MFD mode starts off; the regular overlay keeps its own
   settings.
 
-- **A system plan on the Nav page.** Small, above the words: the star, the
-  bodies at their real coordinates, the one you are at ringed, and a dashed leg
-  to wherever you are headed. It marks a body and says so — the logs name the
-  place you are at, never where you are on it.
+- **A system plan on the Nav page, with the whole route on it.** Small, above
+  the words: the star, the bodies at their real coordinates, the one you are at
+  ringed, and a dashed leg to every planned stop in the order you will fly them
+  — with the distance beside it. It marks a body and says so; the logs name the
+  place you are at, never where you are on it, and the distance is a straight
+  line between body centres rather than a quantum route the game never writes
+  down.
 
 - **The maker's mark of the ship you are flying**, in the top-left corner of
   every page. Nothing shows for a maker with no logo, or before a ship has been

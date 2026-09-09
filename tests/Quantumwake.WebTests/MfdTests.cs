@@ -305,17 +305,70 @@ public class MfdTests
     {
         var e = Engine();
         const string plan = "{stops:[{placeId:'STAN_HUR_L1'}]}";
+        // travelling as well as travellingToId: the destination id outlives the
+        // jump, and a stale one must not push itself in front of the plan.
         e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp',"
-            + "travellingToId:'RR_MIC_LEO'}," + plan + ");");
-        Assert.Equal("microTech", e.Evaluate("v.target").AsString());
+            + "travelling:true,travellingToId:'RR_MIC_LEO'}," + plan + ");");
+        Assert.Equal("microTech", e.Evaluate("v.next").AsString());
+        Assert.Equal("Hurston", e.Evaluate("v.target").AsString());
         Assert.Contains("not a fix", e.Evaluate("v.note").AsString());
 
+        e.Execute($"var stale = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp',"
+            + "travellingToId:'RR_MIC_LEO'}," + plan + ");");
+        Assert.Equal("Hurston", e.Evaluate("stale.next").AsString());
+
         e.Execute($"var p = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp'}},{plan});");
-        Assert.Equal("Hurston", e.Evaluate("p.target").AsString());
+        Assert.Equal("Hurston", e.Evaluate("p.next").AsString());
 
         // Standing on the destination is not a leg to fly.
         e.Execute($"var s = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'Hurston'}},{plan});");
-        Assert.True(e.Evaluate("s.bodies.every(b => !b.target)").AsBoolean());
+        Assert.True(e.Evaluate("s.legs.length === 0 && s.next === null").AsBoolean());
+    }
+
+    /// <summary>
+    /// The whole plan, leg by leg, rather than only the next hop - and the
+    /// distance is straight line between body centres, which is all the
+    /// coordinates support. The game plots quantum routes and never writes one
+    /// down, so the caption says what the number is not.
+    /// </summary>
+    [Fact]
+    public void RouteChainsEveryPlannedStopAndMeasuresEachLeg()
+    {
+        var e = Engine();
+        const string plan = "{stops:[{placeId:'STAN_HUR_L1'},{placeId:'RR_MIC_LEO'}]}";
+        e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp'}},{plan});");
+
+        Assert.Equal(2, e.Evaluate("v.legs.length").AsNumber());
+        Assert.Equal("Hurston", e.Evaluate("v.next").AsString());
+        Assert.Equal("microTech", e.Evaluate("v.target").AsString());
+
+        // ArcCorp (0,-28.9) to Hurston (12.85,0), then Hurston to microTech.
+        Assert.Equal(31.65, e.Evaluate("v.legs[0].gm").AsNumber(), 1);
+        Assert.Equal(56.29, e.Evaluate("v.legs[1].gm").AsNumber(), 1);
+        Assert.Equal(87.94, e.Evaluate("v.gm").AsNumber(), 1);
+        Assert.Equal("87.9 Gm to microTech over 2 legs", e.Evaluate("QwMfd.routeLine(v)").AsString());
+        Assert.True(e.Evaluate("v.bodies.find(b => b.name === 'microTech').onRoute").AsBoolean());
+        Assert.Contains("not a fix or a route", e.Evaluate("v.note").AsString());
+
+        // And the Nav rows quote the same view rather than measuring again.
+        Assert.Contains("87.9 Gm to microTech over 2 legs",
+            e.Evaluate($"JSON.stringify(QwMfd.rows(0,{{}},{plan},false,{{map:v}}))").AsString());
+        Assert.DoesNotContain("DISTANCE", e.Evaluate("JSON.stringify(QwMfd.rows(0,{}))").AsString());
+    }
+
+    /// <summary>
+    /// Two jobs at one body is two stops and one arrival, so a leg of no length
+    /// never reaches the plan.
+    /// </summary>
+    [Fact]
+    public void RepeatedAndUnreachableStopsDoNotBecomeLegs()
+    {
+        var e = Engine();
+        e.Execute($"var v = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp'}},"
+            + "{stops:[{placeId:'STAN_HUR_L1'},{placeId:'STAN_HUR_L1'},{placeId:'NOWHERE'}]});");
+        Assert.Equal(1, e.Evaluate("v.legs.length").AsNumber());
+        Assert.Equal(1, e.Evaluate("v.elsewhere").AsNumber());
+        Assert.Contains("1 stop outside this system", e.Evaluate("v.note").AsString());
     }
 
     [Fact]
