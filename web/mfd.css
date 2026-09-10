@@ -123,7 +123,15 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 .orbit { fill: none; stroke: var(--line-hot); stroke-width: .006; }
 .radar-ring { fill: none; stroke: var(--line); stroke-width: .004; stroke-dasharray: .018 .026; }
 .radar-axis { stroke: var(--line-hot); stroke-width: .004; }
-.radar-sweep { stroke: var(--glow); stroke-width: .008; opacity: .32; transform-box: view-box; transform-origin: 50% 50%; animation: radar-sweep 4.8s linear infinite; }
+/* Turned by SMIL about an explicit 0 0, not from here: this plot's viewBox
+   starts at -1.18, and a percentage transform-origin resolved against it put
+   the pivot a whole radius off centre - which is what left the sweep adrift
+   outside the rings instead of turning about the star. */
+.radar-sweep { opacity: .34; }
+.radar-sweep .sweep-edge { fill: none; stroke: var(--glow); stroke-width: .008; }
+/* The trail carries no stroke of its own: five abutting sectors each outlined
+   would draw four seams across it, which is a fan and not a fade. */
+.radar-sweep .sweep-trail { fill: var(--glow); fill-opacity: .13; stroke: none; }
 .star { fill: var(--hot); }
 .body { fill: var(--dim); }
 .body.here { fill: var(--glow); }
@@ -139,7 +147,6 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 #maker { height: clamp(10px, 2.9cqw, 24px); width: auto; max-width: 26%; object-fit: contain; opacity: .75; }
 #maker[hidden] { display: none; }
 .body.stop { fill: none; stroke: var(--amber); stroke-width: .022; }
-@keyframes radar-sweep { to { transform: rotate(360deg); } }
 /* Bound, but with nothing to act on while this page is showing. Dimmed rather
    than blanked: the pilot should be able to tell a button that does nothing
    here from a position that carries nothing at all. */

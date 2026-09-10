@@ -336,6 +336,60 @@ function drawMaker() {
 // The map and the navigation distance share the same body-centre geometry.
 const svgns = 'http://www.w3.org/2000/svg';
 let lastMap = '';
+
+/**
+ * The sweep: a leading edge with a trail fading out behind it.
+ *
+ * It was one bare line turned by a CSS animation, and it read as a stray mark
+ * adrift beside the plot rather than as a sweep - because it was one. The
+ * pivot came from `transform-origin: 50% 50%`, and this viewBox starts at
+ * -1.18, so the percentage landed on user-space (1.18, 1.18): a whole radius
+ * off centre. The line orbited that point instead of turning about the star,
+ * spent most of its travel outside the viewport, and came back as a clipped
+ * stub floating past the outer ring.
+ *
+ * Turned here by SMIL, which names the centre in user units and cannot be read
+ * two ways - the same reason the marching dashes on the system map use it. The
+ * trail is stacked sectors rather than a gradient because SVG has no angular
+ * gradient, and five steps is past telling at the size a frame gives this.
+ *
+ * It is chrome and it stays chrome. It sweeps at its own rate and finds
+ * nothing, because nothing on this plot is a contact - so it is faint, it
+ * never brightens, and it never touches a body. Chrome that could be mistaken
+ * for a reading would be worse than no chrome at all.
+ */
+function drawSweep(group) {
+  const reach = 1.02;
+  const trail = 58;
+  const steps = 5;
+  const at = (degrees, radius) => {
+    const angle = degrees * Math.PI / 180;
+    return `${(Math.cos(angle) * radius).toFixed(4)} ${(Math.sin(angle) * radius).toFixed(4)}`;
+  };
+  const add = (name, attrs) => {
+    const node = document.createElementNS(svgns, name);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    group.append(node);
+  };
+
+  // Behind the edge, not ahead of it: the rotation runs towards +y, which is
+  // clockwise once the screen's y-down is accounted for.
+  for (let step = 0; step < steps; step++) {
+    add('path', {
+      class: 'sweep-trail',
+      opacity: (1 - step / steps).toFixed(3),
+      d: `M 0 0 L ${at(-trail * (step + 1) / steps, reach)}`
+        + ` A ${reach} ${reach} 0 0 1 ${at(-trail * step / steps, reach)} Z`,
+    });
+  }
+
+  add('line', { class: 'sweep-edge', x1: 0, y1: 0, x2: reach, y2: 0 });
+  add('animateTransform', {
+    attributeName: 'transform', type: 'rotate',
+    from: '0 0 0', to: '360 0 0', dur: '4.8s', repeatCount: 'indefinite',
+  });
+}
+
 function drawMap(visible, view, big) {
   const figure = byId('map');
   figure.hidden = !visible;
@@ -361,7 +415,7 @@ function drawMap(visible, view, big) {
   for (const radius of [.25, .5, .75]) add('circle', { cx: 0, cy: 0, r: radius }, 'radar-ring');
   add('line', { x1: -1.08, y1: 0, x2: 1.08, y2: 0 }, 'radar-axis');
   add('line', { x1: 0, y1: -1.08, x2: 0, y2: 1.08 }, 'radar-axis');
-  add('line', { x1: 0, y1: 0, x2: 1.02, y2: 0 }, 'radar-sweep');
+  drawSweep(add('g', {}, 'radar-sweep'));
   for (const radius of view.rings) add('circle', { cx: 0, cy: 0, r: radius }, 'orbit');
   // The whole plan, leg by leg, not just the next hop.
   const at = name => view.bodies.find(b => b.name === name);
