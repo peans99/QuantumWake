@@ -318,7 +318,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.28
+### 0.10.29
+
+- **The HUD now puts one useful thing in front of you.** Its Focus strip opens
+  the next stop, active contract, current location, or a screen that needs
+  attention. The Log keeps repeated clipboard-watch readings as one location
+  with a seen count, while a deliberate read remains a new entry.
+
+- **Points and unfamiliar screens are easier to work with.** A saved location
+  can have your own name and category, including on the MFD. Screenshots the
+  app cannot yet interpret now collect in a review queue with the capture and
+  extracted text together, ready to turn into the next reader.
 
 - **A Log tab keeps what you showed the app in one place.** Screenshots and
   copied `/showlocation` readings now have a direct dashboard tab instead of

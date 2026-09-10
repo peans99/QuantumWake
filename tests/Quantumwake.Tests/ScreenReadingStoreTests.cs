@@ -140,6 +140,22 @@ public class ScreenReadingStoreTests : IDisposable
     }
 
     [Fact]
+    public void Repeated_clipboard_checks_refresh_one_location_instead_of_filling_the_log()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At), mergeWithLatest: true);
+        store.AddClipboard(Paste(At.AddSeconds(3)), mergeWithLatest: true);
+
+        var only = Assert.Single(store.Clipboards());
+        Assert.Equal(At, only.At);
+        Assert.Equal(2, only.TimesSeen);
+        Assert.Equal(At.AddSeconds(3), only.LastSeenAt);
+
+        store.AddClipboard(Paste(At.AddSeconds(6)) with { X = 42 });
+        Assert.Equal(2, store.Clipboards().Count);
+    }
+
+    [Fact]
     public void A_paste_can_be_kept_as_a_point_of_interest_after_the_log_is_cleared()
     {
         var store = new ScreenReadingStore(_dir);
@@ -180,6 +196,22 @@ public class ScreenReadingStoreTests : IDisposable
         Assert.False(store.Unpin(At));
         Assert.Empty(store.Pinned());
         Assert.Single(store.Clipboards());
+    }
+
+    [Fact]
+    public void A_pinned_point_keeps_its_pilot_name_and_category_after_a_restart()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+        store.Pin(At);
+
+        var updated = store.UpdatePin(At, "Ruin mining shelf", "Mining");
+        var again = new ScreenReadingStore(_dir);
+
+        Assert.NotNull(updated);
+        Assert.Equal("Ruin mining shelf", updated.Label);
+        Assert.Equal("Mining", updated.Category);
+        Assert.Equal(updated, Assert.Single(again.Pinned()));
     }
 
     [Fact]

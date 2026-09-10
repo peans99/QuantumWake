@@ -139,6 +139,47 @@ public class ScreenLogTests
         Assert.Contains("DELETE /api/screen/pins?at=2026-09-09T02%3A10%3A00Z", page.Fetched());
     }
 
+    [Fact]
+    public void A_pinned_point_can_be_named_and_categorised()
+    {
+        var page = Panel();
+        page.Serve("/api/screen/pins", """{"label":"Ruin mining shelf","category":"Mining"}""");
+
+        page.Do("await savePinnedLocation({sourceAt:'2026-09-09T02:10:00Z'}, 'Ruin mining shelf', 'Mining', __dom.node('#screen-log-refresh'));");
+
+        Assert.Contains("PUT /api/screen/pins", page.Fetched());
+        Assert.Contains("Ruin mining shelf", page.BodyOf("/api/screen/pins"));
+        Assert.Contains("Mining", page.BodyOf("/api/screen/pins"));
+    }
+
+    [Fact]
+    public void A_repeated_clipboard_location_says_it_was_seen_again()
+    {
+        var paste = Paste.Replace("\"system\":\"Pyro\"", "\"system\":\"Pyro\",\"timesSeen\":4,\"lastSeenAt\":\"2026-09-09T02:13:00Z\"");
+
+        var log = Panel(clipboard: paste).NodeText("#screen-readings");
+
+        Assert.Contains("seen 4 times", log);
+        Assert.Contains("last", log);
+    }
+
+    [Fact]
+    public void An_unread_mobiglas_screen_goes_to_the_review_queue_with_its_text()
+    {
+        const string unknown = """
+            {"shot":"ScreenShot-unread.jpg","shotAt":"2026-09-09T02:05:00Z","kind":"MobiGlas",
+             "summary":"a mobiGlas screen this app cannot read yet","tookMs":150,"checks":[],
+             "lines":["Unmapped app","Useful captured line"]}
+            """;
+
+        var page = Panel(readings: unknown);
+
+        Assert.False(page.Truth("__dom.node('#screen-review').hidden"));
+        Assert.Contains("ScreenShot-unread.jpg", page.NodeText("#screen-review-list"));
+        Assert.Contains("Useful captured line", page.NodeText("#screen-review-list"));
+        Assert.Contains("Open screenshot", page.NodeText("#screen-review-list"));
+    }
+
     // ---- the stream, and the toast ----
 
     private static void Frame(Page page, string events, string screen = "null") =>
@@ -198,5 +239,16 @@ public class ScreenLogTests
 
         Assert.False(page.Truth("__dom.node('#now-screen-card').hidden"));
         Assert.Contains("PYRO > RUIN STATION", page.NodeText("#now-screen-summary"));
+    }
+
+    [Fact]
+    public void The_hub_leads_with_a_screen_disagreement_and_a_link_to_review_it()
+    {
+        var page = Panel();
+        Frame(page, "", "{checks:[{verdict:'differs'}]}");
+
+        Assert.False(page.Truth("__dom.node('#now-focus').hidden"));
+        Assert.Contains("Screen needs review", page.NodeText("#now-focus-title"));
+        Assert.Equal("Review", page.NodeText("#now-focus-open"));
     }
 }

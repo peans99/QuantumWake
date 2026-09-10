@@ -640,20 +640,27 @@ window.QwMfd = (() => {
           ...(log.readings || []).map(shot => ({ at: shot.shotAt, shot })),
           ...(log.clipboard || []).map(paste => ({ at: paste.at, paste }))
         ].sort((a, b) => new Date(b.at) - new Date(a.at));
-        if (!entries.length) return [['NO LOG ENTRIES', 'Screenshots and copied locations appear here after the dashboard reads them.']];
-        return entries.slice(0, 8).map(entry => {
+        const pinRows = (log.pins || []).slice(0, 2).map(pin => [
+          `POI · ${String(pin.category || 'General').toUpperCase()}`,
+          pin.label || [pin.system, pin.believed].filter(Boolean).join(' · ') || 'Copied location', pin.pinnedAt]);
+        if (!entries.length && !pinRows.length)
+          return [['NO LOG ENTRIES', 'Screenshots and copied locations appear here after the dashboard reads them.']];
+        const recentRows = entries.slice(0, Math.max(0, 8 - pinRows.length)).map(entry => {
           if (entry.paste) {
             const paste = entry.paste;
             const where = [paste.system, paste.believed].filter(Boolean).join(' · ');
             const gm = Number(paste.gigametres);
+            const seen = Math.max(1, Number(paste.timesSeen) || 1);
             return [pinned.has(String(paste.at)) ? 'PINNED POI' : 'COPIED LOCATION',
-              [Number.isFinite(gm) ? `${gm.toFixed(4)} Gm` : null, where || 'No session location recorded']
+              [Number.isFinite(gm) ? `${gm.toFixed(4)} Gm` : null, where || 'No session location recorded',
+                seen > 1 ? `seen ${seen} times` : null]
                 .filter(Boolean).join(' · '), paste.at];
           }
           const shot = entry.shot;
           return [`SCREEN · ${String(shot.kind || 'reading').toUpperCase()}`,
             [shot.summary, shot.shot].filter(Boolean).join(' · '), shot.shotAt];
         });
+        return [...pinRows, ...recentRows];
       }
       /* A floor and never a roster, exactly as the dashboard's Crew page has
          it: a party member who was already grouped up when you logged in and

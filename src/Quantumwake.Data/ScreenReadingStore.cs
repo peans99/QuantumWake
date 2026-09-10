@@ -46,7 +46,9 @@ public sealed record ClipboardSighting(
     double Z,
     double Gigametres,
     string? Believed,
-    string? System);
+    string? System,
+    int TimesSeen = 1,
+    DateTimeOffset? LastSeenAt = null);
 
 /// <summary>A copied location the pilot chose to keep after its log entry is gone.</summary>
 public sealed record PinnedLocation(
@@ -57,7 +59,9 @@ public sealed record PinnedLocation(
     double Z,
     double Gigametres,
     string? Believed,
-    string? System);
+    string? System,
+    string? Label = null,
+    string? Category = null);
 
 /// <summary>
 /// Remembers what the screenshots said, and what was pasted.
@@ -126,7 +130,7 @@ public sealed class ScreenReadingStore
     /// checks the same spot twice, but a single copied reading should never
     /// grow a second pin because the dashboard was clicked twice.
     /// </remarks>
-    public PinnedLocation? Pin(DateTimeOffset sourceAt)
+    public PinnedLocation? Pin(DateTimeOffset sourceAt, string? label = null, string? category = null)
     {
         lock (_gate)
         {
@@ -136,8 +140,13 @@ public sealed class ScreenReadingStore
             var paste = _clipboard.FirstOrDefault(p => p.At == sourceAt);
             if (paste is null) return null;
 
+            var labelForPin = CleanLabel(label)
+                ?? string.Join(" > ", new[] { paste.System, paste.Believed }.Where(v => !string.IsNullOrWhiteSpace(v)));
+            if (string.IsNullOrWhiteSpace(labelForPin)) labelForPin = "Copied location";
+
             var pin = new PinnedLocation(paste.At, DateTimeOffset.UtcNow,
-                paste.X, paste.Y, paste.Z, paste.Gigametres, paste.Believed, paste.System);
+                paste.X, paste.Y, paste.Z, paste.Gigametres, paste.Believed, paste.System,
+                labelForPin, CleanCategory(category) ?? "General");
             _pins.Insert(0, pin);
             SavePins();
             return pin;
@@ -155,10 +164,46 @@ public sealed class ScreenReadingStore
         }
     }
 
-    public void AddClipboard(ClipboardSighting paste)
+    /// <summary>Updates the pilot's own label and category without moving the point.</summary>
+    public PinnedLocation? UpdatePin(DateTimeOffset sourceAt, string? label, string? category)
     {
         lock (_gate)
         {
+            var at = _pins.FindIndex(p => p.SourceAt == sourceAt);
+            if (at < 0) return null;
+
+            var updated = _pins[at] with
+            {
+                Label = CleanLabel(label) ?? _pins[at].Label ?? "Copied location",
+                Category = CleanCategory(category) ?? _pins[at].Category ?? "General",
+            };
+            _pins[at] = updated;
+            SavePins();
+            return updated;
+        }
+    }
+
+    public void AddClipboard(ClipboardSighting paste, bool mergeWithLatest = false)
+    {
+        lock (_gate)
+        {
+            // Clipboard watch deliberately asks every few seconds. The same
+            // /showlocation text must refresh its "last seen" time rather
+            // than consume the whole log while the pilot is still standing.
+            if (mergeWithLatest && _clipboard.FirstOrDefault() is { } latest
+                && latest.X == paste.X && latest.Y == paste.Y && latest.Z == paste.Z)
+            {
+                _clipboard[0] = latest with
+                {
+                    TimesSeen = Math.Max(1, latest.TimesSeen) + 1,
+                    LastSeenAt = paste.At,
+                    Believed = paste.Believed ?? latest.Believed,
+                    System = paste.System ?? latest.System,
+                };
+                SaveClipboard();
+                return;
+            }
+
             _clipboard.Insert(0, paste);
 
             if (_clipboard.Count > Keep)
@@ -335,6 +380,10 @@ public sealed class ScreenReadingStore
             // Kept in memory for the session; the next add tries again.
         }
     }
+
+    private static string? CleanLabel(string? label) => string.IsNullOrWhiteSpace(label) ? null : label.Trim();
+
+    private static string? CleanCategory(string? category) => string.IsNullOrWhiteSpace(category) ? null : category.Trim();
 
     private static readonly JsonSerializerOptions Json = new()
     {

@@ -614,13 +614,16 @@ public class MfdTests
     {
         var e = Engine();
         const string log = "{readings:[{shot:'map.jpg',shotAt:'2026-09-09T12:00:00Z',kind:'Map',summary:'PYRO > RUIN STATION'}],"
-            + "clipboard:[{at:'2026-09-09T12:02:00Z',gigametres:14.99996,believed:'Ruin Station',system:'Pyro'}],"
-            + "pins:[{sourceAt:'2026-09-09T12:02:00Z'}]}";
+            + "clipboard:[{at:'2026-09-09T12:02:00Z',gigametres:14.99996,believed:'Ruin Station',system:'Pyro',timesSeen:3}],"
+            + "pins:[{sourceAt:'2026-09-09T12:02:00Z',pinnedAt:'2026-09-09T12:03:00Z',label:'Ruin mining shelf',category:'Mining'}]}";
 
         var json = Page(e, "log", view: "{extra:{screenLog:" + log + "}}");
 
         Assert.Contains("PINNED POI", json);
+        Assert.Contains("POI · MINING", json);
+        Assert.Contains("Ruin mining shelf", json);
         Assert.Contains("15.0000 Gm · Pyro · Ruin Station", json);
+        Assert.Contains("seen 3 times", json);
         Assert.Contains("SCREEN · MAP", json);
         Assert.Contains("PYRO > RUIN STATION", json);
         Assert.Contains("NO LOG ENTRIES", Page(e, "log", view: "{extra:{screenLog:{}}}"));

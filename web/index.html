@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="app.css?v=0.10.28">
+<link rel="stylesheet" href="app.css?v=0.10.29">
 </head>
 <body>
 
@@ -167,6 +167,14 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <section class="now-focus" id="now-focus" hidden aria-live="polite">
+      <div class="now-focus-mark">Focus</div>
+      <div class="now-focus-copy">
+        <div class="now-focus-title" id="now-focus-title"></div>
+        <div class="muted" id="now-focus-detail"></div>
+      </div>
+      <button class="ghost tiny" id="now-focus-open" hidden></button>
+    </section>
     <div class="now-card-visibility" id="now-card-visibility" hidden>
       <span class="muted">Hidden cards</span>
       <div id="now-hidden-card-list"></div>
@@ -766,6 +774,16 @@
       </div>
       <div id="screen-readings"></div>
     </div>
+
+    <section class="log-history screen-review" id="screen-review" hidden>
+      <div class="option-head">
+        <h3>Needs a reader</h3>
+        <span class="muted" id="screen-review-count"></span>
+      </div>
+      <p class="muted">These screenshots are safely logged with their text, but Quantum Wake does not yet know
+        how to turn that screen into a structured reading. Open the capture and its extracted text together.</p>
+      <div id="screen-review-list"></div>
+    </section>
   </section>
 
   <!-- LOGBOOK -->
@@ -2484,6 +2502,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.10.28"></script>
+<script src="app.js?v=0.10.29"></script>
 </body>
 </html>
