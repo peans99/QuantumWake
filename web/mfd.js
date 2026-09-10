@@ -4,7 +4,9 @@ const panelId = mfdParams.get('panel') === 'right' ? 'right' : 'left';
 const mfdKey = 'qw-mfd-' + panelId;
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem(mfdKey) || '{}') || {}; } catch { }
-let page = Number.isInteger(preferences.page) ? QwMfd.clamp(preferences.page, 0, QwMfd.pages.length - 1) : (panelId === 'right' ? 1 : 0);
+let screen = QwMfd.restoreScreen(preferences);
+let page = Math.max(0, QwMfd.pageIds.indexOf(screen));
+let details = false, hasDetails = false;
 /* Set in MFD setup and pushed from the host. A bound button can still nudge
    them - they stay in the vocabulary - but the nudge lasts until the panel
    reloads, because setup is where a setting is kept. */
@@ -79,41 +81,114 @@ function drawLabels() {
     // The pieces were made here, so they are held rather than looked up again
     // on every draw - twenty buttons times three queries, several times a press.
     const { button, glyph, path: shape, text } = face[number];
-    const caption = QwMfd.caption(bindings[number], compact);
-    const path = QwMfd.icon(bindings[number]);
+    const command = QwMfd.resolveCommand(bindings[number], screen);
+    const inactive = (command === 'confirm' && screen !== 'act') || (command === 'details' && !hasDetails);
+    const caption = inactive ? null : command === 'details' && details ? 'LESS' : QwMfd.caption(command, compact);
+    const path = caption ? QwMfd.icon(command) : null;
     text.textContent = caption || '';
     shape.setAttribute('d', path || '');
     glyph.style.visibility = path ? '' : 'hidden';
     button.disabled = !caption;
     button.title = 'Cougar button ' + number + (caption ? ': ' + caption : ': unassigned');
+    button.setAttribute('aria-label', caption ? `${QwMfd.title(command) === 'Cockpit' ? caption : QwMfd.title(command)} · Cougar button ${number}` : 'Unused button ' + number);
+    button.classList.toggle('selected', command === screen);
+    button.setAttribute('aria-pressed', String(command === screen));
   }
 }
 function savePreferences() {
-  // Only the page. Brightness and text size belong to the saved layout now.
-  try { localStorage.setItem(mfdKey, JSON.stringify({ page })); } catch { }
+  try { localStorage.setItem(mfdKey, JSON.stringify({ screen })); } catch { }
+}
+const isMenu = () => !QwMfd.pageIds.includes(screen);
+function navigate(target) {
+  if (!QwMfd.validScreen(target)) return;
+  standDown(); notice = ''; saved = ''; details = false; selected = 0;
+  screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
+  byId('content').scrollTop = 0;
+  savePreferences(); render();
+}
+function back() {
+  if (details) { details = false; lastRows = ''; byId('content').scrollTop = 0; render(); }
+  else navigate(QwMfd.parent(screen));
+}
+function toggleDetails() {
+  if (!hasDetails || isMenu()) return;
+  standDown(); notice = ''; details = !details; byId('content').scrollTop = 0; render();
+}
+byId('crumb-home').onclick = () => navigate('home');
+byId('crumb-parent').onclick = () => navigate(QwMfd.parent(screen));
+byId('more').onclick = toggleDetails;
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape' || event.key === 'Backspace') { event.preventDefault(); back(); }
+});
+let lastMenu = '';
+function drawMenu() {
+  const menu = byId('menu'); menu.hidden = !isMenu();
+  if (menu.hidden) return;
+  const summaries = {
+    flight: state?.location || 'Location not identified',
+    operations: briefingUnavailable ? 'Plan unavailable' : briefing?.tripTitle || 'No flight plan',
+    resources: briefing ? (QwMfd.plannedLoad(briefing).scu ? `${QwMfd.plannedLoad(briefing).scu} SCU planned` : 'No SCU load planned') : 'Loading the plan…',
+    pilot: state?.handle || 'Pilot not identified'
+  };
+  const items = QwMfd.menuItems(screen).map(id => {
+    const group = QwMfd.groups.find(g => g.id === id);
+    const row = group ? null : QwMfd.rows(QwMfd.pageIds.indexOf(id), state, briefing, briefingUnavailable,
+      { selected: 0, extra, map: QwMfd.mapView(atlas, state, briefing), now: Date.now() })[0];
+    return { id, title: QwMfd.title(id), hint: group?.hint || row?.[0] || '', summary: group ? summaries[id] : row?.[1] || 'Not recorded' };
+  });
+  const key = JSON.stringify([screen, items, bindings]);
+  if (key === lastMenu) return;
+  lastMenu = key; menu.replaceChildren();
+  for (const item of items) {
+    const tile = document.createElement('button'); tile.type = 'button'; tile.className = 'menu-tile';
+    tile.dataset.screen = item.id; tile.onclick = () => navigate(item.id);
+    const icon = document.createElementNS(svgns, 'svg'); icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(svgns, 'path'); path.setAttribute('d', QwMfd.icon(item.id)); icon.append(path);
+    const name = document.createElement('strong'); name.textContent = item.title;
+    const hint = document.createElement('span'); hint.className = 'tile-hint'; hint.textContent = item.hint;
+    const summary = document.createElement('span'); summary.className = 'tile-summary'; summary.textContent = item.summary;
+    const number = osbs.find(n => QwMfd.resolveCommand(bindings[n], screen) === item.id);
+    const keycap = document.createElement('small'); keycap.textContent = number ? String(number).padStart(2, '0') : '›';
+    tile.title = item.title + ' · ' + item.summary; tile.setAttribute('aria-label', tile.title);
+    tile.append(icon, keycap, name, hint, summary); menu.append(tile);
+  }
 }
 function render() {
   byId('mfd').style.filter = `brightness(${brightness})`;
   byId('mfd').style.setProperty('--text-scale', textScale);
-  byId('title').textContent = QwMfd.pages[page];
-  const showing = QwMfd.pageIds[page];
-  for (const number of osbs) face[number].button.classList.toggle('selected', bindings[number] === showing);
+  byId('title').textContent = QwMfd.title(screen) + (details ? ' · details' : '');
+  const showing = screen;
+  byId('mfd').dataset.screen = screen;
+  byId('mfd').classList.toggle('menu-open', isMenu());
+  byId('mfd').classList.toggle('menu-dense', textScale > 1.2 || window.innerWidth > window.innerHeight * 1.2);
+  byId('crumb-parent').hidden = byId('crumb-divider').hidden = isMenu();
+  byId('crumb-parent').textContent = QwMfd.title(QwMfd.parent(screen));
+  byId('crumb-home').disabled = screen === 'home';
+  drawMenu();
   // One view model, drawn as a plan and quoted as a row: the picture and the
   // number must not be able to disagree about where you are going.
   const plan = QwMfd.mapView(atlas, state, briefing);
-  // Small beside the words on Nav, and the whole panel on Map.
-  drawMap(showing === 'nav' || showing === 'map', plan, showing === 'map');
+  drawMap(showing === 'map', plan, true);
   drawMaker();
-  const rows = QwMfd.rows(page, state, briefing, briefingUnavailable,
-    { selected, armed, map: plan, extra, now: Date.now() });
-  const key = JSON.stringify(rows);
+  const view = QwMfd.readingView(screen, isMenu() ? [] : QwMfd.rows(page, state, briefing, briefingUnavailable,
+    { selected, armed, map: plan, extra, now: Date.now() }), details);
+  hasDetails = view.more;
+  const rows = view.rows;
+  const key = JSON.stringify([screen, details, rows]);
   const readings = byId('readings');
+  const content = byId('content');
+  content.hidden = isMenu();
+  readings.hidden = isMenu();
+  byId('more').hidden = !hasDetails;
+  byId('more').textContent = details ? '← Overview' : 'More details →';
+  drawLabels();
   if (key !== lastRows) {
     lastRows = key;
-    const scroll = readings.scrollTop;
+    const scroll = content.scrollTop;
     readings.replaceChildren();
-    for (const [label, value, at, mark] of rows) {
+    for (const [index, [label, value, at, mark]] of rows.entries()) {
       const row = document.createElement('article'); row.className = 'reading';
+      if (index === 0 && !details && !['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map'].includes(screen)) row.classList.add('hero');
       if (mark) row.classList.add(mark);
       const glyph = document.createElementNS(svgns, 'svg');
       glyph.setAttribute('viewBox', '0 0 24 24');
@@ -128,7 +203,7 @@ function render() {
       row.append(glyph, heading, body);
       readings.append(row);
     }
-    readings.scrollTop = scroll;
+    content.scrollTop = scroll;
     // Instant, not smooth: a running scroll animation is one of the things that
     // keeps a headless render from ever settling, and this fires on every press.
     readings.querySelector('.cursor, .armed')?.scrollIntoView({ block: 'nearest' });
@@ -138,10 +213,17 @@ function render() {
      at from a row count. Outside the redraw, because an unchanged page still
      needs its face marked after a page change. */
   drawAction(QwMfd.actionLine(showing, { briefing, selected, armed, saved }));
-  const idle = idleNow(readings.scrollHeight > readings.clientHeight + 1);
+  updateScrollHint();
+  const idle = idleNow(content.scrollHeight > content.clientHeight + 1);
   for (const number of osbs)
-    face[number].button.classList.toggle('dormant', idle.includes(bindings[number]));
+    face[number].button.classList.toggle('dormant', idle.includes(QwMfd.resolveCommand(bindings[number], screen)));
 }
+function updateScrollHint() {
+  const r = byId('content'), hint = byId('scroll-hint');
+  hint.hidden = isMenu() || r.scrollHeight <= r.clientHeight + 1;
+  hint.textContent = r.scrollTop + r.clientHeight < r.scrollHeight - 2 ? '↓ More below' : '↑ More above';
+}
+byId('content').addEventListener('scroll', updateScrollHint);
 /* Pinned under the readings rather than appended to them. The row that asked
    "confirm this?" used to sit at the end of the task list and scroll away
    behind the very list it was asking about. */
@@ -157,12 +239,9 @@ function drawAction(line) {
   byId('action-text').textContent = showing.text;
   byId('action-note').textContent = showing.note || '';
 }
-/* An opening this small has room for about six characters on an edge button and
-   nothing to spare for a map. Measured on load and on resize, because the host
-   moves these windows without reloading them. */
+// Re-measure after placement changes; the host resizes windows without a reload.
 function measure() {
   const small = window.innerWidth < 320 || window.innerHeight < 320;
-  if (small === compact) return;
   compact = small;
   byId('mfd').classList.toggle('compact', compact);
   drawLabels(); lastMap = ''; lastRows = ''; render();
@@ -188,9 +267,7 @@ function drawMaker() {
   // A file that is not there must not leave a broken-image glyph on a HUD.
   badge.onerror = () => { badge.hidden = true; };
 }
-/* The system plan on the Nav page, kept deliberately small: it is there to say
-   which way round the system you are, beside the words that say where. The
-   readings are the answer; this is the shape of it. */
+// The map and the navigation distance share the same body-centre geometry.
 const svgns = 'http://www.w3.org/2000/svg';
 let lastMap = '';
 function drawMap(visible, view, big) {
@@ -237,14 +314,16 @@ function drawMap(visible, view, big) {
    on the next render that has something else to say, so a message about a press
    never outlives the press. */
 let notice = '';
-function note(text) { notice = text; drawAction(QwMfd.actionLine(QwMfd.pageIds[page], { briefing, selected, armed, saved })); }
+function note(text) { notice = text; drawAction(QwMfd.actionLine(screen, { briefing, selected, armed, saved })); }
 /* One rule for what is idle, asked by the face when it dims a button and by the
    input before it acts on one. */
 function idleNow(scrollable) {
-  return QwMfd.dormant(QwMfd.pageIds[page], { tasks: QwMfd.tasks(briefing).length, scrollable });
+  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable: !isMenu() && scrollable }),
+    ...(!hasDetails ? ['details'] : []), ...(screen === 'home' ? ['back'] : []),
+    ...(briefingUnavailable || confirming ? ['confirm'] : [])];
 }
 function isIdle(commandId) {
-  const readings = byId('readings');
+  const readings = byId('content');
   return idleNow(readings.scrollHeight > readings.clientHeight + 1).includes(commandId);
 }
 function standDown() { armed = false; armedTask = null; lastRows = ''; }
@@ -253,19 +332,25 @@ function press(number) {
   notice = '';
   const button = face[number]?.button;
   if (button) { button.classList.add('pressed'); setTimeout(() => button.classList.remove('pressed'), 180); }
-  const action = QwMfd.action(number, bindings);
+  if (!Number.isInteger(number) || number < 1 || number > QwMfd.BUTTONS) return;
+  const command = QwMfd.resolveCommand(bindings[number], screen);
+  const action = QwMfd.effect(command);
   if (!action) return;
   /* A dimmed button does nothing. Dimming and refusing were two rules and only
      the face's ran, so DONE looked dead on Nav and still marked a task off -
      with the confirmation drawn on a page nobody was looking at. */
-  if (isIdle(bindings[number])) { note('Nothing for that button on this page'); render(); return; }
+  if (isIdle(command)) return;
   // Anything but DONE stands a live confirmation down. A pilot reaching for
   // another page must not leave one armed behind them.
   if (!action.confirm && armed) standDown();
   if (action.confirm) { confirmSelected(); return; }
+  if (action.menu) { action.menu === 'back' ? back() : navigate(action.menu); return; }
+  if (action.details) { toggleDetails(); return; }
   if (action.page !== undefined || action.cycle) {
-    page = action.page ?? (page + action.cycle + QwMfd.pages.length) % QwMfd.pages.length;
-    selected = 0; saved = ''; lastRows = ''; byId('readings').scrollTop = 0;
+    const siblings = QwMfd.menuItems(screen);
+    const target = action.page !== undefined ? QwMfd.pageIds[action.page]
+      : siblings[(siblings.indexOf(screen) + action.cycle + siblings.length) % siblings.length];
+    navigate(target); return;
   }
   if (action.text) textScale = QwMfd.clamp(textScale + action.text * .1, .8, 1.5);
   if (action.brightness) brightness = QwMfd.clamp(brightness + action.brightness * .1, .3, 1);
@@ -276,8 +361,8 @@ function press(number) {
    scroll the panel everywhere else. One pair of buttons either way: a cockpit
    frame has no spare ones, and a rocker nobody can name yet is not a plan. */
 function step(direction) {
-  if (QwMfd.pageIds[page] !== 'act') {
-    byId('readings').scrollBy({ top: direction * byId('readings').clientHeight * .7, behavior: 'smooth' });
+  if (screen !== 'act') {
+    byId('content').scrollBy({ top: direction * byId('content').clientHeight * .7, behavior: 'smooth' });
     return;
   }
   const count = QwMfd.tasks(briefing).length;
@@ -290,7 +375,7 @@ function step(direction) {
 async function confirmSelected() {
   // One write at a time. Two quick presses used to be two POSTs, and a toggle
   // sent twice puts the line back exactly where it started.
-  if (confirming) return;
+  if (confirming || screen !== 'act' || briefingUnavailable) return;
   const list = QwMfd.tasks(briefing);
   const target = list[QwMfd.clamp(selected, 0, list.length - 1)];
   if (!target?.tripId) { note('Nothing to confirm here'); render(); return; }

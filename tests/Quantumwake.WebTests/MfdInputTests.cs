@@ -24,23 +24,21 @@ public class MfdInputTests
     public void DoneDoesNothingOffTheActPageRatherThanQuietlyMarkingATask()
     {
         var panel = new Panel(Plan);
-        panel.Do("page = QwMfd.pageIds.indexOf('nav'); lastRows = ''; render();");
+        panel.Do("navigate('nav');");
 
         panel.Press(8).Press(8);
 
         Assert.Empty(panel.Writes());
-        Assert.Equal("NAV", panel.Title);
+        Assert.Equal("Navigation", panel.Title);
 
-        // It says so in the one place the frame answers, rather than silently.
-        Assert.Equal("note", panel.StripState);
-        Assert.Contains("Nothing for that button on this page", panel.Strip);
+        Assert.True(panel.StripHidden);
     }
 
     [Fact]
     public void DoneOnActArmsFirstAndOnlyWritesOnTheSecondPress()
     {
         var panel = new Panel(Plan);
-        panel.Do("page = QwMfd.pageIds.indexOf('act'); lastRows = ''; render();");
+        panel.Do("navigate('act');");
 
         panel.Press(8);
         Assert.Empty(panel.Writes());
@@ -60,7 +58,7 @@ public class MfdInputTests
     public void APlanThatMovesBetweenTheTwoPressesCancelsRatherThanConfirming()
     {
         var panel = new Panel(Plan);
-        panel.Do("page = QwMfd.pageIds.indexOf('act'); lastRows = ''; render();");
+        panel.Do("navigate('act');");
         panel.Press(8);
         Assert.Equal("armed", panel.StripState);
 
@@ -83,13 +81,13 @@ public class MfdInputTests
     public void ReachingForAnotherPageCancelsAnArmedConfirmation()
     {
         var panel = new Panel(Plan);
-        panel.Do("page = QwMfd.pageIds.indexOf('act'); lastRows = ''; render();");
+        panel.Do("navigate('act');");
         panel.Press(8);
         Assert.Equal("armed", panel.StripState);
 
-        panel.Press(1);
-        Assert.Equal("NAV", panel.Title);
-        panel.Press(3);
+        panel.Press(15);
+        Assert.Equal("Operations", panel.Title);
+        panel.Press(2);
 
         Assert.Equal("ready", panel.StripState);
         panel.Press(8);
@@ -100,7 +98,7 @@ public class MfdInputTests
     public void TheStripReportsWhatWasMarkedRatherThanLeavingThePilotGuessing()
     {
         var panel = new Panel(Plan);
-        panel.Do("page = QwMfd.pageIds.indexOf('act'); lastRows = ''; render();");
+        panel.Do("navigate('act');");
         // A server that accepts the toggle, so this is the saved path and not
         // the "check the dashboard" one.
         panel.Do("__fetch.routes['/api/trips/t1/stops/s1/actions/a1/toggle'] = { id: 't1' };");
@@ -119,7 +117,7 @@ public class MfdInputTests
     public void AWriteInFlightSwallowsAFurtherPress()
     {
         var panel = new Panel(Plan);
-        panel.Do("page = QwMfd.pageIds.indexOf('act'); lastRows = ''; render();");
+        panel.Do("navigate('act');");
         panel.Press(8);
 
         // A POST that never settles, so the guard is the only thing stopping a
@@ -136,14 +134,12 @@ public class MfdInputTests
     public void WithNoPlanTrackedDoneSaysSoAndWritesNothing()
     {
         var panel = new Panel("{ stops: [] }");
-        panel.Do("page = QwMfd.pageIds.indexOf('act'); lastRows = ''; render();");
+        panel.Do("navigate('act');");
 
         panel.Press(8).Press(8);
 
         Assert.Empty(panel.Writes());
-        // With nothing outstanding, Done is idle - so the refusal is the general
-        // one rather than a special case, which is the point of one rule.
-        Assert.Contains("Nothing for that button on this page", panel.Strip);
+        Assert.True(panel.StripHidden);
     }
 
     /// <summary>

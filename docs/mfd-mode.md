@@ -11,7 +11,7 @@ Feature branch: `codex/cougar-mfd`, based on `dev0100`.
   exact pixel fields, shared-monitor and separate-monitor presets.
 - [x] Add a full-size alignment preview, USB button tester and saved placement.
 - [x] Start with focused Nav, Task and Status HUD pages, using the existing live
-  stream and briefing API. Default left to navigation and right to the next task.
+  stream and briefing API. Each frame now starts at Home and remembers its own view.
 - [x] Extend the compact pages to flight-plan actions, cargo and contracts.
 - [x] Make every button reassignable, with the rockers bindable rather than
   guessed at.
@@ -31,8 +31,8 @@ and controls aligned to the physical buttons. Page changes stay under the
 pilot's control; a detected ship must not silently rearrange the buttons.
 
 - **Nav:** where am I, where am I going, and which ship did the logs identify?
-  A quantum destination takes priority over the next planned stop. A small
-  system plan sits above the words - see below.
+  A quantum destination takes priority over the next planned stop. The system
+  map is a separate page in Flight.
 - **Task:** what do I do next? Show the first outstanding stop and its next
   unfinished instruction, including the quantity and unit the pilot entered.
   Planned loads are never presented as detected cargo in the hold.
@@ -93,29 +93,28 @@ thrown away.** The panel pulled `focus`, `claim`, `services`, `shopping`,
 Here and Mine cost no new call at all. Only Ledger needed one, and it rides the
 thirty-second timer with the rest.
 
-Fourteen pages, and the frame has a button for every one of them. Prev/Next is
-the fallback rather than the way in, because cycling through fourteen to reach
-the fourteenth is not something to do in flight. A flat list rather than F-16
-master modes: grouping only pays above about fifteen pages and costs the pilot a
-mental model - which is also the ceiling this is now close to. The next page
-worth adding is the one that argues for grouping.
+The cockpit now uses a hierarchy. Home has Flight, Operations, Resources and
+Pilot tiles with current context; category tiles show the main reading of each
+screen. Top buttons resolve against the visible category and keep sibling
+screens reachable without returning home. Empty slots remain blank; live data
+never reorders the menu. Back moves to the parent, Home goes directly to the root.
 
 The goal form, the card show/hide controls and anything needing typed input stay
 on the dashboard. The panels are click-through - there is no pointer, and there
 never will be.
 
-The default cockpit pairs Nav on the left with Task on the right. Fleet
+Both frames start at Home and remember their last screen independently. Fleet
 catalogues, market browsing, historical tables and settings stay on the
 dashboard - what came across is the question a pilot asks in the seat, never the
 report behind it.
 
 ### The HUD format
 
-Every reading was a label stacked over a value, at a size that wrapped nearly
-every line - which read as a list of sentences rather than an instrument, and
-ran Nav's four readings off the bottom of a 480 px panel. A reading is one line
-now: a glyph, a short label at 30% of the width, and the value. The type came
-down with it.
+Overview pages lead with a full-width answer and supporting readings. More
+opens the remaining details; Back returns to the overview before the category.
+Lists keep all their rows and scroll with Up/Down. Cargo keeps its qualifier in
+both views. Category menus use icon tiles; compact openings omit tile summaries
+when height is limited. The physical button captions stay short.
 
 The glyph is looked up from the label, which is safe only because the labels are
 a closed vocabulary written in this file. Anything unmapped gets a neutral mark
@@ -131,9 +130,9 @@ false: Cargo says *Never the hold*, and Crew says *Absence means nothing*.
 Everything else is in this file and on the settings page, where there is room to
 read it.
 
-**Map is a page.** The same plan Nav carries small, at full size, on the button
-between Up and Down - with where you are and where you are going underneath,
-because those are the two facts a picture cannot state.
+**Map is a page under Flight.** The picture and its readings share a scroll
+area, so a small opening can scroll past the map to read the location and route.
+Navigation keeps the destination prominent without competing with a map.
 
 ### One strip of chrome, and words a frame can carry
 
@@ -234,11 +233,10 @@ with the layout. They used to be four buttons on the face.
 running alignment preview immediately, so a rebinding can be tried on the frame
 before it is saved; **Save layout** keeps them along with the placement.
 
-## The plan on Nav, and the corner of the frame
+## The system map and the corner of the frame
 
-The map is small on purpose. The readings answer "where am I"; the plan is only
-the shape of it, so it takes about a third of the panel's height and the words
-keep the rest.
+Flight contains a dedicated System map screen. Navigation quotes the distance
+from the same model; the map and its text scroll together on smaller openings.
 
 It is real geometry. `/api/map` carries the community starmap's own body
 coordinates - 16 bodies in Stanton, 12 in Pyro, 3 in Nyx - normalised to the
@@ -338,32 +336,28 @@ assignments without changing the firmware.
 
 | Buttons | Quantum Wake action |
 | --- | --- |
-| 1–5 | Nav, Task, Act, Cargo, Contract |
-| 6 / 7 | Ship, Here |
-| 9 / 10 | Money, List |
-| 16 / 17 / 18 | Status, Feed, Crew |
-| 19 / 20 | Ledger, Mine |
-| 14 / 12 | Up / down — the cursor on Act, the panel elsewhere. Dim where neither applies |
-| 8 | Done — arm, then confirm, the selected line. Dim off Act |
-| 21–28 (rockers) | Unassigned; see below |
+| 1–5 | Context menu options; captions follow Home, category or sibling screens |
+| 15 | Back: details → overview → category → Home |
+| 13 | Home: cockpit category tiles |
+| 10 | More / Less: secondary readings where available |
+| 14 / 12 | Up / Down: select on Checklist, scroll elsewhere |
+| 8 | Done: arm, then confirm the selected checklist task |
+| Other OSBs and rockers | Unassigned |
 
-**Seventeen buttons, and the three that are left over.** Previous page, next page and Home ship
-unassigned: every page has a button of its own, so cycling is a second way to do
-the same thing whose shape the pilot cannot see, and a bottom row of five
-overlapping navigation keys was the most confusing thing on the frame. Screen
-brightness and text size are sliders in setup - they are set once when the
-frames go on, and adjusting them from the face cost four of the twenty
-positions. All five commands stay in the list for anyone who wants them under a
-thumb, and the rockers are their natural home once a cockpit run names them.
+The category layout is stable as data arrives:
 
-**Three buttons dim when they have nothing to act on.** Up and Down have nothing
-to move on a page that already fits and carries no cursor; Done has nothing to
-confirm anywhere but Act, and had been sitting lit on nine pages where it did
-nothing. Dimmed rather than blanked: a bound button that is idle here is
-different information from a position carrying nothing at all, which stays
-blank. Page buttons never dim - a way out that disappears is worse than a
-redundant one. Whether a page can scroll is measured from the laid-out panel and
-handed to the rule, rather than guessed from a row count.
+| Category | Screens |
+| --- | --- |
+| Flight | Navigation, System map, Local intel, Ship |
+| Operations | Flight plan, Checklist, Contract, Shopping |
+| Resources | Cargo & trade, Mining, Earnings, Ledger |
+| Pilot | Session, Crew, Activity |
+
+DONE and MORE disappear where they have no action; Up/Down dim when there is
+nothing to move. Home and Back retain their positions across menus. Direct page
+shortcuts, category shortcuts, text size and brightness commands remain bindable.
+Custom profiles are preserved; Restore defaults and Save layout adopt this menu
+profile. Keep Home or Back bound for hardware navigation out of a submenu.
 
 Every one of those is a default rather than a rule. **Button assignments** in
 setup rebinds any of the 28 buttons to any page or action, shared by both
@@ -505,6 +499,20 @@ That bug was also reaching the screenshot cross-check: the mobiGlas Contracts
 app was compared against a permanently empty list, so a photograph of five
 accepted contracts read "the tab says 5, the logs say 0" and filed all five as
 "on screen but not in the logs".
+
+### Menu redesign verification
+
+The fixture browser harness is `tests/mfd-hud.browser.cjs`. Run it with Node
+and an installed Chrome, passing an output directory for screenshots. It serves
+only fixture data and intercepts writes. The run checked 40 screen/size
+combinations at 220 and 480 pixels, plus wide panels and enlarged text. It
+checks menu parents, native button messages, custom maps, overview/details,
+task confirmation guards and independent saved navigation for both panels.
+
+Screenshots caught clipped menu tiles at enlarged text and in a wide panel;
+tile sizing now follows the shorter panel dimension and drops secondary hints
+when space is tight. The small map originally left almost no room for its text;
+map and readings now share the same scroll area.
 
 Physical button presses while the game has focus, frame alignment, and
 mixed-DPI monitor behavior still need a cockpit run. The native checks read

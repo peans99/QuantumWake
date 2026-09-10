@@ -44,8 +44,7 @@ public class MfdTests
     }
 
     [Theory]
-    [InlineData(1, "page", 0)] [InlineData(3, "page", 2)]
-    [InlineData(9, "page", 8)] [InlineData(16, "page", 5)] [InlineData(20, "page", 13)]
+    [InlineData(1, "slot", 1)] [InlineData(3, "slot", 3)] [InlineData(5, "slot", 5)]
     [InlineData(12, "scroll", 1)] [InlineData(14, "scroll", -1)]
     public void DefaultButtonsFollowCougarClockwiseNumbering(int button, string action, int value)
     {
@@ -65,7 +64,7 @@ public class MfdTests
     public void ReservedButtonsAndInvalidInputHaveNoAction()
     {
         var e = Engine();
-        Assert.True(e.Evaluate("[0,11,15,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
+        Assert.True(e.Evaluate("[0,6,7,9,11,16,20,21,28,29,1.5,'1',-1].every(n => QwMfd.action(n) === null)").AsBoolean());
     }
 
     /// <summary>
@@ -92,7 +91,7 @@ public class MfdTests
         Assert.True(e.Evaluate("QwMfd.action(1,{2:'nav'}) === null").AsBoolean());
         Assert.Equal(0, e.Evaluate("QwMfd.action(2,{2:'nav'}).page").AsNumber());
         Assert.True(e.Evaluate("QwMfd.action(3,{3:'invented-command'}) === null").AsBoolean());
-        Assert.Equal("nav", e.Evaluate("QwMfd.buttons(null)[1]").AsString());
+        Assert.Equal("menu-1", e.Evaluate("QwMfd.buttons(null)[1]").AsString());
         Assert.True(e.Evaluate("Object.keys(QwMfd.buttons({})).length === 0").AsBoolean());
     }
 
@@ -469,22 +468,56 @@ public class MfdTests
         e.Evaluate($"JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('{id}'),{state},{plan},false,{view}))").AsString();
 
     [Fact]
-    public void EveryPageHasAButtonRatherThanOnlyACycle()
+    public void EveryPageIsReachableThroughOneCategoryAndHasAWayBack()
     {
         var e = Engine();
         Assert.Equal(15, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
-            "QwMfd.pageIds.every(id => Object.values(QwMfd.defaults).includes(id))").AsBoolean());
+            "QwMfd.pageIds.every(id => QwMfd.groups.filter(g => g.children.includes(id)).length === 1"
+            + " && QwMfd.menuItems(QwMfd.parent(id)).includes(id))").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.icon(id) && QwMfd.caption(id))").AsBoolean());
 
-        // Page cycling, Home, brightness and text size stay in the vocabulary
-        // and out of the shipped profile: every page has a button of its own, so
-        // cycling is a second invisible way to do the same thing, and two
-        // settings were costing four of the twenty positions to adjust.
-        Assert.True(e.Evaluate("['prev','next','home','text-up','text-down','bright-up','bright-down']"
+        Assert.True(e.Evaluate("['prev','next','text-up','text-down','bright-up','bright-down']"
             + ".every(id => QwMfd.commands.some(c => c.id === id)"
             + " && !Object.values(QwMfd.defaults).includes(id))").AsBoolean());
-        Assert.Equal(18, e.Evaluate("Object.keys(QwMfd.defaults).length").AsNumber());
+        Assert.Equal("back", e.Evaluate("QwMfd.defaults[15]").AsString());
+        Assert.Equal("home", e.Evaluate("QwMfd.defaults[13]").AsString());
+        Assert.True(e.Evaluate("QwMfd.groups.every(g => QwMfd.parent(g.id) === 'home')").AsBoolean());
+    }
+
+    [Fact]
+    public void MenuKeysFollowTheVisibleCategoryIncludingEmptySlots()
+    {
+        var e = Engine();
+        Assert.Equal("flight", e.Evaluate("QwMfd.resolveCommand('menu-1','home')").AsString());
+        Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','flight')").AsString());
+        Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','nav')").AsString());
+        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-5','home') === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-4','pilot') === null").AsBoolean());
+        Assert.Equal("cargo", e.Evaluate("QwMfd.resolveCommand('cargo','pilot')").AsString());
+        Assert.Equal("back", e.Evaluate("QwMfd.effect('back').menu").AsString());
+    }
+
+    [Fact]
+    public void OldPagePreferencesMigrateAndInvalidScreensReturnHome()
+    {
+        var e = Engine();
+        Assert.Equal("home", e.Evaluate("QwMfd.restoreScreen({})").AsString());
+        Assert.Equal("act", e.Evaluate("QwMfd.restoreScreen({page:2})").AsString());
+        Assert.Equal("pilot", e.Evaluate("QwMfd.restoreScreen({screen:'pilot',page:2})").AsString());
+        Assert.Equal("home", e.Evaluate("QwMfd.restoreScreen({screen:'missing',page:900})").AsString());
+    }
+
+    [Fact]
+    public void OverviewAndDetailsKeepEveryReadingAndTheCargoQualifier()
+    {
+        var e = Engine();
+        e.Execute("var cargo = QwMfd.rows(QwMfd.pageIds.indexOf('cargo'),{}, {stops:[]});"
+            + "var brief = QwMfd.readingView('cargo',cargo,false); var detail = QwMfd.readingView('cargo',cargo,true);");
+        Assert.True(e.Evaluate("brief.more && detail.more").AsBoolean());
+        Assert.True(e.Evaluate("[brief,detail].every(v => v.rows.some(r => r[1].includes('Never the hold')))").AsBoolean());
+        Assert.True(e.Evaluate("cargo.every(r => [...brief.rows,...detail.rows].some(v => JSON.stringify(v) === JSON.stringify(r)))").AsBoolean());
+        Assert.True(e.Evaluate($"!QwMfd.readingView('act',QwMfd.rows(2,{{}},{Plan}),false).more").AsBoolean());
     }
 
     /// <summary>

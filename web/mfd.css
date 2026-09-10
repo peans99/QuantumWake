@@ -22,6 +22,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--display); }
 button { font: inherit; color: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
 #mfd { container-type: size; display: grid; grid-template-columns: 14% 1fr 14%; grid-template-rows: 12% 1fr 12%; width: 100%; height: 100%; padding: 2%; position: relative; }
 .edge { display: grid; gap: 3%; }
 .top, .bottom { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-column: 2; }
@@ -49,20 +50,41 @@ header { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-siz
   color: var(--dim); letter-spacing: .14em; text-transform: uppercase;
   padding-bottom: 2%; border-bottom: 1px solid var(--line); }
 #identity { margin-right: auto; }
-h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; font-weight: 400; color: var(--hot); }
-#readings { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; flex: 1; }
-/* A glyph, a label and a value on one line. Stacked label-over-value read as a
-   list of sentences and wrapped constantly; an instrument puts the name and the
-   number side by side, and the type came down with it. */
-.reading { display: flex; align-items: baseline; gap: 2.5%; padding: 0 0 2.6%; overflow-wrap: anywhere; }
-.reading svg { flex: 0 0 auto; width: 1.15em; height: 1.15em; fill: none; stroke: var(--dim);
+h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; font-weight: 500; color: var(--hot); }
+#breadcrumb { display: flex; gap: .5em; align-items: center; padding: 3% 0 2%; color: var(--muted); font-size: clamp(8px, 1.9cqw, 14px); }
+#breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--muted); }
+#breadcrumb button:disabled { color: var(--dim); cursor: default; }
+#breadcrumb button:hover:not(:disabled) { color: var(--hot); }
+#menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 3%; flex: 1; min-height: 0; }
+.menu-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  min-width: 0; min-height: 0; padding: clamp(5px, 2cqmin, 14px); border: 1px solid var(--line-hot); border-radius: 3px;
+  background: linear-gradient(145deg, #102637, #08111b); overflow: hidden; }
+.menu-tile:hover, .menu-tile:focus-visible { outline: 1px solid var(--hot); background: #123347; }
+.menu-tile svg { flex: 0 0 auto; width: clamp(18px, 6cqmin, 44px); height: clamp(18px, 6cqmin, 44px);
+  fill: none; stroke: var(--glow); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; margin-bottom: auto; }
+.menu-tile strong { flex: 0 0 auto; font-weight: 500; font-size: calc(clamp(10px, 3cqmin, 23px) * var(--text-scale)); margin-top: 1.2cqmin; line-height: 1.12; }
+.menu-tile small { position: absolute; right: 8%; top: 8%; color: var(--muted); font: clamp(8px, 2cqw, 14px) var(--mono); }
+.tile-hint { flex: 0 0 auto; color: var(--muted); font-size: clamp(8px, 1.8cqmin, 14px); margin-top: 1cqmin; line-height: 1.25; }
+.tile-summary { flex: 0 0 auto; display: block; color: var(--hot); font-size: clamp(8px, 2cqmin, 15px); padding-top: 1.2cqmin; margin-top: 1.2cqmin;
+  border-top: 1px solid var(--line-hot); width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#content { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; flex: 1; }
+/* Give the answer the full width; a separate label column was squeezing the
+   destination into fragments even when most of the panel was empty. */
+.reading { display: grid; grid-template-columns: 1.2em minmax(0, 1fr); align-items: center; gap: 3px 3%;
+  padding: 3% 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.reading svg { width: 1.15em; height: 1.15em; fill: none; stroke: var(--muted);
   stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
   font-size: calc(clamp(9px, 2.1cqw, 15px) * var(--text-scale)); transform: translateY(.15em); }
-.reading h2 { flex: 0 0 30%; margin: 0; font-size: calc(clamp(8px, 1.9cqw, 13px) * var(--text-scale));
-  letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 400; }
-.reading .value { flex: 1; min-width: 0; }
+.reading h2 { margin: 0; font-size: calc(clamp(8px, 1.9cqw, 13px) * var(--text-scale));
+  letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
+.reading .value { grid-column: 1 / -1; min-width: 0; }
 .reading p { margin: 0; font-family: var(--mono);
   font-size: calc(clamp(10px, 2.4cqw, 18px) * var(--text-scale)); line-height: 1.3; }
+.reading.hero { background: linear-gradient(110deg, #103044, #091722); border: 1px solid var(--line-hot); border-left: 2px solid var(--glow); padding: 5%; margin-bottom: 2%; }
+.reading.hero p { font-family: var(--display); font-size: calc(clamp(14px, 4.5cqw, 32px) * var(--text-scale)); line-height: 1.16; color: #e1f6ff; }
+.reading.hero svg { stroke: var(--glow); }
+#more { flex: 0 0 auto; padding: 3% 0; text-align: left; color: var(--glow); border: 0; background: transparent; font-size: clamp(9px, 2.1cqw, 16px); }
+#scroll-hint { flex: 0 0 auto; color: var(--muted); font-size: clamp(8px, 1.8cqw, 13px); text-align: right; padding-top: 1%; }
 .reading time { display: block; color: var(--muted); font-size: clamp(7px, 1.6cqw, 12px); margin-top: 1%; }
 .reading.cursor svg, .reading.armed svg { stroke: var(--glow); }
 /* The line a press would act on, and the line a press has armed. */
@@ -132,7 +154,8 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
 /* ---------- a small opening ---------- */
 /* At 220 px the frame has room for the readings or the decoration, not both.
    Shorter captions come from the command table; the rest goes here. */
-.compact #map { display: none; }
+.compact #map.big svg { max-width: min(100%, 46cqh); }
+.compact #map-note { letter-spacing: .02em; }
 .compact h1 { font-size: clamp(13px, 3.4cqw, 20px); letter-spacing: .12em; margin: 3% 0; }
 .compact .reading { padding-bottom: 3%; gap: 2%; }
 .compact .reading h2 { flex-basis: 34%; letter-spacing: .04em; }
@@ -142,3 +165,13 @@ h1 { font-size: clamp(16px, 4cqw, 34px); letter-spacing: .24em; margin: 5% 0; fo
 .compact .edge button { letter-spacing: .02em; padding: 1%; }
 .compact .edge button svg { width: 1.35em; height: 1.35em; margin-bottom: .1em; }
 .compact #action span { display: none; }
+.compact .menu-tile { padding: 8%; }
+.compact .menu-tile strong { font-size: clamp(10px, 3.2cqw, 14px); }
+.compact .menu-tile svg { width: 5.5cqw; height: 5.5cqw; min-width: 12px; min-height: 12px; }
+.compact .tile-hint { display: none; }
+.menu-dense .tile-hint { display: none; }
+.compact .tile-summary { font-size: 8px; padding-top: 4%; margin-top: 5%; }
+.compact .reading.hero { padding: 4%; }
+.compact #breadcrumb { padding: 2% 0 1%; }
+@media (max-height: 300px) { .tile-summary { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

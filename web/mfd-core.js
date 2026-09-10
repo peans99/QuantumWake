@@ -27,12 +27,7 @@ window.QwMfd = (() => {
      rocker is which number cannot be had from a datasheet, so they are
      bindable and named by the setup tester rather than guessed at here. */
   const OSBS = 20, BUTTONS = 28;
-  /* Ten pages, and a direct button for every one of them - the frame has the
-     positions, and cycling through ten to reach the tenth is not something to
-     do in flight. The Now page's fifteen cards do not map one to one: five of
-     them thicken a page that already exists rather than earning one of their
-     own, because a page is a question a pilot asks, not a card on a dashboard
-     they are scanning at rest. */
+  // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
     'ship', 'here', 'ledger', 'mine', 'map'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
@@ -78,7 +73,9 @@ window.QwMfd = (() => {
       icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
     { id: 'next', label: 'Next page', caption: 'NEXT', short: 'NXT', icon: 'M9 4l8 8-8 8' },
-    { id: 'home', label: 'Home (Nav)', caption: 'HOME', short: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
+    { id: 'home', label: 'Home menu', caption: 'HOME', short: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
+    { id: 'back', label: 'Back · up one menu level', caption: 'BACK', short: 'BACK', icon: 'M10 5l-7 7 7 7M3 12h18' },
+    { id: 'details', label: 'Show details / overview', caption: 'MORE', short: 'MORE', icon: 'M5 6h14M5 12h14M5 18h14' },
     { id: 'up', label: 'Up · select or scroll', caption: 'UP', short: 'UP', icon: 'M4 15l8-8 8 8' },
     { id: 'down', label: 'Down · select or scroll', caption: 'DOWN', short: 'DN', icon: 'M4 9l8 8 8-8' },
     { id: 'text-up', label: 'Text size larger', caption: 'TEXT +', short: 'A+',
@@ -96,12 +93,49 @@ window.QwMfd = (() => {
   /* The shipped profile, on the official clockwise numbering: top 1-5, right
      6-10, bottom 11-15 right to left, left 16-20 bottom to top. The rockers
      start unassigned - see the note above. */
-  const defaults = {
-    1: 'nav', 2: 'task', 3: 'act', 4: 'cargo', 5: 'contract',
-    6: 'ship', 7: 'here', 8: 'confirm', 9: 'money', 10: 'list',
-    12: 'down', 13: 'map', 14: 'up',
-    16: 'status', 17: 'feed', 18: 'crew', 19: 'ledger', 20: 'mine'
-  };
+  const groups = [
+    { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Navigate · map · ship', children: ['nav', 'map', 'here', 'ship'] },
+    { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan · tasks · contracts', children: ['task', 'act', 'contract', 'list'] },
+    { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo · mining · earnings', children: ['cargo', 'mine', 'money', 'ledger'] },
+    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session · crew · activity', children: ['status', 'crew', 'feed'] }
+  ];
+  const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Flight plan', act: 'Checklist',
+    cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
+    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map' };
+  for (const group of groups) commands.push({ id: group.id, label: 'Menu · ' + group.title,
+    caption: group.short, short: group.short, icon: commands.find(c => c.id === group.icon).icon });
+  for (let slot = 1; slot <= 5; slot++) commands.push({ id: 'menu-' + slot,
+    label: 'Context menu · option ' + slot, caption: 'OPT ' + slot, short: 'M' + slot,
+    icon: 'M4 6h16M4 12h16M4 18h16' });
+
+  const defaults = { 1: 'menu-1', 2: 'menu-2', 3: 'menu-3', 4: 'menu-4', 5: 'menu-5',
+    8: 'confirm', 10: 'details', 12: 'down', 13: 'home', 14: 'up', 15: 'back' };
+  const parent = id => groups.find(g => g.children.includes(id))?.id || 'home';
+  const title = id => groups.find(g => g.id === id)?.title || titles[id] || titles.home;
+  const validScreen = id => id === 'home' || groups.some(g => g.id === id) || pageIds.includes(id);
+  function menuItems(screen) {
+    if (screen === 'home') return groups.map(g => g.id);
+    return (groups.find(g => g.id === screen || g.children.includes(screen))?.children || []);
+  }
+  // The label and the press resolve through the same menu, including unused slots.
+  function resolveCommand(id, screen) {
+    if (!/^menu-[1-5]$/.test(id || '')) return id;
+    return menuItems(screen)[Number(id.slice(-1)) - 1] || null;
+  }
+  function restoreScreen(preferences) {
+    if (validScreen(preferences?.screen)) return preferences.screen;
+    if (Number.isInteger(preferences?.page) && pageIds[preferences.page]) return pageIds[preferences.page];
+    return 'home';
+  }
+  const longPages = ['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map'];
+  function readingView(id, rows, details) {
+    // The cargo qualifier must travel with both views, never disappear behind More.
+    const qualifier = rows.filter(r => r[0] === 'NOT A MANIFEST');
+    const body = rows.filter(r => r[0] !== 'NOT A MANIFEST');
+    const limit = qualifier.length ? 2 : 3;
+    const split = !longPages.includes(id) && body.length > limit;
+    return { rows: [...(split ? (details ? body.slice(limit) : body.slice(0, limit)) : body), ...qualifier], more: split };
+  }
 
   /* Which commands do nothing on the page in front of the pilot. Only three are
      ever in doubt: Up and Down have nothing to move on a page that already
@@ -207,7 +241,9 @@ window.QwMfd = (() => {
   function effect(id) {
     const page = pageIds.indexOf(id);
     if (page >= 0) return { page };
-    return ({ prev: { cycle: -1 }, next: { cycle: 1 }, home: { page: 0 },
+    if (groups.some(g => g.id === id) || id === 'home' || id === 'back') return { menu: id };
+    if (/^menu-[1-5]$/.test(id || '')) return { slot: Number(id.slice(-1)) };
+    return ({ prev: { cycle: -1 }, next: { cycle: 1 }, details: { details: true },
       up: { scroll: -1 }, down: { scroll: 1 },
       'text-up': { text: 1 }, 'text-down': { text: -1 },
       'bright-up': { brightness: 1 }, 'bright-down': { brightness: -1 },
@@ -643,6 +679,7 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+  return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+    groups, parent, title, validScreen, menuItems, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
 })();
