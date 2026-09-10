@@ -140,6 +140,49 @@ public class ScreenReadingStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_paste_can_be_kept_as_a_point_of_interest_after_the_log_is_cleared()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+
+        var pin = store.Pin(At);
+        store.Clear();
+
+        Assert.NotNull(pin);
+        Assert.Equal(At, pin.SourceAt);
+        Assert.Equal(14.99996, pin.Gigametres);
+        Assert.Empty(store.Clipboards());
+        Assert.Single(new ScreenReadingStore(_dir).Pinned());
+    }
+
+    [Fact]
+    public void Pinning_the_same_clipboard_reading_twice_keeps_one_point()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+
+        var first = store.Pin(At);
+        var again = store.Pin(At);
+
+        Assert.Equal(first, again);
+        Assert.Single(store.Pinned());
+        Assert.Null(store.Pin(At.AddMinutes(1)));
+    }
+
+    [Fact]
+    public void A_pinned_point_can_be_removed_without_losing_its_log_entry()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+        store.Pin(At);
+
+        Assert.True(store.Unpin(At));
+        Assert.False(store.Unpin(At));
+        Assert.Empty(store.Pinned());
+        Assert.Single(store.Clipboards());
+    }
+
+    [Fact]
     public void Clearing_takes_both_halves()
     {
         var store = new ScreenReadingStore(_dir);

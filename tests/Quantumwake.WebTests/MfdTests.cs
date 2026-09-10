@@ -471,7 +471,7 @@ public class MfdTests
     public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
-        Assert.Equal(15, e.Evaluate("QwMfd.pageIds.length").AsNumber());
+        Assert.Equal(16, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
             "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
             + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"
@@ -503,7 +503,7 @@ public class MfdTests
 
         // Navigation rides Home's fifth slot, which the four categories left empty.
         Assert.Equal("nav", e.Evaluate("QwMfd.resolveCommand('menu-5','home')").AsString());
-        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-4','pilot') === null").AsBoolean());
+        Assert.Equal("log", e.Evaluate("QwMfd.resolveCommand('menu-4','pilot')").AsString());
         Assert.Equal("cargo", e.Evaluate("QwMfd.resolveCommand('cargo','pilot')").AsString());
         Assert.Equal("back", e.Evaluate("QwMfd.effect('back').menu").AsString());
     }
@@ -607,6 +607,23 @@ public class MfdTests
         Assert.Contains("Contract completed · Recover the cargo", json);
         Assert.Contains("2026-09-09T12:02:00Z", json);
         Assert.Contains("NOTHING YET", Page(e, "feed"));
+    }
+
+    [Fact]
+    public void LogMixesScreenshotsAndCopiedLocationsAndMarksPinnedPoints()
+    {
+        var e = Engine();
+        const string log = "{readings:[{shot:'map.jpg',shotAt:'2026-09-09T12:00:00Z',kind:'Map',summary:'PYRO > RUIN STATION'}],"
+            + "clipboard:[{at:'2026-09-09T12:02:00Z',gigametres:14.99996,believed:'Ruin Station',system:'Pyro'}],"
+            + "pins:[{sourceAt:'2026-09-09T12:02:00Z'}]}";
+
+        var json = Page(e, "log", view: "{extra:{screenLog:" + log + "}}");
+
+        Assert.Contains("PINNED POI", json);
+        Assert.Contains("15.0000 Gm · Pyro · Ruin Station", json);
+        Assert.Contains("SCREEN · MAP", json);
+        Assert.Contains("PYRO > RUIN STATION", json);
+        Assert.Contains("NO LOG ENTRIES", Page(e, "log", view: "{extra:{screenLog:{}}}"));
     }
 
     /// <summary>

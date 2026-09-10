@@ -2250,10 +2250,24 @@ public static class ServerHost
             {
                 readings = readings.All().Take(many),
                 clipboard = readings.Clipboards().Take(many),
+                pins = readings.Pinned(),
                 total = readings.All().Count,
                 pastes = readings.Clipboards().Count,
             });
         });
+
+        // A copied /showlocation has exact coordinates but no game-owned name.
+        // Keeping a pin is a pilot decision, separate from clearing the log it
+        // came through, so it remains useful after routine log cleanup.
+        app.MapPost("/api/screen/clipboard/pin", (ClipboardPinRequest request, ScreenReadingStore readings) =>
+            readings.Pin(request.At) is { } pin
+                ? Results.Ok(pin)
+                : Results.NotFound(new { trouble = "that copied location is no longer in the log" }));
+
+        app.MapDelete("/api/screen/pins", (DateTimeOffset at, ScreenReadingStore readings) =>
+            readings.Unpin(at)
+                ? Results.Ok(new { removed = true })
+                : Results.NotFound(new { trouble = "that point of interest is already gone" }));
 
         // The newest loadout read for each ship, for the fleet page - dated,
         // because a screenshot is a moment and never a state.
@@ -3632,6 +3646,9 @@ public sealed record JobRequest(
 
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);
+
+/// <summary>The clipboard reading a pilot has chosen to keep as a point of interest.</summary>
+public sealed record ClipboardPinRequest(DateTimeOffset At);
 
 /// <summary>The current place joined onto the small set of decisions it enables.</summary>
 public sealed record PilotBriefing(

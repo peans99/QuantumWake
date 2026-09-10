@@ -41,7 +41,7 @@ public class ScreenLogTests
             """);
 
         page.Serve("/api/screen/readings?take=50", $$"""
-            {"readings":[{{readings}}],"clipboard":[{{clipboard}}],"total":1,"pastes":2}
+            {"readings":[{{readings}}],"clipboard":[{{clipboard}}],"pins":[],"total":1,"pastes":2}
             """);
 
         page.Serve("/api/briefing", "{}");
@@ -107,11 +107,36 @@ public class ScreenLogTests
     {
         var page = Panel(Sighting, Paste);
 
-        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"total":0,"pastes":0}""");
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"pins":[],"total":0,"pastes":0}""");
         page.Do("__dom.node('#screen-log-clear').click();");
 
         Assert.Contains("DELETE /api/screen/readings", page.Fetched());
         Assert.Contains("Nothing read yet", page.NodeText("#screen-readings"));
+    }
+
+    [Fact]
+    public void A_copied_location_can_be_pinned_as_a_point_of_interest()
+    {
+        var page = Panel(clipboard: Paste);
+        page.Do("renderPinnedLocations([{sourceAt:'2026-09-09T02:10:00Z',pinnedAt:'2026-09-09T02:12:00Z',x:-9641671346.9,y:-11490734321.2,z:-91805.1,gigametres:14.99996,believed:'Ruin Station',system:'Pyro'}]);");
+        page.Serve("/api/screen/clipboard/pin", """{"sourceAt":"2026-09-09T02:10:00Z"}""");
+
+        Assert.Contains("Ruin Station", page.NodeText("#screen-pins"));
+        page.Do("await pinClipboardLocation({at:'2026-09-09T02:10:00Z'}, __dom.node('#screen-log-refresh'));");
+
+        Assert.Contains("POST /api/screen/clipboard/pin", page.Fetched());
+        Assert.Contains("2026-09-09T02:10:00Z", page.BodyOf("/api/screen/clipboard/pin"));
+    }
+
+    [Fact]
+    public void A_saved_point_can_be_removed_from_the_log()
+    {
+        var page = Panel();
+        page.Serve("/api/screen/pins?at=2026-09-09T02%3A10%3A00Z", """{"removed":true}""");
+
+        page.Do("await unpinLocation({sourceAt:'2026-09-09T02:10:00Z'}, __dom.node('#screen-log-refresh'));");
+
+        Assert.Contains("DELETE /api/screen/pins?at=2026-09-09T02%3A10%3A00Z", page.Fetched());
     }
 
     // ---- the stream, and the toast ----

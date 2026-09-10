@@ -48,6 +48,17 @@ public sealed record ClipboardSighting(
     string? Believed,
     string? System);
 
+/// <summary>A copied location the pilot chose to keep after its log entry is gone.</summary>
+public sealed record PinnedLocation(
+    DateTimeOffset SourceAt,
+    DateTimeOffset PinnedAt,
+    double X,
+    double Y,
+    double Z,
+    double Gigametres,
+    string? Believed,
+    string? System);
+
 /// <summary>
 /// Remembers what the screenshots said, and what was pasted.
 /// </summary>
@@ -70,14 +81,17 @@ public sealed class ScreenReadingStore
 
     private readonly string _path;
     private readonly string _clipboardPath;
+    private readonly string _pinsPath;
     private readonly Lock _gate = new();
     private List<ScreenSighting> _sightings = [];
     private List<ClipboardSighting> _clipboard = [];
+    private List<PinnedLocation> _pins = [];
 
     public ScreenReadingStore(string? directory = null)
     {
         _path = Path.Combine(directory ?? AppPaths.Root, "screen-readings.json");
         _clipboardPath = Path.Combine(directory ?? AppPaths.Root, "screen-clipboard.json");
+        _pinsPath = Path.Combine(directory ?? AppPaths.Root, "pinned-locations.json");
         Load();
     }
 
@@ -96,6 +110,49 @@ public sealed class ScreenReadingStore
     public IReadOnlyList<ClipboardSighting> Clipboards()
     {
         lock (_gate) return [.. _clipboard];
+    }
+
+    /// <summary>Locations deliberately kept by the pilot, newest pin first.</summary>
+    public IReadOnlyList<PinnedLocation> Pinned()
+    {
+        lock (_gate) return [.. _pins];
+    }
+
+    /// <summary>
+    /// Promotes one copied location into a durable point of interest.
+    /// </summary>
+    /// <remarks>
+    /// The paste moment is its identity. Coordinates may repeat when a pilot
+    /// checks the same spot twice, but a single copied reading should never
+    /// grow a second pin because the dashboard was clicked twice.
+    /// </remarks>
+    public PinnedLocation? Pin(DateTimeOffset sourceAt)
+    {
+        lock (_gate)
+        {
+            var existing = _pins.FirstOrDefault(p => p.SourceAt == sourceAt);
+            if (existing is not null) return existing;
+
+            var paste = _clipboard.FirstOrDefault(p => p.At == sourceAt);
+            if (paste is null) return null;
+
+            var pin = new PinnedLocation(paste.At, DateTimeOffset.UtcNow,
+                paste.X, paste.Y, paste.Z, paste.Gigametres, paste.Believed, paste.System);
+            _pins.Insert(0, pin);
+            SavePins();
+            return pin;
+        }
+    }
+
+    /// <summary>Forgets a point of interest without rewriting its source reading.</summary>
+    public bool Unpin(DateTimeOffset sourceAt)
+    {
+        lock (_gate)
+        {
+            if (_pins.RemoveAll(p => p.SourceAt == sourceAt) == 0) return false;
+            SavePins();
+            return true;
+        }
     }
 
     public void AddClipboard(ClipboardSighting paste)
@@ -180,6 +237,7 @@ public sealed class ScreenReadingStore
     {
         LoadSightings();
         LoadClipboard();
+        LoadPins();
     }
 
     private void LoadSightings()
@@ -234,6 +292,34 @@ public sealed class ScreenReadingStore
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // Kept in memory for the session; the next paste tries again.
+        }
+    }
+
+    private void LoadPins()
+    {
+        try
+        {
+            if (!File.Exists(_pinsPath)) return;
+
+            _pins = JsonSerializer.Deserialize<List<PinnedLocation>>(File.ReadAllText(_pinsPath), Json) ?? [];
+            _pins.Sort((a, b) => b.PinnedAt.CompareTo(a.PinnedAt));
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            _pins = [];
+        }
+    }
+
+    private void SavePins()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_pinsPath)!);
+            File.WriteAllText(_pinsPath, JsonSerializer.Serialize(_pins, Json));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Kept in memory for the session; the next pin tries again.
         }
     }
 

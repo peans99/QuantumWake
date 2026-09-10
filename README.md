@@ -318,7 +318,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.27
+### 0.10.28
+
+- **A Log tab keeps what you showed the app in one place.** Screenshots and
+  copied `/showlocation` readings now have a direct dashboard tab instead of
+  living under Overlay settings, and the Cougar MFD has the same compact Log
+  screen under Pilot. A copied location can be pinned as a point of interest;
+  pins keep the exact coordinates even when routine readings are cleared.
+
+- **The Log is clearer at a glance.** Reading controls, recent activity and
+  pinned points are arranged as visual cards, with a small action on each
+  copied coordinate rather than a separate configuration flow.
 
 - **The ledger pages, instead of stopping after the first few.** It showed the
   newest handful, told you there were more and gave you no way to reach them.

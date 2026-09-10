@@ -60,9 +60,9 @@ window.QwMfd = (() => {
   const OSBS = 20, BUTTONS = 28;
   // Keep these indices stable for displays saved before menu navigation.
   const pageIds = ['nav', 'task', 'act', 'cargo', 'contract', 'status', 'feed', 'crew', 'money', 'list',
-    'ship', 'here', 'ledger', 'mine', 'map'];
+    'ship', 'here', 'ledger', 'mine', 'map', 'log'];
   const pages = ['NAV', 'TASK', 'ACT', 'CARGO', 'CONTRACT', 'STATUS', 'FEED', 'CREW', 'MONEY', 'LIST',
-    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP'];
+    'SHIP', 'HERE', 'LEDGER', 'MINE', 'MAP', 'LOG'];
 
   /* One vocabulary for the display, the setup editor and the stored profile.
      Ids rather than page numbers in the file: a profile saved today still
@@ -102,6 +102,8 @@ window.QwMfd = (() => {
       icon: 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4' },
     { id: 'map', label: 'Page · Map', caption: 'MAP', short: 'MAP',
       icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
+    { id: 'log', label: 'Page · Log', caption: 'LOG', short: 'LOG',
+      icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6M9 8h2' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
     { id: 'next', label: 'Next page', caption: 'NEXT', short: 'NXT', icon: 'M9 4l8 8-8 8' },
     { id: 'home', label: 'Home menu', caption: 'HOME', short: 'HOME', icon: 'M3 11l9-7 9 7M6 9.5V20h12V9.5' },
@@ -142,12 +144,12 @@ window.QwMfd = (() => {
       children: ['task', 'act', 'contract', 'list'] },
     { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
       children: ['cargo', 'ledger', 'mine', 'money'] },
-    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, activity, crew',
-      children: ['status', 'feed', 'crew'] }
+    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, activity, crew and log',
+      children: ['status', 'feed', 'crew', 'log'] }
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Flight plan', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
-    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map' };
+    money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', log: 'Log' };
   const menuNodes = {}, leafParents = {};
   function indexMenu(nodes, parentId = 'home') {
     for (const node of nodes) {
@@ -207,7 +209,7 @@ window.QwMfd = (() => {
     if (Number.isInteger(preferences?.page) && pageIds[preferences.page]) return pageIds[preferences.page];
     return validScreen(fallback) ? fallback : 'home';
   }
-  const longPages = ['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map'];
+  const longPages = ['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map', 'log'];
   function readingView(id, rows, details) {
     // The cargo qualifier must travel with both views, never disappear behind More.
     const qualifier = rows.filter(r => r[0] === 'NOT A MANIFEST');
@@ -625,6 +627,33 @@ window.QwMfd = (() => {
         return feed.slice(0, 8).map(entry => [
           String(entry.kind || 'event').replace(/-/g, ' ').toUpperCase(),
           [entry.text, entry.detail].filter(Boolean).join(' · '), entry.at]);
+      }
+      /* Screenshots and copied locations are one history everywhere they are
+         shown. The MFD keeps that history read-only; promotion to a POI is a
+         deliberate dashboard action because the panel has no keyboard for a
+         name or confirmation. */
+      case 'log': {
+        const log = view.extra?.screenLog;
+        if (!log) return [['LOG', 'Reading screenshots and copied locations…']];
+        const pinned = new Set((log.pins || []).map(pin => String(pin.sourceAt || '')));
+        const entries = [
+          ...(log.readings || []).map(shot => ({ at: shot.shotAt, shot })),
+          ...(log.clipboard || []).map(paste => ({ at: paste.at, paste }))
+        ].sort((a, b) => new Date(b.at) - new Date(a.at));
+        if (!entries.length) return [['NO LOG ENTRIES', 'Screenshots and copied locations appear here after the dashboard reads them.']];
+        return entries.slice(0, 8).map(entry => {
+          if (entry.paste) {
+            const paste = entry.paste;
+            const where = [paste.system, paste.believed].filter(Boolean).join(' · ');
+            const gm = Number(paste.gigametres);
+            return [pinned.has(String(paste.at)) ? 'PINNED POI' : 'COPIED LOCATION',
+              [Number.isFinite(gm) ? `${gm.toFixed(4)} Gm` : null, where || 'No session location recorded']
+                .filter(Boolean).join(' · '), paste.at];
+          }
+          const shot = entry.shot;
+          return [`SCREEN · ${String(shot.kind || 'reading').toUpperCase()}`,
+            [shot.summary, shot.shot].filter(Boolean).join(' · '), shot.shotAt];
+        });
       }
       /* A floor and never a roster, exactly as the dashboard's Crew page has
          it: a party member who was already grouped up when you logged in and

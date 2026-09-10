@@ -4028,6 +4028,14 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 /* ---- the screen panel: a reading, and the verdicts beside it ---- */
 .screen-reading { padding: 8px 0; border-top: 1px solid var(--rule); }
 .screen-reading:first-child { border-top: 0; }
+.log-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .8fr); gap: 14px; margin: 0 0 16px; }
+.log-card, .log-history { border: 1px solid var(--rule); background: var(--panel); padding: 14px; }
+.log-card > :last-child, .log-history > :last-child { margin-bottom: 0; }
+.pinned-points { border-color: var(--cyan-deep); }
+.pinned-location { padding: 9px 0; border-top: 1px solid var(--rule); }
+.pinned-location:first-child { border-top: 0; }
+.pin-location { margin-top: 8px; }
+@media (max-width: 720px) { .log-overview { grid-template-columns: 1fr; } }
 .feed.screen-checks, .feed.screen-fittings { max-height: none; overflow: visible; margin-top: 6px; }
 .feed .k.agrees { color: var(--green); border-color: #1f5c3d; }
 .feed .k.differs { color: var(--amber); border-color: #6d4715; }
