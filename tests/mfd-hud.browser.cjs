@@ -76,7 +76,9 @@ let chrome, ws;
     // Named, not counted: "[Array]" tells you a tile overflowed and nothing
     // about which one, which is a whole run of guessing away from the answer.
     const room = await run(`(()=>{const t=document.querySelector('.menu-tile');const a=document.getElementById('action');
-      return t ? {tile:+t.getBoundingClientRect().height.toFixed(1), strip: a && !a.hidden} : null;})()`);
+      return t ? {tile:+t.getBoundingClientRect().height.toFixed(1), strip: a && !a.hidden,
+        cls: document.getElementById('mfd').className, scale: getComputedStyle(document.getElementById('mfd')).getPropertyValue('--text-scale').trim(),
+        menuH: +document.getElementById('menu').getBoundingClientRect().height.toFixed(1)} : null;})()`);
     assert.deepEqual(spilling, [], 'Menu contents fit vertically; spilling: ' + JSON.stringify(spilling)
       + ' with ' + JSON.stringify(room));
   };

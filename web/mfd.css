@@ -55,7 +55,16 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 #breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--muted); }
 #breadcrumb button:disabled { color: var(--dim); cursor: default; }
 #breadcrumb button:hover:not(:disabled) { color: var(--hot); }
-#menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 3%; flex: 1; min-height: 0; }
+/* Rows are at least as tall as what stands in them, and share what is left
+   over only once that is paid for. A flat 1fr split the frame evenly whatever
+   the cost, so on the smallest frame - and again at the largest text - a tile
+   got thirty pixels for a title that stood twenty-three, and overflow:hidden
+   clipped the rest into a word that merely looked cut short. Now the tile that
+   does not fit is off the bottom, where it can be scrolled to, rather than
+   inside the box where it cannot be reached at all. */
+#menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(min-content, 1fr); gap: 3%; flex: 1; min-height: 0;
+  overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; }
 .menu-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left;
   min-width: 0; min-height: 0; padding: clamp(5px, 2cqmin, 14px); border: 1px solid var(--line-hot); border-radius: 3px;
   background: linear-gradient(145deg, #102637, #08111b); overflow: hidden; }
@@ -194,17 +203,7 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 .compact .menu-tile svg { width: 5.5cqw; height: 5.5cqw; min-width: 12px; min-height: 12px; }
 .compact .tile-hint { display: none; }
 .menu-dense .tile-hint { display: none; }
-/* The icon gives the room back, rather than a reading doing it. Turning the
-   text up to 1.5 leaves a tile needing about ninety pixels of a seventy-seven
-   pixel box, and dropping the hint alone did not cover it - the summary then
-   spilled past the bottom, where overflow:hidden clipped it into looking like
-   a word that had simply been cut. A smaller glyph costs nothing that is read:
-   it names the tile the title already names. */
-.menu-dense .menu-tile svg { width: clamp(13px, 3.4cqmin, 26px); height: clamp(13px, 3.4cqmin, 26px); }
-.menu-dense .menu-tile { padding: clamp(4px, 1.4cqmin, 10px); }
-/* And the rule above it keeps its line without the breathing room around it:
-   at this size the gap was worth more as clearance than as separation. */
-.menu-dense .tile-summary { padding-top: .5cqmin; margin-top: .5cqmin; }
+
 .compact .tile-summary { font-size: 8px; padding-top: 4%; margin-top: 5%; }
 .compact .reading.hero { padding: 4%; }
 .compact #breadcrumb { padding: 2% 0 1%; }
