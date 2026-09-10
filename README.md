@@ -318,7 +318,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.22
+### 0.10.23
+
+- **Each frame opens where it is useful again.** Both were starting on the menu,
+  so a two-frame cockpit showed the same list twice. A frame you have not used
+  yet opens on Navigation on the left and your flight plan on the right; once
+  you move it, it remembers where you left it.
 
 - **Two presses to any screen, one to Navigation.** The menu had a middle
   level — Flight → Route → Navigation — and every one of those middle entries

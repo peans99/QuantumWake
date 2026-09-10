@@ -161,10 +161,13 @@ window.QwMfd = (() => {
     if (!/^menu-[1-5]$/.test(id || '')) return id;
     return menuItems(screen)[Number(id.slice(-1)) - 1] || null;
   }
-  function restoreScreen(preferences) {
+  /* A frame that has never been used opens on something worth reading, not on
+     the menu. Two frames both starting at Home showed the same list twice and
+     wasted the second one - which is the whole reason there are two. */
+  function restoreScreen(preferences, fallback = 'home') {
     if (validScreen(preferences?.screen)) return preferences.screen;
     if (Number.isInteger(preferences?.page) && pageIds[preferences.page]) return pageIds[preferences.page];
-    return 'home';
+    return validScreen(fallback) ? fallback : 'home';
   }
   const longPages = ['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map'];
   function readingView(id, rows, details) {

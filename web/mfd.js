@@ -4,7 +4,9 @@ const panelId = mfdParams.get('panel') === 'right' ? 'right' : 'left';
 const mfdKey = 'qw-mfd-' + panelId;
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem(mfdKey) || '{}') || {}; } catch { }
-let screen = QwMfd.restoreScreen(preferences);
+// The cockpit this was built for: where you are on the left, what to do next
+// on the right. Only until the frame is used - after that it remembers.
+let screen = QwMfd.restoreScreen(preferences, panelId === 'right' ? 'task' : 'nav');
 let page = Math.max(0, QwMfd.pageIds.indexOf(screen));
 let details = false, hasDetails = false;
 /* Set in MFD setup and pushed from the host. A bound button can still nudge
@@ -165,14 +167,14 @@ function drawBreadcrumb() {
     breadcrumb.append(crumb);
   });
 }
-function drawMenu() {
+function drawMenu(plan) {
   const menu = byId('menu'); menu.hidden = !isMenu();
   if (menu.hidden) return;
   const items = QwMfd.menuItems(screen).map(id => {
     const node = QwMfd.menuNode(id);
     const preview = QwMfd.previewPage(id);
     const row = !preview ? null : QwMfd.rows(QwMfd.pageIds.indexOf(preview), state, briefing, briefingUnavailable,
-      { selected: 0, extra, map: QwMfd.mapView(atlas, state, briefing), now: Date.now() })[0];
+      { selected: 0, extra, map: plan, now: Date.now() })[0];
     return { id, title: QwMfd.title(id), hint: node?.hint || row?.[0] || '', summary: row?.[1] || 'Not recorded', branch: !!node };
   });
   const key = JSON.stringify([screen, items, bindings]);
@@ -201,10 +203,12 @@ function render() {
   byId('mfd').classList.toggle('menu-open', isMenu());
   byId('mfd').classList.toggle('menu-dense', textScale > 1.2 || window.innerWidth > window.innerHeight * 1.2);
   drawBreadcrumb();
-  drawMenu();
   // One view model, drawn as a plan and quoted as a row: the picture and the
-  // number must not be able to disagree about where you are going.
+  // number must not be able to disagree about where you are going. Built once
+  // and handed on - the menu was building a fresh one per tile, so Home cost
+  // six of these a second on a panel meant to be left running all evening.
   const plan = QwMfd.mapView(atlas, state, briefing);
+  drawMenu(plan);
   drawMap(showing === 'map', plan, true);
   drawMaker();
   const view = QwMfd.readingView(screen, isMenu() ? [] : QwMfd.rows(page, state, briefing, briefingUnavailable,

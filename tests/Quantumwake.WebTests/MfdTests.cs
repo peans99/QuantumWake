@@ -525,6 +525,26 @@ public class MfdTests
         Assert.Equal("home/pilot/crew", e.Evaluate("QwMfd.trail('crew').join('/')").AsString());
     }
 
+    /// <summary>
+    /// A frame nobody has used yet opens on something worth reading. Two frames
+    /// both starting at Home showed the same list twice, which wastes the second
+    /// one - and having two is the whole point of a Cougar pair.
+    /// </summary>
+    [Fact]
+    public void AFreshFrameOpensOnItsCockpitDefaultRatherThanTheMenu()
+    {
+        var e = Engine();
+        Assert.Equal("nav", e.Evaluate("QwMfd.restoreScreen(null,'nav')").AsString());
+        Assert.Equal("task", e.Evaluate("QwMfd.restoreScreen({},'task')").AsString());
+
+        // What the frame remembers still wins over the default.
+        Assert.Equal("ledger", e.Evaluate("QwMfd.restoreScreen({screen:'ledger'},'nav')").AsString());
+
+        // A fallback that is not a screen, and no fallback at all, both land Home.
+        Assert.Equal("home", e.Evaluate("QwMfd.restoreScreen({},'flight-route')").AsString());
+        Assert.Equal("home", e.Evaluate("QwMfd.restoreScreen({})").AsString());
+    }
+
     [Fact]
     public void OldPagePreferencesMigrateAndInvalidScreensReturnHome()
     {
