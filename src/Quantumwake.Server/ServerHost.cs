@@ -2250,15 +2250,35 @@ public static class ServerHost
             // they are taken once rather than once per field.
             var all = readings.All();
             var pastes = readings.Clipboards();
+            var pinned = readings.Pinned();
 
             return Results.Ok(new
             {
                 readings = all.Take(many),
                 clipboard = pastes.Take(many),
+                pins = pinned,
                 total = all.Count,
                 pastes = pastes.Count,
             });
         });
+
+        // A copied /showlocation has exact coordinates but no game-owned name.
+        // Keeping a pin is a pilot decision, separate from clearing the log it
+        // came through, so it remains useful after routine log cleanup.
+        app.MapPost("/api/screen/clipboard/pin", (ClipboardPinRequest request, ScreenReadingStore readings) =>
+            readings.Pin(request.At, request.Label, request.Category) is { } pin
+                ? Results.Ok(pin)
+                : Results.NotFound(new { trouble = "that copied location is no longer in the log" }));
+
+        app.MapPut("/api/screen/pins", (PinUpdateRequest request, ScreenReadingStore readings) =>
+            readings.UpdatePin(request.SourceAt, request.Label, request.Category) is { } pin
+                ? Results.Ok(pin)
+                : Results.NotFound(new { trouble = "that point of interest is already gone" }));
+
+        app.MapDelete("/api/screen/pins", (DateTimeOffset at, ScreenReadingStore readings) =>
+            readings.Unpin(at)
+                ? Results.Ok(new { removed = true })
+                : Results.NotFound(new { trouble = "that point of interest is already gone" }));
 
         // The newest loadout read for each ship, for the fleet page - dated,
         // because a screenshot is a moment and never a state.
@@ -2289,6 +2309,7 @@ public static class ServerHost
         app.MapPost("/api/screen/clipboard", async (
             ScreenInsightService insight,
             ScreenSettingsStore settings,
+            bool? watched,
             CancellationToken token) =>
         {
             // The setting is enforced here and not only in the page. A panel
@@ -2297,7 +2318,7 @@ public static class ServerHost
             if (settings.Current.Mode == ScreenMode.Off)
                 return Results.Ok(new ClipboardReading(false, null, null, null, null, "the screen panel is off"));
 
-            return Results.Ok(await insight.ReadClipboardAsync(token));
+            return Results.Ok(await insight.ReadClipboardAsync(watched == true, token));
         });
 
         app.MapPost("/api/screen/scan", async (
@@ -2314,6 +2335,23 @@ public static class ServerHost
             }
 
             return Results.Ok(await insight.ScanNewestAsync(install?.RootPath, token));
+        });
+
+        // A log entry carries a file name, never its path. Resolve that name
+        // under the game's screenshot folder here so the review queue can open
+        // the evidence without turning this local server into a file browser.
+        app.MapGet("/api/screen/shots/{shot}", (string shot) =>
+        {
+            if (install is null || !string.Equals(Path.GetFileName(shot), shot, StringComparison.Ordinal)
+                || !ScreenFolder.IsScreenshot(shot))
+                return Results.NotFound();
+
+            var path = Path.Combine(Screenshots.FolderFor(install.RootPath), shot);
+            if (!File.Exists(path)) return Results.NotFound();
+
+            var contentType = Path.GetExtension(shot).Equals(".png", StringComparison.OrdinalIgnoreCase)
+                ? "image/png" : "image/jpeg";
+            return Results.File(path, contentType);
         });
 
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
@@ -3637,6 +3675,12 @@ public sealed record JobRequest(
 
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);
+
+/// <summary>The clipboard reading a pilot has chosen to keep as a point of interest.</summary>
+public sealed record ClipboardPinRequest(DateTimeOffset At, string? Label = null, string? Category = null);
+
+/// <summary>The pilot-owned details attached to an existing point of interest.</summary>
+public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category);
 
 /// <summary>The current place joined onto the small set of decisions it enables.</summary>
 public sealed record PilotBriefing(

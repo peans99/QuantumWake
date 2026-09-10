@@ -165,7 +165,7 @@ public sealed class ScreenInsightService(
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
-    public async Task<ClipboardReading> ReadClipboardAsync(CancellationToken token = default)
+    public async Task<ClipboardReading> ReadClipboardAsync(bool mergeWithLatest = false, CancellationToken token = default)
     {
         if (clipboard is null)
             return new ClipboardReading(false, null, null, null, null,
@@ -190,7 +190,7 @@ public sealed class ScreenInsightService(
 
         readings.AddClipboard(new ClipboardSighting(
             now, position.X, position.Y, position.Z, position.GigametresFromCentre,
-            believed?.Name, believed?.System));
+            believed?.Name, believed?.System), mergeWithLatest);
 
         return new ClipboardReading(
             true, position.X, position.Y, position.Z, position.GigametresFromCentre, null);

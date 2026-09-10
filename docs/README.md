@@ -14,6 +14,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [architecture.md](architecture.md) | Design decisions for Quantumwake and the reasons behind them - including shopping lists and destinations, what fits a ship, and the four rules the star map learned the hard way. |
 | [phase-1-core.md](phase-1-core.md) | Build log: the Core parser, what it verified, and the quirks it uncovered. |
 | [phases-2-5.md](phases-2-5.md) | Build log: server, dashboard, map, overlay, and the dormant combat parser. |
+| [mfd-mode.md](mfd-mode.md) | Cougar MFD HUD plan, visual monitor placement, default USB profile and verification. |
 | [log-simulator.md](log-simulator.md) | The fake-log generator: how to use it and why it reproduces the format's quirks. |
 | [untapped-signals.md](untapped-signals.md) | Log signals we have not used yet, ranked, with formats and counts. |
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |

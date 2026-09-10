@@ -53,7 +53,118 @@ public sealed record NowState
 
     /// <summary>The newest screenshot reading, or null when none has been taken.</summary>
     public NowScreen? Screen { get; init; }
+
+    /// <summary>
+    /// Contracts still open in this session, newest first.
+    /// </summary>
+    /// <remarks>
+    /// This session only, and deliberately: /api/contracts reads the store, and
+    /// the store gains a session on log rotation - so the contract being flown
+    /// right now is the one thing that report cannot show. Filtered to the open
+    /// ones and capped, because this rides a snapshot pushed every second and a
+    /// history here would be a report inside a heartbeat.
+    /// </remarks>
+    public IReadOnlyList<NowContract> Contracts { get; init; } = [];
+
+    /// <summary>What the kiosks recorded moving this session, or null when nothing has.</summary>
+    public NowCargo? Cargo { get; init; }
 }
+
+/// <summary>One contract this session opened and has not closed.</summary>
+/// <param name="Steps">
+/// Journal objectives and how many of them finished. Zero steps means the
+/// journal reported none, which is not the same as none remaining - so a view
+/// showing "0 of 0" would be inventing progress, and must say the game was
+/// quiet instead.
+/// </param>
+public sealed record NowContract(
+    string Name,
+    string Issuer,
+    string? Type,
+    string? Difficulty,
+    int Steps,
+    int StepsDone,
+    DateTimeOffset Since)
+{
+    /// <summary>
+    /// The contracts a session took and has not closed, newest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every <see cref="ContractRecord"/> comes from an objective marker, and
+    /// the game creates objective markers for missions in the journal - so
+    /// being here is what "taken" means. Open is then the outcome the logs
+    /// never closed.
+    /// </para>
+    /// <para>
+    /// Not <see cref="ContractRecord.Accepted"/>, which nothing sets: filtering
+    /// on it returns an empty list for every session ever recorded. Found by
+    /// running this page against a real install and getting no contracts out of
+    /// a log carrying 24 acceptance toasts.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<NowContract> OpenIn(SessionSummary summary) =>
+        [.. summary.Contracts
+            .Where(c => c.CompletedAt is null
+                && c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress)
+            .OrderByDescending(c => c.FirstSeen)
+            .Take(6)
+            .Select(c => new NowContract(
+                // The annotations come off the title here for the same reason
+                // the logbook takes them off: a contract reads as its own name.
+                ContractTags.Clean(c.DisplayName),
+                c.Issuer,
+                c.Type,
+                c.Difficulty,
+                c.Steps,
+                c.StepsDone,
+                c.FirstSeen))];
+}
+
+/// <summary>
+/// The commodity counters' own account of this session.
+/// </summary>
+/// <remarks>
+/// Not a manifest, and nothing built on it may be shown as one. Game.log never
+/// states what is in a hold: these are buy and sell requests at a kiosk, so a
+/// haul bought last session, transferred from another ship or blown out of the
+/// back is invisible either way. Every figure here is a floor, over this
+/// session alone.
+/// </remarks>
+public sealed record NowCargo(int BoughtScu, int SoldScu, NowKioskMove? Last)
+{
+    /// <summary>What the commodity counters moved this session, or null if none did.</summary>
+    /// <param name="name">
+    /// Resolves a logged resource id to the game's own word for it - see
+    /// <see cref="LogLibrary.CommodityName"/>. Passed in rather than reached
+    /// for so this stays a function of the session it is given.
+    /// </param>
+    /// <remarks>
+    /// The last move is the newest by timestamp rather than the last in the
+    /// list: the list is appended as events arrive, and the one thing this must
+    /// not do is call an older receipt the current one.
+    /// </remarks>
+    public static NowCargo? From(SessionSummary summary, Func<string?, string?> name)
+    {
+        if (summary.Trades.Count == 0) return null;
+
+        var last = summary.Trades.MaxBy(trade => trade.At)!;
+
+        return new NowCargo(
+            summary.Trades.Where(t => !t.IsSell).Sum(t => t.Quantity),
+            summary.Trades.Where(t => t.IsSell).Sum(t => t.Quantity),
+            new NowKioskMove(last.At, last.Shop, last.IsSell, last.Quantity, last.Amount, name(last.ResourceId)));
+    }
+}
+
+/// <summary>The last thing a commodity counter was asked to move.</summary>
+/// <param name="Commodity">
+/// The resolved name, or null when the id names nothing the install or the
+/// dataset knows - see <see cref="LogLibrary.CommodityName"/>. Never the raw
+/// id: an unresolved id shown as a name is a cargo nobody carried.
+/// </param>
+public sealed record NowKioskMove(
+    DateTimeOffset At, string Shop, bool Sell, int Scu, decimal Amount, string? Commodity);
 
 /// <summary>The newest screenshot reading, for the Now card and the widget.</summary>
 /// <remarks>
@@ -307,6 +418,8 @@ public sealed class LiveSessionService : BackgroundService
             Kills = summary.Kills,
             RecentEvents = Feed(),
             Screen = screen,
+            Contracts = NowContract.OpenIn(summary),
+            Cargo = NowCargo.From(summary, _library.CommodityName),
             Party = ReadParty(summary.PartyNotes),
             PartyDisbanded = summary.PartyNotes.Count > 0
                 && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded

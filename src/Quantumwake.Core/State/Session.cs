@@ -134,6 +134,15 @@ public sealed record RespawnRecord(
     string Cause = "death");
 
 /// <summary>A contract seen during a session.</summary>
+/// <param name="Accepted">
+/// Always false, and never filter on it. The acceptance toast and the objective
+/// marker name a contract in two vocabularies that do not join, so nothing ever
+/// sets this - and two separate views quietly returned "no open contracts" for
+/// every session ever recorded because they asked it. Being here is already
+/// what taken means: the game raises an objective marker for a mission in the
+/// journal. Kept rather than removed only because dropping it would retire
+/// every cached session to change nothing that is stored.
+/// </param>
 public sealed record ContractRecord(
     DateTimeOffset FirstSeen,
     string Raw,

@@ -90,6 +90,29 @@ internal static partial class NativeWindowStyles
     }
 
     /// <summary>
+    /// Styles for a plain backdrop: out of the way, never focused, clicks pass
+    /// straight through it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="WS_EX_LAYERED"/>, unlike
+    /// <see cref="ApplyOverlayStyles"/>. A backdrop is opaque and has nothing to
+    /// blend, and a layered window is composited from a surface the DWM keeps
+    /// rather than from the window itself - which is the awkward place to be
+    /// asking for a window region as well. There is nothing to gain and one
+    /// interaction to get wrong.
+    /// </remarks>
+    public static void ApplyBackdropStyles(Window window)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero)
+            return;
+
+        var style = GetWindowLong(handle, GWL_EXSTYLE);
+        SetWindowLong(handle, GWL_EXSTYLE,
+            style | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT);
+    }
+
+    /// <summary>
     /// Turns mouse click-through on or off.
     /// </summary>
     /// <remarks>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="app.css?v=0.7.16">
+<link rel="stylesheet" href="app.css?v=0.10.29">
 </head>
 <body>
 
@@ -25,6 +25,7 @@
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
+    <button data-view="log">Log</button>
     <div class="tab-group">
       <button type="button" class="group-btn">Jobs<span class="caret">▾</span></button>
       <div class="group-menu">
@@ -166,6 +167,14 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <section class="now-focus" id="now-focus" hidden aria-live="polite">
+      <div class="now-focus-mark">Focus</div>
+      <div class="now-focus-copy">
+        <div class="now-focus-title" id="now-focus-title"></div>
+        <div class="muted" id="now-focus-detail"></div>
+      </div>
+      <button class="ghost tiny" id="now-focus-open" hidden></button>
+    </section>
     <div class="now-card-visibility" id="now-card-visibility" hidden>
       <span class="muted">Hidden cards</span>
       <div id="now-hidden-card-list"></div>
@@ -696,6 +705,85 @@
     <div id="blueprints-shared"></div>
 
     <div id="blueprint-jobs"></div>
+  </section>
+
+  <!-- LOG -->
+  <section id="view-log" class="view">
+    <div class="section-bar">
+      <div>
+        <h2>Log</h2>
+        <p class="muted caption">What you have shown Quantum Wake, and the coordinates you chose to keep.</p>
+      </div>
+      <div class="controls">
+        <button class="ghost" id="screen-log-refresh">Refresh</button>
+        <button class="ghost" id="screen-log-clear">Clear readings</button>
+      </div>
+    </div>
+
+    <div class="log-overview">
+      <div class="log-card">
+        <div class="option-head">
+          <h3>Read from the game</h3>
+          <span class="muted" id="screen-mode-status"></span>
+        </div>
+        <p class="muted">Copy a <code>/showlocation</code> result or take a screenshot. Both land below;
+          copied coordinates can be kept as a point of interest.</p>
+        <div class="option-head">
+          <label class="muted" for="screen-mode">What it may read</label>
+          <select id="screen-mode" class="select">
+            <option value="Off">Off</option>
+            <option value="CopyOnly">Copy only</option>
+            <option value="Screenshots">Copy and screenshots</option>
+          </select>
+        </div>
+        <p class="muted" id="screen-unavailable" hidden>
+          Not available here: this dashboard has no desktop to read from. Run <code>QuantumWake.exe</code> to use it.
+        </p>
+        <div id="screen-controls" hidden>
+          <div class="option-head">
+            <button class="ghost" id="screen-parse">Read copied location</button>
+            <button class="ghost" id="screen-scan" hidden>Read last screenshot</button>
+            <label class="muted" title="Check the clipboard on its own every few seconds">
+              <input type="checkbox" id="screen-watch"> Watch clipboard
+            </label>
+            <label class="muted" id="screen-watch-folder-label" hidden
+                   title="Read each new screenshot as the game saves it. Nothing already in the folder is read.">
+              <input type="checkbox" id="screen-watch-folder"> Watch screenshots
+            </label>
+          </div>
+          <p class="muted" id="screen-folder" hidden></p>
+          <p class="muted" id="screen-status" aria-live="polite"></p>
+          <div id="screen-result"></div>
+        </div>
+      </div>
+
+      <aside class="log-card pinned-points" aria-labelledby="pinned-points-title">
+        <div class="option-head">
+          <h3 id="pinned-points-title">Pinned points</h3>
+          <span class="muted" id="screen-pin-count"></span>
+        </div>
+        <p class="muted">A pin preserves the exact copied coordinates when you clear routine readings.</p>
+        <div id="screen-pins"></div>
+      </aside>
+    </div>
+
+    <div class="log-history">
+      <div class="option-head">
+        <h3>Recent readings</h3>
+        <span class="muted" id="screen-log-counts"></span>
+      </div>
+      <div id="screen-readings"></div>
+    </div>
+
+    <section class="log-history screen-review" id="screen-review" hidden>
+      <div class="option-head">
+        <h3>Needs a reader</h3>
+        <span class="muted" id="screen-review-count"></span>
+      </div>
+      <p class="muted">These screenshots are safely logged with their text, but Quantum Wake does not yet know
+        how to turn that screen into a structured reading. Open the capture and its extracted text together.</p>
+      <div id="screen-review-list"></div>
+    </section>
   </section>
 
   <!-- LOGBOOK -->
@@ -1554,82 +1642,43 @@
       </p>
     </div>
 
-    <div class="option-block" id="option-screen">
+    <!--
+      Nothing here is a setting, and it stopped pretending to be one. Every
+      control that changes MFD mode lives in the tray window, because that is
+      the only place that can see your monitors, read the USB frames or write
+      mfd.json - so this block explains how to get there and what you will find,
+      and says plainly that the two links are previews rather than the thing.
+    -->
+    <div class="option-block" id="option-mfd">
+      <div class="option-head"><h3>Cougar MFD displays</h3></div>
+      <p class="muted">Optional cockpit displays for Thrustmaster MFD Cougar frames.
+        <b>They are set up from the tray, not from here</b> — this page cannot see your
+        monitors or read a USB frame. Off until you turn them on.</p>
+      <ol class="mfd-steps muted">
+        <li>Right-click the <b>Quantum Wake</b> tray icon (under the <code>^</code> arrow if
+          it is hidden) and choose <b>MFD setup…</b></li>
+        <li>Drag the left and right rectangles onto the monitor behind your frames, and
+          resize them to the openings. <b>Show alignment preview</b> puts them on the real
+          screen and follows you as you drag.</li>
+        <li>Press each Cougar button to light up its row, and bind anything you want
+          differently. The four rockers ship unassigned because nothing states which
+          rocker reports which number — press one and the tester names it.</li>
+        <li>Set screen brightness and text size, tick <b>Enable MFD displays</b>, and
+          <b>Save layout</b>.</li>
+      </ol>
+      <p class="muted">A visual Home menu groups the displays into Flight, Operations,
+        Resources and Pilot. Each category drills into a submenu before its screens —
+        Flight → Route → Navigation or System map, for example. Top buttons follow the
+        current level, Back walks up the path, and Home returns to the cockpit menu.
+        More opens secondary readings. Saved custom shortcuts stay in place; use Restore
+        defaults in MFD setup to adopt menu navigation.</p>
+      <p class="muted">The links below open the pages in this browser, where there is no
+        Windows to ask and no frame to read: they show an example layout and a preview of
+        a display, and can save nothing.</p>
       <div class="option-head">
-        <h3>Reading the screen</h3>
-        <span class="muted" id="screen-mode-status"></span>
+        <a class="ghost" href="mfd-setup.html" target="_blank" rel="noopener">Preview the placement editor</a>
+        <a class="ghost" href="mfd.html" target="_blank" rel="noopener">Preview an MFD page</a>
       </div>
-
-      <p class="muted">
-        Two separate things, and neither is on until you say so. <b>Copy only</b>
-        reads what you have copied — type <code>/showlocation</code> in the game
-        and it turns the coordinates into something readable. <b>Screenshots</b>
-        adds reading the last screenshot you took, to say what an item is.
-        Nothing watches the screen: a screenshot is a file you chose to save.
-      </p>
-
-      <div class="option-head">
-        <label class="muted" for="screen-mode">What it may read</label>
-        <select id="screen-mode" class="select">
-          <option value="Off">Off</option>
-          <option value="CopyOnly">Copy only</option>
-          <option value="Screenshots">Copy and screenshots</option>
-        </select>
-      </div>
-
-      <p class="muted" id="screen-unavailable" hidden>
-        Not available here: this dashboard is served by the bare server, which
-        has no desktop to read from. Run <code>QuantumWake.exe</code> to get one.
-      </p>
-
-      <div id="screen-controls" hidden>
-        <div class="option-head">
-          <button class="ghost" id="screen-parse">Parse what I copied</button>
-          <button class="ghost" id="screen-scan" hidden>Read my last screenshot</button>
-          <label class="muted" title="Check the clipboard on its own every few seconds">
-            <input type="checkbox" id="screen-watch"> Watch the clipboard
-          </label>
-          <label class="muted" id="screen-watch-folder-label" hidden
-                 title="Read each new screenshot as the game saves it. Nothing already in the folder is read.">
-            <input type="checkbox" id="screen-watch-folder"> Read each screenshot as it lands
-          </label>
-        </div>
-
-        <p class="muted" id="screen-folder" hidden></p>
-        <p class="muted" id="screen-status" aria-live="polite"></p>
-        <div id="screen-result"></div>
-
-        <p class="muted">
-          Each screenshot is sorted into the screen it is — an item's tooltip,
-          the Vehicle Loadout Manager, the mobiGlas map — and what it says is set
-          beside what your logs had led the app to believe at that moment. The
-          logs never carry a balance, where you stood, or what is bolted to your
-          ship; a screenshot does, and the disagreement is the useful part. A
-          screen this app has no reader for yet is kept with its text, which is
-          what the next reader gets written from.
-        </p>
-
-      </div>
-    </div>
-
-    <div class="option-block" id="option-screen-log">
-      <div class="option-head">
-        <h3>What you have shown it</h3>
-        <span class="muted" id="screen-log-counts"></span>
-      </div>
-
-      <p class="muted">
-        Every screenshot read and every location pasted, newest first, with what
-        your logs said at that moment beside it. Kept on this machine and
-        nowhere else. The newest is shown in full and the rest a line each.
-      </p>
-
-      <div class="option-head">
-        <button class="ghost" id="screen-log-refresh">Refresh</button>
-        <button class="ghost" id="screen-log-clear">Clear the log</button>
-      </div>
-
-      <div id="screen-readings"></div>
     </div>
 
     <div class="option-block">
@@ -2453,6 +2502,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.7.16"></script>
+<script src="app.js?v=0.10.29"></script>
 </body>
 </html>

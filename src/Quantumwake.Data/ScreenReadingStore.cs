@@ -46,7 +46,22 @@ public sealed record ClipboardSighting(
     double Z,
     double Gigametres,
     string? Believed,
-    string? System);
+    string? System,
+    int TimesSeen = 1,
+    DateTimeOffset? LastSeenAt = null);
+
+/// <summary>A copied location the pilot chose to keep after its log entry is gone.</summary>
+public sealed record PinnedLocation(
+    DateTimeOffset SourceAt,
+    DateTimeOffset PinnedAt,
+    double X,
+    double Y,
+    double Z,
+    double Gigametres,
+    string? Believed,
+    string? System,
+    string? Label = null,
+    string? Category = null);
 
 /// <summary>
 /// Remembers what the screenshots said, and what was pasted.
@@ -70,14 +85,17 @@ public sealed class ScreenReadingStore
 
     private readonly string _path;
     private readonly string _clipboardPath;
+    private readonly string _pinsPath;
     private readonly Lock _gate = new();
     private List<ScreenSighting> _sightings = [];
     private List<ClipboardSighting> _clipboard = [];
+    private List<PinnedLocation> _pins = [];
 
     public ScreenReadingStore(string? directory = null)
     {
         _path = Path.Combine(directory ?? AppPaths.Root, "screen-readings.json");
         _clipboardPath = Path.Combine(directory ?? AppPaths.Root, "screen-clipboard.json");
+        _pinsPath = Path.Combine(directory ?? AppPaths.Root, "pinned-locations.json");
         Load();
     }
 
@@ -98,26 +116,92 @@ public sealed class ScreenReadingStore
         lock (_gate) return [.. _clipboard];
     }
 
-    /// <summary>A paste, unless it is the one already on top. True when it was kept.</summary>
+    /// <summary>Locations deliberately kept by the pilot, newest pin first.</summary>
+    public IReadOnlyList<PinnedLocation> Pinned()
+    {
+        lock (_gate) return [.. _pins];
+    }
+
+    /// <summary>
+    /// Promotes one copied location into a durable point of interest.
+    /// </summary>
     /// <remarks>
-    /// The clipboard holds whatever was copied until something else is copied,
-    /// and the watcher reads it every three seconds - so without this, one
-    /// paste becomes a row every three seconds, and the bound above fills with
-    /// three hundred copies of it inside a quarter of an hour, discarding every
-    /// genuinely different paste to do it. Same coordinates as the newest means
-    /// the same paste rather than a new one: both were parsed from the same
-    /// copied text, so they match to the bit.
+    /// The paste moment is its identity. Coordinates may repeat when a pilot
+    /// checks the same spot twice, but a single copied reading should never
+    /// grow a second pin because the dashboard was clicked twice.
     /// </remarks>
-    public bool AddClipboard(ClipboardSighting paste)
+    public PinnedLocation? Pin(DateTimeOffset sourceAt, string? label = null, string? category = null)
     {
         lock (_gate)
         {
-            if (_clipboard.FirstOrDefault() is { } newest
-                && newest.X == paste.X
-                && newest.Y == paste.Y
-                && newest.Z == paste.Z)
+            var existing = _pins.FirstOrDefault(p => p.SourceAt == sourceAt);
+            if (existing is not null) return existing;
+
+            var paste = _clipboard.FirstOrDefault(p => p.At == sourceAt);
+            if (paste is null) return null;
+
+            var labelForPin = CleanLabel(label)
+                ?? string.Join(" > ", new[] { paste.System, paste.Believed }.Where(v => !string.IsNullOrWhiteSpace(v)));
+            if (string.IsNullOrWhiteSpace(labelForPin)) labelForPin = "Copied location";
+
+            var pin = new PinnedLocation(paste.At, DateTimeOffset.UtcNow,
+                paste.X, paste.Y, paste.Z, paste.Gigametres, paste.Believed, paste.System,
+                labelForPin, CleanCategory(category) ?? "General");
+            _pins.Insert(0, pin);
+            SavePins();
+            return pin;
+        }
+    }
+
+    /// <summary>Forgets a point of interest without rewriting its source reading.</summary>
+    public bool Unpin(DateTimeOffset sourceAt)
+    {
+        lock (_gate)
+        {
+            if (_pins.RemoveAll(p => p.SourceAt == sourceAt) == 0) return false;
+            SavePins();
+            return true;
+        }
+    }
+
+    /// <summary>Updates the pilot's own label and category without moving the point.</summary>
+    public PinnedLocation? UpdatePin(DateTimeOffset sourceAt, string? label, string? category)
+    {
+        lock (_gate)
+        {
+            var at = _pins.FindIndex(p => p.SourceAt == sourceAt);
+            if (at < 0) return null;
+
+            var updated = _pins[at] with
             {
-                return false;
+                Label = CleanLabel(label) ?? _pins[at].Label ?? "Copied location",
+                Category = CleanCategory(category) ?? _pins[at].Category ?? "General",
+            };
+            _pins[at] = updated;
+            SavePins();
+            return updated;
+        }
+    }
+
+    public void AddClipboard(ClipboardSighting paste, bool mergeWithLatest = false)
+    {
+        lock (_gate)
+        {
+            // Clipboard watch deliberately asks every few seconds. The same
+            // /showlocation text must refresh its "last seen" time rather
+            // than consume the whole log while the pilot is still standing.
+            if (mergeWithLatest && _clipboard.FirstOrDefault() is { } latest
+                && latest.X == paste.X && latest.Y == paste.Y && latest.Z == paste.Z)
+            {
+                _clipboard[0] = latest with
+                {
+                    TimesSeen = Math.Max(1, latest.TimesSeen) + 1,
+                    LastSeenAt = paste.At,
+                    Believed = paste.Believed ?? latest.Believed,
+                    System = paste.System ?? latest.System,
+                };
+                SaveClipboard();
+                return;
             }
 
             _clipboard.Insert(0, paste);
@@ -126,7 +210,6 @@ public sealed class ScreenReadingStore
                 _clipboard.RemoveRange(Keep, _clipboard.Count - Keep);
 
             SaveClipboard();
-            return true;
         }
     }
 
@@ -199,6 +282,7 @@ public sealed class ScreenReadingStore
     {
         LoadSightings();
         LoadClipboard();
+        LoadPins();
     }
 
     private void LoadSightings()
@@ -256,6 +340,34 @@ public sealed class ScreenReadingStore
         }
     }
 
+    private void LoadPins()
+    {
+        try
+        {
+            if (!File.Exists(_pinsPath)) return;
+
+            _pins = JsonSerializer.Deserialize<List<PinnedLocation>>(File.ReadAllText(_pinsPath), Json) ?? [];
+            _pins.Sort((a, b) => b.PinnedAt.CompareTo(a.PinnedAt));
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            _pins = [];
+        }
+    }
+
+    private void SavePins()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_pinsPath)!);
+            File.WriteAllText(_pinsPath, JsonSerializer.Serialize(_pins, Json));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Kept in memory for the session; the next pin tries again.
+        }
+    }
+
     private void Save()
     {
         try
@@ -268,6 +380,10 @@ public sealed class ScreenReadingStore
             // Kept in memory for the session; the next add tries again.
         }
     }
+
+    private static string? CleanLabel(string? label) => string.IsNullOrWhiteSpace(label) ? null : label.Trim();
+
+    private static string? CleanCategory(string? category) => string.IsNullOrWhiteSpace(category) ? null : category.Trim();
 
     private static readonly JsonSerializerOptions Json = new()
     {

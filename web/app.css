@@ -480,6 +480,16 @@ h2.spaced { margin-top: 32px; }
   align-items: start;
 }
 
+/* The hub starts with one decision. Cards stay below for the pilots who want
+   the context, but a glance should not require sorting a grid first. */
+.now-focus { display: flex; align-items: center; gap: 14px; margin: 0 0 var(--gap); padding: 11px 15px;
+  border: 1px solid var(--cyan-deep); background: linear-gradient(90deg, rgba(24, 98, 122, .18), var(--panel)); }
+.now-focus-mark { color: var(--cyan-hot); font-size: 9px; letter-spacing: .23em; text-transform: uppercase; }
+.now-focus-copy { min-width: 0; flex: 1; }
+.now-focus-title { color: var(--text); font-weight: 600; }
+.now-focus .tiny { flex: 0 0 auto; }
+@media (max-width: 620px) { .now-focus { align-items: flex-start; flex-wrap: wrap; } .now-focus .tiny { margin-left: auto; } }
+
 .card {
   position: relative;
   background: linear-gradient(158deg, var(--panel) 0%, var(--deep) 100%);
@@ -968,7 +978,16 @@ h2.spaced { margin-top: 32px; }
  * one added later" that stays true, so the default is now correct and the
  * exceptions say they are exceptions.
  */
-button {
+/*
+ * `a.ghost` rides along with the buttons rather than restating them. A few
+ * actions have to be links because they open a page in a new tab - the MFD
+ * placement editor and preview - and a bare anchor in a row of HUD buttons is
+ * the same "from another application" problem as the grey Windows button this
+ * rule was written to stop. Sharing the selector is what keeps them in step:
+ * a change to the button look reaches them without anybody remembering to.
+ */
+button,
+a.ghost {
   background: linear-gradient(160deg, rgba(23, 41, 60, .5), rgba(7, 12, 20, .5));
   border: 1px solid var(--rule);
   color: var(--muted);
@@ -982,20 +1001,25 @@ button {
   transition: border-color .14s, color .14s, background .14s;
 }
 
-button:hover:not(:disabled) {
+a.ghost { display: inline-block; text-decoration: none; }
+
+button:hover:not(:disabled),
+a.ghost:hover {
   border-color: var(--cyan-deep);
   background: linear-gradient(160deg, rgba(53, 200, 240, .16), rgba(13, 92, 120, .1));
   color: var(--cyan-hot);
 }
 
 /* Pressed reads as pressed: the lift goes away rather than deepening. */
-button:active:not(:disabled) {
+button:active:not(:disabled),
+a.ghost:active {
   background: rgba(53, 200, 240, .05);
   color: var(--cyan);
 }
 
 /* Keyboard focus has to survive the clipped corner, which crops an outline. */
-button:focus-visible {
+button:focus-visible,
+a.ghost:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--cyan);
   color: var(--cyan-hot);
@@ -4014,6 +4038,21 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 /* ---- the screen panel: a reading, and the verdicts beside it ---- */
 .screen-reading { padding: 8px 0; border-top: 1px solid var(--rule); }
 .screen-reading:first-child { border-top: 0; }
+.log-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .8fr); gap: 14px; margin: 0 0 16px; }
+.log-card, .log-history { border: 1px solid var(--rule); background: var(--panel); padding: 14px; }
+.log-card > :last-child, .log-history > :last-child { margin-bottom: 0; }
+.pinned-points { border-color: var(--cyan-deep); }
+.pinned-location { padding: 9px 0; border-top: 1px solid var(--rule); }
+.pinned-location:first-child { border-top: 0; }
+.pin-location { margin-top: 8px; }
+.pin-fields { display: grid; grid-template-columns: minmax(0, 1fr) 115px auto auto; gap: 6px; margin-top: 8px; }
+.pin-fields .search, .pin-fields .select { min-width: 0; padding: 5px 7px; font-size: 11px; }
+.screen-review { margin-top: 16px; }
+.screen-review-item { padding: 9px 0; border-top: 1px solid var(--rule); }
+.screen-review-item:first-child { border-top: 0; }
+.screen-review-item pre { max-height: 140px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); font: 11px/1.5 var(--mono); }
+@media (max-width: 720px) { .pin-fields { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .log-overview { grid-template-columns: 1fr; } }
 .feed.screen-checks, .feed.screen-fittings { max-height: none; overflow: visible; margin-top: 6px; }
 .feed .k.agrees { color: var(--green); border-color: #1f5c3d; }
 .feed .k.differs { color: var(--amber); border-color: #6d4715; }
@@ -4022,3 +4061,10 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .feed .k.screen-differs { color: var(--amber); border-color: #6d4715; }
 .toast.screen-differs { border-left-color: var(--amber); }
 .feed.screen-fittings .what { color: var(--text); font-size: 12px; }
+
+/* The MFD block is documentation, not settings: every control it describes is
+   in the tray window. Numbered steps rather than prose, because "where do I
+   click" is the question it exists to answer. */
+.mfd-steps { margin: 10px 0 12px; padding-left: 20px; font-size: 12.5px; line-height: 1.6; }
+.mfd-steps li { margin-bottom: 5px; }
+.mfd-steps li::marker { color: var(--cyan); font-size: 11px; }

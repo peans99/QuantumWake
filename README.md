@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1124 tests](https://img.shields.io/badge/tests-1124%20passing-4fd48a)
+![1668 tests](https://img.shields.io/badge/tests-1668%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
@@ -318,7 +318,263 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.7
+### 0.10.31
+
+- **The Cougar MFD map is now a radar instrument.** Its real body-centre
+  geometry has range rings, a sweep and a lock reticle for the selected body.
+  The five upper bezel buttons become **Nav**, **Previous**, **Next**, **POI**
+  and **Here**, so the frame names what it can do on that screen. POI opens the
+  named points kept in the MFD Log; positions are never invented from a name.
+
+- **The HUD now puts one useful thing in front of you.** Its Focus strip opens
+  the next stop, active contract, current location, or a screen that needs
+  attention. The Log keeps repeated clipboard-watch readings as one location
+  with a seen count, while a deliberate read remains a new entry.
+
+- **Points and unfamiliar screens are easier to work with.** A saved location
+  can have your own name and category, including on the MFD. Screenshots the
+  app cannot yet interpret now collect in a review queue with the capture and
+  extracted text together, ready to turn into the next reader.
+
+- **A Log tab keeps what you showed the app in one place.** Screenshots and
+  copied `/showlocation` readings now have a direct dashboard tab instead of
+  living under Overlay settings, and the Cougar MFD has the same compact Log
+  screen under Pilot. A copied location can be pinned as a point of interest;
+  pins keep the exact coordinates even when routine readings are cleared.
+
+- **The Log is clearer at a glance.** Reading controls, recent activity and
+  pinned points are arranged as visual cards, with a small action on each
+  copied coordinate rather than a separate configuration flow.
+
+- **The ledger pages, instead of stopping after the first few.** It showed the
+  newest handful, told you there were more and gave you no way to reach them.
+  **UP** and **DOWN** now move a page at a time and the title says where you
+  are — *Ledger · 4-6 of 95* — and it reads back thirty days rather than three,
+  because paging through three days is not worth a button. Item names lose
+  their underscores, so an entry wraps instead of taking a whole line as one
+  unbreakable word.
+
+
+- **The system map puts where you are at the top.** Location and next stop were
+  under the plot, which on a small opening meant scrolling a map to find out
+  where you were — the one thing you opened it for. They are above it now, and
+  the plot is sized to leave room for them rather than to fill the frame.
+
+- **The map caption says what it means.** It read "straight line, not a fix",
+  and a fix is the word for a position — so it looked like a warning about
+  where it had put you, which is not what was in doubt. It now says **direct
+  line, not the route flown**: the distance is body centre to body centre, and
+  the game never writes down the route it actually plots.
+
+
+- **Brightness is four levels now, and a button can reach every one of them.**
+  It used to nudge five percent at a time, which is fine for a mouse and no use
+  at all on a frame — you press until it looks right, and next flight you do it
+  again. Bind **Screen brightness · 1 to 4** and one button cycles 40, 60, 80,
+  100 and round again, showing the level it is on. The one-level brighter and
+  dimmer commands are still there for the rocker printed BRT. If you had set
+  something in between, it moves to the nearest level once.
+
+
+- **Setting up the buttons now shows the frame, not a form.** Binding a key
+  meant reading past twenty-eight dropdowns of thirty-six options each, none
+  of which said which key on the desk it meant. Setup draws the Cougar
+  instead: the twenty face buttons in their real positions around the screen,
+  the rockers in a row underneath, each carrying its number and what it does
+  today. **Press a button on the frame and its position lights up and is
+  selected**, so binding one is press, pick, done — and the picking is a
+  single grouped list rather than a thousand entries.
+
+- **Frames can dim themselves when you leave them alone.** Off unless you
+  pick a time in **Screen** — five minutes to an hour. After that the frames
+  drop to a third of your brightness, and the next press of anything brings
+  them straight back before it does whatever it was bound to do. They never
+  blank: a panel you can still glance at beats one that has to be woken
+  first.
+
+- **Each frame opens where it is useful again.** Both were starting on the menu,
+  so a two-frame cockpit showed the same list twice. A frame you have not used
+  yet opens on Navigation on the left and your flight plan on the right; once
+  you move it, it remembers where you left it.
+
+- **Two presses to any screen, one to Navigation.** The menu had a middle
+  level — Flight → Route → Navigation — and every one of those middle entries
+  split just two screens, so it cost a press on the way to everything and
+  sorted nothing. Categories now hold their screens directly, which fits the
+  five top buttons with room to spare, and **Navigation** sits on Home beside
+  the four categories rather than behind one of them.
+
+
+- **A real drill-down menu for Cougar MFDs.** Home opens Flight, Operations,
+  Resources or Pilot; each category opens its own submenu before the page. For
+  example: **Flight → Route → Navigation / System map**. Top buttons follow the
+  visible level, **Back** follows the whole path up, and **Home** returns to the
+  cockpit root. The menu is data-driven, so later features can add another level
+  without adding a navigation rule.
+
+- **Less prose on the frame.** State, source and caveat rows now use labelled
+  icons with short operational text. Loading, disconnected plans, empty logs,
+  no crew, counter state and similar conditions no longer fill the display with
+  dashboard instructions. The detailed explanation remains in the dashboard.
+
+- **The readings read like an instrument.** Every line is a glyph, a short label
+  and the value, all on one line, at a smaller size — instead of a label stacked
+  over a value that wrapped constantly. All four Nav readings now fit a 480 px
+  panel without scrolling; they used to run off the bottom.
+
+- **The disclaimers are gone from the frame.** A qualifier nobody reads is not
+  doing its job, so the claim moved into the label that *is* read — the rate is
+  **TRADING RATE**, a list says **2 of 5 seen** rather than "held", a claim is
+  **CLAIM, PER THE TABLES**. The two that prevent a genuinely dangerous
+  misreading stay: Cargo still says *Never the hold*, Crew still says *Absence
+  means nothing*. The full explanations live in the docs and on the settings
+  page, where there is room to read them.
+
+- **Here lists what a place actually has**, rather than naming every service
+  with its status — five facts to say "none of them", wrapping to four lines.
+  It reads *Refuel · Repair*, or *None of 5 listed here*.
+
+- **A MAP page**, on the button between **UP** and **DOWN**: the system plan at
+  full size, with where you are and where you are going underneath it.
+
+- **One strip of chrome instead of two.** The frame said which MFD it was at the
+  bottom, next to a readout of the button you had just pressed with your own
+  thumb — two things costing a whole reading on a 480 px panel. Which frame it
+  is and which Cougar drives it are at the top with the rest of the identity now,
+  and the footer is gone.
+
+- **Shorter words on the frame.** The qualifiers that keep each page honest were
+  turning into paragraphs. They say the same thing in a phrase — *"Counter
+  receipts and your plan. Never the hold."*, *"Held: seen in a stash listing, not
+  counted."* — and the lists are cut to what you read at a glance rather than
+  what a report would show.
+
+- **Four more pages, from data the panel was already downloading.** **Ship**
+  says what you are flying, what it is for, and what the game’s own tables say
+  losing it costs. **Here** is the moment after landing: what this place can do
+  for you, what on your shopping list it stocks, and what you left here last
+  time. **Ledger** is what the logs actually priced, confirmed only. **Mine**
+  is where the deposit tables rank a rock highest.
+
+  Six of the nine things the panel fetches every five seconds were being thrown
+  away, so three of those four pages cost no extra request at all.
+
+- **Done no longer acts where it looks dead.** It is dimmed on every page but
+  Act, and dimming was all that happened: two presses elsewhere still marked a
+  task off your flight plan, with the confirmation drawn on a page you were not
+  looking at. Dimming a button and refusing its press are one rule now.
+
+- **A confirmation stays attached to the task it was armed against.** Your plan
+  is re-read every few seconds, so the line under the cursor when you armed
+  **DONE** could be a different job by the time you pressed again — and the
+  second press took whatever was there. It now stands down and says the plan
+  moved. A second press while the first is still saving is ignored rather than
+  sent twice, which would have put the line back where it started.
+
+- **Nav leads with where you are going.** The destination and its distance were
+  third, under the map, off the bottom of the panel. They are the headline now,
+  with your location beneath and the map shrunk to a supporting picture.
+
+- **The confirmation on Act has a fixed strip of its own.** It used to be the
+  last row of the very list it was asking about, and scrolled out of sight. It
+  reads *Confirm: load · 32 SCU · Titanium?*, then says what was marked.
+
+- **A small opening gets a layout of its own.** Below 320 px the captions switch
+  to short forms rather than clipping, the map and the corner marks step aside,
+  and the spacing tightens.
+
+- **The MFD section on the Overlay page is documentation now.** It was shaped
+  like settings and could change nothing: everything that configures MFD mode is
+  in the tray window, because that is the only place that can see your monitors
+  or read a frame. It now says how to get there, in order.
+
+- **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
+  independent left and right displays on a shared monitor or separate monitors.
+  Drag and resize the areas, preview alignment behind the frames, and save the
+  placement. Six pages: where you are, the next planned task, the outstanding
+  work at that stop, what you planned to load against what the commodity
+  counters recorded, the contract you accepted this session, and where all of
+  it came from. MFD mode starts off; the regular overlay keeps its own
+  settings.
+
+- **Quantum Wake's own mark, small, in the corner of the frame.** Bottom left,
+  beside the device line — the ship maker's mark already has the top corner.
+
+- **A calmer frame.** Brightness and text size are sliders in **MFD setup** now
+  rather than four buttons on the face, and previous/next page and Home ship
+  unassigned — with a button for every page, cycling was a second way to do the
+  same thing and a bottom row of five navigation keys was the most confusing
+  part of it. Thirteen buttons instead of twenty, and the three that are left —
+  up, down and **DONE** — dim on a page where they have nothing to act on. Every
+  one of those commands is still there to bind if you want it.
+
+- **The Now page, broken across the frame.** Ten pages now, each with its own
+  button: Nav, Task, Act, Cargo, Contract, Status, and four new ones — **Feed**
+  (what just happened, straight off the live log), **Crew** (who the party
+  channel has named, and why that is a floor rather than a roster), **Money**
+  (your trading rate and how long a goal will take at it) and **List** (shopping
+  lists and how much of each you are holding). Session time, deaths, your handle
+  and where you would wake up folded into Status; where a price is better folded
+  into Cargo. Nothing on the frame is unassigned any more.
+
+- **A system plan on the Nav page, with the whole route on it.** Small, above
+  the words: the star, the bodies at their real coordinates, the one you are at
+  ringed, and a dashed leg to every planned stop in the order you will fly them
+  — with the distance beside it. It marks a body and says so; the logs name the
+  place you are at, never where you are on it, and the distance is a straight
+  line between body centres rather than a quantum route the game never writes
+  down.
+
+- **The maker's mark of the ship you are flying**, in the top-left corner of
+  every page. Nothing shows for a maker with no logo, or before a ship has been
+  identified.
+
+- **Icons above the button captions**, and a blank where a button does nothing.
+  The number used to sit there, labelling a button the pilot is looking straight
+  at; a blank position now reads as blank, the way a real MFD's does.
+
+- **The alignment preview follows the editor as you drag.** It updated only
+  when you let go of a rectangle, and — worse — saving switched it off, so after
+  one save nothing you changed reached the frames until you saved again. The
+  preview now moves under your hand and keeps running after a save; **Stop
+  preview** or closing setup puts the saved placement back.
+
+- **MFD mode looks like the rest of Quantum Wake.** The placement editor had
+  grown a palette and typeface of its own; it now uses the dashboard's own
+  stylesheet, so it cannot drift again. The instrument moved off its phosphor
+  green onto the same cyan HUD palette as everything else. And the placement
+  editor opened in a browser draws one invented monitor that used to look
+  exactly like a detected one — it now says it is an example, and that your own
+  monitors are only found when you open setup from the tray.
+
+- **The monitor behind the frames goes black.** A Cougar frame covers part of a
+  monitor, and the rest of it keeps glowing around the bezel — wallpaper, the
+  taskbar, whatever was there — which in a dark cockpit washes out the
+  instrument inside the opening. Quantum Wake now fills those monitors with
+  black around the openings. Turn it off with **Black out the rest of those
+  monitors** if a panel is sitting in the corner of a screen you are still
+  using. The monitor you have setup open on is left alone until you close it.
+
+- **Tick work off from the frame.** The Act page lists what is still to be done
+  at your next stop and marks one done with the **DONE** button — pressed once
+  to arm it and again to confirm, so a glove on the wrong button costs nothing.
+  It writes to your own flight plan and tells the game nothing.
+
+- **Every button can be reassigned, rockers included.** Setup now carries the
+  full button map, shared by both frames. The four rocker switches report as
+  buttons 21–28 and ship unassigned, because which rocker is which number is
+  not something a datasheet answers: press one, watch the tester name it, and
+  bind it. **Restore defaults** puts the shipped profile back.
+
+- **Cargo, honestly.** The game logs no cargo hold, so the Cargo page shows what
+  your plan says to load and what the commodity counters actually recorded this
+  session, each labelled as what it is. It never claims to know what is aboard.
+
+- **Screenshots of the Contracts app are checked properly now.** Reading a
+  mobiGlas Contracts screenshot compared it against a list that was always
+  empty, so a photograph of five accepted contracts reported "the tab says 5,
+  the logs say 0" and marked every one of them as unseen. It now compares
+  against the contracts the logs actually carry.
 
 - **Readings now reach the overlay, and tell you when something is off.**
   The last screenshot read appears on the Now card in the dashboard and in
@@ -336,11 +592,6 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   place your logs had you at the time, because the reading itself names
   nowhere and three numbers are unreadable a week later. It stays on this
   machine, and there is a button to clear it.
-
-  One row per place you copied, not one per check. With the clipboard watch
-  on, the app looks every few seconds and your clipboard still holds what you
-  copied, so the same location was being written down over and over - which
-  filled the log with one paste and pushed out every other.
 
 - **Off means off.** Switching the screen panel off now clears the reading
   from the Now card and the widget as well, rather than leaving the last one

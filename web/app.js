@@ -187,6 +187,10 @@ function showView(name) {
     loadGameData().catch(() => {});
   }
 
+  // A log is a live reference, not an Overlay setting. Read it when the pilot
+  // opens its tab so pasted locations and screenshots stay together.
+  if (name === 'log') renderScreenPanel().catch(() => {});
+
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
@@ -655,6 +659,34 @@ document.addEventListener('keydown', (event) => {
 let sessionStarted = null;
 let nowState = null;
 let briefingFor = null;
+let pilotBriefing = null;
+
+/** The one decision worth leading the hub with, before the configurable cards. */
+function renderNowFocus(state, briefing = pilotBriefing) {
+  const strip = $('#now-focus');
+  const title = $('#now-focus-title');
+  const detail = $('#now-focus-detail');
+  const open = $('#now-focus-open');
+  if (!strip || !title || !detail || !open) return;
+
+  const differs = (state?.screen?.checks || []).filter(check => check.verdict === 'differs').length;
+  const nextStop = (briefing?.stops || []).find(stop => !stop.done);
+  let focus = null;
+
+  if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
+  else if (differs) focus = { title: 'Screen needs review', detail: `${differs} screen detail${differs === 1 ? '' : 's'} disagrees with the logs`, view: 'log', action: 'Review' };
+  else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
+  else if (state?.contracts?.length) focus = { title: 'Active contract', detail: state.contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+  else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };
+
+  strip.hidden = !focus;
+  if (!focus) return;
+  title.textContent = focus.title;
+  detail.textContent = focus.detail;
+  open.hidden = false;
+  open.textContent = focus.action;
+  open.onclick = () => showView(focus.view);
+}
 
 function renderNow(state) {
   nowState = state;
@@ -702,6 +734,7 @@ function renderNow(state) {
 
   renderNowParty(state);
   renderNowScreenCard(state.screen);
+  renderNowFocus(state);
 
   raiseToasts(state.recentEvents);
 
@@ -1062,6 +1095,8 @@ async function refreshPilotBriefing(state) {
   if (!key) {
     card.hidden = true;
     briefingFor = null;
+    pilotBriefing = null;
+    renderNowFocus(state, null);
     return;
   }
 
@@ -1469,6 +1504,8 @@ function renderPilotBriefing(briefing) {
   $('#briefing-overlay').onclick = pinBriefingToOverlay;
   $('#briefing-overlay').hidden = isOverlay;
   card.hidden = false;
+  pilotBriefing = briefing;
+  renderNowFocus(nowState, briefing);
 }
 
 setInterval(() => { $('#now-clock').textContent = clock(sessionStarted); }, 1000);
@@ -4633,7 +4670,7 @@ function screenShow(build) {
 async function parseClipboard(quiet = false) {
   if (!quiet) screenSay('reading what you copied…');
 
-  const found = await getJson2('/api/screen/clipboard');
+  const found = await getJson2(`/api/screen/clipboard${quiet ? '?watched=true' : ''}`);
 
   if (!found.found) {
     if (!quiet) {
@@ -4952,6 +4989,8 @@ async function renderScreenLog() {
     ...(got.readings || []).map((s) => ({ at: s.shotAt, shot: s })),
     ...(got.clipboard || []).map((c) => ({ at: c.at, paste: c })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at));
+  const pins = got.pins || [];
+  const pinnedAt = new Set(pins.map((pin) => pin.sourceAt));
 
   screenLatestShot = (got.readings || [])[0]?.shot || null;
 
@@ -4961,9 +5000,12 @@ async function renderScreenLog() {
 
   if (counts) {
     counts.textContent = entries.length
-      ? `${got.total} screenshot${got.total === 1 ? '' : 's'} read, ${got.pastes} paste${got.pastes === 1 ? '' : 's'}`
+      ? `${got.total} screenshot${got.total === 1 ? '' : 's'} read, ${got.pastes} paste${got.pastes === 1 ? '' : 's'}${pins.length ? ` · ${pins.length} pinned` : ''}`
       : '';
   }
+
+  renderPinnedLocations(pins);
+  renderScreenReviewInbox(got.readings || []);
 
   if (!entries.length) {
     list.append(el('p', 'muted', 'Nothing read yet. Screenshots and pastes both land here.'));
@@ -4977,7 +5019,10 @@ async function renderScreenLog() {
 
     if (entry.paste) {
       const p = entry.paste;
-      row.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted`));
+      const repeats = Math.max(1, Number(p.timesSeen) || 1);
+      const lastSeen = p.lastSeenAt && repeats > 1
+        ? ` · seen ${repeats} times, last ${new Date(p.lastSeenAt).toLocaleString()}` : '';
+      row.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
       row.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
 
       // The raw numbers are the exact part and the only part.
@@ -4988,6 +5033,15 @@ async function renderScreenLog() {
       row.append(el('div', 'muted', p.believed
         ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
         : 'Your logs had no session running, so there is nothing to place it against.'));
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'ghost pin-location';
+      const saved = pinnedAt.has(p.at);
+      action.textContent = saved ? 'Pinned as POI' : 'Pin as POI';
+      action.disabled = saved;
+      if (!saved) action.addEventListener('click', () => pinClipboardLocation(p, action));
+      row.append(action);
     } else {
       const s = entry.shot;
       row.append(el('div', 'muted',
@@ -4997,6 +5051,129 @@ async function renderScreenLog() {
     }
 
     list.append(row);
+  }
+}
+
+/** The saved locations are separate from the disposable reading history. */
+function renderPinnedLocations(pins) {
+  const list = $('#screen-pins');
+  const count = $('#screen-pin-count');
+  if (!list) return;
+
+  list.textContent = '';
+  if (count) count.textContent = pins.length ? `${pins.length} saved` : '';
+
+  if (!pins.length) {
+    list.append(el('p', 'muted', 'Pin a copied location below to keep it here.'));
+    return;
+  }
+
+  for (const pin of pins) {
+    const row = el('div', 'pinned-location');
+    row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location'));
+    row.append(el('div', 'muted', pin.category || 'General'));
+    row.append(el('div', 'muted', `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+    row.append(el('div', 'muted',
+      `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
+    const fields = el('div', 'pin-fields');
+    const label = document.createElement('input');
+    label.type = 'text'; label.className = 'search'; label.value = pin.label || '';
+    label.setAttribute('aria-label', 'Point of interest name');
+    const category = document.createElement('select');
+    category.className = 'select'; category.setAttribute('aria-label', 'Point of interest category');
+    for (const choice of ['General', 'Navigation', 'Mining', 'Salvage', 'Meet point']) {
+      const option = new Option(choice, choice);
+      option.selected = choice === (pin.category || 'General');
+      category.append(option);
+    }
+    const save = document.createElement('button');
+    save.type = 'button'; save.className = 'ghost'; save.textContent = 'Save';
+    save.addEventListener('click', () => savePinnedLocation(pin, label.value, category.value, save));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'ghost pin-remove';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => unpinLocation(pin, remove));
+    fields.append(label, category, save, remove);
+    row.append(fields);
+    list.append(row);
+  }
+}
+
+/** Screens held for the next reader, with the capture beside the OCR evidence. */
+function renderScreenReviewInbox(readings) {
+  const box = $('#screen-review');
+  const list = $('#screen-review-list');
+  const count = $('#screen-review-count');
+  if (!box || !list) return;
+
+  const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind));
+  box.hidden = unknown.length === 0;
+  list.textContent = '';
+  if (count) count.textContent = unknown.length ? `${unknown.length} queued` : '';
+
+  for (const reading of unknown.slice(0, 12)) {
+    const item = document.createElement('details');
+    item.className = 'screen-review-item';
+    const summary = document.createElement('summary');
+    summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString()}`;
+    item.append(summary, el('p', 'muted', reading.summary));
+    const image = document.createElement('a');
+    image.href = `/api/screen/shots/${encodeURIComponent(reading.shot)}`;
+    image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = 'Open screenshot';
+    item.append(image);
+    if ((reading.lines || []).length) item.append(el('pre', null, reading.lines.join('\n')));
+    list.append(item);
+  }
+}
+
+async function pinClipboardLocation(paste, button) {
+  button.disabled = true;
+  button.textContent = 'Pinning…';
+
+  try {
+    const response = await fetch('/api/screen/clipboard/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ at: paste.at }),
+    });
+    if (!response.ok) throw new Error(`pin -> ${response.status}`);
+    screenSay('Pinned as a point of interest.');
+    await renderScreenLog();
+  } catch {
+    screenSay('could not pin that copied location');
+    button.disabled = false;
+    button.textContent = 'Pin as POI';
+  }
+}
+
+async function savePinnedLocation(pin, label, category, button) {
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/screen/pins', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceAt: pin.sourceAt, label, category }),
+    });
+    if (!response.ok) throw new Error(`pin update -> ${response.status}`);
+    screenSay('Point of interest saved.');
+    await renderScreenLog();
+  } catch {
+    screenSay('could not save that point of interest');
+    button.disabled = false;
+  }
+}
+
+async function unpinLocation(pin, button) {
+  button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/screen/pins?at=${encodeURIComponent(pin.sourceAt)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`unpin -> ${response.status}`);
+    screenSay('Removed point of interest.');
+    await renderScreenLog();
+  } catch {
+    screenSay('could not remove that point of interest');
+    button.disabled = false;
   }
 }
 

@@ -93,20 +93,14 @@ public class ScreenReadingStoreTests : IDisposable
 
     // ---- what was pasted ----
 
-    /// <param name="drift">
-    /// Moves the reading, for the cases that need each paste to be a different
-    /// one: identical coordinates are taken for the same paste still sitting on
-    /// the clipboard, which is the whole point of the dedupe below.
-    /// </param>
-    private static ClipboardSighting Paste(
-        DateTimeOffset at, string? believed = "Ruin Station", double drift = 0) =>
-        new(at, -9641671346.9 + drift, -11490734321.2, -91805.1, 14.99996, believed, believed is null ? null : "Pyro");
+    private static ClipboardSighting Paste(DateTimeOffset at, string? believed = "Ruin Station") =>
+        new(at, -9641671346.9, -11490734321.2, -91805.1, 14.99996, believed, believed is null ? null : "Pyro");
 
     [Fact]
     public void Pastes_come_back_newest_first_and_survive_a_restart()
     {
         var store = new ScreenReadingStore(_dir);
-        store.AddClipboard(Paste(At.AddMinutes(-5), drift: 5000));
+        store.AddClipboard(Paste(At.AddMinutes(-5)));
         store.AddClipboard(Paste(At));
 
         var again = new ScreenReadingStore(_dir);
@@ -140,57 +134,102 @@ public class ScreenReadingStoreTests : IDisposable
         var store = new ScreenReadingStore(_dir);
 
         for (var i = 0; i < ScreenReadingStore.Keep + 10; i++)
-            store.AddClipboard(Paste(At.AddSeconds(i), drift: i));
+            store.AddClipboard(Paste(At.AddSeconds(i)));
 
         Assert.Equal(ScreenReadingStore.Keep, store.Clipboards().Count);
     }
 
     /// <summary>
-    /// The watcher reads the clipboard every three seconds and the clipboard
-    /// keeps what was copied until something else is copied, so one paste would
-    /// otherwise become a row every three seconds - filling the bound above
-    /// with three hundred copies of itself in a quarter of an hour and throwing
-    /// away every genuinely different paste to do it.
+    /// Only the watch merges. A pilot who copies the same spot twice on purpose
+    /// meant it twice, and folding those into one row with a count would lose
+    /// the second reading - which is the opposite failure from the one the
+    /// merge exists to prevent, and just as invisible.
     /// </summary>
     [Fact]
-    public void The_same_paste_read_again_is_not_stored_again()
+    public void A_deliberate_read_of_the_same_place_is_still_a_new_entry()
     {
         var store = new ScreenReadingStore(_dir);
 
-        Assert.True(store.AddClipboard(Paste(At)));
-        Assert.False(store.AddClipboard(Paste(At.AddSeconds(3))));
-        Assert.False(store.AddClipboard(Paste(At.AddSeconds(6))));
+        store.AddClipboard(Paste(At), mergeWithLatest: true);
+        store.AddClipboard(Paste(At.AddSeconds(30)));
 
-        Assert.Single(store.Clipboards());
-        Assert.Equal(At, store.Clipboards()[0].At);
+        Assert.Equal(2, store.Clipboards().Count);
+        Assert.All(store.Clipboards(), paste => Assert.Equal(1, paste.TimesSeen));
     }
 
     [Fact]
-    public void A_paste_from_somewhere_else_is_stored()
+    public void Repeated_clipboard_checks_refresh_one_location_instead_of_filling_the_log()
     {
         var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At), mergeWithLatest: true);
+        store.AddClipboard(Paste(At.AddSeconds(3)), mergeWithLatest: true);
 
-        store.AddClipboard(Paste(At));
-        Assert.True(store.AddClipboard(Paste(At.AddSeconds(3), drift: 5000)));
+        var only = Assert.Single(store.Clipboards());
+        Assert.Equal(At, only.At);
+        Assert.Equal(2, only.TimesSeen);
+        Assert.Equal(At.AddSeconds(3), only.LastSeenAt);
 
+        store.AddClipboard(Paste(At.AddSeconds(6)) with { X = 42 });
         Assert.Equal(2, store.Clipboards().Count);
     }
 
-    /// <summary>
-    /// Copying the same place again after going elsewhere is a new paste: only
-    /// the row on top is compared, because only that one can be the clipboard
-    /// still holding what it held three seconds ago.
-    /// </summary>
     [Fact]
-    public void The_same_place_copied_again_later_is_stored()
+    public void A_paste_can_be_kept_as_a_point_of_interest_after_the_log_is_cleared()
     {
         var store = new ScreenReadingStore(_dir);
-
         store.AddClipboard(Paste(At));
-        store.AddClipboard(Paste(At.AddMinutes(1), drift: 5000));
 
-        Assert.True(store.AddClipboard(Paste(At.AddMinutes(2))));
-        Assert.Equal(3, store.Clipboards().Count);
+        var pin = store.Pin(At);
+        store.Clear();
+
+        Assert.NotNull(pin);
+        Assert.Equal(At, pin.SourceAt);
+        Assert.Equal(14.99996, pin.Gigametres);
+        Assert.Empty(store.Clipboards());
+        Assert.Single(new ScreenReadingStore(_dir).Pinned());
+    }
+
+    [Fact]
+    public void Pinning_the_same_clipboard_reading_twice_keeps_one_point()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+
+        var first = store.Pin(At);
+        var again = store.Pin(At);
+
+        Assert.Equal(first, again);
+        Assert.Single(store.Pinned());
+        Assert.Null(store.Pin(At.AddMinutes(1)));
+    }
+
+    [Fact]
+    public void A_pinned_point_can_be_removed_without_losing_its_log_entry()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+        store.Pin(At);
+
+        Assert.True(store.Unpin(At));
+        Assert.False(store.Unpin(At));
+        Assert.Empty(store.Pinned());
+        Assert.Single(store.Clipboards());
+    }
+
+    [Fact]
+    public void A_pinned_point_keeps_its_pilot_name_and_category_after_a_restart()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+        store.Pin(At);
+
+        var updated = store.UpdatePin(At, "Ruin mining shelf", "Mining");
+        var again = new ScreenReadingStore(_dir);
+
+        Assert.NotNull(updated);
+        Assert.Equal("Ruin mining shelf", updated.Label);
+        Assert.Equal("Mining", updated.Category);
+        Assert.Equal(updated, Assert.Single(again.Pinned()));
     }
 
     [Fact]

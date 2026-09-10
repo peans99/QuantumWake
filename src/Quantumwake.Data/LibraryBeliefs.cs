@@ -56,8 +56,13 @@ public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
     {
         if (Session(at) is not { } session) return null;
 
+        // Not ContractRecord.Accepted, which nothing sets: this returned an
+        // empty list for every screenshot ever checked, so the Contracts app
+        // read "differs - the tab says 5, the logs say 0" against a log
+        // carrying every one of those five. A contract is here because an
+        // objective marker fired for it, and the game raises those for missions
+        // in the journal - which is what having taken one means.
         return [.. session.Contracts
-            .Where(c => c.Accepted)
             .Where(c => c.FirstSeen <= at)
             .Where(c => c.CompletedAt is null || c.CompletedAt > at)
             .Where(c => c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress

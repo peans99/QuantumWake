@@ -41,7 +41,7 @@ public class ScreenLogTests
             """);
 
         page.Serve("/api/screen/readings?take=50", $$"""
-            {"readings":[{{readings}}],"clipboard":[{{clipboard}}],"total":1,"pastes":2}
+            {"readings":[{{readings}}],"clipboard":[{{clipboard}}],"pins":[],"total":1,"pastes":2}
             """);
 
         page.Serve("/api/briefing", "{}");
@@ -107,11 +107,77 @@ public class ScreenLogTests
     {
         var page = Panel(Sighting, Paste);
 
-        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"total":0,"pastes":0}""");
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"pins":[],"total":0,"pastes":0}""");
         page.Do("__dom.node('#screen-log-clear').click();");
 
         Assert.Contains("DELETE /api/screen/readings", page.Fetched());
         Assert.Contains("Nothing read yet", page.NodeText("#screen-readings"));
+    }
+
+    [Fact]
+    public void A_copied_location_can_be_pinned_as_a_point_of_interest()
+    {
+        var page = Panel(clipboard: Paste);
+        page.Do("renderPinnedLocations([{sourceAt:'2026-09-09T02:10:00Z',pinnedAt:'2026-09-09T02:12:00Z',x:-9641671346.9,y:-11490734321.2,z:-91805.1,gigametres:14.99996,believed:'Ruin Station',system:'Pyro'}]);");
+        page.Serve("/api/screen/clipboard/pin", """{"sourceAt":"2026-09-09T02:10:00Z"}""");
+
+        Assert.Contains("Ruin Station", page.NodeText("#screen-pins"));
+        page.Do("await pinClipboardLocation({at:'2026-09-09T02:10:00Z'}, __dom.node('#screen-log-refresh'));");
+
+        Assert.Contains("POST /api/screen/clipboard/pin", page.Fetched());
+        Assert.Contains("2026-09-09T02:10:00Z", page.BodyOf("/api/screen/clipboard/pin"));
+    }
+
+    [Fact]
+    public void A_saved_point_can_be_removed_from_the_log()
+    {
+        var page = Panel();
+        page.Serve("/api/screen/pins?at=2026-09-09T02%3A10%3A00Z", """{"removed":true}""");
+
+        page.Do("await unpinLocation({sourceAt:'2026-09-09T02:10:00Z'}, __dom.node('#screen-log-refresh'));");
+
+        Assert.Contains("DELETE /api/screen/pins?at=2026-09-09T02%3A10%3A00Z", page.Fetched());
+    }
+
+    [Fact]
+    public void A_pinned_point_can_be_named_and_categorised()
+    {
+        var page = Panel();
+        page.Serve("/api/screen/pins", """{"label":"Ruin mining shelf","category":"Mining"}""");
+
+        page.Do("await savePinnedLocation({sourceAt:'2026-09-09T02:10:00Z'}, 'Ruin mining shelf', 'Mining', __dom.node('#screen-log-refresh'));");
+
+        Assert.Contains("PUT /api/screen/pins", page.Fetched());
+        Assert.Contains("Ruin mining shelf", page.BodyOf("/api/screen/pins"));
+        Assert.Contains("Mining", page.BodyOf("/api/screen/pins"));
+    }
+
+    [Fact]
+    public void A_repeated_clipboard_location_says_it_was_seen_again()
+    {
+        var paste = Paste.Replace("\"system\":\"Pyro\"", "\"system\":\"Pyro\",\"timesSeen\":4,\"lastSeenAt\":\"2026-09-09T02:13:00Z\"");
+
+        var log = Panel(clipboard: paste).NodeText("#screen-readings");
+
+        Assert.Contains("seen 4 times", log);
+        Assert.Contains("last", log);
+    }
+
+    [Fact]
+    public void An_unread_mobiglas_screen_goes_to_the_review_queue_with_its_text()
+    {
+        const string unknown = """
+            {"shot":"ScreenShot-unread.jpg","shotAt":"2026-09-09T02:05:00Z","kind":"MobiGlas",
+             "summary":"a mobiGlas screen this app cannot read yet","tookMs":150,"checks":[],
+             "lines":["Unmapped app","Useful captured line"]}
+            """;
+
+        var page = Panel(readings: unknown);
+
+        Assert.False(page.Truth("__dom.node('#screen-review').hidden"));
+        Assert.Contains("ScreenShot-unread.jpg", page.NodeText("#screen-review-list"));
+        Assert.Contains("Useful captured line", page.NodeText("#screen-review-list"));
+        Assert.Contains("Open screenshot", page.NodeText("#screen-review-list"));
     }
 
     // ---- the stream, and the toast ----
@@ -181,11 +247,21 @@ public class ScreenLogTests
     private static int Reads(Page page) =>
         page.Fetched().Count(call => call.Contains("/api/screen/readings?take=50"));
 
-    private static void Copied(Page page) =>
-        page.Serve("/api/screen/clipboard", """
+    /// <summary>
+    /// Both URLs, because the watch asks with ?watched=true so the server can
+    /// merge the repeat into the row it already has, and a deliberate paste
+    /// asks without it.
+    /// </summary>
+    private static void Copied(Page page)
+    {
+        const string found = """
             {"found":true,"x":-9641671346.9,"y":-11490734321.2,"z":-91805.1,
              "gigametresFromCentre":14.99996,"trouble":null}
-            """);
+            """;
+
+        page.Serve("/api/screen/clipboard", found);
+        page.Serve("/api/screen/clipboard?watched=true", found);
+    }
 
     /// <summary>
     /// The watcher reads the clipboard every three seconds, and the clipboard
@@ -241,5 +317,16 @@ public class ScreenLogTests
         Frame(page, "", Sighting);
 
         Assert.Equal(before + 1, Reads(page));
+    }
+
+    [Fact]
+    public void The_hub_leads_with_a_screen_disagreement_and_a_link_to_review_it()
+    {
+        var page = Panel();
+        Frame(page, "", "{checks:[{verdict:'differs'}]}");
+
+        Assert.False(page.Truth("__dom.node('#now-focus').hidden"));
+        Assert.Contains("Screen needs review", page.NodeText("#now-focus-title"));
+        Assert.Equal("Review", page.NodeText("#now-focus-open"));
     }
 }
