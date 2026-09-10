@@ -2,11 +2,12 @@
 const mfdParams = new URLSearchParams(location.search);
 const panelId = mfdParams.get('panel') === 'right' ? 'right' : 'left';
 const mfdKey = 'qw-mfd-' + panelId;
+const panelRole = QwMfd.panelRole(panelId);
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem(mfdKey) || '{}') || {}; } catch { }
-// The cockpit this was built for: where you are on the left, what to do next
-// on the right. Only until the frame is used - after that it remembers.
-let screen = QwMfd.restoreScreen(preferences, panelId === 'right' ? 'task' : 'nav');
+// The cockpit starts paired: where you are on the left, the work in hand on
+// the right. Only until the frame is used - saved pilot choice still wins.
+let screen = QwMfd.restoreScreen(preferences, panelRole.defaultScreen);
 let page = Math.max(0, QwMfd.pageIds.indexOf(screen));
 let details = false, hasDetails = false;
 // Which page of a paged screen is showing. Reset on navigate, like the Act
@@ -93,7 +94,8 @@ const iconOnlyLabels = new Set(['LOCATION SOURCE', 'NOT A MANIFEST', 'SESSION ON
 let cougar = null, usb = false, connection = 'CONNECTING';
 function drawIdentity() {
   byId('identity').textContent = cougar
-    ? `${panelId.toUpperCase()} · MFD ${cougar}` : panelId.toUpperCase() + ' MFD';
+    ? `${panelId.toUpperCase()} · ${panelRole.label} · MFD ${cougar}`
+    : `${panelId.toUpperCase()} · ${panelRole.label} MFD`;
   byId('connection').textContent = connection + (cougar && !usb ? ' · NO USB' : '');
 }
 drawIdentity();
@@ -486,6 +488,7 @@ function press(number) {
   if (!action.confirm && armed) standDown();
   if (action.confirm) { confirmSelected(); return; }
   if (action.menu) { action.menu === 'back' ? back() : navigate(action.menu); return; }
+  if (action.mission) { navigate(action.mission); return; }
   if (action.pois) { navigate('log'); return; }
   if (action.radar !== undefined) {
     radarFocus = QwMfd.radarFocus(radarPlan, radarFocus, action.radar);

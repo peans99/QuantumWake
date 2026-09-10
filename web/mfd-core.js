@@ -76,6 +76,14 @@ window.QwMfd = (() => {
       icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 7.5a4.5 4.5 0 1 0 .1 0M12 12l3.5-3.5' },
     { id: 'task', label: 'Page · Task', caption: 'TASK', short: 'TASK',
       icon: 'M4 6.5h10M4 12h10M4 17.5h6M16.5 16l2 2 3.5-4' },
+    { id: 'mission-map', label: 'Mission · show destination on radar', caption: 'MAP', short: 'MAP',
+      icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
+    { id: 'mission-done', label: 'Mission · open checklist', caption: 'DONE', short: 'DONE',
+      icon: 'M4 12.5l5.5 5.5L20 6' },
+    { id: 'mission-contract', label: 'Mission · open active contract', caption: 'CNTRCT', short: 'CNTR',
+      icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6' },
+    { id: 'mission-list', label: 'Mission · open shopping list', caption: 'LIST', short: 'LIST',
+      icon: 'M9 6.5h11M9 12h11M9 17.5h11M4 6l1.2 1.2L7.5 4.5' },
     { id: 'act', label: 'Page · Act', caption: 'ACT', short: 'ACT',
       icon: 'M4 5h16v14H4zM8 12l3 3 5-6' },
     { id: 'cargo', label: 'Page · Cargo', caption: 'CARGO', short: 'CRGO',
@@ -155,7 +163,7 @@ window.QwMfd = (() => {
     { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, activity, crew and log',
       children: ['status', 'feed', 'crew', 'log'] }
   ];
-  const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Flight plan', act: 'Checklist',
+  const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Mission', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
     money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map', log: 'Log' };
   const menuNodes = {}, leafParents = {};
@@ -199,7 +207,9 @@ window.QwMfd = (() => {
      reaches every flight page through the normal Flight menu. */
   const contextualItems = screen => screen === 'map'
     ? ['nav', 'map-prev', 'map-next', 'map-pois', 'map-here']
-    : menuItems(screen);
+    : screen === 'task'
+      ? ['mission-map', 'mission-done', 'mission-contract', 'mission-list', 'home']
+      : menuItems(screen);
   function previewPage(id) {
     if (pageIds.includes(id)) return id;
     const next = menuItems(id)[0];
@@ -387,6 +397,8 @@ window.QwMfd = (() => {
       bright: { cycleBright: true },
       'map-prev': { radar: -1 }, 'map-next': { radar: 1 },
       'map-pois': { pois: true }, 'map-here': { radarHere: true },
+      'mission-map': { mission: 'map' }, 'mission-done': { mission: 'act' },
+      'mission-contract': { mission: 'contract' }, 'mission-list': { mission: 'list' },
       confirm: { confirm: true } })[id] || null;
   }
   function action(button, stored) {
@@ -525,6 +537,45 @@ window.QwMfd = (() => {
       : `${total} Gm to ${map.target} over ${map.legs.length} legs`;
   }
 
+  /* The two frames have jobs before a pilot touches either one. They remain
+     ordinary pages after that - saved screen choice always wins - but their
+     identity should explain why one opened on a radar and the other on work. */
+  const panelRole = panel => panel === 'right'
+    ? { label: 'MISSION', defaultScreen: 'task' }
+    : { label: 'NAV', defaultScreen: 'nav' };
+
+  const contractWords = value => new Set((String(value || '').toLowerCase().match(/[a-z0-9]{4,}/g) || []));
+  const sameContract = (contract, screen) => {
+    if (!contract?.name || !screen?.selectedTitle) return false;
+    const a = contractWords(contract.name), b = contractWords(screen.selectedTitle);
+    let shared = 0;
+    for (const word of a) if (b.has(word)) shared++;
+    return shared >= 2 || (a.size === 1 && shared === 1);
+  };
+
+  /* One view model for the right-hand MFD. Log-derived contract progress is
+     authoritative; reward and text objectives are only borrowed from a recent
+     Contracts screenshot when its selected title matches that open contract. */
+  function missionCard(state, briefing, view = {}) {
+    const s = state || {};
+    const stop = (briefing?.stops || []).find(item => !item.done) || null;
+    const contract = (s.contracts || [])[0] || null;
+    const next = (stop?.actions || []).find(action => !action.done) || null;
+    const screenshots = view.extra?.screenLog?.readings || [];
+    const contractScreen = screenshots.map(reading => reading.contracts)
+      .find(reading => sameContract(contract, reading)) || null;
+    const reward = contractScreen?.selectedReward;
+    return {
+      contract, stop, next,
+      destination: stop?.place || null,
+      progress: contract?.steps > 0 ? `${contract.stepsDone} of ${contract.steps} objectives done` : null,
+      reward: Number.isFinite(Number(reward)) ? Number(reward) : null,
+      objectives: contractScreen?.objectives || [],
+      activeFor: contract?.since ? elapsed(contract.since, view.now) : null,
+      tripTitle: briefing?.tripTitle || null,
+    };
+  }
+
   function loadLine(load) {
     if (!load.stops) return 'No load or purchase planned';
     const parts = [];
@@ -565,11 +616,21 @@ window.QwMfd = (() => {
       }
       case 'task': {
         if (planMissing) return planMissing;
-        if (!stop) return [['NO OUTSTANDING STOP', 'Track a flight plan in the dashboard to show the next task here.']];
-        const next = (stop.actions || []).find(a => !a.done);
-        return [['NEXT STOP', stop.place],
-          ['NEXT ACTION', next ? describe(next) : stop.note || 'Travel to this stop'],
-          ['PLAN', briefing.tripTitle || 'Tracked flight plan'],
+        const mission = missionCard(s, briefing, view);
+        if (!mission.contract && !mission.stop)
+          return [['NO OUTSTANDING STOP', 'Track a flight plan or accept a contract to show work here.']];
+        const status = [mission.progress,
+          mission.reward !== null ? `${Math.round(mission.reward).toLocaleString()} aUEC` : null]
+          .filter(Boolean).join(' · ');
+        return [
+          [mission.contract ? 'ACTIVE MISSION' : 'NEXT STOP', mission.contract?.name || mission.destination],
+          ...(mission.destination ? [['DESTINATION', mission.destination]] : []),
+          ...(status ? [['PROGRESS / REWARD', status]] : []),
+          ...mission.objectives.slice(0, 2).map((objective, index) => [`SCREEN OBJECTIVE ${index + 1}`, objective]),
+          ...(mission.activeFor ? [['ACTIVE FOR', mission.activeFor]] : []),
+          ...(mission.stop ? [['NEXT ACTION', mission.next ? describe(mission.next)
+            : mission.stop.note || 'Travel to this stop']] : []),
+          ...(mission.tripTitle ? [['PLAN', mission.tripTitle]] : [])
         ];
       }
       case 'act': {
@@ -842,7 +903,8 @@ window.QwMfd = (() => {
      changes, and a seconds field would rewrite it every second for no reader. */
   function elapsed(from, now) {
     if (!from) return null;
-    const minutes = Math.floor(((now || Date.now()) - new Date(from).getTime()) / 60000);
+    const until = now == null ? Date.now() : new Date(now).getTime();
+    const minutes = Math.floor((until - new Date(from).getTime()) / 60000);
     if (!Number.isFinite(minutes) || minutes < 0) return null;
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   }
@@ -868,7 +930,7 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+  return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

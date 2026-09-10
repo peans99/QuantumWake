@@ -128,6 +128,41 @@ public class MfdTests
     }
 
     [Fact]
+    public void MissionCardJoinsTheOpenContractToTheMatchingContractsScreenOnly()
+    {
+        var e = Engine();
+        const string state = "{contracts:[{name:'Covalex · Recover Cargo',issuer:'Covalex',steps:3,stepsDone:1,since:'2026-09-10T10:00:00Z'}]}";
+        const string plan = "{tripTitle:'Recovery run',stops:[{place:'Everus Harbor',actions:[{kind:'load',quantity:8,unit:'SCU',text:'Recovered cargo',done:false}]}]}";
+        const string view = "{now:'2026-09-10T10:42:00Z',extra:{screenLog:{readings:[{contracts:{selectedTitle:'Recover Cargo',selectedReward:125000,objectives:['Secure the package']}}]}}}";
+
+        var json = e.Evaluate($"JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('task'),{state},{plan},false,{view}))").AsString();
+
+        Assert.Contains("ACTIVE MISSION", json);
+        Assert.Contains("Covalex · Recover Cargo", json);
+        Assert.Contains("Everus Harbor", json);
+        Assert.Contains("1 of 3 objectives done", json);
+        Assert.Contains("125,000 aUEC", json);
+        Assert.Contains("Secure the package", json);
+        Assert.Contains("42 min", json);
+
+        // A screenshot of another contract is evidence about that screen, not
+        // a reward for the live mission.
+        var mismatch = e.Evaluate($"JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('task'),{state},{plan},false,"
+            + "{extra:{screenLog:{readings:[{contracts:{selectedTitle:'Defend the site',selectedReward:900000}}]}}}))").AsString();
+        Assert.DoesNotContain("900,000", mismatch);
+    }
+
+    [Fact]
+    public void TheTwoPanelsHaveNavigationAndMissionRolesBeforeAnyPreferenceExists()
+    {
+        var e = Engine();
+        Assert.Equal("NAV", e.Evaluate("QwMfd.panelRole('left').label").AsString());
+        Assert.Equal("nav", e.Evaluate("QwMfd.panelRole('left').defaultScreen").AsString());
+        Assert.Equal("MISSION", e.Evaluate("QwMfd.panelRole('right').label").AsString());
+        Assert.Equal("task", e.Evaluate("QwMfd.panelRole('right').defaultScreen").AsString());
+    }
+
+    [Fact]
     public void QuantumDestinationWinsOverPlanAndFailedPlanIsExplicit()
     {
         var e = Engine();
