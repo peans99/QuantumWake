@@ -126,7 +126,8 @@ internal sealed class MfdController : IDisposable
     private static object Display(MfdLayout layout) => new
     {
         type = "display", buttons = layout.Buttons,
-        brightness = layout.Brightness, textScale = layout.TextScale
+        brightness = layout.Brightness, textScale = layout.TextScale,
+        sleepAfterMinutes = layout.SleepAfterMinutes
     };
 
     private void SendDeviceStatus()

@@ -85,14 +85,6 @@ output { font: 13px var(--mono); letter-spacing: .06em; color: var(--cyan-hot); 
   font-size: 9.5px; letter-spacing: .24em; text-transform: uppercase;
   color: var(--dim); margin: 14px 0 2px;
 }
-.bindings { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 4px 14px; margin: 8px 0 6px; }
-.bindings label {
-  display: flex; align-items: center; gap: 10px; margin: 0; padding: 3px 6px;
-  border: 1px solid transparent; font: 11px var(--mono); color: var(--dim);
-}
-.bindings .select { min-width: 0; flex: 1; font-size: 11px; padding: 4px 7px; }
-/* Lit by a real press, which is the only way to find out which rocker is which. */
-.bindings label.hit { border-color: var(--cyan-deep); color: var(--cyan-hot); background: rgba(53, 200, 240, .08); }
 
 details { font-size: 12px; margin-top: 18px; }
 summary { cursor: pointer; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
@@ -123,3 +115,67 @@ footer .toggle { font-size: 11px; letter-spacing: .1em; text-transform: uppercas
 .sliders label { display: block; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin: 0; }
 .sliders output { float: right; font: 11px var(--mono); letter-spacing: 0; color: var(--cyan-hot); }
 .sliders input[type=range] { width: 100%; margin: 6px 0 0; padding: 0; accent-color: var(--cyan); background: transparent; border: 0; }
+
+/* ---------- the frame you are actually holding ---------- */
+/* Laid out as the Cougar is: five keys a side around the screen, clockwise
+   from the top left, so a position on this diagram is the position under the
+   pilot's thumb. The rockers sit apart because nothing states which is which. */
+.cougar {
+  display: grid; gap: 6px; margin: 12px 0 14px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto repeat(5, minmax(34px, auto)) auto;
+  max-width: 620px;
+}
+/* The arrays are already in visual order - top left-to-right, right
+   top-to-bottom, bottom left-to-right, left top-to-bottom - which on the
+   official clockwise numbering puts 11 bottom-right and 20 top-left. */
+.side { display: contents; }
+.side.top .key { grid-row: 1; }
+.side.top .key:nth-child(1) { grid-column: 2; }
+.side.top .key:nth-child(2) { grid-column: 3; }
+.side.top .key:nth-child(3) { grid-column: 4; }
+.side.top .key:nth-child(4) { grid-column: 5; }
+.side.top .key:nth-child(5) { grid-column: 6; }
+.side.right .key { grid-column: 7; }
+.side.right .key:nth-child(1) { grid-row: 2; }
+.side.right .key:nth-child(2) { grid-row: 3; }
+.side.right .key:nth-child(3) { grid-row: 4; }
+.side.right .key:nth-child(4) { grid-row: 5; }
+.side.right .key:nth-child(5) { grid-row: 6; }
+.side.bottom .key { grid-row: 7; }
+.side.bottom .key:nth-child(1) { grid-column: 2; }
+.side.bottom .key:nth-child(2) { grid-column: 3; }
+.side.bottom .key:nth-child(3) { grid-column: 4; }
+.side.bottom .key:nth-child(4) { grid-column: 5; }
+.side.bottom .key:nth-child(5) { grid-column: 6; }
+.side.left .key { grid-column: 1; }
+.side.left .key:nth-child(1) { grid-row: 2; }
+.side.left .key:nth-child(2) { grid-row: 3; }
+.side.left .key:nth-child(3) { grid-row: 4; }
+.side.left .key:nth-child(4) { grid-row: 5; }
+.side.left .key:nth-child(5) { grid-row: 6; }
+.face {
+  grid-column: 2 / 7; grid-row: 2 / 7;
+  border: 1px solid var(--rule-hot); background: var(--void);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim); font-size: 10px; letter-spacing: .3em;
+  clip-path: var(--chamfer);
+}
+.key {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; padding: 4px 2px; min-width: 0;
+  border: 1px solid var(--rule); background: var(--panel-2); color: var(--text);
+  font: 10px var(--display); letter-spacing: .06em; text-transform: uppercase;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+.key small { font: 9px var(--mono); letter-spacing: 0; color: var(--dim); }
+.key span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.key.empty { color: var(--dim); background: transparent; }
+.key:hover { border-color: var(--cyan-deep); color: var(--cyan-hot); }
+.key.picked { border-color: var(--cyan); background: rgba(53, 200, 240, .16); color: var(--cyan-hot); }
+/* Lit by a real press - the only way to learn which rocker is which. */
+.key.hit { border-color: var(--amber); color: var(--amber); background: rgba(255, 171, 61, .14); }
+.rockers { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; max-width: 620px; margin-top: 6px; }
+.assign { margin: 4px 0 10px; max-width: 620px; }
+.assign label { display: block; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.assign .select { display: block; width: 100%; margin-top: 5px; }

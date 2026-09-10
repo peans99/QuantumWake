@@ -13,6 +13,11 @@ let details = false, hasDetails = false;
    them - they stay in the vocabulary - but the nudge lasts until the panel
    reloads, because setup is where a setting is kept. */
 let brightness = 1, textScale = 1;
+/* Dim after a spell with nothing pressed, if the pilot asked for it. Off
+   unless set: these are LED panels, so this is for a dark cockpit rather
+   than for protecting anything. It dims and never blanks - a frame you can
+   still glance at beats one that has to be woken before it will answer. */
+let sleepAfterMinutes = 0, lastPress = Date.now(), dozing = false;
 let bindings = QwMfd.buttons(null);
 /* Body coordinates and the place gazetteer. Fetched once and kept: it is
    reference data that only changes when the game does, and re-pulling 294
@@ -195,7 +200,10 @@ function drawMenu(plan) {
   }
 }
 function render() {
-  byId('mfd').style.filter = `brightness(${brightness})`;
+  // Recomputed here so the frame can never be left showing a dimming that
+  // has since expired; the timer below only decides when to ask again.
+  dozing = QwMfd.dozed(sleepAfterMinutes, Date.now() - lastPress);
+  byId('mfd').style.filter = `brightness(${dozing ? brightness * QwMfd.DOZE : brightness})`;
   byId('mfd').style.setProperty('--text-scale', textScale);
   byId('title').textContent = QwMfd.title(screen) + (details ? ' · details' : '');
   const showing = screen;
@@ -371,6 +379,11 @@ function isIdle(commandId) {
 }
 function standDown() { armed = false; armedTask = null; lastRows = ''; }
 function press(number) {
+  // Any press is the pilot being there: it wakes the frame before anything
+  // else, so the first press after a doze is not spent on turning the light
+  // back on.
+  lastPress = Date.now();
+  if (dozing) { dozing = false; render(); }
   // Each press starts clean, so a message only ever describes this one.
   notice = '';
   const button = face[number]?.button;
@@ -461,6 +474,10 @@ window.chrome?.webview?.addEventListener('message', ({ data }) => {
     bindings = QwMfd.buttons(data.buttons);
     if (Number.isFinite(data.brightness)) brightness = QwMfd.clamp(data.brightness, .3, 1);
     if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
+    if (Number.isFinite(data.sleepAfterMinutes)) {
+      sleepAfterMinutes = QwMfd.clamp(data.sleepAfterMinutes, 0, 120);
+      lastPress = Date.now(); dozing = false;
+    }
     drawLabels(); lastRows = ''; render();
   }
   if (data.type === 'device') { cougar = data.cougar; usb = !!data.connected; drawIdentity(); }
@@ -530,6 +547,12 @@ async function bootMfd() {
   stream = new EventSource('/api/stream');
   const briefingTimer = setInterval(refreshBriefing, 5000);
   const extraTimer = setInterval(refreshExtras, 30000);
+  /* Its own timer rather than a check inside render: the panel re-renders
+     whenever anything changes, and a frame nobody is touching is exactly the
+     case where nothing is changing. */
+  const dozeTimer = setInterval(() => {
+    if (dozing !== QwMfd.dozed(sleepAfterMinutes, Date.now() - lastPress)) render();
+  }, 15000);
   stream.onmessage = event => {
     try {
       state = JSON.parse(event.data);
@@ -540,7 +563,7 @@ async function bootMfd() {
   };
   stream.onerror = () => { connection = state ? 'DISCONNECTED · LAST DATA' : 'SERVER UNAVAILABLE'; drawIdentity(); };
   window.addEventListener('beforeunload', () => {
-    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer);
+    stream.close(); clearInterval(briefingTimer); clearInterval(extraTimer); clearInterval(dozeTimer);
   });
 }
 bootMfd();

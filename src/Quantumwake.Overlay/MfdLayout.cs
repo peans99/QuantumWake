@@ -53,6 +53,18 @@ internal sealed record MfdLayout
 
     public double TextScale { get; init; } = 1;
 
+    /// <summary>
+    /// Minutes of no button press before the frames dim, or 0 to never dim.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and a comfort setting rather than a protective one:
+    /// these are LED panels, so nothing is burning in. It is for a lit cockpit
+    /// at night, and it dims rather than blanks - a frame you can still glance
+    /// at is worth more than one that has gone dark and has to be woken before
+    /// it will answer.
+    /// </remarks>
+    public int SleepAfterMinutes { get; init; }
+
     public MfdPanel[] Panels { get; init; } = [];
 
     /// <summary>
@@ -99,6 +111,7 @@ internal sealed record MfdLayout
             // A slider cannot send a bad number, but a hand-edited file can.
             Brightness = double.IsFinite(Brightness) ? Math.Clamp(Brightness, .3, 1) : 1,
             TextScale = double.IsFinite(TextScale) ? Math.Clamp(TextScale, .8, 1.5) : 1,
+            SleepAfterMinutes = Math.Clamp(SleepAfterMinutes, 0, 120),
             Panels = Panels.Select(p =>
         {
             if (p.Cougar is < 1 or > 8 || string.IsNullOrWhiteSpace(p.Monitor))

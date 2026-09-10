@@ -318,7 +318,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.23
+### 0.10.24
+
+- **Setting up the buttons now shows the frame, not a form.** Binding a key
+  meant reading past twenty-eight dropdowns of thirty-six options each, none
+  of which said which key on the desk it meant. Setup draws the Cougar
+  instead: the twenty face buttons in their real positions around the screen,
+  the rockers in a row underneath, each carrying its number and what it does
+  today. **Press a button on the frame and its position lights up and is
+  selected**, so binding one is press, pick, done — and the picking is a
+  single grouped list rather than a thousand entries.
+
+- **Frames can dim themselves when you leave them alone.** Off unless you
+  pick a time in **Screen** — five minutes to an hour. After that the frames
+  drop to a third of your brightness, and the next press of anything brings
+  them straight back before it does whatever it was bound to do. They never
+  blank: a panel you can still glance at beats one that has to be woken
+  first.
 
 - **Each frame opens where it is useful again.** Both were starting on the menu,
   so a two-frame cockpit showed the same list twice. A frame you have not used

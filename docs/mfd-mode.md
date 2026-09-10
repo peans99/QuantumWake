@@ -245,12 +245,29 @@ every later change needed another save to be seen. The page keeps previewing
 across a save, and the controller keeps applying as a preview while `_preview`
 is set.
 
-**Screen** carries brightness and text size, shared by both frames and saved
-with the layout. They used to be four buttons on the face.
+**Screen** carries brightness, text size and **Dim when idle**, shared by both
+frames and saved with the layout. The first two used to be four buttons on the
+face.
 
-**Button assignments** below the tester rebinds any button. Changes reach a
-running alignment preview immediately, so a rebinding can be tried on the frame
-before it is saved; **Save layout** keeps them along with the placement.
+Dimming is off unless a time is picked. After that many minutes with no button
+pressed the frames drop to a third of the configured brightness, and the next
+press of anything brings them back before it does whatever it was bound to do.
+It never blanks them: a panel bolted into a cockpit is glanced at far more often
+than it is pressed, and one that has to be woken before it can be read is worse
+than one that is merely dim. Burn-in is not the reason - these are LCDs — so
+the setting exists for night flying rather than for the panel's health.
+
+**Button assignments** below the tester draws the frame instead of listing it.
+Twenty-eight dropdowns of thirty-six options each is a thousand entries to read
+past, and none of them said which key on the desk they meant. The page now shows
+the twenty face buttons in their clockwise positions around a stand-in screen,
+with the rockers in a row beneath, each carrying its number and what it does
+today. Press a physical button and its position lights and becomes the selected
+one; click a position to select it by hand. One grouped list underneath says
+what that button does, sorted into menu positions, direct screens, menus and
+controls. Changes reach a running alignment preview immediately, so a rebinding
+can be tried on the frame before it is saved; **Save layout** keeps them along
+with the placement.
 
 ## The system map and the corner of the frame
 
@@ -390,7 +407,7 @@ themselves. **Restore defaults** puts the shipped profile back.
 
 A saved map is the whole answer, not a patch over the defaults: a button the
 pilot clears stays cleared, and clearing every one of them leaves a blank frame
-with every dropdown in setup saying so. Falling back per button would mean an
+with every position on the setup diagram reading as unassigned. Falling back per button would mean an
 unassignment quietly undoing itself on the next reload, which is the one thing
 that would make a custom profile untrustworthy.
 
@@ -400,7 +417,8 @@ number — so a default here would be a guess printed as a fact. Press one, watc
 the setup tester name the number that answered, and bind it. The row lights up
 as it is pressed, which is the whole discovery procedure.
 
-Screen brightness changes the rendered page, not the Cougar LEDs. Native
+Screen brightness — and idle dimming with it — changes the rendered page, not
+the Cougar LEDs. Native
 USB reads use Windows `joyGetPosEx` and do not consume game inputs or send
 keystrokes. A button also bound in Star Citizen can therefore affect both.
 No T.A.R.G.E.T. profile is needed. A virtual controller replacing the default

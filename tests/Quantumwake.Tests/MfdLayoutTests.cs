@@ -58,6 +58,12 @@ public class MfdLayoutTests
         Assert.Equal(.3, (MfdLayout.Default(Monitors) with { Brightness = -4 }).Validate(Monitors).Brightness);
         Assert.Equal(1.5, (MfdLayout.Default(Monitors) with { TextScale = 9 }).Validate(Monitors).TextScale);
 
+        // Off unless asked for, and never a value a menu could not offer.
+        Assert.Equal(0, MfdLayout.Default(Monitors).SleepAfterMinutes);
+        Assert.Equal(0, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = -5 }).Validate(Monitors).SleepAfterMinutes);
+        Assert.Equal(120, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = 9999 }).Validate(Monitors).SleepAfterMinutes);
+        Assert.Equal(20, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = 20 }).Validate(Monitors).SleepAfterMinutes);
+
         var kept = (MfdLayout.Default(Monitors) with { Brightness = .7, TextScale = 1.2 }).Validate(Monitors);
         Assert.Equal(.7, kept.Brightness);
         Assert.Equal(1.2, kept.TextScale);

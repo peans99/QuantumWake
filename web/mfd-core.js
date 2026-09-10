@@ -2,6 +2,15 @@
 'use strict';
 window.QwMfd = (() => {
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+  /* Dimming and its timing are one decision, not two: how readable a frame
+     nobody has touched should stay. A third of the pilot's own brightness
+     still reads at a glance, which is the point — a panel bolted into a
+     cockpit is looked at far more often than it is pressed, so blanking it
+     would trade every glance for a press. */
+  const DOZE = .3;
+  const dozed = (sleepAfterMinutes, idleMs) =>
+    sleepAfterMinutes > 0 && idleMs >= sleepAfterMinutes * 60000;
   const integer = (n, fallback) => Number.isFinite(Number(n)) ? Math.round(Number(n)) : fallback;
   function fit(panel, monitor) {
     if (!monitor) return { ...panel };
@@ -129,8 +138,13 @@ window.QwMfd = (() => {
   indexMenu(groups);
   for (const node of Object.values(menuNodes)) commands.push({ id: node.id, label: 'Menu · ' + node.title,
     caption: node.short, short: node.short, icon: commands.find(c => c.id === node.icon).icon });
+  /* Named for what the pilot sees rather than for what the code does: these are
+     the five top buttons, and what each one means is whatever the screen is
+     offering in that position. "Context menu · option 3" described the
+     mechanism to somebody who wanted the effect. */
   for (let slot = 1; slot <= 5; slot++) commands.push({ id: 'menu-' + slot,
-    label: 'Context menu · option ' + slot, caption: 'OPT ' + slot, short: 'M' + slot,
+    label: 'Menu position ' + slot + ' · follows the screen',
+    caption: 'OPT ' + slot, short: 'M' + slot,
     icon: 'M4 6h16M4 12h16M4 18h16' });
 
   const defaults = { 1: 'menu-1', 2: 'menu-2', 3: 'menu-3', 4: 'menu-4', 5: 'menu-5',
@@ -723,5 +737,5 @@ window.QwMfd = (() => {
   }
   return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
-    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
+    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, OSBS, BUTTONS };
 })();

@@ -2,7 +2,7 @@
 const setupElement = id => document.getElementById(id);
 const host = window.chrome?.webview;
 let monitors = [{ id: 'example', x: 0, y: 0, width: 1920, height: 1080, primary: true }];
-let layout = { enabled: false, blackout: true, brightness: 1, textScale: 1, buttons: null, panels: [
+let layout = { enabled: false, blackout: true, brightness: 1, textScale: 1, sleepAfterMinutes: 0, buttons: null, panels: [
   { id: 'left', monitor: 'example', x: 360, y: 280, width: 480, height: 480, cougar: 1 },
   { id: 'right', monitor: 'example', x: 960, y: 280, width: 480, height: 480, cougar: 2 }
 ] };
@@ -132,8 +132,16 @@ function showScreen() {
   setupElement('brightness').value = bright;
   setupElement('brightness-value').textContent = bright + '%';
   setupElement('text-scale').value = text;
+  setupElement('sleep-after').value = String(layout.sleepAfterMinutes || 0);
   setupElement('text-scale-value').textContent = text + '%';
 }
+setupElement('sleep-after').onchange = event => {
+  layout.sleepAfterMinutes = Number(event.target.value) || 0;
+  if (previewing) send('preview');
+  status(layout.sleepAfterMinutes
+    ? 'Frames dim after ' + layout.sleepAfterMinutes + ' idle minutes. Save to keep it.'
+    : 'Frames stay at full brightness. Save to keep it.');
+};
 for (const [id, key] of [['brightness', 'brightness'], ['text-scale', 'textScale']])
   setupElement(id).oninput = event => {
     layout[key] = Number(event.target.value) / 100;
@@ -156,42 +164,119 @@ setupElement('separate').onclick = () => {
 /* Rebuilt only when the whole profile changes, never on a single dropdown:
    redrawing the grid under the pilot's hand would take the focus off the row
    they were part-way through setting. */
-const groups = [
-  { title: 'OPTICAL BUTTONS 1–' + QwMfd.OSBS, from: 1, to: QwMfd.OSBS,
-    hint: 'The buttons around the screen, numbered clockwise from the top left.' },
-  { title: 'ROCKERS ' + (QwMfd.OSBS + 1) + '–' + QwMfd.BUTTONS, from: QwMfd.OSBS + 1, to: QwMfd.BUTTONS,
-    hint: 'The four two-way rockers. Press one to find out which number it is.' }
-];
+/* The frame, not a list of dropdowns.
+ *
+ * Twenty-eight selects of thirty-six options each is a thousand entries in
+ * front of somebody whose actual question is "what does THIS button do" - and
+ * they are looking at the button while they ask it. So the editor is shaped
+ * like the thing in their hands: press a button, its position lights up, and
+ * one grouped list assigns it.
+ *
+ * The rockers get a row of their own below the frame, because which rocker
+ * reports which number is the one thing no datasheet answers - the tester is
+ * how you find out, and the row is where the answer lands.
+ */
+const edges = { top: [1, 2, 3, 4, 5], right: [6, 7, 8, 9, 10], bottom: [15, 14, 13, 12, 11], left: [20, 19, 18, 17, 16] };
+const rockers = Array.from({ length: QwMfd.BUTTONS - QwMfd.OSBS }, (_, i) => QwMfd.OSBS + 1 + i);
+let picked = 1;
+
+/* Four kinds of thing were sharing one flat list: screens to open, menus to
+   step into, the five positions that follow the screen, and plain controls. */
+function optionGroups() {
+  const menus = QwMfd.groups.map(g => g.id);
+  const slots = QwMfd.commands.filter(c => /^menu-[1-5]$/.test(c.id)).map(c => c.id);
+  const screens = QwMfd.pageIds.slice();
+  const rest = QwMfd.commands.map(c => c.id)
+    .filter(id => !menus.includes(id) && !slots.includes(id) && !screens.includes(id));
+  return [
+    ['Menu positions · what the screen offers', slots],
+    ['Open a screen directly', screens],
+    ['Open a menu', menus.concat(['home', 'back'])],
+    ['Controls', rest.filter(id => id !== 'home' && id !== 'back')]
+  ];
+}
+
+function assign(number, id) {
+  const next = QwMfd.buttons(layout.buttons);
+  if (id) next[number] = id; else delete next[number];
+  layout.buttons = next;
+  drawButtons();
+  if (previewing) send('preview');
+  status('Button ' + String(number).padStart(2, '0') + ': '
+    + (id ? labelOf(id) : 'unassigned') + '. Save to keep it.');
+}
+
+/* A saved file is allowed to name a command this build has never heard of —
+   that is how a profile survives going back a version — so nothing here may
+   assume the lookup succeeds. Showing the raw name is the honest answer: it
+   is what the frame will act on, and it is not this page's to quietly drop. */
+const labelOf = id => QwMfd.commands.find(c => c.id === id)?.label || id;
+
+function keycap(number, map) {
+  const cell = document.createElement('button');
+  cell.type = 'button';
+  cell.id = 'bind-' + number;
+  cell.className = 'key' + (number === picked ? ' picked' : '') + (map[number] ? '' : ' empty');
+  cell.onclick = () => { picked = number; drawButtons(); };
+  const n = document.createElement('small'); n.textContent = String(number).padStart(2, '0');
+  const what = document.createElement('span');
+  // A caption this build has no word for still has a binding, so the cap
+  // must not read as blank - blank here means nothing is bound.
+  what.textContent = QwMfd.caption(map[number], true) || (map[number] ? '?' : '—');
+  cell.append(n, what);
+  cell.title = 'Cougar button ' + number
+    + (map[number] ? ': ' + labelOf(map[number]) : ': unassigned');
+  return cell;
+}
+
 function drawButtons() {
   const map = QwMfd.buttons(layout.buttons);
   const panel = setupElement('buttons');
   panel.replaceChildren();
-  for (const group of groups) {
-    const title = document.createElement('div'); title.className = 'group'; title.textContent = group.title;
-    const hint = document.createElement('p'); hint.className = 'hint muted'; hint.textContent = group.hint;
-    const grid = document.createElement('div'); grid.className = 'bindings';
-    for (let number = group.from; number <= group.to; number++) {
-      const row = document.createElement('label');
-      row.id = 'bind-' + number;
-      row.append(String(number).padStart(2, '0'));
-      const select = document.createElement('select');
-      select.className = 'select';
-      select.add(new Option('Unassigned', ''));
-      for (const command of QwMfd.commands) select.add(new Option(command.label, command.id));
-      select.value = map[number] || '';
-      select.setAttribute('aria-label', 'Cougar button ' + number);
-      select.onchange = () => {
-        const next = QwMfd.buttons(layout.buttons);
-        if (select.value) next[number] = select.value; else delete next[number];
-        layout.buttons = next;
-        if (previewing) send('preview');
-        status('Button ' + number + ': ' + (select.selectedOptions[0].text) + '. Save to keep it.');
-      };
-      row.append(select);
-      grid.append(row);
-    }
-    panel.append(title, hint, grid);
+
+  const frame = document.createElement('div'); frame.className = 'cougar';
+  for (const [side, numbers] of Object.entries(edges)) {
+    const row = document.createElement('div'); row.className = 'side ' + side;
+    for (const number of numbers) row.append(keycap(number, map));
+    frame.append(row);
   }
+  const face = document.createElement('div'); face.className = 'face';
+  face.textContent = 'MFD';
+  frame.append(face);
+
+  const rockerTitle = document.createElement('div'); rockerTitle.className = 'group';
+  rockerTitle.textContent = 'ROCKERS ' + rockers[0] + '–' + rockers[rockers.length - 1];
+  const rockerHint = document.createElement('p'); rockerHint.className = 'hint muted';
+  rockerHint.textContent = 'Which rocker reports which number is not something a datasheet answers. '
+    + 'Press one and its number lights up here.';
+  const rockerRow = document.createElement('div'); rockerRow.className = 'rockers';
+  for (const number of rockers) rockerRow.append(keycap(number, map));
+
+  const editor = document.createElement('div'); editor.className = 'assign';
+  const label = document.createElement('label');
+  label.append('Button ' + String(picked).padStart(2, '0') + ' does');
+  const select = document.createElement('select'); select.className = 'select';
+  select.add(new Option('Nothing', ''));
+  for (const [title, ids] of optionGroups()) {
+    const set = document.createElement('optgroup'); set.label = title;
+    for (const id of ids) {
+      const command = QwMfd.commands.find(c => c.id === id);
+      if (command) set.append(new Option(command.label, command.id));
+    }
+    select.append(set);
+  }
+  // An unknown binding needs an entry of its own, or selecting it back would be
+  // impossible and the blank would read as 'unassigned' when it is not.
+  const current = map[picked] || '';
+  if (current && !Array.from(select.options).some(o => o.value === current)) {
+    select.append(new Option(current + ' (from a newer version)', current));
+  }
+  select.value = current;
+  select.onchange = () => assign(picked, select.value);
+  label.append(select);
+  editor.append(label);
+
+  panel.append(frame, editor, rockerTitle, rockerHint, rockerRow);
 }
 setupElement('restore').onclick = () => {
   layout.buttons = null;
@@ -225,14 +310,15 @@ host?.addEventListener('message', ({ data }) => {
     setupElement('button-test').textContent = `F16 MFD ${data.cougar} → BUTTON ${String(data.button).padStart(2, '0')}`;
     // The only way to find out which rocker is which: press it and watch its
     // row light up, then bind the number that answered.
-    for (const lit of document.querySelectorAll('.bindings label.hit')) lit.classList.remove('hit');
+    if (data.button >= 1 && data.button <= QwMfd.BUTTONS) { picked = data.button; drawButtons(); }
+    for (const lit of document.querySelectorAll('.key.hit')) lit.classList.remove('hit');
     setupElement('bind-' + data.button)?.classList.add('hit');
   }
   if (data.type === 'result') status(data.message, !data.ok);
 });
 if (!host) {
   setupElement('host-note').hidden = false;
-  for (const id of ['save', 'preview', 'stop-preview', 'enabled', 'blackout']) setupElement(id).disabled = true;
+  for (const id of ['save', 'preview', 'stop-preview', 'enabled', 'blackout', 'sleep-after']) setupElement(id).disabled = true;
   setupElement('devices').textContent = 'USB input is available in the desktop app.';
   // "Your monitors" over a single invented rectangle reads as a detection that
   // found one monitor, which is the wrong thing to be told when you have three.

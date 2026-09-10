@@ -910,4 +910,23 @@ public class MfdTests
         Assert.Contains("NO OPEN CONTRACT", json);
         Assert.Contains("Earlier ones are in the logbook", json);
     }
+
+    /// <summary>
+    /// Off is the shipped answer, so a zero here has to mean never rather than
+    /// immediately - the difference between a setting nobody asked for and a
+    /// frame that dims the moment it is left alone.
+    /// </summary>
+    [Fact]
+    public void IdleDimmingOnlyHappensAfterATimeThePilotPicked()
+    {
+        var e = Engine();
+        Assert.False(e.Evaluate("QwMfd.dozed(0, 60 * 60000)").AsBoolean());
+        Assert.False(e.Evaluate("QwMfd.dozed(5, 4.9 * 60000)").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.dozed(5, 5 * 60000)").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.dozed(5, 90 * 60000)").AsBoolean());
+
+        // Dim, never dark: a frame you can still read beats one that has to be
+        // woken before it can be, which is the whole reason it is not a blank.
+        Assert.InRange(e.Evaluate("QwMfd.DOZE").AsNumber(), .2, .5);
+    }
 }
