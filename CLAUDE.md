@@ -180,6 +180,12 @@ the repo's `web/` — rebuild after every asset edit, and stop the server
 first or the copy is locked. And stub `window.EventSource` in any throwaway
 page you drive, or it never settles.
 
+A throwaway harness that loads `mfd.js` shares one global scope with it, so a
+`let` in the harness that the panel also declares — `stream`, `state`, `screen`
+— is a SyntaxError that stops the panel loading at all, and the page still
+renders enough chrome to look like a styling problem. Prefix harness variables.
+`--dump-dom` into a file is how you find out; the screenshot never says.
+
 Two more traps once a page has to be *driven* rather than merely loaded. Chrome's
 virtual clock stalls while the live stream holds a request open, so `setTimeout`
 never fires — hang the harness off a `MutationObserver` instead. And a table that

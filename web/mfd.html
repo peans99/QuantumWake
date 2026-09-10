@@ -17,9 +17,15 @@
 <h1 id="title">Cockpit</h1>
 <div id="menu" aria-label="Choose a screen" hidden></div>
 <div id="content" tabindex="0" aria-label="Screen readings">
+<!--
+      Readings first, picture second. The map screen put the plot at the top and
+      "where am I" underneath it, so the one fact a pilot opens the map for was
+      the one thing off the bottom of a 220 px opening. A picture is worth
+      looking at; a location is worth reading, and reading comes first.
+    -->
+<div id="readings"></div>
     <figure id="map" hidden><svg id="map-plot" viewBox="-1.18 -1.18 2.36 2.36" aria-hidden="true"></svg>
       <figcaption id="map-note"></figcaption></figure>
-<div id="readings"></div>
 </div>
 <button id="more" type="button" hidden>More details</button>
 <div id="scroll-hint" hidden>UP / DOWN · more below</div>

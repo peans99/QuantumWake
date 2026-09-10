@@ -435,7 +435,10 @@ window.QwMfd = (() => {
     // would draw the same circle four times over a 150 px panel.
     const rings = [...new Set(bodies.map(b => Math.round(b.radius * 50) / 50))].filter(r => r > .04);
     const note = [system.toUpperCase(),
-      here ? 'straight line, not a fix' : 'body not identified',
+      // "Not a fix" reads as a caveat about the position, which is not what is
+      // being disclaimed: the position is as good as the logs get. It is the
+      // line and its distance that are direct rather than flown.
+      here ? 'direct line, not the route flown' : 'body not identified',
       elsewhere ? `${elsewhere} stop${elsewhere > 1 ? 's' : ''} outside this system` : null]
       .filter(Boolean).join(' · ');
     return { system, here, next, target, bodies, rings, legs, gm, elsewhere, note };

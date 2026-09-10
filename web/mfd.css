@@ -110,10 +110,13 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 #map { margin: 0 0 2%; flex: 0 0 auto; text-align: center; }
 #map[hidden] { display: none; }
 #map svg { display: block; width: 100%; max-width: 22cqh; height: auto; aspect-ratio: 1; margin: 0 auto; }
-/* Big, but not greedy: the two lines under it are the facts a picture cannot
-   state, and a map that took the whole panel pushed them off it. */
-#map.big { flex: 0 0 auto; margin-bottom: 3%; }
-#map.big svg { max-width: min(100%, 42cqh); }
+/* Big, but not greedy: the two lines above it are the facts a picture cannot
+   state, and a map sized to the panel pushed them off it. Sized so the whole
+   screen - location, next stop, plot and caption - lands inside a 220 px
+   opening without a scroll, because scrolling a map to find where you are is
+   the failure this screen exists to avoid. */
+#map.big { flex: 0 0 auto; margin: 3% 0 0; }
+#map.big svg { max-width: min(100%, 30cqh); }
 #map-note { font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-top: 2%; }
 .orbit { fill: none; stroke: var(--line-hot); stroke-width: .006; }
 .star { fill: var(--hot); }
@@ -160,7 +163,7 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 /* ---------- a small opening ---------- */
 /* At 220 px the frame has room for the readings or the decoration, not both.
    Shorter captions come from the command table; the rest goes here. */
-.compact #map.big svg { max-width: min(100%, 46cqh); }
+.compact #map.big svg { max-width: min(100%, 34cqh); }
 .compact #map-note { letter-spacing: .02em; }
 .compact h1 { font-size: clamp(13px, 3.4cqw, 20px); letter-spacing: .12em; margin: 3% 0; }
 .compact .reading { padding-bottom: 3%; gap: 2%; }

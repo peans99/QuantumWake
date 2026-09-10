@@ -308,6 +308,11 @@ so before the pilot has a chance to trust it. Travel *time* is deliberately
 absent for the same reason: it would need a speed the logs do not carry, and an
 estimate dressed as a reading is the one thing this app does not do.
 
+**Location and next stop sit above the plot, not below it.** They were under
+it, and on a 220 px opening that put the one fact the screen exists to answer —
+where am I — off the bottom edge, reachable only by scrolling a map. The plot is
+sized to leave room for them rather than to fill the panel.
+
 **It marks a body, never a point.** Game.log names the place you are at and the
 body it sits on; where you are on that body is not something it ever says, and
 a dot on a surface would be an invention. The caption under the plan says so.

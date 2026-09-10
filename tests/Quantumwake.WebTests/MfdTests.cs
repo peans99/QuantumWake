@@ -320,7 +320,7 @@ public class MfdTests
             + "travelling:true,travellingToId:'RR_MIC_LEO'}," + plan + ");");
         Assert.Equal("microTech", e.Evaluate("v.next").AsString());
         Assert.Equal("Hurston", e.Evaluate("v.target").AsString());
-        Assert.Contains("not a fix", e.Evaluate("v.note").AsString());
+        Assert.Contains("not the route flown", e.Evaluate("v.note").AsString());
 
         e.Execute($"var stale = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp',"
             + "travellingToId:'RR_MIC_LEO'}," + plan + ");");
@@ -357,7 +357,7 @@ public class MfdTests
         Assert.Equal(87.94, e.Evaluate("v.gm").AsNumber(), 1);
         Assert.Equal("87.9 Gm to microTech over 2 legs", e.Evaluate("QwMfd.routeLine(v)").AsString());
         Assert.True(e.Evaluate("v.bodies.find(b => b.name === 'microTech').onRoute").AsBoolean());
-        Assert.Contains("straight line, not a fix", e.Evaluate("v.note").AsString());
+        Assert.Contains("direct line, not the route flown", e.Evaluate("v.note").AsString());
 
         // And the Nav headline quotes the same view rather than measuring again,
         // on the destination's own line rather than a row below it.

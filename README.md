@@ -318,7 +318,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.25
+### 0.10.26
+
+- **The system map puts where you are at the top.** Location and next stop were
+  under the plot, which on a small opening meant scrolling a map to find out
+  where you were — the one thing you opened it for. They are above it now, and
+  the plot is sized to leave room for them rather than to fill the frame.
+
+- **The map caption says what it means.** It read "straight line, not a fix",
+  and a fix is the word for a position — so it looked like a warning about
+  where it had put you, which is not what was in doubt. It now says **direct
+  line, not the route flown**: the distance is body centre to body centre, and
+  the game never writes down the route it actually plots.
+
 
 - **Brightness is four levels now, and a button can reach every one of them.**
   It used to nudge five percent at a time, which is fine for a mouse and no use
