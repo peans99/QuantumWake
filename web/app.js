@@ -761,12 +761,24 @@ const TOAST_KINDS = {
 /**
  * The newest entry already toasted, as "at|kind|text".
  *
- * Null until the first frame lands, which is the whole point: the stream opens
- * with up to 40 entries of history, and a client that toasted what it found
- * would replay the last hour of the session every time the page was refreshed
- * or the overlay reloaded.
+ * Null until a frame with something in it lands, which is the whole point: the
+ * stream opens with up to 40 entries of history, and a client that toasted what
+ * it found would replay the last hour of the session every time the page was
+ * refreshed or the overlay reloaded. Null again after an empty frame, which
+ * means the opposite - nothing to replay, so the next frame is all news.
  */
 let lastToastKey = null;
+
+/**
+ * Whether any frame has been seen yet.
+ *
+ * Separate from lastToastKey because the first frame can legitimately be
+ * empty - the dashboard opened at the game's menu, or a session whose timeline
+ * has nothing in it yet - and anchoring only on a non-empty frame swallowed
+ * the first thing that ever happened. For the screen readings that first thing
+ * is the disagreement the toast exists to announce.
+ */
+let toastAnchored = false;
 
 function toastKey(entry) {
   return `${entry.at}|${entry.kind}|${entry.text}`;
@@ -781,11 +793,18 @@ function toastKey(entry) {
  * rather than the whole window, since the point is the moment, not the backlog.
  */
 function raiseToasts(entries) {
-  if (!entries || entries.length === 0) return;
+  if (!entries || entries.length === 0) {
+    // Nothing has happened yet, so there is no backlog to replay and whatever
+    // arrives next is news. The null key says exactly that to the frame after.
+    toastAnchored = true;
+    lastToastKey = null;
+    return;
+  }
 
   const newest = toastKey(entries[0]);
 
-  if (lastToastKey === null) {
+  if (!toastAnchored) {
+    toastAnchored = true;
     lastToastKey = newest;
     return;
   }
@@ -793,15 +812,23 @@ function raiseToasts(entries) {
   if (lastToastKey === newest) return;
 
   const fresh = [];
-  let anchored = false;
 
-  for (const entry of entries) {
-    if (toastKey(entry) === lastToastKey) {
-      anchored = true;
-      break;
+  // A null key here is the empty frame above rather than a fresh page: there
+  // was nothing to anchor on because there was nothing at all, so the whole
+  // frame is new and none of it is history.
+  let anchored = lastToastKey === null;
+
+  if (anchored) {
+    fresh.push(...entries);
+  } else {
+    for (const entry of entries) {
+      if (toastKey(entry) === lastToastKey) {
+        anchored = true;
+        break;
+      }
+
+      fresh.push(entry);
     }
-
-    fresh.push(entry);
   }
 
   lastToastKey = newest;
@@ -4632,7 +4659,10 @@ async function parseClipboard(quiet = false) {
       'Which system this is in comes from your logs, not from the reading.'));
   });
 
-  renderScreenLog().catch(() => {});
+  // Only when the pilot asked. The watcher calls this every three seconds with
+  // the same clipboard, and a list that rebuilds itself that often cannot be
+  // read - which is what this function's own doc comment says.
+  if (!quiet) renderScreenLog().catch(() => {});
 }
 
 /** What kind of screen a reading was, in words a pilot would use. */
@@ -4895,12 +4925,6 @@ async function scanScreenshot() {
 }
 
 /**
- * What the screenshots said, newest first, on the panel and on the Now card.
- *
- * Redrawn only when a new one has landed, because the list is polled and a
- * list that flickers every three seconds cannot be read.
- */
-/**
  * The log: everything the app has been shown, newest first.
  *
  * One list for both, because to the pilot a paste and a screenshot are the
@@ -5007,9 +5031,14 @@ function renderNowScreenCard(s) {
   card.hidden = false;
 
   // The log is not polled, so a reading arriving on the stream is what tells
-  // it to redraw - and only when somebody is looking at it.
-  if (s.shot !== screenLatestShot && $('#view-overlay')?.classList.contains('active'))
+  // it to redraw - and only when somebody is looking at it. The shot is marked
+  // seen here rather than left to the redraw: renderScreenLog gives up quietly
+  // when the fetch fails, and a shot that stayed unseen would ask again on
+  // every frame of the stream, once a second, for as long as the page was open.
+  if (s.shot !== screenLatestShot && $('#view-overlay')?.classList.contains('active')) {
+    screenLatestShot = s.shot;
     renderScreenLog().catch(() => {});
+  }
 
   $('#now-screen-summary').textContent = s.summary;
   $('#now-screen-when').textContent =

@@ -2246,12 +2246,17 @@ public static class ServerHost
         {
             var many = take is > 0 ? take.Value : 50;
 
+            // Each call takes the lock and copies the whole bounded list, so
+            // they are taken once rather than once per field.
+            var all = readings.All();
+            var pastes = readings.Clipboards();
+
             return Results.Ok(new
             {
-                readings = readings.All().Take(many),
-                clipboard = readings.Clipboards().Take(many),
-                total = readings.All().Count,
-                pastes = readings.Clipboards().Count,
+                readings = all.Take(many),
+                clipboard = pastes.Take(many),
+                total = all.Count,
+                pastes = pastes.Count,
             });
         });
 

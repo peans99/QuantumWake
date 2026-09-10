@@ -93,14 +93,20 @@ public class ScreenReadingStoreTests : IDisposable
 
     // ---- what was pasted ----
 
-    private static ClipboardSighting Paste(DateTimeOffset at, string? believed = "Ruin Station") =>
-        new(at, -9641671346.9, -11490734321.2, -91805.1, 14.99996, believed, believed is null ? null : "Pyro");
+    /// <param name="drift">
+    /// Moves the reading, for the cases that need each paste to be a different
+    /// one: identical coordinates are taken for the same paste still sitting on
+    /// the clipboard, which is the whole point of the dedupe below.
+    /// </param>
+    private static ClipboardSighting Paste(
+        DateTimeOffset at, string? believed = "Ruin Station", double drift = 0) =>
+        new(at, -9641671346.9 + drift, -11490734321.2, -91805.1, 14.99996, believed, believed is null ? null : "Pyro");
 
     [Fact]
     public void Pastes_come_back_newest_first_and_survive_a_restart()
     {
         var store = new ScreenReadingStore(_dir);
-        store.AddClipboard(Paste(At.AddMinutes(-5)));
+        store.AddClipboard(Paste(At.AddMinutes(-5), drift: 5000));
         store.AddClipboard(Paste(At));
 
         var again = new ScreenReadingStore(_dir);
@@ -134,9 +140,57 @@ public class ScreenReadingStoreTests : IDisposable
         var store = new ScreenReadingStore(_dir);
 
         for (var i = 0; i < ScreenReadingStore.Keep + 10; i++)
-            store.AddClipboard(Paste(At.AddSeconds(i)));
+            store.AddClipboard(Paste(At.AddSeconds(i), drift: i));
 
         Assert.Equal(ScreenReadingStore.Keep, store.Clipboards().Count);
+    }
+
+    /// <summary>
+    /// The watcher reads the clipboard every three seconds and the clipboard
+    /// keeps what was copied until something else is copied, so one paste would
+    /// otherwise become a row every three seconds - filling the bound above
+    /// with three hundred copies of itself in a quarter of an hour and throwing
+    /// away every genuinely different paste to do it.
+    /// </summary>
+    [Fact]
+    public void The_same_paste_read_again_is_not_stored_again()
+    {
+        var store = new ScreenReadingStore(_dir);
+
+        Assert.True(store.AddClipboard(Paste(At)));
+        Assert.False(store.AddClipboard(Paste(At.AddSeconds(3))));
+        Assert.False(store.AddClipboard(Paste(At.AddSeconds(6))));
+
+        Assert.Single(store.Clipboards());
+        Assert.Equal(At, store.Clipboards()[0].At);
+    }
+
+    [Fact]
+    public void A_paste_from_somewhere_else_is_stored()
+    {
+        var store = new ScreenReadingStore(_dir);
+
+        store.AddClipboard(Paste(At));
+        Assert.True(store.AddClipboard(Paste(At.AddSeconds(3), drift: 5000)));
+
+        Assert.Equal(2, store.Clipboards().Count);
+    }
+
+    /// <summary>
+    /// Copying the same place again after going elsewhere is a new paste: only
+    /// the row on top is compared, because only that one can be the clipboard
+    /// still holding what it held three seconds ago.
+    /// </summary>
+    [Fact]
+    public void The_same_place_copied_again_later_is_stored()
+    {
+        var store = new ScreenReadingStore(_dir);
+
+        store.AddClipboard(Paste(At));
+        store.AddClipboard(Paste(At.AddMinutes(1), drift: 5000));
+
+        Assert.True(store.AddClipboard(Paste(At.AddMinutes(2))));
+        Assert.Equal(3, store.Clipboards().Count);
     }
 
     [Fact]

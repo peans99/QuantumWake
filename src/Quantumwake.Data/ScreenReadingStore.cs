@@ -98,16 +98,35 @@ public sealed class ScreenReadingStore
         lock (_gate) return [.. _clipboard];
     }
 
-    public void AddClipboard(ClipboardSighting paste)
+    /// <summary>A paste, unless it is the one already on top. True when it was kept.</summary>
+    /// <remarks>
+    /// The clipboard holds whatever was copied until something else is copied,
+    /// and the watcher reads it every three seconds - so without this, one
+    /// paste becomes a row every three seconds, and the bound above fills with
+    /// three hundred copies of it inside a quarter of an hour, discarding every
+    /// genuinely different paste to do it. Same coordinates as the newest means
+    /// the same paste rather than a new one: both were parsed from the same
+    /// copied text, so they match to the bit.
+    /// </remarks>
+    public bool AddClipboard(ClipboardSighting paste)
     {
         lock (_gate)
         {
+            if (_clipboard.FirstOrDefault() is { } newest
+                && newest.X == paste.X
+                && newest.Y == paste.Y
+                && newest.Z == paste.Z)
+            {
+                return false;
+            }
+
             _clipboard.Insert(0, paste);
 
             if (_clipboard.Count > Keep)
                 _clipboard.RemoveRange(Keep, _clipboard.Count - Keep);
 
             SaveClipboard();
+            return true;
         }
     }
 

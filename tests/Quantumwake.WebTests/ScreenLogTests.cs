@@ -174,4 +174,72 @@ public class ScreenLogTests
         Assert.False(page.Truth("__dom.node('#now-screen-card').hidden"));
         Assert.Contains("PYRO > RUIN STATION", page.NodeText("#now-screen-summary"));
     }
+
+    // ---- what redraws the log, and what must not ----
+
+    /// <summary>How many times the page has asked for the log.</summary>
+    private static int Reads(Page page) =>
+        page.Fetched().Count(call => call.Contains("/api/screen/readings?take=50"));
+
+    private static void Copied(Page page) =>
+        page.Serve("/api/screen/clipboard", """
+            {"found":true,"x":-9641671346.9,"y":-11490734321.2,"z":-91805.1,
+             "gigametresFromCentre":14.99996,"trouble":null}
+            """);
+
+    /// <summary>
+    /// The watcher reads the clipboard every three seconds, and the clipboard
+    /// holds what was copied until something else is copied - so this fires on
+    /// the same paste over and over. Rebuilding the list underneath somebody
+    /// reading it, at that rate, is what the log's own doc comment forbids.
+    /// </summary>
+    [Fact]
+    public void The_clipboard_watcher_does_not_redraw_the_log()
+    {
+        var page = Panel(Sighting, Paste);
+        Copied(page);
+
+        var before = Reads(page);
+        page.Do("await parseClipboard(true);");
+        page.Do("await parseClipboard(true);");
+
+        Assert.Equal(before, Reads(page));
+    }
+
+    /// <summary>
+    /// A paste the pilot asked for is the other half of the same rule: they
+    /// pressed the button, so the thing they just added should appear.
+    /// </summary>
+    [Fact]
+    public void A_paste_the_pilot_asked_for_does_redraw_the_log()
+    {
+        var page = Panel(Sighting, Paste);
+        Copied(page);
+
+        var before = Reads(page);
+        page.Do("await parseClipboard(false);");
+
+        Assert.Equal(before + 1, Reads(page));
+    }
+
+    /// <summary>
+    /// The log gives up quietly when the fetch fails, and the stream pushes a
+    /// frame a second. A shot left unmarked would ask again on every one of
+    /// them for as long as the page stayed open.
+    /// </summary>
+    [Fact]
+    public void A_log_that_will_not_load_is_not_asked_for_on_every_frame()
+    {
+        var page = Panel();
+        page.Do("__dom.node('#view-overlay').classList.add('active');");
+        page.Do("__fetch.unreachable.push('/api/screen/readings?take=50');");
+
+        var before = Reads(page);
+
+        Frame(page, "", Sighting);
+        Frame(page, "", Sighting);
+        Frame(page, "", Sighting);
+
+        Assert.Equal(before + 1, Reads(page));
+    }
 }

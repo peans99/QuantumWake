@@ -109,6 +109,7 @@ public sealed class LiveSessionService : BackgroundService
     private string? _lastPlace;
 
     private readonly ScreenReadingStore? _screen;
+    private readonly ScreenSettingsStore? _screenSettings;
 
     /// <summary>The newest screenshot already accounted for.</summary>
     private string? _lastScreenShot;
@@ -136,13 +137,18 @@ public sealed class LiveSessionService : BackgroundService
     /// What the screenshots said. Optional for the same reason as the rest:
     /// a server with no reader has none, and the Now card then stays hidden.
     /// </param>
+    /// <param name="screenSettings">
+    /// Whether the pilot has the screen panel switched on. Optional like the
+    /// rest; absent means nothing is filtered, which is what the tests want.
+    /// </param>
     public LiveSessionService(
         IHubContext<LiveHub> hub,
         LogLibrary library,
         ILogger<LiveSessionService> logger,
         GameInstall? install = null,
         TripStore? trips = null,
-        ScreenReadingStore? screen = null)
+        ScreenReadingStore? screen = null,
+        ScreenSettingsStore? screenSettings = null)
     {
         _hub = hub;
         _library = library;
@@ -150,6 +156,7 @@ public sealed class LiveSessionService : BackgroundService
         _logger = logger;
         _trips = trips;
         _screen = screen;
+        _screenSettings = screenSettings;
         _builder = new SessionBuilder(install?.GameLogPath ?? "live");
 
         // Whatever was already read is not news. Seeding this here is what
@@ -167,6 +174,15 @@ public sealed class LiveSessionService : BackgroundService
         if (_install is null || !_install.HasGameLog)
         {
             _logger.LogWarning("No Game.log found; live view disabled.");
+
+            // The screen reader runs without a game log, and since the readings
+            // moved onto this channel there is no client-side poll left to fall
+            // back on - so without this the Now card and the reading log never
+            // see a thing on an install the tail cannot follow. Connected stays
+            // false: there is no game here, only screenshots.
+            if (_screen is not null)
+                await BroadcastScreenOnlyAsync(stoppingToken);
+
             return;
         }
 
@@ -242,6 +258,13 @@ public sealed class LiveSessionService : BackgroundService
             _builder = new SessionBuilder(_install?.GameLogPath ?? "live");
             _currentShip = null;
             _recent.Clear();
+
+            // The notes belong to the session that just ended. Left here they
+            // would be the whole of the next session's feed, on top of a
+            // timeline that correctly says nothing has happened yet.
+            // _lastScreenShot is deliberately kept: the readings themselves did
+            // not rotate, and clearing it would announce the newest one again.
+            _screenNotes.Clear();
         }
     }
 
@@ -254,6 +277,13 @@ public sealed class LiveSessionService : BackgroundService
         // Keep the tail of the timeline for the live feed.
         _recent.Clear();
         _recent.AddRange(summary.Timeline.TakeLast(40).Reverse());
+
+        // Before the initializer, not inside it: ScreenNow is what appends a
+        // disagreement to _screenNotes, and Feed() reads that list. Left to the
+        // initializer's own order the note arrived one snapshot after the feed
+        // it was written for - which the two-second tick hid, and which the
+        // next reordering of these lines would not have.
+        var screen = ScreenNow();
 
         return new NowState
         {
@@ -276,7 +306,7 @@ public sealed class LiveSessionService : BackgroundService
             Deaths = summary.Deaths,
             Kills = summary.Kills,
             RecentEvents = Feed(),
-            Screen = ScreenNow(),
+            Screen = screen,
             Party = ReadParty(summary.PartyNotes),
             PartyDisbanded = summary.PartyNotes.Count > 0
                 && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded
@@ -301,6 +331,14 @@ public sealed class LiveSessionService : BackgroundService
     /// </remarks>
     private NowScreen? ScreenNow()
     {
+        // Enforced here and not only on the page, for the same reason the scan
+        // and clipboard endpoints enforce it: a panel that has been switched
+        // off should be switched off however the reading arrives. Without it
+        // the last screenshot read before the switch stays on the Now card and
+        // in the widget for good.
+        if (_screenSettings is not null && _screenSettings.Current.Mode != ScreenMode.Screenshots)
+            return null;
+
         if (_screen?.Latest is not { } latest) return null;
 
         if (!string.Equals(latest.Shot, _lastScreenShot, StringComparison.OrdinalIgnoreCase))
@@ -331,6 +369,27 @@ public sealed class LiveSessionService : BackgroundService
                 note.Handle!,
                 note.Moment.ToString().ToLowerInvariant(),
                 note.At))];
+
+    /// <summary>
+    /// Pushes snapshots on an install with no Game.log, where the only thing
+    /// that can change is what the pilot has shown the app.
+    /// </summary>
+    private async Task BroadcastScreenOnlyAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+
+        while (await WaitAsync(timer, token))
+        {
+            NowState snapshot;
+            lock (_gate)
+            {
+                var screen = ScreenNow();
+                snapshot = Current = new NowState { Screen = screen, RecentEvents = Feed() };
+            }
+
+            await _hub.Clients.All.SendAsync("now", snapshot, token);
+        }
+    }
 
     private async Task BroadcastAsync()
     {

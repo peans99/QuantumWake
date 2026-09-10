@@ -1016,9 +1016,33 @@ frame and toasts nothing it arrived with, which it already did. And the server
 seeds the last-seen screenshot in its constructor, so a reading taken days ago
 is not news the moment the app starts.
 
+An empty first frame is still a frame, and saying so was a fix rather than a
+detail. A session with nothing in its timeline yet - the dashboard opened at
+the game's menu - gave the client nothing to anchor on, so the first thing that
+ever happened became the anchor and was swallowed. On a quiet session that
+first thing is exactly the disagreement the toast exists for. An empty frame
+now anchors on nothing, which says the opposite of a full one: there is no
+backlog here, so what arrives next is news.
+
+The server drops the note when a Game.log rotates, along with the timeline it
+sits beside. The notes belong to the session that ended; left in place they
+were the whole of the next session's feed, on top of a timeline correctly
+reporting that nothing had happened yet. The last-seen screenshot is
+deliberately kept across that rotation - the readings did not rotate, and
+clearing it would announce the newest one a second time.
+
 **The clipboard is still polled from the page**, three seconds apart, and only
 while a page is open. That is the same flaw the screenshot watch had before it
 moved into the server, and it is the obvious next thing to move.
+
+Polling something that does not change is why the store compares before it
+writes. A clipboard holds what was copied until something else is copied, so
+every one of those three-second reads parses the same coordinates - and the
+first version wrote each one down. One paste became twenty rows a minute and
+filled the three-hundred-row bound with copies of itself in a quarter of an
+hour, evicting every genuinely different paste to do it. Identical coordinates
+on top of the list mean the same paste rather than a new one: both were parsed
+from the same copied text, so they match to the bit.
 
 ### The log
 
@@ -1031,6 +1055,15 @@ A paste is stored with the place the logs put the pilot at the time. Without
 that it is three numbers nobody can place a week later, since the reading
 itself names no place and no system. That is the same pairing
 [precise-poi.md](precise-poi.md) describes from the other direction.
+
+The list is not polled, and the reason is the same one. It is redrawn when the
+page is opened, after a scan or a paste the pilot asked for, and when the live
+stream reports a shot the page has not seen - never on the three-second watch,
+because a list that rebuilds itself while somebody is reading it cannot be
+read. A shot is marked seen before the redraw rather than by it: the redraw
+gives up quietly when the fetch fails, and a shot left unmarked would be asked
+for again on every frame of the stream, once a second, for as long as the page
+stayed open.
 
 The two halves are two files. A paste and a screenshot have nothing in common
 but the panel they end up on, and neither an unreadable file nor an absent one

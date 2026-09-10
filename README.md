@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.5
+### 0.10.6
 
 - **Readings now reach the overlay, and tell you when something is off.**
   The last screenshot read appears on the Now card in the dashboard and in
@@ -336,6 +336,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   place your logs had you at the time, because the reading itself names
   nowhere and three numbers are unreadable a week later. It stays on this
   machine, and there is a button to clear it.
+
+  One row per place you copied, not one per check. With the clipboard watch
+  on, the app looks every few seconds and your clipboard still holds what you
+  copied, so the same location was being written down over and over - which
+  filled the log with one paste and pushed out every other.
+
+- **Off means off.** Switching the screen panel off now clears the reading
+  from the Now card and the widget as well, rather than leaving the last one
+  you took sitting there.
 
 - **Commodity kiosks read.** Point a screenshot at a shop terminal and the
   buy side comes back as a list: what it stocks, how much of it, and what it
