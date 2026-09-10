@@ -11,6 +11,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- The live snapshot is assembled by private methods on a background
+       service, and the two things worth pinning down about it - that a note
+       reaches the feed it was written for, and that a log rotation does not
+       carry the last session's notes into the next - cannot be seen from
+       outside it. Same arrangement Quantumwake.Core already uses. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Quantumwake.Tests" />
+  </ItemGroup>
+
   <!-- The shared web UI ships twice, deliberately.
 
        Next to the binary, so an ordinary build serves files that can be edited

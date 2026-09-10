@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.6
+### 0.10.7
 
 - **Readings now reach the overlay, and tell you when something is off.**
   The last screenshot read appears on the Now card in the dashboard and in

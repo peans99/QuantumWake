@@ -238,7 +238,7 @@ public sealed class LiveSessionService : BackgroundService
         }
     }
 
-    private void OnRotated()
+    internal void OnRotated()
     {
         lock (_gate)
         {
@@ -269,7 +269,7 @@ public sealed class LiveSessionService : BackgroundService
     }
 
     /// <summary>Builds a snapshot. Caller must hold the lock.</summary>
-    private NowState Snapshot()
+    internal NowState Snapshot()
     {
         var summary = _builder.Build();
         var location = _builder.Location;
