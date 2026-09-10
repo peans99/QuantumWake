@@ -221,10 +221,51 @@ window.QwMfd = (() => {
      ever in doubt: Up and Down have nothing to move on a page that already
      fits, and Done has nothing to confirm anywhere but Act. A page button never
      dims - a way out that disappears is worse than one that is redundant. */
+  /* How many ledger entries a page holds. Three rather than the four it used
+     to cap at, because an entry wraps to three lines on a real opening and the
+     fourth was already off the bottom — which was the whole complaint: the list
+     said there were more and gave you no way to reach them. */
+  /* The same rule the dashboard's ledger table uses. Raw class names arrive
+     underscored, and on a panel that is one unbreakable token: it cannot wrap,
+     so it takes a whole line to itself and pushes the entry below it off. */
+  const prettyItem = name => String(name || '').replace(/_/g, ' ');
+
+  const LEDGER_PAGE = 3;
+
+  /* A window onto a list longer than the frame, carrying the numbers needed to
+     say where in it the pilot is. Paged rather than scrolled: a cockpit frame
+     has no scrollbar and nothing to drag one with, UP and DOWN are the entire
+     vocabulary, and "4-6 of 95" is a position that a scroll offset cannot
+     state. */
+  function pageOf(list, offset, size) {
+    const all = Array.isArray(list) ? list : [];
+    const span = Math.max(1, Math.round(size) || 1);
+    const last = Math.max(0, (Math.ceil(all.length / span) - 1) * span);
+    const start = clamp(integer(offset, 0), 0, last);
+    return { items: all.slice(start, start + span), start, span, last,
+      end: Math.min(start + span, all.length), total: all.length };
+  }
+
+  /* Null means "this screen is not paged, scroll it instead", so the panel has
+     one place to ask rather than a list of screen names in the input handler. */
+  function pageStep(pageId, view, direction) {
+    if (pageId !== 'ledger') return null;
+    const page = pageOf(view?.extra?.ledger, view?.offset, LEDGER_PAGE);
+    // Clamped, not wrapped. Running off the end of a ledger back to today
+    // would look exactly like nothing having happened.
+    return clamp(page.start + direction * page.span, 0, page.last);
+  }
+
+  function pageLabel(pageId, view) {
+    if (pageId !== 'ledger') return null;
+    const page = pageOf(view?.extra?.ledger, view?.offset, LEDGER_PAGE);
+    return page.total > page.span ? `${page.start + 1}-${page.end} of ${page.total}` : null;
+  }
+
   function dormant(pageId, context) {
     const idle = [];
     const tasks = context?.tasks || 0;
-    if (!(context?.scrollable || (pageId === 'act' && tasks > 1))) idle.push('up', 'down');
+    if (!(context?.scrollable || context?.paged || (pageId === 'act' && tasks > 1))) idle.push('up', 'down');
     if (!(pageId === 'act' && tasks > 0)) idle.push('confirm');
     return idle;
   }
@@ -670,11 +711,11 @@ window.QwMfd = (() => {
         const ledger = view.extra?.ledger;
         if (!ledger) return [['LEDGER', 'Reading what the logs priced…']];
         if (!ledger.length) return [['NOTHING PRICED',
-          'No confirmed transaction in the last few days.']];
+          'No confirmed transaction in the last 30 days.']];
         return [
-          ...ledger.slice(0, 4).map(entry => [
+          ...pageOf(ledger, view.offset, LEDGER_PAGE).items.map(entry => [
             String(entry.kind || 'entry').toUpperCase(),
-            [entry.what, entry.amount != null
+            [prettyItem(entry.what), entry.amount != null
               ? `${entry.amount > 0 ? '+' : ''}${aUEC(entry.amount)}` : null,
               entry.where].filter(Boolean).join(' · '),
             entry.at]),
@@ -765,6 +806,6 @@ window.QwMfd = (() => {
   }
   return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
-    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, BRIGHTNESS, brightnessLevel, brightnessAt,
+    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };
 })();

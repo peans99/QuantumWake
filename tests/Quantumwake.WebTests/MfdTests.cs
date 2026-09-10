@@ -959,4 +959,44 @@ public class MfdTests
         Assert.True(e.Evaluate("['bright','bright-up','bright-down'].every(id => QwMfd.commands.some(c => c.id === id))").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.effect('bright').cycleBright").AsBoolean());
     }
+
+    /// <summary>
+    /// The ledger showed the first few entries and said there were more, with
+    /// nothing that could reach them: a cockpit frame has no scrollbar, so a
+    /// list longer than the panel has to be paged or it is simply truncated.
+    /// </summary>
+    [Fact]
+    public void TheLedgerPagesThroughEveryEntryAndStopsAtBothEnds()
+    {
+        var e = Engine();
+        e.Execute("var entries = Array.from({length: 8}, (_, i) => ({ kind: 'bought', what: 'item ' + i, amount: -i, at: 'then' }));");
+        e.Execute("var view = offset => ({ extra: { ledger: entries }, offset });");
+
+        Assert.Equal(3, e.Evaluate("QwMfd.LEDGER_PAGE").AsNumber());
+        Assert.Equal("item 0,item 1,item 2", e.Evaluate("QwMfd.pageOf(entries, 0, 3).items.map(x => x.what).join(',')").AsString());
+        Assert.Equal("item 6,item 7", e.Evaluate("QwMfd.pageOf(entries, 6, 3).items.map(x => x.what).join(',')").AsString());
+
+        // Where you are, which a scroll position cannot state.
+        Assert.Equal("1-3 of 8", e.Evaluate("QwMfd.pageLabel('ledger', view(0))").AsString());
+        Assert.Equal("7-8 of 8", e.Evaluate("QwMfd.pageLabel('ledger', view(6))").AsString());
+
+        Assert.Equal(3, e.Evaluate("QwMfd.pageStep('ledger', view(0), 1)").AsNumber());
+        Assert.Equal(0, e.Evaluate("QwMfd.pageStep('ledger', view(3), -1)").AsNumber());
+
+        // Clamped rather than wrapped: running off the end of a ledger back to
+        // today reads exactly like nothing having happened.
+        Assert.Equal(0, e.Evaluate("QwMfd.pageStep('ledger', view(0), -1)").AsNumber());
+        Assert.Equal(6, e.Evaluate("QwMfd.pageStep('ledger', view(6), 1)").AsNumber());
+
+        // Every entry is reachable, which is the whole point of the change.
+        Assert.Equal(8, e.Evaluate("(() => { const seen = new Set(); for (let o = 0; o <= 6; o += 3) for (const x of QwMfd.pageOf(entries, o, 3).items) seen.add(x.what); return seen.size; })()").AsNumber());
+
+        // Not a paged screen: null tells the panel to scroll instead.
+        Assert.True(e.Evaluate("QwMfd.pageStep('nav', view(0), 1) === null && QwMfd.pageLabel('nav', view(0)) === null").AsBoolean());
+
+        // One page needs no label and must not light Up and Down.
+        Assert.True(e.Evaluate("QwMfd.pageLabel('ledger', { extra: { ledger: entries.slice(0, 2) }, offset: 0 }) === null").AsBoolean());
+        Assert.Contains("up", (object[])e.Evaluate("QwMfd.dormant('ledger', { scrollable: false, paged: false })").ToObject()!);
+        Assert.DoesNotContain("up", (object[])e.Evaluate("QwMfd.dormant('ledger', { scrollable: false, paged: true })").ToObject()!);
+    }
 }

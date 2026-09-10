@@ -172,6 +172,18 @@ explanations live in this file and on the settings page. The lists came down
 with them: four ledger entries rather than ten, eight feed lines rather than
 fourteen.
 
+**Shortening a list is not the same as reaching the rest of it.** The ledger cap
+was a truncation: it showed the newest few, said there were more, and offered
+nothing that could get to them — a cockpit frame has no scrollbar and nothing to
+drag one with. It is paged now, three entries at a time, **UP** and **DOWN**
+moving a page and the title carrying the position: *Ledger · 4-6 of 95*. The
+window widened to thirty days with it, because paging through three days of
+entries is not worth a button. Paging clamps at both ends rather than wrapping:
+running off the end of a ledger back to today looks exactly like nothing having
+happened. Entry names go through the same underscore rule the dashboard's ledger
+table uses — a raw class name is one unbreakable token, and on a panel it takes
+a line to itself and pushes the entry below it off the bottom.
+
 ### Two bugs the page rules could not have caught
 
 Both were reported off a real panel, and both were the input failing to ask a

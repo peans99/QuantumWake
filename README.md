@@ -318,7 +318,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.26
+### 0.10.27
+
+- **The ledger pages, instead of stopping after the first few.** It showed the
+  newest handful, told you there were more and gave you no way to reach them.
+  **UP** and **DOWN** now move a page at a time and the title says where you
+  are — *Ledger · 4-6 of 95* — and it reads back thirty days rather than three,
+  because paging through three days is not worth a button. Item names lose
+  their underscores, so an entry wraps instead of taking a whole line as one
+  unbreakable word.
+
 
 - **The system map puts where you are at the top.** Location and next stop were
   under the plot, which on a small opening meant scrolling a map to find out

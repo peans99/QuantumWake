@@ -183,4 +183,41 @@ public class MfdInputTests
         // Nothing about brightness belongs in the pilot's plan.
         Assert.Empty(panel.Writes());
     }
+
+    /// <summary>
+    /// The rules being right is not the same as the buttons asking them: Done
+    /// was dimmed and still acted, so a page rule that nothing presses is worth
+    /// no more than the truncation it replaced.
+    /// </summary>
+    [Fact]
+    public void DownPagesTheLedgerAndTheTitleSaysWhereYouAre()
+    {
+        var panel = new Panel(Plan);
+        panel.Do("extra = { ledger: Array.from({length: 8}, (_, i) => "
+                 + "({ kind: 'bought', what: 'item ' + i, amount: -i, at: 'then' })) };");
+        panel.Do("navigate('ledger');");
+
+        Assert.Contains("1-3 of 8", panel.Title);
+
+        panel.Press(12);
+        Assert.Contains("4-6 of 8", panel.Title);
+
+        panel.Press(12);
+        Assert.Contains("7-8 of 8", panel.Title);
+
+        // The end is the end, and says so rather than silently doing nothing.
+        panel.Press(12);
+        Assert.Contains("7-8 of 8", panel.Title);
+        Assert.Equal("End of the ledger", panel.Strip);
+
+        panel.Press(14).Press(14);
+        Assert.Contains("1-3 of 8", panel.Title);
+
+        // Leaving and coming back starts at the newest, not where you had read to.
+        panel.Press(12);
+        panel.Do("navigate('nav'); navigate('ledger');");
+        Assert.Contains("1-3 of 8", panel.Title);
+
+        Assert.Empty(panel.Writes());
+    }
 }

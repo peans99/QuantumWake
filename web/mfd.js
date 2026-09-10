@@ -9,6 +9,10 @@ try { preferences = JSON.parse(localStorage.getItem(mfdKey) || '{}') || {}; } ca
 let screen = QwMfd.restoreScreen(preferences, panelId === 'right' ? 'task' : 'nav');
 let page = Math.max(0, QwMfd.pageIds.indexOf(screen));
 let details = false, hasDetails = false;
+// Which page of a paged screen is showing. Reset on navigate, like the Act
+// cursor: coming back to the ledger should start at the newest entry, not
+// wherever you had read to before going somewhere else.
+let offset = 0;
 /* Set in MFD setup and pushed from the host. A bound button can still nudge
    them - they stay in the vocabulary - but the nudge lasts until the panel
    reloads, because setup is where a setting is kept. */
@@ -145,7 +149,7 @@ function savePreferences() {
 const isMenu = () => !QwMfd.pageIds.includes(screen);
 function navigate(target) {
   if (!QwMfd.validScreen(target)) return;
-  standDown(); notice = ''; saved = ''; details = false; selected = 0;
+  standDown(); notice = ''; saved = ''; details = false; selected = 0; offset = 0;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
   byId('content').scrollTop = 0;
   savePreferences(); render();
@@ -210,7 +214,9 @@ function render() {
   dozing = QwMfd.dozed(sleepAfterMinutes, Date.now() - lastPress);
   byId('mfd').style.filter = `brightness(${dozing ? brightness * QwMfd.DOZE : brightness})`;
   byId('mfd').style.setProperty('--text-scale', textScale);
-  byId('title').textContent = QwMfd.title(screen) + (details ? ' · details' : '');
+  const where = QwMfd.pageLabel(screen, { extra, offset });
+  byId('title').textContent = QwMfd.title(screen)
+    + (details ? ' · details' : '') + (where ? ' · ' + where : '');
   const showing = screen;
   byId('mfd').dataset.screen = screen;
   byId('mfd').classList.toggle('menu-open', isMenu());
@@ -225,7 +231,7 @@ function render() {
   drawMap(showing === 'map', plan, true);
   drawMaker();
   const view = QwMfd.readingView(screen, isMenu() ? [] : QwMfd.rows(page, state, briefing, briefingUnavailable,
-    { selected, armed, map: plan, extra, now: Date.now() }), details);
+    { selected, armed, map: plan, extra, offset, now: Date.now() }), details);
   hasDetails = view.more;
   const rows = view.rows;
   const key = JSON.stringify([screen, details, rows]);
@@ -374,7 +380,8 @@ function note(text) { notice = text; drawAction(QwMfd.actionLine(screen, { brief
 /* One rule for what is idle, asked by the face when it dims a button and by the
    input before it acts on one. */
 function idleNow(scrollable) {
-  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable: !isMenu() && scrollable }),
+  return [...QwMfd.dormant(screen, { tasks: QwMfd.tasks(briefing).length, scrollable: !isMenu() && scrollable,
+      paged: QwMfd.pageStep(screen, { extra, offset }, 1) !== null && QwMfd.pageLabel(screen, { extra, offset }) !== null }),
     ...(!hasDetails ? ['details'] : []), ...(screen === 'home' ? ['back'] : []),
     ...(briefingUnavailable || confirming ? ['confirm'] : [])];
 }
@@ -423,6 +430,14 @@ function press(number) {
    scroll the panel everywhere else. One pair of buttons either way: a cockpit
    frame has no spare ones, and a rocker nobody can name yet is not a plan. */
 function step(direction) {
+  // A paged screen steps a page; everything else scrolls. Asked of one rule
+  // rather than tested against a list of screen names here.
+  const paged = QwMfd.pageStep(screen, { extra, offset }, direction);
+  if (paged !== null) {
+    if (paged === offset) { note(direction > 0 ? 'End of the ledger' : 'Newest entries'); return; }
+    offset = paged; lastRows = '';
+    return;
+  }
   if (screen !== 'act') {
     byId('content').scrollBy({ top: direction * byId('content').clientHeight * .7, behavior: 'smooth' });
     return;
@@ -523,7 +538,7 @@ async function refreshExtras() {
     } catch { /* the page it feeds says what it is missing */ }
   };
   await Promise.all([grab('/api/earnings?days=30', 'earnings'), grab('/api/jobs', 'jobs'),
-    grab('/api/respawn', 'respawn'), grab('/api/ledger?days=3', 'ledger')]);
+    grab('/api/respawn', 'respawn'), grab('/api/ledger?days=30', 'ledger')]);
   lastRows = ''; render();
 }
 async function loadMakers() {
