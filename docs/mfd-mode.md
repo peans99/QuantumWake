@@ -93,11 +93,13 @@ thrown away.** The panel pulled `focus`, `claim`, `services`, `shopping`,
 Here and Mine cost no new call at all. Only Ledger needed one, and it rides the
 thirty-second timer with the rest.
 
-The cockpit now uses a hierarchy. Home has Flight, Operations, Resources and
-Pilot tiles with current context; category tiles show the main reading of each
-screen. Top buttons resolve against the visible category and keep sibling
-screens reachable without returning home. Empty slots remain blank; live data
-never reorders the menu. Back moves to the parent, Home goes directly to the root.
+The cockpit menu is recursive. Home has Flight, Operations, Resources and
+Pilot; each category has submenus before its screens. Flight, for example,
+opens Route or Ship & local, then Route opens Navigation and System map. The
+menu tree is data rather than a screen-specific navigation rule, so a later
+feature can add a submenu without changing button, breadcrumb or Back logic.
+Top buttons resolve against the visible level. Empty slots remain blank; live
+data never reorders the menu. Back walks the full parent path, Home goes to root.
 
 The goal form, the card show/hide controls and anything needing typed input stay
 on the dashboard. The panels are click-through - there is no pointer, and there
@@ -111,10 +113,11 @@ report behind it.
 ### The HUD format
 
 Overview pages lead with a full-width answer and supporting readings. More
-opens the remaining details; Back returns to the overview before the category.
-Lists keep all their rows and scroll with Up/Down. Cargo keeps its qualifier in
-both views. Category menus use icon tiles; compact openings omit tile summaries
-when height is limited. The physical button captions stay short.
+opens the remaining details; Back returns to the overview before the parent
+menu. Lists keep all their rows and scroll with Up/Down. Cargo keeps its
+qualifier in both views. Source and caveat rows use labelled icons and short
+operational text instead of dashboard instructions. Menus use icon tiles;
+compact openings omit tile summaries when height is limited.
 
 The glyph is looked up from the label, which is safe only because the labels are
 a closed vocabulary written in this file. Anything unmapped gets a neutral mark
@@ -337,7 +340,7 @@ assignments without changing the firmware.
 | Buttons | Quantum Wake action |
 | --- | --- |
 | 1–5 | Context menu options; captions follow Home, category or sibling screens |
-| 15 | Back: details → overview → category → Home |
+| 15 | Back: details → overview → every parent menu → Home |
 | 13 | Home: cockpit category tiles |
 | 10 | More / Less: secondary readings where available |
 | 14 / 12 | Up / Down: select on Checklist, scroll elsewhere |
@@ -346,12 +349,16 @@ assignments without changing the firmware.
 
 The category layout is stable as data arrives:
 
-| Category | Screens |
-| --- | --- |
-| Flight | Navigation, System map, Local intel, Ship |
-| Operations | Flight plan, Checklist, Contract, Shopping |
-| Resources | Cargo & trade, Mining, Earnings, Ledger |
-| Pilot | Session, Crew, Activity |
+| Category | Submenu | Screens |
+| --- | --- | --- |
+| Flight | Route | Navigation, System map |
+| Flight | Ship & local | Ship, Local intel |
+| Operations | Plan & task | Flight plan, Checklist |
+| Operations | Jobs & list | Contract, Shopping |
+| Resources | Trade | Cargo & trade, Ledger |
+| Resources | Industry | Mining, Earnings |
+| Pilot | Session | Session, Activity |
+| Pilot | People | Crew |
 
 DONE and MORE disappear where they have no action; Up/Down dim when there is
 nothing to move. Home and Back retain their positions across menus. Direct page

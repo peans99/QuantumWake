@@ -318,7 +318,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.20
+### 0.10.21
+
+- **A real drill-down menu for Cougar MFDs.** Home opens Flight, Operations,
+  Resources or Pilot; each category opens its own submenu before the page. For
+  example: **Flight → Route → Navigation / System map**. Top buttons follow the
+  visible level, **Back** follows the whole path up, and **Home** returns to the
+  cockpit root. The menu is data-driven, so later features can add another level
+  without adding a navigation rule.
+
+- **Less prose on the frame.** State, source and caveat rows now use labelled
+  icons with short operational text. Loading, disconnected plans, empty logs,
+  no crew, counter state and similar conditions no longer fill the display with
+  dashboard instructions. The detailed explanation remains in the dashboard.
 
 - **The readings read like an instrument.** Every line is a glyph, a short label
   and the value, all on one line, at a smaller size — instead of a label stacked

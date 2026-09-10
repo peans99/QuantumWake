@@ -40,6 +40,38 @@ let compact = false;
 let lastRows = '';
 let stream;
 const byId = id => document.getElementById(id);
+/* Long explanations belong in the dashboard. The frame keeps the operational
+   result; status rows retain their meaning through a labelled icon. */
+const hudText = value => {
+  const terseLoad = /^(.+) across (\d+) stop(s?) · planned, not detected$/.exec(value || '');
+  if (terseLoad) return `${terseLoad[1]} · ${terseLoad[2]} stop${terseLoad[3]}`;
+  return ({
+  'Cannot read the flight plan. Check the dashboard connection.': 'Plan offline',
+  'Open the dashboard to check your route.': 'Route unavailable',
+  'Loading your tracked plan…': 'Loading plan…',
+  'No outstanding stop in the tracked plan': 'No planned stop',
+  'Location not yet identified': 'No location',
+  'No ship identified in the logs': 'No ship',
+  'Waiting for a location signal': 'Waiting for signal',
+  'Track a flight plan in the dashboard to show the next task here.': 'No tracked plan',
+  'Track a flight plan in the dashboard to tick its work off from here.': 'No tracked plan',
+  'No commodity counter used in this session': 'No counter use',
+  'Nothing bought or sold at a commodity counter yet': 'No counter activity',
+  'Counter receipts and your plan. Never the hold.': 'Plan + counters · not a hold',
+  'Nothing accepted in this session that the logs have not since closed.': 'No active contract',
+  'Earlier ones are in the logbook.': 'Earlier: logbook',
+  'The log has said nothing this session. Entries appear here as the game writes them.': 'Waiting for events',
+  'The party channel has not named anyone this session.': 'No crew named',
+  'Absence means nothing.': 'Not a roster',
+  'Too little recorded flying time to state a rate': 'Need more flight time',
+  'Set one in the dashboard and the flying time to reach it shows here.': 'Set a goal in dashboard',
+  'Nothing for this hull.': 'No table entry',
+  'Nothing the installed data can identify here': 'No listed services',
+  'Reading what the logs priced…': 'Reading ledger…',
+  'No confirmed transaction in the last few days.': 'No recent transactions'
+  }[value] || value);
+};
+const iconOnlyLabels = new Set(['LOCATION SOURCE', 'NOT A MANIFEST', 'SESSION ONLY', 'HOW SURE', 'A FLOOR', 'NOT ALL NEARBY', 'FROM']);
 /* Which frame this is and which Cougar drives it, in one line at the top. The
    footer used to carry the device and a BTN-nn readout of the last press; the
    press is under the pilot's own thumb, so the readout was a label for
@@ -114,27 +146,34 @@ function toggleDetails() {
   if (!hasDetails || isMenu()) return;
   standDown(); notice = ''; details = !details; byId('content').scrollTop = 0; render();
 }
-byId('crumb-home').onclick = () => navigate('home');
-byId('crumb-parent').onclick = () => navigate(QwMfd.parent(screen));
 byId('more').onclick = toggleDetails;
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape' || event.key === 'Backspace') { event.preventDefault(); back(); }
 });
 let lastMenu = '';
+function drawBreadcrumb() {
+  const breadcrumb = byId('breadcrumb');
+  breadcrumb.replaceChildren();
+  const path = QwMfd.trail(screen);
+  path.forEach((id, index) => {
+    if (index) {
+      const divider = document.createElement('span'); divider.textContent = '/';
+      divider.setAttribute('aria-hidden', 'true'); breadcrumb.append(divider);
+    }
+    const crumb = document.createElement('button'); crumb.type = 'button'; crumb.textContent = QwMfd.title(id);
+    crumb.disabled = id === screen; crumb.onclick = () => navigate(id);
+    breadcrumb.append(crumb);
+  });
+}
 function drawMenu() {
   const menu = byId('menu'); menu.hidden = !isMenu();
   if (menu.hidden) return;
-  const summaries = {
-    flight: state?.location || 'Location not identified',
-    operations: briefingUnavailable ? 'Plan unavailable' : briefing?.tripTitle || 'No flight plan',
-    resources: briefing ? (QwMfd.plannedLoad(briefing).scu ? `${QwMfd.plannedLoad(briefing).scu} SCU planned` : 'No SCU load planned') : 'Loading the plan…',
-    pilot: state?.handle || 'Pilot not identified'
-  };
   const items = QwMfd.menuItems(screen).map(id => {
-    const group = QwMfd.groups.find(g => g.id === id);
-    const row = group ? null : QwMfd.rows(QwMfd.pageIds.indexOf(id), state, briefing, briefingUnavailable,
+    const node = QwMfd.menuNode(id);
+    const preview = QwMfd.previewPage(id);
+    const row = !preview ? null : QwMfd.rows(QwMfd.pageIds.indexOf(preview), state, briefing, briefingUnavailable,
       { selected: 0, extra, map: QwMfd.mapView(atlas, state, briefing), now: Date.now() })[0];
-    return { id, title: QwMfd.title(id), hint: group?.hint || row?.[0] || '', summary: group ? summaries[id] : row?.[1] || 'Not recorded' };
+    return { id, title: QwMfd.title(id), hint: node?.hint || row?.[0] || '', summary: row?.[1] || 'Not recorded', branch: !!node };
   });
   const key = JSON.stringify([screen, items, bindings]);
   if (key === lastMenu) return;
@@ -148,7 +187,7 @@ function drawMenu() {
     const hint = document.createElement('span'); hint.className = 'tile-hint'; hint.textContent = item.hint;
     const summary = document.createElement('span'); summary.className = 'tile-summary'; summary.textContent = item.summary;
     const number = osbs.find(n => QwMfd.resolveCommand(bindings[n], screen) === item.id);
-    const keycap = document.createElement('small'); keycap.textContent = number ? String(number).padStart(2, '0') : '›';
+    const keycap = document.createElement('small'); keycap.textContent = number ? String(number).padStart(2, '0') : item.branch ? '›' : '•';
     tile.title = item.title + ' · ' + item.summary; tile.setAttribute('aria-label', tile.title);
     tile.append(icon, keycap, name, hint, summary); menu.append(tile);
   }
@@ -161,9 +200,7 @@ function render() {
   byId('mfd').dataset.screen = screen;
   byId('mfd').classList.toggle('menu-open', isMenu());
   byId('mfd').classList.toggle('menu-dense', textScale > 1.2 || window.innerWidth > window.innerHeight * 1.2);
-  byId('crumb-parent').hidden = byId('crumb-divider').hidden = isMenu();
-  byId('crumb-parent').textContent = QwMfd.title(QwMfd.parent(screen));
-  byId('crumb-home').disabled = screen === 'home';
+  drawBreadcrumb();
   drawMenu();
   // One view model, drawn as a plan and quoted as a row: the picture and the
   // number must not be able to disagree about where you are going.
@@ -188,6 +225,7 @@ function render() {
     readings.replaceChildren();
     for (const [index, [label, value, at, mark]] of rows.entries()) {
       const row = document.createElement('article'); row.className = 'reading';
+      if (iconOnlyLabels.has(label)) row.classList.add('status');
       if (index === 0 && !details && !['act', 'feed', 'crew', 'list', 'ledger', 'mine', 'map'].includes(screen)) row.classList.add('hero');
       if (mark) row.classList.add(mark);
       const glyph = document.createElementNS(svgns, 'svg');
@@ -195,9 +233,10 @@ function render() {
       const shape = document.createElementNS(svgns, 'path');
       shape.setAttribute('d', QwMfd.rowIcon(label));
       glyph.append(shape);
+      glyph.setAttribute('role', 'img'); glyph.setAttribute('aria-label', label);
       const heading = document.createElement('h2'); heading.textContent = label;
       const body = document.createElement('div'); body.className = 'value';
-      const text = document.createElement('p'); text.textContent = value || 'Not recorded';
+      const text = document.createElement('p'); text.textContent = hudText(value || 'Not recorded');
       body.append(text);
       if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(); body.append(time); }
       row.append(glyph, heading, body);

@@ -79,23 +79,29 @@ let chrome, ws;
   await shot('home-480');
   await run("__native({data:{type:'button',button:1}})");
   assert.equal(await run('screen'), 'flight'); await shot('flight-480');
+  await run('press(1)'); assert.equal(await run('screen'), 'flight-route'); await shot('route-480');
   await run('press(1)'); assert.equal(await run('screen'), 'nav'); await shot('nav-480');
   await run('press(8);press(8)'); assert.deepEqual(await run('__posts'), []);
   await run('press(2)'); assert.equal(await run('screen'), 'map'); await shot('map-480');
+  await run('press(15)'); assert.equal(await run('screen'), 'flight-route');
   await run('press(15)'); assert.equal(await run('screen'), 'flight');
   await run('press(15)'); assert.equal(await run('screen'), 'home');
   await run('press(5)'); assert.equal(await run('screen'), 'home');
-  await run('press(2);press(2);press(8)'); assert.equal(await run('armed'), true); await shot('checklist-armed-480');
-  await run('press(15)'); assert.equal(await run('armed'), false); assert.equal(await run('screen'), 'operations');
+  await run('press(2);press(1);press(2);press(8)'); assert.equal(await run('armed'), true); await shot('checklist-armed-480');
+  await run('press(15)'); assert.equal(await run('armed'), false); assert.equal(await run('screen'), 'operations-plan');
   await run('press(2);press(8);briefing.stops[0].actions.shift();render();press(8)');
   assert.deepEqual(await run('__posts'), []); assert.equal(await run('armed'), false);
   await run('refreshBriefing()'); await run('__delay=250;press(8);press(8);press(8)');
   await pause(350); assert.equal(await run('__posts.length'), 1);
   await run("navigate('cargo')"); assert.equal(await run('hasDetails'), true);
-  assert.match(await run("byId('readings').textContent"), /Never the hold/);
+  assert.match(await run("byId('readings').textContent"), /Plan \+ counters · not a hold/);
+  assert.equal(await run("byId('readings').querySelector('.status p').textContent"), 'Plan + counters · not a hold');
+  assert.equal(await run("byId('readings').querySelector('.status h2').getBoundingClientRect().width <= 1"), true);
+  await shot('cargo-compact-copy-480');
   await run('press(10)'); assert.equal(await run('details'), true);
-  assert.match(await run("byId('readings').textContent"), /Never the hold/);
+  assert.match(await run("byId('readings').textContent"), /Plan \+ counters · not a hold/);
   await run('press(15)'); assert.equal(await run('details'), false); assert.equal(await run('screen'), 'cargo');
+  await run('press(15)'); assert.equal(await run('screen'), 'resources-cargo');
   await run('press(15)'); assert.equal(await run('screen'), 'resources');
   // A custom profile remains the whole answer, including cleared keys and rocker shortcuts.
   await run("__native({data:{type:'display',buttons:{1:'crew',21:'home',22:'menu-2'}}});press(1)");
@@ -103,18 +109,23 @@ let chrome, ws;
   await run('press(13)'); assert.equal(await run('screen'), 'crew');
   await run('press(21);press(22)'); assert.equal(await run('screen'), 'operations');
   await run("__native({data:{type:'display',buttons:null}})");
+  await run("navigate('home');document.querySelector('[data-screen=flight]').click()");
+  assert.equal(await run('screen'), 'flight');
+  await run("document.querySelector('[data-screen=flight-route]').click()");
+  assert.equal(await run('screen'), 'flight-route');
   const pages = await run('QwMfd.pageIds');
+  const menus = await run('Object.keys(QwMfd.menuNodes)');
   const layout = [];
   for (const width of [220, 480]) {
     await size(width); await pause(60);
-    for (const id of ['home', 'flight', 'operations', 'resources', 'pilot', ...pages]) {
+    for (const id of ['home', ...menus, ...pages]) {
       await run(`navigate('${id}')`);
       const clipped = await run(`Array.from(document.querySelectorAll('.edge button:not(:disabled)')).filter(b=>b.scrollWidth>b.clientWidth+1).map(b=>b.textContent)`);
       assert.deepEqual(clipped, [], `${width} ${id}: captions fit`);
       assert.equal(await run("document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight"), true);
       if (await run('isMenu()')) await checkTiles();
       layout.push({ width, id, title: await run("byId('title').textContent") });
-      if (width === 220 && ['home', 'flight', 'nav', 'map', 'act'].includes(id)) await shot(id + '-220');
+      if (width === 220 && ['home', 'flight', 'flight-route', 'nav', 'map', 'act'].includes(id)) await shot(id + '-220');
     }
   }
   await size(480); await run("__native({data:{type:'display',buttons:null,textScale:1.5}});navigate('home')"); await checkTiles(); await shot('home-large-text');
@@ -129,7 +140,7 @@ let chrome, ws;
   await pause(400); await shot('setup-1100');
   assert.deepEqual(errors, [], 'No runtime exceptions');
   fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify({ views: layout, errors }, null, 2));
-  console.log(`PASS: ${layout.length} screen/size combinations; hierarchy, native input, custom mappings, details, and confirmation guards. Screenshots: ${output}`);
+  console.log(`PASS: ${layout.length} screen/size combinations; recursive menu, native input, custom mappings, details, and confirmation guards. Screenshots: ${output}`);
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => {
   ws?.close(); chrome?.kill(); server.closeAllConnections(); server.close();
 });

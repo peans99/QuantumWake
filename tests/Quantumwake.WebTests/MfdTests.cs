@@ -468,12 +468,13 @@ public class MfdTests
         e.Evaluate($"JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('{id}'),{state},{plan},false,{view}))").AsString();
 
     [Fact]
-    public void EveryPageIsReachableThroughOneCategoryAndHasAWayBack()
+    public void EveryPageIsReachableThroughADeepMenuAndHasAWayBack()
     {
         var e = Engine();
         Assert.Equal(15, e.Evaluate("QwMfd.pageIds.length").AsNumber());
         Assert.True(e.Evaluate(
-            "QwMfd.pageIds.every(id => QwMfd.groups.filter(g => g.children.includes(id)).length === 1"
+            "QwMfd.pageIds.every(id => QwMfd.trail(id)[0] === 'home'"
+            + " && QwMfd.trail(id)[QwMfd.trail(id).length - 1] === id"
             + " && QwMfd.menuItems(QwMfd.parent(id)).includes(id))").AsBoolean());
         Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.icon(id) && QwMfd.caption(id))").AsBoolean());
 
@@ -483,6 +484,7 @@ public class MfdTests
         Assert.Equal("back", e.Evaluate("QwMfd.defaults[15]").AsString());
         Assert.Equal("home", e.Evaluate("QwMfd.defaults[13]").AsString());
         Assert.True(e.Evaluate("QwMfd.groups.every(g => QwMfd.parent(g.id) === 'home')").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.trail(id).length >= 4)").AsBoolean());
     }
 
     [Fact]
@@ -490,12 +492,27 @@ public class MfdTests
     {
         var e = Engine();
         Assert.Equal("flight", e.Evaluate("QwMfd.resolveCommand('menu-1','home')").AsString());
-        Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','flight')").AsString());
+        Assert.Equal("flight-ship", e.Evaluate("QwMfd.resolveCommand('menu-2','flight')").AsString());
+        Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','flight-route')").AsString());
         Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','nav')").AsString());
         Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-5','home') === null").AsBoolean());
-        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-4','pilot') === null").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-3','pilot') === null").AsBoolean());
         Assert.Equal("cargo", e.Evaluate("QwMfd.resolveCommand('cargo','pilot')").AsString());
         Assert.Equal("back", e.Evaluate("QwMfd.effect('back').menu").AsString());
+    }
+
+    [Fact]
+    public void AMenuNodeCanGainAnotherLevelWithoutChangingNavigationRules()
+    {
+        var e = Engine();
+        Assert.Equal("flight-route", e.Evaluate("QwMfd.parent('nav')").AsString());
+        Assert.Equal("flight", e.Evaluate("QwMfd.parent('flight-route')").AsString());
+        Assert.Equal("home", e.Evaluate("QwMfd.parent('flight')").AsString());
+        Assert.Equal("nav", e.Evaluate("QwMfd.previewPage('flight')").AsString());
+        Assert.Equal("map", e.Evaluate("QwMfd.previewPage('map')").AsString());
+        Assert.Equal("Route", e.Evaluate("QwMfd.title('flight-route')").AsString());
+        Assert.Equal("home/flight/flight-route/nav",
+            e.Evaluate("QwMfd.trail('nav').join('/')").AsString());
     }
 
     [Fact]

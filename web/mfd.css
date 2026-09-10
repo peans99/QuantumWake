@@ -83,6 +83,12 @@ h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; 
 .reading.hero { background: linear-gradient(110deg, #103044, #091722); border: 1px solid var(--line-hot); border-left: 2px solid var(--glow); padding: 5%; margin-bottom: 2%; }
 .reading.hero p { font-family: var(--display); font-size: calc(clamp(14px, 4.5cqw, 32px) * var(--text-scale)); line-height: 1.16; color: #e1f6ff; }
 .reading.hero svg { stroke: var(--glow); }
+/* Source and caveat rows need a reminder, not a second miniature paragraph.
+   Their icon has the accessible label while their value carries the short fact. */
+.reading.status { grid-template-columns: 1.2em minmax(0, 1fr); align-items: center; padding: 2% 0; }
+.reading.status h2 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.reading.status .value { grid-column: 2; }
+.reading.status p { color: var(--muted); font-size: calc(clamp(8px, 2cqw, 15px) * var(--text-scale)); }
 #more { flex: 0 0 auto; padding: 3% 0; text-align: left; color: var(--glow); border: 0; background: transparent; font-size: clamp(9px, 2.1cqw, 16px); }
 #scroll-hint { flex: 0 0 auto; color: var(--muted); font-size: clamp(8px, 1.8cqw, 13px); text-align: right; padding-top: 1%; }
 .reading time { display: block; color: var(--muted); font-size: clamp(7px, 1.6cqw, 12px); margin-top: 1%; }

@@ -93,29 +93,68 @@ window.QwMfd = (() => {
   /* The shipped profile, on the official clockwise numbering: top 1-5, right
      6-10, bottom 11-15 right to left, left 16-20 bottom to top. The rockers
      start unassigned - see the note above. */
+  /* Menus are data, not a screen-specific set of if statements. Adding a new
+     branch only adds a node here; the face, breadcrumb and Back all discover
+     its parent and children from the same tree. Each level stays under the five
+     top buttons, while a page can sit as deep as its question needs. */
   const groups = [
-    { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Navigate · map · ship', children: ['nav', 'map', 'here', 'ship'] },
-    { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan · tasks · contracts', children: ['task', 'act', 'contract', 'list'] },
-    { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo · mining · earnings', children: ['cargo', 'mine', 'money', 'ledger'] },
-    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session · crew · activity', children: ['status', 'crew', 'feed'] }
+    { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Navigate · map · ship', children: [
+      { id: 'flight-route', title: 'Route', short: 'RTE', icon: 'nav', hint: 'Destination · system map', children: ['nav', 'map'] },
+      { id: 'flight-ship', title: 'Ship & local', short: 'SHIP', icon: 'ship', hint: 'Hull · landing intel', children: ['ship', 'here'] }
+    ] },
+    { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan · checklist · jobs', children: [
+      { id: 'operations-plan', title: 'Plan & task', short: 'PLAN', icon: 'task', hint: 'Next stop · checklist', children: ['task', 'act'] },
+      { id: 'operations-jobs', title: 'Jobs & list', short: 'JOBS', icon: 'contract', hint: 'Contract · shopping', children: ['contract', 'list'] }
+    ] },
+    { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo · mining · earnings', children: [
+      { id: 'resources-cargo', title: 'Trade', short: 'TRDE', icon: 'cargo', hint: 'Cargo · counter receipts', children: ['cargo', 'ledger'] },
+      { id: 'resources-industry', title: 'Industry', short: 'INDY', icon: 'mine', hint: 'Mining · earnings', children: ['mine', 'money'] }
+    ] },
+    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session · crew · activity', children: [
+      { id: 'pilot-session', title: 'Session', short: 'SESS', icon: 'status', hint: 'State · live activity', children: ['status', 'feed'] },
+      { id: 'pilot-crew', title: 'People', short: 'PPL', icon: 'crew', hint: 'Crew · party signal', children: ['crew'] }
+    ] }
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Flight plan', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
     money: 'Earnings', list: 'Shopping', ship: 'Ship', here: 'Local intel', ledger: 'Ledger', mine: 'Mining', map: 'System map' };
-  for (const group of groups) commands.push({ id: group.id, label: 'Menu · ' + group.title,
-    caption: group.short, short: group.short, icon: commands.find(c => c.id === group.icon).icon });
+  const menuNodes = {}, leafParents = {};
+  function indexMenu(nodes, parentId = 'home') {
+    for (const node of nodes) {
+      const children = node.children.map(child => typeof child === 'string' ? child : child.id);
+      menuNodes[node.id] = { ...node, children, parent: parentId };
+      for (const child of node.children) {
+        if (typeof child === 'string') leafParents[child] = node.id;
+        else indexMenu([child], node.id);
+      }
+    }
+  }
+  indexMenu(groups);
+  for (const node of Object.values(menuNodes)) commands.push({ id: node.id, label: 'Menu · ' + node.title,
+    caption: node.short, short: node.short, icon: commands.find(c => c.id === node.icon).icon });
   for (let slot = 1; slot <= 5; slot++) commands.push({ id: 'menu-' + slot,
     label: 'Context menu · option ' + slot, caption: 'OPT ' + slot, short: 'M' + slot,
     icon: 'M4 6h16M4 12h16M4 18h16' });
 
   const defaults = { 1: 'menu-1', 2: 'menu-2', 3: 'menu-3', 4: 'menu-4', 5: 'menu-5',
     8: 'confirm', 10: 'details', 12: 'down', 13: 'home', 14: 'up', 15: 'back' };
-  const parent = id => groups.find(g => g.children.includes(id))?.id || 'home';
-  const title = id => groups.find(g => g.id === id)?.title || titles[id] || titles.home;
-  const validScreen = id => id === 'home' || groups.some(g => g.id === id) || pageIds.includes(id);
+  const menuNode = id => menuNodes[id] || null;
+  const parent = id => menuNodes[id]?.parent || leafParents[id] || 'home';
+  const title = id => menuNodes[id]?.title || titles[id] || titles.home;
+  const validScreen = id => id === 'home' || !!menuNodes[id] || pageIds.includes(id);
   function menuItems(screen) {
     if (screen === 'home') return groups.map(g => g.id);
-    return (groups.find(g => g.id === screen || g.children.includes(screen))?.children || []);
+    return menuNodes[screen]?.children || menuNodes[parent(screen)]?.children || [];
+  }
+  function previewPage(id) {
+    if (pageIds.includes(id)) return id;
+    const next = menuItems(id)[0];
+    return next ? previewPage(next) : null;
+  }
+  function trail(id) {
+    const path = [id];
+    while (path[0] !== 'home') path.unshift(parent(path[0]));
+    return path;
   }
   // The label and the press resolve through the same menu, including unused slots.
   function resolveCommand(id, screen) {
@@ -241,7 +280,7 @@ window.QwMfd = (() => {
   function effect(id) {
     const page = pageIds.indexOf(id);
     if (page >= 0) return { page };
-    if (groups.some(g => g.id === id) || id === 'home' || id === 'back') return { menu: id };
+    if (menuNodes[id] || id === 'home' || id === 'back') return { menu: id };
     if (/^menu-[1-5]$/.test(id || '')) return { slot: Number(id.slice(-1)) };
     return ({ prev: { cycle: -1 }, next: { cycle: 1 }, details: { details: true },
       up: { scroll: -1 }, down: { scroll: 1 },
@@ -680,6 +719,6 @@ window.QwMfd = (() => {
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
   return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
-    groups, parent, title, validScreen, menuItems, resolveCommand, restoreScreen, readingView,
+    groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, OSBS, BUTTONS };
 })();
