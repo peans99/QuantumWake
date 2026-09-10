@@ -151,14 +151,30 @@ public class MfdInputTests
     public void TheHeaderNamesTheFrameAndItsCougar()
     {
         var panel = new Panel(Plan);
-        Assert.Equal("LEFT MFD", panel.Text("__dom.node('#identity').textContent"));
+        Assert.Equal("LEFT · NAV MFD", panel.Text("__dom.node('#identity').textContent"));
 
         panel.Do("cougar = 1; usb = true; drawIdentity();");
-        Assert.Equal("LEFT · MFD 1", panel.Text("__dom.node('#identity').textContent"));
+        Assert.Equal("LEFT · NAV · MFD 1", panel.Text("__dom.node('#identity').textContent"));
 
         // A frame the USB reader cannot find says so beside the connection.
         panel.Do("usb = false; connection = 'LIVE LOG'; drawIdentity();");
         Assert.Equal("LIVE LOG · NO USB", panel.Text("__dom.node('#connection').textContent"));
+    }
+
+    [Fact]
+    public void MissionBezelOpensTheRadarAndChecklistWithoutMarkingAnythingDone()
+    {
+        var panel = new Panel(Plan);
+        panel.Do("navigate('task');");
+
+        panel.Press(1);
+        Assert.Equal("System map", panel.Title);
+        Assert.Empty(panel.Writes());
+
+        panel.Do("navigate('task');");
+        panel.Press(2);
+        Assert.Equal("Checklist", panel.Title);
+        Assert.Empty(panel.Writes());
     }
 
     /// <summary>

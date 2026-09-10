@@ -318,7 +318,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.30
+### 0.10.31
+
+- **The Cougar frames now work as a cockpit pair.** The left frame opens as
+  Navigation and the right as Mission. The Mission card keeps the active
+  contract, destination, objective progress and a matching Contracts-screen
+  reward together; a captured reward is shown only when its selected contract
+  matches the live one. Its bezel becomes **Map**, **Done**, **Contract**,
+  **List** and **Home**, making the next drill-down visible on the hardware.
 
 - **The Cougar MFD map is now a radar instrument.** Its real body-centre
   geometry has range rings, a sweep and a lock reticle for the selected body.
