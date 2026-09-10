@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.19
+### 0.10.20
 
 - **The readings read like an instrument.** Every line is a glyph, a short label
   and the value, all on one line, at a smaller size — instead of a label stacked
@@ -332,6 +332,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   misreading stay: Cargo still says *Never the hold*, Crew still says *Absence
   means nothing*. The full explanations live in the docs and on the settings
   page, where there is room to read them.
+
+- **Here lists what a place actually has**, rather than naming every service
+  with its status — five facts to say "none of them", wrapping to four lines.
+  It reads *Refuel · Repair*, or *None of 5 listed here*.
 
 - **A MAP page**, on the button between **UP** and **DOWN**: the system plan at
   full size, with where you are and where you are going underneath it.

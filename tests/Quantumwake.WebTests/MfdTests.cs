@@ -764,7 +764,9 @@ public class MfdTests
             + "stash:[{name:'MedPen',category:'Medical',lastSeen:'2026-09-08T22:39:22Z'}]}";
         var json = Page(e, "here", "{}", place);
         Assert.Contains("Port Tressler", json);
-        Assert.Contains("Refuel: listed · Repair: not listed", json);
+        // Only what is actually here, not five statuses saying nothing is.
+        Assert.Contains("Refuel", json);
+        Assert.DoesNotContain("Repair", json);
         Assert.Contains("Medical supplies · 4 units · 2,100 aUEC", json);
         Assert.Contains("MedPen", json);
         Assert.Contains("2026-09-08T22:39:22Z", json);

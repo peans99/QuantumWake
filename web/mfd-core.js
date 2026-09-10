@@ -534,9 +534,12 @@ window.QwMfd = (() => {
         const services = briefing.services || [], shopping = briefing.shopping || [], stash = briefing.stash || [];
         return [
           ['PLACE', briefing.location || s.location || 'Not identified'],
-          ['SERVICES', services.length
-            ? services.map(v => `${v.name}: ${v.status}`).join(' · ')
-            : 'Nothing the installed data can identify here'],
+          /* Only what is here. Naming all five with their statuses was five
+             facts to say "none of them", and wrapped to four lines doing it. */
+          ['SERVICES', !services.length ? 'Nothing the installed data can identify'
+            : services.some(available)
+              ? services.filter(available).map(v => v.name).join(' · ')
+              : `None of ${services.length} listed here`],
           ...(shopping.length ? [['ON YOUR LIST, IN STOCK', shopping.slice(0, 3)
             .map(i => `${i.name} · ${i.needed} ${i.unit} · ${aUEC(i.price)}`).join('  |  ')]] : []),
           ...(stash.length ? [['SEEN HERE BEFORE',
@@ -599,6 +602,14 @@ window.QwMfd = (() => {
       : { state: 'ready', text: `DONE marks: ${task.label}`,
           note: 'Writes to your plan. Tells the game nothing.' };
   }
+
+  /* "not listed" and "not reported" both open with "not", which is the only
+     thing separating a service that is here from one nobody recorded.
+     startsWith rather than a regex: an escape that does not survive being
+     written by a script is an escape that silently matches nothing, which is
+     exactly what happened to the word boundary that used to be here. */
+  const available = service =>
+    !String(service?.status || '').trim().toLowerCase().startsWith('not');
 
   const aUEC = n => `${Math.round(Number(n) || 0).toLocaleString()} aUEC`;
 
