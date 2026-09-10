@@ -125,12 +125,14 @@ for (let n = 1; n <= 8; n++) setupElement('cougar').add(new Option('F16 MFD ' + 
 setupElement('cougar').onchange = event => { selectedPanel().cougar = Number(event.target.value); changed(); };
 setupElement('enabled').onchange = event => { layout.enabled = event.target.checked; };
 setupElement('blackout').onchange = event => { layout.blackout = event.target.checked; changed(); };
-/* Percentages on the slider, fractions in the file: a pilot reads 70%, and the
-   display multiplies by .7. */
+/* Percentages on the text slider, fractions in the file: a pilot reads 70%, and
+   the display multiplies by .7. Brightness is four numbered levels instead,
+   because a button on the frame has to be able to land on every one of them. */
 function showScreen() {
-  const bright = Math.round((layout.brightness ?? 1) * 100), text = Math.round((layout.textScale ?? 1) * 100);
-  setupElement('brightness').value = bright;
-  setupElement('brightness-value').textContent = bright + '%';
+  const level = QwMfd.brightnessLevel(layout.brightness ?? 1), text = Math.round((layout.textScale ?? 1) * 100);
+  setupElement('brightness').value = level;
+  setupElement('brightness-value').textContent =
+    level + ' · ' + Math.round(QwMfd.brightnessAt(level) * 100) + '%';
   setupElement('text-scale').value = text;
   setupElement('sleep-after').value = String(layout.sleepAfterMinutes || 0);
   setupElement('text-scale-value').textContent = text + '%';
@@ -142,13 +144,17 @@ setupElement('sleep-after').onchange = event => {
     ? 'Frames dim after ' + layout.sleepAfterMinutes + ' idle minutes. Save to keep it.'
     : 'Frames stay at full brightness. Save to keep it.');
 };
-for (const [id, key] of [['brightness', 'brightness'], ['text-scale', 'textScale']])
-  setupElement(id).oninput = event => {
-    layout[key] = Number(event.target.value) / 100;
-    showScreen();
-    // Under the hand, like a drag: the preview is what you are judging it by.
-    pushPreview();
-  };
+setupElement('text-scale').oninput = event => {
+  layout.textScale = Number(event.target.value) / 100;
+  showScreen();
+  // Under the hand, like a drag: the preview is what you are judging it by.
+  pushPreview();
+};
+setupElement('brightness').oninput = event => {
+  layout.brightness = QwMfd.brightnessAt(Number(event.target.value));
+  showScreen();
+  pushPreview();
+};
 setupElement('swap').onclick = () => { [layout.panels[0].cougar, layout.panels[1].cougar] = [layout.panels[1].cougar, layout.panels[0].cougar]; changed(); };
 setupElement('together').onclick = () => {
   const m = monitors.find(m => m.id === selectedPanel().monitor) || monitors[0];

@@ -318,7 +318,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.24
+### 0.10.25
+
+- **Brightness is four levels now, and a button can reach every one of them.**
+  It used to nudge five percent at a time, which is fine for a mouse and no use
+  at all on a frame — you press until it looks right, and next flight you do it
+  again. Bind **Screen brightness · 1 to 4** and one button cycles 40, 60, 80,
+  100 and round again, showing the level it is on. The one-level brighter and
+  dimmer commands are still there for the rocker printed BRT. If you had set
+  something in between, it moves to the nearest level once.
+
 
 - **Setting up the buttons now shows the frame, not a form.** Binding a key
   meant reading past twenty-eight dropdowns of thirty-six options each, none

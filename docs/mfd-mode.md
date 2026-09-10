@@ -249,6 +249,18 @@ is set.
 frames and saved with the layout. The first two used to be four buttons on the
 face.
 
+Brightness has four levels rather than a slider — 40, 60, 80 and 100 percent.
+A control that moves in five-percent steps cannot be pressed to a known place:
+you nudge it until it looks right, and next flight you nudge it again. Four
+numbered levels are a setting a pilot can hold in their head, and more to the
+point they are ones a button on the frame can land on exactly. **Screen
+brightness · 1 to 4** cycles them and wraps, and the button shows the level it
+is on rather than a bare lamp icon; **Screen brighter** and **Screen dimmer**
+still move one level each and stop at the ends, for the rocker the frame has
+printed BRT. A value between two levels — a 70% written by an earlier build —
+snaps to the nearer, going to the brighter on an exact tie, because a setting no
+control can return to is worse than one that moved once.
+
 Dimming is off unless a time is picked. After that many minutes with no button
 pressed the frames drop to a third of the configured brightness, and the next
 press of anything brings them back before it does whatever it was bound to do.

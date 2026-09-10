@@ -19,8 +19,8 @@
 <p class="hint muted">Default USB profile · no keyboard mapping required. Inputs also remain available to the game.</p></div>
 <output id="button-test" aria-live="polite">Press a button on either frame</output></section>
 <section class="screen card"><h2>Screen <span>Both frames</span></h2>
-<p class="hint muted">Set once when the frames go on. These used to cost four buttons on the face; the commands are still there to bind if you want them under a thumb.</p>
-<div class="sliders"><label>Brightness <output id="brightness-value">100%</output><input id="brightness" type="range" min="30" max="100" step="5"></label>
+<p class="hint muted">Set once when the frames go on. These used to cost four buttons on the face; the commands are still there to bind if you want them under a thumb. Brightness has four levels so that a button on the frame can reach any of them.</p>
+<div class="sliders"><label>Brightness <output id="brightness-value">4 · 100%</output><input id="brightness" type="range" min="1" max="4" step="1"></label>
 <label>Text size <output id="text-scale-value">100%</output><input id="text-scale" type="range" min="80" max="150" step="5"></label><label>Dim when idle<select id="sleep-after" class="select"><option value="0">Never</option><option value="5">After 5 minutes</option><option value="10">After 10 minutes</option><option value="20">After 20 minutes</option><option value="30">After 30 minutes</option><option value="60">After an hour</option></select></label></div><p class="hint muted">Dims the frames to a third of the brightness above after a spell with no button pressed, and any press brings them straight back. It never blanks them — a frame you can still glance at beats one that has to be woken first. Off unless you pick a time.</p></section>
 <section class="assignments card"><h2>Button assignments <span>Shared by both frames</span></h2>
 <p class="hint muted">Press a button on the frame — its position lights up below and is selected. Then say what it should do. Both MFDs share one map; each remembers its own screen. <button id="restore" type="button">Restore defaults</button></p>

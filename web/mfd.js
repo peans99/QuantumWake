@@ -122,7 +122,12 @@ function drawLabels() {
     const { button, glyph, path: shape, text } = face[number];
     const command = QwMfd.resolveCommand(bindings[number], screen);
     const inactive = (command === 'confirm' && screen !== 'act') || (command === 'details' && !hasDetails);
-    const caption = inactive ? null : command === 'details' && details ? 'LESS' : QwMfd.caption(command, compact);
+    // The cycling button carries the level it is on, or pressing it would be
+    // the only control on the frame with no idea where it had got to.
+    const caption = inactive ? null
+      : command === 'details' && details ? 'LESS'
+      : command === 'bright' ? 'BRT ' + QwMfd.brightnessLevel(brightness)
+      : QwMfd.caption(command, compact);
     const path = caption ? QwMfd.icon(command) : null;
     text.textContent = caption || '';
     shape.setAttribute('d', path || '');
@@ -409,7 +414,8 @@ function press(number) {
     navigate(target); return;
   }
   if (action.text) textScale = QwMfd.clamp(textScale + action.text * .1, .8, 1.5);
-  if (action.brightness) brightness = QwMfd.clamp(brightness + action.brightness * .1, .3, 1);
+  if (action.brightness) brightness = QwMfd.stepBrightness(brightness, action.brightness);
+  if (action.cycleBright) brightness = QwMfd.cycleBrightness(brightness);
   if (action.scroll) step(action.scroll);
   savePreferences(); render();
 }
@@ -472,7 +478,7 @@ window.chrome?.webview?.addEventListener('message', ({ data }) => {
   if (data.type === 'button') press(data.button);
   if (data.type === 'display') {
     bindings = QwMfd.buttons(data.buttons);
-    if (Number.isFinite(data.brightness)) brightness = QwMfd.clamp(data.brightness, .3, 1);
+    if (Number.isFinite(data.brightness)) brightness = QwMfd.brightnessAt(QwMfd.brightnessLevel(data.brightness));
     if (Number.isFinite(data.textScale)) textScale = QwMfd.clamp(data.textScale, .8, 1.5);
     if (Number.isFinite(data.sleepAfterMinutes)) {
       sleepAfterMinutes = QwMfd.clamp(data.sleepAfterMinutes, 0, 120);

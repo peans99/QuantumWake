@@ -9,6 +9,28 @@ window.QwMfd = (() => {
      cockpit is looked at far more often than it is pressed, so blanking it
      would trade every glance for a press. */
   const DOZE = .3;
+
+  /* Four steps rather than a slider. A button that nudges five percent cannot
+     be pressed to a known place — you press it until it looks right, and next
+     flight you do it again — whereas "the third one" is a setting a pilot can
+     actually hold in their head. The setup page offers these same four, so a
+     level picked by hand and a level pressed on the frame mean one thing. */
+  const BRIGHTNESS = [.4, .6, .8, 1];
+  const brightnessLevel = value => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return BRIGHTNESS.length;
+    let best = 0;
+    for (let i = 1; i < BRIGHTNESS.length; i++) {
+      if (Math.abs(BRIGHTNESS[i] - n) < Math.abs(BRIGHTNESS[best] - n)) best = i;
+    }
+    return best + 1;
+  };
+  const brightnessAt = level => BRIGHTNESS[clamp(Math.round(level) || 1, 1, BRIGHTNESS.length) - 1];
+  /* The one button wraps, because a button that stops has a dead press in it.
+     The rocker stops at the ends, because a rocker held down rolling off the
+     bottom into full brightness is the opposite of what the hand asked for. */
+  const cycleBrightness = value => BRIGHTNESS[brightnessLevel(value) % BRIGHTNESS.length];
+  const stepBrightness = (value, direction) => brightnessAt(brightnessLevel(value) + direction);
   const dozed = (sleepAfterMinutes, idleMs) =>
     sleepAfterMinutes > 0 && idleMs >= sleepAfterMinutes * 60000;
   const integer = (n, fallback) => Number.isFinite(Number(n)) ? Math.round(Number(n)) : fallback;
@@ -91,9 +113,11 @@ window.QwMfd = (() => {
       icon: 'M2 19L8 5l6 14M4.2 14.5h7.6M18 9v8M14 13h8' },
     { id: 'text-down', label: 'Text size smaller', caption: 'TEXT −', short: 'A-',
       icon: 'M2 19L8 5l6 14M4.2 14.5h7.6M14 13h8' },
-    { id: 'bright-up', label: 'Screen brighter', caption: 'BRIGHT', short: 'BRT',
+    { id: 'bright', label: 'Screen brightness · 1 to 4', caption: 'BRT', short: 'BRT',
       icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2 2M17.4 17.4l2 2M19.4 4.6l-2 2M6.6 17.4l-2 2' },
-    { id: 'bright-down', label: 'Screen dimmer', caption: 'DIM', short: 'DIM',
+    { id: 'bright-up', label: 'Screen brighter · one level', caption: 'BRIGHT', short: 'BRT+',
+      icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2 2M17.4 17.4l2 2M19.4 4.6l-2 2M6.6 17.4l-2 2' },
+    { id: 'bright-down', label: 'Screen dimmer · one level', caption: 'DIM', short: 'DIM',
       icon: 'M12 8.5a3.5 3.5 0 1 0 .1 0M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2' },
     { id: 'confirm', label: 'Confirm the selected task', caption: 'DONE', short: 'DONE',
       icon: 'M4 12.5l5.5 5.5L20 6' }
@@ -303,6 +327,7 @@ window.QwMfd = (() => {
       up: { scroll: -1 }, down: { scroll: 1 },
       'text-up': { text: 1 }, 'text-down': { text: -1 },
       'bright-up': { brightness: 1 }, 'bright-down': { brightness: -1 },
+      bright: { cycleBright: true },
       confirm: { confirm: true } })[id] || null;
   }
   function action(button, stored) {
@@ -737,5 +762,6 @@ window.QwMfd = (() => {
   }
   return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
-    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, OSBS, BUTTONS };
+    pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, BRIGHTNESS, brightnessLevel, brightnessAt,
+    cycleBrightness, stepBrightness, OSBS, BUTTONS };
 })();

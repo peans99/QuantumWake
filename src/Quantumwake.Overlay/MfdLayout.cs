@@ -51,6 +51,28 @@ internal sealed record MfdLayout
     /// </remarks>
     public double Brightness { get; init; } = 1;
 
+    /// <summary>
+    /// The four levels the setup slider and the frame's own brightness button
+    /// both work in. A stored value between two of them snaps to the nearer:
+    /// a 65% written by an earlier build is a place no control can now return
+    /// to, and a setting the pilot cannot get back is worse than one that moved
+    /// five percent once.
+    /// </summary>
+    public static readonly double[] BrightnessLevels = [.4, .6, .8, 1];
+
+    private static double NearestLevel(double value)
+    {
+        if (!double.IsFinite(value)) return 1;
+        // Rounded before comparing, and ties go to the brighter: .7 sits exactly
+        // between two levels, and float noise deciding which way it fell would
+        // make the same file open dimmer on one machine than another. Brighter,
+        // because a frame too dark to read the way back out of is the worse end.
+        var best = BrightnessLevels[0];
+        foreach (var level in BrightnessLevels)
+            if (Math.Round(Math.Abs(level - value), 9) <= Math.Round(Math.Abs(best - value), 9)) best = level;
+        return best;
+    }
+
     public double TextScale { get; init; } = 1;
 
     /// <summary>
@@ -109,7 +131,7 @@ internal sealed record MfdLayout
         return this with {
             Buttons = CleanButtons(),
             // A slider cannot send a bad number, but a hand-edited file can.
-            Brightness = double.IsFinite(Brightness) ? Math.Clamp(Brightness, .3, 1) : 1,
+            Brightness = NearestLevel(Brightness),
             TextScale = double.IsFinite(TextScale) ? Math.Clamp(TextScale, .8, 1.5) : 1,
             SleepAfterMinutes = Math.Clamp(SleepAfterMinutes, 0, 120),
             Panels = Panels.Select(p =>

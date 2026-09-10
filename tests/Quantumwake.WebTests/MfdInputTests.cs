@@ -160,4 +160,27 @@ public class MfdInputTests
         panel.Do("usb = false; connection = 'LIVE LOG'; drawIdentity();");
         Assert.Equal("LIVE LOG · NO USB", panel.Text("__dom.node('#connection').textContent"));
     }
+
+    /// <summary>
+    /// The cycling button is the one control whose caption is its own state, so
+    /// the level has to reach the cap. A lamp icon that never changes would make
+    /// four levels indistinguishable from the nudging pair they replaced.
+    /// </summary>
+    [Fact]
+    public void TheBrightnessButtonShowsWhichOfTheFourLevelsItIsOn()
+    {
+        var panel = new Panel(Plan);
+        panel.Do("bindings[6] = 'bright'; drawLabels();");
+        Assert.Equal("BRT 4", panel.Text("face[6].text.textContent"));
+
+        panel.Press(6);
+        Assert.Equal("BRT 1", panel.Text("face[6].text.textContent"));
+        Assert.Equal(.4, panel.Eval("brightness"));
+
+        panel.Press(6).Press(6).Press(6);
+        Assert.Equal("BRT 4", panel.Text("face[6].text.textContent"));
+
+        // Nothing about brightness belongs in the pilot's plan.
+        Assert.Empty(panel.Writes());
+    }
 }

@@ -55,7 +55,7 @@ public class MfdLayoutTests
         Assert.Equal(1, wild.Brightness);
         Assert.Equal(1, wild.TextScale);
 
-        Assert.Equal(.3, (MfdLayout.Default(Monitors) with { Brightness = -4 }).Validate(Monitors).Brightness);
+        Assert.Equal(.4, (MfdLayout.Default(Monitors) with { Brightness = -4 }).Validate(Monitors).Brightness);
         Assert.Equal(1.5, (MfdLayout.Default(Monitors) with { TextScale = 9 }).Validate(Monitors).TextScale);
 
         // Off unless asked for, and never a value a menu could not offer.
@@ -64,10 +64,17 @@ public class MfdLayoutTests
         Assert.Equal(120, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = 9999 }).Validate(Monitors).SleepAfterMinutes);
         Assert.Equal(20, (MfdLayout.Default(Monitors) with { SleepAfterMinutes = 20 }).Validate(Monitors).SleepAfterMinutes);
 
-        var kept = (MfdLayout.Default(Monitors) with { Brightness = .7, TextScale = 1.2 }).Validate(Monitors);
-        Assert.Equal(.7, kept.Brightness);
+        // Four levels, and a value between two of them snaps rather than sitting
+        // where no slider and no button on the frame can reach it again. A .7
+        // from an older build is an exact tie, and goes to the brighter.
+        Assert.Equal(new[] { .4, .6, .8, 1 }, MfdLayout.BrightnessLevels);
+        Assert.Equal(.8, (MfdLayout.Default(Monitors) with { Brightness = .7 }).Validate(Monitors).Brightness);
+        Assert.Equal(.4, (MfdLayout.Default(Monitors) with { Brightness = .45 }).Validate(Monitors).Brightness);
+
+        var kept = (MfdLayout.Default(Monitors) with { Brightness = .6, TextScale = 1.2 }).Validate(Monitors);
+        Assert.Equal(.6, kept.Brightness);
         Assert.Equal(1.2, kept.TextScale);
-        Assert.Equal(.7, System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(
+        Assert.Equal(.6, System.Text.Json.JsonSerializer.Deserialize<MfdLayout>(
             System.Text.Json.JsonSerializer.Serialize(kept, MfdLayout.JsonOptions),
             MfdLayout.JsonOptions)!.Brightness);
     }

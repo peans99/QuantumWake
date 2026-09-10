@@ -929,4 +929,34 @@ public class MfdTests
         // woken before it can be, which is the whole reason it is not a blank.
         Assert.InRange(e.Evaluate("QwMfd.DOZE").AsNumber(), .2, .5);
     }
+
+    /// <summary>
+    /// The cycling button wraps so no press is ever dead; the rocker stops at
+    /// the ends, because holding one down should not roll off the bottom into
+    /// full brightness.
+    /// </summary>
+    [Fact]
+    public void BrightnessMovesInFourLevelsAndOnlyTheCyclingButtonWraps()
+    {
+        var e = Engine();
+        Assert.Equal("0.4,0.6,0.8,1", e.Evaluate("QwMfd.BRIGHTNESS.join(',')").AsString());
+        Assert.Equal(3, e.Evaluate("QwMfd.brightnessLevel(.8)").AsNumber());
+        Assert.Equal(4, e.Evaluate("QwMfd.brightnessLevel(undefined)").AsNumber());
+
+        Assert.Equal(.4, e.Evaluate("QwMfd.cycleBrightness(1)").AsNumber());
+        Assert.Equal(.6, e.Evaluate("QwMfd.cycleBrightness(.4)").AsNumber());
+
+        Assert.Equal(1, e.Evaluate("QwMfd.stepBrightness(1, 1)").AsNumber());
+        Assert.Equal(.4, e.Evaluate("QwMfd.stepBrightness(.4, -1)").AsNumber());
+        Assert.Equal(.8, e.Evaluate("QwMfd.stepBrightness(.6, 1)").AsNumber());
+
+        // A button that lands somewhere unreachable would be worse than one that
+        // did nothing, so every route out of a stray value is one of the four.
+        Assert.True(e.Evaluate("[0,.35,.7,.9,5,NaN].every(v => QwMfd.BRIGHTNESS.includes(QwMfd.cycleBrightness(v)) && QwMfd.BRIGHTNESS.includes(QwMfd.stepBrightness(v,-1)))").AsBoolean());
+
+        // The pair and the cycler are separate bindings: the frame has a rocker
+        // printed BRT, and taking that away to save a button would be a trade.
+        Assert.True(e.Evaluate("['bright','bright-up','bright-down'].every(id => QwMfd.commands.some(c => c.id === id))").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.effect('bright').cycleBright").AsBoolean());
+    }
 }
