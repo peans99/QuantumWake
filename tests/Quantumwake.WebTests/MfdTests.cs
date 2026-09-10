@@ -334,6 +334,28 @@ public class MfdTests
         Assert.True(e.Evaluate("s.legs.length === 0 && s.next === null").AsBoolean());
     }
 
+    [Fact]
+    public void MapBezelBecomesRadarControlsAndKeepsItsLockInTheSameViewModel()
+    {
+        var e = Engine();
+        const string plan = "{stops:[{placeId:'STAN_HUR_L1'}]}";
+        e.Execute($"var radar = QwMfd.mapView({Atlas},{{locationSystem:'Stanton',locationBody:'ArcCorp',"
+            + "travelling:true,travellingToId:'RR_MIC_LEO'}," + plan + ");");
+
+        Assert.Equal("map-prev", e.Evaluate("QwMfd.resolveCommand('menu-2', 'map')").AsString());
+        Assert.Equal("map-pois", e.Evaluate("QwMfd.resolveCommand('menu-4', 'map')").AsString());
+        Assert.Equal(-1, e.Evaluate("QwMfd.effect(QwMfd.resolveCommand('menu-2', 'map')).radar").AsNumber());
+        Assert.True(e.Evaluate("QwMfd.effect(QwMfd.resolveCommand('menu-4', 'map')).pois").AsBoolean());
+
+        // Quantum wins the route exactly as it does in the normal Nav view,
+        // and the locked body is the one ringed by the renderer.
+        Assert.Equal("microTech", e.Evaluate("radar.focus").AsString());
+        Assert.True(e.Evaluate("radar.bodies.find(b => b.name === radar.focus).focused").AsBoolean());
+        Assert.Equal("ArcCorp", e.Evaluate("radar.focusNames[QwMfd.radarHere(radar)]").AsString());
+        Assert.Contains("RADAR LOCK", e.Evaluate("JSON.stringify(QwMfd.rows(QwMfd.pageIds.indexOf('map'),"
+            + "{location:'Area18'}, {}, false, {map:radar}))").AsString());
+    }
+
     /// <summary>
     /// The whole plan, leg by leg, rather than only the next hop - and the
     /// distance is straight line between body centres, which is all the

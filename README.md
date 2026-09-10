@@ -318,7 +318,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.29
+### 0.10.30
+
+- **The Cougar MFD map is now a radar instrument.** Its real body-centre
+  geometry has range rings, a sweep and a lock reticle for the selected body.
+  The five upper bezel buttons become **Nav**, **Previous**, **Next**, **POI**
+  and **Here**, so the frame names what it can do on that screen. POI opens the
+  named points kept in the MFD Log; positions are never invented from a name.
 
 - **The HUD now puts one useful thing in front of you.** Its Focus strip opens
   the next stop, active contract, current location, or a screen that needs

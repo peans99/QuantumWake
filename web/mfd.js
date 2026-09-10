@@ -40,6 +40,9 @@ let extra = {};
 let state = null;
 let briefing = null, briefingUnavailable = false, briefingBusy = false;
 let selected = 0, armed = false;
+/* The radar's lock is local to this panel. It changes what the top bezel names
+   without writing a route or pretending a selected body is a game waypoint. */
+let radarFocus = 0, radarPlan = null;
 /* What the arming press was actually pointing at, and whether a write is in
    flight. An index is not an identity: the plan is re-read every five seconds,
    so the line under the cursor when DONE was armed may not be the line under it
@@ -149,7 +152,7 @@ function savePreferences() {
 const isMenu = () => !QwMfd.pageIds.includes(screen);
 function navigate(target) {
   if (!QwMfd.validScreen(target)) return;
-  standDown(); notice = ''; saved = ''; details = false; selected = 0; offset = 0;
+  standDown(); notice = ''; saved = ''; details = false; selected = 0; radarFocus = 0; offset = 0;
   screen = target; page = Math.max(0, QwMfd.pageIds.indexOf(screen));
   byId('content').scrollTop = 0;
   savePreferences(); render();
@@ -226,7 +229,8 @@ function render() {
   // number must not be able to disagree about where you are going. Built once
   // and handed on - the menu was building a fresh one per tile, so Home cost
   // six of these a second on a panel meant to be left running all evening.
-  const plan = QwMfd.mapView(atlas, state, briefing);
+  const plan = QwMfd.mapView(atlas, state, briefing, radarFocus);
+  radarPlan = plan;
   drawMenu(plan);
   drawMap(showing === 'map', plan, true);
   drawMaker();
@@ -351,6 +355,13 @@ function drawMap(visible, view, big) {
     plot.append(node);
     return node;
   };
+  /* The orbital geometry stays true to the data, while the rings, axes and
+     moving sweep let it read as an instrument at a glance rather than a tiny
+     static star map. The sweep has no navigational meaning. */
+  for (const radius of [.25, .5, .75]) add('circle', { cx: 0, cy: 0, r: radius }, 'radar-ring');
+  add('line', { x1: -1.08, y1: 0, x2: 1.08, y2: 0 }, 'radar-axis');
+  add('line', { x1: 0, y1: -1.08, x2: 0, y2: 1.08 }, 'radar-axis');
+  add('line', { x1: 0, y1: 0, x2: 1.02, y2: 0 }, 'radar-sweep');
   for (const radius of view.rings) add('circle', { cx: 0, cy: 0, r: radius }, 'orbit');
   // The whole plan, leg by leg, not just the next hop.
   const at = name => view.bodies.find(b => b.name === name);
@@ -363,12 +374,20 @@ function drawMap(visible, view, big) {
     add('circle', { cx: body.x, cy: body.y, r: body.here || body.onRoute ? .06 : .035 },
       body.here ? 'body here' : body.next ? 'body target' : body.onRoute ? 'body stop' : 'body');
     if (body.here) add('circle', { cx: body.x, cy: body.y, r: .13 }, 'halo');
+    if (body.focused) {
+      add('rect', { x: body.x - .095, y: body.y - .095, width: .19, height: .19 }, 'radar-lock');
+      add('circle', { cx: body.x, cy: body.y, r: .15 }, 'radar-lock-ring');
+    }
   }
-  // Only the two that matter carry a name; a 150 px plan cannot hold sixteen.
-  // The rest of the route is named in the Distance row instead.
-  for (const body of [at(view.here), at(view.next)]) {
+  // A lock deserves a name alongside the current body and next stop. The set
+  // prevents the label from repeating when those happen to be one point.
+  for (const body of [...new Set([at(view.here), at(view.next), at(view.focus)])]) {
     if (!body) continue;
-    const label = add('text', { x: body.x, y: body.y - .19 }, body.here ? 'name here' : 'name target');
+    // Outer bodies land at the plot edge. Pull their caption inwards instead
+    // of letting half a system name disappear beyond the viewport.
+    const edge = body.x < -.72 ? 1 : body.x > .72 ? -1 : 0;
+    const label = add('text', { x: body.x + edge * .08, y: body.y - .19,
+      'text-anchor': edge > 0 ? 'start' : edge < 0 ? 'end' : 'middle' }, body.here ? 'name here' : 'name target');
     label.textContent = body.name;
   }
 }
@@ -413,6 +432,15 @@ function press(number) {
   if (!action.confirm && armed) standDown();
   if (action.confirm) { confirmSelected(); return; }
   if (action.menu) { action.menu === 'back' ? back() : navigate(action.menu); return; }
+  if (action.pois) { navigate('log'); return; }
+  if (action.radar !== undefined) {
+    radarFocus = QwMfd.radarFocus(radarPlan, radarFocus, action.radar);
+    lastMap = ''; lastRows = ''; render(); return;
+  }
+  if (action.radarHere) {
+    radarFocus = QwMfd.radarHere(radarPlan);
+    lastMap = ''; lastRows = ''; render(); return;
+  }
   if (action.details) { toggleDetails(); return; }
   if (action.page !== undefined || action.cycle) {
     const siblings = QwMfd.menuItems(screen);

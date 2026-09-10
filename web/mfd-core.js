@@ -102,6 +102,14 @@ window.QwMfd = (() => {
       icon: 'M4 20.5 12 12.5M6.2 8.2c3-3 8.2-4.1 12.2-3-1 4-2.1 9.2-5.1 12.2M14.2 6.2l4 4' },
     { id: 'map', label: 'Page · Map', caption: 'MAP', short: 'MAP',
       icon: 'M2.5 5.8 9 3.4v14.8L2.5 20.6zM9 3.4l6 2.4v14.8l-6-2.4M15 5.8l6.5-2.4v14.8L15 20.6' },
+    { id: 'map-prev', label: 'Radar · previous body', caption: 'PREV', short: 'PRV',
+      icon: 'M15 4L7 12l8 8' },
+    { id: 'map-next', label: 'Radar · next body', caption: 'NEXT', short: 'NXT',
+      icon: 'M9 4l8 8-8 8' },
+    { id: 'map-pois', label: 'Radar · open saved points', caption: 'POI', short: 'POI',
+      icon: 'M12 21.2s6.8-6.4 6.8-11.2a6.8 6.8 0 1 0-13.6 0c0 4.8 6.8 11.2 6.8 11.2zM12 7.6a2.4 2.4 0 1 0 .1 0' },
+    { id: 'map-here', label: 'Radar · lock current body', caption: 'HERE', short: 'HERE',
+      icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 7.5a4.5 4.5 0 1 0 .1 0' },
     { id: 'log', label: 'Page · Log', caption: 'LOG', short: 'LOG',
       icon: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6M9 8h2' },
     { id: 'prev', label: 'Previous page', caption: 'PREV', short: 'PRV', icon: 'M15 4L7 12l8 8' },
@@ -186,6 +194,12 @@ window.QwMfd = (() => {
     if (screen === 'home') return [...groups.map(g => g.id), 'nav'];
     return menuNodes[screen]?.children || menuNodes[parent(screen)]?.children || [];
   }
+  /* The map is an instrument rather than a sibling-picker. Its five top
+     buttons name the things the pilot can do to the radar now; Home still
+     reaches every flight page through the normal Flight menu. */
+  const contextualItems = screen => screen === 'map'
+    ? ['nav', 'map-prev', 'map-next', 'map-pois', 'map-here']
+    : menuItems(screen);
   function previewPage(id) {
     if (pageIds.includes(id)) return id;
     const next = menuItems(id)[0];
@@ -199,7 +213,7 @@ window.QwMfd = (() => {
   // The label and the press resolve through the same menu, including unused slots.
   function resolveCommand(id, screen) {
     if (!/^menu-[1-5]$/.test(id || '')) return id;
-    return menuItems(screen)[Number(id.slice(-1)) - 1] || null;
+    return contextualItems(screen)[Number(id.slice(-1)) - 1] || null;
   }
   /* A frame that has never been used opens on something worth reading, not on
      the menu. Two frames both starting at Home showed the same list twice and
@@ -371,6 +385,8 @@ window.QwMfd = (() => {
       'text-up': { text: 1 }, 'text-down': { text: -1 },
       'bright-up': { brightness: 1 }, 'bright-down': { brightness: -1 },
       bright: { cycleBright: true },
+      'map-prev': { radar: -1 }, 'map-next': { radar: 1 },
+      'map-pois': { pois: true }, 'map-here': { radarHere: true },
       confirm: { confirm: true } })[id] || null;
   }
   function action(button, stored) {
@@ -426,7 +442,7 @@ window.QwMfd = (() => {
      body it sits on; where you are on that body is not something Game.log ever
      says, and a dot placed on a surface would be an invention. The caption says
      so on the panel itself. */
-  function mapView(atlas, state, briefing) {
+  function mapView(atlas, state, briefing, requestedFocus = 0) {
     const s = state || {};
     if (!atlas) return { note: 'Loading the star map…' };
     const system = s.locationSystem || '';
@@ -467,25 +483,36 @@ window.QwMfd = (() => {
 
     const entries = Object.entries(positions);
     const far = Math.max(...entries.map(([, p]) => Math.sqrt(p.x * p.x + p.y * p.y))) || 1;
+    const focusNames = [...new Set([next, here, ...route, ...entries.map(([name]) => name)].filter(Boolean))];
+    const focusIndex = clamp(integer(requestedFocus, 0), 0, Math.max(0, focusNames.length - 1));
+    const focus = focusNames[focusIndex] || null;
     const bodies = entries.map(([name, p]) => {
       const radius = Math.sqrt(p.x * p.x + p.y * p.y) / far;
       return { name, x: p.x / far, y: p.y / far, radius,
         here: name === here, next: name === next,
-        onRoute: route.indexOf(name) > 0 };
+        onRoute: route.indexOf(name) > 0, focused: name === focus };
     });
 
     // Moons sit within a rounding of their planet's orbit, so one ring each
     // would draw the same circle four times over a 150 px panel.
     const rings = [...new Set(bodies.map(b => Math.round(b.radius * 50) / 50))].filter(r => r > .04);
-    const note = [system.toUpperCase(),
+    const note = [system.toUpperCase(), focus ? `radar lock · ${focus}` : null,
       // "Not a fix" reads as a caveat about the position, which is not what is
       // being disclaimed: the position is as good as the logs get. It is the
       // line and its distance that are direct rather than flown.
       here ? 'direct line, not the route flown' : 'body not identified',
       elsewhere ? `${elsewhere} stop${elsewhere > 1 ? 's' : ''} outside this system` : null]
       .filter(Boolean).join(' · ');
-    return { system, here, next, target, bodies, rings, legs, gm, elsewhere, note };
+    return { system, here, next, target, bodies, rings, legs, gm, elsewhere, note,
+      focus, focusIndex, focusNames };
   }
+
+  const radarFocus = (view, index, direction) => {
+    const count = view?.focusNames?.length || 0;
+    if (!count) return 0;
+    return (integer(index, 0) + integer(direction, 0) % count + count) % count;
+  };
+  const radarHere = view => Math.max(0, (view?.focusNames || []).indexOf(view?.here));
 
   /* The distance the plan adds up to, for the Nav rows. Named for what it
      measures: a straight line between body centres, which is the only thing
@@ -775,6 +802,7 @@ window.QwMfd = (() => {
         if (!plan?.bodies) return [['MAP', plan?.note || 'No system to draw yet']];
         return [
           ['LOCATION', s.location || plan.here || 'Not identified'],
+          ...(plan.focus ? [['RADAR LOCK', plan.focus]] : []),
           ...(plan.next ? [['NEXT STOP', plan.next + (plan.gm
             ? ` · ${plan.gm >= 100 ? plan.gm.toFixed(0) : plan.gm.toFixed(1)} Gm` : '')]] : [])
         ];
@@ -840,7 +868,7 @@ window.QwMfd = (() => {
         ? `A medical bed used ${bed.times} times · the game never states a regen point`
         : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
   }
-  return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+  return { fit, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };
