@@ -86,7 +86,7 @@ public class MfdInputTests
         Assert.Equal("armed", panel.StripState);
 
         panel.Press(15);
-        Assert.Equal("Plan & task", panel.Title);
+        Assert.Equal("Operations", panel.Title);
         panel.Press(2);
 
         Assert.Equal("ready", panel.StripState);

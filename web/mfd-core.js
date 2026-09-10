@@ -95,25 +95,22 @@ window.QwMfd = (() => {
      start unassigned - see the note above. */
   /* Menus are data, not a screen-specific set of if statements. Adding a new
      branch only adds a node here; the face, breadcrumb and Back all discover
-     its parent and children from the same tree. Each level stays under the five
-     top buttons, while a page can sit as deep as its question needs. */
+     its parent and children from the same tree.
+
+     Two levels, not three. The middle tier existed to split two screens apiece -
+     Route held Navigation and System map, People held Crew on its own - so it
+     cost a press on the way to everything and sorted nothing. Each category
+     fits the five top buttons by itself: four screens at most, and the row has
+     five. The tree still nests to any depth if a branch ever earns it. */
   const groups = [
-    { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Navigate · map · ship', children: [
-      { id: 'flight-route', title: 'Route', short: 'RTE', icon: 'nav', hint: 'Destination · system map', children: ['nav', 'map'] },
-      { id: 'flight-ship', title: 'Ship & local', short: 'SHIP', icon: 'ship', hint: 'Hull · landing intel', children: ['ship', 'here'] }
-    ] },
-    { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan · checklist · jobs', children: [
-      { id: 'operations-plan', title: 'Plan & task', short: 'PLAN', icon: 'task', hint: 'Next stop · checklist', children: ['task', 'act'] },
-      { id: 'operations-jobs', title: 'Jobs & list', short: 'JOBS', icon: 'contract', hint: 'Contract · shopping', children: ['contract', 'list'] }
-    ] },
-    { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo · mining · earnings', children: [
-      { id: 'resources-cargo', title: 'Trade', short: 'TRDE', icon: 'cargo', hint: 'Cargo · counter receipts', children: ['cargo', 'ledger'] },
-      { id: 'resources-industry', title: 'Industry', short: 'INDY', icon: 'mine', hint: 'Mining · earnings', children: ['mine', 'money'] }
-    ] },
-    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session · crew · activity', children: [
-      { id: 'pilot-session', title: 'Session', short: 'SESS', icon: 'status', hint: 'State · live activity', children: ['status', 'feed'] },
-      { id: 'pilot-crew', title: 'People', short: 'PPL', icon: 'crew', hint: 'Crew · party signal', children: ['crew'] }
-    ] }
+    { id: 'flight', title: 'Flight', short: 'FLT', icon: 'nav', hint: 'Where you are, and what you fly',
+      children: ['nav', 'map', 'ship', 'here'] },
+    { id: 'operations', title: 'Operations', short: 'OPS', icon: 'task', hint: 'Plan, checklist, jobs',
+      children: ['task', 'act', 'contract', 'list'] },
+    { id: 'resources', title: 'Resources', short: 'RSRC', icon: 'cargo', hint: 'Cargo, money, mining',
+      children: ['cargo', 'ledger', 'mine', 'money'] },
+    { id: 'pilot', title: 'Pilot', short: 'PLT', icon: 'status', hint: 'Session, activity, crew',
+      children: ['status', 'feed', 'crew'] }
   ];
   const titles = { home: 'Cockpit', nav: 'Navigation', task: 'Flight plan', act: 'Checklist',
     cargo: 'Cargo & trade', contract: 'Contract', status: 'Session', feed: 'Activity', crew: 'Crew',
@@ -143,7 +140,10 @@ window.QwMfd = (() => {
   const title = id => menuNodes[id]?.title || titles[id] || titles.home;
   const validScreen = id => id === 'home' || !!menuNodes[id] || pageIds.includes(id);
   function menuItems(screen) {
-    if (screen === 'home') return groups.map(g => g.id);
+    /* Home carries Navigation beside the four categories: it is the page a
+       pilot wants most and the fifth slot was empty, so putting it behind a
+       category would have been spending a press to save nothing. */
+    if (screen === 'home') return [...groups.map(g => g.id), 'nav'];
     return menuNodes[screen]?.children || menuNodes[parent(screen)]?.children || [];
   }
   function previewPage(id) {

@@ -318,7 +318,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.21
+### 0.10.22
+
+- **Two presses to any screen, one to Navigation.** The menu had a middle
+  level — Flight → Route → Navigation — and every one of those middle entries
+  split just two screens, so it cost a press on the way to everything and
+  sorted nothing. Categories now hold their screens directly, which fits the
+  five top buttons with room to spare, and **Navigation** sits on Home beside
+  the four categories rather than behind one of them.
+
 
 - **A real drill-down menu for Cougar MFDs.** Home opens Flight, Operations,
   Resources or Pilot; each category opens its own submenu before the page. For

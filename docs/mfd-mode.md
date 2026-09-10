@@ -110,6 +110,22 @@ catalogues, market browsing, historical tables and settings stay on the
 dashboard - what came across is the question a pilot asks in the seat, never the
 report behind it.
 
+### How deep the menu goes
+
+Two levels: Home, a category, the screen. It had three, and the middle tier
+split two screens apiece - Route held Navigation and System map, People held
+Crew on its own - so it cost a press on the way to everything and sorted
+nothing. Each category holds four screens at most and the top row has five
+buttons, so the level it replaced was never needed to fit them.
+
+Navigation also sits on Home, in the fifth slot the four categories left
+empty. It is the page a pilot wants most, and putting it behind a category
+would have spent a press to save nothing.
+
+The builder still recurses, so a branch that genuinely earns a third level
+can have one by nesting a node in `groups` - nothing else changes. The
+shipped tree simply has no branch that earns it.
+
 ### The HUD format
 
 Overview pages lead with a full-width answer and supporting readings. More

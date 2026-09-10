@@ -484,7 +484,10 @@ public class MfdTests
         Assert.Equal("back", e.Evaluate("QwMfd.defaults[15]").AsString());
         Assert.Equal("home", e.Evaluate("QwMfd.defaults[13]").AsString());
         Assert.True(e.Evaluate("QwMfd.groups.every(g => QwMfd.parent(g.id) === 'home')").AsBoolean());
-        Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.trail(id).length >= 4)").AsBoolean());
+        // Exactly three: home, a category, the screen. Nothing is more than two
+        // presses away, which is the whole point of collapsing the middle tier.
+        Assert.True(e.Evaluate("QwMfd.pageIds.every(id => QwMfd.trail(id).length === 3)").AsBoolean());
+        Assert.True(e.Evaluate("QwMfd.groups.every(g => QwMfd.menuItems(g.id).length <= 5)").AsBoolean());
     }
 
     [Fact]
@@ -492,27 +495,34 @@ public class MfdTests
     {
         var e = Engine();
         Assert.Equal("flight", e.Evaluate("QwMfd.resolveCommand('menu-1','home')").AsString());
-        Assert.Equal("flight-ship", e.Evaluate("QwMfd.resolveCommand('menu-2','flight')").AsString());
-        Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','flight-route')").AsString());
+        Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','flight')").AsString());
+        Assert.Equal("here", e.Evaluate("QwMfd.resolveCommand('menu-4','flight')").AsString());
+
+        // Standing on a screen, the row still offers its siblings.
         Assert.Equal("map", e.Evaluate("QwMfd.resolveCommand('menu-2','nav')").AsString());
-        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-5','home') === null").AsBoolean());
-        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-3','pilot') === null").AsBoolean());
+
+        // Navigation rides Home's fifth slot, which the four categories left empty.
+        Assert.Equal("nav", e.Evaluate("QwMfd.resolveCommand('menu-5','home')").AsString());
+        Assert.True(e.Evaluate("QwMfd.resolveCommand('menu-4','pilot') === null").AsBoolean());
         Assert.Equal("cargo", e.Evaluate("QwMfd.resolveCommand('cargo','pilot')").AsString());
         Assert.Equal("back", e.Evaluate("QwMfd.effect('back').menu").AsString());
     }
 
+    /// <summary>
+    /// One category between Home and any screen. The middle tier that used to
+    /// sit here split two screens apiece, so it cost a press on the way to
+    /// everything and sorted nothing.
+    /// </summary>
     [Fact]
-    public void AMenuNodeCanGainAnotherLevelWithoutChangingNavigationRules()
+    public void EveryScreenSitsOneCategoryBelowHome()
     {
         var e = Engine();
-        Assert.Equal("flight-route", e.Evaluate("QwMfd.parent('nav')").AsString());
-        Assert.Equal("flight", e.Evaluate("QwMfd.parent('flight-route')").AsString());
+        Assert.Equal("flight", e.Evaluate("QwMfd.parent('nav')").AsString());
         Assert.Equal("home", e.Evaluate("QwMfd.parent('flight')").AsString());
         Assert.Equal("nav", e.Evaluate("QwMfd.previewPage('flight')").AsString());
         Assert.Equal("map", e.Evaluate("QwMfd.previewPage('map')").AsString());
-        Assert.Equal("Route", e.Evaluate("QwMfd.title('flight-route')").AsString());
-        Assert.Equal("home/flight/flight-route/nav",
-            e.Evaluate("QwMfd.trail('nav').join('/')").AsString());
+        Assert.Equal("home/flight/nav", e.Evaluate("QwMfd.trail('nav').join('/')").AsString());
+        Assert.Equal("home/pilot/crew", e.Evaluate("QwMfd.trail('crew').join('/')").AsString());
     }
 
     [Fact]
