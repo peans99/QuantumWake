@@ -318,7 +318,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.32
+### 0.10.33
 
 - **The Cougar MFD map is now a radar instrument.** Its real body-centre
   geometry has range rings, a sweep and a lock reticle for the selected body.

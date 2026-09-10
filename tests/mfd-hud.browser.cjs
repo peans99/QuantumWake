@@ -69,26 +69,40 @@ let chrome, ws;
     await pause(220); const r = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     fs.writeFileSync(path.join(output, name + '.png'), Buffer.from(r.data, 'base64'));
   };
-  const checkTiles = async () => assert.deepEqual(await run(`Array.from(document.querySelectorAll('.menu-tile')).flatMap(tile=>
-    Array.from(tile.children).filter(c=>getComputedStyle(c).display!=='none' && c.getBoundingClientRect().bottom>tile.getBoundingClientRect().bottom-2)
-      .map(c=>tile.dataset.screen+': '+c.textContent))`), [], 'Menu contents fit vertically');
+  const checkTiles = async () => {
+    const spilling = await run(`Array.from(document.querySelectorAll('.menu-tile')).flatMap(tile=>
+      Array.from(tile.children).filter(c=>getComputedStyle(c).display!=='none' && c.getBoundingClientRect().bottom>tile.getBoundingClientRect().bottom-2)
+        .map(c=>tile.dataset.screen+': '+c.textContent))`);
+    // Named, not counted: "[Array]" tells you a tile overflowed and nothing
+    // about which one, which is a whole run of guessing away from the answer.
+    const room = await run(`(()=>{const t=document.querySelector('.menu-tile');const a=document.getElementById('action');
+      return t ? {tile:+t.getBoundingClientRect().height.toFixed(1), strip: a && !a.hidden} : null;})()`);
+    assert.deepEqual(spilling, [], 'Menu contents fit vertically; spilling: ' + JSON.stringify(spilling)
+      + ' with ' + JSON.stringify(room));
+  };
   await size(480);
   await call('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/mfd.html?snapshot=1` });
   await pause(650);
+  // Each frame opens where it is useful rather than at the top menu - the left
+  // panel on Nav, the right on Task - since 0.10.23. The walk below starts from
+  // the menu, so it asks for the menu instead of assuming it is already there.
+  assert.equal(await run('screen'), 'nav', 'the left panel opens on Nav');
+  await run("navigate('home')");
   assert.equal(await run('screen'), 'home');
   await shot('home-480');
   await run("__native({data:{type:'button',button:1}})");
   assert.equal(await run('screen'), 'flight'); await shot('flight-480');
-  await run('press(1)'); assert.equal(await run('screen'), 'flight-route'); await shot('route-480');
   await run('press(1)'); assert.equal(await run('screen'), 'nav'); await shot('nav-480');
   await run('press(8);press(8)'); assert.deepEqual(await run('__posts'), []);
+  await run('press(15)'); assert.equal(await run('screen'), 'flight');
   await run('press(2)'); assert.equal(await run('screen'), 'map'); await shot('map-480');
-  await run('press(15)'); assert.equal(await run('screen'), 'flight-route');
   await run('press(15)'); assert.equal(await run('screen'), 'flight');
   await run('press(15)'); assert.equal(await run('screen'), 'home');
-  await run('press(5)'); assert.equal(await run('screen'), 'home');
+  // A button bound to nothing leaves you where you are. 6 rather than 5: 5 is
+  // Nav from the top menu now, so pressing it proved the opposite of the point.
+  await run('press(6)'); assert.equal(await run('screen'), 'home');
   await run('press(2);press(1);press(2);press(8)'); assert.equal(await run('armed'), true); await shot('checklist-armed-480');
-  await run('press(15)'); assert.equal(await run('armed'), false); assert.equal(await run('screen'), 'operations-plan');
+  await run('press(15)'); assert.equal(await run('armed'), false); assert.equal(await run('screen'), 'operations');
   await run('press(2);press(8);briefing.stops[0].actions.shift();render();press(8)');
   assert.deepEqual(await run('__posts'), []); assert.equal(await run('armed'), false);
   await run('refreshBriefing()'); await run('__delay=250;press(8);press(8);press(8)');
@@ -101,7 +115,6 @@ let chrome, ws;
   await run('press(10)'); assert.equal(await run('details'), true);
   assert.match(await run("byId('readings').textContent"), /Plan \+ counters · not a hold/);
   await run('press(15)'); assert.equal(await run('details'), false); assert.equal(await run('screen'), 'cargo');
-  await run('press(15)'); assert.equal(await run('screen'), 'resources-cargo');
   await run('press(15)'); assert.equal(await run('screen'), 'resources');
   // A custom profile remains the whole answer, including cleared keys and rocker shortcuts.
   await run("__native({data:{type:'display',buttons:{1:'crew',21:'home',22:'menu-2'}}});press(1)");
@@ -111,8 +124,8 @@ let chrome, ws;
   await run("__native({data:{type:'display',buttons:null}})");
   await run("navigate('home');document.querySelector('[data-screen=flight]').click()");
   assert.equal(await run('screen'), 'flight');
-  await run("document.querySelector('[data-screen=flight-route]').click()");
-  assert.equal(await run('screen'), 'flight-route');
+  await run("document.querySelector('[data-screen=nav]').click()");
+  assert.equal(await run('screen'), 'nav');
   const pages = await run('QwMfd.pageIds');
   const menus = await run('Object.keys(QwMfd.menuNodes)');
   const layout = [];
@@ -134,7 +147,9 @@ let chrome, ws;
   await run("navigate('resources')");
   await call('Page.reload'); await pause(450); assert.equal(await run('screen'), 'resources');
   await call('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/mfd.html?snapshot=1&panel=right` });
-  await pause(450); assert.equal(await run('screen'), 'home', 'Each panel has independent navigation');
+  // Its own opening screen, and its own saved one: the left panel was left on
+  // resources a moment ago, and the right knows nothing about that.
+  await pause(450); assert.equal(await run('screen'), 'task', 'Each panel has independent navigation');
   await size(1100, 850);
   await call('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/mfd-setup.html` });
   await pause(400); await shot('setup-1100');
