@@ -10532,35 +10532,55 @@ try {
   shipPaints = JSON.parse(localStorage.getItem('qw-ship-paints') || '{}') || {};
 } catch { /* private browsing; a silhouette is the honest default anyway */ }
 
+/** The pilot's word for "no paint, the silhouette" - distinct from never having picked. */
+const SILHOUETTE = 'silhouette';
+
 function rememberShipPaint(vehicleClass, paintItem) {
   if (paintItem) shipPaints[vehicleClass] = paintItem;
   else delete shipPaints[vehicleClass];
   try { localStorage.setItem('qw-ship-paints', JSON.stringify(shipPaints)); } catch { /* as above */ }
 }
 
+/** The paints the game pictures for a hull, fetched once per hull for the page. */
+const hullPaints = new Map();
+function paintsForHull(vehicleClass) {
+  if (!hullPaints.has(vehicleClass)) {
+    hullPaints.set(vehicleClass, getJson(`/api/fleet/paints/${encodeURIComponent(vehicleClass)}`).catch(() => []));
+  }
+  return hullPaints.get(vehicleClass);
+}
+
 /**
  * The ship's picture on its card: the game's own render of the hull in the
  * paint the pilot chose, or the game's silhouette tinted by maker. A small
- * button opens the paints the game pictures for that hull; the app never
- * picks one, because which paint a ship wears is not in the logs.
+ * button opens the paints the game pictures for that hull. Until the pilot
+ * picks, the first paint the game lists stands in - and says it is standing
+ * in, because which paint a ship wears is not in the logs.
  */
 function shipPicture(ship, maker) {
   const box = el('div', 'ship-picture');
   let chosen = shipPaints[ship.className];
+  // Unpicked: the first paint the game pictures, once known; null means "none".
+  let standIn = null;
+  let failed = false;
 
   const draw = () => {
     box.textContent = '';
+    const wanted = chosen === undefined ? standIn : chosen === SILHOUETTE ? null : chosen;
+    const paint = failed ? null : wanted;
 
-    if (chosen) {
+    if (paint) {
       const img = document.createElement('img');
       img.className = 'ship-render';
-      img.src = `/api/fleet/paints/${encodeURIComponent(chosen)}/render`;
+      img.src = `/api/fleet/paints/${encodeURIComponent(paint)}/render`;
       img.alt = '';
       img.loading = 'lazy';
-      img.title = `${ship.name} in the paint you chose — the game's own picture`;
+      img.title = chosen
+        ? `${ship.name} in the paint you chose — the game's own picture`
+        : `${ship.name} in the first paint the game pictures for it — not necessarily the one yours wears; Paint… to choose`;
       // Shown as the silhouette for now, the pick kept: a render that fails once -
       // the server still converting, a request dropped - is not a retired paint.
-      img.addEventListener('error', () => { chosen = null; draw(); });
+      img.addEventListener('error', () => { failed = true; draw(); });
       box.append(img);
     } else {
       const outline = el('div', 'ship-outline');
@@ -10587,28 +10607,38 @@ function shipPicture(ship, maker) {
 
   draw();
 
+  // Nothing picked yet: the silhouette shows while the first paint is looked
+  // up, and the render replaces it once the list is in. A pick made in the
+  // meantime wins - the lookup redraws only if the box is still unpicked.
+  if (chosen === undefined && ship.className) {
+    paintsForHull(ship.className).then((paints) => {
+      standIn = paints[0]?.item || null;
+      if (standIn && chosen === undefined) draw();
+    });
+  }
+
   // The chooser redraws this box, wherever it sits - a Fleet card or a
   // Hangar card - rather than every Fleet card, which was why a pick made on
   // the Hangar showed only after a reload.
-  box.redraw = () => { chosen = shipPaints[ship.className]; draw(); };
+  box.redraw = () => { chosen = shipPaints[ship.className]; failed = false; draw(); };
   return box;
 }
 
 async function openPaintChooser(ship, box, button) {
   button.disabled = true;
 
-  let paints = [];
-  try {
-    paints = await getJson(`/api/fleet/paints/${encodeURIComponent(ship.className)}`);
-  } catch { /* the select below says so */ }
+  // An empty list is what the fetch resolves to when the server cannot say.
+  const paints = await paintsForHull(ship.className);
 
   const select = document.createElement('select');
   select.className = 'select ship-paint-select';
   select.setAttribute('aria-label', `Paint for ${ship.name}`);
-  select.append(new Option('Silhouette, tinted by maker', ''));
-  for (const paint of paints) select.append(new Option(paint.name, paint.item));
+  select.append(new Option('Silhouette, tinted by maker', SILHOUETTE));
+  const unpicked = !shipPaints[ship.className];
+  paints.forEach((paint, i) => select.append(new Option(i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name, paint.item)));
   if (!paints.length) select.append(new Option('The game pictures no paint for this hull', '', false, false));
-  select.value = shipPaints[ship.className] || '';
+  // Unpicked shows the first paint, so that is where the list opens.
+  select.value = shipPaints[ship.className] || paints[0]?.item || SILHOUETTE;
 
   select.addEventListener('change', () => {
     rememberShipPaint(ship.className, select.value || null);

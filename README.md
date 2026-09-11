@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1815 tests](https://img.shields.io/badge/tests-1815%20passing-4fd48a)
+![1817 tests](https://img.shields.io/badge/tests-1817%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -358,7 +358,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.5
+### 0.11.6
+
+- **Ships wear a paint before you pick one.** A ship you have not chosen a
+  paint for shows the first paint the game pictures for its hull, on Fleet
+  and in the Hangar gallery, rather than the tinted silhouette. It is labelled
+  as a stand-in - which paint yours wears is not in the logs - and the Paint
+  list opens on it and says so. Choosing the silhouette is a choice too, and
+  it is kept.
 
 - **The Hangar keeps to your roster and shelves ships and vehicles apart.** A
   ship you unticked on Fleet is not in the Hangar either, and the count says

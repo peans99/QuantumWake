@@ -17,12 +17,12 @@ public class ShipPictureTests
     private static Page Fresh()
     {
         var page = new Page();
-        page.Do("shipPaints = {};");
+        page.Do("shipPaints = {}; hullPaints.clear();");
         return page;
     }
 
     [Fact]
-    public void Without_a_chosen_paint_the_silhouette_is_a_mask_in_the_makers_tint()
+    public void Without_a_chosen_paint_and_none_pictured_the_silhouette_is_a_mask_in_the_makers_tint()
     {
         var page = Fresh();
         page.Do($"__dom.node('#t').append(shipPicture({Corsair}, {Maker}));");
@@ -66,12 +66,58 @@ public class ShipPictureTests
         Assert.Equal(3, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-paint-select')[0].options.length")));
         Assert.Contains("Silhouette", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[0].textContent"));
         Assert.Contains("Corsair Commando Livery", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[2].textContent"));
+        // Unpicked, the list opens on the paint that is standing in, and says so.
+        Assert.Equal("Paint_Corsair_Black_Black_Gold_Camo", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].value"));
+        Assert.Contains("shown until you pick", page.Text("__dom.node('#t').byClass('ship-paint-select')[0].options[1].textContent"));
 
         page.Do("rememberShipPaint('DRAK_Corsair', 'Paint_Corsair_Commando');");
         Assert.Equal("Paint_Corsair_Commando", page.Text("shipPaints.DRAK_Corsair"));
 
         page.Do("rememberShipPaint('DRAK_Corsair', null);");
         Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
+    }
+
+    /// <summary>
+    /// Nothing picked and the game pictures paints for the hull: the first
+    /// one stands in, labelled as a stand-in - which paint a ship wears is not
+    /// in the logs, so the card cannot claim it is the pilot's.
+    /// </summary>
+    [Fact]
+    public void Without_a_chosen_paint_the_first_the_game_pictures_stands_in()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """
+            [{"item":"Paint_Corsair_BIS2953_Purple_Blue_Cyan","name":"Corsair 2953 Best in Show Livery"},
+             {"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery"}]
+            """);
+        page.Do($"__dom.node('#t').append(shipPicture({Corsair}, {Maker})); await paintsForHull('DRAK_Corsair'); await Promise.resolve();");
+
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render').length")));
+        Assert.Contains("Paint_Corsair_BIS2953_Purple_Blue_Cyan/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
+        Assert.Contains("not necessarily the one yours wears", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
+        Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-outline').length")));
+        // Standing in is not picking: nothing is remembered for the hull.
+        Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
+    }
+
+    /// <summary>The pilot can still ask for the silhouette, and that choice is kept apart from never having picked.</summary>
+    [Fact]
+    public void Choosing_the_silhouette_over_the_stand_in_is_remembered()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """[{"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery"}]""");
+        page.Do($"""
+            const box = shipPicture({Corsair}, {Maker});
+            __dom.node('#t').append(box);
+            await openPaintChooser({Corsair}, box, box.byClass('ship-paint')[0]);
+            const select = box.byClass('ship-paint-select')[0];
+            select.value = 'silhouette';
+            select.fire('change');
+            """);
+
+        Assert.Equal("silhouette", page.Text("shipPaints.DRAK_Corsair"));
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-outline').length")));
+        Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render').length")));
     }
 
     /// <summary>
