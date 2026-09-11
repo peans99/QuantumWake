@@ -70,6 +70,21 @@ public class HangarTests
         Assert.DoesNotContain("Mystery Hull", page.NodeText("#hangar-canvas"));
     }
 
+    /// <summary>
+    /// The icon is white; the tint is the maker's colour through an SVG filter
+    /// that keeps the shape exact - and it is on the attribute, because a CSS
+    /// filter on the image would win over it and put the tint back to white.
+    /// </summary>
+    [Fact]
+    public void A_silhouette_is_tinted_by_its_maker_through_a_filter_on_the_image()
+    {
+        var page = Loaded();
+
+        Assert.Contains("url(#hangar-tint-DRAK_Corsair)", Attr(page, 0, "image", "filter"));
+        Assert.Equal("#f0954a", page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[0].querySelector('filter').children[0].getAttribute('flood-color')"));
+        Assert.Contains("tinted by maker", page.NodeText("#hangar-scale"));
+    }
+
     [Fact]
     public void The_scale_bar_names_a_round_number_of_metres()
     {

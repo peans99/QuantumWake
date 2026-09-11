@@ -853,38 +853,56 @@ public static class ServerHost
             return Results.Ok(new { available = game.Vehicles.Count > 0, ships });
         });
 
-        // A ship's silhouette, from the game's own vehicle icon, as a PNG cropped
-        // to the shape. Converted once and kept beside the other caches: BC3
-        // decodes in milliseconds, but the page asks for twenty at a time and
-        // the archive walk to find each one is the slow part.
-        app.MapGet("/api/fleet/icons/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
+        // A picture out of the archive as a PNG, converted once and kept beside
+        // the other caches: BC3 decodes in milliseconds, but the page asks for
+        // twenty at a time and the archive walk to find each one is the slow
+        // part. The same route serves a ship's silhouette and a paint render.
+        IResult ArchivePicture(string entry, string cacheFolder)
         {
-            if (install is null || lib.GameCommodities.Vehicle(vehicleClass)?.Icon is not { } entry)
-                return Results.NotFound();
+            if (install is null) return Results.NotFound();
 
-            var cacheDir = Path.Combine(Core.AppPaths.Root, "vehicle-icons");
+            var cacheDir = Path.Combine(Core.AppPaths.Root, cacheFolder);
             var cached = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(entry) + ".png");
 
             if (!File.Exists(cached))
             {
                 var dds = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(entry);
-                if (dds is null || VehicleIcons.Convert(dds) is not { } icon)
+                if (dds is null || VehicleIcons.Convert(dds) is not { } picture)
                     return Results.NotFound();
 
                 try
                 {
                     Directory.CreateDirectory(cacheDir);
-                    File.WriteAllBytes(cached, icon.Png);
+                    File.WriteAllBytes(cached, picture.Png);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
                     // Losing the cache only costs the next request the decode.
-                    return Results.File(icon.Png, "image/png");
+                    return Results.File(picture.Png, "image/png");
                 }
             }
 
             return Results.File(cached, "image/png");
-        });
+        }
+
+        // A ship's silhouette, from the game's own vehicle icon, cropped to the shape.
+        app.MapGet("/api/fleet/icons/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
+            lib.GameCommodities.Vehicle(vehicleClass)?.Icon is { } entry
+                ? ArchivePicture(entry, "vehicle-icons")
+                : Results.NotFound());
+
+        // The paints the game pictures for a hull, for the pilot to pick from.
+        // The app never picks: which paint a ship wears is not in the logs.
+        app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
+            Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
+                .Select(p => new { p.Item, p.Name })));
+
+        // The game's own picture of a hull in one paint: the paint item's logo.
+        app.MapGet("/api/fleet/paints/{paintItem}/render", (string paintItem, LogLibrary lib) =>
+            lib.GameCommodities.Paints.FirstOrDefault(p =>
+                string.Equals(p.Item, paintItem, StringComparison.OrdinalIgnoreCase)) is { } paint
+                ? ArchivePicture(paint.Render, "paint-renders")
+                : Results.NotFound());
 
         app.MapGet("/api/fleet", (LogLibrary lib) =>
         {

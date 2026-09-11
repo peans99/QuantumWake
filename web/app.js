@@ -5556,9 +5556,20 @@ function renderHangar() {
     const top = (rowHeightOf(placed, sy) - h);   // ships in a row share a baseline
 
     if (ship.icon) {
+      // The game's icon is white; the maker's tint is the app's, and the
+      // legend says so. feFlood through SourceAlpha keeps the shape exact.
+      const tintId = `hangar-tint-${ship.className.replace(/[^A-Za-z0-9_-]/g, '')}`;
+      const filter = svgEl('filter', { id: tintId });
+      filter.append(svgEl('feFlood', { 'flood-color': makerTint(makerOf(ship.name).code) }));
+      filter.append(svgEl('feComposite', { in2: 'SourceAlpha', operator: 'in' }));
+      // The glow rides in the same chain: a CSS filter on the image would win
+      // over this attribute and put the tint back to white.
+      filter.append(svgEl('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-color': '#35c8f0', 'flood-opacity': 0.3 }));
+      group.append(filter);
       group.append(svgEl('image', {
         href: `/api/fleet/icons/${encodeURIComponent(ship.className)}`,
         x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
+        filter: `url(#${tintId})`,
       }));
     } else {
       group.append(svgEl('rect', { class: 'hangar-box', x: offset, y: top, width: w, height: h, rx: 2 }));
@@ -5587,7 +5598,7 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons`));
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons, tinted by maker (a hint at whose, not the finish)`));
   }
 
   if (missing.length && unsized) {
@@ -10420,6 +10431,114 @@ function buildMakerAliases() {
 buildMakerAliases();
 
 /** Splits a ship name into its maker and the model that follows. */
+/*
+ * A colour per maker for the silhouettes. Cosmetic and said to be: the game's
+ * vehicle icons are white shapes, and a maker's colour on one is a hint at
+ * whose ship it is, not the ship's finish - that is what the paint choice is
+ * for. Chosen to read on the dark deck, nothing more.
+ */
+const MAKER_TINTS = {
+  AEGS: '#7fc4b0', ANVL: '#8fd18a', AOPO: '#b6dc9a', ARGO: '#f0cf5a', BANU: '#d8b97c',
+  CNOU: '#f0a45c', CRUS: '#e6ecf2', DRAK: '#f0954a', ESPR: '#c7b8e6', GAMA: '#a9c4e0',
+  GRIN: '#e2cf5a', KRIG: '#f2b05c', MISC: '#9adcf2', MRAI: '#d7dfe4', ORIG: '#e8d79a',
+  RSI: '#a9d0f5', TMBL: '#d3bd8f', VNCL: '#e56b66', XIAN: '#9fd9a8', XNAA: '#9fd9a8',
+};
+
+function makerTint(code) {
+  return MAKER_TINTS[code] || '#7fe4ff';
+}
+
+/** The paint the pilot chose per hull, in this browser - the same home as the roster tick. */
+let shipPaints = {};
+try {
+  shipPaints = JSON.parse(localStorage.getItem('qw-ship-paints') || '{}') || {};
+} catch { /* private browsing; a silhouette is the honest default anyway */ }
+
+function rememberShipPaint(vehicleClass, paintItem) {
+  if (paintItem) shipPaints[vehicleClass] = paintItem;
+  else delete shipPaints[vehicleClass];
+  try { localStorage.setItem('qw-ship-paints', JSON.stringify(shipPaints)); } catch { /* as above */ }
+}
+
+/**
+ * The ship's picture on its card: the game's own render of the hull in the
+ * paint the pilot chose, or the game's silhouette tinted by maker. A small
+ * button opens the paints the game pictures for that hull; the app never
+ * picks one, because which paint a ship wears is not in the logs.
+ */
+function shipPicture(ship, maker) {
+  const box = el('div', 'ship-picture');
+  let chosen = shipPaints[ship.className];
+
+  const draw = () => {
+    box.textContent = '';
+
+    if (chosen) {
+      const img = document.createElement('img');
+      img.className = 'ship-render';
+      img.src = `/api/fleet/paints/${encodeURIComponent(chosen)}/render`;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.title = `${ship.name} in the paint you chose — the game's own picture`;
+      // A paint the game no longer pictures - a patch retired it - falls back
+      // to the silhouette rather than taking the picture away.
+      img.addEventListener('error', () => { rememberShipPaint(ship.className, null); chosen = null; draw(); });
+      box.append(img);
+    } else {
+      const outline = el('div', 'ship-outline');
+      outline.style.setProperty('--tint', makerTint(maker.code));
+      outline.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(ship.className)}")`);
+      outline.title = `${ship.name} — the game's silhouette, tinted ${maker.name}'s colour; see the fleet to scale on Hangar`;
+      outline.addEventListener('click', () => showView('hangar'));
+
+      // The mask cannot say whether the file exists; an Image can.
+      if (typeof Image === 'function') {
+        const probe = new Image();
+        probe.addEventListener('error', () => outline.remove());
+        probe.src = `/api/fleet/icons/${encodeURIComponent(ship.className)}`;
+      }
+      box.append(outline);
+    }
+
+    const pick = el('button', 'ghost tiny ship-paint', chosen ? 'Paint' : 'Paint…');
+    pick.type = 'button';
+    pick.title = 'Choose the paint this ship wears, from the ones the game pictures';
+    pick.addEventListener('click', () => openPaintChooser(ship, box, pick));
+    box.append(pick);
+  };
+
+  draw();
+  return box;
+}
+
+async function openPaintChooser(ship, box, button) {
+  button.disabled = true;
+
+  let paints = [];
+  try {
+    paints = await getJson(`/api/fleet/paints/${encodeURIComponent(ship.className)}`);
+  } catch { /* the select below says so */ }
+
+  const select = document.createElement('select');
+  select.className = 'select ship-paint-select';
+  select.setAttribute('aria-label', `Paint for ${ship.name}`);
+  select.append(new Option('Silhouette, tinted by maker', ''));
+  for (const paint of paints) select.append(new Option(paint.name, paint.item));
+  if (!paints.length) select.append(new Option('The game pictures no paint for this hull', '', false, false));
+  select.value = shipPaints[ship.className] || '';
+
+  select.addEventListener('change', () => {
+    rememberShipPaint(ship.className, select.value || null);
+    renderFleetShips();
+  });
+
+  // The select takes the button's place in the box.
+  const box2 = button.parentElement;
+  button.remove();
+  box2?.append(select);
+  select.focus?.();
+}
+
 function makerOf(shipName) {
   const words = String(shipName).trim().split(/\s+/);
 
@@ -10581,20 +10700,10 @@ function renderFleetShips() {
     }
     card.append(badge);
 
-    // The game's own silhouette of the ship, when the install has one. A 404
-    // takes the image out rather than leaving a broken frame: the icons come
-    // from the game files, and not every hull has one.
-    if (ship.className) {
-      const outline = document.createElement('img');
-      outline.className = 'ship-outline';
-      outline.src = `/api/fleet/icons/${encodeURIComponent(ship.className)}`;
-      outline.alt = '';
-      outline.loading = 'lazy';
-      outline.title = `${ship.name} — see the whole fleet to scale on Hangar`;
-      outline.addEventListener('error', () => outline.remove());
-      outline.addEventListener('click', () => showView('hangar'));
-      card.append(outline);
-    }
+    // The ship's picture: the paint the pilot chose, painted, or the game's
+    // silhouette tinted by maker. A missing silhouette takes the frame out
+    // rather than leaving it broken - not every hull has one in the files.
+    if (ship.className) card.append(shipPicture(ship, maker));
 
     const body = el('div', 'ship-body');
     body.append(el('div', 'ship-name', maker.model));

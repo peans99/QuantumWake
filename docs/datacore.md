@@ -501,3 +501,20 @@ Two more things the blob holds, both read since 0.11.2 by
   crops to the opaque bounds and writes a PNG; the server caches the PNG under
   `vehicle-icons\` beside the other caches. 931 of the 1,094 entities name an
   icon; the Clipper, Paladin and the ATLS do not.
+
+### Paints, and the one painted picture of a ship the files hold (2026-09-11)
+
+There is no stock-finish render of any ship in the archive - the game draws
+ships live - but every paint item (`EntityClassDefinition.Paint_<model>_<scheme>`,
+`Type = Paints`) points at a manufacturer record whose `Logo` is a 256-square
+three-quarter render of that hull in that paint, under
+`Data\UI\SharedAssets\PaintColorLogos\`: 926 of them with a picture in the
+archive, out of 1,087 paint items (the rest are templates whose logo is the
+maker's mark). The hull they fit is the item's `RequiredTags`
+(`Paint_Corsair`); the ship's side of that tag sits in its vehicle XML, so
+`GameData/GamePaints.cs` joins by name instead - `Paint_<model>_` against the
+class without its maker, longest prefix first, then each token - and every ship
+in this install's fleet found its paints that way (Corsair 10, Cutter 26,
+Pisces 12, UTV 5). Which paint a pilot flies is not in the logs, so the Fleet
+page offers the list and the pilot picks; the pick lives in the browser like
+the roster tick.
