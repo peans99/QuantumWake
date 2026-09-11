@@ -4103,6 +4103,7 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .point-head .select { min-width: 0; }
 .point-belief .warn { color: var(--amber); }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
+#points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }
 .screen-nearest { margin-top: 8px; }
 .near-point { font-size: 12px; line-height: 1.6; }

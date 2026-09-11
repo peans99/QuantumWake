@@ -175,6 +175,29 @@ public class LedgerTests
     }
 
     /// <summary>
+    /// The same reading reaches the Now card - the overlay is where a pilot at
+    /// a kiosk is - as one line: an estimate when anything moved since, the
+    /// figure itself when nothing did, and no line at all before a reading.
+    /// </summary>
+    [Fact]
+    public void Cash_on_hand_reaches_the_Now_card_in_one_line()
+    {
+        var page = WithWallet(Standing);
+
+        Assert.False(page.Truth("__dom.node('#now-cash').hidden"));
+        Assert.Equal("about 2,062,773 aUEC", page.NodeText("#now-cash-value"));
+        Assert.Contains("Estimate: 2,092,773 aUEC on a screenshot", page.NodeText("#now-cash-note"));
+        Assert.Contains("2 movements logged since", page.NodeText("#now-cash-note"));
+
+        page.Do("renderLedgerWallet({shot:'a.jpg',shotAt:'2026-09-11T00:53:54Z',balance:2092773,movedSince:0,movementsSince:0,estimate:2092773});");
+        Assert.Equal("2,092,773 aUEC", page.NodeText("#now-cash-value"));
+        Assert.Contains("nothing has moved", page.NodeText("#now-cash-note"));
+
+        page.Do("renderLedgerWallet(null);");
+        Assert.True(page.Truth("__dom.node('#now-cash').hidden"));
+    }
+
+    /// <summary>
     /// The card is fetched after the table, and a card that will not load
     /// costs the ledger nothing.
     /// </summary>

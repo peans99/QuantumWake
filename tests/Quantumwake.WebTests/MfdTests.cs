@@ -728,6 +728,35 @@ public class MfdTests
         Assert.Contains("Reading what the ledger recorded", Page(e, "money"));
     }
 
+    /// <summary>
+    /// Cash on hand leads the Money page: the figure a pilot at a kiosk wants
+    /// and the one Game.log never states. Carried forward it is called an
+    /// estimate; never read it is a sentence, not a zero; not fetched yet it
+    /// is nothing at all rather than "no reading".
+    /// </summary>
+    [Fact]
+    public void MoneyLeadsWithCashOnHandAndCallsTheCarriedFigureAnEstimate()
+    {
+        var e = Engine();
+        const string earnings = "earnings:{basis:'lifetime',lifetime:{earned:1,perHour:5,days:0}}";
+
+        var carried = Page(e, "money", "{}", "null",
+            "{extra:{" + earnings + ",wallet:{read:{balance:2092773,movedSince:-10974,movementsSince:5,estimate:2081799}}}}");
+        Assert.StartsWith("[[\"CASH ON HAND\",\"about 2,081,799 aUEC · estimate\"]", carried);
+        Assert.Contains("2,092,773 aUEC on screen, 5 movements logged since", carried);
+
+        var fresh = Page(e, "money", "{}", "null",
+            "{extra:{" + earnings + ",wallet:{read:{balance:2092773,movedSince:0,movementsSince:0,estimate:2092773}}}}");
+        Assert.Contains("2,092,773 aUEC · from the last screenshot", fresh);
+        Assert.DoesNotContain("estimate", fresh);
+
+        var never = Page(e, "money", "{}", "null", "{extra:{" + earnings + ",wallet:{}}}");
+        Assert.Contains("No screenshot has shown your balance yet", never);
+        Assert.DoesNotContain("0 aUEC", never);
+
+        Assert.DoesNotContain("CASH ON HAND", Page(e, "money", "{}", "null", "{extra:{" + earnings + "}}"));
+    }
+
     [Fact]
     public void ListShowsProgressAndSaysHeldIsNotACount()
     {

@@ -623,7 +623,7 @@ async function refreshExtras() {
     } catch { /* the page it feeds says what it is missing */ }
   };
   await Promise.all([grab('/api/earnings?days=30', 'earnings'), grab('/api/jobs', 'jobs'),
-    grab('/api/respawn', 'respawn'), grab('/api/ledger?days=30', 'ledger'),
+    grab('/api/respawn', 'respawn'), grab('/api/ledger?days=30', 'ledger'), grab('/api/ledger/wallet', 'wallet'),
     grab('/api/screen/readings?take=8', 'screenLog')]);
   lastRows = ''; render();
 }

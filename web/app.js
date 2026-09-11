@@ -965,6 +965,33 @@ async function loadEarnings() {
   renderGoal(state);
 }
 
+/**
+ * Cash on hand on the Now card, which the overlay shows while flying. The
+ * same reading the Ledger card draws, in one line: the figure carried forward
+ * by the ledger, called an estimate when anything has moved since the shot.
+ * Nothing read yet hides the line - the Ledger explains how to get one; a
+ * card in the overlay has no room to.
+ */
+function renderNowCash(read) {
+  const line = $('#now-cash');
+  const note = $('#now-cash-note');
+  if (!line || !note) return;
+
+  if (!read) {
+    line.hidden = true;
+    note.hidden = true;
+    return;
+  }
+
+  const moved = Number(read.movementsSince) || 0;
+  line.hidden = false;
+  note.hidden = false;
+  $('#now-cash-value').textContent = moved ? `about ${money(read.estimate)}` : money(read.balance);
+  note.textContent = moved
+    ? `Estimate: ${money(read.balance)} on a screenshot ${dateOf(read.shotAt)}, carried by ${moved} movement${moved === 1 ? '' : 's'} logged since.`
+    : `From a screenshot ${dateOf(read.shotAt)}; nothing has moved in the logs since.`;
+}
+
 /** Turns an ISO-ish duration from the server into hours a person reads. */
 function hoursOf(span) {
   const hours = typeof span === 'string' ? spanHours(span) : Number(span) || 0;
@@ -2670,6 +2697,8 @@ async function loadLedgerWallet() {
 }
 
 function renderLedgerWallet(read) {
+  renderNowCash(read);
+
   const card = $('#ledger-wallet');
   if (!card) return;
 

@@ -318,7 +318,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.40
+### 0.10.41
+
+- **Cash on hand where you fly.** The balance the Ledger shows - from the last
+  screenshot that printed it, carried forward by the movements logged since -
+  now leads the Cougar MFD's Money page and sits on the Now page's trading
+  card, which the overlay shows in game. Carried forward it is called an
+  estimate and says what it rests on; before any screenshot has shown a
+  balance there is no line, not a zero.
 
 - **How far are the things you marked?** Copy a `/showlocation` in the game and
   the reading on the Log now lists the nearest of your points with the

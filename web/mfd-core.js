@@ -769,7 +769,23 @@ window.QwMfd = (() => {
         const money = view.extra?.earnings;
         if (!money) return [['EARNINGS', 'Reading what the ledger recorded…']];
         const rate = money.basis === 'recent' ? money.window : money.lifetime;
+
+        /* Cash on hand leads, because it is the figure a pilot at a kiosk
+           wants and the one Game.log never states. It comes from the last
+           screenshot that showed the balance, carried forward by the ledger;
+           the carried figure is called an estimate, and no reading yet is a
+           sentence rather than a zero. `wallet` absent is the fetch not back
+           yet, and says nothing rather than "no reading". */
+        const wallet = view.extra?.wallet;
+        const cash = wallet === undefined ? []
+          : !wallet?.read ? [['CASH ON HAND', 'No screenshot has shown your balance yet - a kiosk prints it in full.']]
+          : wallet.read.movementsSince > 0
+            ? [['CASH ON HAND', `about ${aUEC(wallet.read.estimate)} · estimate`],
+               ['LAST READ', `${aUEC(wallet.read.balance)} on screen, ${wallet.read.movementsSince} movement${wallet.read.movementsSince === 1 ? '' : 's'} logged since`]]
+            : [['CASH ON HAND', `${aUEC(wallet.read.balance)} · from the last screenshot`]];
+
         return [
+          ...cash,
           ['TRADING RATE', rate?.perHour > 0 ? `${aUEC(rate.perHour)} per hour`
             : 'Too little recorded flying time to state a rate'],
           ['FROM', money.basis === 'recent' ? `the last ${money.window.days} days` : 'every session on record'],
