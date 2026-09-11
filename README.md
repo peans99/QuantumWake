@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.47
+### 0.11.0
 
 - **Help answers the questions people actually arrive with.** Twenty-six
   answers in five groups instead of eleven in three: the orange wipe banner,
