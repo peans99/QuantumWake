@@ -360,6 +360,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ### 0.11.0
 
+### 0.10.47
+
 - **Help answers the questions people actually arrive with.** Twenty-six
   answers in five groups instead of eleven in three: the orange wipe banner,
   showing the dashboard on a tablet, which keys do anything, where the data
