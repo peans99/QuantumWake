@@ -27,6 +27,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [screen-insight.md](screen-insight.md) | Plan, unbuilt: reading a screenshot to name an item, with what OCR can and cannot be asked to do. |
 | [player-market.md](player-market.md) | Plan, unbuilt: what a pilot will pay rather than what a shop pays, from UEX's marketplace feed. |
 | [precise-poi.md](precise-poi.md) | Plan, unbuilt: marking a place by coordinates the game hands over, and the line that keeps it out of macro territory. |
+| [wikelo.md](wikelo.md) | Wikelo's emporium read from the game files: every trade, its requirements, rewards and rank gates, what the guides got wrong, and what the logs add. |
 | [releasing.md](releasing.md) | Bump, tag, and what the pipeline does with it. |
 | [bug-reports.md](bug-reports.md) | What the report Settings saves holds, what it deliberately leaves out, and the one thing it cannot promise. |
 
