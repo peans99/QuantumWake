@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1787 tests](https://img.shields.io/badge/tests-1787%20passing-4fd48a)
+![1789 tests](https://img.shields.io/badge/tests-1789%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,787 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,789 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -358,7 +358,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.46
+### 0.10.47
+
+- **Help answers the questions people actually arrive with.** Twenty-six
+  answers in five groups instead of eleven in three: the orange wipe banner,
+  showing the dashboard on a tablet, which keys do anything, where the data
+  lives; the trading rate, the ~ on the Ledger, how the wake-up card infers
+  your regen; how to mark a point, why it says "believed to be", how far away
+  it is, which screens the reader can and cannot read, what to do with a wrong
+  reading; what a shared file carries, what happens to one you are sent, and
+  what a backup holds and leaves out. Each answer links to the page it is
+  about. A filter box narrows the page to the questions that mention a word
+  - in the answer as well as the question - and **Expand all** opens them.
 
 - **Share your points of interest the way you share prices.** Settings → Share
   what you have has a fourth box: your points, with the name, category and note

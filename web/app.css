@@ -3271,6 +3271,14 @@ body.entity-open .view { padding-right: 296px; }
   max-width: 74ch;
 }
 .faq a { color: var(--cyan); }
+.faq p b { color: var(--text); }
+/* The filter row: a question found by a word rather than by scrolling. */
+.help-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 20px 0 4px; }
+.help-tools .search { flex: 1 1 260px; min-width: 0; }
+.help-tools .muted { font-size: 11.5px; }
+.help-section[hidden], .faq-item[hidden], .help-none[hidden] { display: none; }
+.help-none { margin: 18px 0 0; font-size: 12.5px; }
+.help-none a { color: var(--cyan); }
 @media (max-width: 700px) {
   .help-page { padding: 22px 18px 28px; }
   .help-head { flex-direction: column; }

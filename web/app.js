@@ -284,6 +284,54 @@ $('#tabs').addEventListener('click', (event) => {
 $('#about-open-help')?.addEventListener('click', () => showView('help'));
 $('#help-back')?.addEventListener('click', () => showView('about'));
 
+/**
+ * The Help filter. Twenty-odd answers is past what anyone scrolls, so a word
+ * narrows the page to the questions that mention it - question and answer
+ * both, since "wipe" is in an answer whose question says "totals". A section
+ * with nothing left folds away; nothing left at all says so and points at
+ * the Discord, which is where an unanswered question goes.
+ */
+function filterHelp(query) {
+  const words = (query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const root = $('#view-help');
+  const items = root ? Array.from(root.querySelectorAll('.faq-item')) : [];
+  let shown = 0;
+
+  for (const item of items) {
+    const text = item.textContent.toLowerCase();
+    const hit = words.every((word) => text.includes(word));
+    item.hidden = !hit;
+    if (hit) shown++;
+    // A match opens the answer: the word searched for is usually in it.
+    if (hit && words.length) item.open = true;
+  }
+
+  for (const section of Array.from(root?.querySelectorAll('.help-section') || []))
+    section.hidden = !Array.from(section.querySelectorAll('.faq-item')).some((item) => !item.hidden);
+
+  const none = $('#help-none');
+  if (none) none.hidden = shown > 0;
+
+  const count = $('#help-count');
+  if (count) count.textContent = words.length ? `${shown} of ${items.length}` : '';
+
+  return shown;
+}
+
+/** Every visible answer open, or every one closed - whichever the button says. */
+function expandHelp(open) {
+  const root = $('#view-help');
+  for (const item of Array.from(root?.querySelectorAll('.faq-item') || [])) if (!item.hidden) item.open = open;
+  const button = $('#help-expand');
+  if (button) button.textContent = open ? 'Collapse all' : 'Expand all';
+}
+
+$('#help-search')?.addEventListener('input', (event) => filterHelp(event.target.value));
+$('#help-expand')?.addEventListener('click', () => {
+  const button = $('#help-expand');
+  expandHelp(button.textContent !== 'Collapse all');
+});
+
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
    unlocking click-through. Also bound to the arrow keys for browser use. */
 window.scCycleView = (delta) => {

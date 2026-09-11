@@ -2322,66 +2322,152 @@
       </div>
 
       <div class="help-start">
-        <div><b>Just installed?</b><span>Start the app, wait for the first log read, then open the dashboard from the tray.</span></div>
-        <div><b>Something looks wrong?</b><span>Check the source beside the number first; a missing log signal is not the same as zero.</span></div>
+        <div><b>Just installed?</b><span>Start the app, wait for the first log read, then open the dashboard from the tray. It reads every backup the game kept — a few seconds for a hundred and fifty files.</span></div>
+        <div><b>Something looks wrong?</b><span>Check the source beside the number first; a missing log signal is not the same as zero, and the app says which it is.</span></div>
         <div><b>Need to report it?</b><span>Settings → Report a problem makes a small diagnostic file you can read before sharing.</span></div>
       </div>
 
-      <h3>Using Quantum Wake</h3>
+      <div class="help-tools">
+        <input type="search" id="help-search" class="search" placeholder="Find a question — try “wipe”, “points”, “backup”…" autocomplete="off" spellcheck="false" aria-label="Find a question">
+        <button type="button" class="ghost" id="help-expand">Expand all</button>
+        <span class="muted" id="help-count"></span>
+      </div>
+
+      <section class="help-section">
+      <h3>Getting started</h3>
       <div class="faq">
-        <details>
+        <details class="faq-item">
+          <summary>What is the orange banner about a patch and a wipe?</summary>
+          <p>Every account starts over when a patch wipes, so the app counts your history from a line. When a new game version appears in the logs it asks whether that patch wiped: <b>It wiped — start there</b> moves the line to that patch; <b>It did not wipe</b> leaves it where it is. Nothing is deleted either way — Settings → <b>Last wipe</b> moves the line again, and sessions before it stay in the list, just uncounted.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Can I see it on a tablet or a second screen?</summary>
+          <p>Yes. Start the app with <code>start.ps1 -Lan</code> and it listens on the network rather than only on this machine. From another device the dashboard is read-only: everything that changes something — settings, the wipe line, installing labels — is refused off-machine, because there is no login and there should not need to be one.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Which keys do anything?</summary>
+          <p>In the dashboard the <b>left and right arrows</b> cycle through the views. For the overlay, <code>Ctrl+Alt+O</code> shows or hides it and <code>Ctrl+Alt+F</code> switches between widget size and full screen; both work while the game has focus. The Cougar MFD frames answer their own physical buttons once MFD mode is set up.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Where does it keep my data?</summary>
+          <p>Under <code>%LOCALAPPDATA%\Quantumwake</code>: the session database, the things you typed, screen readings, points and any files you were sent. Nothing is written into the game folder unless you install item labels or StarStrings, and both keep a backup of the file they replace in the app's own folder.</p>
+        </details>
+      </div>
+      </section>
+
+      <section class="help-section">
+      <h3>Reading the numbers</h3>
+      <div class="faq">
+        <details class="faq-item">
           <summary>Why is my pledged ship, armour or gun missing?</summary>
           <p>Nothing that arrives in your account is written to <code>Game.log</code>. A pledge, pack, rental or website purchase appears here only after you fly the ship, wear the armour or move the item: that is the first moment the game writes a line to read.</p>
         </details>
-        <details>
+        <details class="faq-item">
           <summary>Why are my totals lower than I expected?</summary>
           <p>Sessions from before the last wipe are kept but not counted, because a wipe ends one account and starts another. Settings → <b>Last wipe</b> says how many sessions that is and lets you move the date or choose what the wipe took. Nothing is deleted; move the date back and it returns.</p>
         </details>
-        <details>
+        <details class="faq-item">
+          <summary>Why is the trading rate not my income?</summary>
+          <p>Commodity sales are the only income the logs record. Contract payouts, bounties and mission rewards are never written, so the rate on the Now page is what trading makes an hour and is labelled a floor: for a hauler it is close to the whole story, for a bounty hunter it is a fraction of it. Time spent in menus is left out of the hours.</p>
+        </details>
+        <details class="faq-item">
+          <summary>What does the ~ on the Ledger mean?</summary>
+          <p>Item purchases are confirmed by the game server and appear as they were. A cargo trade is logged as the amount you <em>asked</em> the kiosk for, and the kiosk's answer is never written — so those rows carry a <b>~</b>. The place on a row is inferred from your last arrival, not logged with the sale, and the <a href="#ledger">Ledger</a> says so.</p>
+        </details>
+        <details class="faq-item">
           <summary>Where did the kill counter go?</summary>
           <p>Star Citizen 4.9 and 4.10 do not write kill or vehicle-destruction lines to <code>Game.log</code>. A counter fixed at zero would look broken, so it is absent. The parser for the older format remains ready if the game starts writing those lines again.</p>
         </details>
-        <details>
+        <details class="faq-item">
           <summary>Why does the map not show where I am exactly?</summary>
-          <p>No player position is logged. Location comes from discrete signals such as inventory requests, quantum routes and spawns, so the map is a topology rather than a radar. Every estimate carries its confidence instead of pretending to precision it does not have.</p>
+          <p>No player position is logged. Location comes from discrete signals such as inventory requests, quantum routes and spawns, so the map is a topology rather than a radar. Every estimate carries its confidence instead of pretending to precision it does not have. For an exact position, see the points questions below — the game will hand you one on request.</p>
+        </details>
+        <details class="faq-item">
+          <summary>How does it know where I will wake up?</summary>
+          <p>It does not, exactly. The game never logs where your regeneration point is set, so the <b>Wake up at</b> card infers it from the last medical bed or insurance office you used and says which. A bed you were carried to once is not necessarily your regen, and the card leads with that.</p>
         </details>
       </div>
+      </section>
 
-      <h3>Overlay, MFDs and screen readings</h3>
+      <section class="help-section">
+      <h3>Points, screenshots and the cockpit</h3>
       <div class="faq">
-        <details>
+        <details class="faq-item">
+          <summary>How do I mark a point of interest?</summary>
+          <p>Type <code>/showlocation</code> in the game's chat: the game copies your exact coordinates to the clipboard, which is the only place it ever gives them away. Then, on the <a href="#log">Log</a> tab, press <b>Read copied location</b> — or tick <b>Watch clipboard</b> and the app notices on its own — and pin the reading. It lands on <a href="#points">Flight → Points</a> with room for a name, a category and a note on why you were there. The app never types the command for you; that is your keypress.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Why does a point say “believed to be”?</summary>
+          <p><code>/showlocation</code> gives three numbers and no system, and the same numbers mean different places in Stanton and Pyro. So the system on a point is what your logs said about where you were when you copied it — a belief, and the card says what it rests on: an arrival four minutes earlier, or a quantum jump forty minutes earlier. If the logs were wrong or had nothing, set the system on the card; it is yours from then on.</p>
+        </details>
+        <details class="faq-item">
+          <summary>How far away is a point?</summary>
+          <p>Copy a fresh <code>/showlocation</code> and the reading lists your nearest points with distances; the Points page measures every card from wherever you last copied. A point in another system is named as not measurable rather than given a number, because the two sets of coordinates are in different frames. The app does not decide how near counts as “there” — a cave mouth and a belt disagree, and you can judge a distance better than it can guess one.</p>
+        </details>
+        <details class="faq-item">
           <summary>The overlay will not let me click the game.</summary>
           <p>Press its <b>📌 pin</b> button and clicks pass straight through. To get it back, right-click the tray icon and untick <b>Pin overlay</b>, or press <code>Ctrl+Alt+O</code>. It arrives unpinned so you can place it first.</p>
         </details>
-        <details>
+        <details class="faq-item">
           <summary>How do the Cougar MFD displays work?</summary>
           <p>Choose <b>MFD setup…</b> from the tray, place the two display openings on the monitor or monitors behind the frames, then enable and save the layout. The panels use the same local data as the dashboard but keep the answer short: navigation, the next task, cargo, contracts, money and the live feed. They are optional and do not replace the regular overlay.</p>
         </details>
-        <details>
+        <details class="faq-item">
           <summary>Does screenshot reading capture my screen?</summary>
-          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
+          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on, and only files saved after that — nothing already there is read. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
         </details>
-        <details>
+        <details class="faq-item">
+          <summary>Which screens can it read?</summary>
+          <p>An item tooltip, the character loadout, the mobiGlas map footer, the Contracts and Reputation apps, the Fleet Manager and a commodity kiosk — each checked against what the logs believed and shown with the verdict. The inventory screen cannot be read: its items are icons with no text, so a stash is confirmed one tooltip at a time. A screen it does not know goes to the review queue on the Log tab with its text, which is how each reader so far was written.</p>
+        </details>
+        <details class="faq-item">
+          <summary>A reading is wrong. What do I do with it?</summary>
+          <p>On the <a href="#log">Log</a> tab each reading has <b>Invalidate</b>, which keeps it in the list — struck through, so the misreading can still be seen — but stops the wallet, the fleet, the fittings and the Now card believing it; and <b>Read again</b>, which puts the same screenshot through the reader as it is now and replaces the old reading. A screen the app learned to read after you photographed it is read at last that way.</p>
+        </details>
+        <details class="faq-item">
           <summary>Why does cash on hand say “about”?</summary>
-          <p>The balance comes from the last screenshot that printed it in a face the reader can read - so far that has been a commodity kiosk; the mobiGlas bar has never read. Quantum Wake carries that figure forward by the transactions the logs recorded afterwards. It says “about” because the logs miss some money movement, such as fees, claims or a transaction the parser did not recognise. The next readable screenshot is the check.</p>
+          <p>The logs never state a balance. The figure comes from the last screenshot that printed it in a face the reader can read — so far that has been a commodity kiosk; the mobiGlas bar has never read — and the app carries it forward by the transactions logged since. It says “about” because the logs miss some money movement, such as fees, claims or a transaction the parser did not recognise. The next readable screenshot is the check, and says how far off the estimate was.</p>
         </details>
       </div>
+      </section>
 
+      <section class="help-section">
+      <h3>Sharing and backups</h3>
+      <div class="faq">
+        <details class="faq-item">
+          <summary>What can I send to a friend?</summary>
+          <p>Settings → <b>Share what you have</b> writes one file with what you tick: your own trades over a window you choose, the blueprints you hold, your jobs, checklists and flight plans, and your points of interest with their notes. Your handle goes on it only if you leave that box ticked. UEX prices are never in it — they are a third party's, not yours to pass on.</p>
+        </details>
+        <details class="faq-item">
+          <summary>What happens to a file someone sends me?</summary>
+          <p>Open it from <a href="#imports">Shared files</a>. It is kept apart from your own work — nothing is merged — so removing it takes it away completely. Its rows are hidden until you choose to show them on that page; then a friend's trades appear on the Cargo page, their blueprints on Jobs → Blueprints, and their points under <b>Shared by others</b> on Points, where <b>Keep as mine</b> copies one across as your own. Anything in the file that does not read — a date in the future, a coordinate that is not a number — is dropped and counted, and the file says how many.</p>
+        </details>
+        <details class="faq-item">
+          <summary>What is in a backup, and what is not?</summary>
+          <p>Settings → <b>Back up what you typed</b>: jobs, checklists, flight plans, the mining log, map notes, kits, points of interest with their notes, your goal, your wipe line and your label settings — everything re-reading the logs cannot bring back. Sessions, trades and contracts are deliberately not in it: they come back by reading your logs again, and a second copy could disagree with the game. Restoring shows what it would change first, keeps newer work on this machine by default, and never brings back something you deleted on purpose without asking.</p>
+        </details>
+      </div>
+      </section>
+
+      <section class="help-section">
       <h3>Privacy and support</h3>
       <div class="faq">
-        <details>
+        <details class="faq-item">
           <summary>Does it touch the game or my account?</summary>
           <p>No game memory is read and nothing is injected. Quantum Wake reads <code>Game.log</code>, its backups and, when you ask it to, saved screenshots or copied location text. The game directory is untouched unless you explicitly install item labels or StarStrings.</p>
         </details>
-        <details>
+        <details class="faq-item">
           <summary>Does it phone home or check for updates?</summary>
           <p>It sends no identifier, usage or statistics. Version checks and market refreshes are off until you enable them in Settings. Community datasets are also opt-in. Update checks use GitHub's public release feed; nothing is downloaded or installed without your action.</p>
         </details>
-        <details>
+        <details class="faq-item">
           <summary>Something is wrong or missing. Where do I say so?</summary>
           <p>Please do. Ask on the <a href="https://discord.gg/AV3cDzRs39" target="_blank" rel="noopener noreferrer">Discord</a>, or raise an issue at <a href="https://github.com/peans99/QuantumWake/issues" target="_blank" rel="noreferrer">github.com/peans99/QuantumWake/issues</a>. A report with the source shown beside the number, or the log line itself, is especially useful.</p>
         </details>
       </div>
+      </section>
+
+      <p class="muted help-none" id="help-none" hidden>No question matches that. The <a href="https://discord.gg/AV3cDzRs39" target="_blank" rel="noopener noreferrer">Discord</a> is the place to ask one.</p>
     </div>
   </section>
 
