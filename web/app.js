@@ -5461,7 +5461,10 @@ async function loadHangar() {
 
 /** Ships in the chosen order; the unsized ones are set aside for the note below the drawing. */
 function hangarOrdered() {
-  const ships = (hangarShips?.ships || []).slice();
+  // The Fleet roster tick rules here too: a rental or a ship since sold is
+  // unticked there, and a hangar that still showed it would be a second
+  // opinion about what the pilot owns.
+  const ships = (hangarShips?.ships || []).filter((s) => !excludedShips.has(s.name));
   const sort = $('#hangar-sort')?.value || 'length';
 
   ships.sort((a, b) => {
@@ -5496,7 +5499,11 @@ function renderHangar() {
   const sized = ships.filter((s) => s.length > 0 && s.beam > 0);
   const missing = ships.filter((s) => !(s.length > 0 && s.beam > 0));
 
-  if (count) count.textContent = `${ships.length} ship${ships.length === 1 ? '' : 's'} flown`;
+  const unticked = (hangarShips?.ships || []).length - ships.length;
+  if (count) {
+    count.textContent = `${ships.length} ship${ships.length === 1 ? '' : 's'}`
+      + (unticked ? ` · ${unticked} unticked on Fleet` : '');
+  }
 
   const mode = $('#hangar-mode')?.value || 'gallery';
   const zoomSelect = $('#hangar-zoom');
@@ -5523,6 +5530,83 @@ function renderHangar() {
   const zoom = Number($('#hangar-zoom')?.value) || 1;
   const longest = Math.max(...sized.map((s) => s.length));
   const scale = ((width - 40) / 2 / longest) * zoom;   // px per metre
+  const groups = [
+    ['Ships', sized.filter((s) => s.kind === 'Spaceship' || !s.kind)],
+    ['Ground vehicles', sized.filter((s) => s.kind && s.kind !== 'Spaceship')],
+  ];
+
+  // Ships on one shelf, ground vehicles on another, at the same scale - the
+  // point is how a Pulse stands beside a Starlancer, which a scale of its own
+  // for the vehicles would hide.
+  for (const [title, group] of groups) {
+    if (!group.length) continue;
+    canvas.append(el('h3', 'hangar-group', `${title} · ${group.length}`));
+    canvas.append(drawToScale(group, width, scale));
+  }
+
+  // The bar says what a length on the page is worth in metres: 10, 50 or
+  // 100 m, whichever comes out at a readable width.
+  if (scaleBox) {
+    const metres = [10, 25, 50, 100, 200].find((m) => m * scale >= 60) || 200;
+    const bar = svgEl('svg', { class: 'hangar-bar', width: metres * scale + 4, height: 14, viewBox: `0 0 ${metres * scale + 4} 14` });
+    bar.append(svgEl('line', { x1: 2, y1: 7, x2: metres * scale + 2, y2: 7 }));
+    bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
+    bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
+    scaleBox.append(bar);
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons, tinted by maker (a hint at whose, not the finish)`));
+  }
+
+  if (missing.length && unsized) {
+    unsized.hidden = false;
+    unsized.textContent = `Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`;
+  }
+}
+
+/**
+ * The gallery: one card per ship, with the game's own render of it in the
+ * paint the pilot chose on Fleet, or its silhouette tinted by maker. Not to
+ * scale, and the page says which mode it is in - a three-quarter render drawn
+ * "to scale" would be a lie, which is what the other mode is for.
+ */
+function renderHangarGallery(canvas, ships) {
+  if (!ships.length) {
+    canvas.append(el('p', 'muted', 'No ship has been flown in the logs yet, so there is nothing to show.'));
+    return;
+  }
+
+  const grid = el('div', 'hangar-gallery');
+
+  for (const ship of ships) {
+    const maker = makerOf(ship.name);
+    const card = el('article', 'hangar-card');
+    card.dataset.className = ship.className;
+
+    if (ship.className) card.append(shipPicture(ship, maker));
+
+    const body = el('div', 'hangar-card-body');
+    body.append(el('div', 'hangar-card-name', ship.name));
+
+    const facts = [];
+    if (ship.length > 0) facts.push(`${ship.length} × ${ship.beam} × ${ship.height} m`);
+    facts.push(`${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`);
+    if (ship.hours > 0) facts.push(`~${ship.hours} h aboard`);
+    body.append(el('div', 'muted', facts.join(' · ')));
+
+    if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
+    card.append(body);
+    grid.append(card);
+  }
+
+  canvas.append(grid);
+}
+
+/**
+ * One group of ships drawn to one scale: a flow layout, left to right,
+ * wrapping when the row is full. Each ship's box is its bounding box in
+ * metres times the scale; the silhouette sits inside it, so the drawn
+ * footprint is the real one.
+ */
+function drawToScale(ships, width, scale) {
   const gap = 28;
   const label = 40;
 
@@ -5534,7 +5618,7 @@ function renderHangar() {
   let rowHeight = 0;
   const placed = [];
 
-  for (const ship of sized) {
+  for (const ship of ships) {
     const w = Math.max(6, ship.length * scale);
     const h = Math.max(4, ship.beam * scale);
     const cell = Math.max(w, 90);   // room for the name under a small ship
@@ -5596,62 +5680,8 @@ function renderHangar() {
     svg.append(group);
   }
 
-  canvas.append(svg);
 
-  // The bar says what a length on the page is worth in metres: 10, 50 or
-  // 100 m, whichever comes out at a readable width.
-  if (scaleBox) {
-    const metres = [10, 25, 50, 100, 200].find((m) => m * scale >= 60) || 200;
-    const bar = svgEl('svg', { class: 'hangar-bar', width: metres * scale + 4, height: 14, viewBox: `0 0 ${metres * scale + 4} 14` });
-    bar.append(svgEl('line', { x1: 2, y1: 7, x2: metres * scale + 2, y2: 7 }));
-    bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
-    bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
-    scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons, tinted by maker (a hint at whose, not the finish)`));
-  }
-
-  if (missing.length && unsized) {
-    unsized.hidden = false;
-    unsized.textContent = `Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`;
-  }
-}
-
-/**
- * The gallery: one card per ship, with the game's own render of it in the
- * paint the pilot chose on Fleet, or its silhouette tinted by maker. Not to
- * scale, and the page says which mode it is in - a three-quarter render drawn
- * "to scale" would be a lie, which is what the other mode is for.
- */
-function renderHangarGallery(canvas, ships) {
-  if (!ships.length) {
-    canvas.append(el('p', 'muted', 'No ship has been flown in the logs yet, so there is nothing to show.'));
-    return;
-  }
-
-  const grid = el('div', 'hangar-gallery');
-
-  for (const ship of ships) {
-    const maker = makerOf(ship.name);
-    const card = el('article', 'hangar-card');
-    card.dataset.className = ship.className;
-
-    if (ship.className) card.append(shipPicture(ship, maker));
-
-    const body = el('div', 'hangar-card-body');
-    body.append(el('div', 'hangar-card-name', ship.name));
-
-    const facts = [];
-    if (ship.length > 0) facts.push(`${ship.length} × ${ship.beam} × ${ship.height} m`);
-    facts.push(`${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`);
-    if (ship.hours > 0) facts.push(`~${ship.hours} h aboard`);
-    body.append(el('div', 'muted', facts.join(' · ')));
-
-    if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
-    card.append(body);
-    grid.append(card);
-  }
-
-  canvas.append(grid);
+  return svg;
 }
 
 /** The tallest ship in the row a ship was placed on, so the row shares one baseline. */
@@ -10528,9 +10558,9 @@ function shipPicture(ship, maker) {
       img.alt = '';
       img.loading = 'lazy';
       img.title = `${ship.name} in the paint you chose — the game's own picture`;
-      // A paint the game no longer pictures - a patch retired it - falls back
-      // to the silhouette rather than taking the picture away.
-      img.addEventListener('error', () => { rememberShipPaint(ship.className, null); chosen = null; draw(); });
+      // Shown as the silhouette for now, the pick kept: a render that fails once -
+      // the server still converting, a request dropped - is not a retired paint.
+      img.addEventListener('error', () => { chosen = null; draw(); });
       box.append(img);
     } else {
       const outline = el('div', 'ship-outline');
@@ -10556,6 +10586,11 @@ function shipPicture(ship, maker) {
   };
 
   draw();
+
+  // The chooser redraws this box, wherever it sits - a Fleet card or a
+  // Hangar card - rather than every Fleet card, which was why a pick made on
+  // the Hangar showed only after a reload.
+  box.redraw = () => { chosen = shipPaints[ship.className]; draw(); };
   return box;
 }
 
@@ -10577,7 +10612,7 @@ async function openPaintChooser(ship, box, button) {
 
   select.addEventListener('change', () => {
     rememberShipPaint(ship.className, select.value || null);
-    renderFleetShips();
+    box.redraw?.();
   });
 
   // The select takes the button's place in the box.

@@ -16,7 +16,8 @@ public sealed record GameVehicle(
     double Beam,
     double Length,
     double Height,
-    string? Icon);
+    string? Icon,
+    string Kind = "");
 
 /// <summary>
 /// The vehicles the install describes: name, size and silhouette.
@@ -92,7 +93,10 @@ public static class GameVehicles
                 }
             }
 
-            vehicles[bare] = new GameVehicle(bare, name, beam, length, height, icon);
+            // The game's own word for what moves it - Spaceship, Ground, Gravlev -
+            // so a hangar can shelve ships and vehicles apart without guessing.
+            vehicles[bare] = new GameVehicle(bare, name, beam, length, height, icon,
+                core.EnumAt(at, vehicleParams, "movementClass") ?? "");
         }
 
         return vehicles;

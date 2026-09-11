@@ -847,6 +847,7 @@ public static class ServerHost
                     length = vehicle?.Length,
                     height = vehicle?.Height,
                     icon = vehicle?.Icon is not null,
+                    kind = vehicle?.Kind,
                 };
             });
 

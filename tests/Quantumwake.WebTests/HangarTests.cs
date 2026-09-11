@@ -16,11 +16,13 @@ public class HangarTests
     private const string Fleet = """
         {"available":true,"ships":[
           {"name":"Anvil C8X Pisces Expedition","className":"ANVL_C8X_Pisces_Expedition","sorties":12,"lastFlown":"2026-09-10T20:00:00Z","hours":3.5,
-           "beam":12,"length":16,"height":8,"icon":true},
+           "beam":12,"length":16,"height":8,"icon":true,"kind":"Spaceship"},
           {"name":"Drake Corsair","className":"DRAK_Corsair","sorties":40,"lastFlown":"2026-09-01T20:00:00Z","hours":30,
-           "beam":30,"length":53,"height":25,"icon":true},
+           "beam":30,"length":53,"height":25,"icon":true,"kind":"Spaceship"},
           {"name":"Drake Clipper","className":"DRAK_Clipper","sorties":2,"lastFlown":"2026-09-11T01:00:00Z","hours":1,
-           "beam":18,"length":26.5,"height":21,"icon":false},
+           "beam":18,"length":26.5,"height":21,"icon":false,"kind":"Spaceship"},
+          {"name":"Greycat PTV","className":"GRIN_PTV","sorties":5,"lastFlown":"2026-09-02T20:00:00Z","hours":0.5,
+           "beam":2.6,"length":4,"height":2.5,"icon":true,"kind":"Ground"},
           {"name":"Mystery Hull","className":"XXXX_Unknown","sorties":1,"lastFlown":"2026-08-01T20:00:00Z","hours":0.2,
            "beam":null,"length":null,"height":null,"icon":false}]}
         """;
@@ -41,7 +43,7 @@ public class HangarTests
     {
         var page = Loaded();
 
-        Assert.Equal(3, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-ship').length")));
+        Assert.Equal(4, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-ship').length")));
 
         // Longest first, and the Corsair's drawn width is 53/16 of the Pisces's.
         var corsair = double.Parse(Attr(page, 0, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
@@ -49,8 +51,8 @@ public class HangarTests
         Assert.Equal(53.0 / 16.0, corsair / pisces, 3);
         Assert.Contains("Drake Corsair", page.NodeText("#hangar-canvas"));
         Assert.Contains("/api/fleet/icons/DRAK_Corsair", Attr(page, 0, "image", "href"));
-        // Four flown, three drawn: the count is of the fleet, the drawing of what can be sized.
-        Assert.Equal("4 ships flown", page.NodeText("#hangar-count"));
+        // Five flown, four drawn: the count is of the fleet, the drawing of what can be sized.
+        Assert.Equal("5 ships", page.NodeText("#hangar-count"));
     }
 
     [Fact]
@@ -123,7 +125,7 @@ public class HangarTests
             await loadHangar();
             """);
 
-        Assert.Equal(4, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card').length")));
+        Assert.Equal(5, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card').length")));
         Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-ship').length")));
 
         // The Corsair wears its chosen paint; the Pisces is the tinted silhouette.
@@ -138,6 +140,42 @@ public class HangarTests
         Assert.Contains("no size", text);
         Assert.Equal("", page.NodeText("#hangar-scale"));
         Assert.True(page.Truth("__dom.node('#hangar-zoom').hidden"));
+    }
+
+    /// <summary>
+    /// Ships on one shelf and ground vehicles on another, at the same scale:
+    /// the PTV's 4 m against the Corsair's 53 m is the point of the drawing.
+    /// </summary>
+    [Fact]
+    public void Ships_and_ground_vehicles_are_shelved_apart_at_one_scale()
+    {
+        var page = Loaded();
+
+        Assert.Equal(2, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-group').length")));
+        Assert.Contains("Ships · 3", page.Text("__dom.node('#hangar-canvas').byClass('hangar-group')[0].textContent"));
+        Assert.Contains("Ground vehicles · 1", page.Text("__dom.node('#hangar-canvas').byClass('hangar-group')[1].textContent"));
+
+        var corsair = double.Parse(Attr(page, 0, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
+        var ptv = double.Parse(Attr(page, 3, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(53.0 / 4.0, corsair / ptv, 3);
+    }
+
+    /// <summary>The Fleet roster tick rules the hangar too, and the count says how many it hid.</summary>
+    [Fact]
+    public void A_ship_unticked_on_Fleet_is_not_in_the_hangar()
+    {
+        var page = new Page();
+        page.Serve("/api/fleet/hangar", Fleet);
+        page.Do("""
+            __dom.node('#hangar-mode').value = 'gallery'; __dom.node('#hangar-sort').value = 'length';
+            excludedShips = new Set(['Drake Clipper']); shipPaints = {};
+            await loadHangar();
+            """);
+
+        Assert.Equal(4, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card').length")));
+        Assert.DoesNotContain("Drake Clipper", page.NodeText("#hangar-canvas"));
+        Assert.Equal("4 ships · 1 unticked on Fleet", page.NodeText("#hangar-count"));
+        page.Do("excludedShips = new Set();");
     }
 
     [Fact]

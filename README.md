@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1811 tests](https://img.shields.io/badge/tests-1811%20passing-4fd48a)
+![1815 tests](https://img.shields.io/badge/tests-1815%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,811 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,815 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -358,7 +358,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.4
+### 0.11.5
+
+- **The Hangar keeps to your roster and shelves ships and vehicles apart.** A
+  ship you unticked on Fleet is not in the Hangar either, and the count says
+  how many it left out. In the to-scale view, ships sit on one shelf and
+  ground vehicles on another - the game's own word for what moves each - at
+  the same scale, so the Ursa beside the Starlancer is the real difference.
+  A paint picked on the Hangar now shows at once rather than after a reload,
+  and a render that fails to load once keeps your pick.
 
 - **The Hangar opens as a gallery.** One card a ship - the game's render in
   the paint you chose on Fleet, or the tinted silhouette - with its size,

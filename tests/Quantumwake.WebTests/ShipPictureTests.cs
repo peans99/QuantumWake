@@ -74,6 +74,46 @@ public class ShipPictureTests
         Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
     }
 
+    /// <summary>
+    /// A pick redraws the card it was made on, wherever that card sits. It
+    /// used to redraw the Fleet cards only, so a pick on the Hangar showed
+    /// after a reload and not before.
+    /// </summary>
+    [Fact]
+    public void Picking_a_paint_redraws_the_card_it_was_picked_on()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """[{"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery"}]""");
+        page.Do($"""
+            const box = shipPicture({Corsair}, {Maker});
+            __dom.node('#t').append(box);
+            await openPaintChooser({Corsair}, box, box.byClass('ship-paint')[0]);
+            const select = box.byClass('ship-paint-select')[0];
+            select.value = 'Paint_Corsair_Commando';
+            select.fire('change');
+            """);
+
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render').length")));
+        Assert.Contains("Paint_Corsair_Commando/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
+        Assert.Equal("Paint_Corsair_Commando", page.Text("shipPaints.DRAK_Corsair"));
+    }
+
+    /// <summary>A render that fails to load shows the silhouette for now and keeps the pick.</summary>
+    [Fact]
+    public void A_render_that_fails_keeps_the_pick_and_shows_the_silhouette()
+    {
+        var page = Fresh();
+        page.Do($$"""
+            shipPaints = {DRAK_Corsair: 'Paint_Corsair_Commando'};
+            const box = shipPicture({{Corsair}}, {{Maker}});
+            __dom.node('#t').append(box);
+            box.byClass('ship-render')[0].fire('error');
+            """);
+
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-outline').length")));
+        Assert.Equal("Paint_Corsair_Commando", page.Text("shipPaints.DRAK_Corsair"));
+    }
+
     [Fact]
     public void A_hull_the_game_pictures_no_paint_for_says_so()
     {
