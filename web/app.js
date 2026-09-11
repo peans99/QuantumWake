@@ -206,6 +206,7 @@ function showView(name) {
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
+  if (name === 'hangar') loadHangar().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
@@ -5433,6 +5434,176 @@ async function unpinLocation(pin, button) {
   }
 }
 
+/* ---- The hangar: the fleet drawn to one scale ----
+   The silhouettes are the game's own vehicle icons and the sizes are the
+   game's bounding boxes, so a Pisces beside an Idris is the real difference,
+   which is the whole point of drawing them together. */
+
+// svgEl and SVG_NS are the map's, declared beside it further down.
+let hangarShips = null;
+
+async function loadHangar() {
+  const canvas = $('#hangar-canvas');
+  if (!canvas) return;
+
+  let got;
+  try {
+    got = await getJson('/api/fleet/hangar');
+  } catch {
+    canvas.textContent = '';
+    canvas.append(el('p', 'muted', 'Could not load the fleet — is the app still running?'));
+    return;
+  }
+
+  hangarShips = got;
+  renderHangar();
+}
+
+/** Ships in the chosen order; the unsized ones are set aside for the note below the drawing. */
+function hangarOrdered() {
+  const ships = (hangarShips?.ships || []).slice();
+  const sort = $('#hangar-sort')?.value || 'length';
+
+  ships.sort((a, b) => {
+    if (sort === 'sorties') return (b.sorties || 0) - (a.sorties || 0);
+    if (sort === 'recent') return new Date(b.lastFlown) - new Date(a.lastFlown);
+    return (b.length || 0) - (a.length || 0);
+  });
+
+  return ships;
+}
+
+function renderHangar() {
+  const canvas = $('#hangar-canvas');
+  if (!canvas) return;
+
+  canvas.textContent = '';
+  const count = $('#hangar-count');
+  const scaleBox = $('#hangar-scale');
+  const unsized = $('#hangar-unsized');
+  if (scaleBox) scaleBox.textContent = '';
+  if (unsized) { unsized.hidden = true; unsized.textContent = ''; }
+
+  if (!hangarShips?.available) {
+    if (count) count.textContent = '';
+    canvas.append(el('p', 'muted',
+      'The sizes and silhouettes come from the game files, and this install has not been read yet — '
+      + 'Settings says when the game data is ready.'));
+    return;
+  }
+
+  const ships = hangarOrdered();
+  const sized = ships.filter((s) => s.length > 0 && s.beam > 0);
+  const missing = ships.filter((s) => !(s.length > 0 && s.beam > 0));
+
+  if (count) count.textContent = `${ships.length} ship${ships.length === 1 ? '' : 's'} flown`;
+
+  if (!sized.length) {
+    canvas.append(el('p', 'muted', ships.length
+      ? 'None of the ships flown is in the install\'s vehicle table, so there is nothing to draw to scale.'
+      : 'No ship has been flown in the logs yet, so there is nothing to draw.'));
+    return;
+  }
+
+  // One scale for everything. The longest ship takes half the width, times
+  // the zoom; smaller ships come out as small as they really are, which is
+  // the honest picture and also why zoom exists. Half rather than all of it
+  // because a ship is as wide as it is long more often than not, and one
+  // 90 m hull at full width is a 60 m tall row with the rest below the fold.
+  const width = Math.max(600, canvas.clientWidth || 1200);
+  const zoom = Number($('#hangar-zoom')?.value) || 1;
+  const longest = Math.max(...sized.map((s) => s.length));
+  const scale = ((width - 40) / 2 / longest) * zoom;   // px per metre
+  const gap = 28;
+  const label = 40;
+
+  // Flow layout: left to right, wrapping when the row is full. Each ship's
+  // box is its bounding box in metres times the scale; the silhouette sits
+  // inside it, so the drawn footprint is the real one.
+  let x = 20;
+  let y = 20;
+  let rowHeight = 0;
+  const placed = [];
+
+  for (const ship of sized) {
+    const w = Math.max(6, ship.length * scale);
+    const h = Math.max(4, ship.beam * scale);
+    const cell = Math.max(w, 90);   // room for the name under a small ship
+
+    if (x + cell > width - 20 && x > 20) {
+      x = 20;
+      y += rowHeight + label + gap;
+      rowHeight = 0;
+    }
+
+    placed.push({ ship, x, y, w, h, cell });
+    rowHeight = Math.max(rowHeight, h);
+    x += cell + gap;
+  }
+
+  const height = y + rowHeight + label + 20;
+  const svg = svgEl('svg', { class: 'hangar-svg', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img' });
+  svg.setAttribute('aria-label', 'The fleet drawn to scale');
+
+  for (const { ship, x: sx, y: sy, w, h, cell } of placed) {
+    const group = svgEl('g', { class: 'hangar-ship', transform: `translate(${sx} ${sy})` });
+    const title = svgEl('title', {});
+    group.append(title);
+    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`;
+
+    // Centred in the cell so a small ship's name does not hang off its left edge.
+    const offset = (cell - w) / 2;
+    const top = (rowHeightOf(placed, sy) - h);   // ships in a row share a baseline
+
+    if (ship.icon) {
+      group.append(svgEl('image', {
+        href: `/api/fleet/icons/${encodeURIComponent(ship.className)}`,
+        x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
+      }));
+    } else {
+      group.append(svgEl('rect', { class: 'hangar-box', x: offset, y: top, width: w, height: h, rx: 2 }));
+    }
+
+    const baseline = rowHeightOf(placed, sy) + 14;
+    const name = svgEl('text', { class: 'hangar-name', x: cell / 2, y: baseline, 'text-anchor': 'middle' });
+    name.textContent = ship.name;
+    group.append(name);
+
+    const dims = svgEl('text', { class: 'hangar-dims', x: cell / 2, y: baseline + 13, 'text-anchor': 'middle' });
+    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`;
+    group.append(dims);
+
+    svg.append(group);
+  }
+
+  canvas.append(svg);
+
+  // The bar says what a length on the page is worth in metres: 10, 50 or
+  // 100 m, whichever comes out at a readable width.
+  if (scaleBox) {
+    const metres = [10, 25, 50, 100, 200].find((m) => m * scale >= 60) || 200;
+    const bar = svgEl('svg', { class: 'hangar-bar', width: metres * scale + 4, height: 14, viewBox: `0 0 ${metres * scale + 4} 14` });
+    bar.append(svgEl('line', { x1: 2, y1: 7, x2: metres * scale + 2, y2: 7 }));
+    bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
+    bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
+    scaleBox.append(bar);
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons`));
+  }
+
+  if (missing.length && unsized) {
+    unsized.hidden = false;
+    unsized.textContent = `Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`;
+  }
+}
+
+/** The tallest ship in the row a ship was placed on, so the row shares one baseline. */
+function rowHeightOf(placed, y) {
+  return Math.max(...placed.filter((p) => p.y === y).map((p) => p.h));
+}
+
+$('#hangar-sort')?.addEventListener('change', () => renderHangar());
+$('#hangar-zoom')?.addEventListener('change', () => renderHangar());
+
 /* ---- Wikelo's emporium: what he trades, from the game files, against the stash ----
    Every number on this page is the installed patch's. What the page cannot
    know is the pilot's standing with him, so a rank gate is said, not judged. */
@@ -10409,6 +10580,21 @@ function renderFleetShips() {
       badge.append(el('span', 'ship-logo-text', maker.code || maker.name));
     }
     card.append(badge);
+
+    // The game's own silhouette of the ship, when the install has one. A 404
+    // takes the image out rather than leaving a broken frame: the icons come
+    // from the game files, and not every hull has one.
+    if (ship.className) {
+      const outline = document.createElement('img');
+      outline.className = 'ship-outline';
+      outline.src = `/api/fleet/icons/${encodeURIComponent(ship.className)}`;
+      outline.alt = '';
+      outline.loading = 'lazy';
+      outline.title = `${ship.name} — see the whole fleet to scale on Hangar`;
+      outline.addEventListener('error', () => outline.remove());
+      outline.addEventListener('click', () => showView('hangar'));
+      card.append(outline);
+    }
 
     const body = el('div', 'ship-body');
     body.append(el('div', 'ship-name', maker.model));

@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1798 tests](https://img.shields.io/badge/tests-1798%20passing-4fd48a)
+![1804 tests](https://img.shields.io/badge/tests-1804%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,798 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,804 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -358,7 +358,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.1
+### 0.11.2
+
+- **Your fleet, drawn to scale.** Flight → Hangar draws every ship your logs
+  say you have flown at one scale, from your installed game files: the
+  silhouette is the game's own vehicle icon and the size is the bounding box
+  the game gives the ship, so a Pisces beside a Corsair is the real difference.
+  Sort by length, sorties or last flown; zoom in when the small ones get small.
+  A ship the install has no icon for is drawn as a box at its size; one it
+  cannot size is named below rather than drawn as a guess. The same silhouette
+  sits on each card on the Fleet page.
 
 - **Wikelo's emporium, from your game files.** Jobs → Wikelo lists every trade
   the Banu collector offers - what he builds, what he wants for it, the rep it

@@ -479,3 +479,25 @@ What it costs is a reader that has to be re-checked every patch, against a
 format CIG do not document. The download is somebody else carrying that burden,
 which is worth something, and it is still there for the two things this file
 cannot answer: live prices, and the ship specifications the game encrypts.
+
+## Vehicles: size and silhouette (2026-09-11)
+
+Two more things the blob holds, both read since 0.11.2 by
+`GameData/GameVehicles.cs` and drawn on the Hangar page:
+
+- **`maxBoundingBoxSize`** on every vehicle entity's `VehicleComponentParams`,
+  in metres. The Fortune reads x 16.5, y 26.5, z 8 - beam, length, height as the
+  wiki publishes them - and the pattern holds for every ship checked (Corsair
+  30 × 53, Starlancer MAX 60 × 90, Freelancer MAX 34 × 38, Aurora 27.4 × 27.7):
+  **y is length**. 1,094 vehicle entities carry a box; debris and templates
+  among them, which is why the page draws only what the logs say was flown.
+- **`displayIcon`** on the entity's `EntityUIDisplayParams`, a `.tif` path the
+  archive holds as `.dds`: `Data\UI\Textures\EA\VehicleIcons\VehicleIcon_<model>.dds`,
+  98 files, 79 referenced, one per base model (every Cutlass shares
+  `VehicleIcon_DRAK_Cutlass`). 1024-square BC3 (DXT5), white silhouette on
+  transparent, top-down, nose to the right, and - measured - normalised to fill
+  the square regardless of the ship's size, so an icon says nothing about scale
+  on its own. `GameData/VehicleIcons.cs` decodes BC3 (sixty lines, no library),
+  crops to the opaque bounds and writes a PNG; the server caches the PNG under
+  `vehicle-icons\` beside the other caches. 931 of the 1,094 entities name an
+  icon; the Clipper, Paladin and the ATLS do not.

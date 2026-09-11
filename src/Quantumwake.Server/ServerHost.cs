@@ -825,6 +825,67 @@ public static class ServerHost
             }
         });
 
+        // The hangar: every ship the logs say was flown, with the size the
+        // install gives it and whether the install has a silhouette for it,
+        // so the page can draw the fleet to one scale. A ship the install does
+        // not describe is still listed - the log flew it - with no size, and
+        // the page says so rather than drawing a guess.
+        app.MapGet("/api/fleet/hangar", (LogLibrary lib) =>
+        {
+            var game = lib.GameCommodities;
+            var ships = lib.Stats().Ships.Select(ship =>
+            {
+                var vehicle = game.Vehicle(ship.ClassName);
+                return new
+                {
+                    ship.Name,
+                    ship.ClassName,
+                    ship.Sorties,
+                    ship.LastFlown,
+                    hours = Math.Round(ship.EstimatedTime.TotalHours, 1),
+                    beam = vehicle?.Beam,
+                    length = vehicle?.Length,
+                    height = vehicle?.Height,
+                    icon = vehicle?.Icon is not null,
+                };
+            });
+
+            return Results.Ok(new { available = game.Vehicles.Count > 0, ships });
+        });
+
+        // A ship's silhouette, from the game's own vehicle icon, as a PNG cropped
+        // to the shape. Converted once and kept beside the other caches: BC3
+        // decodes in milliseconds, but the page asks for twenty at a time and
+        // the archive walk to find each one is the slow part.
+        app.MapGet("/api/fleet/icons/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
+        {
+            if (install is null || lib.GameCommodities.Vehicle(vehicleClass)?.Icon is not { } entry)
+                return Results.NotFound();
+
+            var cacheDir = Path.Combine(Core.AppPaths.Root, "vehicle-icons");
+            var cached = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(entry) + ".png");
+
+            if (!File.Exists(cached))
+            {
+                var dds = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(entry);
+                if (dds is null || VehicleIcons.Convert(dds) is not { } icon)
+                    return Results.NotFound();
+
+                try
+                {
+                    Directory.CreateDirectory(cacheDir);
+                    File.WriteAllBytes(cached, icon.Png);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Losing the cache only costs the next request the decode.
+                    return Results.File(icon.Png, "image/png");
+                }
+            }
+
+            return Results.File(cached, "image/png");
+        });
+
         app.MapGet("/api/fleet", (LogLibrary lib) =>
         {
             var stats = lib.Stats();

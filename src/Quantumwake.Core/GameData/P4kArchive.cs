@@ -80,6 +80,53 @@ public sealed class P4kArchive
         return decompressor.Unwrap(payload).ToArray();
     }
 
+    /// <summary>
+    /// Every entry path under a prefix, with its stored size. The same walk
+    /// <see cref="TryRead"/> makes to find one entry, kept for finding out
+    /// what is there at all - a texture folder, say - without guessing names.
+    /// </summary>
+    public IReadOnlyList<(string Path, long Size)> List(string prefix)
+    {
+        using var stream = File.Open(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new BinaryReader(stream);
+
+        var (directoryOffset, entryCount) = FindCentralDirectory(stream, reader);
+        stream.Seek(directoryOffset, SeekOrigin.Begin);
+
+        var normalised = prefix.Replace('/', '\\');
+        var found = new List<(string, long)>();
+
+        for (long i = 0; i < entryCount; i++)
+        {
+            if (reader.ReadUInt32() != CentralHeaderSignature)
+                break;
+
+            stream.Seek(4, SeekOrigin.Current);
+            _ = reader.ReadUInt16();
+            _ = reader.ReadUInt16();
+            stream.Seek(8, SeekOrigin.Current);
+            long compressed = reader.ReadUInt32();
+            long uncompressed = reader.ReadUInt32();
+            var nameLength = reader.ReadUInt16();
+            var extraLength = reader.ReadUInt16();
+            var commentLength = reader.ReadUInt16();
+            stream.Seek(8, SeekOrigin.Current);
+            long localOffset = reader.ReadUInt32();
+
+            var name = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
+            var extra = reader.ReadBytes(extraLength);
+            stream.Seek(commentLength, SeekOrigin.Current);
+
+            if (!name.Replace('/', '\\').StartsWith(normalised, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            ApplyZip64Extra(extra, ref uncompressed, ref compressed, ref localOffset);
+            found.Add((name, uncompressed));
+        }
+
+        return found;
+    }
+
     /// <summary>Locates the central directory, following the ZIP64 records.</summary>
     private static (long Offset, long Count) FindCentralDirectory(FileStream stream, BinaryReader reader)
     {

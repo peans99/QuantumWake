@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 26;
+    private const int CacheVersion = 27;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -45,6 +45,7 @@ public sealed partial class GameCommodities
     private readonly List<GameSpawn> _spawns;
     private readonly Dictionary<string, GamePlace> _places;
     private readonly GameWikeloCatalogue _wikelo;
+    private readonly Dictionary<string, GameVehicle> _vehicles;
 
     private GameCommodities(
         Dictionary<string, string> byId,
@@ -53,9 +54,11 @@ public sealed partial class GameCommodities
         List<GameBlueprint> blueprints,
         List<GameSpawn> spawns,
         Dictionary<string, GamePlace> places,
-        GameWikeloCatalogue? wikelo = null)
+        GameWikeloCatalogue? wikelo = null,
+        Dictionary<string, GameVehicle>? vehicles = null)
     {
         _wikelo = wikelo ?? GameWikeloCatalogue.Empty;
+        _vehicles = vehicles ?? new Dictionary<string, GameVehicle>(StringComparer.OrdinalIgnoreCase);
         _byId = byId;
         _itemUuids = itemUuids;
         _facts = facts;
@@ -89,6 +92,13 @@ public sealed partial class GameCommodities
 
     /// <summary>Wikelo's emporium: every trade, its price and its reward, as the install states them.</summary>
     public GameWikeloCatalogue Wikelo => _wikelo;
+
+    /// <summary>What the install says a vehicle class is - name, size and silhouette - or null.</summary>
+    public GameVehicle? Vehicle(string? vehicleClass) =>
+        vehicleClass is { Length: > 0 } && _vehicles.TryGetValue(vehicleClass, out var vehicle) ? vehicle : null;
+
+    /// <summary>Every vehicle the install describes, by class.</summary>
+    public IReadOnlyDictionary<string, GameVehicle> Vehicles => _vehicles;
 
     /// <summary>Nothing known, used when the archive is unreadable.</summary>
     public static GameCommodities Empty { get; } =
@@ -145,16 +155,16 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts, blueprints, spawns, places, wikelo) = Read(archive);
+        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles);
 
-        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo);
+        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
         Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints,
-        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo) Read(string archivePath)
+        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -163,6 +173,7 @@ public sealed partial class GameCommodities
         var spawns = new List<GameSpawn>();
         var places = new Dictionary<string, GamePlace>(StringComparer.OrdinalIgnoreCase);
         var wikelo = GameWikeloCatalogue.Empty;
+        var vehicles = new Dictionary<string, GameVehicle>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -172,7 +183,7 @@ public sealed partial class GameCommodities
             var ini = p4k.TryRead(LocalisationEntry);
 
             if (blob is null || ini is null)
-                return (result, itemUuids, facts, blueprints, spawns, places, wikelo);
+                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles);
 
             var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -220,14 +231,15 @@ public sealed partial class GameCommodities
             spawns = GameSpawns.Read(core, text, facts);
             places = GamePlaces.Read(core, text);
             wikelo = GameWikelo.Read(core, text, facts);
+            vehicles = GameVehicles.Read(core, text);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts, blueprints, spawns, places, wikelo);
+            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles);
         }
 
-        return (result, itemUuids, facts, blueprints, spawns, places, wikelo);
+        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles);
     }
 
     /// <summary>
@@ -271,7 +283,8 @@ public sealed partial class GameCommodities
                 cache.Blueprints,
                 cache.Spawns,
                 new Dictionary<string, GamePlace>(cache.Places, StringComparer.OrdinalIgnoreCase),
-                cache.Wikelo);
+                cache.Wikelo,
+                cache.Vehicles is not null ? new Dictionary<string, GameVehicle>(cache.Vehicles, StringComparer.OrdinalIgnoreCase) : null);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -283,7 +296,8 @@ public sealed partial class GameCommodities
         string cachePath, string stamp, Dictionary<string, string> names,
         Dictionary<string, string> items, Dictionary<string, GameItem> facts,
         List<GameBlueprint> blueprints, List<GameSpawn> spawns,
-        Dictionary<string, GamePlace> places, GameWikeloCatalogue wikelo)
+        Dictionary<string, GamePlace> places, GameWikeloCatalogue wikelo,
+        Dictionary<string, GameVehicle> vehicles)
     {
         try
         {
@@ -294,7 +308,7 @@ public sealed partial class GameCommodities
                     {
                         Stamp = stamp, Commodities = names, Items = items,
                         Facts = facts, Blueprints = blueprints, Spawns = spawns, Places = places,
-                        Wikelo = wikelo
+                        Wikelo = wikelo, Vehicles = vehicles
                     },
                     Json));
         }
@@ -317,5 +331,6 @@ public sealed partial class GameCommodities
         public List<GameSpawn> Spawns { get; set; } = [];
         public Dictionary<string, GamePlace> Places { get; set; } = [];
         public GameWikeloCatalogue? Wikelo { get; set; }
+        public Dictionary<string, GameVehicle>? Vehicles { get; set; }
     }
 }

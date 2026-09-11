@@ -42,6 +42,7 @@
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
         <button data-view="fleet">Fleet</button>
+        <button data-view="hangar">Hangar</button>
         <button data-view="places">Places</button>
         <button data-view="points">Points</button>
         <button data-view="contracts">Contracts</button>
@@ -1138,6 +1139,36 @@
     <div id="places-chart" class="bars"></div>
     <h2 class="spaced">Quantum destinations</h2>
     <div id="dests-chart" class="bars"></div>
+  </section>
+
+  <!-- HANGAR: the fleet drawn to one scale, from the install's own vehicle
+       silhouettes and bounding boxes. Nothing here is downloaded. -->
+  <section id="view-hangar" class="view">
+    <div class="section-bar">
+      <h2>Hangar</h2>
+      <div class="controls">
+        <select id="hangar-sort" class="select" title="Order the ships">
+          <option value="length">Longest first</option>
+          <option value="sorties">Most flown first</option>
+          <option value="recent">Last flown first</option>
+        </select>
+        <select id="hangar-zoom" class="select" title="How much of the width the longest ship takes">
+          <option value="1">Two big ships across</option>
+          <option value="2">2× closer</option>
+          <option value="4">4× closer</option>
+        </select>
+        <span class="muted" id="hangar-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      Every ship your logs say you have flown, drawn to one scale from your installed
+      game files: the silhouette is the game's own vehicle icon and the size is the
+      bounding box the game gives the ship. A ship the install has no icon for is a box
+      at its size; one it has no size for is listed below rather than drawn as a guess.
+    </p>
+    <div id="hangar-scale" class="hangar-scale"></div>
+    <div id="hangar-canvas" class="hangar-canvas"></div>
+    <p class="muted" id="hangar-unsized" hidden></p>
   </section>
 
   <!-- WIKELO: the Banu trader's collection contracts, read from the installed
