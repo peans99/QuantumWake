@@ -8,12 +8,24 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1668 tests](https://img.shields.io/badge/tests-1668%20passing-4fd48a)
+![1777 tests](https://img.shields.io/badge/tests-1777%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
-Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
-your sessions, ships, trades, contracts, crew, inventory sightings and travel
-history together, then adds reference data from your own Star Citizen install.
+Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
+joins sessions, ships, travel, contracts, crew, inventory sightings and
+transactions with reference data from your own game install.
+
+One local pipeline feeds the screens you use in different moments: the dashboard
+for planning and history, the in-game overlay for a quick answer, and an
+optional paired Cougar MFD HUD for the cockpit. Saved screenshots and copied
+`/showlocation` coordinates can add facts the logs do not carry, but only after
+you ask Quantum Wake to read them.
+
+![Quantum Wake architecture: local inputs feed one desktop companion, then the dashboard, overlay and paired cockpit MFDs](docs/assets/quantumwake-architecture-hero.png)
+
+*Logs, saved screenshots and game data stay on your PC. The same local service
+feeds the dashboard, overlay and cockpit displays; the MFDs receive concise
+answers rather than screenshots or raw OCR output.*
 
 The app runs on your PC and keeps its database there. Network features are
 optional. Most of Quantum Wake is read-only; item labels and StarStrings are the
@@ -114,7 +126,7 @@ it: nothing is written to the registry, no service is installed, and the game
 folder is untouched unless you installed item labels — in which case remove
 those from the app first, or the game keeps the marked text file.
 
-## What is included
+## What it helps with
 
 ![The star map](docs/images/map.png)
 
@@ -122,24 +134,18 @@ those from the app first, or the game keeps the marked text file.
 unvisited. The map uses logged locations and quantum travel; it is not a live
 position tracker.*
 
-| View | What it answers |
+| Surface or view | What it answers |
 |---|---|
-| **Now** | Where am I, what am I flying, and what has happened this session? |
-| **Map** | Where have I been, and where can I find a place, service or commodity? |
-| **Flight plan** | What is my next stop? Plans can come from a route, shopping list or manual entry |
-| **Sessions** | How long did I play, excluding time left in menus? |
-| **Fleet** | Which ships have appeared on my account, and what fits each component port? |
-| **Places** | Which locations and quantum destinations do I use most? |
-| **Contracts** | What did I accept, finish or abandon, and for whom? |
-| **Crew** | Who has appeared in party and ship-comms events? |
-| **Spending and Ledger** | What confirmed transactions were logged, and where? |
-| **Cargo and Market** | What did I buy or sell, and where is each commodity traded? |
-| **Mining** | What spawns where, how rich the rocks are, their quality and respawn time |
-| **Crafting** | What can be made, from which materials, and where its blueprint drops |
-| **Loot, Loadout and Stash** | What gear has appeared, what is equipped, and where it was last seen |
-| **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear |
-| **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, the next task, cargo, contracts, money and the live feed |
-| **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the local logbook where that is possible |
+| **Now and overlay** | Where am I, what am I flying, and what changed during this session? |
+| **Map, places and points** | Where have I been, where is a place or commodity, and how far is a point from the last copied location? |
+| **Flight plan and checklist** | What is my next stop, what has to happen there, and what can be checked off? |
+| **Sessions, contracts and crew** | How long did I play, which contracts changed, and who did the log name? |
+| **Fleet, loadout and stash** | Which ships and gear have appeared, what fits, and where something was last seen? |
+| **Ledger, cargo and market** | Which transactions were confirmed, what did a counter record, and where is a commodity traded? |
+| **Mining, crafting and items** | What the installed game data says about deposits, recipes, parts and shops. |
+| **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the logbook where possible. |
+| **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, tasks, cargo, contracts, money and the live feed. |
+| **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear. |
 
 Tables can be sorted by their column headings. Dashboard cards can be hidden,
 collapsed and rearranged.
@@ -266,26 +272,38 @@ installs have their own cache and do not mix with real account data. See
 
 ## Architecture
 
-The dashboard is a single web UI hosted by the standalone server and by the WPF
-overlay. The release executable embeds the server and web assets, so the normal
-Windows download is one file and one process.
+### One local pipeline, three ways to use it
 
-The optional cockpit HUD uses the same local server but opens two small WebView2
-windows for a paired Cougar MFD setup. Screen reading is another local input:
-the overlay reads a saved screenshot only after the pilot enables it, the server
-keeps the dated result, and the dashboard and HUD receive small summaries over
-the existing live stream.
+`QuantumWake.exe` hosts the local ASP.NET Core server, the dashboard assets and
+the Windows overlay. There is one source of truth: the parser and reading stores
+write local data, then the server provides it through REST and the live event
+stream. The dashboard is the full logbook; the overlay and MFD HUD are focused
+views over the same state.
 
 ```text
-        QuantumWake.exe
-   ┌──────────────────────────────────────────┐
-   │  tray icon      overlay (WPF + WebView2) │      Browser / tablet
-   │            ASP.NET Core, in process ─────┼───── HTTP + SSE
-   └──────────────────────┬───────────────────┘
-                          │
-        Quantumwake.Core        Quantumwake.Data
-        tail → parse → state    SQLite + game-data readers
+  Star Citizen install                         Quantum Wake on this PC
+  ────────────────────                         ───────────────────────────────
+  Game.log + backups ──> Core parser ──────┐
+  Data.p4k ─────────────> game-data reader ├──> Data stores + local SQLite
+  saved screenshot ──────> optional OCR ───┤              │
+  copied /showlocation ──> local reader ───┘              ▼
+                                              ASP.NET Core API + live stream
+                                                           │
+                              ┌────────────────────────────┼──────────────────────────┐
+                              ▼                            ▼                          ▼
+                       browser dashboard            WPF overlay              paired Cougar MFDs
+                       planning and history         in-game glance            cockpit decisions
 ```
+
+Screen reading is intentionally a file-and-text feature, not live screen
+capture. When enabled, it reads a saved screenshot locally and records a dated
+result. The dashboard can show the complete reading and its checks; the overlay
+and MFDs get only the short answer they need, such as a recent screen summary
+or a kiosk balance carried forward by logged movement.
+
+The release remains one executable. The dashboard and MFD pages are embedded
+with it, the database stays under `%LOCALAPPDATA%\Quantumwake`, and network
+services remain opt-in.
 
 | Project | Purpose |
 |---|---|
@@ -340,7 +358,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.42
+### 0.10.43
+
+- **A README that reflects the whole current app.** The opening now explains
+  the shared local pipeline behind the dashboard, overlay, paired MFD HUD and
+  optional screen readings. The feature list is grouped by the questions each
+  surface answers, and a new architecture image sits at the top of the page.
 
 - **A clearer map of the new cockpit and screen tools.** The README and
   technical notes now explain what the paired Cougar MFD HUD reads, how saved
