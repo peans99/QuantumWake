@@ -34,13 +34,18 @@ public sealed record ScreenScanMatch(
 public sealed record ScreenScanNamed(string Text, IReadOnlyList<string> Candidates, bool Exact);
 
 /// <summary>What reading the clipboard found.</summary>
+/// <param name="Nearest">
+/// The closest saved points to this copy, nearest first - the first thing a
+/// coordinate is good for. Empty when nothing is pinned.
+/// </param>
 public sealed record ClipboardReading(
     bool Found,
     double? X,
     double? Y,
     double? Z,
     double? GigametresFromCentre,
-    string? Trouble);
+    string? Trouble,
+    IReadOnlyList<NearPoint>? Nearest = null);
 
 /// <summary>
 /// The screenshot feature, joined up: a file, an engine, the catalogue, and
@@ -193,8 +198,15 @@ public sealed class ScreenInsightService(
             believed?.Name, believed?.System,
             BelievedBy: believed?.Signal, BelievedAt: believed?.SignalAt), mergeWithLatest);
 
+        // Three at most: the panel is a glance, and the Points page has the rest.
+        var nearest = PointDistances
+            .From(position.X, position.Y, position.Z, believed?.System, readings.Pinned())
+            .Take(3)
+            .Select(NearPoint.Of)
+            .ToList();
+
         return new ClipboardReading(
-            true, position.X, position.Y, position.Z, position.GigametresFromCentre, null);
+            true, position.X, position.Y, position.Z, position.GigametresFromCentre, null, nearest);
     }
 
     /// <summary>

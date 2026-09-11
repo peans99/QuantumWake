@@ -318,7 +318,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.39
+### 0.10.40
+
+- **How far are the things you marked?** Copy a `/showlocation` in the game and
+  the reading on the Log now lists the nearest of your points with the
+  distance - *Ruin mining shelf · 12.4 km* - and the Points page measures every
+  card from wherever you last copied, saying when and where that was. A point
+  in another system is named as not measurable rather than given a number:
+  the same coordinates mean different places in Stanton and Pyro. Nothing
+  decides how near counts as "there" - that differs between a cave mouth and a
+  belt, and you can judge a distance better than the app can guess one.
 
 - **A point says what its "believed to be" rests on, and you can set the
   system yourself.** A copied `/showlocation` names no system, so the app

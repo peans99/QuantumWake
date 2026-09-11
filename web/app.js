@@ -4769,6 +4769,15 @@ async function parseClipboard(quiet = false) {
 
     box.append(el('div', 'muted',
       'Which system this is in comes from your logs, not from the reading.'));
+
+    // The first thing a coordinate is good for: how far the things you marked
+    // are. Three at most here; the Points page measures every one.
+    if (found.nearest?.length) {
+      const list = el('div', 'screen-nearest');
+      list.append(el('div', 'muted', 'Nearest of your points:'));
+      for (const near of found.nearest) list.append(nearPointLine(near));
+      box.append(list);
+    }
   });
 
   // Only when the pilot asked. The watcher calls this every three seconds with
@@ -5351,6 +5360,8 @@ const POINT_CATEGORIES = ['General', 'Navigation', 'Mining', 'Salvage', 'Meet po
 let pointsAll = [];
 /** null is every category; the chips narrow it. */
 let pointsCategory = null;
+/** Where the pilot last copied a location, and every point measured from it; null until one has been. */
+let pointsFrom = null;
 
 async function loadPoints() {
   const list = $('#points-list');
@@ -5362,6 +5373,15 @@ async function loadPoints() {
     list.textContent = '';
     list.append(el('p', 'muted', 'Could not load your points — is the app still running?'));
     return;
+  }
+
+  // The distances are a second answer and the page stands without them: a
+  // card with no "from here" line is a card, not a failure.
+  try {
+    const here = await getJson('/api/screen/pins/nearest');
+    pointsFrom = here?.from ? { from: here.from, byId: new Map(here.points.map((p) => [p.sourceAt, p])) } : null;
+  } catch {
+    pointsFrom = null;
   }
 
   // A category that no longer has a point would filter the page to nothing
@@ -5415,11 +5435,55 @@ function renderPointCategories() {
     chip(`${category} · ${count}`, category);
 }
 
+/** A distance in the unit a pilot would say it in: metres up close, kilometres in the main, gigametres across a system. */
+function distanceWord(metres) {
+  const m = Number(metres) || 0;
+  if (m < 1000) return `${Math.round(m).toLocaleString()} m`;
+  if (m < 1e9) return `${(m / 1000).toLocaleString(undefined, { maximumFractionDigits: m < 1e5 ? 1 : 0 })} km`;
+  return `${(m / 1e9).toFixed(3)} Gm`;
+}
+
+/**
+ * One saved point at a distance. Across two systems the number is arithmetic
+ * on two unrelated frames - the same coordinates mean different places in
+ * Stanton and Pyro - so it is named as not comparable rather than printed
+ * as a range.
+ */
+function nearPointLine(near) {
+  const line = el('div', 'near-point');
+  line.append(el('span', 'strong', near.label));
+  if (near.sameSystem) {
+    line.append(el('span', null, ` · ${distanceWord(near.metres)}`));
+  } else {
+    line.append(el('span', 'muted',
+      ` · ${near.system ? `in ${near.system}` : 'system unknown'} — a different frame, so no distance can be given`));
+  }
+  return line;
+}
+
+/** Where the last copy was, in words: when, and where the logs put it. */
+function renderPointsFromHere() {
+  const box = $('#points-from');
+  if (!box) return;
+
+  box.textContent = '';
+  box.hidden = !pointsFrom || !pointsAll.length;
+  if (box.hidden) return;
+
+  const from = pointsFrom.from;
+  const placed = [from.system, from.believed].filter(Boolean).join(' › ');
+  box.append(el('span', null,
+    `Distances are from where you last copied a location — ${dateOf(from.at)}, ${shortTimeOf(from.at)}`
+    + `${placed ? `, believed to be ${placed}` : ', which the logs could not place'}. `));
+  box.append(el('span', 'muted', 'Copy a new /showlocation in the game and they move with you.'));
+}
+
 function renderPoints() {
   const list = $('#points-list');
   if (!list) return;
 
   renderPointCategories();
+  renderPointsFromHere();
   list.textContent = '';
 
   const count = $('#points-count');
@@ -5529,6 +5593,16 @@ function renderPointCard(pin, into = null) {
   facts.append(el('span', null, `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
   facts.append(pointBeliefLine(pin));
   card.append(facts);
+
+  // From wherever the pilot last copied, when there is such a place.
+  const near = pointsFrom?.byId.get(pin.sourceAt);
+  if (near) {
+    const here = el('div', 'point-here');
+    here.append(near.sameSystem
+      ? el('span', null, `${distanceWord(near.metres)} from where you last copied`)
+      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+    card.append(here);
+  }
 
   const when = el('div', 'point-when muted');
   when.append(el('span', null, `Copied ${dateOf(pin.sourceAt)}, ${shortTimeOf(pin.sourceAt)}`));

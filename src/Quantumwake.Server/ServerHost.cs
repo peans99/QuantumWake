@@ -2283,6 +2283,23 @@ public static class ServerHost
         // about what was read. Newest pinned first, as the store keeps them.
         app.MapGet("/api/screen/pins", (ScreenReadingStore readings) => readings.Pinned());
 
+        // Every point measured from wherever the pilot last copied a location -
+        // the one question a coordinate answers that a name cannot. An object
+        // with a null "from" when nothing has been copied, so the page can say
+        // so rather than mistake it for a failed request.
+        app.MapGet("/api/screen/pins/nearest", (ScreenReadingStore readings) =>
+        {
+            var from = readings.Clipboards().FirstOrDefault();
+            if (from is null) return Results.Ok(new PointsFromHere(null, []));
+
+            var points = PointDistances
+                .From(from.X, from.Y, from.Z, from.System, readings.Pinned())
+                .Select(NearPoint.Of)
+                .ToList();
+
+            return Results.Ok(new PointsFromHere(from, points));
+        });
+
         app.MapPut("/api/screen/pins", (PinUpdateRequest request, ScreenReadingStore readings) =>
             readings.UpdatePin(request.SourceAt, request.Label, request.Category, request.Note, request.System) is { } pin
                 ? Results.Ok(pin)

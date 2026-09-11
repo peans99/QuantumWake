@@ -179,6 +179,58 @@ public class PointsTests
         Assert.Contains("\"system\":\"Stanton\"", page.BodyOf("/api/screen/pins"));
     }
 
+    private const string FromHere = """
+        {"from":{"at":"2026-09-11T00:58:00Z","x":0,"y":0,"z":0,"gigametres":0,"believed":"Ruin Station","system":"Pyro"},
+         "points":[{"sourceAt":"2026-09-09T02:10:00Z","label":"Ruin mining shelf","system":"Pyro","metres":12400,"sameSystem":true},
+                   {"sourceAt":"2026-09-08T20:00:00Z","label":"Stanton","system":"Stanton","metres":4,"sameSystem":false}]}
+        """;
+
+    /// <summary>
+    /// Every card measured from where the pilot last copied, the banner saying
+    /// where that was, and a point in another system named as not measurable
+    /// rather than given a number from the wrong frame.
+    /// </summary>
+    [Fact]
+    public void Cards_are_measured_from_where_the_pilot_last_copied()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", Pins);
+        page.Serve("/api/screen/pins/nearest", FromHere);
+        page.Do("allSessions = []; await loadPoints();");
+
+        Assert.False(page.Truth("__dom.node('#points-from').hidden"));
+        var banner = page.NodeText("#points-from");
+        Assert.Contains("Distances are from where you last copied a location", banner);
+        Assert.Contains("believed to be Pyro › Ruin Station", banner);
+
+        var list = page.NodeText("#points-list");
+        Assert.Contains("12.4 km from where you last copied", list);
+        Assert.Contains("not measurable from where you last copied — a different system", list);
+        Assert.DoesNotContain("4 m from", list);
+    }
+
+    [Fact]
+    public void With_nothing_copied_yet_no_distance_is_claimed()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", Pins);
+        page.Serve("/api/screen/pins/nearest", """{"from":null,"points":[]}""");
+        page.Do("allSessions = []; await loadPoints();");
+
+        Assert.True(page.Truth("__dom.node('#points-from').hidden"));
+        Assert.DoesNotContain("from where you last copied", page.NodeText("#points-list"));
+    }
+
+    [Theory]
+    [InlineData(412, "412 m")]
+    [InlineData(12_400, "12.4 km")]
+    [InlineData(1_234_567, "1,235 km")]
+    [InlineData(3_996_000_000, "3.996 Gm")]
+    public void A_distance_is_said_in_the_unit_a_pilot_would_use(double metres, string expected)
+    {
+        Assert.Equal(expected, new Page().Text($"distanceWord({metres})"));
+    }
+
     /// <summary>
     /// Two notes half-typed, one saved: the other must still be on the page.
     /// Redrawing the whole list on save threw it away, with no undo.

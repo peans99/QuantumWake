@@ -264,6 +264,30 @@ public class ScreenLogTests
     }
 
     /// <summary>
+    /// The first thing a coordinate is good for: the nearest of the points the
+    /// pilot marked, with a distance - and a point in another system named as
+    /// not measurable rather than given a number from the wrong frame.
+    /// </summary>
+    [Fact]
+    public void A_fresh_copy_names_the_nearest_points_and_will_not_measure_across_systems()
+    {
+        var page = Panel(Sighting, Paste);
+        page.Serve("/api/screen/clipboard", """
+            {"found":true,"x":1,"y":2,"z":3,"gigametresFromCentre":0.001,"trouble":null,
+             "nearest":[{"sourceAt":"2026-09-09T02:10:00Z","label":"Ruin mining shelf","system":"Pyro","metres":12400,"sameSystem":true},
+                        {"sourceAt":"2026-09-08T02:10:00Z","label":"Daymar wreck","system":"Stanton","metres":40,"sameSystem":false}]}
+            """);
+
+        page.Do("await parseClipboard();");
+
+        var shown = page.NodeText("#screen-result");
+        Assert.Contains("Nearest of your points", shown);
+        Assert.Contains("Ruin mining shelf · 12.4 km", shown);
+        Assert.Contains("Daymar wreck · in Stanton — a different frame, so no distance can be given", shown);
+        Assert.DoesNotContain("40 m", shown);
+    }
+
+    /// <summary>
     /// The watcher reads the clipboard every three seconds, and the clipboard
     /// holds what was copied until something else is copied - so this fires on
     /// the same paste over and over. Rebuilding the list underneath somebody
