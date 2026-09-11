@@ -1788,6 +1788,20 @@ body.overlay .foot { display: none; }
   color: var(--cyan-hot);
 }
 
+.about-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(53, 200, 240, .05);
+}
+.about-help b, .about-help span { display: block; }
+.about-help b { font-size: 13px; color: var(--text); }
+.about-help span { margin-top: 3px; font-size: 12px; color: var(--muted); }
+
 .about-legal {
   font-size: 10.5px;
   line-height: 1.7;
@@ -1804,6 +1818,7 @@ body.overlay .foot { display: none; }
   .about { flex-direction: column; gap: 24px; align-items: center; text-align: center; }
   .about-logo { width: 200px; }
   .about-facts { justify-items: center; }
+  .about-help { flex-direction: column; }
 }
 
 /* ---------- community-data offer ---------- */
@@ -3199,9 +3214,37 @@ body.entity-open .view { padding-right: 296px; }
 .setup-wipe span { font-size: 11.5px; line-height: 1.55; }
 .setup-wipe .wipe-row { margin-top: 6px; }
 
-/* Questions on the About page
-: shut by default, because a wall of answers to
-   questions you do not have is not help. */
+/* Help is its own page, reachable from About: a wall of answers inside the
+   introduction hid the question someone had gone there to ask. The questions
+   still start shut, because an answer is useful only when it is wanted. */
+.help-page {
+  max-width: 980px;
+  padding: 26px 30px 34px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+.help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.help-head h2 { margin: 2px 0 7px; }
+.help-head p:not(.kicker) { margin: 0; max-width: 60ch; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.help-start {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 20px 0 28px;
+}
+.help-start div { padding: 12px 13px; background: rgba(0, 0, 0, .2); border-left: 2px solid var(--rule-hot); }
+.help-start b, .help-start span { display: block; }
+.help-start b { color: var(--text); font-size: 12px; }
+.help-start span { margin-top: 4px; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.help-page h3 { margin: 26px 0 9px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--cyan-hot); }
 .faq { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; }
 .faq details {
   border: 1px solid var(--rule);
@@ -3228,6 +3271,11 @@ body.entity-open .view { padding-right: 296px; }
   max-width: 74ch;
 }
 .faq a { color: var(--cyan); }
+@media (max-width: 700px) {
+  .help-page { padding: 22px 18px 28px; }
+  .help-head { flex-direction: column; }
+  .help-start { grid-template-columns: 1fr; }
+}
 
 /* ---------- flight plans ---------- */
 

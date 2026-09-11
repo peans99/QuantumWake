@@ -2283,105 +2283,12 @@
           in <code>docs/credits.md</code>.
         </p>
 
-        <h2 class="spaced">Questions</h2>
-
-        <div class="faq">
-          <details>
-            <summary>Why is my pledged ship, armour or gun missing?</summary>
-            <p>
-              Nothing that arrives in your account is written to
-              <code>Game.log</code>. A pledge, a pack, a rental or anything bought
-              on the website is simply <em>there</em> the next time you look, and
-              the game says nothing about it. It appears here the first time you
-              actually use it — fly the ship, wear the armour, move the item —
-              because that is the first moment there is a line to read.
-            </p>
-          </details>
-
-          <details>
-            <summary>Why are my totals lower than I expected?</summary>
-            <p>
-              Sessions from before the last wipe are kept but not counted, because
-              a wipe ends one account and starts another. Settings → <b>Last wipe</b>
-              says how many sessions that is, lets you move the date, and lets you
-              say what the wipe actually took — some reset aUEC and leave your
-              hangar alone. Nothing is deleted: move the date back and it all
-              returns.
-            </p>
-          </details>
-
-          <details>
-            <summary>Where did the kill counter go?</summary>
-            <p>
-              Removed, because it could only ever read zero. Star Citizen 4.9
-              and 4.10 do not write kill or vehicle-destruction lines to
-              <code>Game.log</code> at all — checked line by line across every
-              backup on this machine: not one. A counter pinned at zero reads as
-              a broken feature rather than a missing one, so the honest thing is
-              to say so here instead of showing it.
-            </p>
-            <p>
-              The parser for those events is written and tested against the old
-              format, sitting dormant. If CIG starts logging them again the
-              counter comes back with it.
-            </p>
-          </details>
-
-          <details>
-            <summary>Why does the map not show where I am, exactly?</summary>
-            <p>
-              No player position is logged. Location is inferred from discrete
-              signals — inventory requests, quantum routes, spawns — so the map is
-              a topology, not a radar, and every estimate carries a confidence
-              rather than pretending to a precision it does not have.
-            </p>
-          </details>
-
-          <details>
-            <summary>The overlay will not let me click the game.</summary>
-            <p>
-              Press its <b>📌 pin</b> button and clicks pass straight through. To get
-              it back, right-click the tray icon and untick <b>Pin overlay</b>, or
-              press <code>Ctrl+Alt+O</code>. It arrives unpinned, so it can be
-              dragged where you want it first.
-            </p>
-          </details>
-
-          <details>
-            <summary>Does it touch the game, or my account?</summary>
-            <p>
-              No. It reads <code>Game.log</code> and the backups beside it, and
-              nothing is written to the game directory, no memory is read and
-              nothing is injected. It connects to the internet only where you
-              have said it may, from the Settings page — and the two that can go
-              out unattended, the version check and the market-price refresh,
-              are both off until you turn them on.
-            </p>
-          </details>
-
-          <details>
-            <summary>Does it phone home, or check for updates?</summary>
-            <p>
-              It sends nothing about you, ever — no identifier, no usage, no
-              statistics. It can look up whether a newer release exists, and only
-              if you say yes: you are asked once, and Settings → <b>New versions</b>
-              carries the switch and a <b>Check now</b> button. That look is one
-              request to GitHub's public release feed, which carries nothing but
-              the request. Nothing is downloaded or installed for you — you get a
-              link to the release page.
-            </p>
-          </details>
-
-          <details>
-            <summary>Something is wrong, or missing. Where do I say so?</summary>
-            <p>
-              Please do. Message <b>nekhron</b> on Discord, or raise an issue at
-              <a href="https://github.com/peans99/QuantumWake/issues" target="_blank"
-                 rel="noreferrer">github.com/peans99/QuantumWake/issues</a>. A log
-              line that was parsed wrongly, with the line itself, is the most
-              useful thing you can send.
-            </p>
-          </details>
+        <div class="about-help">
+          <div>
+            <b>Need a hand?</b>
+            <span>Setup, privacy, the overlay, MFDs and what the logs cannot say.</span>
+          </div>
+          <button type="button" class="ghost" id="about-open-help">Open Help &amp; FAQ</button>
         </div>
 
         <p class="about-legal">
@@ -2389,6 +2296,81 @@
           registered trademarks of Cloud Imperium Rights LLC. An unofficial fan
           tool, not affiliated with or endorsed by Cloud Imperium Games.
         </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-help" class="view">
+    <div class="help-page">
+      <div class="help-head">
+        <div>
+          <p class="kicker">Quantum Wake</p>
+          <h2>Help &amp; FAQ</h2>
+          <p>Short answers for the parts of the game, logs and app that are easy to misread.</p>
+        </div>
+        <button type="button" class="ghost" id="help-back">Back to About</button>
+      </div>
+
+      <div class="help-start">
+        <div><b>Just installed?</b><span>Start the app, wait for the first log read, then open the dashboard from the tray.</span></div>
+        <div><b>Something looks wrong?</b><span>Check the source beside the number first; a missing log signal is not the same as zero.</span></div>
+        <div><b>Need to report it?</b><span>Settings → Report a problem makes a small diagnostic file you can read before sharing.</span></div>
+      </div>
+
+      <h3>Using Quantum Wake</h3>
+      <div class="faq">
+        <details>
+          <summary>Why is my pledged ship, armour or gun missing?</summary>
+          <p>Nothing that arrives in your account is written to <code>Game.log</code>. A pledge, pack, rental or website purchase appears here only after you fly the ship, wear the armour or move the item: that is the first moment the game writes a line to read.</p>
+        </details>
+        <details>
+          <summary>Why are my totals lower than I expected?</summary>
+          <p>Sessions from before the last wipe are kept but not counted, because a wipe ends one account and starts another. Settings → <b>Last wipe</b> says how many sessions that is and lets you move the date or choose what the wipe took. Nothing is deleted; move the date back and it returns.</p>
+        </details>
+        <details>
+          <summary>Where did the kill counter go?</summary>
+          <p>Star Citizen 4.9 and 4.10 do not write kill or vehicle-destruction lines to <code>Game.log</code>. A counter fixed at zero would look broken, so it is absent. The parser for the older format remains ready if the game starts writing those lines again.</p>
+        </details>
+        <details>
+          <summary>Why does the map not show where I am exactly?</summary>
+          <p>No player position is logged. Location comes from discrete signals such as inventory requests, quantum routes and spawns, so the map is a topology rather than a radar. Every estimate carries its confidence instead of pretending to precision it does not have.</p>
+        </details>
+      </div>
+
+      <h3>Overlay, MFDs and screen readings</h3>
+      <div class="faq">
+        <details>
+          <summary>The overlay will not let me click the game.</summary>
+          <p>Press its <b>📌 pin</b> button and clicks pass straight through. To get it back, right-click the tray icon and untick <b>Pin overlay</b>, or press <code>Ctrl+Alt+O</code>. It arrives unpinned so you can place it first.</p>
+        </details>
+        <details>
+          <summary>How do the Cougar MFD displays work?</summary>
+          <p>Choose <b>MFD setup…</b> from the tray, place the two display openings on the monitor or monitors behind the frames, then enable and save the layout. The panels use the same local data as the dashboard but keep the answer short: navigation, the next task, cargo, contracts, money and the live feed. They are optional and do not replace the regular overlay.</p>
+        </details>
+        <details>
+          <summary>Does screenshot reading capture my screen?</summary>
+          <p>No. The optional reader only reads a screenshot file you saved in Star Citizen's screenshots folder, after you turn it on. It does not capture the display, read game memory or send the image away. The dashboard keeps a dated reading; the overlay and MFDs receive only a small summary.</p>
+        </details>
+        <details>
+          <summary>Why does cash on hand say “about”?</summary>
+          <p>The balance comes from the last readable screenshot of a kiosk or mobiGlas. Quantum Wake carries that figure forward by the transactions the logs recorded afterwards. It says “about” because the logs miss some money movement, such as fees, claims or a transaction the parser did not recognise. The next readable screenshot is the check.</p>
+        </details>
+      </div>
+
+      <h3>Privacy and support</h3>
+      <div class="faq">
+        <details>
+          <summary>Does it touch the game or my account?</summary>
+          <p>No game memory is read and nothing is injected. Quantum Wake reads <code>Game.log</code>, its backups and, when you ask it to, saved screenshots or copied location text. The game directory is untouched unless you explicitly install item labels or StarStrings.</p>
+        </details>
+        <details>
+          <summary>Does it phone home or check for updates?</summary>
+          <p>It sends no identifier, usage or statistics. Version checks and market refreshes are off until you enable them in Settings. Community datasets are also opt-in. Update checks use GitHub's public release feed; nothing is downloaded or installed without your action.</p>
+        </details>
+        <details>
+          <summary>Something is wrong or missing. Where do I say so?</summary>
+          <p>Please do. Message <b>nekhron</b> on Discord, or raise an issue at <a href="https://github.com/peans99/QuantumWake/issues" target="_blank" rel="noreferrer">github.com/peans99/QuantumWake/issues</a>. A report with the source shown beside the number, or the log line itself, is especially useful.</p>
+        </details>
       </div>
     </div>
   </section>

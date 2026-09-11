@@ -263,6 +263,9 @@ const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
+  '#tabs button': ['#test-tab-now', '#test-tab-about'],
+  '.view': ['#view-now', '#view-about', '#view-help'],
+  '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
     '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
     '#now-handle-card', '#now-feed-card', '#now-stats-card', '#now-respawn-card',
@@ -323,6 +326,9 @@ globalThis.document = {
 };
 
 node('#contracts-stats-toggle').dataset.statsToggle = 'contracts';
+
+node('#test-tab-now').dataset.view = 'now';
+node('#test-tab-about').dataset.view = 'about';
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';

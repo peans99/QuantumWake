@@ -358,7 +358,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.43
+### 0.10.44
+
+- **Help is where the questions are.** About now opens a dedicated Help & FAQ
+  page with setup, privacy and reporting guidance updated for the paired Cougar
+  MFD HUD, saved-screen reading and cash estimates.
 
 - **A README that reflects the whole current app.** The opening now explains
   the shared local pipeline behind the dashboard, overlay, paired MFD HUD and

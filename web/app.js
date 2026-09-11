@@ -153,10 +153,11 @@ function showView(name) {
 
   const buttons = $$('#tabs button');
 
-  // The commodity page is a drill-down rather than a tab: it has no button of
-  // its own, and keeps Market lit, because Market is where it is opened from.
+  // Commodity and Help are drill-downs rather than tabs: Market stays lit for
+  // a commodity, and About stays lit for Help. Neither earns a top-bar slot,
+  // but both are still shareable views with their own fragment.
   const target = buttons.find(
-    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name));
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name));
 
   if (!target) return;
 
@@ -243,7 +244,7 @@ function showView(name) {
    someone and a page that survives a refresh. */
 function viewFromHash() {
   const name = decodeURIComponent(location.hash.replace(/^#/, ''));
-  return $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
+  return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
 /**
@@ -277,6 +278,11 @@ $('#tabs').addEventListener('click', (event) => {
   // :focus-within pins it open over the page.
   button.blur();
 });
+
+// Help belongs under About rather than in a crowded navigation strip. Its
+// fragment still works as a link, and About remains lit while it is open.
+$('#about-open-help')?.addEventListener('click', () => showView('help'));
+$('#help-back')?.addEventListener('click', () => showView('about'));
 
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
    unlocking click-through. Also bound to the arrow keys for browser use. */
