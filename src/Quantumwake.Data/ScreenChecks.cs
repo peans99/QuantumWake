@@ -45,7 +45,8 @@ public interface IScreenBeliefs
 public sealed record ScreenCheck(string Subject, string Claim, string Belief, string Verdict, string? Note = null);
 
 /// <summary>The last wallet figure read, for the next one to be checked against.</summary>
-public sealed record WalletBaseline(DateTimeOffset At, long Balance);
+/// <param name="Shot">The screenshot it came off, so the Ledger can say where its figure is from.</param>
+public sealed record WalletBaseline(DateTimeOffset At, long Balance, string? Shot = null);
 
 /// <summary>
 /// Compares what a frame said with what the logs had led the app to believe.

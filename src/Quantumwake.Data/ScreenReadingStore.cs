@@ -15,6 +15,13 @@ namespace Quantumwake.Data;
 /// sits here waiting for the reader to be written from it, which is how each
 /// of the readers that exist was written.
 /// </param>
+/// <param name="Dismissed">
+/// Set by the pilot, from the log. A reading that misread - a frame of
+/// somebody else's terminal, a balance with a digit dropped - stays in the
+/// log so the file is not read a second time and so the misreading can be
+/// seen, but nothing believes it any more: not the wallet, not the fleet,
+/// not the fittings, not the Now card.
+/// </param>
 public sealed record ScreenSighting(
     string Shot,
     DateTimeOffset ShotAt,
@@ -30,7 +37,8 @@ public sealed record ScreenSighting(
     ContractsReading? Contracts = null,
     FleetReading? Fleet = null,
     ReputationReading? Reputation = null,
-    KioskReading? Kiosk = null);
+    KioskReading? Kiosk = null,
+    bool Dismissed = false);
 
 /// <summary>One <c>/showlocation</c> reading the pilot pasted.</summary>
 /// <param name="At">When it was parsed, which for a paste is the only time there is.</param>
@@ -105,9 +113,10 @@ public sealed class ScreenReadingStore
         lock (_gate) return [.. _sightings];
     }
 
+    /// <summary>The newest reading the pilot has not dismissed.</summary>
     public ScreenSighting? Latest
     {
-        get { lock (_gate) return _sightings.FirstOrDefault(); }
+        get { lock (_gate) return _sightings.FirstOrDefault(s => !s.Dismissed); }
     }
 
     /// <summary>Every paste, newest first.</summary>
@@ -216,7 +225,7 @@ public sealed class ScreenReadingStore
     /// <summary>The newest Fleet Manager reading, for the fleet page.</summary>
     public ScreenSighting? LatestFleet()
     {
-        lock (_gate) return _sightings.FirstOrDefault(s => s.Fleet is not null);
+        lock (_gate) return _sightings.FirstOrDefault(s => !s.Dismissed && s.Fleet is not null);
     }
 
     /// <summary>Whether this file has been read already, so a folder scan does not read it twice.</summary>
@@ -231,8 +240,9 @@ public sealed class ScreenReadingStore
         lock (_gate)
         {
             return _sightings
+                .Where(s => !s.Dismissed)
                 .Where(s => s.Wallet?.Balance is not null)
-                .Select(s => new WalletBaseline(s.ShotAt, s.Wallet!.Balance!.Value))
+                .Select(s => new WalletBaseline(s.ShotAt, s.Wallet!.Balance!.Value, s.Shot))
                 .FirstOrDefault();
         }
     }
@@ -246,6 +256,7 @@ public sealed class ScreenReadingStore
         lock (_gate)
         {
             return [.. _sightings
+                .Where(s => !s.Dismissed)
                 .Where(s => s.Loadout?.Ship is not null)
                 .GroupBy(s => s.Loadout!.Ship!, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.OrderByDescending(s => s.ShotAt).First())
@@ -264,6 +275,24 @@ public sealed class ScreenReadingStore
                 _sightings.RemoveRange(Keep, _sightings.Count - Keep);
 
             Save();
+        }
+    }
+
+    /// <summary>
+    /// Marks a reading as not to be believed, or believes it again. The
+    /// reading itself is kept as read; only whether it counts changes.
+    /// </summary>
+    /// <returns>The reading as it now stands, or null when no such shot is in the log.</returns>
+    public ScreenSighting? Dismiss(string shot, bool dismissed)
+    {
+        lock (_gate)
+        {
+            var at = _sightings.FindIndex(s => string.Equals(s.Shot, shot, StringComparison.OrdinalIgnoreCase));
+            if (at < 0) return null;
+
+            _sightings[at] = _sightings[at] with { Dismissed = dismissed };
+            Save();
+            return _sightings[at];
         }
     }
 

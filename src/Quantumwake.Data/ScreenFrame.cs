@@ -234,8 +234,14 @@ public static partial class ScreenFrames
         if (ReadReputation(all) is { } reputation)
             return new ScreenFrame(ScreenKind.Reputation, texts, null, null, null, wallet, Reputation: reputation);
 
+        // The kiosk has no mobiGlas bar, and is the one screen where the
+        // balance has ever read - so when it printed every digit, that is
+        // the wallet, and it goes through the same check the bar's would.
         if (ReadKiosk(all, commodityNames ?? [], shipNames) is { } kiosk)
-            return new ScreenFrame(ScreenKind.Kiosk, texts, null, null, null, wallet, Kiosk: kiosk);
+        {
+            return new ScreenFrame(ScreenKind.Kiosk, texts, null, null, null,
+                kiosk.Balance is { } balance ? new WalletReading(balance, null) : wallet, Kiosk: kiosk);
+        }
 
         if (hasTooltip)
             return new ScreenFrame(ScreenKind.Tooltip, texts, tooltip, null, null, wallet);

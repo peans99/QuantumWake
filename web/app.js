@@ -2633,6 +2633,76 @@ async function loadLedger() {
   ledgerHidden.clear();
   ledgerPage = 0;
   renderLedger();
+
+  // After the table, so a balance that will not load never costs the ledger.
+  await loadLedgerWallet();
+}
+
+/** The screenshot the cash card was last drawn from, so the stream can say when there is a newer one. */
+let ledgerWalletShot = null;
+
+/**
+ * Cash on hand, which no line in Game.log ever states. The last screenshot
+ * that showed the balance is the figure, and the ledger's movements since
+ * carry it forward. The carried figure is called an estimate because it is
+ * one: the logs miss insurance claims, hangar fees and anything the parser
+ * does not recognise, and only the next screenshot says by how much.
+ */
+async function loadLedgerWallet() {
+  const card = $('#ledger-wallet');
+  if (!card) return;
+
+  let got;
+
+  try {
+    got = await getJson('/api/ledger/wallet');
+  } catch {
+    card.hidden = true;
+    return;
+  }
+
+  renderLedgerWallet(got.read);
+}
+
+function renderLedgerWallet(read) {
+  const card = $('#ledger-wallet');
+  if (!card) return;
+
+  card.textContent = '';
+  card.hidden = false;
+
+  // Marked only when there is a shot to mark: an empty answer must not
+  // forget the frame that just asked, or the next frame asks again.
+  if (read?.shot) ledgerWalletShot = read.shot;
+
+  if (!read) {
+    card.append(el('div', 'l', 'Cash on hand'));
+    card.append(el('div', 'muted',
+      'No screenshot has shown your balance yet. A commodity kiosk prints it in full — photograph one and the figure lands here.'));
+    return;
+  }
+
+  const figure = el('div', 'wallet-figure');
+  figure.append(el('div', 'n', money(read.balance)));
+  figure.append(el('div', 'l', 'Cash on hand'));
+  card.append(figure);
+
+  const body = el('div', 'wallet-body');
+  body.append(el('div', null, `Last updated ${new Date(read.shotAt).toLocaleString()}, from ${read.shot || 'a screenshot'}.`));
+
+  const moved = Number(read.movedSince) || 0;
+  const lines = Number(read.movementsSince) || 0;
+
+  if (lines === 0) {
+    body.append(el('div', 'muted', 'Nothing has moved in the logs since, so that is the latest word.'));
+  } else {
+    const sign = moved > 0 ? '+' : moved < 0 ? '−' : '';
+    body.append(el('div', 'muted',
+      `Since then the logs record ${lines} movement${lines === 1 ? '' : 's'} netting ${sign}${money(Math.abs(moved))}, `
+      + `so about ${money(read.estimate)} now — an estimate, because money that moved without a line in the log is not in it.`));
+  }
+
+  card.append(body);
 }
 
 function renderLedger() {
@@ -4845,8 +4915,12 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(list);
     }
 
-    // Said out loud: the kiosk rounds this one and the mobiGlas bar does not.
-    if (k.balanceRead)
+    // Said either way. Some kiosks round the balance and some print every
+    // digit; only the second kind becomes a figure, and the wallet check
+    // above says what was made of it.
+    if (k.balance != null)
+      box.append(el('div', 'muted', `Balance on screen: ${Number(k.balance).toLocaleString()} aUEC, printed in full.`));
+    else if (k.balanceRead)
       box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
   }
 
@@ -5044,10 +5118,40 @@ async function renderScreenLog() {
       row.append(action);
     } else {
       const s = entry.shot;
+      if (s.dismissed) row.classList.add('dismissed');
       row.append(el('div', 'muted',
-        `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}`));
+        `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ' · invalidated' : ''}`));
       renderSighting(row, s, { full: first });
       first = false;
+
+      // Kept in the log either way: the misreading is worth seeing, and the
+      // file must not be read a second time. What changes is whether the
+      // wallet, the fleet and the fittings believe it.
+      if (s.dismissed)
+        row.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'ghost screen-dismiss';
+      action.textContent = s.dismissed ? 'Believe it again' : 'Invalidate';
+      action.title = s.dismissed
+        ? 'Let the wallet, fleet and fittings use this reading again'
+        : 'Keep this reading in the log, but stop the wallet, fleet and fittings using it';
+      action.addEventListener('click', () => dismissReading(s, !s.dismissed, action));
+
+      // Through the reader as it is now. The frame that taught a reader is
+      // the first one worth reading again, and the log otherwise keeps the
+      // old reading of it for good.
+      const again = document.createElement('button');
+      again.type = 'button';
+      again.className = 'ghost screen-reread';
+      again.textContent = 'Read again';
+      again.title = 'Put this screenshot through the reader again and replace this reading';
+      again.addEventListener('click', () => rereadReading(s, again));
+
+      const actions = el('div', 'screen-actions');
+      actions.append(action, again);
+      row.append(actions);
     }
 
     list.append(row);
@@ -5147,6 +5251,57 @@ async function pinClipboardLocation(paste, button) {
   }
 }
 
+/** The same file through the reader it has now; the fresh reading replaces the old one. */
+async function rereadReading(reading, button) {
+  button.disabled = true;
+  button.textContent = 'Reading…';
+
+  try {
+    const response = await fetch('/api/screen/readings/reread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shot: reading.shot }),
+    });
+    // The server says why it would not, in the pilot's words, and that is
+    // the message: no engine in this copy is a different fix from a file
+    // the game has since deleted.
+    if (!response.ok) {
+      const why = await response.json().catch(() => null);
+      throw new Error(why?.trouble || 'could not read that screenshot again - is it still in the game\'s folder?');
+    }
+    const got = await response.json();
+    screenSay(`Read again: ${got.summary}`);
+    await renderScreenLog();
+    loadLedgerWallet().catch(() => {});
+  } catch (e) {
+    screenSay(e.message || 'could not read that screenshot again');
+    button.disabled = false;
+    button.textContent = 'Read again';
+  }
+}
+
+/** A reading the pilot has looked at and does not want believed - or wants believed again. */
+async function dismissReading(reading, dismissed, button) {
+  button.disabled = true;
+
+  try {
+    const response = await fetch('/api/screen/readings/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shot: reading.shot, dismissed }),
+    });
+    if (!response.ok) throw new Error(`dismiss -> ${response.status}`);
+    screenSay(dismissed ? 'Invalidated. Nothing will use that reading.' : 'That reading counts again.');
+    await renderScreenLog();
+
+    // The cash card may have been drawn from the very reading just set aside.
+    loadLedgerWallet().catch(() => {});
+  } catch {
+    screenSay(dismissed ? 'could not invalidate that reading' : 'could not restore that reading');
+    button.disabled = false;
+  }
+}
+
 async function savePinnedLocation(pin, label, category, button) {
   button.disabled = true;
   try {
@@ -5215,6 +5370,15 @@ function renderNowScreenCard(s) {
   if (s.shot !== screenLatestShot && $('#view-overlay')?.classList.contains('active')) {
     screenLatestShot = s.shot;
     renderScreenLog().catch(() => {});
+  }
+
+  // The cash card is drawn once, at boot, and a kiosk photographed since is
+  // exactly the thing it is waiting for. Only a frame whose wallet actually
+  // read moves it, and only once per frame.
+  if (s.shot !== ledgerWalletShot
+    && (s.checks || []).some((c) => c.subject === 'Wallet' && c.verdict !== 'unchecked')) {
+    ledgerWalletShot = s.shot;
+    loadLedgerWallet().catch(() => {});
   }
 
   $('#now-screen-summary').textContent = s.summary;

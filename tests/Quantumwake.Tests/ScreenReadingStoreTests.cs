@@ -72,6 +72,43 @@ public class ScreenReadingStoreTests : IDisposable
         Assert.Equal(At.AddMinutes(-10), baseline.At);
     }
 
+    /// <summary>
+    /// Invalidating a reading keeps it - the file must not be read twice and
+    /// the misreading is worth seeing - but it stops being anyone's baseline,
+    /// and the reading before it is again.
+    /// </summary>
+    [Fact]
+    public void A_dismissed_reading_stays_in_the_log_and_stops_being_believed()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.Add(Sighting("a.jpg", At.AddMinutes(-10), wallet: new WalletReading(1_000_000, null)));
+        store.Add(Sighting("b.jpg", At, wallet: new WalletReading(100_000, null)));
+
+        var dismissed = store.Dismiss("B.JPG", true);
+
+        Assert.True(dismissed?.Dismissed);
+        Assert.Equal(2, store.All().Count);
+        Assert.True(store.Has("b.jpg"));
+        Assert.Equal("a.jpg", store.Latest?.Shot);
+        Assert.Equal(1_000_000, store.LastWallet()?.Balance);
+
+        // It survives a restart, and it can be taken back.
+        var again = new ScreenReadingStore(_dir);
+        Assert.True(again.All().Single(s => s.Shot == "b.jpg").Dismissed);
+
+        again.Dismiss("b.jpg", false);
+        Assert.Equal(100_000, again.LastWallet()?.Balance);
+        Assert.Equal("b.jpg", again.Latest?.Shot);
+    }
+
+    [Fact]
+    public void Dismissing_a_shot_not_in_the_log_says_so()
+    {
+        var store = new ScreenReadingStore(_dir);
+
+        Assert.Null(store.Dismiss("nothing.jpg", true));
+    }
+
     [Fact]
     public void The_newest_loadout_per_ship_is_what_the_fleet_page_gets()
     {

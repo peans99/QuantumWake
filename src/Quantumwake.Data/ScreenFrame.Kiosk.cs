@@ -30,8 +30,8 @@ public sealed record KioskRow(
 /// tell them apart says so rather than picking.
 /// </param>
 /// <param name="BalanceRead">
-/// The balance as printed, verbatim: the kiosk abbreviates it. See
-/// <see cref="KioskReading.Balance"/> for why there is no number beside it.
+/// The balance as printed, verbatim. See <see cref="KioskReading.Balance"/>
+/// for when there is a number beside it and when there is not.
 /// </param>
 public sealed record KioskReading(
     bool? Buying,
@@ -42,19 +42,20 @@ public sealed record KioskReading(
     string? BalanceRead,
     IReadOnlyList<KioskRow> Rows)
 {
-    /// <summary>
-    /// Always null, and a property rather than an omission so the reason has
-    /// somewhere to live.
-    /// </summary>
+    /// <summary>The balance as a number, only when the kiosk printed every digit of it.</summary>
     /// <remarks>
-    /// The kiosk prints the balance abbreviated - <c>¤1,583M AUEC</c> - which
-    /// has dropped however many digits the suffix stands for. Turning that
-    /// into a number would give the wallet check a baseline wrong by up to
-    /// whatever the rounding hid, and every later drift would inherit it. The
-    /// mobiGlas bar prints the balance in full and is where that number comes
-    /// from.
+    /// Two kiosks have been photographed and they print the balance two ways.
+    /// Somebody else's terminal abbreviated it - <c>¤1,583M AUEC</c> - which
+    /// has dropped however many digits the suffix stands for, and a figure
+    /// taken from that would give the wallet check a baseline wrong by
+    /// whatever the rounding hid, with every later drift inheriting it. This
+    /// pilot's own kiosk, on 10 Sep 2026, printed <c>¤2,092,773 AUEC</c> in
+    /// full and in the regular face - the only place on any screen the figure
+    /// has ever read, since the mobiGlas bar sets it in a face the engine does
+    /// not. So every digit on the screen is a figure; a suffix is kept as
+    /// printed and never becomes one.
     /// </remarks>
-    public long? Balance => null;
+    public long? Balance => ScreenFrames.FullFigure(BalanceRead);
 }
 
 public static partial class ScreenFrames
@@ -192,10 +193,17 @@ public static partial class ScreenFrames
 
         var (ship, _) = shipRead is null ? (null, []) : NameShip(shipRead, shipNames);
 
-        var balance = Beside(lines, "CURRENT BALANCE") ?? lines
+        // The figure sits under its label, not beside it, on both kiosks
+        // photographed - and on this install's the close button's "x" sat
+        // beside the label instead, so asking for what is beside it first
+        // returned that and the balance was never looked for. The unit is
+        // the tell: the balance is the highest line that carries it.
+        var balance = lines
             .Where(line => Fold(line.Text).EndsWith("AUEC", StringComparison.Ordinal))
+            .OrderBy(line => line.Top)
             .Select(line => line.Text)
-            .FirstOrDefault();
+            .FirstOrDefault()
+            ?? Beside(lines, "CURRENT BALANCE");
 
         return new KioskReading(
             buying, shipRead, ship,
@@ -204,6 +212,25 @@ public static partial class ScreenFrames
             balance,
             rows);
     }
+
+    /// <summary>A whole number of aUEC, or null when a suffix or anything else stands in for digits.</summary>
+    internal static long? FullFigure(string? read)
+    {
+        if (read is null) return null;
+
+        var match = BalanceRegex().Match(read);
+        if (!match.Success) return null;
+
+        var digits = new string([.. match.Groups["n"].Value.Where(char.IsAsciiDigit)]);
+        return long.TryParse(digits, out var value) ? value : null;
+    }
+
+    // The currency glyph, which the engine renders as anything; then the
+    // digits, in groups of three with a separator the engine may have padded
+    // - "2,092, 773" is how this install's kiosk read; then the unit. A
+    // letter between the digits and the unit is a suffix, and fails it.
+    [GeneratedRegex(@"^\D{0,3}(?<n>\d{1,3}(?:[,.]\s?\d{3})+|\d{1,3})\s*AUEC\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex BalanceRegex();
 
     /// <summary>Fold, but without the confusions - a plain uppercase key.</summary>
     private static string Fold(string text) => ScreenInsight.Plain(text).ToUpperInvariant();

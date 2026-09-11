@@ -99,6 +99,94 @@ public class LedgerTests
         Assert.Contains("No transactions in that range", Loaded("[]").NodeText("#ledger-table tbody"));
     }
 
+    // ---- cash on hand ----
+
+    private const string Standing = """
+        {"read":{"shot":"ScreenShot-2026-09-10_20-53-54-CF5.jpg","shotAt":"2026-09-11T00:53:54Z",
+         "balance":2092773,"movedSince":-30000,"movementsSince":2,"estimate":2062773}}
+        """;
+
+    private static Page WithWallet(string standing)
+    {
+        var page = new Page();
+        page.Serve("/api/ledger?days=0", Entries);
+        page.Serve("/api/ledger/wallet", standing);
+        page.Do("__dom.node('#ledger-period').value = '0'; await loadLedger();");
+        return page;
+    }
+
+    /// <summary>
+    /// The one figure the ledger cannot make: it is the screen's, dated by the
+    /// screenshot, and the movement since is the logs' and is said to be.
+    /// </summary>
+    [Fact]
+    public void Cash_on_hand_is_the_screens_figure_with_when_it_was_read()
+    {
+        var page = WithWallet(Standing);
+
+        Assert.False(page.Truth("__dom.node('#ledger-wallet').hidden"));
+
+        var card = page.NodeText("#ledger-wallet");
+        Assert.Contains("Cash on hand", card);
+        Assert.Contains("2,092,773 aUEC", card);
+        Assert.Contains("Last updated", card);
+        Assert.Contains("ScreenShot-2026-09-10_20-53-54-CF5.jpg", card);
+    }
+
+    /// <summary>
+    /// A figure carried forward by the logs is an estimate and is called one,
+    /// with the sign and the count it rests on.
+    /// </summary>
+    [Fact]
+    public void The_movement_since_is_shown_and_the_carried_figure_is_called_an_estimate()
+    {
+        var card = WithWallet(Standing).NodeText("#ledger-wallet");
+
+        Assert.Contains("2 movements", card);
+        Assert.Contains("−30,000 aUEC", card);
+        Assert.Contains("about 2,062,773 aUEC now", card);
+        Assert.Contains("estimate", card);
+    }
+
+    [Fact]
+    public void With_nothing_moved_since_the_figure_stands_as_the_latest_word()
+    {
+        var card = WithWallet("""
+            {"read":{"shot":"a.jpg","shotAt":"2026-09-11T00:53:54Z",
+             "balance":2092773,"movedSince":0,"movementsSince":0,"estimate":2092773}}
+            """).NodeText("#ledger-wallet");
+
+        Assert.Contains("Nothing has moved", card);
+        Assert.DoesNotContain("estimate", card);
+    }
+
+    /// <summary>
+    /// No reading is a sentence saying what would fill the card, not a zero -
+    /// a zero balance is a claim about somebody's money.
+    /// </summary>
+    [Fact]
+    public void No_reading_yet_says_what_would_fill_the_card()
+    {
+        var card = WithWallet("""{"read":null}""").NodeText("#ledger-wallet");
+
+        Assert.Contains("No screenshot has shown your balance", card);
+        Assert.Contains("kiosk", card);
+        Assert.DoesNotContain("0 aUEC", card);
+    }
+
+    /// <summary>
+    /// The card is fetched after the table, and a card that will not load
+    /// costs the ledger nothing.
+    /// </summary>
+    [Fact]
+    public void A_cash_card_that_will_not_load_hides_and_leaves_the_ledger_alone()
+    {
+        var page = Loaded();
+
+        Assert.True(page.Truth("__dom.node('#ledger-wallet').hidden"));
+        Assert.Contains("288,000", page.NodeText("#ledger-summary"));
+    }
+
     /// <summary>
     /// The page is paged, and a page that silently dropped the rest would look
     /// exactly like a quiet month.

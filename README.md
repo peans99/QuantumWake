@@ -318,7 +318,30 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.35
+### 0.10.36
+
+- **The Ledger now shows your cash on hand.** Game.log never states a balance,
+  so the figure comes from the last screenshot that showed one, dated and named
+  on the card, and the movements logged since carry it forward. The carried
+  figure is labelled an estimate, with the count and net of the lines it rests
+  on, because money that moved without a line in the log is not in it - the
+  next screenshot says by how much. Until a screenshot has shown a balance the
+  card says so rather than showing a zero.
+
+- **A commodity kiosk that prints the balance in full is now the wallet.** The
+  first kiosk photographed abbreviated it - `1,583M` - and no figure was ever
+  taken from a kiosk. Your own kiosk prints every digit, and that reading is the
+  only place any screen has shown the balance in a face the reader can read. A
+  figure with a suffix is still kept as printed and never becomes a number. The
+  reader also no longer mistakes the close button's `x` beside "Current
+  balance" for the balance itself.
+
+- **A reading you do not trust can be invalidated from the Log.** It stays in
+  the list, struck through and saying so, but the wallet, the fleet, the
+  fittings and the Now card stop using it; it can be believed again with one
+  click. Each reading also has **Read again**, which puts the same screenshot
+  through the reader as it is now and replaces the old reading - so a screen
+  the app learned to read after you photographed it is read at last.
 
 - **The Cougar frames now work as a cockpit pair.** The left frame opens as
   Navigation and the right as Mission. The Mission card keeps the active

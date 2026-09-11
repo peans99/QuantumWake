@@ -984,6 +984,15 @@ public static class ServerHost
 
         app.MapGet("/api/ledger", (LogLibrary lib, int? days) => lib.Ledger(days ?? 0));
 
+        // The balance, which the ledger alone can never state: the last figure a
+        // screenshot showed, carried forward by the movements logged since. An
+        // object either way, so the page can tell "nothing read yet" from a
+        // request that failed.
+        app.MapGet("/api/ledger/wallet", (LogLibrary lib, ScreenReadingStore readings) =>
+            WalletStandings.Now(readings, lib) is { } standing
+                ? Results.Ok(new { read = standing })
+                : Results.Ok(new { read = (WalletStanding?)null }));
+
         /*
          * Why a number is what it is: the rule that made it, the records behind
          * it, and what was left out.
@@ -2306,6 +2315,15 @@ public static class ServerHost
             return Results.Ok(new { cleared = true });
         });
 
+        // One reading, set aside or taken back. It stays in the log - the file
+        // must not be read a second time, and the misreading is worth seeing -
+        // but the wallet, the fleet, the fittings and the Now card stop
+        // believing it.
+        app.MapPost("/api/screen/readings/dismiss", (ReadingDismissRequest request, ScreenReadingStore readings) =>
+            readings.Dismiss(request.Shot, request.Dismissed) is { } reading
+                ? Results.Ok(reading)
+                : Results.NotFound(new { trouble = "that screenshot is no longer in the log" }));
+
         app.MapPost("/api/screen/clipboard", async (
             ScreenInsightService insight,
             ScreenSettingsStore settings,
@@ -2340,18 +2358,48 @@ public static class ServerHost
         // A log entry carries a file name, never its path. Resolve that name
         // under the game's screenshot folder here so the review queue can open
         // the evidence without turning this local server into a file browser.
-        app.MapGet("/api/screen/shots/{shot}", (string shot) =>
+        string? ShotPath(string shot)
         {
             if (install is null || !string.Equals(Path.GetFileName(shot), shot, StringComparison.Ordinal)
                 || !ScreenFolder.IsScreenshot(shot))
-                return Results.NotFound();
+                return null;
 
             var path = Path.Combine(Screenshots.FolderFor(install.RootPath), shot);
-            if (!File.Exists(path)) return Results.NotFound();
+            return File.Exists(path) ? path : null;
+        }
+
+        app.MapGet("/api/screen/shots/{shot}", (string shot) =>
+        {
+            if (ShotPath(shot) is not { } path) return Results.NotFound();
 
             var contentType = Path.GetExtension(shot).Equals(".png", StringComparison.OrdinalIgnoreCase)
                 ? "image/png" : "image/jpeg";
             return Results.File(path, contentType);
+        });
+
+        // The same file through the reader it has now. Every reader here was
+        // written from a frame already in the log, and the frame that taught
+        // it is the first one worth reading again - the log otherwise keeps
+        // the old reading of it for good. A fresh reading replaces the old one
+        // whole, dismissal included.
+        app.MapPost("/api/screen/readings/reread", async (
+            ReadingRereadRequest request,
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+                return Results.BadRequest(new { trouble = "screenshot analysis is switched off" });
+
+            // Refused here rather than read as nothing: a reading that could
+            // not happen must not come back looking like one that did.
+            if (insight.Excuse(install?.RootPath) is { } excuse)
+                return Results.BadRequest(new { trouble = excuse });
+
+            if (ShotPath(request.Shot) is not { } path)
+                return Results.NotFound(new { trouble = "that screenshot is no longer in the game's folder" });
+
+            return Results.Ok(await insight.ReadShotAsync(path, token));
         });
 
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
@@ -3678,6 +3726,12 @@ public sealed record DestinationRequest(string? Place, string? PlaceId);
 
 /// <summary>The clipboard reading a pilot has chosen to keep as a point of interest.</summary>
 public sealed record ClipboardPinRequest(DateTimeOffset At, string? Label = null, string? Category = null);
+
+/// <summary>Which screenshot, and whether it is to be believed.</summary>
+public sealed record ReadingDismissRequest(string Shot, bool Dismissed = true);
+
+/// <summary>Which screenshot to put through the reader again.</summary>
+public sealed record ReadingRereadRequest(string Shot);
 
 /// <summary>The pilot-owned details attached to an existing point of interest.</summary>
 public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category);

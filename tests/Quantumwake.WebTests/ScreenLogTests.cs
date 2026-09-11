@@ -319,6 +319,133 @@ public class ScreenLogTests
         Assert.Equal(before + 1, Reads(page));
     }
 
+    private const string Kiosk = """
+        {"shot":"ScreenShot-K.jpg","shotAt":"2026-09-11T00:53:54Z","kind":"Kiosk",
+         "summary":"a kiosk selling, 5 commodities listed","tookMs":150,
+         "checks":[{"subject":"Wallet","claim":"2,092,773 aUEC","belief":"nothing - the logs never carry a balance","verdict":"new","note":null}],
+         "kiosk":{"buying":false,"balanceRead":"Ä2,092, 773 AUEC","balance":2092773,"rows":[]},
+         "wallet":{"balance":2092773,"trouble":null},"lines":[]}
+        """;
+
+    /// <summary>
+    /// A reading the pilot has looked at and does not trust can be set aside
+    /// from the log. It stays on the page - struck, and saying so - because
+    /// the misreading is the evidence; what changes is that nothing uses it.
+    /// </summary>
+    [Fact]
+    public void A_reading_can_be_invalidated_from_the_log_and_stays_there_marked()
+    {
+        var page = Panel(Kiosk);
+        page.Serve("/api/screen/readings/dismiss", """{"shot":"ScreenShot-K.jpg","dismissed":true}""");
+
+        Assert.Contains("Invalidate", page.NodeText("#screen-readings"));
+        Assert.DoesNotContain("invalidated", page.NodeText("#screen-readings"));
+
+        var dismissed = Kiosk.Replace("\"lines\":[]", "\"lines\":[],\"dismissed\":true");
+        page.Serve("/api/screen/readings?take=50", $$"""
+            {"readings":[{{dismissed}}],"clipboard":[],"pins":[],"total":1,"pastes":0}
+            """);
+        page.Do("await __dom.node('#screen-readings').byClass('screen-dismiss')[0].fire('click');");
+
+        Assert.Contains("POST /api/screen/readings/dismiss", page.Fetched());
+        Assert.Contains("ScreenShot-K.jpg", page.BodyOf("/api/screen/readings/dismiss"));
+        Assert.Contains("\"dismissed\":true", page.BodyOf("/api/screen/readings/dismiss"));
+
+        var log = page.NodeText("#screen-readings");
+        Assert.Contains("invalidated", log);
+        Assert.Contains("believed by nothing", log);
+        Assert.Contains("Believe it again", log);
+
+        // The cash card may have been drawn from the very reading set aside.
+        Assert.Contains("GET /api/ledger/wallet", page.Fetched());
+    }
+
+    /// <summary>
+    /// The frame that taught a reader is the first one worth reading again,
+    /// and the log otherwise keeps the old reading of it for good.
+    /// </summary>
+    [Fact]
+    public void A_reading_can_be_put_through_the_reader_again_from_the_log()
+    {
+        var page = Panel(Kiosk);
+        page.Serve("/api/screen/readings/reread", Kiosk);
+
+        page.Do("await __dom.node('#screen-readings').byClass('screen-reread')[0].fire('click');");
+
+        Assert.Contains("POST /api/screen/readings/reread", page.Fetched());
+        Assert.Contains("ScreenShot-K.jpg", page.BodyOf("/api/screen/readings/reread"));
+        Assert.Contains("GET /api/ledger/wallet", page.Fetched());
+    }
+
+    /// <summary>
+    /// The server refuses in the pilot's words - no engine in this copy, or
+    /// a file the game has deleted - and those words are what the page says,
+    /// because the two have different fixes.
+    /// </summary>
+    [Fact]
+    public void A_reading_the_server_will_not_read_again_says_why()
+    {
+        var page = Panel(Kiosk);
+        page.Fail("/api/screen/readings/reread", 400,
+            """{"trouble":"this copy cannot read screenshots - the overlay does that"}""");
+
+        page.Do("await __dom.node('#screen-readings').byClass('screen-reread')[0].fire('click');");
+
+        Assert.Equal("this copy cannot read screenshots - the overlay does that", page.NodeText("#screen-status"));
+        Assert.Equal("Read again", page.Eval("__dom.node('#screen-readings').byClass('screen-reread')[0].textContent"));
+        Assert.False(page.Truth("__dom.node('#screen-readings').byClass('screen-reread')[0].disabled"));
+    }
+
+    [Fact]
+    public void An_invalidated_reading_can_be_believed_again()
+    {
+        var dismissed = Kiosk.Replace("\"lines\":[]", "\"lines\":[],\"dismissed\":true");
+        var page = Panel(dismissed);
+        page.Serve("/api/screen/readings/dismiss", """{"shot":"ScreenShot-K.jpg","dismissed":false}""");
+
+        page.Do("await __dom.node('#screen-readings').byClass('screen-dismiss')[0].fire('click');");
+
+        Assert.Contains("\"dismissed\":false", page.BodyOf("/api/screen/readings/dismiss"));
+    }
+
+    /// <summary>
+    /// The kiosk on this install prints the balance in full, and the log says
+    /// so rather than calling every kiosk balance abbreviated.
+    /// </summary>
+    [Fact]
+    public void A_kiosk_balance_printed_in_full_is_shown_as_the_figure_it_became()
+    {
+        var log = Panel(Kiosk).NodeText("#screen-readings");
+
+        Assert.Contains("2,092,773 aUEC, printed in full", log);
+        Assert.DoesNotContain("abbreviated", log);
+    }
+
+    /// <summary>
+    /// The cash card is drawn at boot. A kiosk photographed while the page is
+    /// open is the thing it is waiting for, so a frame whose wallet read
+    /// refreshes it - once, not on every frame the stream sends.
+    /// </summary>
+    [Fact]
+    public void A_frame_whose_wallet_read_refreshes_the_cash_card_once()
+    {
+        var page = Panel();
+        page.Serve("/api/ledger/wallet", """{"read":null}""");
+
+        var before = page.Fetched().Count(call => call.Contains("/api/ledger/wallet"));
+
+        const string read = "{shot:'ScreenShot-K.jpg',shotAt:'2026-09-11T00:53:54Z',kind:'Kiosk',summary:'a kiosk',"
+            + "checks:[{subject:'Wallet',claim:'2,092,773 aUEC',belief:'nothing',verdict:'new'}]}";
+        Frame(page, "", read);
+        Frame(page, "", read);
+
+        const string unread = "{shot:'ScreenShot-M.jpg',shotAt:'2026-09-11T01:00:00Z',kind:'Map',summary:'a map',"
+            + "checks:[{subject:'Wallet',claim:'(did not read)',belief:'nothing',verdict:'unchecked'}]}";
+        Frame(page, "", unread);
+
+        Assert.Equal(before + 1, page.Fetched().Count(call => call.Contains("/api/ledger/wallet")));
+    }
+
     [Fact]
     public void The_hub_leads_with_a_screen_disagreement_and_a_link_to_review_it()
     {

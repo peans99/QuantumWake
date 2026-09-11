@@ -94,13 +94,12 @@ public class ScreenKioskTests
     }
 
     /// <summary>
-    /// The kiosk rounds the balance and the mobiGlas bar does not. Taking a
-    /// figure from the rounded one would give the wallet check a baseline
-    /// wrong by whatever the abbreviation hid, and every later drift would
-    /// inherit it.
+    /// This kiosk rounds the balance. Taking a figure from the rounded one
+    /// would give the wallet check a baseline wrong by whatever the
+    /// abbreviation hid, and every later drift would inherit it.
     /// </summary>
     [Fact]
-    public void The_kiosk_balance_is_kept_as_printed_and_never_becomes_a_number()
+    public void An_abbreviated_kiosk_balance_is_kept_as_printed_and_never_becomes_a_number()
     {
         var kiosk = Read(ScreenKioskFixtures.BuySide).Kiosk!;
 
@@ -111,6 +110,46 @@ public class ScreenKioskTests
         var frame = Read(ScreenKioskFixtures.BuySide);
         Assert.DoesNotContain(ScreenChecks.Check(frame, DateTimeOffset.UtcNow, new Beliefs(), null),
             c => c.Subject == "Wallet" && c.Verdict == "new");
+    }
+
+    /// <summary>
+    /// This install's own kiosk, 10 Sep 2026: the balance printed in full, in
+    /// the regular face - the first time the figure has read on any screen.
+    /// It is the wallet, and it goes through the wallet check like the bar's
+    /// would, which is how the Ledger gets a balance at all.
+    /// </summary>
+    [Fact]
+    public void A_balance_printed_in_full_is_the_wallet()
+    {
+        var frame = Read(ScreenKioskFixtures.OwnSellSide);
+
+        Assert.Equal(ScreenKind.Kiosk, frame.Kind);
+        Assert.Equal(2_092_773, frame.Kiosk!.Balance);
+        Assert.Equal(2_092_773, frame.Wallet?.Balance);
+
+        var check = Assert.Single(ScreenChecks.Check(frame, DateTimeOffset.UtcNow, new Beliefs(), null),
+            c => c.Subject == "Wallet");
+        Assert.Equal("new", check.Verdict);
+        Assert.Contains("2,092,773", check.Claim);
+    }
+
+    /// <summary>
+    /// Every shape the two kiosks have printed, and the shapes that must not
+    /// pass: a suffix stands for digits that are not there.
+    /// </summary>
+    [Theory]
+    [InlineData("Ä2,092, 773 AUEC", 2_092_773L)]
+    [InlineData("¤2,092,773 AUEC", 2_092_773L)]
+    [InlineData("2.092.773 aUEC", 2_092_773L)]
+    [InlineData("n 512 AUEC", 512L)]
+    [InlineData("Ä1.583n AUEC", null)]
+    [InlineData("¤1,583M AUEC", null)]
+    [InlineData("¤2.1K AUEC", null)]
+    [InlineData("2,092,773", null)]
+    [InlineData("CURRENT BALANCE:", null)]
+    public void Only_a_balance_with_every_digit_on_it_is_a_figure(string read, long? expected)
+    {
+        Assert.Equal(expected, ScreenFrames.FullFigure(read));
     }
 
     [Fact]

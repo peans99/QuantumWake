@@ -242,7 +242,7 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery, 
     {
         Console.WriteLine($"Side      : {(kiosk.Buying == false ? "selling" : kiosk.Buying == true ? "buying" : "(not read)")}");
         Console.WriteLine($"Ship      : {kiosk.Ship ?? kiosk.ShipRead ?? "(not read)"}  cargo {kiosk.CargoUsed}/{kiosk.CargoCapacity} SCU");
-        Console.WriteLine($"Balance   : {kiosk.BalanceRead ?? "(not read)"}  (abbreviated, so no number is taken from it)");
+        Console.WriteLine($"Balance   : {kiosk.BalanceRead ?? "(not read)"}  {(kiosk.Balance is { } full ? $"({full:N0} aUEC, printed in full)" : "(abbreviated, so no number is taken from it)")}");
 
         foreach (var row in kiosk.Rows)
         {

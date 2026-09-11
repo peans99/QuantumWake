@@ -85,4 +85,45 @@ internal static class ScreenKioskFixtures
         new("8 SCU", 470, 473, 20),
         new("1/SCU", 490, 500, 14),
     ];
+
+    /// <summary>
+    /// A kiosk on this install at last - the sell side, 10 Sep 2026, with the
+    /// pilot's ship out of the frame - and the balance printed in full.
+    /// </summary>
+    /// <remarks>
+    /// The text is the engine's own, line for line, from
+    /// <c>ScreenShot-2026-09-10_20-53-54-CF5.jpg</c> as it sits in the
+    /// readings log: <c>NO OENAND</c>, <c>TO NAKE A TRANSACTION</c> and the
+    /// padded <c>2,092, 773</c> are all real. The boxes are not - the log keeps
+    /// text and not geometry - so they are plausible, and the two things they
+    /// have to get right are what the reading itself proved: the figure sits
+    /// under its label as on the other kiosk, and the close button's <c>x</c>
+    /// sits beside the label, which is what the first reader took for the
+    /// balance.
+    /// </remarks>
+    public static readonly ScreenTextLine[] OwnSellSide =
+    [
+        new("x", 3000, 70, 24),
+        new("COMMODITIES", 100, 40, 54),
+        new("YOUR INVENTORIES", 90, 155, 24),
+        new("SELECT LOCATION", 110, 209, 20),
+        new("IN DEMAND", 90, 624, 21),
+        new("NO OENAND", 90, 679, 20),
+        new("CANNOT SELL", 90, 734, 20),
+        new("SHOP", 1500, 160, 24),
+        new("BUY", 1600, 160, 24),
+        new("INVENTORY", 1700, 160, 24),
+        new("CURRENT BALANCE:", 2592, 68, 32),
+        new("Ä2,092, 773 AUEC", 2698, 114, 27),
+        new("LOCAL MARKET VALUE", 2481, 293, 27),
+        new("IN STOCK", 2500, 350, 20),
+        new("SCRAP", 1600, 473, 20),
+        new("MX INVENTORY", 1600, 496, 16),
+        new("METHANE", 1600, 560, 20),
+        new("INVENTORY", 1600, 583, 16),
+        new("PLEASE SELECT A VALID INVENTORY", 1500, 900, 22),
+        new("TO NAKE A TRANSACTION", 1500, 930, 22),
+        new("e", 2900, 1000, 16),
+        new("e", 2950, 1000, 16),
+    ];
 }
