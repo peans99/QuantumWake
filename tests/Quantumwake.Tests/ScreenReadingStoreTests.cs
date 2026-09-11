@@ -269,6 +269,44 @@ public class ScreenReadingStoreTests : IDisposable
         Assert.Equal(updated, Assert.Single(again.Pinned()));
     }
 
+    /// <summary>
+    /// The note is the reason the point exists. Naming the point again must
+    /// not lose it, a blank must clear it - a wrong reason is worse than none
+    /// - and it comes back after a restart like the name does.
+    /// </summary>
+    [Fact]
+    public void A_pinned_point_keeps_why_the_pilot_was_there()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+        store.Pin(At);
+
+        var noted = store.UpdatePin(At, null, null, "  Quantanium vein on the north face, \r\n two rocks left.  ");
+        Assert.Equal("Quantanium vein on the north face, \n two rocks left.", noted?.Note);
+
+        // A rename without a note in hand leaves the note alone.
+        var renamed = store.UpdatePin(At, "North face vein", "Mining");
+        Assert.Equal(noted?.Note, renamed?.Note);
+        Assert.Equal("North face vein", renamed?.Label);
+
+        Assert.Equal(noted?.Note, Assert.Single(new ScreenReadingStore(_dir).Pinned()).Note);
+
+        var cleared = store.UpdatePin(At, null, null, "   ");
+        Assert.Null(cleared?.Note);
+    }
+
+    [Fact]
+    public void A_note_is_cut_at_a_paragraph_or_two_rather_than_kept_whole()
+    {
+        var store = new ScreenReadingStore(_dir);
+        store.AddClipboard(Paste(At));
+        store.Pin(At);
+
+        var kept = store.UpdatePin(At, null, null, new string('x', ScreenReadingStore.NoteLength + 500));
+
+        Assert.Equal(ScreenReadingStore.NoteLength, kept?.Note?.Length);
+    }
+
     [Fact]
     public void Clearing_takes_both_halves()
     {

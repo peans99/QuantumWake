@@ -318,7 +318,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.36
+### 0.10.37
+
+- **Points of interest have a page of their own, with room for why.** Under
+  Flight, next to Places: every `/showlocation` you pinned, as a card with its
+  name, category, exact coordinates, when it was copied and which session that
+  fell in - and a note. Write down why you were there, what is there and what
+  to bring next time; nothing in the logs will ever say. Search reads the notes
+  as well as the names, categories become filters once there is more than one,
+  and a card with something typed and not yet saved shows an amber bar until
+  it is. The Log's pinned-points aside shows the note and links to the page.
 
 - **The Ledger now shows your cash on hand.** Game.log never states a balance,
   so the figure comes from the last screenshot that showed one, dated and named

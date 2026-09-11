@@ -1,0 +1,200 @@
+namespace Quantumwake.WebTests;
+
+/// <summary>
+/// The Points page: the coordinates the pilot chose to keep, and why.
+/// </summary>
+/// <remarks>
+/// The note is the whole reason the page exists - the Log aside already had a
+/// name and a category - so the failures worth catching are a note that does
+/// not reach the server, one that is lost by a rename, and a page that shows
+/// nothing rather than saying there is nothing.
+/// </remarks>
+public class PointsTests
+{
+    private const string Pins = """
+        [{"sourceAt":"2026-09-09T02:10:00Z","pinnedAt":"2026-09-09T02:12:00Z",
+          "x":-9641671346.9,"y":-11490734321.2,"z":-91805.1,"gigametres":14.99996,
+          "believed":"Ruin Station","system":"Pyro","label":"Ruin mining shelf","category":"Mining",
+          "note":"Quantanium on the north face, two rocks left."},
+         {"sourceAt":"2026-09-08T20:00:00Z","pinnedAt":"2026-09-08T20:01:00Z",
+          "x":1.5,"y":2.5,"z":3.5,"gigametres":0.001,
+          "believed":null,"system":"Stanton","label":null,"category":"General","note":null}]
+        """;
+
+    private static Page Loaded(string pins = Pins)
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", pins);
+        page.Do("""
+            allSessions = [{id:'s1', startedAt:'2026-09-09T01:00:00Z', endedAt:'2026-09-09T03:00:00Z', primaryShip:'Drake Corsair'}];
+            await loadPoints();
+            """);
+        return page;
+    }
+
+    private static int Cards(Page page) =>
+        Convert.ToInt32(page.Eval("__dom.node('#points-list').byClass('point-card').length"));
+
+    [Fact]
+    public void Every_kept_point_is_a_card_with_its_name_note_and_coordinates()
+    {
+        var page = Loaded();
+        var list = page.NodeText("#points-list");
+
+        Assert.Equal(2, Cards(page));
+        Assert.Contains("Quantanium on the north face", page.Text("__dom.node('#points-list').byClass('point-note')[0].value"));
+        Assert.Equal("Ruin mining shelf", page.Text("__dom.node('#points-list').byClass('point-name')[0].value"));
+        Assert.Contains("-9,641,671,347", list);
+        Assert.Contains("15.0000 Gm from system centre", list);
+        Assert.Contains("believed to be Pyro › Ruin Station when copied", list);
+        Assert.Equal("2 kept", page.NodeText("#points-count"));
+    }
+
+    /// <summary>
+    /// A point without a name is still shown by what the app believed it was,
+    /// so it can be found before it is named.
+    /// </summary>
+    [Fact]
+    public void An_unnamed_point_falls_back_to_what_was_believed()
+    {
+        var page = Loaded();
+
+        Assert.Equal("Stanton", page.Text("__dom.node('#points-list').byClass('point-name')[1].placeholder"));
+    }
+
+    /// <summary>
+    /// The session the copy fell in is named, and a moment no session covers
+    /// says so instead of naming the nearest one.
+    /// </summary>
+    [Fact]
+    public void The_session_around_the_copy_is_named_when_there_is_one()
+    {
+        var list = Loaded().NodeText("#points-list");
+
+        Assert.Contains("during the session of", list);
+        Assert.Contains("Drake Corsair", list);
+        Assert.Contains("no session in the library spans that moment", list);
+    }
+
+    /// <summary>
+    /// Opened straight from the URL, the page draws before the sessions have
+    /// arrived; when they do, the cards must say which session it was rather
+    /// than keep the answer they gave when they knew nothing.
+    /// </summary>
+    [Fact]
+    public void Cards_drawn_before_the_sessions_arrived_learn_their_session_afterwards()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", Pins);
+        page.Do("allSessions = []; await loadPoints();");
+        Assert.DoesNotContain("during the session of", page.NodeText("#points-list"));
+
+        page.Do("""
+            allSessions = [{id:'s1', startedAt:'2026-09-09T01:00:00Z', endedAt:'2026-09-09T03:00:00Z', primaryShip:'Drake Corsair'}];
+            renderPoints();
+            """);
+        Assert.Contains("during the session of", page.NodeText("#points-list"));
+    }
+
+    [Fact]
+    public void Saving_sends_the_name_category_and_note_together()
+    {
+        var page = Loaded();
+        page.Serve("/api/screen/pins", """
+            {"sourceAt":"2026-09-09T02:10:00Z","x":-9641671346.9,"y":-11490734321.2,"z":-91805.1,"gigametres":14.99996,
+             "believed":"Ruin Station","system":"Pyro","label":"North face vein","category":"Mining",
+             "note":"Bring the Prospector."}
+            """);
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"pins":[],"total":0,"pastes":0}""");
+
+        page.Do("""
+            const card = __dom.node('#points-list').byClass('point-card')[0];
+            card.byClass('point-name')[0].value = 'North face vein';
+            card.byClass('point-note')[0].value = 'Bring the Prospector.';
+            await card.byClass('point-save')[0].fire('click');
+            """);
+
+        Assert.Contains("PUT /api/screen/pins", page.Fetched());
+        var body = page.BodyOf("/api/screen/pins");
+        Assert.Contains("\"sourceAt\":\"2026-09-09T02:10:00Z\"", body);
+        Assert.Contains("\"label\":\"North face vein\"", body);
+        Assert.Contains("\"category\":\"Mining\"", body);
+        Assert.Contains("\"note\":\"Bring the Prospector.\"", body);
+
+        // The card is redrawn from the server's answer, not from what was typed.
+        Assert.Equal("Bring the Prospector.", page.Text("__dom.node('#points-list').byClass('point-note')[0].value"));
+    }
+
+    /// <summary>
+    /// The only failure that loses a reason quietly: a save that fails must
+    /// leave the typed note on the page and say so.
+    /// </summary>
+    [Fact]
+    public void A_save_that_fails_keeps_the_note_on_the_page_and_says_so()
+    {
+        var page = Loaded();
+        page.Fail("/api/screen/pins", 404, """{"trouble":"that point of interest is already gone"}""");
+
+        page.Do("""
+            const card = __dom.node('#points-list').byClass('point-card')[0];
+            card.byClass('point-note')[0].value = 'Typed and not yet saved';
+            await card.byClass('point-save')[0].fire('click');
+            """);
+
+        Assert.Equal("Typed and not yet saved", page.Text("__dom.node('#points-list').byClass('point-note')[0].value"));
+        Assert.Contains("Could not save", page.Text("__dom.node('#points-list').byClass('point-said')[0].textContent"));
+        Assert.False(page.Truth("__dom.node('#points-list').byClass('point-save')[0].disabled"));
+    }
+
+    [Fact]
+    public void Removing_a_point_takes_its_card_away()
+    {
+        var page = Loaded();
+        page.Serve("/api/screen/pins?at=2026-09-09T02%3A10%3A00Z", """{"removed":true}""");
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"pins":[],"total":0,"pastes":0}""");
+
+        page.Do("await __dom.node('#points-list').byClass('point-remove')[0].fire('click');");
+
+        Assert.Contains("DELETE /api/screen/pins?at=2026-09-09T02%3A10%3A00Z", page.Fetched());
+        Assert.Equal(1, Cards(page));
+        Assert.Equal("1 kept", page.NodeText("#points-count"));
+    }
+
+    [Fact]
+    public void The_search_reads_the_note_as_well_as_the_name()
+    {
+        var page = Loaded();
+
+        page.Do("__dom.node('#points-search').value = 'two rocks'; renderPoints();");
+        Assert.Equal(1, Cards(page));
+
+        page.Do("__dom.node('#points-search').value = 'nothing like this'; renderPoints();");
+        Assert.Contains("No point matches", page.NodeText("#points-list"));
+    }
+
+    [Fact]
+    public void Categories_become_chips_only_when_there_is_more_than_one()
+    {
+        var page = Loaded();
+
+        Assert.Contains("Mining · 1", page.NodeText("#points-categories"));
+        Assert.Contains("All · 2", page.NodeText("#points-categories"));
+
+        page.Do("__dom.node('#points-categories').byClass('ghost')[1].fire('click');");
+        Assert.Equal(1, Cards(page));
+
+        var one = Loaded("""[{"sourceAt":"2026-09-09T02:10:00Z","x":1,"y":2,"z":3,"gigametres":0.1,"category":"Mining"}]""");
+        Assert.Equal("", one.NodeText("#points-categories"));
+    }
+
+    /// <summary>No points is a sentence about how to get one, never an empty page.</summary>
+    [Fact]
+    public void No_points_says_how_to_make_one()
+    {
+        var list = Loaded("[]").NodeText("#points-list");
+
+        Assert.Contains("No points yet", list);
+        Assert.Contains("/showlocation", list);
+        Assert.Contains("Log", list);
+    }
+}

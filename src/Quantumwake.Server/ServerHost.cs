@@ -2279,8 +2279,12 @@ public static class ServerHost
                 ? Results.Ok(pin)
                 : Results.NotFound(new { trouble = "that copied location is no longer in the log" }));
 
+        // The points on their own, for the page that is about them rather than
+        // about what was read. Newest pinned first, as the store keeps them.
+        app.MapGet("/api/screen/pins", (ScreenReadingStore readings) => readings.Pinned());
+
         app.MapPut("/api/screen/pins", (PinUpdateRequest request, ScreenReadingStore readings) =>
-            readings.UpdatePin(request.SourceAt, request.Label, request.Category) is { } pin
+            readings.UpdatePin(request.SourceAt, request.Label, request.Category, request.Note) is { } pin
                 ? Results.Ok(pin)
                 : Results.NotFound(new { trouble = "that point of interest is already gone" }));
 
@@ -3734,7 +3738,8 @@ public sealed record ReadingDismissRequest(string Shot, bool Dismissed = true);
 public sealed record ReadingRereadRequest(string Shot);
 
 /// <summary>The pilot-owned details attached to an existing point of interest.</summary>
-public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category);
+/// <param name="Note">Why the point was kept; null leaves the note as it is, blank clears it.</param>
+public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category, string? Note = null);
 
 /// <summary>The current place joined onto the small set of decisions it enables.</summary>
 public sealed record PilotBriefing(

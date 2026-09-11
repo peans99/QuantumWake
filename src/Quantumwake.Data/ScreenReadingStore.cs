@@ -59,6 +59,11 @@ public sealed record ClipboardSighting(
     DateTimeOffset? LastSeenAt = null);
 
 /// <summary>A copied location the pilot chose to keep after its log entry is gone.</summary>
+/// <param name="Note">
+/// Why it was worth keeping, in the pilot's words. The coordinates say where;
+/// nothing in the logs says why anyone was there, and a point without the
+/// reason is a number that means nothing a month later.
+/// </param>
 public sealed record PinnedLocation(
     DateTimeOffset SourceAt,
     DateTimeOffset PinnedAt,
@@ -69,7 +74,8 @@ public sealed record PinnedLocation(
     string? Believed,
     string? System,
     string? Label = null,
-    string? Category = null);
+    string? Category = null,
+    string? Note = null);
 
 /// <summary>
 /// Remembers what the screenshots said, and what was pasted.
@@ -173,8 +179,15 @@ public sealed class ScreenReadingStore
         }
     }
 
-    /// <summary>Updates the pilot's own label and category without moving the point.</summary>
-    public PinnedLocation? UpdatePin(DateTimeOffset sourceAt, string? label, string? category)
+    /// <summary>Updates the pilot's own label, category and note without moving the point.</summary>
+    /// <remarks>
+    /// A blank label or category keeps what was there - a name can only be
+    /// replaced, never emptied. A blank note clears it, because a note can be
+    /// wrong and deleting a wrong reason is a thing the pilot will want; a
+    /// null note leaves it alone, so a caller that only names the point does
+    /// not lose the note beside it.
+    /// </remarks>
+    public PinnedLocation? UpdatePin(DateTimeOffset sourceAt, string? label, string? category, string? note = null)
     {
         lock (_gate)
         {
@@ -185,6 +198,7 @@ public sealed class ScreenReadingStore
             {
                 Label = CleanLabel(label) ?? _pins[at].Label ?? "Copied location",
                 Category = CleanCategory(category) ?? _pins[at].Category ?? "General",
+                Note = note is null ? _pins[at].Note : CleanNote(note),
             };
             _pins[at] = updated;
             SavePins();
@@ -413,6 +427,17 @@ public sealed class ScreenReadingStore
     private static string? CleanLabel(string? label) => string.IsNullOrWhiteSpace(label) ? null : label.Trim();
 
     private static string? CleanCategory(string? category) => string.IsNullOrWhiteSpace(category) ? null : category.Trim();
+
+    /// <summary>Longest a note gets - a paragraph or two, not a pasted log.</summary>
+    public const int NoteLength = 2000;
+
+    private static string? CleanNote(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note)) return null;
+
+        var trimmed = note.Replace("\r\n", "\n").Trim();
+        return trimmed.Length <= NoteLength ? trimmed : trimmed[..NoteLength];
+    }
 
     private static readonly JsonSerializerOptions Json = new()
     {

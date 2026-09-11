@@ -42,6 +42,7 @@
         <button data-view="sessions">Sessions</button>
         <button data-view="fleet">Fleet</button>
         <button data-view="places">Places</button>
+        <button data-view="points">Points</button>
         <button data-view="contracts">Contracts</button>
         <button data-view="crew">Crew</button>
         <button data-view="casualties">Casualties</button>
@@ -762,7 +763,8 @@
           <h3 id="pinned-points-title">Pinned points</h3>
           <span class="muted" id="screen-pin-count"></span>
         </div>
-        <p class="muted">A pin preserves the exact copied coordinates when you clear routine readings.</p>
+        <p class="muted">A pin preserves the exact copied coordinates when you clear routine readings.
+          Notes and the full list live on the <a href="#points">Points page</a>.</p>
         <div id="screen-pins"></div>
       </aside>
     </div>
@@ -1130,6 +1132,26 @@
     <div id="places-chart" class="bars"></div>
     <h2 class="spaced">Quantum destinations</h2>
     <div id="dests-chart" class="bars"></div>
+  </section>
+
+  <!-- POINTS OF INTEREST: the coordinates the pilot chose to keep, with the
+       reason. Places is what the logs saw; this is what the pilot marked. -->
+  <section id="view-points" class="view">
+    <div class="section-bar">
+      <h2>Points of interest</h2>
+      <div class="controls">
+        <input type="search" id="points-search" class="search" placeholder="Search points…"
+               autocomplete="off" spellcheck="false">
+        <span class="muted" id="points-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      Every point here is a <code>/showlocation</code> you copied in game and pinned from the
+      Log — exact coordinates the game never names. The name, category and the note are
+      yours: write down why you were there, because nothing in the logs ever will.
+    </p>
+    <div class="export-row" id="points-categories"></div>
+    <div id="points-list" class="points-list"></div>
   </section>
 
   <!-- CONTRACTS -->

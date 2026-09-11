@@ -4077,8 +4077,59 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .screen-review-item { padding: 9px 0; border-top: 1px solid var(--rule); }
 .screen-review-item:first-child { border-top: 0; }
 .screen-review-item pre { max-height: 140px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); font: 11px/1.5 var(--mono); }
+.pinned-points a { color: var(--cyan); }
+.pin-note { font-size: 11.5px; line-height: 1.5; color: var(--text); white-space: pre-wrap; margin: 2px 0 4px; }
 @media (max-width: 720px) { .pin-fields { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) { .log-overview { grid-template-columns: 1fr; } }
+
+/* ---- Points of interest: one card per mark, the note given the room the
+   Log aside cannot spare. Two columns when the page is wide enough for the
+   note to still be a paragraph, one otherwise. ---- */
+.points-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--gap); align-items: start; }
+.point-card {
+  position: relative;
+  padding: 13px 15px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+  clip-path: var(--chamfer);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.point-card::before { content: ""; position: absolute; top: 0; left: 10px; width: 26px; height: 2px; background: var(--cyan); }
+/* Something typed and not yet saved: the bar turns amber until Save is pressed. */
+.point-card.dirty::before { background: var(--amber); }
+.point-head { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: 6px; }
+.point-head .point-name { min-width: 0; font-size: 14px; font-weight: 600; color: var(--cyan-hot); }
+.point-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; line-height: 1.5; }
+.point-facts .mono { font-family: var(--mono); }
+.point-when { font-size: 11.5px; }
+.point-when button.link {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline dotted;
+  /* A sentence, not a control: the global button face would shout it. */
+  text-transform: none; letter-spacing: 0; clip-path: none;
+}
+.point-when button.link:hover { color: var(--cyan-hot); }
+.point-note {
+  background: rgba(8, 18, 30, .9);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 7px 10px;
+  outline: none;
+  resize: vertical;
+  min-height: 64px;
+}
+.point-note:focus { border-color: var(--cyan); }
+.point-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.point-actions .point-said { font-size: 11px; }
+@media (max-width: 720px) {
+  .points-list { grid-template-columns: 1fr; }
+  .point-head { grid-template-columns: 1fr; }
+}
 .feed.screen-checks, .feed.screen-fittings { max-height: none; overflow: visible; margin-top: 6px; }
 .feed .k.agrees { color: var(--green); border-color: #1f5c3d; }
 .feed .k.differs { color: var(--amber); border-color: #6d4715; }

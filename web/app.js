@@ -203,6 +203,7 @@ function showView(name) {
   if (name === 'routes') loadRoutes().catch(() => {});
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
+  if (name === 'points') loadPoints().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
@@ -1968,6 +1969,10 @@ async function loadHistory() {
 
   allSessions = sessions;
   sessionPage = 0;
+
+  // A Points page opened straight from the URL drew its cards before the
+  // sessions were known, and said no session spanned any of them.
+  if (pointsAll.length) safeRender('Points', () => renderPoints());
 
   safeRender('Sessions', () => renderSessions());
   safeRender('Fleet', () => renderFleet(stats));
@@ -5176,6 +5181,9 @@ function renderPinnedLocations(pins) {
     const row = el('div', 'pinned-location');
     row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location'));
     row.append(el('div', 'muted', pin.category || 'General'));
+    // The reason is edited on the Points page; here it is only read, so the
+    // aside stays the glance it is.
+    if (pin.note) row.append(el('div', 'pin-note', pin.note));
     row.append(el('div', 'muted', `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
     row.append(el('div', 'muted',
       `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
@@ -5185,7 +5193,7 @@ function renderPinnedLocations(pins) {
     label.setAttribute('aria-label', 'Point of interest name');
     const category = document.createElement('select');
     category.className = 'select'; category.setAttribute('aria-label', 'Point of interest category');
-    for (const choice of ['General', 'Navigation', 'Mining', 'Salvage', 'Meet point']) {
+    for (const choice of POINT_CATEGORIES) {
       const option = new Option(choice, choice);
       option.selected = choice === (pin.category || 'General');
       category.append(option);
@@ -5331,6 +5339,242 @@ async function unpinLocation(pin, button) {
     button.disabled = false;
   }
 }
+
+/* ---- Points of interest: the pilot's own marks, and why ----
+   Places is what the logs saw. This is what the pilot chose to keep - exact
+   coordinates copied from /showlocation, which the game never names - and the
+   one thing no log line carries: the reason anyone was there. */
+
+/** The categories a point can carry; one list, so the Log aside and this page never disagree. */
+const POINT_CATEGORIES = ['General', 'Navigation', 'Mining', 'Salvage', 'Meet point'];
+
+let pointsAll = [];
+/** null is every category; the chips narrow it. */
+let pointsCategory = null;
+
+async function loadPoints() {
+  const list = $('#points-list');
+  if (!list) return;
+
+  try {
+    pointsAll = await getJson('/api/screen/pins');
+  } catch {
+    list.textContent = '';
+    list.append(el('p', 'muted', 'Could not load your points — is the app still running?'));
+    return;
+  }
+
+  // A category that no longer has a point would filter the page to nothing
+  // with no chip to click back out of.
+  if (pointsCategory && !pointsAll.some((pin) => (pin.category || 'General') === pointsCategory))
+    pointsCategory = null;
+
+  renderPoints();
+}
+
+function pointName(pin) {
+  return pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location';
+}
+
+/** The session the copy fell inside, when the library has one that spans it. */
+function sessionAround(iso) {
+  const at = new Date(iso).getTime();
+  return (allSessions || []).find((s) =>
+    new Date(s.startedAt).getTime() <= at && at <= new Date(s.endedAt).getTime()) || null;
+}
+
+function renderPointCategories() {
+  const row = $('#points-categories');
+  if (!row) return;
+
+  row.textContent = '';
+
+  const counts = new Map();
+  for (const pin of pointsAll) {
+    const category = pin.category || 'General';
+    counts.set(category, (counts.get(category) || 0) + 1);
+  }
+
+  // One category is not a choice.
+  if (counts.size < 2) return;
+
+  const chip = (label, category) => {
+    const on = pointsCategory === category;
+    const button = el('button', on ? 'ghost' : 'ghost off', label);
+    button.type = 'button';
+    button.dataset.category = category ?? '';
+    button.addEventListener('click', () => {
+      pointsCategory = category;
+      renderPoints();
+    });
+    row.append(button);
+  };
+
+  chip(`All · ${pointsAll.length}`, null);
+  for (const [category, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0])))
+    chip(`${category} · ${count}`, category);
+}
+
+function renderPoints() {
+  const list = $('#points-list');
+  if (!list) return;
+
+  renderPointCategories();
+  list.textContent = '';
+
+  const count = $('#points-count');
+  if (count) count.textContent = pointsAll.length ? `${pointsAll.length} kept` : '';
+
+  if (!pointsAll.length) {
+    list.append(el('p', 'muted',
+      'No points yet. Copy a /showlocation in the game, then pin it from the Log — it lands here with room for a note.'));
+    return;
+  }
+
+  const query = ($('#points-search')?.value || '').trim().toLowerCase();
+  const shown = pointsAll.filter((pin) => {
+    if (pointsCategory && (pin.category || 'General') !== pointsCategory) return false;
+    if (!query) return true;
+    const haystack = `${pointName(pin)} ${pin.note || ''} ${pin.category || ''} ${pin.system || ''} ${pin.believed || ''}`.toLowerCase();
+    return haystack.includes(query);
+  });
+
+  if (!shown.length) {
+    list.append(el('p', 'muted', 'No point matches that.'));
+    return;
+  }
+
+  for (const pin of shown) list.append(renderPointCard(pin));
+}
+
+function renderPointCard(pin) {
+  const card = el('article', 'point-card');
+  card.dataset.sourceAt = pin.sourceAt;
+
+  const head = el('div', 'point-head');
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'search point-name';
+  name.value = pin.label || '';
+  name.placeholder = pointName(pin);
+  name.setAttribute('aria-label', 'Point name');
+  const category = document.createElement('select');
+  category.className = 'select point-category';
+  category.setAttribute('aria-label', 'Point category');
+  for (const choice of POINT_CATEGORIES) category.append(new Option(choice, choice));
+  category.value = POINT_CATEGORIES.includes(pin.category) ? pin.category : 'General';
+  head.append(name, category);
+  card.append(head);
+
+  // Where, in the game's own numbers, and what the app believed the place
+  // was when the copy happened - a belief, and said to be one.
+  const facts = el('div', 'point-facts muted');
+  facts.append(el('span', 'mono',
+    `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
+  facts.append(el('span', null, `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+  const believed = [pin.system, pin.believed].filter(Boolean).join(' › ');
+  if (believed) facts.append(el('span', null, `believed to be ${believed} when copied`));
+  card.append(facts);
+
+  const when = el('div', 'point-when muted');
+  when.append(el('span', null, `Copied ${dateOf(pin.sourceAt)}, ${shortTimeOf(pin.sourceAt)}`));
+  const session = sessionAround(pin.sourceAt);
+  if (session) {
+    const open = el('button', 'link', `during the session of ${dateOf(session.startedAt)}${session.primaryShip ? ` · ${session.primaryShip}` : ''}`);
+    open.type = 'button';
+    open.title = 'Open that session';
+    open.addEventListener('click', () => {
+      showView('sessions');
+      if (expandedSessionId !== session.id) toggleSessionDebrief(session.id).catch(() => {});
+    });
+    when.append(el('span', null, ' · '), open);
+  } else {
+    when.append(el('span', null, ' · no session in the library spans that moment'));
+  }
+  card.append(when);
+
+  const note = document.createElement('textarea');
+  note.className = 'point-note';
+  note.rows = 3;
+  note.maxLength = 2000;
+  note.value = pin.note || '';
+  note.placeholder = 'Why were you there? What is here, who you met, what to bring next time…';
+  note.setAttribute('aria-label', 'Why you were there');
+  card.append(note);
+
+  const actions = el('div', 'point-actions');
+  const said = el('span', 'muted point-said');
+  const save = el('button', 'ghost point-save', 'Save');
+  save.type = 'button';
+  save.addEventListener('click', () => savePoint(pin, name.value, category.value, note.value, save, said));
+
+  const copy = el('button', 'ghost point-copy', 'Copy coordinates');
+  copy.type = 'button';
+  copy.title = 'Copy x y z to the clipboard';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(`${pin.x} ${pin.y} ${pin.z}`);
+      said.textContent = 'Coordinates copied.';
+    } catch {
+      said.textContent = 'The browser would not let the page write to the clipboard.';
+    }
+  });
+
+  const remove = el('button', 'ghost danger point-remove', 'Remove');
+  remove.type = 'button';
+  remove.title = 'Forget this point; the copied reading it came from stays in the Log';
+  remove.addEventListener('click', () => removePoint(pin, remove, said));
+
+  actions.append(save, copy, remove, said);
+  card.append(actions);
+
+  // Typing marks the card so an unsaved reason is visible as such.
+  for (const field of [name, category, note])
+    field.addEventListener('input', () => card.classList.add('dirty'));
+
+  return card;
+}
+
+async function savePoint(pin, label, category, note, button, said) {
+  button.disabled = true;
+  said.textContent = 'Saving…';
+
+  try {
+    const response = await fetch('/api/screen/pins', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceAt: pin.sourceAt, label, category, note }),
+    });
+    if (!response.ok) throw new Error(`pin update -> ${response.status}`);
+
+    const saved = await response.json();
+    pointsAll = pointsAll.map((p) => (p.sourceAt === pin.sourceAt ? saved : p));
+    renderPoints();
+
+    // The Log aside shows the same points, and is cheap to keep honest.
+    renderScreenLog().catch(() => {});
+  } catch {
+    said.textContent = 'Could not save — is the app still running?';
+    button.disabled = false;
+  }
+}
+
+async function removePoint(pin, button, said) {
+  button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/screen/pins?at=${encodeURIComponent(pin.sourceAt)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`unpin -> ${response.status}`);
+
+    pointsAll = pointsAll.filter((p) => p.sourceAt !== pin.sourceAt);
+    renderPoints();
+    renderScreenLog().catch(() => {});
+  } catch {
+    said.textContent = 'Could not remove that point.';
+    button.disabled = false;
+  }
+}
+
+$('#points-search')?.addEventListener('input', () => renderPoints());
 
 /** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
 function fleetRow(row) {
