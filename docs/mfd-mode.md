@@ -55,7 +55,9 @@ pilot's control; a detected ship must not silently rearrange the buttons.
   means nothing. The page says so every time.
 - **Money:** what is my trading rate, and how far is a goal at it? Commodity
   sales less what buying them cost, and nothing else the logs record - a trading
-  rate rather than everything earned, which the page states.
+  rate rather than everything earned, which the page states. When a saved kiosk
+  or mobiGlas screenshot has supplied a balance, cash on hand leads this page;
+  logged movements after that shot make it an estimate rather than a claim.
 - **List:** what am I shopping for, and how much of it am I holding? "Held"
   means seen in a stash listing, which records presence and never a count.
 - **Ship:** what am I flying, what is it for, and what does losing it cost?
@@ -109,6 +111,21 @@ Both frames start at Home and remember their last screen independently. Fleet
 catalogues, market browsing, historical tables and settings stay on the
 dashboard - what came across is the question a pilot asks in the seat, never the
 report behind it.
+
+### Screenshots on the frame
+
+The MFD does not read images. The optional screen reader is a dashboard and
+overlay feature: it reads a saved screenshot only after the pilot turns it on,
+then keeps a dated reading in the local store. The live snapshot carries only
+the small result that a cockpit page needs. Status can name the latest reading;
+Money can use a balance that a kiosk printed; neither page sees image bytes,
+OCR boxes or the screenshot folder.
+
+That boundary matters. The display keeps working when screen reading is off,
+when Windows has no OCR engine, and when no screenshot has ever supplied an
+answer. A missing reading is a sentence or an omitted row, never a made-up
+zero. The full reading, its source and any disagreement with the logbook remain
+on the dashboard's Screen page. See [screen-insight.md](screen-insight.md).
 
 ### How deep the menu goes
 

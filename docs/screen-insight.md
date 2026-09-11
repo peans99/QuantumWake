@@ -1034,6 +1034,23 @@ the card says `2,092,773`, dated by the shot, and *about 2,081,799 now* -
 called an estimate, because money that moved without a line in the log is
 not in it, and the next screenshot says by how much.
 
+### How the feature reaches the dashboard and HUD
+
+`ScreenInsightService` is the join between the saved file, the OCR adapter,
+the installed catalogue and the local reading store. It records a screenshot by
+its capture time, not the moment the app got around to reading it. The server
+adds the newest summary to the existing live snapshot, so the dashboard, the
+regular overlay and the optional paired Cougar MFD windows see the same result
+without each polling the screenshots folder.
+
+The hosts deliberately receive different amounts of detail. The dashboard's
+Screen page can show the reading, its source, what the app matched and any
+comparison with the logbook. A cockpit frame only receives the short operational
+answer: Status can say what the latest screenshot was, while Money can show a
+kiosk balance and the ledger's logged movement since it. The frame never gets
+the image, OCR word boxes or a route to the screenshots folder. This keeps the
+HUD small and keeps the reader local to the desktop app.
+
 ### How the feature is driven
 
 Worth writing down, because the first arrangement was wrong in a way that was

@@ -138,6 +138,8 @@ position tracker.*
 | **Crafting** | What can be made, from which materials, and where its blueprint drops |
 | **Loot, Loadout and Stash** | What gear has appeared, what is equipped, and where it was last seen |
 | **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear |
+| **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, the next task, cargo, contracts, money and the live feed |
+| **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the local logbook where that is possible |
 
 Tables can be sorted by their column headings. Dashboard cards can be hidden,
 collapsed and rearranged.
@@ -157,6 +159,13 @@ collapsed and rearranged.
   </tr>
 </table>
 
+![Cockpit HUD, saved screenshot, dashboard and local data store](docs/assets/hud-screen-insight.png)
+
+*The cockpit HUD stays focused on a pilot's next decision. Saved screenshots can
+add facts that `Game.log` never writes, such as a kiosk balance or a ship's
+fittings; they are read locally and kept as dated readings, not treated as live
+telemetry.*
+
 ## Data sources
 
 Quantum Wake reads three kinds of data:
@@ -166,7 +175,11 @@ Quantum Wake reads three kinds of data:
 2. **Your game install.** `Data.p4k` provides names, items, commodities,
    crafting recipes, mining deposits, place descriptions and facilities. The
    first read after a game patch takes about half a minute and is then cached.
-3. **Optional community services.** UEX adds current prices and shop listings.
+3. **Screenshots and copied locations, when you ask for them.** The optional
+   screen reader reads the newest saved Star Citizen screenshot or a
+   `/showlocation` copied by the game. It never captures the display, reads
+   game memory or sends the image away.
+4. **Optional community services.** UEX adds current prices and shop listings.
    StarCitizenWiki's scunpacked dataset adds ship specifications and wider map
    and mining coverage. Both integrations are off until enabled in Settings.
 
@@ -183,9 +196,10 @@ No game data is committed to this repository.
 - **No automatic mining history.** The game logs no extraction, scan or refinery
   job. Ore sold without a recorded purchase is shown as likely mined, and a
   separate manual mining log is available.
-- **No wallet balance.** Trading income is visible because commodity sales are
-  logged. Contract and bounty payouts are not, so earnings are labelled as a
-  trading floor rather than total income.
+- **No complete wallet history.** A readable screenshot can establish a cash
+  balance, and logged movements can carry it forward as an estimate. The logs
+  still do not state contract or bounty payouts, so trading remains a floor on
+  total income.
 - **Crew is a floor, not a roster.** A player who was already connected may
   produce no join event.
 
@@ -256,6 +270,12 @@ The dashboard is a single web UI hosted by the standalone server and by the WPF
 overlay. The release executable embeds the server and web assets, so the normal
 Windows download is one file and one process.
 
+The optional cockpit HUD uses the same local server but opens two small WebView2
+windows for a paired Cougar MFD setup. Screen reading is another local input:
+the overlay reads a saved screenshot only after the pilot enables it, the server
+keeps the dated result, and the dashboard and HUD receive small summaries over
+the existing live stream.
+
 ```text
         QuantumWake.exe
    ┌──────────────────────────────────────────┐
@@ -284,9 +304,9 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,124 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,777 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
-dashboard JavaScript against a stub DOM.
+dashboard and MFD JavaScript against a stub DOM.
 
 Parser fixtures are copied from real log lines. The CLI is then run against the
 local backup corpus before a release to catch format changes that fixtures do
@@ -298,6 +318,8 @@ not contain.
 - [Log-format reference](docs/log-format-reference.md)
 - [Missing combat-event findings](docs/findings.md)
 - [Architecture decisions](docs/architecture.md)
+- [Cockpit HUD / Cougar MFD mode](docs/mfd-mode.md)
+- [Screenshot and clipboard reading](docs/screen-insight.md)
 - [Problem-report contents](docs/bug-reports.md)
 - [Release process](docs/releasing.md)
 - [Credits and external sources](docs/credits.md)
@@ -318,7 +340,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.41
+### 0.10.42
+
+- **A clearer map of the new cockpit and screen tools.** The README and
+  technical notes now explain what the paired Cougar MFD HUD reads, how saved
+  screenshots and copied locations stay local, and how their small summaries
+  reach the dashboard and cockpit displays.
 
 - **Cash on hand where you fly.** The balance the Ledger shows - from the last
   screenshot that printed it, carried forward by the movements logged since -
