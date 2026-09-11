@@ -1044,7 +1044,7 @@ regular overlay and the optional paired Cougar MFD windows see the same result
 without each polling the screenshots folder.
 
 The hosts deliberately receive different amounts of detail. The dashboard's
-Screen page can show the reading, its source, what the app matched and any
+Log tab can show the reading, its source, what the app matched and any
 comparison with the logbook. A cockpit frame only receives the short operational
 answer: Status can say what the latest screenshot was, while Money can show a
 kiosk balance and the ledger's logged movement since it. The frame never gets

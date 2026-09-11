@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1777 tests](https://img.shields.io/badge/tests-1777%20passing-4fd48a)
+![1787 tests](https://img.shields.io/badge/tests-1787%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,777 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,787 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.45
+### 0.10.46
 
 - **Share your points of interest the way you share prices.** Settings → Share
   what you have has a fourth box: your points, with the name, category and note

@@ -56,8 +56,9 @@ pilot's control; a detected ship must not silently rearrange the buttons.
 - **Money:** what is my trading rate, and how far is a goal at it? Commodity
   sales less what buying them cost, and nothing else the logs record - a trading
   rate rather than everything earned, which the page states. When a saved kiosk
-  or mobiGlas screenshot has supplied a balance, cash on hand leads this page;
-  logged movements after that shot make it an estimate rather than a claim.
+  screenshot has supplied a balance (the mobiGlas bar has never read), cash on
+  hand leads this page; logged movements after that shot make it an estimate
+  rather than a claim.
 - **List:** what am I shopping for, and how much of it am I holding? "Held"
   means seen in a stash listing, which records presence and never a count.
 - **Ship:** what am I flying, what is it for, and what does losing it cost?
@@ -125,7 +126,7 @@ That boundary matters. The display keeps working when screen reading is off,
 when Windows has no OCR engine, and when no screenshot has ever supplied an
 answer. A missing reading is a sentence or an omitted row, never a made-up
 zero. The full reading, its source and any disagreement with the logbook remain
-on the dashboard's Screen page. See [screen-insight.md](screen-insight.md).
+on the dashboard's Log tab. See [screen-insight.md](screen-insight.md).
 
 ### How deep the menu goes
 
