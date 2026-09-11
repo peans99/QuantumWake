@@ -5498,6 +5498,15 @@ function renderHangar() {
 
   if (count) count.textContent = `${ships.length} ship${ships.length === 1 ? '' : 's'} flown`;
 
+  const mode = $('#hangar-mode')?.value || 'gallery';
+  const zoomSelect = $('#hangar-zoom');
+  if (zoomSelect) zoomSelect.hidden = mode !== 'scale';
+
+  if (mode === 'gallery') {
+    renderHangarGallery(canvas, ships);
+    return;
+  }
+
   if (!sized.length) {
     canvas.append(el('p', 'muted', ships.length
       ? 'None of the ships flown is in the install\'s vehicle table, so there is nothing to draw to scale.'
@@ -5607,11 +5616,50 @@ function renderHangar() {
   }
 }
 
+/**
+ * The gallery: one card per ship, with the game's own render of it in the
+ * paint the pilot chose on Fleet, or its silhouette tinted by maker. Not to
+ * scale, and the page says which mode it is in - a three-quarter render drawn
+ * "to scale" would be a lie, which is what the other mode is for.
+ */
+function renderHangarGallery(canvas, ships) {
+  if (!ships.length) {
+    canvas.append(el('p', 'muted', 'No ship has been flown in the logs yet, so there is nothing to show.'));
+    return;
+  }
+
+  const grid = el('div', 'hangar-gallery');
+
+  for (const ship of ships) {
+    const maker = makerOf(ship.name);
+    const card = el('article', 'hangar-card');
+    card.dataset.className = ship.className;
+
+    if (ship.className) card.append(shipPicture(ship, maker));
+
+    const body = el('div', 'hangar-card-body');
+    body.append(el('div', 'hangar-card-name', ship.name));
+
+    const facts = [];
+    if (ship.length > 0) facts.push(`${ship.length} × ${ship.beam} × ${ship.height} m`);
+    facts.push(`${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`);
+    if (ship.hours > 0) facts.push(`~${ship.hours} h aboard`);
+    body.append(el('div', 'muted', facts.join(' · ')));
+
+    if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
+    card.append(body);
+    grid.append(card);
+  }
+
+  canvas.append(grid);
+}
+
 /** The tallest ship in the row a ship was placed on, so the row shares one baseline. */
 function rowHeightOf(placed, y) {
   return Math.max(...placed.filter((p) => p.y === y).map((p) => p.h));
 }
 
+$('#hangar-mode')?.addEventListener('change', () => renderHangar());
 $('#hangar-sort')?.addEventListener('change', () => renderHangar());
 $('#hangar-zoom')?.addEventListener('change', () => renderHangar());
 

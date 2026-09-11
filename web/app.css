@@ -4171,6 +4171,14 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .hangar-dims { fill: var(--dim); font-size: 10px; }
 .hangar-scale { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 11.5px; }
 .hangar-bar line { stroke: var(--cyan); stroke-width: 2; }
+/* The gallery: the same picture the Fleet card carries, larger, one card a ship. */
+.hangar-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--gap); padding: 14px; }
+.hangar-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .18); }
+.hangar-card .ship-picture { flex: 0 0 150px; width: 150px; }
+.hangar-card .ship-outline { width: 146px; height: 90px; }
+.hangar-card .ship-render { width: 150px; height: 118px; }
+.hangar-card-body { min-width: 0; font-size: 12px; line-height: 1.5; }
+.hangar-card-name { font-family: var(--mono); font-weight: 600; color: var(--text); font-size: 13px; }
 /* The ship's picture on its card: the tinted silhouette as a CSS mask, or the
    painted render the pilot chose, with the paint button under either. */
 .ship-picture { flex: 0 0 72px; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; }

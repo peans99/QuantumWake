@@ -1147,6 +1147,10 @@
     <div class="section-bar">
       <h2>Hangar</h2>
       <div class="controls">
+        <select id="hangar-mode" class="select" title="How to show the fleet">
+          <option value="gallery">Gallery</option>
+          <option value="scale">To scale</option>
+        </select>
         <select id="hangar-sort" class="select" title="Order the ships">
           <option value="length">Longest first</option>
           <option value="sorties">Most flown first</option>
@@ -1161,10 +1165,12 @@
       </div>
     </div>
     <p class="muted caption">
-      Every ship your logs say you have flown, drawn to one scale from your installed
-      game files: the silhouette is the game's own vehicle icon and the size is the
-      bounding box the game gives the ship. A ship the install has no icon for is a box
-      at its size; one it has no size for is listed below rather than drawn as a guess.
+      Every ship your logs say you have flown, from your installed game files. The
+      gallery shows the game's own render of a ship in the paint you chose on Fleet,
+      or its silhouette tinted by maker; <b>To scale</b> draws them all at one scale from
+      the bounding box the game gives each ship. A ship the install has no icon for is
+      a box at its size; one it has no size for is listed below rather than drawn as a
+      guess.
     </p>
     <div id="hangar-scale" class="hangar-scale"></div>
     <div id="hangar-canvas" class="hangar-canvas"></div>

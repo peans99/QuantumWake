@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1810 tests](https://img.shields.io/badge/tests-1810%20passing-4fd48a)
+![1811 tests](https://img.shields.io/badge/tests-1811%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,810 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,811 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -358,7 +358,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.3
+### 0.11.4
+
+- **The Hangar opens as a gallery.** One card a ship - the game's render in
+  the paint you chose on Fleet, or the tinted silhouette - with its size,
+  sorties and hours under it, and a Paint button on each. **To scale** is a
+  switch away for the plan view drawn at one scale; the gallery does not
+  pretend to be, which is why the scale bar leaves with it.
 
 - **Ships in colour.** The game's silhouettes are white, so on Fleet and Hangar
   they are now tinted in their maker's colour - a hint at whose ship, said to

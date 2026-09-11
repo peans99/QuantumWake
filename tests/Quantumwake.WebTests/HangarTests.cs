@@ -29,7 +29,7 @@ public class HangarTests
     {
         var page = new Page();
         page.Serve("/api/fleet/hangar", fleet);
-        page.Do("__dom.node('#hangar-sort').value = 'length'; __dom.node('#hangar-zoom').value = '1'; await loadHangar();");
+        page.Do("__dom.node('#hangar-mode').value = 'scale'; __dom.node('#hangar-sort').value = 'length'; __dom.node('#hangar-zoom').value = '1'; shipPaints = {}; await loadHangar();");
         return page;
     }
 
@@ -104,6 +104,40 @@ public class HangarTests
 
         page.Do("__dom.node('#hangar-sort').value = 'recent'; renderHangar();");
         Assert.Contains("Drake Clipper", page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[0].textContent"));
+    }
+
+    /// <summary>
+    /// The gallery is the default: one card a ship, the Fleet card's picture
+    /// larger - the chosen paint's render, or the tinted silhouette - with
+    /// the size as a fact under it. Not to scale, and it does not claim to be:
+    /// no scale bar, and the unsized ship is a card that says it has no size.
+    /// </summary>
+    [Fact]
+    public void The_gallery_shows_every_ship_as_a_card_with_its_picture_and_size()
+    {
+        var page = new Page();
+        page.Serve("/api/fleet/hangar", Fleet);
+        page.Do("""
+            __dom.node('#hangar-mode').value = 'gallery'; __dom.node('#hangar-sort').value = 'length';
+            shipPaints = {DRAK_Corsair: 'Paint_Corsair_Olive_Olive_Yellow'};
+            await loadHangar();
+            """);
+
+        Assert.Equal(4, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card').length")));
+        Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-ship').length")));
+
+        // The Corsair wears its chosen paint; the Pisces is the tinted silhouette.
+        Assert.Contains("/api/fleet/paints/Paint_Corsair_Olive_Olive_Yellow/render",
+            page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render')[0].src"));
+        Assert.Equal("#8fd18a", page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[2].byClass('ship-outline')[0].style['--tint']"));
+
+        var text = page.NodeText("#hangar-canvas");
+        Assert.Contains("53 × 30 × 25 m", text);
+        Assert.Contains("40 sorties", text);
+        Assert.Contains("Mystery Hull", text);
+        Assert.Contains("no size", text);
+        Assert.Equal("", page.NodeText("#hangar-scale"));
+        Assert.True(page.Truth("__dom.node('#hangar-zoom').hidden"));
     }
 
     [Fact]
