@@ -205,6 +205,7 @@ function showView(name) {
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
+  if (name === 'wikelo') loadWikelo().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
@@ -5431,6 +5432,184 @@ async function unpinLocation(pin, button) {
     button.disabled = false;
   }
 }
+
+/* ---- Wikelo's emporium: what he trades, from the game files, against the stash ----
+   Every number on this page is the installed patch's. What the page cannot
+   know is the pilot's standing with him, so a rank gate is said, not judged. */
+
+const WIKELO_GROUPS = { vehicles: 'Ships & vehicles', favours: 'Favors & the way in', items: 'Armour & weapons' };
+
+let wikeloAll = null;
+let wikeloGroup = 'vehicles';
+
+async function loadWikelo() {
+  const list = $('#wikelo-list');
+  if (!list) return;
+
+  try {
+    wikeloAll = await getJson('/api/wikelo');
+  } catch {
+    list.textContent = '';
+    list.append(el('p', 'muted', 'Could not load the emporium — is the app still running?'));
+    return;
+  }
+
+  renderWikelo();
+}
+
+function wikeloTrades() {
+  return (wikeloAll?.trades || []).filter((t) => !t.retired);
+}
+
+function renderWikeloGroups() {
+  const row = $('#wikelo-groups');
+  if (!row) return;
+
+  row.textContent = '';
+  const trades = wikeloTrades();
+
+  for (const [key, label] of Object.entries(WIKELO_GROUPS)) {
+    const count = trades.filter((t) => t.group === key).length;
+    if (!count) continue;
+    const button = el('button', wikeloGroup === key ? 'ghost' : 'ghost off', `${label} · ${count}`);
+    button.type = 'button';
+    button.dataset.group = key;
+    button.addEventListener('click', () => { wikeloGroup = key; renderWikelo(); });
+    row.append(button);
+  }
+}
+
+function renderWikelo() {
+  const list = $('#wikelo-list');
+  if (!list) return;
+
+  list.textContent = '';
+  renderWikeloGroups();
+
+  const count = $('#wikelo-count');
+
+  if (!wikeloAll?.available) {
+    if (count) count.textContent = '';
+    list.append(el('p', 'muted',
+      'The emporium is read from the game files, and this install has not been read yet — '
+      + 'Settings says when the game data is ready. Nothing here comes from a website.'));
+    return;
+  }
+
+  const trades = wikeloTrades();
+  const retired = (wikeloAll.trades || []).length - trades.length;
+  if (count) {
+    count.textContent = `${trades.length} trades`
+      + (retired ? ` · ${retired} retired in the file, not shown` : '');
+  }
+
+  const query = ($('#wikelo-search')?.value || '').trim().toLowerCase();
+  const shown = trades.filter((t) => {
+    if (!query && t.group !== wikeloGroup) return false;
+    if (!query) return true;
+    const haystack = `${t.title} ${t.description} ${t.rewards.map((r) => r.name).join(' ')} `
+      + t.requirements.map((r) => r.name).join(' ');
+    return haystack.toLowerCase().includes(query);
+  });
+
+  if (!shown.length) {
+    list.append(el('p', 'muted', query ? 'No trade matches that.' : 'Nothing in this group.'));
+    return;
+  }
+
+  for (const trade of shown) list.append(wikeloCard(trade));
+}
+
+/** The rank a trade needs, in the file's own words with its threshold. */
+function wikeloGate(trade) {
+  if (!trade.minStanding) return null;
+  const standing = (wikeloAll?.standings || []).find((s) => s.id === trade.minStanding);
+  return standing ? `${standing.name} (${standing.minReputation.toLocaleString()} rep) or better` : `rank ${trade.minStanding}`;
+}
+
+/** One trade's card - new, or redrawn in place once it is tracked, so the message under it survives. */
+function wikeloCard(trade, into = null) {
+  const card = into || el('article', 'point-card wikelo-card');
+  card.textContent = '';
+  card.dataset.id = trade.id;
+
+  const head = el('div', 'wikelo-head');
+  head.append(el('div', 'point-name-read', trade.title));
+  const held = trade.requirements.filter((r) => r.have).length;
+  head.append(el('div', 'muted', trade.requirements.length
+    ? `${held} of ${trade.requirements.length} seen in your stash`
+    : ''));
+  card.append(head);
+
+  if (trade.description) card.append(el('div', 'muted wikelo-desc', trade.description));
+
+  const gives = el('div', 'wikelo-gives');
+  if (trade.rewards.length) {
+    gives.append(el('span', 'strong', trade.rewards.map((r) => `${r.count > 1 ? `${r.count}× ` : ''}${r.name}`).join(', ')));
+  } else {
+    gives.append(el('span', 'muted', 'a reward the file does not name — a blueprint or food pool'));
+  }
+  if (trade.reputation) gives.append(el('span', 'muted', ` · +${trade.reputation} rep`));
+  card.append(gives);
+
+  const gate = wikeloGate(trade);
+  if (gate) card.append(el('div', 'muted warn wikelo-gate', `Needs ${gate}. Your standing is not in the logs, so this is a fact about the trade, not about you.`));
+
+  const wants = el('ul', 'wikelo-wants');
+  for (const r of trade.requirements) {
+    const li = el('li', r.have ? 'have' : 'lack');
+    li.append(el('span', 'mark', r.have ? '✓' : '○'));
+    li.append(el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} ${r.name}`));
+    if (r.have) li.append(el('span', 'muted', ` · seen at ${r.where.join(', ')}`));
+    wants.append(li);
+  }
+  card.append(wants);
+
+  const actions = el('div', 'point-actions');
+  const said = el('span', 'muted point-said');
+
+  if (trade.trackedJobId) {
+    const open = el('button', 'ghost wikelo-open', 'Tracking — open the list');
+    open.type = 'button';
+    open.addEventListener('click', () => showView('jobs'));
+    actions.append(open);
+  } else {
+    const track = el('button', 'ghost wikelo-track', trade.trackedDone ? 'Track again' : 'Track as a goal');
+    track.type = 'button';
+    track.title = 'Make a shopping list of everything this trade wants';
+    track.addEventListener('click', () => trackWikelo(trade, card, track, said));
+    actions.append(track);
+  }
+
+  actions.append(said);
+  card.append(actions);
+  return card;
+}
+
+async function trackWikelo(trade, card, button, said) {
+  button.disabled = true;
+  said.textContent = 'Making the list…';
+
+  try {
+    const response = await fetch(`/api/wikelo/${encodeURIComponent(trade.id)}/track`, { method: 'POST' });
+    const answer = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(answer?.trouble || `track -> ${response.status}`);
+
+    // The card alone is redrawn as tracked; the rest of the page keeps its
+    // scroll and its search, and the sentence below the button stays put.
+    trade.trackedJobId = answer.job?.id || 'tracked';
+    wikeloCard(trade, card);
+    card.querySelector('.point-said').textContent = answer.existed
+      ? 'Already tracking — the list is on Jobs.'
+      : 'Listed on Jobs. Pin it there to see it on Now and the MFD.';
+    loadJobs().catch(() => {});
+  } catch (e) {
+    said.textContent = e.message || 'Could not make the list.';
+    button.disabled = false;
+  }
+}
+
+$('#wikelo-search')?.addEventListener('input', () => renderWikelo());
 
 /* ---- Points of interest: the pilot's own marks, and why ----
    Places is what the logs saw. This is what the pilot chose to keep - exact

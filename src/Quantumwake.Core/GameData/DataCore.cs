@@ -496,6 +496,16 @@ public sealed class DataCore
             : null;
     }
 
+    /// <summary>A 64-bit integer field, or null - reputation thresholds are stored this wide.</summary>
+    public long? Int64At(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        return at >= 0 && field is { ConversionType: 0, DataType: 0x0005 } && at + 8 <= _data.LongLength
+            ? BitConverter.ToInt64(_data, (int)at)
+            : null;
+    }
+
     /// <summary>
     /// An enum field's name, or null.
     /// </summary>

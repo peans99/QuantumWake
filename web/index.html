@@ -32,6 +32,7 @@
         <button data-view="jobs">Shopping</button>
         <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
+        <button data-view="wikelo">Wikelo</button>
         <button data-view="routes">Routes</button>
       </div>
     </div>
@@ -1137,6 +1138,29 @@
     <div id="places-chart" class="bars"></div>
     <h2 class="spaced">Quantum destinations</h2>
     <div id="dests-chart" class="bars"></div>
+  </section>
+
+  <!-- WIKELO: the Banu trader's collection contracts, read from the installed
+       game rather than a guide, each checked against what the stash sightings
+       say is held. Tracking one makes a shopping list of its requirements. -->
+  <section id="view-wikelo" class="view">
+    <div class="section-bar">
+      <h2>Wikelo's emporium</h2>
+      <div class="controls">
+        <input type="search" id="wikelo-search" class="search" placeholder="Search trades or items…"
+               autocomplete="off" spellcheck="false">
+        <span class="muted" id="wikelo-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      What Wikelo will build, and what he wants for it — read from your installed game
+      files, so the numbers are this patch's. Ranks are in the file; your own standing is
+      not, so a gated trade is marked rather than hidden. <b>Track</b> turns a trade's
+      requirements into a shopping list on Jobs, where what you hold is ticked off from
+      stash sightings — presence, never a count, because removals are not logged.
+    </p>
+    <div class="export-row" id="wikelo-groups"></div>
+    <div id="wikelo-list" class="points-list"></div>
   </section>
 
   <!-- POINTS OF INTEREST: the coordinates the pilot chose to keep, with the

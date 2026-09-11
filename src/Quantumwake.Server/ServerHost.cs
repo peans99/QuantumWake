@@ -1656,22 +1656,7 @@ public static class ServerHost
             ImportStore imports, string? imported) =>
         {
             var stats = lib.Stats();
-
-            // Where each held thing is. Stash listings are per location and
-            // record presence, not counts - removals are never logged - so a
-            // job can say WHERE something is but never how many.
-            var held = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var place in stats.Stash)
-                foreach (var group in place.Groups)
-                    foreach (var item in group.Items)
-                    {
-                        if (!held.TryGetValue(item.Name, out var places))
-                            held[item.Name] = places = [];
-
-                        if (!places.Contains(place.Name, StringComparer.OrdinalIgnoreCase))
-                            places.Add(place.Name);
-                    }
+            var held = HeldPlaces(stats);
 
             var worn = stats.Loadout
                 .SelectMany(slot => slot.Items)
@@ -1682,14 +1667,7 @@ public static class ServerHost
             {
                 var lines = job.Items.Select(item =>
                 {
-                    // Held: an exact stash name, else anything containing it -
-                    // "Hadanite" should find "Hadanite (Raw)".
-                    var where = held.TryGetValue(item.Name, out var exact)
-                        ? exact
-                        : held.Where(h => h.Key.Contains(item.Name, StringComparison.OrdinalIgnoreCase))
-                            .SelectMany(h => h.Value)
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .ToList();
+                    var where = HeldWhere(held, item.Name);
 
                     // Where to get what is missing: a commodity has a cheapest
                     // terminal, an item has a shop.
@@ -1751,6 +1729,66 @@ public static class ServerHost
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Jobs ?? [])
                         .Select(job => Project(job, batch))));
+        });
+
+        // ---- Wikelo: what the emporium trades, from the install, against what is held ----
+
+        // The emporium as the installed patch states it - every trade, its
+        // price and its reward - with each requirement marked held or not the
+        // way a job line is: a stash sighting is presence, never a count, so
+        // "have" means "seen somewhere", and the page says where. A trade the
+        // pilot is already collecting for names its job, so the button reads
+        // "tracking" rather than making a second list.
+        app.MapGet("/api/wikelo", (LogLibrary lib, JobStore jobs) =>
+        {
+            var catalogue = lib.GameCommodities.Wikelo;
+            var held = HeldPlaces(lib.Stats());
+            var tracked = jobs.All()
+                .Where(j => j.Source is { } s && s.StartsWith("wikelo:", StringComparison.Ordinal))
+                .ToDictionary(j => j.Source!["wikelo:".Length..], j => j, StringComparer.OrdinalIgnoreCase);
+
+            return Results.Ok(new
+            {
+                available = catalogue.Trades.Count > 0,
+                standings = catalogue.Standings,
+                trades = catalogue.Trades.Select(t => new
+                {
+                    t.Id, t.Title, t.Description, t.Group, t.Reputation, t.MinStanding, t.Retired,
+                    rewards = t.Rewards,
+                    requirements = t.Requirements.Select(r =>
+                    {
+                        var where = HeldWhere(held, r.Name);
+                        return new { r.Class, r.Name, r.Count, r.Unit, have = where.Count > 0, where };
+                    }),
+                    trackedJobId = tracked.TryGetValue(t.Id, out var job) && !job.Done ? job.Id : null,
+                    trackedDone = tracked.TryGetValue(t.Id, out var done) && done.Done,
+                }),
+            });
+        });
+
+        // Collecting for a trade is a shopping list: the requirements become
+        // its lines, held counts and prices come from the ordinary job join,
+        // and it shows on Now and the MFD like any other list. One per trade -
+        // a second press returns the list that exists.
+        app.MapPost("/api/wikelo/{id}/track", (string id, LogLibrary lib, JobStore jobs) =>
+        {
+            var trade = lib.GameCommodities.Wikelo.Trades.FirstOrDefault(t =>
+                string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (trade is null)
+                return Results.NotFound(new { trouble = "the installed game does not list that trade" });
+
+            var source = $"wikelo:{trade.Id}";
+            if (jobs.All().FirstOrDefault(j => j.Source == source && !j.Done) is { } existing)
+                return Results.Ok(new { job = existing, existed = true });
+
+            var reward = trade.Rewards.FirstOrDefault()?.Name;
+            var job = jobs.Add(
+                reward is { Length: > 0 } ? $"Wikelo: {reward}" : $"Wikelo: {trade.Title}",
+                "list",
+                source,
+                [.. trade.Requirements.Select(r => new JobItem(r.Name, r.Count, r.Unit))]);
+
+            return Results.Ok(new { job, existed = false });
         });
 
         app.MapPost("/api/jobs", (JobStore jobs, JobRequest body) =>
@@ -3128,6 +3166,39 @@ static WipeScope ScopeOf(List<string>? covers)
 /// safe because the answer is shown with its price and shop: the player sees
 /// what was matched before flying anywhere.
 /// </remarks>
+/// <summary>
+/// Where each held thing is. Stash listings are per location and record
+/// presence, not counts - removals are never logged - so a list can say WHERE
+/// something is but never how many. Shared by the jobs page and the Wikelo
+/// page so the two never disagree about what "have" means.
+/// </summary>
+static Dictionary<string, List<string>> HeldPlaces(LibraryStats stats)
+{
+    var held = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var place in stats.Stash)
+        foreach (var group in place.Groups)
+            foreach (var item in group.Items)
+            {
+                if (!held.TryGetValue(item.Name, out var places))
+                    held[item.Name] = places = [];
+
+                if (!places.Contains(place.Name, StringComparer.OrdinalIgnoreCase))
+                    places.Add(place.Name);
+            }
+
+    return held;
+}
+
+/// <summary>An exact stash name, else anything containing it - "Hadanite" should find "Hadanite (Raw)".</summary>
+static List<string> HeldWhere(Dictionary<string, List<string>> held, string name) =>
+    held.TryGetValue(name, out var exact)
+        ? exact
+        : held.Where(h => h.Key.Contains(name, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(h => h.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
 static ItemInfo? MatchItem(LogLibrary lib, string written)
 {
     var wanted = Compact(written);

@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1789 tests](https://img.shields.io/badge/tests-1789%20passing-4fd48a)
+![1798 tests](https://img.shields.io/badge/tests-1798%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,789 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,798 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -358,7 +358,18 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.0
+### 0.11.1
+
+- **Wikelo's emporium, from your game files.** Jobs → Wikelo lists every trade
+  the Banu collector offers - what he builds, what he wants for it, the rep it
+  pays and which rank it needs - read from the installed patch rather than a
+  guide, so the numbers are this build's (the Polaris is 50 Favors, whatever a
+  page from 4.9 says). Each requirement is ticked against your stash sightings
+  by the same rule the Jobs page uses: seen somewhere, never a count. **Track
+  as a goal** makes a shopping list of everything a trade wants; pin it and it
+  is on Now and the MFD like any other list. Retired trades still in the file
+  are counted and hidden; your standing with him is not in the logs, so a rank
+  gate is stated, not judged.
 
 ### 0.10.47
 

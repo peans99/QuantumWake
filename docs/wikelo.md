@@ -127,13 +127,24 @@ kind, the GG suits, the AD rifles. Seventeen carry `DO_NOT_USE_NOW_LOOT` or
 retired or moved to loot and the store, and still in the file. A page built on
 this has to hide them, not list them.
 
-## What this extraction does not read yet
+## What the reader does
 
-- **Commodity requirements in SCU.** "Want Polaris? Need something special."
-  (24 SCU Quantainium per the guides) and the Apollo's 48 SCU Savrilium are
-  *resource* hauling orders - a resource type and a volume, not an entity class
-  and a count - and this pass reads only entity orders. The shape is in the same
-  `HaulingOrder` list; it is the next field to read, not a research question.
+`Quantumwake.Core/GameData/GameWikelo.cs` reads all of the above into the
+game-data cache beside the recipes, and the Wikelo page under Jobs shows it.
+Since the survey it also reads the **SCU requirements**: a resource order is a
+`HaulingOrderContent_Resource` with a `ResourceType` and a `minSCU` that is a
+float in the file, which is why the first pass missed it. The Polaris Bit is
+24 SCU Quantainium; the Apollo wants 48 SCU Savrilium besides its 30 Favors;
+the ATLS Orange Line wants 36 SCU Quantainium and 8 each of Copper, Tungsten
+and Corundum. A contract's own `HaulingOverride` replaces its template's orders
+rather than adding to them - read both and the Polaris Bit asks for its 24 SCU
+twice.
+
+Names come from the item catalogue, then `vehicle_Name<class>` for ships (the
+localisation table keys some of those with a `,P` suffix), then the class name
+spaced. Three ATLS paint variants have no name anywhere in the game's text and
+show their class.
+
 - **Which emporium.** Any of the three; the drop-off resolves by tag to the
   collector's asteroid bases. Which three, the logs say better than the file -
   see below.
@@ -172,12 +183,12 @@ So "is it on offer" is not server-side after all: it is in the log, per
 session, which is a better answer than the file's - it is the offer list
 *as this account saw it*.
 
-## What a page would say
+## The page
 
-Pick a reward; see what it wants; see what you hold. The stash and inventory
-sightings already carry counts per item, so "15 Ace Interceptor Helmets: you
-have 4, last seen at Ruin Station" is a join the app can make today, and the
-shopping list could carry the shortfall. Favors are items too
-(`Carryable_1H_CY_banu_favour_Wikelo`) and would show the same way. The rank
-gates and the three rep thresholds are in the file; the pilot's own standing is
-not, and the page would have to say it is estimating.
+Jobs → Wikelo. Every live trade as a card - the retired seventeen are counted
+and hidden - with what it wants ticked against stash sightings by the same rule
+the Jobs page uses: presence, never a count, and the place it was seen. A rank
+gate is stated as a fact about the trade, since the pilot's standing is not in
+the logs. **Track as a goal** turns the requirements into a shopping list
+(`source: wikelo:<debugName>`, one per trade), which then behaves like any
+other list: held marks, prices and shops from UEX, pin it to Now and the MFD.
