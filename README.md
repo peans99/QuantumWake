@@ -358,7 +358,19 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.44
+### 0.10.45
+
+- **Share your points of interest the way you share prices.** Settings → Share
+  what you have has a fourth box: your points, with the name, category and note
+  you gave each - and which system your logs believed, or you said. A friend
+  opening the file sees them on their Points page under **Shared by others**,
+  with whose they are, whose word the system is, and the distance from wherever
+  they last copied a location by the same rule as their own points. Nothing is
+  merged: removing the file takes them away and leaves their own untouched.
+  **Keep as mine** copies one across as their own point, with a note saying who
+  shared it. Coordinates that are not numbers, dates in the future and notes
+  past the cap are dropped or cut on the way in and counted, as with every
+  other shared class.
 
 - **Help is where the questions are.** About now opens a dedicated Help & FAQ
   page with setup, privacy and reporting guidance updated for the paired Cougar

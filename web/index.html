@@ -1158,6 +1158,9 @@
     <div class="export-row" id="points-categories"></div>
     <p class="muted caption" id="points-from" hidden></p>
     <div id="points-list" class="points-list"></div>
+    <!-- Points other pilots sent. Kept apart from your own: removing the
+         file takes them away and leaves yours untouched. -->
+    <div id="points-shared"></div>
   </section>
 
   <!-- CONTRACTS -->
@@ -2152,6 +2155,13 @@
         <span>
           Jobs, checklists and flight plans
           <em class="muted">The things you typed rather than the things your logs saw.</em>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="export-points" checked>
+        <span>
+          Points of interest
+          <em class="muted">Coordinates you copied in game, with the name, category and note you gave them &mdash; and which system your logs believed, or you said.</em>
         </span>
       </label>
       <label class="toggle">

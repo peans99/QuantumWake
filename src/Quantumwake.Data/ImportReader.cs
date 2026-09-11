@@ -13,7 +13,7 @@ public sealed record ImportProblem(string Message, int Status = 400);
 /// <summary>How many of each thing came in, were dropped, or were cut short.</summary>
 public sealed record ImportCounts(
     int Receipts = 0, int Blueprints = 0, int Jobs = 0, int Checklists = 0, int Trips = 0,
-    int RunActions = 0)
+    int RunActions = 0, int Points = 0)
 {
     /// <summary>Whether anything at all landed in this tally.</summary>
     /// <remarks>
@@ -23,7 +23,7 @@ public sealed record ImportCounts(
     /// </remarks>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool Any =>
-        Receipts > 0 || Blueprints > 0 || Jobs > 0 || Checklists > 0 || Trips > 0 || RunActions > 0;
+        Receipts > 0 || Blueprints > 0 || Jobs > 0 || Checklists > 0 || Trips > 0 || RunActions > 0 || Points > 0;
 }
 
 /// <summary>What a file turned into, before anything is stored.</summary>
@@ -75,6 +75,9 @@ public static class ImportReader
 
     public const int MaxReceipts = 20_000;
     public const int MaxBlueprints = 2_000;
+
+    /// <summary>More points than anybody marks by hand; the cap is against a generated file.</summary>
+    public const int MaxPoints = 2_000;
     public const int MaxAuthored = 500;
     public const int MaxItems = 200;
     public const int MaxChecklistItems = 500;
@@ -149,9 +152,10 @@ public static class ImportReader
         var receipts = ReadReceipts(document, now, ref counts, ref rejected, ref truncated);
         var blueprints = ReadBlueprints(document, now, ref counts, ref rejected, ref truncated);
         var authored = ReadAuthored(document, now, ref counts, ref rejected, ref truncated);
+        var points = ReadPoints(document, now, ref counts, ref rejected, ref truncated);
 
         var classes = (document.Classes ?? [])
-            .Where(c => c is ExportDocument.Receipts or ExportDocument.Blueprints or ExportDocument.Authored)
+            .Where(c => c is ExportDocument.Receipts or ExportDocument.Blueprints or ExportDocument.Authored or ExportDocument.Points)
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -166,6 +170,7 @@ public static class ImportReader
             Receipts = receipts,
             Blueprints = blueprints,
             Authored = authored,
+            Points = points,
         };
 
         return (new ImportReading(clean, counts, rejected, truncated), null);
@@ -259,6 +264,60 @@ public static class ImportReader
         var order = kept.OrderBy(b => b.At).ToList();
 
         return new ExportBlueprints(
+            order.Count > 0 ? order[0].At : null,
+            order.Count > 0 ? order[^1].At : null,
+            Caveats(block.Caveats),
+            order);
+    }
+
+    /// <summary>
+    /// Points somebody else marked. A coordinate is three numbers and the
+    /// numbers are the hazard: one Infinity in a row makes every distance the
+    /// page computes from it NaN, so a row is kept only when all four figures
+    /// are finite and the distance from centre is not negative.
+    /// </summary>
+    private static ExportPoints? ReadPoints(
+        ExportFile document, DateTimeOffset now,
+        ref ImportCounts counts, ref ImportCounts rejected, ref ImportCounts truncated)
+    {
+        if (document.Points is not { } block)
+            return null;
+
+        var kept = new List<ExportPointRow>();
+        var dropped = 0;
+        var seen = 0;
+
+        foreach (var row in block.Rows ?? [])
+        {
+            seen++;
+            if (kept.Count >= MaxPoints) continue;
+
+            if (row is null || !Dated(row.At, now)
+                || !double.IsFinite(row.X) || !double.IsFinite(row.Y) || !double.IsFinite(row.Z)
+                || !double.IsFinite(row.Gigametres) || row.Gigametres < 0)
+            {
+                dropped++;
+                continue;
+            }
+
+            kept.Add(new ExportPointRow(
+                row.At.ToUniversalTime(),
+                Sanitise.Clean(Printable(row.Label), "A point"),
+                Sanitise.CleanOptional(Printable(row.Category), 40),
+                Sanitise.CleanOptional(Printable(row.Note, breaks: true), ScreenReadingStore.NoteLength),
+                Sanitise.CleanOptional(Printable(row.System), 40),
+                row.SystemByPilot,
+                Sanitise.CleanOptional(Printable(row.Believed), Sanitise.Title),
+                row.X, row.Y, row.Z, row.Gigametres));
+        }
+
+        counts = counts with { Points = kept.Count };
+        rejected = rejected with { Points = dropped };
+        if (seen > MaxPoints) truncated = truncated with { Points = seen - kept.Count - dropped };
+
+        var order = kept.OrderBy(p => p.At).ToList();
+
+        return new ExportPoints(
             order.Count > 0 ? order[0].At : null,
             order.Count > 0 ? order[^1].At : null,
             Caveats(block.Caveats),

@@ -331,4 +331,63 @@ public class ImportReaderTests
         var row = Assert.Single(reading.Document.Blueprints!.Rows);
         Assert.Equal(TimeSpan.Zero, row.At.Offset);
     }
+
+    /* ---------- points ---------- */
+
+    private static string Point(string at, string x, string y, string z, string gm, string extra = "") =>
+        $"{{\"at\":\"{at}\",\"label\":\"Shelf\",\"category\":\"Mining\",\"x\":{x},\"y\":{y},\"z\":{z},\"gigametres\":{gm}{extra}}}";
+
+    /// <summary>
+    /// A coordinate is three numbers and the numbers are the hazard: one that is
+    /// not finite makes every distance computed from it NaN, and a date in 2074
+    /// pins the row to the top of the page. Both are dropped and counted.
+    /// </summary>
+    [Fact]
+    public void A_point_with_a_bad_number_or_date_is_dropped_and_counted()
+    {
+        var reading = Read(Wrap("\"points\"", "\"points\":{\"caveats\":[\"system-inferred\"],\"rows\":["
+            + Point("2026-08-20T09:00:00+00:00", "-9641671346.9", "-11490734321.2", "-91805.1", "14.99996",
+                ",\"note\":\"Two rocks\\nleft.\",\"system\":\"Pyro\",\"systemByPilot\":true,\"believed\":\"Ruin Station\"") + ","
+            + Point("2026-08-20T09:00:00+00:00", "1e400", "0", "0", "0") + ","
+            + Point("2026-08-20T09:00:00+00:00", "1", "0", "0", "-1") + ","
+            + Point("2074-01-01T00:00:00+00:00", "1", "2", "3", "0.1")
+            + "]}"));
+
+        Assert.Equal(1, reading.Counts.Points);
+        Assert.Equal(3, reading.Rejected.Points);
+
+        var row = Assert.Single(reading.Document.Points!.Rows);
+        Assert.Equal("Shelf", row.Label);
+        Assert.Equal("Two rocks\nleft.", row.Note);
+        Assert.Equal("Pyro", row.System);
+        Assert.True(row.SystemByPilot);
+        Assert.Equal("Ruin Station", row.Believed);
+        Assert.Equal(-91805.1, row.Z);
+        Assert.Contains("system-inferred", reading.Document.Points.Caveats);
+        Assert.Contains("points", reading.Document.Classes);
+    }
+
+    [Fact]
+    public void A_point_without_a_label_gets_one_and_a_note_is_cut_at_the_cap()
+    {
+        var reading = Read(Wrap("\"points\"", "\"points\":{\"caveats\":[],\"rows\":["
+            + "{\"at\":\"2026-08-20T09:00:00+00:00\",\"x\":1,\"y\":2,\"z\":3,\"gigametres\":0.1,\"note\":\""
+            + new string('n', 5000) + "\"}]}"));
+
+        var row = Assert.Single(reading.Document.Points!.Rows);
+        Assert.Equal("A point", row.Label);
+        Assert.Equal(ScreenReadingStore.NoteLength, row.Note!.Length);
+    }
+
+    [Fact]
+    public void More_points_than_the_cap_are_cut_and_the_cut_is_counted()
+    {
+        var rows = string.Join(",", Enumerable.Range(0, ImportReader.MaxPoints + 5)
+            .Select(_ => Point("2026-08-20T09:00:00+00:00", "1", "2", "3", "0.1")));
+
+        var reading = Read(Wrap("\"points\"", $"\"points\":{{\"caveats\":[],\"rows\":[{rows}]}}"));
+
+        Assert.Equal(ImportReader.MaxPoints, reading.Counts.Points);
+        Assert.Equal(5, reading.Truncated.Points);
+    }
 }

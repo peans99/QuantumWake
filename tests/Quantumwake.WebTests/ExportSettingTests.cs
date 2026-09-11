@@ -19,7 +19,7 @@ public class ExportSettingTests
     private static Page Ready()
     {
         var page = new Page();
-        page.Serve("/api/export/preview?receipts=true&blueprints=true&authored=true&days=7", Preview);
+        page.Serve("/api/export/preview?receipts=true&blueprints=true&authored=true&points=true&days=7", Preview);
         return page;
     }
 
@@ -47,6 +47,7 @@ public class ExportSettingTests
             __dom.node('#export-receipts').checked = false;
             __dom.node('#export-blueprints').checked = false;
             __dom.node('#export-authored').checked = false;
+            __dom.node('#export-points').checked = false;
             await renderExportPreview();
             """);
 
@@ -121,10 +122,33 @@ public class ExportSettingTests
             __dom.node('#export-receipts').checked = false;
             __dom.node('#export-blueprints').checked = false;
             __dom.node('#export-authored').checked = false;
+            __dom.node('#export-points').checked = false;
             await saveExport();
             """);
 
         Assert.DoesNotContain("POST /api/export", page.Fetched());
         Assert.Contains("Tick at least one", page.NodeText("#export-status"));
+    }
+
+    /// <summary>Points are a class of their own in the file, ticked like the rest and counted in the preview.</summary>
+    [Fact]
+    public void Points_of_interest_are_offered_and_counted()
+    {
+        var page = new Page();
+        page.Serve("/api/export/preview?receipts=false&blueprints=false&authored=false&points=true&days=7",
+            """{"receipts":0,"blueprints":0,"jobs":0,"checklists":0,"trips":0,"points":3,"days":7,"defaultDays":7}""");
+        page.Serve("/api/export", "{\"format\":\"quantumwake.export\"}");
+
+        page.Do("""
+            __dom.node('#export-receipts').checked = false;
+            __dom.node('#export-blueprints').checked = false;
+            __dom.node('#export-authored').checked = false;
+            __dom.node('#export-points').checked = true;
+            await renderExportPreview();
+            """);
+        Assert.Contains("3 points of interest", page.NodeText("#export-preview"));
+
+        page.Do("await saveExport();");
+        Assert.Contains("\"points\":true", page.BodyOf("/api/export"));
     }
 }

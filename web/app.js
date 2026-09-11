@@ -5399,6 +5399,12 @@ let pointsCategory = null;
 let pointsFrom = null;
 
 async function loadPoints() {
+  await loadOwnPoints();
+  renderSharedPoints().catch(() => {});
+}
+
+/** The pilot's own points, and the distances; the shared block is left as it stands. */
+async function loadOwnPoints() {
   const list = $('#points-list');
   if (!list) return;
 
@@ -5751,6 +5757,106 @@ async function removePoint(pin, button, said) {
 }
 
 $('#points-search')?.addEventListener('input', () => renderPoints());
+
+/**
+ * Points other pilots sent, under the pilot's own. Read-only: they are
+ * somebody else's marks, kept apart so removing the file takes them away and
+ * leaves your own untouched. "Keep as mine" copies one across, deliberately.
+ *
+ * Unlike the blueprints page this one says when shared points are being
+ * hidden by the imports filter: a friend's points are the whole reason to
+ * open the file, and a page that silently showed none would read as the
+ * import having failed.
+ */
+async function renderSharedPoints() {
+  const host = $('#points-shared');
+  if (!host) return;
+
+  host.textContent = '';
+
+  const rows = await getJson(`/api/imports/points${importedQuery()}`).catch(() => []);
+  if (!rows.length) return;
+
+  if (showImported === 'none') {
+    const line = el('p', 'muted');
+    line.append(el('span', null,
+      `${rows.length} point${rows.length === 1 ? '' : 's'} from files you were sent ${rows.length === 1 ? 'is' : 'are'} not shown. `));
+    const show = el('button', 'ghost tiny', 'Show them');
+    show.addEventListener('click', () => setShowImported('all'));
+    line.append(show);
+    host.append(line);
+    return;
+  }
+
+  const block = el('section', 'shared-block');
+  block.append(el('h3', null, 'Shared by others'));
+  block.append(el('p', 'muted', 'Points from the files you were sent. The coordinates are exact; '
+    + 'the system is what the sender\'s logs believed unless they set it themselves, and the '
+    + 'note is theirs. Keep one and it becomes your own point, backed up and edited like the rest.'));
+
+  const list = el('div', 'points-list');
+  for (const row of rows) list.append(sharedPointCard(row));
+  block.append(list);
+  host.append(block);
+}
+
+function sharedPointCard(row) {
+  const card = el('article', 'point-card shared');
+
+  const head = el('div', 'point-head shared');
+  head.append(el('div', 'point-name-read', row.label));
+  head.append(el('div', 'muted', `${row.category || 'General'} · from ${row.imported?.handle || 'someone'}`));
+  card.append(head);
+
+  const facts = el('div', 'point-facts muted');
+  facts.append(el('span', 'mono',
+    `x ${Math.round(row.x).toLocaleString()} · y ${Math.round(row.y).toLocaleString()} · z ${Math.round(row.z).toLocaleString()}`));
+  facts.append(el('span', null, `${Number(row.gigametres).toFixed(4)} Gm from system centre`));
+  if (row.system) {
+    facts.append(el('span', null, row.systemByPilot
+      ? `in ${row.system}, as they set it`
+      : `in ${row.system}, as their logs believed${row.believed ? ` (near ${row.believed})` : ''}`));
+  } else {
+    facts.append(el('span', 'warn', 'system unknown — their logs could not place it'));
+  }
+  card.append(facts);
+
+  if (row.metres != null) {
+    const here = el('div', 'point-here');
+    here.append(row.sameSystem
+      ? el('span', null, `${distanceWord(row.metres)} from where you last copied`)
+      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+    card.append(here);
+  }
+
+  card.append(el('div', 'point-when muted', `They copied it ${dateOf(row.at)}, ${shortTimeOf(row.at)}`));
+  if (row.note) card.append(el('div', 'pin-note', row.note));
+
+  const actions = el('div', 'point-actions');
+  const said = el('span', 'muted point-said');
+  const keep = el('button', 'ghost point-keep', 'Keep as mine');
+  keep.type = 'button';
+  keep.title = 'Copy this point into your own, with a note saying who shared it';
+  keep.addEventListener('click', async () => {
+    keep.disabled = true;
+    try {
+      const response = await fetch(
+        `/api/imports/${encodeURIComponent(row.imported.id)}/points/keep?at=${encodeURIComponent(row.at)}`,
+        { method: 'POST' });
+      const answer = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(answer?.trouble || `keep -> ${response.status}`);
+      said.textContent = 'Kept — it is in your points above.';
+      loadOwnPoints().catch(() => {});
+    } catch (e) {
+      said.textContent = e.message || 'Could not keep that point.';
+      keep.disabled = false;
+    }
+  });
+  actions.append(keep, said);
+  card.append(actions);
+
+  return card;
+}
 
 /** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
 function fleetRow(row) {
@@ -8528,6 +8634,7 @@ function setShowImported(value) {
   loadTrips?.().catch(() => {});
   renderSharedReceipts().catch(() => {});
   renderSharedBlueprints().catch(() => {});
+  renderSharedPoints().catch(() => {});
 }
 
 /**
@@ -8572,6 +8679,7 @@ function countLine(counts) {
   if (counts.checklists) parts.push(`${counts.checklists} checklists`);
   if (counts.trips) parts.push(`${counts.trips} flight plans`);
   if (counts.runActions) parts.push(`${counts.runActions} run-sheet lines`);
+  if (counts.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
   return parts.join(' · ');
 }
 
@@ -8625,7 +8733,7 @@ function importCard(batch) {
 
   if (batch.classes.length) {
     const row = el('div', 'import-classes');
-    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists']];
+    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists'], ['points', 'points of interest']];
 
     for (const [key, label] of named) {
       if (!batch.classes.includes(key)) continue;
@@ -8871,6 +8979,7 @@ function exportChoice() {
     receipts: Boolean($('#export-receipts')?.checked),
     blueprints: Boolean($('#export-blueprints')?.checked),
     authored: Boolean($('#export-authored')?.checked),
+    points: Boolean($('#export-points')?.checked),
     handle: Boolean($('#export-handle')?.checked),
     days: exportDays(),
   };
@@ -8889,7 +8998,7 @@ async function renderExportPreview() {
 
   const choice = exportChoice();
 
-  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+  if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
     line.textContent = 'Nothing ticked, so there is nothing to save.';
     return;
   }
@@ -8897,7 +9006,7 @@ async function renderExportPreview() {
   try {
     const counts = await getJson(
       `/api/export/preview?receipts=${choice.receipts}&blueprints=${choice.blueprints}`
-      + `&authored=${choice.authored}&days=${choice.days}`);
+      + `&authored=${choice.authored}&points=${choice.points}&days=${choice.days}`);
 
     const parts = [];
     if (choice.receipts) {
@@ -8908,6 +9017,7 @@ async function renderExportPreview() {
     if (choice.authored) {
       parts.push(`${counts.jobs} jobs, ${counts.checklists} checklists, ${counts.trips} flight plans`);
     }
+    if (choice.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
 
     line.textContent = `Would save ${parts.join(' · ')}.`;
   } catch {
@@ -9196,7 +9306,7 @@ async function saveExport() {
   const status = $('#export-status');
   const choice = exportChoice();
 
-  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+  if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
     status.textContent = 'Tick at least one thing first.';
     return;
   }
@@ -9241,7 +9351,7 @@ async function saveExport() {
   }
 }
 
-for (const id of ['#export-receipts', '#export-blueprints', '#export-authored', '#export-days']) {
+for (const id of ['#export-receipts', '#export-blueprints', '#export-authored', '#export-points', '#export-days']) {
   $(id)?.addEventListener('change', () => renderExportPreview().catch(() => {}));
 }
 

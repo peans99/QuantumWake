@@ -340,4 +340,74 @@ public class PointsTests
         Assert.Contains("/showlocation", list);
         Assert.Contains("Log", list);
     }
+
+    private const string Shared = """
+        [{"at":"2026-09-01T10:00:00Z","label":"Salvage field, Pyro side","category":"Salvage","note":"Three hulls, one intact.",
+          "system":"Pyro","systemByPilot":false,"believed":"Ruin Station","x":10,"y":20,"z":30,"gigametres":0.5,
+          "metres":9500,"sameSystem":true,"imported":{"id":"b1","handle":"Kaidan"}},
+         {"at":"2026-09-02T10:00:00Z","label":"Dead drop","category":"Meet point","note":null,
+          "system":null,"systemByPilot":false,"believed":null,"x":1,"y":2,"z":3,"gigametres":0.1,
+          "metres":5,"sameSystem":false,"imported":{"id":"b1","handle":"Kaidan"}}]
+        """;
+
+    /// <summary>
+    /// A friend's points sit under the pilot's own, saying whose they are and
+    /// whose word the system is, measured from where the pilot last copied by
+    /// the same rule as their own - and never merged into their own pins.
+    /// </summary>
+    [Fact]
+    public void Points_others_shared_are_shown_apart_with_whose_word_the_system_is()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", "[]");
+        page.Serve("/api/imports/points?imported=all", Shared);
+        page.Do("showImported = 'all'; allSessions = []; await loadPoints();");
+
+        var shared = page.NodeText("#points-shared");
+        Assert.Contains("Shared by others", shared);
+        Assert.Contains("Salvage field, Pyro side", shared);
+        Assert.Contains("from Kaidan", shared);
+        Assert.Contains("in Pyro, as their logs believed (near Ruin Station)", shared);
+        Assert.Contains("9.5 km from where you last copied", shared);
+        Assert.Contains("Three hulls, one intact.", shared);
+        Assert.Contains("system unknown", shared);
+        Assert.Contains("not measurable", shared);
+        Assert.DoesNotContain("5 m from", shared);
+
+        // The pilot's own list is still empty: nothing was merged.
+        Assert.Contains("No points yet", page.NodeText("#points-list"));
+    }
+
+    /// <summary>
+    /// With the imports filter off the page says the points are there and
+    /// hidden, rather than showing nothing and reading as a failed import.
+    /// </summary>
+    [Fact]
+    public void Hidden_shared_points_are_announced_rather_than_omitted()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", "[]");
+        page.Serve("/api/imports/points", Shared);
+        page.Do("showImported = 'none'; allSessions = []; await loadPoints();");
+
+        var shared = page.NodeText("#points-shared");
+        Assert.Contains("2 points from files you were sent are not shown", shared);
+        Assert.DoesNotContain("Salvage field", shared);
+    }
+
+    [Fact]
+    public void Keeping_a_shared_point_posts_which_and_reloads_the_pilots_own()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/pins", "[]");
+        page.Serve("/api/imports/points?imported=all", Shared);
+        page.Serve("/api/imports/b1/points/keep?at=2026-09-01T10%3A00%3A00Z", """{"sourceAt":"2026-09-01T10:00:00Z"}""");
+        page.Do("showImported = 'all'; allSessions = []; await loadPoints();");
+
+        page.Do("await __dom.node('#points-shared').byClass('point-keep')[0].fire('click');");
+
+        Assert.Contains("POST /api/imports/b1/points/keep?at=2026-09-01T10%3A00%3A00Z", page.Fetched());
+        Assert.Contains("Kept", page.Text("__dom.node('#points-shared').byClass('point-said')[0].textContent"));
+        Assert.True(page.Fetched().Count(url => url == "GET /api/screen/pins") >= 2);
+    }
 }

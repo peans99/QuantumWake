@@ -30,20 +30,24 @@ public static class PointDistances
         double x, double y, double z, string? system, IEnumerable<PinnedLocation> points)
     {
         return [.. points
-            .Select(point => new PointDistance(point, Between(x, y, z, point), Same(system, point.System)))
+            .Select(point => new PointDistance(point, Between(x, y, z, point), SameSystem(system, point.System)))
             .OrderByDescending(d => d.SameSystem)
             .ThenBy(d => d.Metres)];
     }
 
-    public static double Between(double x, double y, double z, PinnedLocation point)
+    public static double Between(double x, double y, double z, PinnedLocation point) =>
+        Between(x, y, z, point.X, point.Y, point.Z);
+
+    public static double Between(double x, double y, double z, double px, double py, double pz)
     {
-        var dx = point.X - x;
-        var dy = point.Y - y;
-        var dz = point.Z - z;
+        var dx = px - x;
+        var dy = py - y;
+        var dz = pz - z;
         return Math.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    private static bool Same(string? a, string? b) =>
+    /// <summary>Both named, and the same name; a side with no system is never the same system.</summary>
+    public static bool SameSystem(string? a, string? b) =>
         a is { Length: > 0 } && b is { Length: > 0 } && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }
 

@@ -2000,17 +2000,17 @@ public static class ServerHost
         });
 
         app.MapGet("/api/export/preview", (ExportBuilder exports,
-            bool? receipts, bool? blueprints, bool? authored, int? days) =>
+            bool? receipts, bool? blueprints, bool? authored, int? days, bool? points) =>
         {
             var choice = new ExportChoice(
                 receipts == true, blueprints == true, authored == true,
-                days ?? ExportBuilder.DefaultDays);
+                days ?? ExportBuilder.DefaultDays, Points: points == true);
 
             var counts = exports.Preview(choice);
 
             return Results.Ok(new
             {
-                counts.Receipts, counts.Blueprints, counts.Jobs, counts.Checklists, counts.Trips,
+                counts.Receipts, counts.Blueprints, counts.Jobs, counts.Checklists, counts.Trips, counts.Points,
                 days = choice.Days,
                 defaultDays = ExportBuilder.DefaultDays,
             });
@@ -2081,6 +2081,50 @@ public static class ServerHost
                     row.Name,
                     imported = Marker(batch),
                 })));
+
+        // Somebody else's points, measured from wherever this pilot last copied
+        // a location when there is such a place - the same rule as the pilot's
+        // own: a point in another system, or in no known system, is never given
+        // a distance.
+        app.MapGet("/api/imports/points", (ImportStore imports, ScreenReadingStore readings, string? imported) =>
+        {
+            var from = readings.Clipboards().FirstOrDefault();
+
+            return Shared(imports, imported ?? "all").SelectMany(batch =>
+                (batch.Points?.Rows ?? []).Select(row => new
+                {
+                    row.At, row.Label, row.Category, row.Note, row.System, row.SystemByPilot, row.Believed,
+                    row.X, row.Y, row.Z, row.Gigametres,
+                    metres = from is null ? (double?)null : PointDistances.Between(from.X, from.Y, from.Z, row.X, row.Y, row.Z),
+                    sameSystem = from is not null && PointDistances.SameSystem(from.System, row.System),
+                    imported = Marker(batch),
+                }));
+        });
+
+        // One of somebody else's points, kept as the pilot's own. Goes through
+        // the pins store as a fresh pin rather than a merge: the copy is theirs
+        // from then on, edited and backed up like any other, and removing the
+        // import no longer touches it. The note says who it came from, since a
+        // month later that is the fact most worth having.
+        app.MapPost("/api/imports/{id}/points/keep", (string id, DateTimeOffset at, ImportStore imports, ScreenReadingStore readings) =>
+        {
+            var batch = imports.All().FirstOrDefault(b => b.Id == id);
+            var row = batch?.Points?.Rows.FirstOrDefault(r => r.At == at);
+            if (batch is null || row is null)
+                return Results.NotFound(new { trouble = "that shared point is no longer here" });
+
+            if (readings.Pinned().Any(p => p.SourceAt == row.At))
+                return Results.Conflict(new { trouble = "you already have a point from that same copy" });
+
+            var from = $"Shared by {batch.Handle ?? "someone"}.";
+            var pin = new PinnedLocation(
+                row.At, DateTimeOffset.UtcNow, row.X, row.Y, row.Z, row.Gigametres,
+                row.Believed, row.System, row.Label, row.Category ?? "General",
+                string.IsNullOrWhiteSpace(row.Note) ? from : $"{row.Note}\n\n{from}",
+                SystemByPilot: row.SystemByPilot);
+            readings.PutPin(pin);
+            return Results.Ok(pin);
+        });
 
         app.MapPost("/api/imports/{id}/hide", (string id, ImportStore imports) =>
             imports.ToggleHidden(id) ? Results.Ok(new { id }) : Results.NotFound());
@@ -3892,10 +3936,11 @@ public sealed record ExportRequest(
     bool Authored = false,
     int? Days = null,
     bool Handle = true,
-    string? Note = null)
+    string? Note = null,
+    bool Points = false)
 {
     public ExportChoice Choice() =>
-        new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note);
+        new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note, Points);
 }
 
 /// <summary>

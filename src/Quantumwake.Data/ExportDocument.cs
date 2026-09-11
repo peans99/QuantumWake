@@ -63,9 +63,10 @@ public static class ExportDocument
     /// <para>
     /// 1 — first release.
     /// 2 — flight-plan stops gained manual run-sheet actions.
+    /// 3 — points of interest, as their own class.
     /// </para>
     /// </remarks>
-    public const int ContentVersion = 2;
+    public const int ContentVersion = 3;
 
     /// <summary>
     /// How a document is written and read, owned here rather than borrowed.
@@ -89,6 +90,7 @@ public static class ExportDocument
     public const string Receipts = "receipts";
     public const string Blueprints = "blueprints";
     public const string Authored = "authored";
+    public const string Points = "points";
 
     /// <summary>Everything authored, for restoring a machine rather than sharing.</summary>
     public const string Backup = "backup";
@@ -123,7 +125,8 @@ public sealed record ExportFile(
     ExportReceipts? Receipts = null,
     ExportBlueprints? Blueprints = null,
     ExportAuthored? Authored = null,
-    ExportBackup? Backup = null);
+    ExportBackup? Backup = null,
+    ExportPoints? Points = null);
 
 /// <summary>
 /// Everything the pilot has typed, for getting a machine back rather than for
@@ -237,4 +240,39 @@ public static class ExportCaveats
 
     /// <summary>A blueprint's date is the earliest sighting, not necessarily the grant.</summary>
     public const string EarliestSighting = "earliest-sighting";
+
+    /// <summary>A point's system is what the sender's logs believed, unless the row says the sender set it.</summary>
+    public const string SystemInferred = "system-inferred";
 }
+
+/// <summary>
+/// Points of interest the sender marked: coordinates the game gave away, with
+/// the name, category and note they wrote.
+/// </summary>
+/// <remarks>
+/// The coordinates are exact and the system is not: a <c>/showlocation</c>
+/// is relative to whichever system the pilot was in and names none, so the
+/// system on a row is either what the sender's logs believed at the time or
+/// what the sender typed, and <see cref="ExportPointRow.SystemByPilot"/> says
+/// which. A reader treats the first kind as a guess, because it is one.
+/// </remarks>
+public sealed record ExportPoints(
+    DateTimeOffset? ObservedFrom,
+    DateTimeOffset? ObservedTo,
+    IReadOnlyList<string> Caveats,
+    IReadOnlyList<ExportPointRow> Rows);
+
+/// <param name="At">When the sender copied the location; the row's identity in their log.</param>
+/// <param name="Believed">The place the sender's logs had them at, when they had one.</param>
+public sealed record ExportPointRow(
+    DateTimeOffset At,
+    string Label,
+    string? Category,
+    string? Note,
+    string? System,
+    bool SystemByPilot,
+    string? Believed,
+    double X,
+    double Y,
+    double Z,
+    double Gigametres);

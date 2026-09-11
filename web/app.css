@@ -4150,6 +4150,11 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .point-head { display: grid; grid-template-columns: minmax(0, 1fr) 110px 130px; gap: 6px; }
 .point-head .select { min-width: 0; }
 .point-belief .warn { color: var(--amber); }
+.point-facts .warn { color: var(--amber); }
+.point-card.shared::before { background: var(--dim); }
+.point-head.shared { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
+.point-name-read { font-size: 14px; font-weight: 600; color: var(--text); }
+#points-shared { margin-top: 22px; }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
 #points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }
