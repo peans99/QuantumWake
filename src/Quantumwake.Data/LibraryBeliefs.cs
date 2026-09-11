@@ -14,20 +14,32 @@ namespace Quantumwake.Data;
 /// </remarks>
 public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
 {
-    public (string Id, string Name, string? System)? WhereAt(DateTimeOffset at)
+    public (string Id, string Name, string? System)? WhereAt(DateTimeOffset at) =>
+        Placed(at) is { } belief ? (belief.Id, belief.Name, belief.System) : null;
+
+    /// <summary>
+    /// Where the logs put the pilot at a moment, and what that rests on: the
+    /// line that said so and when it was written.
+    /// </summary>
+    /// <remarks>
+    /// The stored session keeps no confidence on a visit, so the grade a
+    /// reader can give is the evidence itself - an arrival four minutes before
+    /// the moment is a different thing from a quantum jump forty minutes
+    /// before it, and a card that shows both facts lets the pilot judge rather
+    /// than hiding the difference behind a word.
+    /// </remarks>
+    public PlaceBelief? Placed(DateTimeOffset at)
     {
         if (Session(at) is not { } session) return null;
 
-        DateTimeOffset? bestAt = null;
-        (string Id, string Name, string? System)? best = null;
+        PlaceBelief? best = null;
 
         for (var i = session.Locations.Count - 1; i >= 0; i--)
         {
             var visit = session.Locations[i];
             if (visit.At > at) continue;
 
-            bestAt = visit.At;
-            best = (visit.RawId, visit.DisplayName, visit.System);
+            best = new PlaceBelief(visit.RawId, visit.DisplayName, visit.System, visit.At, PlaceSignal.Arrival);
             break;
         }
 
@@ -38,8 +50,8 @@ public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
             var jump = session.Jumps[i];
             if (jump.At > at) continue;
 
-            if (bestAt is null || jump.At > bestAt)
-                best = (jump.ToId, jump.ToName, LocationResolver.Resolve(jump.ToId).System);
+            if (best is null || jump.At > best.SignalAt)
+                best = new PlaceBelief(jump.ToId, jump.ToName, LocationResolver.Resolve(jump.ToId).System, jump.At, PlaceSignal.Jump);
 
             break;
         }
@@ -124,3 +136,16 @@ public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
     private SessionSummary? Session(DateTimeOffset at) =>
         library.Sessions().FirstOrDefault(s => s.StartedAt <= at && at <= s.EndedAt.AddMinutes(5));
 }
+
+/// <summary>The line a place belief rests on.</summary>
+public enum PlaceSignal
+{
+    /// <summary>A location signal - an arrival, a local inventory opened.</summary>
+    Arrival,
+
+    /// <summary>A quantum jump's destination, which says where the ship was going, not that it got there.</summary>
+    Jump,
+}
+
+/// <summary>Where the logs put the pilot at a moment, with the line that said so.</summary>
+public sealed record PlaceBelief(string Id, string Name, string? System, DateTimeOffset SignalAt, PlaceSignal Signal);

@@ -318,7 +318,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.38
+### 0.10.39
+
+- **A point says what its "believed to be" rests on, and you can set the
+  system yourself.** A copied `/showlocation` names no system, so the app
+  places it from the logs - and now says on what: *from a location signal 4
+  min earlier*, or *from a quantum jump 40 min earlier - where the ship was
+  going, not that it arrived*. Each card has a System selector; a copy the logs
+  could not place asks for it rather than showing nothing, and a system you set
+  is shown as yours from then on, with what the logs had said beside it.
 
 - **Points of interest are in the backup now.** Every pin - its name, category
   and note - goes into the backup file and comes back through the same restore

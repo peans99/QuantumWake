@@ -5447,6 +5447,44 @@ function renderPoints() {
   for (const pin of shown) list.append(renderPointCard(pin));
 }
 
+/**
+ * What the app thought the place was when the copy happened, and what that
+ * rested on. A /showlocation names no system, so this line is the only thing
+ * that places the numbers - and it is a belief, graded by its evidence: an
+ * arrival four minutes before the copy is not a quantum jump forty minutes
+ * before it, and the line says which rather than hiding both behind a word.
+ */
+function pointBeliefLine(pin) {
+  const line = el('span', 'point-belief');
+
+  if (pin.systemByPilot) {
+    line.append(el('span', null, `in ${pin.system}, as you set it`));
+    if (pin.believed) line.append(el('span', 'muted', ` · the logs had said ${pin.believed}`));
+    return line;
+  }
+
+  const believed = [pin.system, pin.believed].filter(Boolean).join(' › ');
+  if (!believed) {
+    line.append(el('span', 'warn', 'the logs could not place this copy — set the system above'));
+    return line;
+  }
+
+  line.append(el('span', null, `believed to be ${believed} when copied`));
+
+  if (pin.believedBy && pin.believedAt) {
+    const minutes = Math.max(0, Math.round((new Date(pin.sourceAt) - new Date(pin.believedAt)) / 60000));
+    const ago = minutes < 1 ? 'moments' : minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+    const basis = pin.believedBy === 'Jump'
+      ? `a quantum jump ${ago} earlier — where the ship was going, not that it arrived`
+      : `a location signal ${ago} earlier`;
+    line.append(el('span', 'muted', `, from ${basis}`));
+  } else {
+    line.append(el('span', 'muted', ', on evidence this copy did not record'));
+  }
+
+  return line;
+}
+
 /** One card - new, or after a save redrawn in place so its neighbours keep their typing. */
 function renderPointCard(pin, into = null) {
   const card = into || el('article', 'point-card');
@@ -5466,7 +5504,21 @@ function renderPointCard(pin, into = null) {
   category.setAttribute('aria-label', 'Point category');
   for (const choice of POINT_CATEGORIES) category.append(new Option(choice, choice));
   category.value = POINT_CATEGORIES.includes(pin.category) ? pin.category : 'General';
-  head.append(name, category);
+
+  // The system is the pilot's to say. The coordinates are relative to it, so
+  // a point without one means nothing - and the app's belief is inferred,
+  // sometimes wrong and sometimes absent.
+  const system = document.createElement('select');
+  system.className = 'select point-system';
+  system.setAttribute('aria-label', 'Which system this point is in');
+  system.title = pin.systemByPilot ? 'The system, as you set it' : 'The system, as the logs believed it - change it if they were wrong';
+  system.append(new Option('System?', ''));
+  const systems = Object.keys(SYSTEMS);
+  if (pin.system && !systems.includes(pin.system)) systems.push(pin.system);
+  for (const choice of systems) system.append(new Option(choice, choice));
+  system.value = pin.system || '';
+
+  head.append(name, system, category);
   card.append(head);
 
   // Where, in the game's own numbers, and what the app believed the place
@@ -5475,8 +5527,7 @@ function renderPointCard(pin, into = null) {
   facts.append(el('span', 'mono',
     `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
   facts.append(el('span', null, `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
-  const believed = [pin.system, pin.believed].filter(Boolean).join(' › ');
-  if (believed) facts.append(el('span', null, `believed to be ${believed} when copied`));
+  facts.append(pointBeliefLine(pin));
   card.append(facts);
 
   const when = el('div', 'point-when muted');
@@ -5509,7 +5560,14 @@ function renderPointCard(pin, into = null) {
   const said = el('span', 'muted point-said');
   const save = el('button', 'ghost point-save', 'Save');
   save.type = 'button';
-  save.addEventListener('click', () => savePoint(pin, card, name.value, category.value, note.value, save, said));
+  save.addEventListener('click', () => savePoint(pin, card, {
+    label: name.value,
+    category: category.value,
+    note: note.value,
+    // Sent only when changed: an unchanged select would otherwise mark the
+    // logs' own belief as the pilot's word.
+    system: system.value !== (pin.system || '') ? system.value : null,
+  }, save, said));
 
   const copy = el('button', 'ghost point-copy', 'Copy coordinates');
   copy.type = 'button';
@@ -5532,20 +5590,20 @@ function renderPointCard(pin, into = null) {
   card.append(actions);
 
   // Typing marks the card so an unsaved reason is visible as such.
-  for (const field of [name, category, note])
+  for (const field of [name, system, category, note])
     field.addEventListener('input', () => card.classList.add('dirty'));
 
   return card;
 }
 
-async function savePoint(pin, card, label, category, note, button, said) {
+async function savePoint(pin, card, fields, button, said) {
   button.disabled = true;
   said.textContent = 'Saving…';
 
   try {
     const response = await fetch('/api/screen/pins', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sourceAt: pin.sourceAt, label, category, note }),
+      body: JSON.stringify({ sourceAt: pin.sourceAt, ...fields }),
     });
     if (!response.ok) throw new Error(`pin update -> ${response.status}`);
 

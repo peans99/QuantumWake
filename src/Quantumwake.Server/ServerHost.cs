@@ -2284,7 +2284,7 @@ public static class ServerHost
         app.MapGet("/api/screen/pins", (ScreenReadingStore readings) => readings.Pinned());
 
         app.MapPut("/api/screen/pins", (PinUpdateRequest request, ScreenReadingStore readings) =>
-            readings.UpdatePin(request.SourceAt, request.Label, request.Category, request.Note) is { } pin
+            readings.UpdatePin(request.SourceAt, request.Label, request.Category, request.Note, request.System) is { } pin
                 ? Results.Ok(pin)
                 : Results.NotFound(new { trouble = "that point of interest is already gone" }));
 
@@ -3745,7 +3745,8 @@ public sealed record ReadingRereadRequest(string Shot);
 
 /// <summary>The pilot-owned details attached to an existing point of interest.</summary>
 /// <param name="Note">Why the point was kept; null leaves the note as it is, blank clears it.</param>
-public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category, string? Note = null);
+/// <param name="System">The system the pilot says it is in; null or blank leaves the belief alone.</param>
+public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category, string? Note = null, string? System = null);
 
 /// <summary>The current place joined onto the small set of decisions it enables.</summary>
 public sealed record PilotBriefing(

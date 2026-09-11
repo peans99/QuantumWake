@@ -186,11 +186,12 @@ public sealed class ScreenInsightService(
         // names no place and no system, so without that it is three numbers
         // nobody can place a week later.
         var now = DateTimeOffset.UtcNow;
-        var believed = new LibraryBeliefs(library).WhereAt(now);
+        var believed = new LibraryBeliefs(library).Placed(now);
 
         readings.AddClipboard(new ClipboardSighting(
             now, position.X, position.Y, position.Z, position.GigametresFromCentre,
-            believed?.Name, believed?.System), mergeWithLatest);
+            believed?.Name, believed?.System,
+            BelievedBy: believed?.Signal, BelievedAt: believed?.SignalAt), mergeWithLatest);
 
         return new ClipboardReading(
             true, position.X, position.Y, position.Z, position.GigametresFromCentre, null);

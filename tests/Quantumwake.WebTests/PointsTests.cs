@@ -15,7 +15,8 @@ public class PointsTests
         [{"sourceAt":"2026-09-09T02:10:00Z","pinnedAt":"2026-09-09T02:12:00Z",
           "x":-9641671346.9,"y":-11490734321.2,"z":-91805.1,"gigametres":14.99996,
           "believed":"Ruin Station","system":"Pyro","label":"Ruin mining shelf","category":"Mining",
-          "note":"Quantanium on the north face, two rocks left."},
+          "note":"Quantanium on the north face, two rocks left.",
+          "believedBy":"Jump","believedAt":"2026-09-09T01:30:00Z"},
          {"sourceAt":"2026-09-08T20:00:00Z","pinnedAt":"2026-09-08T20:01:00Z",
           "x":1.5,"y":2.5,"z":3.5,"gigametres":0.001,
           "believed":null,"system":"Stanton","label":null,"category":"General","note":null}]
@@ -123,6 +124,59 @@ public class PointsTests
 
         // The card is redrawn from the server's answer, not from what was typed.
         Assert.Equal("Bring the Prospector.", page.Text("__dom.node('#points-list').byClass('point-note')[0].value"));
+    }
+
+    /// <summary>
+    /// The belief is graded by its evidence, in the open: a quantum jump forty
+    /// minutes before the copy is said to be one, and a copy the logs could
+    /// not place asks for the system rather than showing nothing.
+    /// </summary>
+    [Fact]
+    public void The_belief_says_what_it_rests_on()
+    {
+        var list = Loaded().NodeText("#points-list");
+
+        Assert.Contains("believed to be Pyro › Ruin Station when copied, from a quantum jump 40 min earlier", list);
+        Assert.Contains("not that it arrived", list);
+
+        var unplaced = Loaded("""[{"sourceAt":"2026-09-09T02:10:00Z","x":1,"y":2,"z":3,"gigametres":0.1}]""")
+            .NodeText("#points-list");
+        Assert.Contains("the logs could not place this copy", unplaced);
+    }
+
+    [Fact]
+    public void A_system_the_pilot_set_is_shown_as_theirs()
+    {
+        var list = Loaded("""
+            [{"sourceAt":"2026-09-09T02:10:00Z","x":1,"y":2,"z":3,"gigametres":0.1,
+              "system":"Nyx","believed":"Ruin Station","systemByPilot":true}]
+            """).NodeText("#points-list");
+
+        Assert.Contains("in Nyx, as you set it", list);
+        Assert.Contains("the logs had said Ruin Station", list);
+        Assert.DoesNotContain("believed to be", list);
+    }
+
+    /// <summary>
+    /// The system goes to the server only when the pilot changed it. An
+    /// unchanged select sent back would mark the logs' guess as the pilot's word.
+    /// </summary>
+    [Fact]
+    public void The_system_is_sent_only_when_it_was_changed()
+    {
+        var page = Loaded();
+        page.Serve("/api/screen/pins", """{"sourceAt":"2026-09-09T02:10:00Z","x":1,"y":2,"z":3,"gigametres":15,"system":"Pyro"}""");
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"pins":[],"total":0,"pastes":0}""");
+
+        page.Do("await __dom.node('#points-list').byClass('point-save')[0].fire('click');");
+        Assert.DoesNotContain("\"system\":\"", page.BodyOf("/api/screen/pins"));
+
+        page.Do("""
+            const card = __dom.node('#points-list').byClass('point-card')[0];
+            card.byClass('point-system')[0].value = 'Stanton';
+            await card.byClass('point-save')[0].fire('click');
+            """);
+        Assert.Contains("\"system\":\"Stanton\"", page.BodyOf("/api/screen/pins"));
     }
 
     /// <summary>

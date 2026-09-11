@@ -4099,7 +4099,9 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .point-card::before { content: ""; position: absolute; top: 0; left: 10px; width: 26px; height: 2px; background: var(--cyan); }
 /* Something typed and not yet saved: the bar turns amber until Save is pressed. */
 .point-card.dirty::before { background: var(--amber); }
-.point-head { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: 6px; }
+.point-head { display: grid; grid-template-columns: minmax(0, 1fr) 110px 130px; gap: 6px; }
+.point-head .select { min-width: 0; }
+.point-belief .warn { color: var(--amber); }
 .point-head .point-name { min-width: 0; font-size: 14px; font-weight: 600; color: var(--cyan-hot); }
 .point-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; line-height: 1.5; }
 .point-facts .mono { font-family: var(--mono); }

@@ -56,7 +56,12 @@ public sealed record ClipboardSighting(
     string? Believed,
     string? System,
     int TimesSeen = 1,
-    DateTimeOffset? LastSeenAt = null);
+    DateTimeOffset? LastSeenAt = null,
+    // What the belief rests on, so a reader can weigh it: the line that
+    // placed the pilot and when it was written. Null on readings kept before
+    // this was recorded, which the page says rather than guessing a grade.
+    PlaceSignal? BelievedBy = null,
+    DateTimeOffset? BelievedAt = null);
 
 /// <summary>A copied location the pilot chose to keep after its log entry is gone.</summary>
 /// <param name="Note">
@@ -67,6 +72,12 @@ public sealed record ClipboardSighting(
 /// <param name="ModifiedAt">
 /// When the name, category or note last changed; null until they have. The
 /// backup compares on it, the way it does for a job or a kit.
+/// </param>
+/// <param name="SystemByPilot">
+/// True once the pilot has said which system this is, overriding or filling in
+/// what the logs believed. The coordinates are relative to the system, so a
+/// point with no system means nothing - and the app's belief is inferred and
+/// sometimes absent, so the pilot has to be able to say.
 /// </param>
 public sealed record PinnedLocation(
     DateTimeOffset SourceAt,
@@ -80,7 +91,10 @@ public sealed record PinnedLocation(
     string? Label = null,
     string? Category = null,
     string? Note = null,
-    DateTimeOffset? ModifiedAt = null) : IStamped<PinnedLocation>
+    DateTimeOffset? ModifiedAt = null,
+    PlaceSignal? BelievedBy = null,
+    DateTimeOffset? BelievedAt = null,
+    bool SystemByPilot = false) : IStamped<PinnedLocation>
 {
     /// <summary>The copy it came from, to the tick - the only identity a point has.</summary>
     public string StampId => IdFor(SourceAt);
@@ -178,7 +192,8 @@ public sealed class ScreenReadingStore
 
             var pin = new PinnedLocation(paste.At, DateTimeOffset.UtcNow,
                 paste.X, paste.Y, paste.Z, paste.Gigametres, paste.Believed, paste.System,
-                labelForPin, CleanCategory(category) ?? "General");
+                labelForPin, CleanCategory(category) ?? "General",
+                BelievedBy: paste.BelievedBy, BelievedAt: paste.BelievedAt);
             _pins.Insert(0, pin);
             SavePins();
             return pin;
@@ -207,7 +222,7 @@ public sealed class ScreenReadingStore
     /// null note leaves it alone, so a caller that only names the point does
     /// not lose the note beside it.
     /// </remarks>
-    public PinnedLocation? UpdatePin(DateTimeOffset sourceAt, string? label, string? category, string? note = null)
+    public PinnedLocation? UpdatePin(DateTimeOffset sourceAt, string? label, string? category, string? note = null, string? system = null)
     {
         lock (_gate)
         {
@@ -219,6 +234,10 @@ public sealed class ScreenReadingStore
                 Label = CleanLabel(label) ?? _pins[at].Label ?? "Copied location",
                 Category = CleanCategory(category) ?? _pins[at].Category ?? "General",
                 Note = note is null ? _pins[at].Note : CleanNote(note),
+                // A system the pilot names is theirs from then on; blank keeps the
+                // belief, since "I do not know" is not a correction of it.
+                System = CleanLabel(system) ?? _pins[at].System,
+                SystemByPilot = _pins[at].SystemByPilot || CleanLabel(system) is not null,
                 ModifiedAt = DateTimeOffset.UtcNow,
             };
             _pins[at] = updated;
