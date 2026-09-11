@@ -36,7 +36,7 @@ public class SecondReviewFixTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new LogLibrary(_sessions), new KitStore(_root));
+        new LogLibrary(_sessions), new KitStore(_root), new ScreenReadingStore(_root));
 
     // ---- 1: a backup written before a store existed ----
 

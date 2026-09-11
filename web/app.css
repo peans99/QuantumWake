@@ -480,6 +480,16 @@ h2.spaced { margin-top: 32px; }
   align-items: start;
 }
 
+/* The hub starts with one decision. Cards stay below for the pilots who want
+   the context, but a glance should not require sorting a grid first. */
+.now-focus { display: flex; align-items: center; gap: 14px; margin: 0 0 var(--gap); padding: 11px 15px;
+  border: 1px solid var(--cyan-deep); background: linear-gradient(90deg, rgba(24, 98, 122, .18), var(--panel)); }
+.now-focus-mark { color: var(--cyan-hot); font-size: 9px; letter-spacing: .23em; text-transform: uppercase; }
+.now-focus-copy { min-width: 0; flex: 1; }
+.now-focus-title { color: var(--text); font-weight: 600; }
+.now-focus .tiny { flex: 0 0 auto; }
+@media (max-width: 620px) { .now-focus { align-items: flex-start; flex-wrap: wrap; } .now-focus .tiny { margin-left: auto; } }
+
 .card {
   position: relative;
   background: linear-gradient(158deg, var(--panel) 0%, var(--deep) 100%);
@@ -968,7 +978,16 @@ h2.spaced { margin-top: 32px; }
  * one added later" that stays true, so the default is now correct and the
  * exceptions say they are exceptions.
  */
-button {
+/*
+ * `a.ghost` rides along with the buttons rather than restating them. A few
+ * actions have to be links because they open a page in a new tab - the MFD
+ * placement editor and preview - and a bare anchor in a row of HUD buttons is
+ * the same "from another application" problem as the grey Windows button this
+ * rule was written to stop. Sharing the selector is what keeps them in step:
+ * a change to the button look reaches them without anybody remembering to.
+ */
+button,
+a.ghost {
   background: linear-gradient(160deg, rgba(23, 41, 60, .5), rgba(7, 12, 20, .5));
   border: 1px solid var(--rule);
   color: var(--muted);
@@ -982,20 +1001,25 @@ button {
   transition: border-color .14s, color .14s, background .14s;
 }
 
-button:hover:not(:disabled) {
+a.ghost { display: inline-block; text-decoration: none; }
+
+button:hover:not(:disabled),
+a.ghost:hover {
   border-color: var(--cyan-deep);
   background: linear-gradient(160deg, rgba(53, 200, 240, .16), rgba(13, 92, 120, .1));
   color: var(--cyan-hot);
 }
 
 /* Pressed reads as pressed: the lift goes away rather than deepening. */
-button:active:not(:disabled) {
+button:active:not(:disabled),
+a.ghost:active {
   background: rgba(53, 200, 240, .05);
   color: var(--cyan);
 }
 
 /* Keyboard focus has to survive the clipped corner, which crops an outline. */
-button:focus-visible {
+button:focus-visible,
+a.ghost:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--cyan);
   color: var(--cyan-hot);
@@ -1764,6 +1788,20 @@ body.overlay .foot { display: none; }
   color: var(--cyan-hot);
 }
 
+.about-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule-hot);
+  background: rgba(53, 200, 240, .05);
+}
+.about-help b, .about-help span { display: block; }
+.about-help b { font-size: 13px; color: var(--text); }
+.about-help span { margin-top: 3px; font-size: 12px; color: var(--muted); }
+
 .about-legal {
   font-size: 10.5px;
   line-height: 1.7;
@@ -1780,6 +1818,7 @@ body.overlay .foot { display: none; }
   .about { flex-direction: column; gap: 24px; align-items: center; text-align: center; }
   .about-logo { width: 200px; }
   .about-facts { justify-items: center; }
+  .about-help { flex-direction: column; }
 }
 
 /* ---------- community-data offer ---------- */
@@ -3175,9 +3214,37 @@ body.entity-open .view { padding-right: 296px; }
 .setup-wipe span { font-size: 11.5px; line-height: 1.55; }
 .setup-wipe .wipe-row { margin-top: 6px; }
 
-/* Questions on the About page
-: shut by default, because a wall of answers to
-   questions you do not have is not help. */
+/* Help is its own page, reachable from About: a wall of answers inside the
+   introduction hid the question someone had gone there to ask. The questions
+   still start shut, because an answer is useful only when it is wanted. */
+.help-page {
+  max-width: 980px;
+  padding: 26px 30px 34px;
+  background: linear-gradient(160deg, var(--panel), var(--deep));
+  border: 1px solid var(--rule);
+  clip-path: var(--chamfer);
+}
+.help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.help-head h2 { margin: 2px 0 7px; }
+.help-head p:not(.kicker) { margin: 0; max-width: 60ch; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.help-start {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 20px 0 28px;
+}
+.help-start div { padding: 12px 13px; background: rgba(0, 0, 0, .2); border-left: 2px solid var(--rule-hot); }
+.help-start b, .help-start span { display: block; }
+.help-start b { color: var(--text); font-size: 12px; }
+.help-start span { margin-top: 4px; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.help-page h3 { margin: 26px 0 9px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--cyan-hot); }
 .faq { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 18px; }
 .faq details {
   border: 1px solid var(--rule);
@@ -3204,6 +3271,19 @@ body.entity-open .view { padding-right: 296px; }
   max-width: 74ch;
 }
 .faq a { color: var(--cyan); }
+.faq p b { color: var(--text); }
+/* The filter row: a question found by a word rather than by scrolling. */
+.help-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 20px 0 4px; }
+.help-tools .search { flex: 1 1 260px; min-width: 0; }
+.help-tools .muted { font-size: 11.5px; }
+.help-section[hidden], .faq-item[hidden], .help-none[hidden] { display: none; }
+.help-none { margin: 18px 0 0; font-size: 12.5px; }
+.help-none a { color: var(--cyan); }
+@media (max-width: 700px) {
+  .help-page { padding: 22px 18px 28px; }
+  .help-head { flex-direction: column; }
+  .help-start { grid-template-columns: 1fr; }
+}
 
 /* ---------- flight plans ---------- */
 
@@ -4010,3 +4090,126 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 }
 
 #ledger-kinds { flex-wrap: wrap; align-items: baseline; }
+
+/* ---- the screen panel: a reading, and the verdicts beside it ---- */
+.screen-reading { padding: 8px 0; border-top: 1px solid var(--rule); }
+.screen-reading:first-child { border-top: 0; }
+/* Still legible - the point of keeping it is that the misreading can be seen -
+   but plainly not in force. */
+.screen-reading.dismissed > :not(.screen-dismiss) { opacity: .45; }
+.screen-reading.dismissed .strong { text-decoration: line-through; }
+.screen-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+
+/* The balance on the Ledger: one figure in the tile's face, with its
+   provenance beside it rather than under it, because the provenance is
+   the longer half and a tile would wrap it to a column. */
+.wallet-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: var(--gap);
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+  clip-path: var(--chamfer);
+}
+.wallet-card[hidden] { display: none; }
+.wallet-card .n { font-size: 22px; font-weight: 600; font-family: var(--mono); color: var(--cyan-hot); line-height: 1.1; }
+/* The same gap the tiles above give their label, so the two read as one row. */
+.wallet-card .l { font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); margin-top: 5px; }
+.wallet-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; font-size: 12px; line-height: 1.5; }
+.wallet-body .muted { font-size: 11.5px; }
+.log-overview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .8fr); gap: 14px; margin: 0 0 16px; }
+.log-card, .log-history { border: 1px solid var(--rule); background: var(--panel); padding: 14px; }
+.log-card > :last-child, .log-history > :last-child { margin-bottom: 0; }
+.pinned-points { border-color: var(--cyan-deep); }
+.pinned-location { padding: 9px 0; border-top: 1px solid var(--rule); }
+.pinned-location:first-child { border-top: 0; }
+.pin-location { margin-top: 8px; }
+.pin-fields { display: grid; grid-template-columns: minmax(0, 1fr) 115px auto auto; gap: 6px; margin-top: 8px; }
+.pin-fields .search, .pin-fields .select { min-width: 0; padding: 5px 7px; font-size: 11px; }
+.screen-review { margin-top: 16px; }
+.screen-review-item { padding: 9px 0; border-top: 1px solid var(--rule); }
+.screen-review-item:first-child { border-top: 0; }
+.screen-review-item pre { max-height: 140px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); font: 11px/1.5 var(--mono); }
+.pinned-points a { color: var(--cyan); }
+.pin-note { font-size: 11.5px; line-height: 1.5; color: var(--text); white-space: pre-wrap; margin: 2px 0 4px; }
+@media (max-width: 720px) { .pin-fields { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .log-overview { grid-template-columns: 1fr; } }
+
+/* ---- Points of interest: one card per mark, the note given the room the
+   Log aside cannot spare. Two columns when the page is wide enough for the
+   note to still be a paragraph, one otherwise. ---- */
+.points-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--gap); align-items: start; }
+.point-card {
+  position: relative;
+  padding: 13px 15px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+  clip-path: var(--chamfer);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.point-card::before { content: ""; position: absolute; top: 0; left: 10px; width: 26px; height: 2px; background: var(--cyan); }
+/* Something typed and not yet saved: the bar turns amber until Save is pressed. */
+.point-card.dirty::before { background: var(--amber); }
+.point-head { display: grid; grid-template-columns: minmax(0, 1fr) 110px 130px; gap: 6px; }
+.point-head .select { min-width: 0; }
+.point-belief .warn { color: var(--amber); }
+.point-facts .warn { color: var(--amber); }
+.point-card.shared::before { background: var(--dim); }
+.point-head.shared { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
+.point-name-read { font-size: 14px; font-weight: 600; color: var(--text); }
+#points-shared { margin-top: 22px; }
+.point-here { font-size: 12px; color: var(--cyan-hot); }
+#points-from { margin: 10px 0 14px; }
+.point-here .muted { color: var(--dim); }
+.screen-nearest { margin-top: 8px; }
+.near-point { font-size: 12px; line-height: 1.6; }
+.point-head .point-name { min-width: 0; font-size: 14px; font-weight: 600; color: var(--cyan-hot); }
+.point-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; line-height: 1.5; }
+.point-facts .mono { font-family: var(--mono); }
+.point-when { font-size: 11.5px; }
+.point-when button.link {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline dotted;
+  /* A sentence, not a control: the global button face would shout it. */
+  text-transform: none; letter-spacing: 0; clip-path: none;
+}
+.point-when button.link:hover { color: var(--cyan-hot); }
+.point-note {
+  background: rgba(8, 18, 30, .9);
+  border: 1px solid var(--rule);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 7px 10px;
+  outline: none;
+  resize: vertical;
+  min-height: 64px;
+}
+.point-note:focus { border-color: var(--cyan); }
+.point-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.point-actions .point-said { font-size: 11px; }
+@media (max-width: 720px) {
+  .points-list { grid-template-columns: 1fr; }
+  .point-head { grid-template-columns: 1fr; }
+}
+.feed.screen-checks, .feed.screen-fittings { max-height: none; overflow: visible; margin-top: 6px; }
+.feed .k.agrees { color: var(--green); border-color: #1f5c3d; }
+.feed .k.differs { color: var(--amber); border-color: #6d4715; }
+.feed .k.new { color: var(--cyan); border-color: var(--cyan-deep); }
+.feed .k.unchecked { color: var(--dim); border-color: var(--rule-hot); }
+.feed .k.screen-differs { color: var(--amber); border-color: #6d4715; }
+.toast.screen-differs { border-left-color: var(--amber); }
+.feed.screen-fittings .what { color: var(--text); font-size: 12px; }
+
+/* The MFD block is documentation, not settings: every control it describes is
+   in the tray window. Numbered steps rather than prose, because "where do I
+   click" is the question it exists to answer. */
+.mfd-steps { margin: 10px 0 12px; padding-left: 20px; font-size: 12.5px; line-height: 1.6; }
+.mfd-steps li { margin-bottom: 5px; }
+.mfd-steps li::marker { color: var(--cyan); font-size: 11px; }

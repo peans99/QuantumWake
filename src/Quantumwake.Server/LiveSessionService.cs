@@ -50,6 +50,137 @@ public sealed record NowState
 
     /// <summary>True once a "Party Disbanded" toast has been seen this session.</summary>
     public bool PartyDisbanded { get; init; }
+
+    /// <summary>The newest screenshot reading, or null when none has been taken.</summary>
+    public NowScreen? Screen { get; init; }
+
+    /// <summary>
+    /// Contracts still open in this session, newest first.
+    /// </summary>
+    /// <remarks>
+    /// This session only, and deliberately: /api/contracts reads the store, and
+    /// the store gains a session on log rotation - so the contract being flown
+    /// right now is the one thing that report cannot show. Filtered to the open
+    /// ones and capped, because this rides a snapshot pushed every second and a
+    /// history here would be a report inside a heartbeat.
+    /// </remarks>
+    public IReadOnlyList<NowContract> Contracts { get; init; } = [];
+
+    /// <summary>What the kiosks recorded moving this session, or null when nothing has.</summary>
+    public NowCargo? Cargo { get; init; }
+}
+
+/// <summary>One contract this session opened and has not closed.</summary>
+/// <param name="Steps">
+/// Journal objectives and how many of them finished. Zero steps means the
+/// journal reported none, which is not the same as none remaining - so a view
+/// showing "0 of 0" would be inventing progress, and must say the game was
+/// quiet instead.
+/// </param>
+public sealed record NowContract(
+    string Name,
+    string Issuer,
+    string? Type,
+    string? Difficulty,
+    int Steps,
+    int StepsDone,
+    DateTimeOffset Since)
+{
+    /// <summary>
+    /// The contracts a session took and has not closed, newest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every <see cref="ContractRecord"/> comes from an objective marker, and
+    /// the game creates objective markers for missions in the journal - so
+    /// being here is what "taken" means. Open is then the outcome the logs
+    /// never closed.
+    /// </para>
+    /// <para>
+    /// Not <see cref="ContractRecord.Accepted"/>, which nothing sets: filtering
+    /// on it returns an empty list for every session ever recorded. Found by
+    /// running this page against a real install and getting no contracts out of
+    /// a log carrying 24 acceptance toasts.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<NowContract> OpenIn(SessionSummary summary) =>
+        [.. summary.Contracts
+            .Where(c => c.CompletedAt is null
+                && c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress)
+            .OrderByDescending(c => c.FirstSeen)
+            .Take(6)
+            .Select(c => new NowContract(
+                // The annotations come off the title here for the same reason
+                // the logbook takes them off: a contract reads as its own name.
+                ContractTags.Clean(c.DisplayName),
+                c.Issuer,
+                c.Type,
+                c.Difficulty,
+                c.Steps,
+                c.StepsDone,
+                c.FirstSeen))];
+}
+
+/// <summary>
+/// The commodity counters' own account of this session.
+/// </summary>
+/// <remarks>
+/// Not a manifest, and nothing built on it may be shown as one. Game.log never
+/// states what is in a hold: these are buy and sell requests at a kiosk, so a
+/// haul bought last session, transferred from another ship or blown out of the
+/// back is invisible either way. Every figure here is a floor, over this
+/// session alone.
+/// </remarks>
+public sealed record NowCargo(int BoughtScu, int SoldScu, NowKioskMove? Last)
+{
+    /// <summary>What the commodity counters moved this session, or null if none did.</summary>
+    /// <param name="name">
+    /// Resolves a logged resource id to the game's own word for it - see
+    /// <see cref="LogLibrary.CommodityName"/>. Passed in rather than reached
+    /// for so this stays a function of the session it is given.
+    /// </param>
+    /// <remarks>
+    /// The last move is the newest by timestamp rather than the last in the
+    /// list: the list is appended as events arrive, and the one thing this must
+    /// not do is call an older receipt the current one.
+    /// </remarks>
+    public static NowCargo? From(SessionSummary summary, Func<string?, string?> name)
+    {
+        if (summary.Trades.Count == 0) return null;
+
+        var last = summary.Trades.MaxBy(trade => trade.At)!;
+
+        return new NowCargo(
+            summary.Trades.Where(t => !t.IsSell).Sum(t => t.Quantity),
+            summary.Trades.Where(t => t.IsSell).Sum(t => t.Quantity),
+            new NowKioskMove(last.At, last.Shop, last.IsSell, last.Quantity, last.Amount, name(last.ResourceId)));
+    }
+}
+
+/// <summary>The last thing a commodity counter was asked to move.</summary>
+/// <param name="Commodity">
+/// The resolved name, or null when the id names nothing the install or the
+/// dataset knows - see <see cref="LogLibrary.CommodityName"/>. Never the raw
+/// id: an unresolved id shown as a name is a cargo nobody carried.
+/// </param>
+public sealed record NowKioskMove(
+    DateTimeOffset At, string Shop, bool Sell, int Scu, decimal Amount, string? Commodity);
+
+/// <summary>The newest screenshot reading, for the Now card and the widget.</summary>
+/// <remarks>
+/// Without the frame's own text, deliberately. This rides a snapshot pushed
+/// every second to every client, and seventy lines of OCR per push is a great
+/// deal of nothing. The full reading is a fetch away on the settings page.
+/// </remarks>
+public sealed record NowScreen(
+    string Shot,
+    DateTimeOffset ShotAt,
+    string Kind,
+    string Summary,
+    IReadOnlyList<ScreenCheck> Checks)
+{
+    /// <summary>How many checks the screen and the logs disagreed on.</summary>
+    public int Differs => Checks.Count(c => c.Verdict == "differs");
 }
 
 /// <summary>The last thing the party channel said about one player.</summary>
@@ -88,6 +219,22 @@ public sealed class LiveSessionService : BackgroundService
     /// <summary>Where the player was last seen, so an arrival fires once.</summary>
     private string? _lastPlace;
 
+    private readonly ScreenReadingStore? _screen;
+    private readonly ScreenSettingsStore? _screenSettings;
+
+    /// <summary>The newest screenshot already accounted for.</summary>
+    private string? _lastScreenShot;
+
+    /// <summary>
+    /// Disagreements worth announcing, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the session's own timeline rather than in it: a screenshot
+    /// is not something that happened in the game, and it must not end up in
+    /// a saved session's history.
+    /// </remarks>
+    private readonly List<TimelineEntry> _screenNotes = [];
+
     /// <param name="install">
     /// Defaulted so the container can still build this service on a machine
     /// where no install was found: the live tail has nothing to follow, and
@@ -97,19 +244,37 @@ public sealed class LiveSessionService : BackgroundService
     /// Optional, so the container can build this service before flight plans
     /// exist as a concept - the live tail works with or without one.
     /// </param>
+    /// <param name="screen">
+    /// What the screenshots said. Optional for the same reason as the rest:
+    /// a server with no reader has none, and the Now card then stays hidden.
+    /// </param>
+    /// <param name="screenSettings">
+    /// Whether the pilot has the screen panel switched on. Optional like the
+    /// rest; absent means nothing is filtered, which is what the tests want.
+    /// </param>
     public LiveSessionService(
         IHubContext<LiveHub> hub,
         LogLibrary library,
         ILogger<LiveSessionService> logger,
         GameInstall? install = null,
-        TripStore? trips = null)
+        TripStore? trips = null,
+        ScreenReadingStore? screen = null,
+        ScreenSettingsStore? screenSettings = null)
     {
         _hub = hub;
         _library = library;
         _install = install;
         _logger = logger;
         _trips = trips;
+        _screen = screen;
+        _screenSettings = screenSettings;
         _builder = new SessionBuilder(install?.GameLogPath ?? "live");
+
+        // Whatever was already read is not news. Seeding this here is what
+        // stops the app announcing a week-old disagreement the moment it
+        // starts, which is the same mistake the toast code guards against on
+        // the other side of the wire.
+        _lastScreenShot = screen?.Latest?.Shot;
     }
 
     /// <summary>Current snapshot, also served over REST for first paint.</summary>
@@ -120,6 +285,15 @@ public sealed class LiveSessionService : BackgroundService
         if (_install is null || !_install.HasGameLog)
         {
             _logger.LogWarning("No Game.log found; live view disabled.");
+
+            // The screen reader runs without a game log, and since the readings
+            // moved onto this channel there is no client-side poll left to fall
+            // back on - so without this the Now card and the reading log never
+            // see a thing on an install the tail cannot follow. Connected stays
+            // false: there is no game here, only screenshots.
+            if (_screen is not null)
+                await BroadcastScreenOnlyAsync(stoppingToken);
+
             return;
         }
 
@@ -175,7 +349,7 @@ public sealed class LiveSessionService : BackgroundService
         }
     }
 
-    private void OnRotated()
+    internal void OnRotated()
     {
         lock (_gate)
         {
@@ -195,11 +369,18 @@ public sealed class LiveSessionService : BackgroundService
             _builder = new SessionBuilder(_install?.GameLogPath ?? "live");
             _currentShip = null;
             _recent.Clear();
+
+            // The notes belong to the session that just ended. Left here they
+            // would be the whole of the next session's feed, on top of a
+            // timeline that correctly says nothing has happened yet.
+            // _lastScreenShot is deliberately kept: the readings themselves did
+            // not rotate, and clearing it would announce the newest one again.
+            _screenNotes.Clear();
         }
     }
 
     /// <summary>Builds a snapshot. Caller must hold the lock.</summary>
-    private NowState Snapshot()
+    internal NowState Snapshot()
     {
         var summary = _builder.Build();
         var location = _builder.Location;
@@ -207,6 +388,13 @@ public sealed class LiveSessionService : BackgroundService
         // Keep the tail of the timeline for the live feed.
         _recent.Clear();
         _recent.AddRange(summary.Timeline.TakeLast(40).Reverse());
+
+        // Before the initializer, not inside it: ScreenNow is what appends a
+        // disagreement to _screenNotes, and Feed() reads that list. Left to the
+        // initializer's own order the note arrived one snapshot after the feed
+        // it was written for - which the two-second tick hid, and which the
+        // next reordering of these lines would not have.
+        var screen = ScreenNow();
 
         return new NowState
         {
@@ -228,11 +416,61 @@ public sealed class LiveSessionService : BackgroundService
             Incapacitations = summary.Incapacitations,
             Deaths = summary.Deaths,
             Kills = summary.Kills,
-            RecentEvents = [.. _recent],
+            RecentEvents = Feed(),
+            Screen = screen,
+            Contracts = NowContract.OpenIn(summary),
+            Cargo = NowCargo.From(summary, _library.CommodityName),
             Party = ReadParty(summary.PartyNotes),
             PartyDisbanded = summary.PartyNotes.Count > 0
                 && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded
         };
+    }
+
+    /// <summary>
+    /// The session's own timeline and the screen's notes, newest first.
+    /// </summary>
+    private IReadOnlyList<TimelineEntry> Feed() =>
+        [.. _recent.Concat(_screenNotes).OrderByDescending(entry => entry.At).Take(40)];
+
+    /// <summary>
+    /// The newest reading, and a note when it is the first sight of one that
+    /// disagrees with the logs.
+    /// </summary>
+    /// <remarks>
+    /// Only disagreements are announced. A pilot photographing a loadout takes
+    /// several frames in a row, and a toast apiece would teach them to ignore
+    /// the toasts - which is the one thing a notification cannot afford. A
+    /// reading that agrees updates the card and says nothing.
+    /// </remarks>
+    private NowScreen? ScreenNow()
+    {
+        // Enforced here and not only on the page, for the same reason the scan
+        // and clipboard endpoints enforce it: a panel that has been switched
+        // off should be switched off however the reading arrives. Without it
+        // the last screenshot read before the switch stays on the Now card and
+        // in the widget for good.
+        if (_screenSettings is not null && _screenSettings.Current.Mode != ScreenMode.Screenshots)
+            return null;
+
+        if (_screen?.Latest is not { } latest) return null;
+
+        if (!string.Equals(latest.Shot, _lastScreenShot, StringComparison.OrdinalIgnoreCase))
+        {
+            _lastScreenShot = latest.Shot;
+
+            if (latest.Checks.FirstOrDefault(check => check.Verdict == "differs") is { } differs)
+            {
+                _screenNotes.Add(new TimelineEntry(
+                    latest.ShotAt,
+                    "screen-differs",
+                    $"{differs.Subject}: {differs.Claim}",
+                    differs.Note ?? differs.Belief));
+
+                if (_screenNotes.Count > 10) _screenNotes.RemoveAt(0);
+            }
+        }
+
+        return new NowScreen(latest.Shot, latest.ShotAt, latest.Kind.ToString(), latest.Summary, latest.Checks);
     }
 
     /// <summary>
@@ -244,6 +482,27 @@ public sealed class LiveSessionService : BackgroundService
                 note.Handle!,
                 note.Moment.ToString().ToLowerInvariant(),
                 note.At))];
+
+    /// <summary>
+    /// Pushes snapshots on an install with no Game.log, where the only thing
+    /// that can change is what the pilot has shown the app.
+    /// </summary>
+    private async Task BroadcastScreenOnlyAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+
+        while (await WaitAsync(timer, token))
+        {
+            NowState snapshot;
+            lock (_gate)
+            {
+                var screen = ScreenNow();
+                snapshot = Current = new NowState { Screen = screen, RecentEvents = Feed() };
+            }
+
+            await _hub.Clients.All.SendAsync("now", snapshot, token);
+        }
+    }
 
     private async Task BroadcastAsync()
     {

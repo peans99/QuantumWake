@@ -1,10 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Quantumwake.Core.Logging;
 using Quantumwake.Data;
+using Quantumwake.Ocr;
 using Quantumwake.Server;
 
 namespace Quantumwake.Overlay;
@@ -35,6 +36,7 @@ public partial class App : System.Windows.Application
     private string[] _arguments = [];
     private TrayPresence? _tray;
     private MainWindow? _overlay;
+    private MfdController? _mfd;
     private Settings _settings = new();
 
     /// <summary>Set while shutting down, so a closing overlay is not mistaken for the user turning it off.</summary>
@@ -63,8 +65,14 @@ public partial class App : System.Windows.Application
         _tray.SetInstallFolderRequested += PickInstallFolder;
         _tray.CheckForUpdatesRequested += CheckForUpdates;
         _tray.QuitRequested += Quit;
+        _tray.MfdSetupRequested += () => _mfd?.OpenSetup();
 
         await StartServerAsync(e.Args);
+
+        var mfdRoot = _server?.Urls.FirstOrDefault() is { } address
+            ? new UriBuilder(address) { Host = "127.0.0.1" }.Uri.AbsoluteUri
+            : DashboardUrl;
+        _mfd = new MfdController(mfdRoot, message => _tray?.Notify(message));
 
         _overlay = CreateOverlay();
 
@@ -110,11 +118,31 @@ public partial class App : System.Windows.Application
         return window;
     }
 
+    /// <summary>
+    /// Runs something on the UI thread and waits for it.
+    /// </summary>
+    /// <remarks>
+    /// The clipboard is single-threaded apartment only and the server's request
+    /// threads are not it, so the call has to come back here to be made.
+    /// </remarks>
+    private static Task<string?> OnUiThread(Func<string?> work) =>
+        Current?.Dispatcher is { } dispatcher
+            ? dispatcher.InvokeAsync(work).Task
+            : Task.FromResult<string?>(null);
+
     private async Task StartServerAsync(string[] args)
     {
         try
         {
-            _server = ServerHost.Build(args);
+            // The two things only a desktop app can do, handed to the server
+            // it hosts. A server started on its own gets neither, and the
+            // screen panel says so rather than failing when pressed.
+            var screen = new WindowsScreenReader();
+
+            _server = ServerHost.Build(
+                args,
+                screen.Available ? screen : null,
+                new WindowsClipboardReader(OnUiThread));
             await _server.StartAsync();
 
             // Whatever the last update left behind. Done here rather than at the
@@ -315,6 +343,7 @@ public partial class App : System.Windows.Application
         // Close the window before stopping the server: closing is what saves the
         // overlay's geometry, and it should not race a shutting-down host.
         _overlay?.Close();
+        _mfd?.Dispose();
 
         if (_server is not null)
         {

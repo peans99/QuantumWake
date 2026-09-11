@@ -1,0 +1,609 @@
+# Cougar MFD mode
+
+Feature branch: `codex/cougar-mfd`, based on `dev0100`.
+
+## Plan
+
+- [x] Keep MFD mode optional and separate from the regular overlay.
+- [x] Give each MFD an independent window and selected page.
+- [x] Use the default F16 MFD device numbers and clockwise OSB numbering.
+- [x] Add a visual monitor layout with draggable, resizable MFD openings,
+  exact pixel fields, shared-monitor and separate-monitor presets.
+- [x] Add a full-size alignment preview, USB button tester and saved placement.
+- [x] Start with focused Nav, Task and Status HUD pages, using the existing live
+  stream and briefing API. Each frame now starts at Home and remembers its own view.
+- [x] Extend the compact pages to flight-plan actions, cargo and contracts.
+- [x] Make every button reassignable, with the rockers bindable rather than
+  guessed at.
+- [x] Black out the rest of a monitor carrying panels, so the desktop stops
+  glowing around the edge of the frame.
+- [x] Read what the briefing already carries: focus, claim, services, shopping,
+  stash and mining were fetched every poll and discarded.
+- [ ] Verify physical frame alignment and default USB inputs on the cockpit.
+- [ ] Name the four rockers once hardware says which number each one reports,
+  and decide whether any of them earns a default.
+
+## HUD design
+
+These are cockpit instruments, not the dashboard reduced to a smaller window.
+An MFD page must answer a question useful during flight, with a short hierarchy
+and controls aligned to the physical buttons. Page changes stay under the
+pilot's control; a detected ship must not silently rearrange the buttons.
+
+- **Nav:** where am I, where am I going, and which ship did the logs identify?
+  A quantum destination takes priority over the next planned stop. The system
+  map is a separate page in Flight.
+- **Task:** what do I do next? Show the first outstanding stop and its next
+  unfinished instruction, including the quantity and unit the pilot entered.
+  Planned loads are never presented as detected cargo in the hold.
+- **Act:** the same stop's outstanding work as a list, with a cursor, so one
+  line can be ticked off from the frame. Up and down move the cursor here
+  rather than scrolling. A stop with nothing left offers itself instead, since
+  crossing the stop off is then the only thing to confirm there.
+- **Cargo:** what did I mean to carry, and what did a counter actually record?
+  Never a manifest — see below.
+- **Contract:** which contract am I on, and how many objectives are left? This
+  session only, because that is the only session the store cannot answer for.
+- **Status:** can I trust the source, and what state am I in? Session, elapsed
+  time, pilot, this session's deaths and incapacitations, where the logs suggest
+  you would wake, and the latest screenshot reading with its capture time. No
+  fabricated fuel or shields.
+- **Feed:** what just happened? The live timeline, newest first - the question a
+  pilot has after looking away.
+- **Crew:** who has the party channel named? A floor and never a roster: anyone
+  already grouped up who never dropped produces no toast at all, so being absent
+  means nothing. The page says so every time.
+- **Money:** what is my trading rate, and how far is a goal at it? Commodity
+  sales less what buying them cost, and nothing else the logs record - a trading
+  rate rather than everything earned, which the page states. When a saved kiosk
+  screenshot has supplied a balance (the mobiGlas bar has never read), cash on
+  hand leads this page; logged movements after that shot make it an estimate
+  rather than a claim.
+- **List:** what am I shopping for, and how much of it am I holding? "Held"
+  means seen in a stash listing, which records presence and never a count.
+- **Ship:** what am I flying, what is it for, and what does losing it cost?
+  The focus and the claim tables, both of which the briefing was already
+  carrying. Reference and never a claim in progress - Game.log records no
+  insurance claim of any kind.
+- **Here:** the moment after landing. What this place can do for you, what on
+  your shopping list it stocks, and what you left here last time. A stash
+  listing is a sighting and never a count, which the page says.
+- **Ledger:** what the logs actually priced, confirmed only. A request the game
+  never answered for is not money that moved.
+- **Mine:** where the deposit tables rank a rock highest. Tables, not sightings,
+  and it says when a suggestion is the best anywhere rather than the best near
+  you.
+
+### Breaking the Now page apart
+
+The dashboard's Now page carries fifteen cards, and they do not map one to one.
+A card is something you scan at rest with a mouse; an MFD page answers one
+question you already have, in four lines, with a glove on a button. So five of
+them thickened a page that already existed rather than earning one:
+
+| Now card | Where it went |
+| --- | --- |
+| Location, Ship | Nav |
+| Flight plan, What to do next | Task and Act |
+| Trade from here | folded into **Cargo** - a lead about the counter you are standing at |
+| Session, Handle, This session, Wake up at | folded into **Status** - two counters and a regen hint do not each earn a page |
+| Live feed, Party, Trading rate, Job in hand + Checklist | **Feed, Crew, Money, List** |
+| Fleet and the ship card, Spending and Ledger, Mining, the place itself | **Ship, Ledger, Mine, Here** |
+
+**Six of the briefing's nine fields were being fetched every five seconds and
+thrown away.** The panel pulled `focus`, `claim`, `services`, `shopping`,
+`stash` and `mining` on every poll and read none of them - which is why Ship,
+Here and Mine cost no new call at all. Only Ledger needed one, and it rides the
+thirty-second timer with the rest.
+
+The cockpit menu is recursive. Home has Flight, Operations, Resources and
+Pilot; each category has submenus before its screens. Flight, for example,
+opens Route or Ship & local, then Route opens Navigation and System map. The
+menu tree is data rather than a screen-specific navigation rule, so a later
+feature can add a submenu without changing button, breadcrumb or Back logic.
+Top buttons resolve against the visible level. Empty slots remain blank; live
+data never reorders the menu. Back walks the full parent path, Home goes to root.
+
+The goal form, the card show/hide controls and anything needing typed input stay
+on the dashboard. The panels are click-through - there is no pointer, and there
+never will be.
+
+Both frames start at Home and remember their last screen independently. Fleet
+catalogues, market browsing, historical tables and settings stay on the
+dashboard - what came across is the question a pilot asks in the seat, never the
+report behind it.
+
+### Screenshots on the frame
+
+The MFD does not read images. The optional screen reader is a dashboard and
+overlay feature: it reads a saved screenshot only after the pilot turns it on,
+then keeps a dated reading in the local store. The live snapshot carries only
+the small result that a cockpit page needs. Status can name the latest reading;
+Money can use a balance that a kiosk printed; neither page sees image bytes,
+OCR boxes or the screenshot folder.
+
+That boundary matters. The display keeps working when screen reading is off,
+when Windows has no OCR engine, and when no screenshot has ever supplied an
+answer. A missing reading is a sentence or an omitted row, never a made-up
+zero. The full reading, its source and any disagreement with the logbook remain
+on the dashboard's Log tab. See [screen-insight.md](screen-insight.md).
+
+### How deep the menu goes
+
+Two levels: Home, a category, the screen. It had three, and the middle tier
+split two screens apiece - Route held Navigation and System map, People held
+Crew on its own - so it cost a press on the way to everything and sorted
+nothing. Each category holds four screens at most and the top row has five
+buttons, so the level it replaced was never needed to fit them.
+
+Navigation also sits on Home, in the fifth slot the four categories left
+empty. It is the page a pilot wants most, and putting it behind a category
+would have spent a press to save nothing.
+
+The builder still recurses, so a branch that genuinely earns a third level
+can have one by nesting a node in `groups` - nothing else changes. The
+shipped tree simply has no branch that earns it.
+
+### The HUD format
+
+Overview pages lead with a full-width answer and supporting readings. More
+opens the remaining details; Back returns to the overview before the parent
+menu. Lists keep all their rows and scroll with Up/Down. Cargo keeps its
+qualifier in both views. Source and caveat rows use labelled icons and short
+operational text instead of dashboard instructions. Menus use icon tiles;
+compact openings omit tile summaries when height is limited.
+
+The glyph is looked up from the label, which is safe only because the labels are
+a closed vocabulary written in this file. Anything unmapped gets a neutral mark
+rather than a blank, so a column of icons stays a column.
+
+**The disclaimer rows are gone.** A qualifier a pilot never reads is not doing
+its job, and on a frame read in a second none of them were. The claim moved into
+the label that *is* read - **TRADING RATE** rather than RATE with a footnote,
+"2 of 5 seen" rather than "held" with an explanation of what held means,
+**CLAIM, PER THE TABLES** rather than a paragraph about insurance. Two survive
+on the frame, because misreading either would have a pilot act on something
+false: Cargo says *Never the hold*, and Crew says *Absence means nothing*.
+Everything else is in this file and on the settings page, where there is room to
+read it.
+
+**Map is a page under Flight.** The picture and its readings share a scroll
+area, so a small opening can scroll past the map to read the location and route.
+Navigation keeps the destination prominent without competing with a map.
+
+### One strip of chrome, and words a frame can carry
+
+The display had a header and a footer. The footer carried which frame this was,
+which Cougar drove it, and a BTN-nn readout of the last press - a label for a
+thing the pilot had just done with their own thumb, on a button printed in front
+of them. On a 480 px panel whose edges already take 28%, that strip cost a whole
+reading. Identity moved to the header where the rest of the identity already
+was, and the footer went. What the frame has to say about a press now goes to
+the action strip, which is pinned and was there anyway.
+
+The qualifiers that keep each page honest had grown into paragraphs. They make
+the same claim in a phrase now: *Counter receipts and your plan. Never the
+hold.* / *Held: seen in a stash listing, not counted.* / *Reference: what the
+tables say a claim costs. Never a live one.* Nothing was dropped, only
+shortened - a HUD can carry a qualifier and cannot carry an explanation, and the
+explanations live in this file and on the settings page. The lists came down
+with them: four ledger entries rather than ten, eight feed lines rather than
+fourteen.
+
+**Shortening a list is not the same as reaching the rest of it.** The ledger cap
+was a truncation: it showed the newest few, said there were more, and offered
+nothing that could get to them — a cockpit frame has no scrollbar and nothing to
+drag one with. It is paged now, three entries at a time, **UP** and **DOWN**
+moving a page and the title carrying the position: *Ledger · 4-6 of 95*. The
+window widened to thirty days with it, because paging through three days of
+entries is not worth a button. Paging clamps at both ends rather than wrapping:
+running off the end of a ledger back to today looks exactly like nothing having
+happened. Entry names go through the same underscore rule the dashboard's ledger
+table uses — a raw class name is one unbreakable token, and on a panel it takes
+a line to itself and pushes the entry below it off the bottom.
+
+### Two bugs the page rules could not have caught
+
+Both were reported off a real panel, and both were the input failing to ask a
+rule that was already right.
+
+**Dimming was not refusing.** `dormant` decides which buttons have nothing to do
+on the page in front of the pilot, and the only thing consulting it was a CSS
+class. Done looked dead on Nav and still marked a task off, drawing its
+confirmation on a page nobody was looking at. One rule now answers both the face
+and the input, so what is shown and what is done cannot disagree.
+
+**An index is not an identity.** The plan is re-read every five seconds, so the
+line the cursor was on when Done was armed could be a different job by the second
+press - which confirmed whatever was there. The arming press now records what it
+was pointing at, and a second press against anything else stands down and says
+the plan moved. A press while a write is in flight is swallowed as well: a toggle
+sent twice puts the line back exactly where it started.
+
+Neither was reachable from a test of the page rules, because the rules were
+correct. `Panel` runs `mfd.js` itself under the same DOM stub the dashboard's
+harness uses, and that stub already carries a fetch recorder - which answers the
+only question either bug was ever about: did that press write to my flight plan?
+
+**Act writes, and says so.** Confirming marks a line in the pilot's own flight
+plan and tells the game nothing, which the page states on every visit. A press
+arms; a second press on the same button commits; any other button stands it
+down. One button rather than two, and no timer: a confirmation that expires on
+a clock is one that expires while the pilot is being shot at. The instruction
+they are confirming stays on screen the whole time.
+
+**Cargo cannot be a manifest.** Game.log never states what is in a hold, so the
+page shows two things that are not that and labels both: what the plan still
+says to load, and what the commodity counters recorded this session. Quantities
+are added up only where the pilot wrote SCU on them, and anything else is
+counted beside the total rather than folded into it — two units are two
+numbers. A haul bought last session, transferred from another ship or blown out
+of the back is invisible to all of it, and the page says so rather than
+implying a full hold with a confident figure.
+
+**Contract is session-scoped on purpose.** `/api/contracts` reads the store,
+and the store gains a session when the log rotates — so the contract being
+flown right now is the one thing that report cannot show. The page carries the
+open ones from the live session and points at the dashboard for the rest. A
+contract with no journal objectives says the journal was quiet rather than
+showing "0 of 0", which would read as no work left.
+
+## Use
+
+Run the desktop build, then choose **MFD setup…** from the tray. Drag the left
+and right MFD areas onto the monitor or monitors behind the frames. Resize
+from the corner; the rectangles represent the visible screen openings. The
+monitor dropdown and pixel fields also allow precise placement. Arrow keys
+move a focused rectangle; Shift increases the step.
+
+**Show alignment preview** displays the rectangles at their real positions, and
+from then on the frames follow the editor: dragging moves them under your hand,
+coalesced to one update a frame. **Saving does not stop the preview** - it
+writes the file and the frames keep following. **Stop preview** or closing setup
+restores the saved state. Tick **Enable MFD displays** and choose **Save layout**
+to keep them. Settings live in `mfd.json` under the Quantum Wake data directory.
+Each display remembers only which page it is showing, in the WebView profile -
+that is the one thing that genuinely differs between two frames in one cockpit.
+Brightness and text size are shared and saved with the layout.
+
+Both halves of that were wrong once, and together they made the editor feel
+dead. Updates only reached the frames when a drag ended, so aligning to a few
+pixels meant dropping the rectangle, looking up, and starting again; and `save`
+cleared the previewing flag on the page while the controller separately dropped
+back to a non-preview apply, so after one save nothing else arrived at all and
+every later change needed another save to be seen. The page keeps previewing
+across a save, and the controller keeps applying as a preview while `_preview`
+is set.
+
+**Screen** carries brightness, text size and **Dim when idle**, shared by both
+frames and saved with the layout. The first two used to be four buttons on the
+face.
+
+Brightness has four levels rather than a slider — 40, 60, 80 and 100 percent.
+A control that moves in five-percent steps cannot be pressed to a known place:
+you nudge it until it looks right, and next flight you nudge it again. Four
+numbered levels are a setting a pilot can hold in their head, and more to the
+point they are ones a button on the frame can land on exactly. **Screen
+brightness · 1 to 4** cycles them and wraps, and the button shows the level it
+is on rather than a bare lamp icon; **Screen brighter** and **Screen dimmer**
+still move one level each and stop at the ends, for the rocker the frame has
+printed BRT. A value between two levels — a 70% written by an earlier build —
+snaps to the nearer, going to the brighter on an exact tie, because a setting no
+control can return to is worse than one that moved once.
+
+Dimming is off unless a time is picked. After that many minutes with no button
+pressed the frames drop to a third of the configured brightness, and the next
+press of anything brings them back before it does whatever it was bound to do.
+It never blanks them: a panel bolted into a cockpit is glanced at far more often
+than it is pressed, and one that has to be woken before it can be read is worse
+than one that is merely dim. Burn-in is not the reason - these are LCDs — so
+the setting exists for night flying rather than for the panel's health.
+
+**Button assignments** below the tester draws the frame instead of listing it.
+Twenty-eight dropdowns of thirty-six options each is a thousand entries to read
+past, and none of them said which key on the desk they meant. The page now shows
+the twenty face buttons in their clockwise positions around a stand-in screen,
+with the rockers in a row beneath, each carrying its number and what it does
+today. Press a physical button and its position lights and becomes the selected
+one; click a position to select it by hand. One grouped list underneath says
+what that button does, sorted into menu positions, direct screens, menus and
+controls. Changes reach a running alignment preview immediately, so a rebinding
+can be tried on the frame before it is saved; **Save layout** keeps them along
+with the placement.
+
+## The system map and the corner of the frame
+
+Flight contains a dedicated System map screen. Navigation quotes the distance
+from the same model; the map and its text scroll together on smaller openings.
+
+It is real geometry. `/api/map` carries the community starmap's own body
+coordinates - 16 bodies in Stanton, 12 in Pyro, 3 in Nyx - normalised to the
+outermost body so the renderer never needs to know it is drawing 43 gigametres.
+Bodies sharing an orbit collapse to one ring, or Yela, Daymar and Cellin would
+draw Crusader's circle four times over on a 150-pixel plan. Only the body you
+are at and the one you are headed for carry a name.
+
+**The whole plan is drawn, not just the next hop**: a quantum destination goes
+in front of the tracked stops, because that is where the ship is actually
+pointed and the plan resumes from wherever it puts you. Two stops at one body is
+two jobs and one arrival, so consecutive repeats collapse rather than becoming a
+leg of no length, and a stop in another system is counted in the caption rather
+than drawn somewhere it is not.
+
+The Nav rows quote the distance off that same view rather than measuring again,
+so the picture and the number cannot disagree about where you are going. It is
+**a straight line between body centres** - not a flight path, and not a quantum
+route, because the game plots those and never writes one down. The caption says
+so before the pilot has a chance to trust it. Travel *time* is deliberately
+absent for the same reason: it would need a speed the logs do not carry, and an
+estimate dressed as a reading is the one thing this app does not do.
+
+**Location and next stop sit above the plot, not below it.** They were under
+it, and on a 220 px opening that put the one fact the screen exists to answer —
+where am I — off the bottom edge, reachable only by scrolling a map. The plot is
+sized to leave room for them rather than to fill the panel.
+
+**It marks a body, never a point.** Game.log names the place you are at and the
+body it sits on; where you are on that body is not something it ever says, and
+a dot on a surface would be an invention. The caption under the plan says so.
+With no body positions - the community dataset off, or a system nobody has
+mapped - it names the system it cannot draw rather than falling back to an even
+ring that would look like geometry.
+
+The atlas is fetched once and kept: reference data that changes when the game
+does, and re-pulling 294 places every five seconds to redraw a plan that has
+not moved is not what a panel left running all evening should be doing.
+
+**The maker's mark** of the ship the logs last saw sits in the top-left corner
+of every page, from the same sixteen logos the Fleet page uses. `mfd-core.js`
+keeps its own copy of that table, because the panel cannot load fourteen
+thousand lines of dashboard to read sixteen names - and the copy is safe only
+because a test loads both files and fails when they disagree. Matching by code
+alone is the bug that once left every maker whose code is not its name without
+a badge, so codes and names both resolve, longest match first.
+
+**The app's own mark** sits in the bottom-left of the display. It needed no
+recolouring: mark.svg was already drawn in the same cyan the instrument uses,
+and it is a comet at 16 px by design, which is the size a footer can offer. The
+maker's mark has the top corner and this has the bottom one, and neither is
+ever louder than a reading.
+
+**The button faces carry an icon over the caption, and nothing at all where a
+button does nothing.** The number used to sit there, labelling a button the
+pilot is looking directly at - it is printed on the frame under their thumb. A
+blank position now reads as blank. The icons are stroked paths rather than a
+font: standalone mode makes no outbound request, and the glyph sets Windows
+ships with are a lottery at 14 px. They inherit `currentColor`, so a pressed
+button inverts its icon along with its caption for nothing.
+
+## The backdrop
+
+A Cougar frame is a bezel with a square hole in it, screwed over part of a
+monitor. Everything the frame does not cover still glows - wallpaper, the
+taskbar, whatever window is behind it - and in a dark cockpit that light leaks
+around the edge of the bezel and washes out the instrument inside. **Black out
+the rest of those monitors** fills every monitor carrying a panel with black,
+around the openings. It is on unless you turn it off, and the monitor layout in
+setup draws itself the way the monitor will look, so the switch explains itself.
+
+Off is for anyone who put a panel in the corner of a monitor they are still
+using and would rather keep the desktop than the contrast.
+
+The openings are cut out with a **window region** rather than left to z-order.
+Two topmost windows have no guaranteed order between them, and if the backdrop
+ever won that race the pilot would get a black square where the instrument
+should be - a failure that looks exactly like a crash. A window with holes in it
+is not in that race. They are holes to the mouse as well: the backdrop is
+click-through, and an opening is not the backdrop at all.
+
+**The monitor the setup window is on keeps its backdrop off while setup is
+open**, and takes it back when setup is closed or dragged elsewhere. Somebody
+placing a panel on the monitor they are working on would otherwise cover their
+own setup window with the thing they had just switched on, and the way back out
+would be underneath it.
+
+Disconnected monitors retain their saved placement and their panels stay
+hidden. They are not moved onto the primary monitor. Changes in monitor
+resolution clamp the live placement within the available monitor. Windows
+monitor device names identify saved displays; if Windows renames a display,
+select its new entry in setup.
+
+## Default profile
+
+The official [Cougar default diagram](https://ts.thrustmaster.com/download/accessories/pc/mfd/Cougar-MFD-leaflet.jpg)
+numbers the OSBs clockwise: top 1–5, right 6–10, bottom 11–15 from right to
+left, and left 16–20 from bottom to top. The [user manual](https://ts.thrustmaster.com/download/accessories/pc/mfd/MFD_COUGAR_Pack_User%20Manual.pdf)
+names the default devices F16 MFD 1 and F16 MFD 2. Quantum Wake assigns them
+to the left and right displays respectively; setup can swap or change those
+assignments without changing the firmware.
+
+| Buttons | Quantum Wake action |
+| --- | --- |
+| 1–5 | Context menu options; captions follow Home, category or sibling screens |
+| 15 | Back: details → overview → every parent menu → Home |
+| 13 | Home: cockpit category tiles |
+| 10 | More / Less: secondary readings where available |
+| 14 / 12 | Up / Down: select on Checklist, scroll elsewhere |
+| 8 | Done: arm, then confirm the selected checklist task |
+| Other OSBs and rockers | Unassigned |
+
+The category layout is stable as data arrives:
+
+| Category | Submenu | Screens |
+| --- | --- | --- |
+| Flight | Route | Navigation, System map |
+| Flight | Ship & local | Ship, Local intel |
+| Operations | Plan & task | Flight plan, Checklist |
+| Operations | Jobs & list | Contract, Shopping |
+| Resources | Trade | Cargo & trade, Ledger |
+| Resources | Industry | Mining, Earnings |
+| Pilot | Session | Session, Activity |
+| Pilot | People | Crew |
+
+DONE and MORE disappear where they have no action; Up/Down dim when there is
+nothing to move. Home and Back retain their positions across menus. Direct page
+shortcuts, category shortcuts, text size and brightness commands remain bindable.
+Custom profiles are preserved; Restore defaults and Save layout adopt this menu
+profile. Keep Home or Back bound for hardware navigation out of a submenu.
+
+Every one of those is a default rather than a rule. **Button assignments** in
+setup rebinds any of the 28 buttons to any page or action, shared by both
+frames — they are the same physical device, and the one thing that differs
+between them, the page each is showing, the displays already remember for
+themselves. **Restore defaults** puts the shipped profile back.
+
+A saved map is the whole answer, not a patch over the defaults: a button the
+pilot clears stays cleared, and clearing every one of them leaves a blank frame
+with every position on the setup diagram reading as unassigned. Falling back per button would mean an
+unassignment quietly undoing itself on the next reload, which is the one thing
+that would make a custom profile untrustworthy.
+
+**The four rockers ship unassigned, deliberately.** They report as buttons
+21–28, and nothing in the leaflet or the manual says which rocker is which
+number — so a default here would be a guess printed as a fact. Press one, watch
+the setup tester name the number that answered, and bind it. The row lights up
+as it is pressed, which is the whole discovery procedure.
+
+Screen brightness — and idle dimming with it — changes the rendered page, not
+the Cougar LEDs. Native
+USB reads use Windows `joyGetPosEx` and do not consume game inputs or send
+keystrokes. A button also bound in Star Citizen can therefore affect both.
+No T.A.R.G.E.T. profile is needed. A virtual controller replacing the default
+devices, renamed devices, and devices outside the Windows joystick API's
+slots 1–16 are not supported by this initial reader. Setup reports missing
+devices; duplicate MFD numbers pause input for those numbers. Held buttons
+do not repeat, and buttons held during connection are ignored until released.
+
+The browser links on the Overlay page preview the layout and data without
+native USB input. Opened that way the editor has nothing to detect, so it draws
+one invented monitor - and says so on the rectangle itself, not only in the
+banner above it. That is worth the words: an example drawn like a detected
+monitor reads as "Quantum Wake can only see one of my three", and did exactly
+that on a three-monitor machine. It cannot save desktop settings outside the
+desktop host either.
+
+## The look
+
+The placement editor loads `app.css`, the dashboard's own stylesheet, and adds
+only what is unique to dropping rectangles onto monitors. It had grown a palette
+and a typeface of its own, which is the failure this arrangement prevents
+happening twice: one stylesheet, one set of tokens, no second look for the same
+product.
+
+`mfd.css` copies app.css's `:root` values rather than linking it. The instrument
+is 480 px square and two of them are up the whole time, so pulling 130 KB of
+nav, table and map styling into each one to read six colours out of it is the
+wrong trade - but that means **those values have to be kept in step with
+app.css by hand**. The instrument sits on the same cyan HUD palette as
+everything else. A phosphor green is what a real F-16 MFD does, and beside this
+app's own screens it read as a different program.
+
+## Verification
+
+Verified on 2026-09-09:
+
+- Release build of the Overlay succeeds. The server reports its existing
+  unused `Owned` local-function warning.
+- The full solution test run passed: 1,096 core/data tests, 498 web tests and
+  6 OCR tests. After narrowing the HUD pages, the expanded web suite passed
+  with 500 tests.
+- Headless Chrome checks passed for page buttons, the task's SCU unit,
+  pointer dragging, independent monitors, assignment swapping, preview
+  updates and save messages. Screenshots were inspected at 480 × 480 and
+  220 × 220 for the MFD and 1100 × 850 and 760 × 640 for setup. Save and
+  preview actions remain visible at the minimum setup size.
+- An offscreen native WebView run against a separate server with generated
+  logs detected three monitors and both F16 MFD 1 and F16 MFD 2. It verified
+  the monitor message, save-message round trip, and a requested 480 × 500
+  native window at (-9975, 35) against `GetWindowRect`.
+- Native lifecycle checks passed for preview, cancellation, enable, disable
+  and saved-layout reload in an isolated data directory.
+
+The native run exposed a negative result worth retaining: `joyGetDevCapsW`
+returned **Microsoft PC-joystick driver** for every occupied slot on this
+machine. Matching that field alone detected no Cougars. Resolving the slot's
+OEM registry entry produced the actual MFD names and detected both devices.
+
+### The Act, Cargo and Contract pages, and the button map
+
+Verified on 2026-09-09, against two servers: one on a copy of this install's
+real data, one on a generated install so the counters and journal had something
+in them.
+
+- All three suites pass: 1,105 core/data tests, 511 web tests, 6 OCR tests.
+  `Quantumwake.Cli` against the real corpus reports **0 unmatched known tags**.
+- Headless Chrome drove the real page against the real server. Act listed the
+  two outstanding instructions at Baijini Point from a tracked plan, moved its
+  cursor, armed on **DONE** and stood down again on any other button. The
+  second **DONE** posted
+  `/api/trips/778bd611/stops/86f33f3a/actions/73efdfb7/toggle` - the right trip,
+  stop and instruction. That exact request was then sent for real: HTTP 200, and
+  the briefing dropped the instruction from its outstanding list.
+- Cargo read "96 SCU across 2 stops · planned, not detected" from the plan, and
+  "Sold 80 SCU · Admin lt base g · 132,509 aUEC" with its capture time from the
+  parsed logs, over "The game logs no cargo hold". With neither, it says which
+  one is missing rather than showing a zero.
+- Contract read a real parsed contract and said "The journal reported no
+  objective steps for this one" rather than "0 of 0".
+- The setup editor round-tripped a profile through the host message channel: a
+  rocker press lit row 21, binding it saved `"21": "bright-up"`, clearing button
+  8 removed the key rather than restoring its default, and **Restore defaults**
+  posted `buttons: null`. A profile delivered from the host relabelled the frame
+  live - OSB 1 read `CNTRCT`, unmapped buttons went to `—` and disabled.
+- Rendered at 220 × 220, the minimum panel, inside an iframe. Headless Chrome
+  will not open a window narrower than about 500 px on this machine, so a
+  `--window-size=220,220` screenshot is a crop of a 500-wide page and looks like
+  a broken layout when nothing is wrong. Frame it instead.
+
+### The backdrop
+
+Verified on 2026-09-09, with an offscreen native run: an `MfdBlackout` covering
+a monitor placed at (-9000, 40), so nothing appeared on any real screen.
+
+- `GetWindowRect` returned the requested `-9000,40 1920x1080`, and
+  `GetWindowRgnBox` the full 1920 × 1080 the region spans.
+- `WindowFromPoint` answered the backdrop everywhere except inside the two
+  openings - including the gap between them, and one pixel outside an opening's
+  corner while one pixel inside was clear. The holes are exact, and they are
+  holes to the mouse as well as to the eye.
+- Moving a panel moved its hole: the old opening came back under the backdrop
+  and the new one was clear.
+- The setup editor round-tripped the switch: only the monitor carrying panels
+  drew as blacked, never the desk monitor beside it, and saving carried
+  `blackout` both ways.
+
+**The negative result from this round:** `ContractRecord.Accepted` is never set
+by anything. Filtering on it - which both this page and
+`LibraryBeliefs.OpenContractsAt` did - returns an empty list for every session
+ever recorded, which is why the first live run found no contracts in a log
+carrying 24 acceptance toasts. The acceptance toast and the objective marker
+name a contract in two vocabularies that do not join, so nothing ever fills it
+in. Being in the list is already what "taken" means: the game raises an
+objective marker for a mission in the journal. Both call sites now say so, and
+the field carries a warning rather than being removed, since dropping it would
+retire every cached session to change nothing that is stored.
+
+That bug was also reaching the screenshot cross-check: the mobiGlas Contracts
+app was compared against a permanently empty list, so a photograph of five
+accepted contracts read "the tab says 5, the logs say 0" and filed all five as
+"on screen but not in the logs".
+
+### Menu redesign verification
+
+The fixture browser harness is `tests/mfd-hud.browser.cjs`. Run it with Node
+and an installed Chrome, passing an output directory for screenshots. It serves
+only fixture data and intercepts writes. The run checked 40 screen/size
+combinations at 220 and 480 pixels, plus wide panels and enlarged text. It
+checks menu parents, native button messages, custom maps, overview/details,
+task confirmation guards and independent saved navigation for both panels.
+
+Screenshots caught clipped menu tiles at enlarged text and in a wide panel;
+tile sizing now follows the shorter panel dimension and drops secondary hints
+when space is tight. The small map originally left almost no room for its text;
+map and readings now share the same scroll area.
+
+Physical button presses while the game has focus, frame alignment, and
+mixed-DPI monitor behavior still need a cockpit run. The native checks read
+device state but did not synthesize a physical press or change the game. The
+four rockers cannot be given defaults until that run says which number each
+one reports.

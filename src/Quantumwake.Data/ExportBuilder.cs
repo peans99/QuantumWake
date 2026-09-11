@@ -18,13 +18,14 @@ public sealed record ExportChoice(
     bool Authored = false,
     int Days = ExportBuilder.DefaultDays,
     bool Handle = true,
-    string? Note = null)
+    string? Note = null,
+    bool Points = false)
 {
-    public bool AskedForNothing => !Receipts && !Blueprints && !Authored;
+    public bool AskedForNothing => !Receipts && !Blueprints && !Authored && !Points;
 }
 
 /// <summary>How many of each thing a document holds, for a preview or a receipt.</summary>
-public sealed record ExportCounts(int Receipts, int Blueprints, int Jobs, int Checklists, int Trips);
+public sealed record ExportCounts(int Receipts, int Blueprints, int Jobs, int Checklists, int Trips, int Points = 0);
 
 /// <summary>
 /// Assembles a shareable document out of the stores.
@@ -42,7 +43,8 @@ public sealed class ExportBuilder(
     JobStore jobs,
     ChecklistStore checklists,
     TripStore trips,
-    WipeStore wipe)
+    WipeStore wipe,
+    ScreenReadingStore readings)
 {
     /// <summary>A trading week.</summary>
     public const int DefaultDays = 7;
@@ -63,6 +65,9 @@ public sealed class ExportBuilder(
         var authored = choice.Authored ? BuildAuthored() : null;
         if (authored is not null) classes.Add(ExportDocument.Authored);
 
+        var points = choice.Points ? BuildPoints() : null;
+        if (points is not null) classes.Add(ExportDocument.Points);
+
         return new ExportFile(
             ExportDocument.Format,
             ExportDocument.FormatVersion,
@@ -74,7 +79,8 @@ public sealed class ExportBuilder(
             Trim(choice.Note, 240),
             receipts,
             blueprints,
-            authored);
+            authored,
+            Points: points);
     }
 
     /// <summary>Counts only — what a preview shows before anything leaves.</summary>
@@ -83,7 +89,8 @@ public sealed class ExportBuilder(
             choice.Blueprints ? library.Blueprints().Count : 0,
             choice.Authored ? jobs.All().Count : 0,
             choice.Authored ? checklists.All().Count : 0,
-            choice.Authored ? trips.All().Count : 0);
+            choice.Authored ? trips.All().Count : 0,
+            choice.Points ? readings.Pinned().Count : 0);
 
     private ExportReceipts BuildReceipts(int days)
     {
@@ -152,6 +159,28 @@ public sealed class ExportBuilder(
             jobList,
             listList,
             tripList);
+    }
+
+    /// <summary>
+    /// Every point, as the pilot keeps it. The provenance of the belief
+    /// (which signal, when) stays home: it is about the sender's logs, and a
+    /// reader has the two facts that matter - the system, and whether the
+    /// sender set it or their app guessed it.
+    /// </summary>
+    private ExportPoints BuildPoints()
+    {
+        var rows = readings.Pinned()
+            .OrderBy(p => p.SourceAt)
+            .Select(p => new ExportPointRow(
+                p.SourceAt, p.Label ?? p.Believed ?? "Copied location", p.Category, p.Note,
+                p.System, p.SystemByPilot, p.Believed, p.X, p.Y, p.Z, p.Gigametres))
+            .ToList();
+
+        return new ExportPoints(
+            rows.Count > 0 ? rows[0].At : null,
+            rows.Count > 0 ? rows[^1].At : null,
+            [ExportCaveats.SystemInferred],
+            rows);
     }
 
     /// <summary>

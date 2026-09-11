@@ -11,9 +11,11 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 |---|---|
 | [findings.md](findings.md) | **Read this first.** The kill-event problem, with evidence. The app stopped showing a kill counter in 0.6.8; the events are still absent and the parser still dormant. |
 | [log-format-reference.md](log-format-reference.md) | Line formats verified present in the local logs, plus the removed ones. |
-| [architecture.md](architecture.md) | Design decisions for Quantumwake and the reasons behind them - including shopping lists and destinations, what fits a ship, and the four rules the star map learned the hard way. |
+| [architecture.md](architecture.md) | Runtime design decisions: dashboard, overlay, paired MFD HUD, local screen reading, storage and the boundaries between them. |
 | [phase-1-core.md](phase-1-core.md) | Build log: the Core parser, what it verified, and the quirks it uncovered. |
 | [phases-2-5.md](phases-2-5.md) | Build log: server, dashboard, map, overlay, and the dormant combat parser. |
+| [mfd-mode.md](mfd-mode.md) | Cougar MFD HUD: pages, paired-display setup, USB profile, the screen-reading summaries it can use and verification. |
+| [screen-insight.md](screen-insight.md) | Saved-screenshot and clipboard reading: local OCR, what is kept, what is checked against logs, and what it deliberately cannot claim. |
 | [log-simulator.md](log-simulator.md) | The fake-log generator: how to use it and why it reproduces the format's quirks. |
 | [untapped-signals.md](untapped-signals.md) | Log signals we have not used yet, ranked, with formats and counts. |
 | [commodity-names.md](commodity-names.md) | Why a cargo sale cannot be named, and where the mapping actually lives. |

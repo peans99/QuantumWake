@@ -71,6 +71,33 @@ The UI is a web app served from `web\`. A browser consumes it for second-screen
 use; WebView2 inside a transparent WPF window consumes the *same* UI for the
 overlay; remote clients consume it later for server mode.
 
+### The cockpit HUD and screen readings
+
+The optional Cougar MFD mode is another local host for the same server, not a
+second dashboard. The overlay opens two small WebView2 windows and forwards
+physical button input to them. Each frame owns its selected page, while the
+server remains the single source for the live state, flight briefing and the
+slower ledger-style readings.
+
+Saved screenshots are a separate input path. The pilot enables the reader,
+the Windows-only OCR adapter reads a file in Star Citizen's screenshots folder,
+and `ScreenInsightService` turns its text into a dated local record. The server
+then sends a compact summary over the existing live stream. The dashboard can
+show the complete reading and its checks; the MFD gets only the operational
+answers it needs, such as the latest reading or a cash balance from a kiosk.
+
+```
+saved screenshot ──> OCR adapter ──> ScreenInsightService ──> local reading store
+                                                              │
+Game.log ──> Core parser ──> session state / LogLibrary ─────┼──> Server + SSE
+                                                              │        ├─ dashboard / overlay
+                                                              │        └─ paired Cougar MFD HUD
+```
+
+No component captures the display, reads game memory or sends screenshots to a
+service. A screenshot remains a file the pilot chose to save; the MFD never
+receives the image itself.
+
 **Why not pure WPF/WinUI:** it would require writing the UI three times — once
 for the overlay, once for the second screen, once for the web-based server mode.
 The web-first approach writes it once.

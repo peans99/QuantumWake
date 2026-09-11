@@ -8,12 +8,24 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1124 tests](https://img.shields.io/badge/tests-1124%20passing-4fd48a)
+![1789 tests](https://img.shields.io/badge/tests-1789%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
-Quantum Wake turns `Game.log` into a local dashboard of your flights. It keeps
-your sessions, ships, trades, contracts, crew, inventory sightings and travel
-history together, then adds reference data from your own Star Citizen install.
+Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
+joins sessions, ships, travel, contracts, crew, inventory sightings and
+transactions with reference data from your own game install.
+
+One local pipeline feeds the screens you use in different moments: the dashboard
+for planning and history, the in-game overlay for a quick answer, and an
+optional paired Cougar MFD HUD for the cockpit. Saved screenshots and copied
+`/showlocation` coordinates can add facts the logs do not carry, but only after
+you ask Quantum Wake to read them.
+
+![Quantum Wake architecture: local inputs feed one desktop companion, then the dashboard, overlay and paired cockpit MFDs](docs/assets/quantumwake-architecture-hero.png)
+
+*Logs, saved screenshots and game data stay on your PC. The same local service
+feeds the dashboard, overlay and cockpit displays; the MFDs receive concise
+answers rather than screenshots or raw OCR output.*
 
 The app runs on your PC and keeps its database there. Network features are
 optional. Most of Quantum Wake is read-only; item labels and StarStrings are the
@@ -25,21 +37,96 @@ explicit install click.
 
 ## Install
 
+No installer, no separate .NET runtime, no account. One file.
+
+### 1. Download it
+
 **[Download `QuantumWake.exe`](https://github.com/peans99/QuantumWake/releases/latest)**
-and run it. There is no installer and no separate .NET runtime to add.
+from the latest release. The `.zip` beside it holds the same executable plus the
+command-line parser, the README and the licence, and is only worth taking if you
+want those.
 
-Quantum Wake finds LIVE, PTU and EPTU installs on fixed drives. It starts in the
-notification area; right-click the tray icon to open the dashboard or overlay,
-check for updates, or quit. The dashboard is also available at
-<http://127.0.0.1:31337>.
+### 2. Get past the unknown-publisher warning
 
-Windows may show an unknown-publisher warning because the executable is not
-code-signed. Choose **More info → Run anyway** if you downloaded it from this
-repository's release page.
+The executable is not code-signed, so Windows will not vouch for it. If you
+downloaded it from the release page above, choose **More info → Run anyway**.
 
-The overlay starts disabled. Star Citizen must use **Borderless Windowed** for
-it to appear. Click the overlay's pin button to let mouse input pass through;
-use the tray icon or `Ctrl+Alt+O` to bring it back.
+SmartScreen stops warning once enough people have run a given build, so a fresh
+release warns and a fortnight-old one usually does not. That is a measure of the
+release's age and not of its safety.
+
+### 3. Put it somewhere it can stay
+
+Anywhere you can write to — `C:\Tools`, your user folder, a games drive. Two
+things to avoid:
+
+- **Not `Program Files`.** The app updates itself in place and cannot write
+  there without a prompt every time.
+- **Not the Downloads folder**, if you are the sort of person who empties it.
+
+The app updates itself, so where you put it is where it stays.
+
+### 4. Run it
+
+It starts in the notification area rather than opening a window. Right-click the
+tray icon to open the dashboard or overlay, check for updates, or quit. The
+dashboard is also at <http://127.0.0.1:31337> in any browser on the same PC.
+
+There is nothing to configure. Quantum Wake finds LIVE, PTU and EPTU installs on
+fixed drives by itself. If yours is somewhere unusual, `QuantumWake.exe --path
+"D:\...\StarCitizen\LIVE"` points it straight at one.
+
+### 5. Wait for the first read
+
+The first start reads every log the game has kept — around 180 files and 400 MB
+on an install that has been played for a while. It takes a few seconds to a
+couple of minutes depending on the drive, and the page says what it is doing
+while it works.
+
+Everything after that is incremental: only the current `Game.log` is watched,
+and it is read as the game writes it.
+
+**Where things end up:**
+
+| | |
+|---|---|
+| Your data | `%LOCALAPPDATA%\Quantumwake` |
+| Read from | `<StarCitizen>\LIVE\Game.log` and `\logbackups\` |
+| Dashboard | <http://127.0.0.1:31337> |
+
+Nothing is written inside the game folder unless you install item labels or
+StarStrings, which are the two features that replace the game's English text
+file and both need an explicit click.
+
+### 6. Turn the overlay on, if you want one
+
+It starts disabled. Star Citizen must use **Borderless Windowed** for it to
+appear at all — in fullscreen it is behind the game and you will not see it.
+
+Click the overlay's pin button to let mouse clicks pass through to the game;
+the tray icon or `Ctrl+Alt+O` brings it back. `Ctrl+Alt+←/→` changes page and
+`Ctrl+Alt+F` goes fullscreen.
+
+### Updating
+
+The tray icon checks for updates when you ask it to, downloads the new build and
+restarts into it. Nothing is checked until you allow it, and the choice is
+remembered.
+
+**Some updates re-read your whole history on the first start afterwards**, which
+makes that one start slow. This is deliberate and is how a fix reaches sessions
+that were summarised before it existed — 0.9.57 and 0.9.58 both did it, to give
+past contracts their real completion times. The release notes say so when it
+applies.
+
+### Uninstalling
+
+Delete `QuantumWake.exe` and delete `%LOCALAPPDATA%\Quantumwake`. That is all of
+it: nothing is written to the registry, no service is installed, and the game
+folder is untouched unless you installed item labels — in which case remove
+those from the app first, or the game keeps the marked text file.
+
+## What it helps with
 
 ![The star map](docs/images/map.png)
 
@@ -47,24 +134,18 @@ use the tray icon or `Ctrl+Alt+O` to bring it back.
 unvisited. The map uses logged locations and quantum travel; it is not a live
 position tracker.*
 
-## What is included
-
-| View | What it answers |
+| Surface or view | What it answers |
 |---|---|
-| **Now** | Where am I, what am I flying, and what has happened this session? |
-| **Map** | Where have I been, and where can I find a place, service or commodity? |
-| **Flight plan** | What is my next stop? Plans can come from a route, shopping list or manual entry |
-| **Sessions** | How long did I play, excluding time left in menus? |
-| **Fleet** | Which ships have appeared on my account, and what fits each component port? |
-| **Places** | Which locations and quantum destinations do I use most? |
-| **Contracts** | What did I accept, finish or abandon, and for whom? |
-| **Crew** | Who has appeared in party and ship-comms events? |
-| **Spending and Ledger** | What confirmed transactions were logged, and where? |
-| **Cargo and Market** | What did I buy or sell, and where is each commodity traded? |
-| **Mining** | What spawns where, how rich the rocks are, their quality and respawn time |
-| **Crafting** | What can be made, from which materials, and where its blueprint drops |
-| **Loot, Loadout and Stash** | What gear has appeared, what is equipped, and where it was last seen |
-| **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear |
+| **Now and overlay** | Where am I, what am I flying, and what changed during this session? |
+| **Map, places and points** | Where have I been, where is a place or commodity, and how far is a point from the last copied location? |
+| **Flight plan and checklist** | What is my next stop, what has to happen there, and what can be checked off? |
+| **Sessions, contracts and crew** | How long did I play, which contracts changed, and who did the log name? |
+| **Fleet, loadout and stash** | Which ships and gear have appeared, what fits, and where something was last seen? |
+| **Ledger, cargo and market** | Which transactions were confirmed, what did a counter record, and where is a commodity traded? |
+| **Mining, crafting and items** | What the installed game data says about deposits, recipes, parts and shops. |
+| **Screen readings** | What a saved screenshot or copied `/showlocation` says, checked against the logbook where possible. |
+| **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, tasks, cargo, contracts, money and the live feed. |
+| **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear. |
 
 Tables can be sorted by their column headings. Dashboard cards can be hidden,
 collapsed and rearranged.
@@ -84,6 +165,13 @@ collapsed and rearranged.
   </tr>
 </table>
 
+![Cockpit HUD, saved screenshot, dashboard and local data store](docs/assets/hud-screen-insight.png)
+
+*The cockpit HUD stays focused on a pilot's next decision. Saved screenshots can
+add facts that `Game.log` never writes, such as a kiosk balance or a ship's
+fittings; they are read locally and kept as dated readings, not treated as live
+telemetry.*
+
 ## Data sources
 
 Quantum Wake reads three kinds of data:
@@ -93,7 +181,11 @@ Quantum Wake reads three kinds of data:
 2. **Your game install.** `Data.p4k` provides names, items, commodities,
    crafting recipes, mining deposits, place descriptions and facilities. The
    first read after a game patch takes about half a minute and is then cached.
-3. **Optional community services.** UEX adds current prices and shop listings.
+3. **Screenshots and copied locations, when you ask for them.** The optional
+   screen reader reads the newest saved Star Citizen screenshot or a
+   `/showlocation` copied by the game. It never captures the display, reads
+   game memory or sends the image away.
+4. **Optional community services.** UEX adds current prices and shop listings.
    StarCitizenWiki's scunpacked dataset adds ship specifications and wider map
    and mining coverage. Both integrations are off until enabled in Settings.
 
@@ -110,9 +202,10 @@ No game data is committed to this repository.
 - **No automatic mining history.** The game logs no extraction, scan or refinery
   job. Ore sold without a recorded purchase is shown as likely mined, and a
   separate manual mining log is available.
-- **No wallet balance.** Trading income is visible because commodity sales are
-  logged. Contract and bounty payouts are not, so earnings are labelled as a
-  trading floor rather than total income.
+- **No complete wallet history.** A readable screenshot can establish a cash
+  balance, and logged movements can carry it forward as an estimate. The logs
+  still do not state contract or bounty payouts, so trading remains a floor on
+  total income.
 - **Crew is a floor, not a roster.** A player who was already connected may
   produce no join event.
 
@@ -179,20 +272,38 @@ installs have their own cache and do not mix with real account data. See
 
 ## Architecture
 
-The dashboard is a single web UI hosted by the standalone server and by the WPF
-overlay. The release executable embeds the server and web assets, so the normal
-Windows download is one file and one process.
+### One local pipeline, three ways to use it
+
+`QuantumWake.exe` hosts the local ASP.NET Core server, the dashboard assets and
+the Windows overlay. There is one source of truth: the parser and reading stores
+write local data, then the server provides it through REST and the live event
+stream. The dashboard is the full logbook; the overlay and MFD HUD are focused
+views over the same state.
 
 ```text
-        QuantumWake.exe
-   ┌──────────────────────────────────────────┐
-   │  tray icon      overlay (WPF + WebView2) │      Browser / tablet
-   │            ASP.NET Core, in process ─────┼───── HTTP + SSE
-   └──────────────────────┬───────────────────┘
-                          │
-        Quantumwake.Core        Quantumwake.Data
-        tail → parse → state    SQLite + game-data readers
+  Star Citizen install                         Quantum Wake on this PC
+  ────────────────────                         ───────────────────────────────
+  Game.log + backups ──> Core parser ──────┐
+  Data.p4k ─────────────> game-data reader ├──> Data stores + local SQLite
+  saved screenshot ──────> optional OCR ───┤              │
+  copied /showlocation ──> local reader ───┘              ▼
+                                              ASP.NET Core API + live stream
+                                                           │
+                              ┌────────────────────────────┼──────────────────────────┐
+                              ▼                            ▼                          ▼
+                       browser dashboard            WPF overlay              paired Cougar MFDs
+                       planning and history         in-game glance            cockpit decisions
 ```
+
+Screen reading is intentionally a file-and-text feature, not live screen
+capture. When enabled, it reads a saved screenshot locally and records a dated
+result. The dashboard can show the complete reading and its checks; the overlay
+and MFDs get only the short answer they need, such as a recent screen summary
+or a kiosk balance carried forward by logged movement.
+
+The release remains one executable. The dashboard and MFD pages are embedded
+with it, the database stays under `%LOCALAPPDATA%\Quantumwake`, and network
+services remain opt-in.
 
 | Project | Purpose |
 |---|---|
@@ -211,9 +322,9 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,124 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,789 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
-dashboard JavaScript against a stub DOM.
+dashboard and MFD JavaScript against a stub DOM.
 
 Parser fixtures are copied from real log lines. The CLI is then run against the
 local backup corpus before a release to catch format changes that fixtures do
@@ -225,6 +336,8 @@ not contain.
 - [Log-format reference](docs/log-format-reference.md)
 - [Missing combat-event findings](docs/findings.md)
 - [Architecture decisions](docs/architecture.md)
+- [Cockpit HUD / Cougar MFD mode](docs/mfd-mode.md)
+- [Screenshot and clipboard reading](docs/screen-insight.md)
 - [Problem-report contents](docs/bug-reports.md)
 - [Release process](docs/releasing.md)
 - [Credits and external sources](docs/credits.md)
@@ -244,6 +357,491 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.10.47
+
+- **Help answers the questions people actually arrive with.** Twenty-six
+  answers in five groups instead of eleven in three: the orange wipe banner,
+  showing the dashboard on a tablet, which keys do anything, where the data
+  lives; the trading rate, the ~ on the Ledger, how the wake-up card infers
+  your regen; how to mark a point, why it says "believed to be", how far away
+  it is, which screens the reader can and cannot read, what to do with a wrong
+  reading; what a shared file carries, what happens to one you are sent, and
+  what a backup holds and leaves out. Each answer links to the page it is
+  about. A filter box narrows the page to the questions that mention a word
+  - in the answer as well as the question - and **Expand all** opens them.
+
+- **Share your points of interest the way you share prices.** Settings → Share
+  what you have has a fourth box: your points, with the name, category and note
+  you gave each - and which system your logs believed, or you said. A friend
+  opening the file sees them on their Points page under **Shared by others**,
+  with whose they are, whose word the system is, and the distance from wherever
+  they last copied a location by the same rule as their own points. Nothing is
+  merged: removing the file takes them away and leaves their own untouched.
+  **Keep as mine** copies one across as their own point, with a note saying who
+  shared it. Coordinates that are not numbers, dates in the future and notes
+  past the cap are dropped or cut on the way in and counted, as with every
+  other shared class.
+
+- **Help is where the questions are.** About now opens a dedicated Help & FAQ
+  page with setup, privacy and reporting guidance updated for the paired Cougar
+  MFD HUD, saved-screen reading and cash estimates.
+
+- **A README that reflects the whole current app.** The opening now explains
+  the shared local pipeline behind the dashboard, overlay, paired MFD HUD and
+  optional screen readings. The feature list is grouped by the questions each
+  surface answers, and a new architecture image sits at the top of the page.
+
+- **A clearer map of the new cockpit and screen tools.** The README and
+  technical notes now explain what the paired Cougar MFD HUD reads, how saved
+  screenshots and copied locations stay local, and how their small summaries
+  reach the dashboard and cockpit displays.
+
+- **Cash on hand where you fly.** The balance the Ledger shows - from the last
+  screenshot that printed it, carried forward by the movements logged since -
+  now leads the Cougar MFD's Money page and sits on the Now page's trading
+  card, which the overlay shows in game. Carried forward it is called an
+  estimate and says what it rests on; before any screenshot has shown a
+  balance there is no line, not a zero.
+
+- **How far are the things you marked?** Copy a `/showlocation` in the game and
+  the reading on the Log now lists the nearest of your points with the
+  distance - *Ruin mining shelf · 12.4 km* - and the Points page measures every
+  card from wherever you last copied, saying when and where that was. A point
+  in another system is named as not measurable rather than given a number:
+  the same coordinates mean different places in Stanton and Pyro. Nothing
+  decides how near counts as "there" - that differs between a cave mouth and a
+  belt, and you can judge a distance better than the app can guess one.
+
+- **A point says what its "believed to be" rests on, and you can set the
+  system yourself.** A copied `/showlocation` names no system, so the app
+  places it from the logs - and now says on what: *from a location signal 4
+  min earlier*, or *from a quantum jump 40 min earlier - where the ship was
+  going, not that it arrived*. Each card has a System selector; a copy the logs
+  could not place asks for it rather than showing nothing, and a system you set
+  is shown as yours from then on, with what the logs had said beside it.
+
+- **Points of interest are in the backup now.** Every pin - its name, category
+  and note - goes into the backup file and comes back through the same restore
+  review as your jobs and kits: a point you removed on purpose is not handed
+  back unasked, a newer note here is kept over an older one in the file, and
+  the sentence on the Backup page says how many points a backup would carry.
+  Backups taken before 0.10.38 hold no points; take a fresh one.
+
+- **On the Points page, saving one card no longer discards what you were typing
+  on another.** Only the saved card is redrawn.
+
+- **Points of interest have a page of their own, with room for why.** Under
+  Flight, next to Places: every `/showlocation` you pinned, as a card with its
+  name, category, exact coordinates, when it was copied and which session that
+  fell in - and a note. Write down why you were there, what is there and what
+  to bring next time; nothing in the logs will ever say. Search reads the notes
+  as well as the names, categories become filters once there is more than one,
+  and a card with something typed and not yet saved shows an amber bar until
+  it is. The Log's pinned-points aside shows the note and links to the page.
+
+- **The Ledger now shows your cash on hand.** Game.log never states a balance,
+  so the figure comes from the last screenshot that showed one, dated and named
+  on the card, and the movements logged since carry it forward. The carried
+  figure is labelled an estimate, with the count and net of the lines it rests
+  on, because money that moved without a line in the log is not in it - the
+  next screenshot says by how much. Until a screenshot has shown a balance the
+  card says so rather than showing a zero.
+
+- **A commodity kiosk that prints the balance in full is now the wallet.** The
+  first kiosk photographed abbreviated it - `1,583M` - and no figure was ever
+  taken from a kiosk. Your own kiosk prints every digit, and that reading is the
+  only place any screen has shown the balance in a face the reader can read. A
+  figure with a suffix is still kept as printed and never becomes a number. The
+  reader also no longer mistakes the close button's `x` beside "Current
+  balance" for the balance itself.
+
+- **A reading you do not trust can be invalidated from the Log.** It stays in
+  the list, struck through and saying so, but the wallet, the fleet, the
+  fittings and the Now card stop using it; it can be believed again with one
+  click. Each reading also has **Read again**, which puts the same screenshot
+  through the reader as it is now and replaces the old reading - so a screen
+  the app learned to read after you photographed it is read at last.
+
+- **The Cougar frames now work as a cockpit pair.** The left frame opens as
+  Navigation and the right as Mission. The Mission card keeps the active
+  contract, destination, objective progress and a matching Contracts-screen
+  reward together; a captured reward is shown only when its selected contract
+  matches the live one. Its bezel becomes **Map**, **Done**, **Contract**,
+  **List** and **Home**, making the next drill-down visible on the hardware.
+
+- **The Cougar MFD map is now a radar instrument.** Its real body-centre
+  geometry has range rings, a sweep and a lock reticle for the selected body.
+  The sweep turns about the star and trails behind itself, rather than drifting
+  outside the rings as a short bar attached to nothing.
+  The five upper bezel buttons become **Nav**, **Previous**, **Next**, **POI**
+  and **Here**, so the frame names what it can do on that screen. POI opens the
+  named points kept in the MFD Log; positions are never invented from a name.
+
+- **The MFD menu scrolls instead of cutting its labels off.** On a small frame,
+  or with the text turned up, five tiles did not fit and each was squeezed into
+  a box shorter than the word standing in it - so "Operations" was clipped and
+  looked like a shorter word rather than a hidden one. The tiles keep their
+  height and the menu scrolls to the ones below.
+
+- **The HUD now puts one useful thing in front of you.** Its Focus strip opens
+  the next stop, active contract, current location, or a screen that needs
+  attention. The Log keeps repeated clipboard-watch readings as one location
+  with a seen count, while a deliberate read remains a new entry.
+
+- **Points and unfamiliar screens are easier to work with.** A saved location
+  can have your own name and category, including on the MFD. Screenshots the
+  app cannot yet interpret now collect in a review queue with the capture and
+  extracted text together, ready to turn into the next reader.
+
+- **A Log tab keeps what you showed the app in one place.** Screenshots and
+  copied `/showlocation` readings now have a direct dashboard tab instead of
+  living under Overlay settings, and the Cougar MFD has the same compact Log
+  screen under Pilot. A copied location can be pinned as a point of interest;
+  pins keep the exact coordinates even when routine readings are cleared.
+
+- **The Log is clearer at a glance.** Reading controls, recent activity and
+  pinned points are arranged as visual cards, with a small action on each
+  copied coordinate rather than a separate configuration flow.
+
+- **The ledger pages, instead of stopping after the first few.** It showed the
+  newest handful, told you there were more and gave you no way to reach them.
+  **UP** and **DOWN** now move a page at a time and the title says where you
+  are — *Ledger · 4-6 of 95* — and it reads back thirty days rather than three,
+  because paging through three days is not worth a button. Item names lose
+  their underscores, so an entry wraps instead of taking a whole line as one
+  unbreakable word.
+
+
+- **The system map puts where you are at the top.** Location and next stop were
+  under the plot, which on a small opening meant scrolling a map to find out
+  where you were — the one thing you opened it for. They are above it now, and
+  the plot is sized to leave room for them rather than to fill the frame.
+
+- **The map caption says what it means.** It read "straight line, not a fix",
+  and a fix is the word for a position — so it looked like a warning about
+  where it had put you, which is not what was in doubt. It now says **direct
+  line, not the route flown**: the distance is body centre to body centre, and
+  the game never writes down the route it actually plots.
+
+
+- **Brightness is four levels now, and a button can reach every one of them.**
+  It used to nudge five percent at a time, which is fine for a mouse and no use
+  at all on a frame — you press until it looks right, and next flight you do it
+  again. Bind **Screen brightness · 1 to 4** and one button cycles 40, 60, 80,
+  100 and round again, showing the level it is on. The one-level brighter and
+  dimmer commands are still there for the rocker printed BRT. If you had set
+  something in between, it moves to the nearest level once.
+
+
+- **Setting up the buttons now shows the frame, not a form.** Binding a key
+  meant reading past twenty-eight dropdowns of thirty-six options each, none
+  of which said which key on the desk it meant. Setup draws the Cougar
+  instead: the twenty face buttons in their real positions around the screen,
+  the rockers in a row underneath, each carrying its number and what it does
+  today. **Press a button on the frame and its position lights up and is
+  selected**, so binding one is press, pick, done — and the picking is a
+  single grouped list rather than a thousand entries.
+
+- **Frames can dim themselves when you leave them alone.** Off unless you
+  pick a time in **Screen** — five minutes to an hour. After that the frames
+  drop to a third of your brightness, and the next press of anything brings
+  them straight back before it does whatever it was bound to do. They never
+  blank: a panel you can still glance at beats one that has to be woken
+  first.
+
+- **Each frame opens where it is useful again.** Both were starting on the menu,
+  so a two-frame cockpit showed the same list twice. A frame you have not used
+  yet opens on Navigation on the left and your flight plan on the right; once
+  you move it, it remembers where you left it.
+
+- **Two presses to any screen, one to Navigation.** The menu had a middle
+  level — Flight → Route → Navigation — and every one of those middle entries
+  split just two screens, so it cost a press on the way to everything and
+  sorted nothing. Categories now hold their screens directly, which fits the
+  five top buttons with room to spare, and **Navigation** sits on Home beside
+  the four categories rather than behind one of them.
+
+
+- **A real drill-down menu for Cougar MFDs.** Home opens Flight, Operations,
+  Resources or Pilot; each category opens its own submenu before the page. For
+  example: **Flight → Route → Navigation / System map**. Top buttons follow the
+  visible level, **Back** follows the whole path up, and **Home** returns to the
+  cockpit root. The menu is data-driven, so later features can add another level
+  without adding a navigation rule.
+
+- **Less prose on the frame.** State, source and caveat rows now use labelled
+  icons with short operational text. Loading, disconnected plans, empty logs,
+  no crew, counter state and similar conditions no longer fill the display with
+  dashboard instructions. The detailed explanation remains in the dashboard.
+
+- **The readings read like an instrument.** Every line is a glyph, a short label
+  and the value, all on one line, at a smaller size — instead of a label stacked
+  over a value that wrapped constantly. All four Nav readings now fit a 480 px
+  panel without scrolling; they used to run off the bottom.
+
+- **The disclaimers are gone from the frame.** A qualifier nobody reads is not
+  doing its job, so the claim moved into the label that *is* read — the rate is
+  **TRADING RATE**, a list says **2 of 5 seen** rather than "held", a claim is
+  **CLAIM, PER THE TABLES**. The two that prevent a genuinely dangerous
+  misreading stay: Cargo still says *Never the hold*, Crew still says *Absence
+  means nothing*. The full explanations live in the docs and on the settings
+  page, where there is room to read them.
+
+- **Here lists what a place actually has**, rather than naming every service
+  with its status — five facts to say "none of them", wrapping to four lines.
+  It reads *Refuel · Repair*, or *None of 5 listed here*.
+
+- **A MAP page**, on the button between **UP** and **DOWN**: the system plan at
+  full size, with where you are and where you are going underneath it.
+
+- **One strip of chrome instead of two.** The frame said which MFD it was at the
+  bottom, next to a readout of the button you had just pressed with your own
+  thumb — two things costing a whole reading on a 480 px panel. Which frame it
+  is and which Cougar drives it are at the top with the rest of the identity now,
+  and the footer is gone.
+
+- **Shorter words on the frame.** The qualifiers that keep each page honest were
+  turning into paragraphs. They say the same thing in a phrase — *"Counter
+  receipts and your plan. Never the hold."*, *"Held: seen in a stash listing, not
+  counted."* — and the lists are cut to what you read at a glance rather than
+  what a report would show.
+
+- **Four more pages, from data the panel was already downloading.** **Ship**
+  says what you are flying, what it is for, and what the game’s own tables say
+  losing it costs. **Here** is the moment after landing: what this place can do
+  for you, what on your shopping list it stocks, and what you left here last
+  time. **Ledger** is what the logs actually priced, confirmed only. **Mine**
+  is where the deposit tables rank a rock highest.
+
+  Six of the nine things the panel fetches every five seconds were being thrown
+  away, so three of those four pages cost no extra request at all.
+
+- **Done no longer acts where it looks dead.** It is dimmed on every page but
+  Act, and dimming was all that happened: two presses elsewhere still marked a
+  task off your flight plan, with the confirmation drawn on a page you were not
+  looking at. Dimming a button and refusing its press are one rule now.
+
+- **A confirmation stays attached to the task it was armed against.** Your plan
+  is re-read every few seconds, so the line under the cursor when you armed
+  **DONE** could be a different job by the time you pressed again — and the
+  second press took whatever was there. It now stands down and says the plan
+  moved. A second press while the first is still saving is ignored rather than
+  sent twice, which would have put the line back where it started.
+
+- **Nav leads with where you are going.** The destination and its distance were
+  third, under the map, off the bottom of the panel. They are the headline now,
+  with your location beneath and the map shrunk to a supporting picture.
+
+- **The confirmation on Act has a fixed strip of its own.** It used to be the
+  last row of the very list it was asking about, and scrolled out of sight. It
+  reads *Confirm: load · 32 SCU · Titanium?*, then says what was marked.
+
+- **A small opening gets a layout of its own.** Below 320 px the captions switch
+  to short forms rather than clipping, the map and the corner marks step aside,
+  and the spacing tightens.
+
+- **The MFD section on the Overlay page is documentation now.** It was shaped
+  like settings and could change nothing: everything that configures MFD mode is
+  in the tray window, because that is the only place that can see your monitors
+  or read a frame. It now says how to get there, in order.
+
+- **Optional Cougar MFD displays.** Open **MFD setup…** from the tray to place
+  independent left and right displays on a shared monitor or separate monitors.
+  Drag and resize the areas, preview alignment behind the frames, and save the
+  placement. Six pages: where you are, the next planned task, the outstanding
+  work at that stop, what you planned to load against what the commodity
+  counters recorded, the contract you accepted this session, and where all of
+  it came from. MFD mode starts off; the regular overlay keeps its own
+  settings.
+
+- **Quantum Wake's own mark, small, in the corner of the frame.** Bottom left,
+  beside the device line — the ship maker's mark already has the top corner.
+
+- **A calmer frame.** Brightness and text size are sliders in **MFD setup** now
+  rather than four buttons on the face, and previous/next page and Home ship
+  unassigned — with a button for every page, cycling was a second way to do the
+  same thing and a bottom row of five navigation keys was the most confusing
+  part of it. Thirteen buttons instead of twenty, and the three that are left —
+  up, down and **DONE** — dim on a page where they have nothing to act on. Every
+  one of those commands is still there to bind if you want it.
+
+- **The Now page, broken across the frame.** Ten pages now, each with its own
+  button: Nav, Task, Act, Cargo, Contract, Status, and four new ones — **Feed**
+  (what just happened, straight off the live log), **Crew** (who the party
+  channel has named, and why that is a floor rather than a roster), **Money**
+  (your trading rate and how long a goal will take at it) and **List** (shopping
+  lists and how much of each you are holding). Session time, deaths, your handle
+  and where you would wake up folded into Status; where a price is better folded
+  into Cargo. Nothing on the frame is unassigned any more.
+
+- **A system plan on the Nav page, with the whole route on it.** Small, above
+  the words: the star, the bodies at their real coordinates, the one you are at
+  ringed, and a dashed leg to every planned stop in the order you will fly them
+  — with the distance beside it. It marks a body and says so; the logs name the
+  place you are at, never where you are on it, and the distance is a straight
+  line between body centres rather than a quantum route the game never writes
+  down.
+
+- **The maker's mark of the ship you are flying**, in the top-left corner of
+  every page. Nothing shows for a maker with no logo, or before a ship has been
+  identified.
+
+- **Icons above the button captions**, and a blank where a button does nothing.
+  The number used to sit there, labelling a button the pilot is looking straight
+  at; a blank position now reads as blank, the way a real MFD's does.
+
+- **The alignment preview follows the editor as you drag.** It updated only
+  when you let go of a rectangle, and — worse — saving switched it off, so after
+  one save nothing you changed reached the frames until you saved again. The
+  preview now moves under your hand and keeps running after a save; **Stop
+  preview** or closing setup puts the saved placement back.
+
+- **MFD mode looks like the rest of Quantum Wake.** The placement editor had
+  grown a palette and typeface of its own; it now uses the dashboard's own
+  stylesheet, so it cannot drift again. The instrument moved off its phosphor
+  green onto the same cyan HUD palette as everything else. And the placement
+  editor opened in a browser draws one invented monitor that used to look
+  exactly like a detected one — it now says it is an example, and that your own
+  monitors are only found when you open setup from the tray.
+
+- **The monitor behind the frames goes black.** A Cougar frame covers part of a
+  monitor, and the rest of it keeps glowing around the bezel — wallpaper, the
+  taskbar, whatever was there — which in a dark cockpit washes out the
+  instrument inside the opening. Quantum Wake now fills those monitors with
+  black around the openings. Turn it off with **Black out the rest of those
+  monitors** if a panel is sitting in the corner of a screen you are still
+  using. The monitor you have setup open on is left alone until you close it.
+
+- **Tick work off from the frame.** The Act page lists what is still to be done
+  at your next stop and marks one done with the **DONE** button — pressed once
+  to arm it and again to confirm, so a glove on the wrong button costs nothing.
+  It writes to your own flight plan and tells the game nothing.
+
+- **Every button can be reassigned, rockers included.** Setup now carries the
+  full button map, shared by both frames. The four rocker switches report as
+  buttons 21–28 and ship unassigned, because which rocker is which number is
+  not something a datasheet answers: press one, watch the tester name it, and
+  bind it. **Restore defaults** puts the shipped profile back.
+
+- **Cargo, honestly.** The game logs no cargo hold, so the Cargo page shows what
+  your plan says to load and what the commodity counters actually recorded this
+  session, each labelled as what it is. It never claims to know what is aboard.
+
+- **Screenshots of the Contracts app are checked properly now.** Reading a
+  mobiGlas Contracts screenshot compared it against a list that was always
+  empty, so a photograph of five accepted contracts reported "the tab says 5,
+  the logs say 0" and marked every one of them as unseen. It now compares
+  against the contracts the logs actually carry.
+
+- **Readings now reach the overlay, and tell you when something is off.**
+  The last screenshot read appears on the Now card in the dashboard and in
+  the in-game widget, without your having to open the settings first. Before
+  this it only updated after a visit to the Overlay page, so the widget never
+  showed a reading at all.
+
+  **A toast when the screen and your logs disagree**, and only then. Taking
+  six shots of a loadout should not put six notifications on your screen, so
+  a reading that agrees updates the card quietly and says nothing.
+
+- **A log of everything you have shown it**, on the Overlay page. Every
+  screenshot read and every location pasted, newest first, with what your
+  logs said at that moment beside it. A pasted location is kept with the
+  place your logs had you at the time, because the reading itself names
+  nowhere and three numbers are unreadable a week later. It stays on this
+  machine, and there is a button to clear it.
+
+- **Off means off.** Switching the screen panel off now clears the reading
+  from the Now card and the widget as well, rather than leaving the last one
+  you took sitting there.
+
+- **Commodity kiosks read.** Point a screenshot at a shop terminal and the
+  buy side comes back as a list: what it stocks, how much of it, and what it
+  is asking. Your logs record what you paid and never what was asked, so
+  every one of those prices is new.
+
+  **The unit stays welded to the price.** One kiosk priced Hephaestanite per
+  unit and Corundum per SCU on the same screen. Those are not the same
+  quantity, nothing here converts one into the other, and each price is
+  shown with the word the kiosk printed beside it.
+
+  **What it will not do.** A kiosk abbreviates your balance — ¤1,583M — and
+  that figure is shown as printed and never taken as a number, because a
+  rounded balance used as a starting point would put every later reading out
+  by whatever the rounding hid. A price that did not read is missing rather
+  than borrowed from the row above. The sell side is kept whole but not read.
+
+- **The inventory screen carries no names.** Photographed with a location’s
+  stash open: the items are icons, and the only text on a tile is a stack
+  count. So a stash can be confirmed one hovered item at a time, which
+  already works, and not a screen at a time.
+
+- **Four more screens read: the Contracts app, the Rep app, the Fleet
+  Manager and its loadout estimate.** The Contracts tab’s own count and
+  every card on it are checked against the contracts your logs have open,
+  by number and by name. The Fleet Manager says where each of your ships is
+  stored, which nothing in the logs has ever said, and a ship it lists that
+  you have never flown is filed as new rather than as a mistake. The Rep app
+  gives an organisation and your standing with it; the rank is drawn as a
+  highlight and does not read, and the reading says so.
+
+  **The wallet read.** On three of the twenty-two frames from the second
+  night the balance came back, and two readings a minute apart reconciled
+  against the ledger. On the other nineteen it did not, from the same bar,
+  so a reading is a gift rather than a promise — and a screenshot taken
+  while the game is logging is checked against where you actually were.
+
+- **Every screenshot you take can be read as it lands, and checked against
+  your logs.** Tick **Read each screenshot as it lands** on the Overlay page
+  and each new one is sorted into the screen it is — an item’s tooltip, the
+  Vehicle Loadout Manager, the mobiGlas map — and what it says is set beside
+  what the app had worked out from your logs at that moment. Where the two
+  disagree, it says so. Nothing already in the folder is read, and the setting
+  names the folder it follows.
+
+  **What your ship is actually carrying.** The logs record nothing about what
+  is bolted to a ship, so until now the Fleet page showed the factory fit,
+  which is the same for everyone. A loadout screenshot names the parts in each
+  port — 39 of 47 ports across the six frames in this install — and the Fleet
+  page shows them, dated, with the parts the factory did not fit marked as
+  such. On this install that is Genoa power plants, a Parapet shield and Chaos
+  missiles the Corsair did not ship with.
+
+  **Where you were, from the map.** The map footer names the system and the
+  place, and the reading is checked against where the logs had put you at the
+  second the shot was taken. The same screen says whether you had any accepted
+  contracts, and that is checked too.
+
+  **What it will not claim.** A part two catalogue entries fit equally is shown
+  as both, never guessed; a ship whose name half-read is offered as a
+  resemblance and nothing is built on it; a moment no session covers is
+  marked as unchecked rather than passed. The wallet balance is still printed
+  in a face the reader cannot see, and the reading says so in those words.
+  A screen this app has no reader for yet is kept with its text.
+
+- **The overlay can read what you copy, and the screenshots you take.** New on
+  the Overlay page, off until you switch it on, and in two steps rather than
+  one.
+
+  **Copy only** reads your clipboard. Type `/showlocation` in the game, press
+  **Parse what I copied**, and it turns the coordinates into a distance you can
+  use — the reading in this install works out at 15.0000 Gm from the system
+  centre. It says which system it is in comes from your logs and not from the
+  reading, because it does.
+
+  **Copy and screenshots** adds **Read my last screenshot**, which says what an
+  item is: name, manufacturer, type and volume, matched against the 26,028
+  items in your game files. On the looting screen it names the weapon you are
+  standing over with four separate facts agreeing.
+
+  Nothing watches your screen. A screenshot is a file you chose to save, and it
+  is only read when you press the button. Findings stay up for thirty seconds
+  and then clear, so the panel is never showing something that has stopped
+  being true.
+
+  A dashboard opened in a browser against the bare server says so rather than
+  offering buttons that cannot work — reading the clipboard and reading files
+  are things the desktop app does.
 
 ### 0.9.58
 

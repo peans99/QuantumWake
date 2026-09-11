@@ -1,0 +1,211 @@
+/* The instrument, in the dashboard's own palette rather than a phosphor green
+ * of its own. The values are app.css's tokens copied rather than linked: this
+ * page is 480 px square, two of them are up the whole time, and pulling 130 KB
+ * of nav, tables and map styling into each one to read six colours out of it
+ * would be the wrong trade. Keep them in step with app.css :root by hand. */
+:root {
+  color-scheme: dark;
+  --void: #04070c;
+  --panel: #0a121c;
+  --line: #17293c;
+  --line-hot: #1e4763;
+  --ink: #cfe4f5;
+  --muted: #7796b0;
+  --dim: #46617a;
+  --glow: #35c8f0;
+  --hot: #7fe4ff;
+  --amber: #ffab3d;
+  --display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Segoe UI Mono", ui-monospace, monospace;
+  --text-scale: 1;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--display); }
+button { font: inherit; color: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+#mfd { container-type: size; display: grid; grid-template-columns: 14% 1fr 14%; grid-template-rows: 12% 1fr 12%; width: 100%; height: 100%; padding: 2%; position: relative; }
+.edge { display: grid; gap: 3%; }
+.top, .bottom { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-column: 2; }
+.top { grid-row: 1; } .bottom { grid-row: 3; }
+.left, .right { grid-template-rows: repeat(5, minmax(0, 1fr)); grid-row: 2; }
+.left { grid-column: 1; } .right { grid-column: 3; }
+/* Chamfered like every other button in the app, at a size that survives 220 px. */
+.edge button { min-width: 0; min-height: 0; padding: 2%; border: 1px solid transparent; background: transparent;
+  color: var(--muted); letter-spacing: .1em; font-size: clamp(8px, 2.3cqw, 19px);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+.edge button svg { display: block; width: 1.7em; height: 1.7em; margin: 0 auto .18em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.edge button b { display: block; font-weight: 500; }
+.edge button.selected { border-color: var(--glow); background: rgba(53, 200, 240, .14); color: var(--hot); }
+.edge button.pressed, .edge button:focus-visible { background: var(--glow); color: #041018; outline: none; }
+
+/* Unassigned draws nothing at all - no icon, no caption, no placeholder. */
+.edge button:disabled { cursor: default; }
+.display { min-height: 0; min-width: 0; grid-area: 2 / 2; display: flex; flex-direction: column; padding: 3%;
+  border: 1px solid var(--line-hot); background: linear-gradient(158deg, var(--panel), var(--void)); position: relative; }
+/* The mobiGlas panel tell, same bracket the dashboard's cards carry. */
+.display::before { content: ''; position: absolute; top: -1px; left: 8%; width: 22%; height: 2px;
+  background: var(--glow); box-shadow: 0 0 8px var(--glow); }
+/* One strip of chrome, not two. The footer went to buy back a reading. */
+header { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: clamp(8px, 1.8cqw, 14px);
+  color: var(--dim); letter-spacing: .14em; text-transform: uppercase;
+  padding-bottom: 2%; border-bottom: 1px solid var(--line); }
+#identity { margin-right: auto; }
+h1 { font-size: clamp(15px, 4cqw, 34px); letter-spacing: .06em; margin: 0 0 4%; font-weight: 500; color: var(--hot); }
+#breadcrumb { display: flex; gap: .5em; align-items: center; padding: 3% 0 2%; color: var(--muted); font-size: clamp(8px, 1.9cqw, 14px); }
+#breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--muted); }
+#breadcrumb button:disabled { color: var(--dim); cursor: default; }
+#breadcrumb button:hover:not(:disabled) { color: var(--hot); }
+/* Rows are at least as tall as what stands in them, and share what is left
+   over only once that is paid for. A flat 1fr split the frame evenly whatever
+   the cost, so on the smallest frame - and again at the largest text - a tile
+   got thirty pixels for a title that stood twenty-three, and overflow:hidden
+   clipped the rest into a word that merely looked cut short. Now the tile that
+   does not fit is off the bottom, where it can be scrolled to, rather than
+   inside the box where it cannot be reached at all. */
+#menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(min-content, 1fr); gap: 3%; flex: 1; min-height: 0;
+  overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; }
+.menu-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  min-width: 0; min-height: 0; padding: clamp(5px, 2cqmin, 14px); border: 1px solid var(--line-hot); border-radius: 3px;
+  background: linear-gradient(145deg, #102637, #08111b); overflow: hidden; }
+.menu-tile:hover, .menu-tile:focus-visible { outline: 1px solid var(--hot); background: #123347; }
+.menu-tile svg { flex: 0 0 auto; width: clamp(18px, 6cqmin, 44px); height: clamp(18px, 6cqmin, 44px);
+  fill: none; stroke: var(--glow); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; margin-bottom: auto; }
+.menu-tile strong { flex: 0 0 auto; font-weight: 500; font-size: calc(clamp(10px, 3cqmin, 23px) * var(--text-scale)); margin-top: 1.2cqmin; line-height: 1.12; }
+.menu-tile small { position: absolute; right: 8%; top: 8%; color: var(--muted); font: clamp(8px, 2cqw, 14px) var(--mono); }
+.tile-hint { flex: 0 0 auto; color: var(--muted); font-size: clamp(8px, 1.8cqmin, 14px); margin-top: 1cqmin; line-height: 1.25; }
+.tile-summary { flex: 0 0 auto; display: block; color: var(--hot); font-size: clamp(8px, 2cqmin, 15px); padding-top: 1.2cqmin; margin-top: 1.2cqmin;
+  border-top: 1px solid var(--line-hot); width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#content { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent; flex: 1; }
+/* Give the answer the full width; a separate label column was squeezing the
+   destination into fragments even when most of the panel was empty. */
+.reading { display: grid; grid-template-columns: 1.2em minmax(0, 1fr); align-items: center; gap: 3px 3%;
+  padding: 3% 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.reading svg { width: 1.15em; height: 1.15em; fill: none; stroke: var(--muted);
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  font-size: calc(clamp(9px, 2.1cqw, 15px) * var(--text-scale)); transform: translateY(.15em); }
+.reading h2 { margin: 0; font-size: calc(clamp(8px, 1.9cqw, 13px) * var(--text-scale));
+  letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
+.reading .value { grid-column: 1 / -1; min-width: 0; }
+.reading p { margin: 0; font-family: var(--mono);
+  font-size: calc(clamp(10px, 2.4cqw, 18px) * var(--text-scale)); line-height: 1.3; }
+.reading.hero { background: linear-gradient(110deg, #103044, #091722); border: 1px solid var(--line-hot); border-left: 2px solid var(--glow); padding: 5%; margin-bottom: 2%; }
+.reading.hero p { font-family: var(--display); font-size: calc(clamp(14px, 4.5cqw, 32px) * var(--text-scale)); line-height: 1.16; color: #e1f6ff; }
+.reading.hero svg { stroke: var(--glow); }
+/* Source and caveat rows need a reminder, not a second miniature paragraph.
+   Their icon has the accessible label while their value carries the short fact. */
+.reading.status { grid-template-columns: 1.2em minmax(0, 1fr); align-items: center; padding: 2% 0; }
+.reading.status h2 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.reading.status .value { grid-column: 2; }
+.reading.status p { color: var(--muted); font-size: calc(clamp(8px, 2cqw, 15px) * var(--text-scale)); }
+#more { flex: 0 0 auto; padding: 3% 0; text-align: left; color: var(--glow); border: 0; background: transparent; font-size: clamp(9px, 2.1cqw, 16px); }
+#scroll-hint { flex: 0 0 auto; color: var(--muted); font-size: clamp(8px, 1.8cqw, 13px); text-align: right; padding-top: 1%; }
+.reading time { display: block; color: var(--muted); font-size: clamp(7px, 1.6cqw, 12px); margin-top: 1%; }
+.reading.cursor svg, .reading.armed svg { stroke: var(--glow); }
+/* The line a press would act on, and the line a press has armed. */
+.reading.cursor, .reading.armed { border-left: 2px solid var(--glow); padding-left: 2.5%; }
+.reading.armed { background: rgba(53, 200, 240, .12); }
+.reading.armed h2 { color: var(--hot); }
+#alignment { position: absolute; inset: 1%; z-index: 2; border: 3px solid var(--glow); background: #04070ceb;
+  text-align: center; padding: 25% 12% 5%; pointer-events: none; }
+#alignment[hidden] { display: none; }
+#alignment strong { font-size: 8cqw; letter-spacing: .16em; color: var(--hot); }
+#alignment p { font-size: 3cqw; color: var(--muted); }
+.crosshair { position: absolute; inset: 8%; border: 1px dashed #0d5c78; }
+.crosshair::before, .crosshair::after { content: ''; position: absolute; background: #0d5c78; }
+.crosshair::before { left: 50%; top: 0; height: 100%; width: 1px; }
+.crosshair::after { top: 50%; left: 0; width: 100%; height: 1px; }
+/* The plot is a radar display, not a claim that Quantum Wake knows the ship's
+   surface position. Body centres and route legs come from the atlas; the sweep
+   only makes the selected body legible in peripheral vision. */
+#map { margin: 0 0 2%; flex: 0 0 auto; text-align: center; }
+#map[hidden] { display: none; }
+#map svg { display: block; width: 100%; max-width: 22cqh; height: auto; aspect-ratio: 1; margin: 0 auto; }
+/* Big, but not greedy: the two lines above it are the facts a picture cannot
+   state, and a map sized to the panel pushed them off it. Sized so the whole
+   screen - location, next stop, plot and caption - lands inside a 220 px
+   opening without a scroll, because scrolling a map to find where you are is
+   the failure this screen exists to avoid. */
+#map.big { flex: 0 0 auto; margin: 3% 0 0; }
+#map.big svg { max-width: min(100%, 26cqh); }
+#map-note { font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-top: 2%; }
+.orbit { fill: none; stroke: var(--line-hot); stroke-width: .006; }
+.radar-ring { fill: none; stroke: var(--line); stroke-width: .004; stroke-dasharray: .018 .026; }
+.radar-axis { stroke: var(--line-hot); stroke-width: .004; }
+/* Turned by SMIL about an explicit 0 0, not from here: this plot's viewBox
+   starts at -1.18, and a percentage transform-origin resolved against it put
+   the pivot a whole radius off centre - which is what left the sweep adrift
+   outside the rings instead of turning about the star. */
+.radar-sweep { opacity: .34; }
+.radar-sweep .sweep-edge { fill: none; stroke: var(--glow); stroke-width: .008; }
+/* The trail carries no stroke of its own: five abutting sectors each outlined
+   would draw four seams across it, which is a fan and not a fade. */
+.radar-sweep .sweep-trail { fill: var(--glow); fill-opacity: .13; stroke: none; }
+.star { fill: var(--hot); }
+.body { fill: var(--dim); }
+.body.here { fill: var(--glow); }
+.body.target { fill: var(--amber); }
+.halo { fill: none; stroke: var(--glow); stroke-width: .012; }
+.radar-lock { fill: none; stroke: var(--hot); stroke-width: .012; rx: .018; }
+.radar-lock-ring { fill: none; stroke: var(--glow); stroke-width: .006; stroke-dasharray: .02 .025; }
+.leg { stroke: var(--amber); stroke-width: .01; stroke-dasharray: .05 .04; }
+.name { font-size: .11px; letter-spacing: .02px; text-anchor: middle; fill: var(--muted); }
+.name.here { fill: var(--hot); }
+.name.target { fill: var(--amber); }
+/* The maker's mark, small and in the corner, never louder than a reading. */
+#maker { height: clamp(10px, 2.9cqw, 24px); width: auto; max-width: 26%; object-fit: contain; opacity: .75; }
+#maker[hidden] { display: none; }
+.body.stop { fill: none; stroke: var(--amber); stroke-width: .022; }
+/* Bound, but with nothing to act on while this page is showing. Dimmed rather
+   than blanked: the pilot should be able to tell a button that does nothing
+   here from a position that carries nothing at all. */
+.edge button.dormant { opacity: .28; }
+/* The app's own mark and the ship maker's, both in the header now that there is
+   only one strip of chrome. Neither needed recolouring: mark.svg already carries
+   the HUD's cyan, and both read at the size a header offers. Neither is ever
+   louder than a reading. */
+#brand { height: clamp(9px, 2.4cqw, 18px); width: auto; opacity: .75; }
+
+/* ---------- the fixed action strip ---------- */
+/* What a press will do, what it is asking, or what it just did. Pinned so it
+   cannot scroll away behind the list it is asking about. */
+#action { flex: 0 0 auto; margin-top: auto; padding: 2.5% 3%; border: 1px solid var(--line-hot);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+#action[hidden] { display: none; }
+#action b { display: block; font-weight: 500; font-size: calc(clamp(10px, 2.6cqw, 20px) * var(--text-scale));
+  color: var(--ink); overflow-wrap: anywhere; }
+#action span { display: block; font-size: clamp(7px, 1.7cqw, 13px); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin-top: 2%; }
+#action.armed { border-color: var(--glow); background: rgba(53, 200, 240, .14); }
+#action.armed b { color: var(--hot); }
+#action.saved { border-color: var(--amber); }
+#action.saved b { color: var(--amber); }
+/* A word about the press that just happened, quieter than a confirmation. */
+#action.note { border-color: var(--line); }
+#action.note b { color: var(--muted); font-size: calc(clamp(9px, 2.2cqw, 17px) * var(--text-scale)); }
+
+/* ---------- a small opening ---------- */
+/* At 220 px the frame has room for the readings or the decoration, not both.
+   Shorter captions come from the command table; the rest goes here. */
+.compact #map.big svg { max-width: min(100%, 34cqh); }
+.compact #map-note { letter-spacing: .02em; }
+.compact h1 { font-size: clamp(13px, 3.4cqw, 20px); letter-spacing: .12em; margin: 3% 0; }
+.compact .reading { padding-bottom: 3%; gap: 2%; }
+.compact .reading h2 { flex-basis: 34%; letter-spacing: .04em; }
+.compact .reading svg { width: 1em; height: 1em; }
+.compact header { letter-spacing: .06em; }
+.compact #brand, .compact #maker { display: none; }
+.compact .edge button { letter-spacing: .02em; padding: 1%; }
+.compact .edge button svg { width: 1.35em; height: 1.35em; margin-bottom: .1em; }
+.compact #action span { display: none; }
+.compact .menu-tile { padding: 8%; }
+.compact .menu-tile strong { font-size: clamp(10px, 3.2cqw, 14px); }
+.compact .menu-tile svg { width: 5.5cqw; height: 5.5cqw; min-width: 12px; min-height: 12px; }
+.compact .tile-hint { display: none; }
+.menu-dense .tile-hint { display: none; }
+
+.compact .tile-summary { font-size: 8px; padding-top: 4%; margin-top: 5%; }
+.compact .reading.hero { padding: 4%; }
+.compact #breadcrumb { padding: 2% 0 1%; }
+@media (max-height: 300px) { .tile-summary { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; } }

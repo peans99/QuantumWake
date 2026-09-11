@@ -24,7 +24,16 @@ public static class ServerHost
     /// Configures the server without starting it. Call <c>Run</c> to block, or
     /// <c>StartAsync</c> to run it alongside a UI.
     /// </summary>
-    public static WebApplication Build(string[] args)
+    /// <param name="screen">
+    /// How to read a screenshot, and what the pilot last copied. Supplied by
+    /// the overlay, which is a desktop app and can do both; null when the
+    /// server is run on its own, and the screen endpoints then say so rather
+    /// than failing.
+    /// </param>
+    public static WebApplication Build(
+        string[] args,
+        IScreenReader? screen = null,
+        IClipboardReader? clipboard = null)
     {
 
         // Quantumwake server.
@@ -102,6 +111,20 @@ public static class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<ScreenSettingsStore>();
+        builder.Services.AddSingleton<ScreenReadingStore>();
+
+        // Built by hand rather than resolved, because the two readers come from
+        // the host and may not exist at all.
+        builder.Services.AddSingleton(sp =>
+            new ScreenInsightService(
+                sp.GetRequiredService<LogLibrary>(),
+                sp.GetRequiredService<ScreenReadingStore>(),
+                screen, clipboard));
+
+        // Reads each screenshot as it lands, while the pilot has asked for that.
+        // Idle otherwise: it checks the setting, not the folder.
+        builder.Services.AddHostedService<ScreenWatchService>();
         builder.Services.AddSingleton<KitStore>();
         builder.Services.AddSingleton<ExportBuilder>();
         builder.Services.AddSingleton<ImportStore>();
@@ -960,6 +983,15 @@ public static class ServerHost
         });
 
         app.MapGet("/api/ledger", (LogLibrary lib, int? days) => lib.Ledger(days ?? 0));
+
+        // The balance, which the ledger alone can never state: the last figure a
+        // screenshot showed, carried forward by the movements logged since. An
+        // object either way, so the page can tell "nothing read yet" from a
+        // request that failed.
+        app.MapGet("/api/ledger/wallet", (LogLibrary lib, ScreenReadingStore readings) =>
+            WalletStandings.Now(readings, lib) is { } standing
+                ? Results.Ok(new { read = standing })
+                : Results.Ok(new { read = (WalletStanding?)null }));
 
         /*
          * Why a number is what it is: the rule that made it, the records behind
@@ -1968,17 +2000,17 @@ public static class ServerHost
         });
 
         app.MapGet("/api/export/preview", (ExportBuilder exports,
-            bool? receipts, bool? blueprints, bool? authored, int? days) =>
+            bool? receipts, bool? blueprints, bool? authored, int? days, bool? points) =>
         {
             var choice = new ExportChoice(
                 receipts == true, blueprints == true, authored == true,
-                days ?? ExportBuilder.DefaultDays);
+                days ?? ExportBuilder.DefaultDays, Points: points == true);
 
             var counts = exports.Preview(choice);
 
             return Results.Ok(new
             {
-                counts.Receipts, counts.Blueprints, counts.Jobs, counts.Checklists, counts.Trips,
+                counts.Receipts, counts.Blueprints, counts.Jobs, counts.Checklists, counts.Trips, counts.Points,
                 days = choice.Days,
                 defaultDays = ExportBuilder.DefaultDays,
             });
@@ -2049,6 +2081,50 @@ public static class ServerHost
                     row.Name,
                     imported = Marker(batch),
                 })));
+
+        // Somebody else's points, measured from wherever this pilot last copied
+        // a location when there is such a place - the same rule as the pilot's
+        // own: a point in another system, or in no known system, is never given
+        // a distance.
+        app.MapGet("/api/imports/points", (ImportStore imports, ScreenReadingStore readings, string? imported) =>
+        {
+            var from = readings.Clipboards().FirstOrDefault();
+
+            return Shared(imports, imported ?? "all").SelectMany(batch =>
+                (batch.Points?.Rows ?? []).Select(row => new
+                {
+                    row.At, row.Label, row.Category, row.Note, row.System, row.SystemByPilot, row.Believed,
+                    row.X, row.Y, row.Z, row.Gigametres,
+                    metres = from is null ? (double?)null : PointDistances.Between(from.X, from.Y, from.Z, row.X, row.Y, row.Z),
+                    sameSystem = from is not null && PointDistances.SameSystem(from.System, row.System),
+                    imported = Marker(batch),
+                }));
+        });
+
+        // One of somebody else's points, kept as the pilot's own. Goes through
+        // the pins store as a fresh pin rather than a merge: the copy is theirs
+        // from then on, edited and backed up like any other, and removing the
+        // import no longer touches it. The note says who it came from, since a
+        // month later that is the fact most worth having.
+        app.MapPost("/api/imports/{id}/points/keep", (string id, DateTimeOffset at, ImportStore imports, ScreenReadingStore readings) =>
+        {
+            var batch = imports.All().FirstOrDefault(b => b.Id == id);
+            var row = batch?.Points?.Rows.FirstOrDefault(r => r.At == at);
+            if (batch is null || row is null)
+                return Results.NotFound(new { trouble = "that shared point is no longer here" });
+
+            if (readings.Pinned().Any(p => p.SourceAt == row.At))
+                return Results.Conflict(new { trouble = "you already have a point from that same copy" });
+
+            var from = $"Shared by {batch.Handle ?? "someone"}.";
+            var pin = new PinnedLocation(
+                row.At, DateTimeOffset.UtcNow, row.X, row.Y, row.Z, row.Gigametres,
+                row.Believed, row.System, row.Label, row.Category ?? "General",
+                string.IsNullOrWhiteSpace(row.Note) ? from : $"{row.Note}\n\n{from}",
+                SystemByPilot: row.SystemByPilot);
+            readings.PutPin(pin);
+            return Results.Ok(pin);
+        });
 
         app.MapPost("/api/imports/{id}/hide", (string id, ImportStore imports) =>
             imports.ToggleHidden(id) ? Results.Ok(new { id }) : Results.NotFound());
@@ -2182,6 +2258,219 @@ public static class ServerHost
                 [.. wanted.Select(line => new JobItem(line.Name, line.Quantity))]);
 
             return Results.Ok(new { job = job.Id, items = wanted.Count });
+        });
+
+        // ---- the screen panel ----
+        //
+        // Nothing here reads the screen. It reads a file the pilot saved and
+        // the clipboard the pilot filled, both on a button, and it says which
+        // of those it is able to do at all.
+
+        // The install comes from the closure and not the container: on a
+        // machine with none it is not registered, and a GET cannot take it
+        // as a body the way the scan endpoint's POST can.
+        app.MapGet("/api/screen/settings", (
+            ScreenSettingsStore settings, ScreenInsightService insight) => Results.Ok(new
+        {
+            settings.Current.Mode,
+            settings.Current.Watch,
+            settings.Current.WatchScreenshots,
+            canReadScreenshots = insight.CanReadScreenshots,
+            canReadClipboard = insight.CanReadClipboard,
+
+            // Where the watch looks, said out loud: the pilot is agreeing to a
+            // folder being followed, and should be able to see which.
+            folder = install is null ? null : Screenshots.FolderFor(install.RootPath),
+        }));
+
+        app.MapPost("/api/screen/settings", (
+            ScreenSettingsStore settings, ScreenMode? mode, bool? watch, bool? watchScreenshots) =>
+            Results.Ok(settings.Save(mode, watch, watchScreenshots)));
+
+        // What the screenshots said, newest first, with what the logs believed
+        // beside each. The whole store: it is bounded, and a page that has to
+        // page through three hundred one-line readings is not a page anybody
+        // wants.
+        // Both halves of the history: what was photographed and what was
+        // pasted. One list on the page, because to the pilot they are the same
+        // act - a thing they showed the app - and only the app cares that one
+        // came through an engine and the other through the clipboard.
+        app.MapGet("/api/screen/readings", (ScreenReadingStore readings, int? take) =>
+        {
+            var many = take is > 0 ? take.Value : 50;
+
+            // Each call takes the lock and copies the whole bounded list, so
+            // they are taken once rather than once per field.
+            var all = readings.All();
+            var pastes = readings.Clipboards();
+            var pinned = readings.Pinned();
+
+            return Results.Ok(new
+            {
+                readings = all.Take(many),
+                clipboard = pastes.Take(many),
+                pins = pinned,
+                total = all.Count,
+                pastes = pastes.Count,
+            });
+        });
+
+        // A copied /showlocation has exact coordinates but no game-owned name.
+        // Keeping a pin is a pilot decision, separate from clearing the log it
+        // came through, so it remains useful after routine log cleanup.
+        app.MapPost("/api/screen/clipboard/pin", (ClipboardPinRequest request, ScreenReadingStore readings) =>
+            readings.Pin(request.At, request.Label, request.Category) is { } pin
+                ? Results.Ok(pin)
+                : Results.NotFound(new { trouble = "that copied location is no longer in the log" }));
+
+        // The points on their own, for the page that is about them rather than
+        // about what was read. Newest pinned first, as the store keeps them.
+        app.MapGet("/api/screen/pins", (ScreenReadingStore readings) => readings.Pinned());
+
+        // Every point measured from wherever the pilot last copied a location -
+        // the one question a coordinate answers that a name cannot. An object
+        // with a null "from" when nothing has been copied, so the page can say
+        // so rather than mistake it for a failed request.
+        app.MapGet("/api/screen/pins/nearest", (ScreenReadingStore readings) =>
+        {
+            var from = readings.Clipboards().FirstOrDefault();
+            if (from is null) return Results.Ok(new PointsFromHere(null, []));
+
+            var points = PointDistances
+                .From(from.X, from.Y, from.Z, from.System, readings.Pinned())
+                .Select(NearPoint.Of)
+                .ToList();
+
+            return Results.Ok(new PointsFromHere(from, points));
+        });
+
+        app.MapPut("/api/screen/pins", (PinUpdateRequest request, ScreenReadingStore readings) =>
+            readings.UpdatePin(request.SourceAt, request.Label, request.Category, request.Note, request.System) is { } pin
+                ? Results.Ok(pin)
+                : Results.NotFound(new { trouble = "that point of interest is already gone" }));
+
+        app.MapDelete("/api/screen/pins", (DateTimeOffset at, ScreenReadingStore readings, TombstoneStore deleted) =>
+        {
+            if (!readings.Unpin(at))
+                return Results.NotFound(new { trouble = "that point of interest is already gone" });
+
+            // Remembered as removed, so a restore from an older backup asks
+            // before bringing it back rather than quietly undoing the removal.
+            deleted.Record(TombstoneStore.Kinds.Pins, PinnedLocation.IdFor(at));
+            return Results.Ok(new { removed = true });
+        });
+
+        // The newest loadout read for each ship, for the fleet page - dated,
+        // because a screenshot is a moment and never a state.
+        app.MapGet("/api/screen/fittings", (ScreenReadingStore readings) =>
+            Results.Ok(readings.LatestLoadouts().Select(s => new
+            {
+                s.Shot,
+                s.ShotAt,
+                ship = s.Loadout!.Ship,
+                s.Loadout.Scope,
+                s.Loadout.Fittings,
+            })));
+
+        // The newest Fleet Manager reading: where each ship was, the last time
+        // the terminal was photographed. Nothing in the logs says where a
+        // ship sits, so this is the only source.
+        app.MapGet("/api/screen/fleet", (ScreenReadingStore readings) =>
+            readings.LatestFleet() is { } s
+                ? Results.Ok(new { s.Shot, s.ShotAt, ships = s.Fleet!.Ships })
+                : Results.Ok(new { shot = (string?)null, shotAt = (DateTimeOffset?)null, ships = Array.Empty<FleetRow>() }));
+
+        app.MapDelete("/api/screen/readings", (ScreenReadingStore readings) =>
+        {
+            readings.Clear();
+            return Results.Ok(new { cleared = true });
+        });
+
+        // One reading, set aside or taken back. It stays in the log - the file
+        // must not be read a second time, and the misreading is worth seeing -
+        // but the wallet, the fleet, the fittings and the Now card stop
+        // believing it.
+        app.MapPost("/api/screen/readings/dismiss", (ReadingDismissRequest request, ScreenReadingStore readings) =>
+            readings.Dismiss(request.Shot, request.Dismissed) is { } reading
+                ? Results.Ok(reading)
+                : Results.NotFound(new { trouble = "that screenshot is no longer in the log" }));
+
+        app.MapPost("/api/screen/clipboard", async (
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            bool? watched,
+            CancellationToken token) =>
+        {
+            // The setting is enforced here and not only in the page. A panel
+            // that has been switched off should be switched off however the
+            // request arrives.
+            if (settings.Current.Mode == ScreenMode.Off)
+                return Results.Ok(new ClipboardReading(false, null, null, null, null, "the screen panel is off"));
+
+            return Results.Ok(await insight.ReadClipboardAsync(watched == true, token));
+        });
+
+        app.MapPost("/api/screen/scan", async (
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            GameInstall? install,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+            {
+                return Results.Ok(new ScreenSighting(
+                    "", DateTimeOffset.UtcNow, ScreenKind.Unknown,
+                    "screenshot analysis is switched off", [], null, null, null, null, [], 0));
+            }
+
+            return Results.Ok(await insight.ScanNewestAsync(install?.RootPath, token));
+        });
+
+        // A log entry carries a file name, never its path. Resolve that name
+        // under the game's screenshot folder here so the review queue can open
+        // the evidence without turning this local server into a file browser.
+        string? ShotPath(string shot)
+        {
+            if (install is null || !string.Equals(Path.GetFileName(shot), shot, StringComparison.Ordinal)
+                || !ScreenFolder.IsScreenshot(shot))
+                return null;
+
+            var path = Path.Combine(Screenshots.FolderFor(install.RootPath), shot);
+            return File.Exists(path) ? path : null;
+        }
+
+        app.MapGet("/api/screen/shots/{shot}", (string shot) =>
+        {
+            if (ShotPath(shot) is not { } path) return Results.NotFound();
+
+            var contentType = Path.GetExtension(shot).Equals(".png", StringComparison.OrdinalIgnoreCase)
+                ? "image/png" : "image/jpeg";
+            return Results.File(path, contentType);
+        });
+
+        // The same file through the reader it has now. Every reader here was
+        // written from a frame already in the log, and the frame that taught
+        // it is the first one worth reading again - the log otherwise keeps
+        // the old reading of it for good. A fresh reading replaces the old one
+        // whole, dismissal included.
+        app.MapPost("/api/screen/readings/reread", async (
+            ReadingRereadRequest request,
+            ScreenInsightService insight,
+            ScreenSettingsStore settings,
+            CancellationToken token) =>
+        {
+            if (settings.Current.Mode != ScreenMode.Screenshots)
+                return Results.BadRequest(new { trouble = "screenshot analysis is switched off" });
+
+            // Refused here rather than read as nothing: a reading that could
+            // not happen must not come back looking like one that did.
+            if (insight.Excuse(install?.RootPath) is { } excuse)
+                return Results.BadRequest(new { trouble = excuse });
+
+            if (ShotPath(request.Shot) is not { } path)
+                return Results.NotFound(new { trouble = "that screenshot is no longer in the game's folder" });
+
+            return Results.Ok(await insight.ReadShotAsync(path, token));
         });
 
         app.MapGet("/api/runs/settings", (RunSettingsStore settings) => settings.Current);
@@ -3506,6 +3795,20 @@ public sealed record JobRequest(
 /// <summary>Body of POST /api/jobs/{id}/destination. Both null clears it.</summary>
 public sealed record DestinationRequest(string? Place, string? PlaceId);
 
+/// <summary>The clipboard reading a pilot has chosen to keep as a point of interest.</summary>
+public sealed record ClipboardPinRequest(DateTimeOffset At, string? Label = null, string? Category = null);
+
+/// <summary>Which screenshot, and whether it is to be believed.</summary>
+public sealed record ReadingDismissRequest(string Shot, bool Dismissed = true);
+
+/// <summary>Which screenshot to put through the reader again.</summary>
+public sealed record ReadingRereadRequest(string Shot);
+
+/// <summary>The pilot-owned details attached to an existing point of interest.</summary>
+/// <param name="Note">Why the point was kept; null leaves the note as it is, blank clears it.</param>
+/// <param name="System">The system the pilot says it is in; null or blank leaves the belief alone.</param>
+public sealed record PinUpdateRequest(DateTimeOffset SourceAt, string? Label, string? Category, string? Note = null, string? System = null);
+
 /// <summary>The current place joined onto the small set of decisions it enables.</summary>
 public sealed record PilotBriefing(
     string? LocationId,
@@ -3633,10 +3936,11 @@ public sealed record ExportRequest(
     bool Authored = false,
     int? Days = null,
     bool Handle = true,
-    string? Note = null)
+    string? Note = null,
+    bool Points = false)
 {
     public ExportChoice Choice() =>
-        new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note);
+        new(Receipts, Blueprints, Authored, Days ?? ExportBuilder.DefaultDays, Handle, Note, Points);
 }
 
 /// <summary>

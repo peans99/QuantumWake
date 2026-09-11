@@ -1,0 +1,151 @@
+using Quantumwake.Core.Locations;
+using Quantumwake.Core.State;
+
+namespace Quantumwake.Data;
+
+/// <summary>
+/// What the logs had led the app to believe at a moment, read out of the library.
+/// </summary>
+/// <remarks>
+/// Every answer is back-tracked to the screenshot's own timestamp rather than
+/// taken from the live state, because a screenshot read a week late still
+/// describes the week before. The session covering the moment is found by
+/// its span; a moment no session covers gets null, and the check says so.
+/// </remarks>
+public sealed class LibraryBeliefs(LogLibrary library) : IScreenBeliefs
+{
+    public (string Id, string Name, string? System)? WhereAt(DateTimeOffset at) =>
+        Placed(at) is { } belief ? (belief.Id, belief.Name, belief.System) : null;
+
+    /// <summary>
+    /// Where the logs put the pilot at a moment, and what that rests on: the
+    /// line that said so and when it was written.
+    /// </summary>
+    /// <remarks>
+    /// The stored session keeps no confidence on a visit, so the grade a
+    /// reader can give is the evidence itself - an arrival four minutes before
+    /// the moment is a different thing from a quantum jump forty minutes
+    /// before it, and a card that shows both facts lets the pilot judge rather
+    /// than hiding the difference behind a word.
+    /// </remarks>
+    public PlaceBelief? Placed(DateTimeOffset at)
+    {
+        if (Session(at) is not { } session) return null;
+
+        PlaceBelief? best = null;
+
+        for (var i = session.Locations.Count - 1; i >= 0; i--)
+        {
+            var visit = session.Locations[i];
+            if (visit.At > at) continue;
+
+            best = new PlaceBelief(visit.RawId, visit.DisplayName, visit.System, visit.At, PlaceSignal.Arrival);
+            break;
+        }
+
+        // A jump after the last arrival is the more recent word on where the
+        // pilot is, the same way the ledger places a sale.
+        for (var i = session.Jumps.Count - 1; i >= 0; i--)
+        {
+            var jump = session.Jumps[i];
+            if (jump.At > at) continue;
+
+            if (best is null || jump.At > best.SignalAt)
+                best = new PlaceBelief(jump.ToId, jump.ToName, LocationResolver.Resolve(jump.ToId).System, jump.At, PlaceSignal.Jump);
+
+            break;
+        }
+
+        return best;
+    }
+
+    public (string Id, string Name, string? System)? PlaceNamed(string read) =>
+        library.Terminals.Resolve(read) is { } place
+            ? (place.RawId, place.Name, place.System)
+            : null;
+
+    public IReadOnlyList<string>? OpenContractsAt(DateTimeOffset at)
+    {
+        if (Session(at) is not { } session) return null;
+
+        // Not ContractRecord.Accepted, which nothing sets: this returned an
+        // empty list for every screenshot ever checked, so the Contracts app
+        // read "differs - the tab says 5, the logs say 0" against a log
+        // carrying every one of those five. A contract is here because an
+        // objective marker fired for it, and the game raises those for missions
+        // in the journal - which is what having taken one means.
+        return [.. session.Contracts
+            .Where(c => c.FirstSeen <= at)
+            .Where(c => c.CompletedAt is null || c.CompletedAt > at)
+            .Where(c => c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress
+                || (c.CompletedAt is not null && c.CompletedAt > at))
+            .Select(c => ContractTags.Clean(c.DisplayName))];
+    }
+
+    public decimal? LedgerRunningAt(DateTimeOffset at)
+    {
+        var ledger = library.Ledger();
+        if (ledger.Count == 0) return null;
+
+        // Newest first, so the first entry at or before the moment carries the
+        // running total up to it. Nothing before it means nothing had moved.
+        return ledger.FirstOrDefault(e => e.At <= at)?.Running ?? 0m;
+    }
+
+    /// <summary>
+    /// The factory parts, by the ship's display name.
+    /// </summary>
+    /// <remarks>
+    /// The slot digest is keyed by class - <c>DRAK_Corsair</c> - and the screen
+    /// prints the name. The dataset's ship table joins the two, and where a
+    /// name has several classes (the base ship and its editions) the shortest
+    /// class is the base ship, which is the one whose factory fit is meant.
+    /// </remarks>
+    public IReadOnlyList<string> StockParts(string ship)
+    {
+        var classes = library.Community.Ships
+            .Where(pair => string.Equals(pair.Value.Name, ship, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair.Key)
+            .OrderBy(key => key.Length)
+            .ToList();
+
+        // The name itself last, for a digest keyed the other way.
+        classes.Add(ship);
+
+        foreach (var key in classes)
+        {
+            var parts = library.Community.Slots(key)
+                .Select(slot => slot.Fitted)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (parts.Count > 0) return parts;
+        }
+
+        return [];
+    }
+
+    public IReadOnlyList<string> FlownShips() =>
+        [.. library.Stats().Ships
+            .Select(ship => ship.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    private SessionSummary? Session(DateTimeOffset at) =>
+        library.Sessions().FirstOrDefault(s => s.StartedAt <= at && at <= s.EndedAt.AddMinutes(5));
+}
+
+/// <summary>The line a place belief rests on.</summary>
+public enum PlaceSignal
+{
+    /// <summary>A location signal - an arrival, a local inventory opened.</summary>
+    Arrival,
+
+    /// <summary>A quantum jump's destination, which says where the ship was going, not that it got there.</summary>
+    Jump,
+}
+
+/// <summary>Where the logs put the pilot at a moment, with the line that said so.</summary>
+public sealed record PlaceBelief(string Id, string Name, string? System, DateTimeOffset SignalAt, PlaceSignal Signal);

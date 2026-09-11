@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The Windows SDK target is what puts Windows.Media.Ocr in reach, and it
+         needs no package: the engine and its English model are already on the
+         machine (Windows\OCR\en-us\MsOcrRes.orp). This project exists so that
+         one target framework does not spread to the server and the parser
+         tests, which have no business being Windows-only. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Clipboard lives in WPF, and the overlay is a WPF app already. -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantumwake.Data\Quantumwake.Data.csproj" />
+  </ItemGroup>
+
+</Project>

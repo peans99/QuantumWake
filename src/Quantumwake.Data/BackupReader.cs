@@ -98,6 +98,7 @@ public static class BackupReader
             Notes = backup.Notes ?? [],
             Deleted = backup.Deleted ?? [],
             Kits = backup.Kits ?? [],
+            Pins = backup.Pins ?? [],
         };
 
         return (whole, RestorePlan.HashOf(text), null);

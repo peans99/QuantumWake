@@ -153,10 +153,11 @@ function showView(name) {
 
   const buttons = $$('#tabs button');
 
-  // The commodity page is a drill-down rather than a tab: it has no button of
-  // its own, and keeps Market lit, because Market is where it is opened from.
+  // Commodity and Help are drill-downs rather than tabs: Market stays lit for
+  // a commodity, and About stays lit for Help. Neither earns a top-bar slot,
+  // but both are still shareable views with their own fragment.
   const target = buttons.find(
-    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name));
+    (b) => b.dataset.view === (name === 'commodity' ? 'market' : name === 'help' ? 'about' : name));
 
   if (!target) return;
 
@@ -187,6 +188,10 @@ function showView(name) {
     loadGameData().catch(() => {});
   }
 
+  // A log is a live reference, not an Overlay setting. Read it when the pilot
+  // opens its tab so pasted locations and screenshots stay together.
+  if (name === 'log') renderScreenPanel().catch(() => {});
+
   // Jobs change from the Crafting page and from play, so re-read on entry too.
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
@@ -199,11 +204,13 @@ function showView(name) {
   if (name === 'routes') loadRoutes().catch(() => {});
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
+  if (name === 'points') loadPoints().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
     renderSettings().catch(() => {});
     renderOverlayLayout().catch(() => {});
+    renderScreenPanel().catch(() => {});
   }
 
   buttons.forEach((b) => b.classList.toggle('active', b === target));
@@ -237,7 +244,7 @@ function showView(name) {
    someone and a page that survives a refresh. */
 function viewFromHash() {
   const name = decodeURIComponent(location.hash.replace(/^#/, ''));
-  return $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
+  return name === 'help' || $$('#tabs button').some((b) => b.dataset.view === name) ? name : null;
 }
 
 /**
@@ -270,6 +277,59 @@ $('#tabs').addEventListener('click', (event) => {
   // Dropping focus lets a group menu close once a view is picked; otherwise
   // :focus-within pins it open over the page.
   button.blur();
+});
+
+// Help belongs under About rather than in a crowded navigation strip. Its
+// fragment still works as a link, and About remains lit while it is open.
+$('#about-open-help')?.addEventListener('click', () => showView('help'));
+$('#help-back')?.addEventListener('click', () => showView('about'));
+
+/**
+ * The Help filter. Twenty-odd answers is past what anyone scrolls, so a word
+ * narrows the page to the questions that mention it - question and answer
+ * both, since "wipe" is in an answer whose question says "totals". A section
+ * with nothing left folds away; nothing left at all says so and points at
+ * the Discord, which is where an unanswered question goes.
+ */
+function filterHelp(query) {
+  const words = (query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const root = $('#view-help');
+  const items = root ? Array.from(root.querySelectorAll('.faq-item')) : [];
+  let shown = 0;
+
+  for (const item of items) {
+    const text = item.textContent.toLowerCase();
+    const hit = words.every((word) => text.includes(word));
+    item.hidden = !hit;
+    if (hit) shown++;
+    // A match opens the answer: the word searched for is usually in it.
+    if (hit && words.length) item.open = true;
+  }
+
+  for (const section of Array.from(root?.querySelectorAll('.help-section') || []))
+    section.hidden = !Array.from(section.querySelectorAll('.faq-item')).some((item) => !item.hidden);
+
+  const none = $('#help-none');
+  if (none) none.hidden = shown > 0;
+
+  const count = $('#help-count');
+  if (count) count.textContent = words.length ? `${shown} of ${items.length}` : '';
+
+  return shown;
+}
+
+/** Every visible answer open, or every one closed - whichever the button says. */
+function expandHelp(open) {
+  const root = $('#view-help');
+  for (const item of Array.from(root?.querySelectorAll('.faq-item') || [])) if (!item.hidden) item.open = open;
+  const button = $('#help-expand');
+  if (button) button.textContent = open ? 'Collapse all' : 'Expand all';
+}
+
+$('#help-search')?.addEventListener('input', (event) => filterHelp(event.target.value));
+$('#help-expand')?.addEventListener('click', () => {
+  const button = $('#help-expand');
+  expandHelp(button.textContent !== 'Collapse all');
 });
 
 /* Driven by the overlay shell's global hotkeys, so views can be changed without
@@ -654,6 +714,34 @@ document.addEventListener('keydown', (event) => {
 let sessionStarted = null;
 let nowState = null;
 let briefingFor = null;
+let pilotBriefing = null;
+
+/** The one decision worth leading the hub with, before the configurable cards. */
+function renderNowFocus(state, briefing = pilotBriefing) {
+  const strip = $('#now-focus');
+  const title = $('#now-focus-title');
+  const detail = $('#now-focus-detail');
+  const open = $('#now-focus-open');
+  if (!strip || !title || !detail || !open) return;
+
+  const differs = (state?.screen?.checks || []).filter(check => check.verdict === 'differs').length;
+  const nextStop = (briefing?.stops || []).find(stop => !stop.done);
+  let focus = null;
+
+  if (state?.travelling) focus = { title: 'In quantum', detail: state.travellingTo || 'Destination not identified', view: 'map', action: 'Map' };
+  else if (differs) focus = { title: 'Screen needs review', detail: `${differs} screen detail${differs === 1 ? '' : 's'} disagrees with the logs`, view: 'log', action: 'Review' };
+  else if (nextStop) focus = { title: 'Next stop', detail: nextStop.place || briefing.tripTitle || 'Tracked flight plan', view: 'map', action: 'Map' };
+  else if (state?.contracts?.length) focus = { title: 'Active contract', detail: state.contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
+  else if (state?.location) focus = { title: 'At location', detail: state.location, view: 'map', action: 'Map' };
+
+  strip.hidden = !focus;
+  if (!focus) return;
+  title.textContent = focus.title;
+  detail.textContent = focus.detail;
+  open.hidden = false;
+  open.textContent = focus.action;
+  open.onclick = () => showView(focus.view);
+}
 
 function renderNow(state) {
   nowState = state;
@@ -700,6 +788,8 @@ function renderNow(state) {
   sessionStarted = state.sessionStarted || null;
 
   renderNowParty(state);
+  renderNowScreenCard(state.screen);
+  renderNowFocus(state);
 
   raiseToasts(state.recentEvents);
 
@@ -750,17 +840,33 @@ const TOAST_MS = 9000;
 const TOAST_KINDS = {
   'contract-done': 'Contract complete',
   payout: 'Paid',
+
+  // Only disagreements. A pilot photographing a loadout takes several frames
+  // in a row, and a toast apiece would teach them to ignore the toasts.
+  'screen-differs': 'Screenshot differs',
 };
 
 /**
  * The newest entry already toasted, as "at|kind|text".
  *
- * Null until the first frame lands, which is the whole point: the stream opens
- * with up to 40 entries of history, and a client that toasted what it found
- * would replay the last hour of the session every time the page was refreshed
- * or the overlay reloaded.
+ * Null until a frame with something in it lands, which is the whole point: the
+ * stream opens with up to 40 entries of history, and a client that toasted what
+ * it found would replay the last hour of the session every time the page was
+ * refreshed or the overlay reloaded. Null again after an empty frame, which
+ * means the opposite - nothing to replay, so the next frame is all news.
  */
 let lastToastKey = null;
+
+/**
+ * Whether any frame has been seen yet.
+ *
+ * Separate from lastToastKey because the first frame can legitimately be
+ * empty - the dashboard opened at the game's menu, or a session whose timeline
+ * has nothing in it yet - and anchoring only on a non-empty frame swallowed
+ * the first thing that ever happened. For the screen readings that first thing
+ * is the disagreement the toast exists to announce.
+ */
+let toastAnchored = false;
 
 function toastKey(entry) {
   return `${entry.at}|${entry.kind}|${entry.text}`;
@@ -775,11 +881,18 @@ function toastKey(entry) {
  * rather than the whole window, since the point is the moment, not the backlog.
  */
 function raiseToasts(entries) {
-  if (!entries || entries.length === 0) return;
+  if (!entries || entries.length === 0) {
+    // Nothing has happened yet, so there is no backlog to replay and whatever
+    // arrives next is news. The null key says exactly that to the frame after.
+    toastAnchored = true;
+    lastToastKey = null;
+    return;
+  }
 
   const newest = toastKey(entries[0]);
 
-  if (lastToastKey === null) {
+  if (!toastAnchored) {
+    toastAnchored = true;
     lastToastKey = newest;
     return;
   }
@@ -787,15 +900,23 @@ function raiseToasts(entries) {
   if (lastToastKey === newest) return;
 
   const fresh = [];
-  let anchored = false;
 
-  for (const entry of entries) {
-    if (toastKey(entry) === lastToastKey) {
-      anchored = true;
-      break;
+  // A null key here is the empty frame above rather than a fresh page: there
+  // was nothing to anchor on because there was nothing at all, so the whole
+  // frame is new and none of it is history.
+  let anchored = lastToastKey === null;
+
+  if (anchored) {
+    fresh.push(...entries);
+  } else {
+    for (const entry of entries) {
+      if (toastKey(entry) === lastToastKey) {
+        anchored = true;
+        break;
+      }
+
+      fresh.push(entry);
     }
-
-    fresh.push(entry);
   }
 
   lastToastKey = newest;
@@ -896,6 +1017,33 @@ async function loadEarnings() {
     + 'menu time is left out of the hours.';
 
   renderGoal(state);
+}
+
+/**
+ * Cash on hand on the Now card, which the overlay shows while flying. The
+ * same reading the Ledger card draws, in one line: the figure carried forward
+ * by the ledger, called an estimate when anything has moved since the shot.
+ * Nothing read yet hides the line - the Ledger explains how to get one; a
+ * card in the overlay has no room to.
+ */
+function renderNowCash(read) {
+  const line = $('#now-cash');
+  const note = $('#now-cash-note');
+  if (!line || !note) return;
+
+  if (!read) {
+    line.hidden = true;
+    note.hidden = true;
+    return;
+  }
+
+  const moved = Number(read.movementsSince) || 0;
+  line.hidden = false;
+  note.hidden = false;
+  $('#now-cash-value').textContent = moved ? `about ${money(read.estimate)}` : money(read.balance);
+  note.textContent = moved
+    ? `Estimate: ${money(read.balance)} on a screenshot ${dateOf(read.shotAt)}, carried by ${moved} movement${moved === 1 ? '' : 's'} logged since.`
+    : `From a screenshot ${dateOf(read.shotAt)}; nothing has moved in the logs since.`;
 }
 
 /** Turns an ISO-ish duration from the server into hours a person reads. */
@@ -1029,6 +1177,8 @@ async function refreshPilotBriefing(state) {
   if (!key) {
     card.hidden = true;
     briefingFor = null;
+    pilotBriefing = null;
+    renderNowFocus(state, null);
     return;
   }
 
@@ -1436,6 +1586,8 @@ function renderPilotBriefing(briefing) {
   $('#briefing-overlay').onclick = pinBriefingToOverlay;
   $('#briefing-overlay').hidden = isOverlay;
   card.hidden = false;
+  pilotBriefing = briefing;
+  renderNowFocus(nowState, briefing);
 }
 
 setInterval(() => { $('#now-clock').textContent = clock(sessionStarted); }, 1000);
@@ -1898,6 +2050,10 @@ async function loadHistory() {
 
   allSessions = sessions;
   sessionPage = 0;
+
+  // A Points page opened straight from the URL drew its cards before the
+  // sessions were known, and said no session spanned any of them.
+  if (pointsAll.length) safeRender('Points', () => renderPoints());
 
   safeRender('Sessions', () => renderSessions());
   safeRender('Fleet', () => renderFleet(stats));
@@ -2563,6 +2719,78 @@ async function loadLedger() {
   ledgerHidden.clear();
   ledgerPage = 0;
   renderLedger();
+
+  // After the table, so a balance that will not load never costs the ledger.
+  await loadLedgerWallet();
+}
+
+/** The screenshot the cash card was last drawn from, so the stream can say when there is a newer one. */
+let ledgerWalletShot = null;
+
+/**
+ * Cash on hand, which no line in Game.log ever states. The last screenshot
+ * that showed the balance is the figure, and the ledger's movements since
+ * carry it forward. The carried figure is called an estimate because it is
+ * one: the logs miss insurance claims, hangar fees and anything the parser
+ * does not recognise, and only the next screenshot says by how much.
+ */
+async function loadLedgerWallet() {
+  const card = $('#ledger-wallet');
+  if (!card) return;
+
+  let got;
+
+  try {
+    got = await getJson('/api/ledger/wallet');
+  } catch {
+    card.hidden = true;
+    return;
+  }
+
+  renderLedgerWallet(got.read);
+}
+
+function renderLedgerWallet(read) {
+  renderNowCash(read);
+
+  const card = $('#ledger-wallet');
+  if (!card) return;
+
+  card.textContent = '';
+  card.hidden = false;
+
+  // Marked only when there is a shot to mark: an empty answer must not
+  // forget the frame that just asked, or the next frame asks again.
+  if (read?.shot) ledgerWalletShot = read.shot;
+
+  if (!read) {
+    card.append(el('div', 'l', 'Cash on hand'));
+    card.append(el('div', 'muted',
+      'No screenshot has shown your balance yet. A commodity kiosk prints it in full — photograph one and the figure lands here.'));
+    return;
+  }
+
+  const figure = el('div', 'wallet-figure');
+  figure.append(el('div', 'n', money(read.balance)));
+  figure.append(el('div', 'l', 'Cash on hand'));
+  card.append(figure);
+
+  const body = el('div', 'wallet-body');
+  body.append(el('div', null, `Last updated ${new Date(read.shotAt).toLocaleString()}, from ${read.shot || 'a screenshot'}.`));
+
+  const moved = Number(read.movedSince) || 0;
+  const lines = Number(read.movementsSince) || 0;
+
+  if (lines === 0) {
+    body.append(el('div', 'muted', 'Nothing has moved in the logs since, so that is the latest word.'));
+  } else {
+    const sign = moved > 0 ? '+' : moved < 0 ? '−' : '';
+    body.append(el('div', 'muted',
+      `Since then the logs record ${lines} movement${lines === 1 ? '' : 's'} netting ${sign}${money(Math.abs(moved))}, `
+      + `so about ${money(read.estimate)} now — an estimate, because money that moved without a line in the log is not in it.`));
+  }
+
+  card.append(body);
 }
 
 function renderLedger() {
@@ -4435,6 +4663,1465 @@ const OVERLAY_LABELS = {
  * immediate - there is no Save button because there is nothing to lose by a
  * tick going straight through, and the widget picks it up on its next poll.
  */
+/**
+ * The screen panel: what the app is allowed to read, and what it found.
+ *
+ * Two separate permissions rather than one, because they are different sizes
+ * of thing. Reading the clipboard is reading what somebody deliberately
+ * copied; reading a screenshot is reading a picture of their game. Both are
+ * off until asked for, and the server enforces that as well - a panel switched
+ * off should stay off however the request arrives.
+ */
+let screenSettings = {
+  mode: 'Off', watch: false, watchScreenshots: false,
+  canReadScreenshots: false, canReadClipboard: false, folder: null,
+};
+
+/**
+ * How long a finding stays up.
+ *
+ * Long enough to read a tooltip's worth of detail and get back to flying,
+ * short enough that the panel is not still showing the last thing when you
+ * come back to it. Each scan replaces the one before rather than queueing.
+ */
+const SCREEN_HOLD_MS = 30000;
+
+let screenHold = null;
+let screenWatcher = null;
+
+/** The newest reading the page has seen, so the list only redraws on a new one. */
+let screenLatestShot = null;
+
+async function renderScreenPanel() {
+  try {
+    screenSettings = await getJson('/api/screen/settings');
+  } catch {
+    // The panel is not the page; a failure here must not take the rest down.
+    return;
+  }
+
+  const desktop = screenSettings.canReadClipboard || screenSettings.canReadScreenshots;
+  const unavailable = $('#screen-unavailable');
+  if (unavailable) unavailable.hidden = desktop;
+
+  const mode = $('#screen-mode');
+
+  if (mode) {
+    mode.value = screenSettings.mode;
+    mode.disabled = !desktop;
+  }
+
+  const watch = $('#screen-watch');
+  if (watch) watch.checked = !!screenSettings.watch;
+
+  const folder = $('#screen-watch-folder');
+  if (folder) folder.checked = !!screenSettings.watchScreenshots;
+
+  applyScreenMode();
+  renderScreenLog().catch(() => {});
+}
+
+/** Shows the controls the chosen mode actually has. */
+function applyScreenMode() {
+  const on = screenSettings.mode !== 'Off';
+  const shots = screenSettings.mode === 'Screenshots';
+
+  const controls = $('#screen-controls');
+  if (controls) controls.hidden = !on;
+
+  // The screenshot button appears with the mode that allows it rather than
+  // being greyed out: a control that is there and refuses is worse than one
+  // that is not there yet.
+  const scan = $('#screen-scan');
+  if (scan) scan.hidden = !shots;
+
+  const folderLabel = $('#screen-watch-folder-label');
+  if (folderLabel) folderLabel.hidden = !shots;
+
+  // The folder being followed, named. The pilot is agreeing to a directory
+  // being watched and should be able to see which one.
+  const folder = $('#screen-folder');
+  if (folder) {
+    const watching = shots && screenSettings.watchScreenshots && screenSettings.folder;
+    folder.hidden = !watching;
+    folder.textContent = watching
+      ? `Reading new screenshots from ${screenSettings.folder} as they land. Nothing already there is read.`
+      : '';
+  }
+
+  const status = $('#screen-mode-status');
+  if (status) {
+    status.textContent =
+      shots ? (screenSettings.watchScreenshots ? 'clipboard and every screenshot' : 'clipboard and screenshots')
+      : screenSettings.mode === 'CopyOnly' ? 'clipboard only'
+      : 'off';
+  }
+
+  startScreenWatch();
+}
+
+async function saveScreenSettings(mode, watch, watchScreenshots) {
+  screenSettings = {
+    ...screenSettings,
+    ...await getJson2(
+      `/api/screen/settings?mode=${encodeURIComponent(mode)}&watch=${watch ? 'true' : 'false'}`
+      + `&watchScreenshots=${watchScreenshots ? 'true' : 'false'}`),
+  };
+
+  applyScreenMode();
+}
+
+/**
+ * The clipboard and the readings, on a timer, when asked for.
+ *
+ * Polled rather than pushed because there is no event for "somebody copied
+ * something" that reaches a web page, and the folder watch lives in the
+ * server. Three seconds is slower than a person types /showlocation and
+ * alt-tabs, and slow enough not to be a spin.
+ */
+function startScreenWatch() {
+  if (screenWatcher) {
+    clearInterval(screenWatcher);
+    screenWatcher = null;
+  }
+
+  if (screenSettings.mode === 'Off') return;
+
+  // Only the clipboard is polled. Screenshots arrive on the live stream,
+  // because the server watches the folder and the snapshot carries the
+  // newest reading to every client, widget included.
+  if (!$('#screen-watch')?.checked) return;
+
+  screenWatcher = setInterval(() => {
+    // Quietly: a watcher that announced "nothing copied" every three seconds
+    // would be unusable.
+    parseClipboard(true).catch(() => {});
+  }, 3000);
+}
+
+function screenSay(message) {
+  const status = $('#screen-status');
+  if (status) status.textContent = message;
+}
+
+/**
+ * Puts a finding up, and takes it down again after a while.
+ *
+ * Replacing rather than appending: the panel answers the last thing asked,
+ * and a pile of old answers is a log, which this is not.
+ */
+function screenShow(build) {
+  const box = $('#screen-result');
+  if (!box) return;
+
+  box.textContent = '';
+  build(box);
+
+  if (screenHold) clearTimeout(screenHold);
+
+  screenHold = setTimeout(() => {
+    box.textContent = '';
+    screenSay('');
+  }, SCREEN_HOLD_MS);
+}
+
+async function parseClipboard(quiet = false) {
+  if (!quiet) screenSay('reading what you copied…');
+
+  const found = await getJson2(`/api/screen/clipboard${quiet ? '?watched=true' : ''}`);
+
+  if (!found.found) {
+    if (!quiet) {
+      screenSay(found.trouble || 'nothing to read');
+      screenShow(() => {});
+    }
+    return;
+  }
+
+  screenSay('');
+
+  screenShow((box) => {
+    box.append(el('div', 'strong', `${found.gigametresFromCentre.toFixed(4)} Gm from the system centre`));
+
+    // The raw numbers stay visible. They are the thing the game gave and the
+    // only part of this that is exact.
+    box.append(el('div', 'muted',
+      `x ${Math.round(found.x).toLocaleString()} · `
+      + `y ${Math.round(found.y).toLocaleString()} · `
+      + `z ${Math.round(found.z).toLocaleString()}`));
+
+    box.append(el('div', 'muted',
+      'Which system this is in comes from your logs, not from the reading.'));
+
+    // The first thing a coordinate is good for: how far the things you marked
+    // are. Three at most here; the Points page measures every one.
+    if (found.nearest?.length) {
+      const list = el('div', 'screen-nearest');
+      list.append(el('div', 'muted', 'Nearest of your points:'));
+      for (const near of found.nearest) list.append(nearPointLine(near));
+      box.append(list);
+    }
+  });
+
+  // Only when the pilot asked. The watcher calls this every three seconds with
+  // the same clipboard, and a list that rebuilds itself that often cannot be
+  // read - which is what this function's own doc comment says.
+  if (!quiet) renderScreenLog().catch(() => {});
+}
+
+/** What kind of screen a reading was, in words a pilot would use. */
+const SCREEN_KINDS = {
+  Tooltip: 'item',
+  Loadout: 'loadout',
+  Map: 'map',
+  Contracts: 'contracts',
+  Fleet: 'fleet',
+  Reputation: 'reputation',
+  Kiosk: 'kiosk',
+  MobiGlas: 'mobiGlas',
+  Unknown: 'unread',
+};
+
+/** A check's verdict, worded for a reader. */
+const SCREEN_VERDICTS = {
+  agrees: 'agrees',
+  differs: 'differs',
+  new: 'new',
+  unchecked: 'not checked',
+};
+
+/** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
+function screenCheckRow(check) {
+  const li = el('li');
+  li.append(el('span', `k ${check.verdict}`, SCREEN_VERDICTS[check.verdict] || check.verdict));
+
+  const what = el('span', 'what', `${check.subject}: ${check.claim}`);
+  li.append(what);
+
+  // The belief is shown whatever the verdict: an agreement with nothing
+  // beside it looks like a screen that was taken on trust.
+  li.append(el('span', 'd', ` · logs: ${check.belief}`));
+
+  if (check.note) li.append(el('span', 'd', ` · ${check.note}`));
+  return li;
+}
+
+/** Everything a reading says, into a box. Shared by the panel and the list. */
+function renderSighting(box, s, { full = true } = {}) {
+  if (s.item) {
+    if (s.item.name) {
+      box.append(el('div', 'strong', s.item.name));
+
+      for (const [label, value] of Object.entries(s.item.fields || {}))
+        box.append(el('div', 'muted', `${label}: ${value}`));
+    }
+
+    for (const match of s.item.matches || []) {
+      const line = el('div', null, match.name);
+
+      if (match.agrees?.length)
+        line.append(el('span', 'muted', ` · ${match.agrees.join(', ')} agree`));
+
+      if (match.disagrees?.length)
+        line.append(el('span', 'outward', ` · ${match.disagrees.join(', ')} do not`));
+
+      box.append(line);
+    }
+
+    // Said out loud rather than left to be inferred from an empty space.
+    if (s.item.trouble) box.append(el('div', 'muted', s.item.trouble));
+
+    const named = (s.item.named || []).filter((n) => n.exact);
+
+    if (!s.item.name && named.length) {
+      box.append(el('div', 'muted', `Also on this frame: ${named.length} named`));
+      for (const line of named.slice(0, 8))
+        box.append(el('div', 'muted', line.candidates[0] || line.text));
+    }
+  }
+
+  if (s.loadout) {
+    const ship = s.loadout.ship
+      || (s.loadout.looksLike?.length
+        ? `read as “${s.loadout.shipRead}”, looks like ${s.loadout.looksLike.join(' or ')}`
+        : `read as “${s.loadout.shipRead || '?'}”`);
+
+    box.append(el('div', 'strong', ship));
+
+    // The game's own caveat, carried through as written: this is the ships
+    // at one place, not the fleet.
+    if (s.loadout.scope) box.append(el('div', 'muted', s.loadout.scope));
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+
+      for (const f of s.loadout.fittings || []) {
+        const li = el('li');
+        li.append(el('span', 'what', f.slot));
+
+        if (f.nothingRead) {
+          li.append(el('span', 'd', ' · nothing read under it'));
+        } else if (f.tier === 'Empty') {
+          li.append(el('span', 'd', ' · empty, so the game says'));
+        } else if (f.name) {
+          li.append(el('span', 'd', ` · ${f.name}`));
+          if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
+          if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
+          if (f.tier !== 'Exact') li.append(el('span', 'd', ` · read “${f.read}”`));
+        } else {
+          li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+        }
+
+        list.append(li);
+      }
+
+      box.append(list);
+    }
+  }
+
+  if (s.kiosk) {
+    const k = s.kiosk;
+    const rows = k.rows || [];
+    box.append(el('div', 'strong',
+      `a kiosk ${k.buying === false ? 'selling' : 'buying'}, ${rows.length} commodit${rows.length === 1 ? 'y' : 'ies'}`));
+
+    if (k.ship || k.cargoCapacity != null) {
+      box.append(el('div', 'muted',
+        `${k.ship || k.shipRead || 'a ship'}${k.cargoCapacity != null ? ` · ${k.cargoUsed ?? 0} / ${k.cargoCapacity} SCU` : ''}`));
+    }
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+
+      for (const row of rows) {
+        const li = el('li');
+        li.append(el('span', 'what', row.commodity || `read as “${row.read}”`));
+
+        // The unit stays welded to the price. They are not the same quantity
+        // and nothing here converts one into the other.
+        if (row.price != null)
+          li.append(el('span', 'd', ` · ${Number(row.price).toLocaleString()} per ${row.priceUnit}`));
+
+        if (row.quantity != null)
+          li.append(el('span', 'd', ` · ${Number(row.quantity).toLocaleString()} ${row.quantityUnit || ''} in stock`));
+
+        if (row.state) li.append(el('span', 'd', ` · ${row.state.toLowerCase()}`));
+        list.append(li);
+      }
+
+      box.append(list);
+    }
+
+    // Said either way. Some kiosks round the balance and some print every
+    // digit; only the second kind becomes a figure, and the wallet check
+    // above says what was made of it.
+    if (k.balance != null)
+      box.append(el('div', 'muted', `Balance on screen: ${Number(k.balance).toLocaleString()} aUEC, printed in full.`));
+    else if (k.balanceRead)
+      box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
+  }
+
+  if (s.contracts) {
+    const c = s.contracts;
+    box.append(el('div', 'strong',
+      c.accepted != null ? `${c.accepted} accepted${c.capacity != null ? ` of ${c.capacity}` : ''}` : `${(c.cards || []).length} contracts read`));
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+
+      for (const card of c.cards || []) {
+        const li = el('li');
+        li.append(el('span', 'what', card.title));
+        if (card.reward) li.append(el('span', 'd', ` · ${card.reward}`));
+        if (card.issuer) li.append(el('span', 'd', ` · ${card.issuer}`));
+        list.append(li);
+      }
+
+      box.append(list);
+
+      if (c.selectedTitle) {
+        box.append(el('div', null, c.selectedTitle));
+        const facts = [];
+        if (c.selectedReward != null) facts.push(`${Number(c.selectedReward).toLocaleString()} aUEC`);
+        if (c.selectedIssuer) facts.push(`by ${c.selectedIssuer}`);
+        if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
+        for (const o of c.objectives || []) box.append(el('div', 'muted', `◇ ${o}`));
+      }
+    }
+  }
+
+  if (s.fleet) {
+    const rows = s.fleet.ships || [];
+    box.append(el('div', 'strong', `${rows.length} ship${rows.length === 1 ? '' : 's'} at the Fleet Manager`));
+
+    if (full) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const row of rows) list.append(fleetRow(row));
+      box.append(list);
+    }
+  }
+
+  if (s.reputation) {
+    const r = s.reputation;
+    box.append(el('div', 'strong', r.organisation
+      ? `${r.organisation}${r.standing ? `: ${r.standing}` : ''}`
+      : 'the Rep app'));
+
+    // Said in words: the rank is a highlighted card, and a highlight is not text.
+    box.append(el('div', 'muted', 'The rank is drawn as a highlight and does not read.'));
+
+    if (full && r.organisations?.length)
+      box.append(el('div', 'muted', `Listed: ${r.organisations.join(', ')}`));
+  }
+
+  if (s.map) {
+    const place = s.map.placeRead
+      ? (s.map.systemRead ? `${s.map.systemRead} > ${s.map.placeRead}` : s.map.placeRead)
+      : 'no place read off the footer';
+
+    box.append(el('div', 'strong', place));
+
+    // The trail down to the place, when the footer printed one.
+    if (s.map.pathRead) box.append(el('div', 'muted', s.map.pathRead));
+
+    if (s.map.gigametres != null) {
+      box.append(el('div', 'muted',
+        `${s.map.latitude}° ${s.map.longitude}° · ${s.map.gigametres} Gm`));
+    }
+  }
+
+  if (s.wallet) {
+    box.append(el('div', 'muted', s.wallet.balance != null
+      ? `Wallet: ${Number(s.wallet.balance).toLocaleString()} aUEC`
+      : `Wallet: ${s.wallet.trouble}`));
+  }
+
+  if (s.kind === 'MobiGlas' || s.kind === 'Unknown') {
+    box.append(el('div', 'muted', s.summary));
+
+    // The text is the whole point for a screen with no reader: it is what a
+    // reader gets written from.
+    if (full && s.lines?.length) {
+      const text = el('details');
+      text.append(el('summary', 'muted', `${s.lines.length} lines read`));
+      for (const line of s.lines.slice(0, 60)) text.append(el('div', 'muted', line));
+      box.append(text);
+    }
+  }
+
+  if (s.checks?.length) {
+    const list = el('ul', 'feed screen-checks');
+    for (const check of s.checks) list.append(screenCheckRow(check));
+    box.append(list);
+  }
+}
+
+async function scanScreenshot() {
+  screenSay('reading your last screenshot…');
+  screenShow(() => {});
+
+  const s = await getJson2('/api/screen/scan');
+
+  if (!s.shot) {
+    screenSay(s.summary || 'nothing read');
+    return;
+  }
+
+  screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · read in ${s.tookMs} ms`);
+  screenShow((box) => renderSighting(box, s));
+  renderScreenLog().catch(() => {});
+}
+
+/**
+ * The log: everything the app has been shown, newest first.
+ *
+ * One list for both, because to the pilot a paste and a screenshot are the
+ * same act - a thing they showed the app - and only the app cares that one
+ * came through an engine and the other through the clipboard. The newest
+ * entry is shown in full and the rest as a line each, so a session's worth
+ * can be scanned without scrolling past one reading's detail.
+ *
+ * Not polled. It is redrawn when the page is opened, after a scan or a paste,
+ * and when the live stream reports a shot this page has not seen.
+ */
+async function renderScreenLog() {
+  const list = $('#screen-readings');
+  if (!list) return;
+
+  let got;
+
+  try {
+    got = await getJson('/api/screen/readings?take=50');
+  } catch {
+    return;
+  }
+
+  const entries = [
+    ...(got.readings || []).map((s) => ({ at: s.shotAt, shot: s })),
+    ...(got.clipboard || []).map((c) => ({ at: c.at, paste: c })),
+  ].sort((a, b) => new Date(b.at) - new Date(a.at));
+  const pins = got.pins || [];
+  const pinnedAt = new Set(pins.map((pin) => pin.sourceAt));
+
+  screenLatestShot = (got.readings || [])[0]?.shot || null;
+
+  list.textContent = '';
+
+  const counts = $('#screen-log-counts');
+
+  if (counts) {
+    counts.textContent = entries.length
+      ? `${got.total} screenshot${got.total === 1 ? '' : 's'} read, ${got.pastes} paste${got.pastes === 1 ? '' : 's'}${pins.length ? ` · ${pins.length} pinned` : ''}`
+      : '';
+  }
+
+  renderPinnedLocations(pins);
+  renderScreenReviewInbox(got.readings || []);
+
+  if (!entries.length) {
+    list.append(el('p', 'muted', 'Nothing read yet. Screenshots and pastes both land here.'));
+    return;
+  }
+
+  let first = true;
+
+  for (const entry of entries) {
+    const row = el('div', 'screen-reading');
+
+    if (entry.paste) {
+      const p = entry.paste;
+      const repeats = Math.max(1, Number(p.timesSeen) || 1);
+      const lastSeen = p.lastSeenAt && repeats > 1
+        ? ` · seen ${repeats} times, last ${new Date(p.lastSeenAt).toLocaleString()}` : '';
+      row.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
+      row.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
+
+      // The raw numbers are the exact part and the only part.
+      row.append(el('div', 'muted',
+        `x ${Math.round(p.x).toLocaleString()} · y ${Math.round(p.y).toLocaleString()} · z ${Math.round(p.z).toLocaleString()}`));
+
+      // Where the logs put you then. The reading itself names nowhere.
+      row.append(el('div', 'muted', p.believed
+        ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
+        : 'Your logs had no session running, so there is nothing to place it against.'));
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'ghost pin-location';
+      const saved = pinnedAt.has(p.at);
+      action.textContent = saved ? 'Pinned as POI' : 'Pin as POI';
+      action.disabled = saved;
+      if (!saved) action.addEventListener('click', () => pinClipboardLocation(p, action));
+      row.append(action);
+    } else {
+      const s = entry.shot;
+      if (s.dismissed) row.classList.add('dismissed');
+      row.append(el('div', 'muted',
+        `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ' · invalidated' : ''}`));
+      renderSighting(row, s, { full: first });
+      first = false;
+
+      // Kept in the log either way: the misreading is worth seeing, and the
+      // file must not be read a second time. What changes is whether the
+      // wallet, the fleet and the fittings believe it.
+      if (s.dismissed)
+        row.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'ghost screen-dismiss';
+      action.textContent = s.dismissed ? 'Believe it again' : 'Invalidate';
+      action.title = s.dismissed
+        ? 'Let the wallet, fleet and fittings use this reading again'
+        : 'Keep this reading in the log, but stop the wallet, fleet and fittings using it';
+      action.addEventListener('click', () => dismissReading(s, !s.dismissed, action));
+
+      // Through the reader as it is now. The frame that taught a reader is
+      // the first one worth reading again, and the log otherwise keeps the
+      // old reading of it for good.
+      const again = document.createElement('button');
+      again.type = 'button';
+      again.className = 'ghost screen-reread';
+      again.textContent = 'Read again';
+      again.title = 'Put this screenshot through the reader again and replace this reading';
+      again.addEventListener('click', () => rereadReading(s, again));
+
+      const actions = el('div', 'screen-actions');
+      actions.append(action, again);
+      row.append(actions);
+    }
+
+    list.append(row);
+  }
+}
+
+/** The saved locations are separate from the disposable reading history. */
+function renderPinnedLocations(pins) {
+  const list = $('#screen-pins');
+  const count = $('#screen-pin-count');
+  if (!list) return;
+
+  list.textContent = '';
+  if (count) count.textContent = pins.length ? `${pins.length} saved` : '';
+
+  if (!pins.length) {
+    list.append(el('p', 'muted', 'Pin a copied location below to keep it here.'));
+    return;
+  }
+
+  for (const pin of pins) {
+    const row = el('div', 'pinned-location');
+    row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location'));
+    row.append(el('div', 'muted', pin.category || 'General'));
+    // The reason is edited on the Points page; here it is only read, so the
+    // aside stays the glance it is.
+    if (pin.note) row.append(el('div', 'pin-note', pin.note));
+    row.append(el('div', 'muted', `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+    row.append(el('div', 'muted',
+      `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
+    const fields = el('div', 'pin-fields');
+    const label = document.createElement('input');
+    label.type = 'text'; label.className = 'search'; label.value = pin.label || '';
+    label.setAttribute('aria-label', 'Point of interest name');
+    const category = document.createElement('select');
+    category.className = 'select'; category.setAttribute('aria-label', 'Point of interest category');
+    for (const choice of POINT_CATEGORIES) {
+      const option = new Option(choice, choice);
+      option.selected = choice === (pin.category || 'General');
+      category.append(option);
+    }
+    const save = document.createElement('button');
+    save.type = 'button'; save.className = 'ghost'; save.textContent = 'Save';
+    save.addEventListener('click', () => savePinnedLocation(pin, label.value, category.value, save));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'ghost pin-remove';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => unpinLocation(pin, remove));
+    fields.append(label, category, save, remove);
+    row.append(fields);
+    list.append(row);
+  }
+}
+
+/** Screens held for the next reader, with the capture beside the OCR evidence. */
+function renderScreenReviewInbox(readings) {
+  const box = $('#screen-review');
+  const list = $('#screen-review-list');
+  const count = $('#screen-review-count');
+  if (!box || !list) return;
+
+  const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind));
+  box.hidden = unknown.length === 0;
+  list.textContent = '';
+  if (count) count.textContent = unknown.length ? `${unknown.length} queued` : '';
+
+  for (const reading of unknown.slice(0, 12)) {
+    const item = document.createElement('details');
+    item.className = 'screen-review-item';
+    const summary = document.createElement('summary');
+    summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString()}`;
+    item.append(summary, el('p', 'muted', reading.summary));
+    const image = document.createElement('a');
+    image.href = `/api/screen/shots/${encodeURIComponent(reading.shot)}`;
+    image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = 'Open screenshot';
+    item.append(image);
+    if ((reading.lines || []).length) item.append(el('pre', null, reading.lines.join('\n')));
+    list.append(item);
+  }
+}
+
+async function pinClipboardLocation(paste, button) {
+  button.disabled = true;
+  button.textContent = 'Pinning…';
+
+  try {
+    const response = await fetch('/api/screen/clipboard/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ at: paste.at }),
+    });
+    if (!response.ok) throw new Error(`pin -> ${response.status}`);
+    screenSay('Pinned as a point of interest.');
+    await renderScreenLog();
+  } catch {
+    screenSay('could not pin that copied location');
+    button.disabled = false;
+    button.textContent = 'Pin as POI';
+  }
+}
+
+/** The same file through the reader it has now; the fresh reading replaces the old one. */
+async function rereadReading(reading, button) {
+  button.disabled = true;
+  button.textContent = 'Reading…';
+
+  try {
+    const response = await fetch('/api/screen/readings/reread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shot: reading.shot }),
+    });
+    // The server says why it would not, in the pilot's words, and that is
+    // the message: no engine in this copy is a different fix from a file
+    // the game has since deleted.
+    if (!response.ok) {
+      const why = await response.json().catch(() => null);
+      throw new Error(why?.trouble || 'could not read that screenshot again - is it still in the game\'s folder?');
+    }
+    const got = await response.json();
+    screenSay(`Read again: ${got.summary}`);
+    await renderScreenLog();
+    loadLedgerWallet().catch(() => {});
+  } catch (e) {
+    screenSay(e.message || 'could not read that screenshot again');
+    button.disabled = false;
+    button.textContent = 'Read again';
+  }
+}
+
+/** A reading the pilot has looked at and does not want believed - or wants believed again. */
+async function dismissReading(reading, dismissed, button) {
+  button.disabled = true;
+
+  try {
+    const response = await fetch('/api/screen/readings/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shot: reading.shot, dismissed }),
+    });
+    if (!response.ok) throw new Error(`dismiss -> ${response.status}`);
+    screenSay(dismissed ? 'Invalidated. Nothing will use that reading.' : 'That reading counts again.');
+    await renderScreenLog();
+
+    // The cash card may have been drawn from the very reading just set aside.
+    loadLedgerWallet().catch(() => {});
+  } catch {
+    screenSay(dismissed ? 'could not invalidate that reading' : 'could not restore that reading');
+    button.disabled = false;
+  }
+}
+
+async function savePinnedLocation(pin, label, category, button) {
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/screen/pins', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceAt: pin.sourceAt, label, category }),
+    });
+    if (!response.ok) throw new Error(`pin update -> ${response.status}`);
+    screenSay('Point of interest saved.');
+    await renderScreenLog();
+  } catch {
+    screenSay('could not save that point of interest');
+    button.disabled = false;
+  }
+}
+
+async function unpinLocation(pin, button) {
+  button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/screen/pins?at=${encodeURIComponent(pin.sourceAt)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`unpin -> ${response.status}`);
+    screenSay('Removed point of interest.');
+    await renderScreenLog();
+  } catch {
+    screenSay('could not remove that point of interest');
+    button.disabled = false;
+  }
+}
+
+/* ---- Points of interest: the pilot's own marks, and why ----
+   Places is what the logs saw. This is what the pilot chose to keep - exact
+   coordinates copied from /showlocation, which the game never names - and the
+   one thing no log line carries: the reason anyone was there. */
+
+/** The categories a point can carry; one list, so the Log aside and this page never disagree. */
+const POINT_CATEGORIES = ['General', 'Navigation', 'Mining', 'Salvage', 'Meet point'];
+
+let pointsAll = [];
+/** null is every category; the chips narrow it. */
+let pointsCategory = null;
+/** Where the pilot last copied a location, and every point measured from it; null until one has been. */
+let pointsFrom = null;
+
+async function loadPoints() {
+  await loadOwnPoints();
+  renderSharedPoints().catch(() => {});
+}
+
+/** The pilot's own points, and the distances; the shared block is left as it stands. */
+async function loadOwnPoints() {
+  const list = $('#points-list');
+  if (!list) return;
+
+  try {
+    pointsAll = await getJson('/api/screen/pins');
+  } catch {
+    list.textContent = '';
+    list.append(el('p', 'muted', 'Could not load your points — is the app still running?'));
+    return;
+  }
+
+  // The distances are a second answer and the page stands without them: a
+  // card with no "from here" line is a card, not a failure.
+  try {
+    const here = await getJson('/api/screen/pins/nearest');
+    pointsFrom = here?.from ? { from: here.from, byId: new Map(here.points.map((p) => [p.sourceAt, p])) } : null;
+  } catch {
+    pointsFrom = null;
+  }
+
+  // A category that no longer has a point would filter the page to nothing
+  // with no chip to click back out of.
+  if (pointsCategory && !pointsAll.some((pin) => (pin.category || 'General') === pointsCategory))
+    pointsCategory = null;
+
+  renderPoints();
+}
+
+function pointName(pin) {
+  return pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location';
+}
+
+/** The session the copy fell inside, when the library has one that spans it. */
+function sessionAround(iso) {
+  const at = new Date(iso).getTime();
+  return (allSessions || []).find((s) =>
+    new Date(s.startedAt).getTime() <= at && at <= new Date(s.endedAt).getTime()) || null;
+}
+
+function renderPointCategories() {
+  const row = $('#points-categories');
+  if (!row) return;
+
+  row.textContent = '';
+
+  const counts = new Map();
+  for (const pin of pointsAll) {
+    const category = pin.category || 'General';
+    counts.set(category, (counts.get(category) || 0) + 1);
+  }
+
+  // One category is not a choice.
+  if (counts.size < 2) return;
+
+  const chip = (label, category) => {
+    const on = pointsCategory === category;
+    const button = el('button', on ? 'ghost' : 'ghost off', label);
+    button.type = 'button';
+    button.dataset.category = category ?? '';
+    button.addEventListener('click', () => {
+      pointsCategory = category;
+      renderPoints();
+    });
+    row.append(button);
+  };
+
+  chip(`All · ${pointsAll.length}`, null);
+  for (const [category, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0])))
+    chip(`${category} · ${count}`, category);
+}
+
+/** A distance in the unit a pilot would say it in: metres up close, kilometres in the main, gigametres across a system. */
+function distanceWord(metres) {
+  const m = Number(metres) || 0;
+  if (m < 1000) return `${Math.round(m).toLocaleString()} m`;
+  if (m < 1e9) return `${(m / 1000).toLocaleString(undefined, { maximumFractionDigits: m < 1e5 ? 1 : 0 })} km`;
+  return `${(m / 1e9).toFixed(3)} Gm`;
+}
+
+/**
+ * One saved point at a distance. Across two systems the number is arithmetic
+ * on two unrelated frames - the same coordinates mean different places in
+ * Stanton and Pyro - so it is named as not comparable rather than printed
+ * as a range.
+ */
+function nearPointLine(near) {
+  const line = el('div', 'near-point');
+  line.append(el('span', 'strong', near.label));
+  if (near.sameSystem) {
+    line.append(el('span', null, ` · ${distanceWord(near.metres)}`));
+  } else {
+    line.append(el('span', 'muted',
+      ` · ${near.system ? `in ${near.system}` : 'system unknown'} — a different frame, so no distance can be given`));
+  }
+  return line;
+}
+
+/** Where the last copy was, in words: when, and where the logs put it. */
+function renderPointsFromHere() {
+  const box = $('#points-from');
+  if (!box) return;
+
+  box.textContent = '';
+  box.hidden = !pointsFrom || !pointsAll.length;
+  if (box.hidden) return;
+
+  const from = pointsFrom.from;
+  const placed = [from.system, from.believed].filter(Boolean).join(' › ');
+  box.append(el('span', null,
+    `Distances are from where you last copied a location — ${dateOf(from.at)}, ${shortTimeOf(from.at)}`
+    + `${placed ? `, believed to be ${placed}` : ', which the logs could not place'}. `));
+  box.append(el('span', 'muted', 'Copy a new /showlocation in the game and they move with you.'));
+}
+
+function renderPoints() {
+  const list = $('#points-list');
+  if (!list) return;
+
+  renderPointCategories();
+  renderPointsFromHere();
+  list.textContent = '';
+
+  const count = $('#points-count');
+  if (count) count.textContent = pointsAll.length ? `${pointsAll.length} kept` : '';
+
+  if (!pointsAll.length) {
+    list.append(el('p', 'muted',
+      'No points yet. Copy a /showlocation in the game, then pin it from the Log — it lands here with room for a note.'));
+    return;
+  }
+
+  const query = ($('#points-search')?.value || '').trim().toLowerCase();
+  const shown = pointsAll.filter((pin) => {
+    if (pointsCategory && (pin.category || 'General') !== pointsCategory) return false;
+    if (!query) return true;
+    const haystack = `${pointName(pin)} ${pin.note || ''} ${pin.category || ''} ${pin.system || ''} ${pin.believed || ''}`.toLowerCase();
+    return haystack.includes(query);
+  });
+
+  if (!shown.length) {
+    list.append(el('p', 'muted', 'No point matches that.'));
+    return;
+  }
+
+  for (const pin of shown) list.append(renderPointCard(pin));
+}
+
+/**
+ * What the app thought the place was when the copy happened, and what that
+ * rested on. A /showlocation names no system, so this line is the only thing
+ * that places the numbers - and it is a belief, graded by its evidence: an
+ * arrival four minutes before the copy is not a quantum jump forty minutes
+ * before it, and the line says which rather than hiding both behind a word.
+ */
+function pointBeliefLine(pin) {
+  const line = el('span', 'point-belief');
+
+  if (pin.systemByPilot) {
+    line.append(el('span', null, `in ${pin.system}, as you set it`));
+    if (pin.believed) line.append(el('span', 'muted', ` · the logs had said ${pin.believed}`));
+    return line;
+  }
+
+  const believed = [pin.system, pin.believed].filter(Boolean).join(' › ');
+  if (!believed) {
+    line.append(el('span', 'warn', 'the logs could not place this copy — set the system above'));
+    return line;
+  }
+
+  line.append(el('span', null, `believed to be ${believed} when copied`));
+
+  if (pin.believedBy && pin.believedAt) {
+    const minutes = Math.max(0, Math.round((new Date(pin.sourceAt) - new Date(pin.believedAt)) / 60000));
+    const ago = minutes < 1 ? 'moments' : minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+    const basis = pin.believedBy === 'Jump'
+      ? `a quantum jump ${ago} earlier — where the ship was going, not that it arrived`
+      : `a location signal ${ago} earlier`;
+    line.append(el('span', 'muted', `, from ${basis}`));
+  } else {
+    line.append(el('span', 'muted', ', on evidence this copy did not record'));
+  }
+
+  return line;
+}
+
+/** One card - new, or after a save redrawn in place so its neighbours keep their typing. */
+function renderPointCard(pin, into = null) {
+  const card = into || el('article', 'point-card');
+  card.textContent = '';
+  card.classList.remove('dirty');
+  card.dataset.sourceAt = pin.sourceAt;
+
+  const head = el('div', 'point-head');
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'search point-name';
+  name.value = pin.label || '';
+  name.placeholder = pointName(pin);
+  name.setAttribute('aria-label', 'Point name');
+  const category = document.createElement('select');
+  category.className = 'select point-category';
+  category.setAttribute('aria-label', 'Point category');
+  for (const choice of POINT_CATEGORIES) category.append(new Option(choice, choice));
+  category.value = POINT_CATEGORIES.includes(pin.category) ? pin.category : 'General';
+
+  // The system is the pilot's to say. The coordinates are relative to it, so
+  // a point without one means nothing - and the app's belief is inferred,
+  // sometimes wrong and sometimes absent.
+  const system = document.createElement('select');
+  system.className = 'select point-system';
+  system.setAttribute('aria-label', 'Which system this point is in');
+  system.title = pin.systemByPilot ? 'The system, as you set it' : 'The system, as the logs believed it - change it if they were wrong';
+  system.append(new Option('System?', ''));
+  const systems = Object.keys(SYSTEMS);
+  if (pin.system && !systems.includes(pin.system)) systems.push(pin.system);
+  for (const choice of systems) system.append(new Option(choice, choice));
+  system.value = pin.system || '';
+
+  head.append(name, system, category);
+  card.append(head);
+
+  // Where, in the game's own numbers, and what the app believed the place
+  // was when the copy happened - a belief, and said to be one.
+  const facts = el('div', 'point-facts muted');
+  facts.append(el('span', 'mono',
+    `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
+  facts.append(el('span', null, `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+  facts.append(pointBeliefLine(pin));
+  card.append(facts);
+
+  // From wherever the pilot last copied, when there is such a place.
+  const near = pointsFrom?.byId.get(pin.sourceAt);
+  if (near) {
+    const here = el('div', 'point-here');
+    here.append(near.sameSystem
+      ? el('span', null, `${distanceWord(near.metres)} from where you last copied`)
+      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+    card.append(here);
+  }
+
+  const when = el('div', 'point-when muted');
+  when.append(el('span', null, `Copied ${dateOf(pin.sourceAt)}, ${shortTimeOf(pin.sourceAt)}`));
+  const session = sessionAround(pin.sourceAt);
+  if (session) {
+    const open = el('button', 'link', `during the session of ${dateOf(session.startedAt)}${session.primaryShip ? ` · ${session.primaryShip}` : ''}`);
+    open.type = 'button';
+    open.title = 'Open that session';
+    open.addEventListener('click', () => {
+      showView('sessions');
+      if (expandedSessionId !== session.id) toggleSessionDebrief(session.id).catch(() => {});
+    });
+    when.append(el('span', null, ' · '), open);
+  } else {
+    when.append(el('span', null, ' · no session in the library spans that moment'));
+  }
+  card.append(when);
+
+  const note = document.createElement('textarea');
+  note.className = 'point-note';
+  note.rows = 3;
+  note.maxLength = 2000;
+  note.value = pin.note || '';
+  note.placeholder = 'Why were you there? What is here, who you met, what to bring next time…';
+  note.setAttribute('aria-label', 'Why you were there');
+  card.append(note);
+
+  const actions = el('div', 'point-actions');
+  const said = el('span', 'muted point-said');
+  const save = el('button', 'ghost point-save', 'Save');
+  save.type = 'button';
+  save.addEventListener('click', () => savePoint(pin, card, {
+    label: name.value,
+    category: category.value,
+    note: note.value,
+    // Sent only when changed: an unchanged select would otherwise mark the
+    // logs' own belief as the pilot's word.
+    system: system.value !== (pin.system || '') ? system.value : null,
+  }, save, said));
+
+  const copy = el('button', 'ghost point-copy', 'Copy coordinates');
+  copy.type = 'button';
+  copy.title = 'Copy x y z to the clipboard';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(`${pin.x} ${pin.y} ${pin.z}`);
+      said.textContent = 'Coordinates copied.';
+    } catch {
+      said.textContent = 'The browser would not let the page write to the clipboard.';
+    }
+  });
+
+  const remove = el('button', 'ghost danger point-remove', 'Remove');
+  remove.type = 'button';
+  remove.title = 'Forget this point; the copied reading it came from stays in the Log';
+  remove.addEventListener('click', () => removePoint(pin, remove, said));
+
+  actions.append(save, copy, remove, said);
+  card.append(actions);
+
+  // Typing marks the card so an unsaved reason is visible as such.
+  for (const field of [name, system, category, note])
+    field.addEventListener('input', () => card.classList.add('dirty'));
+
+  return card;
+}
+
+async function savePoint(pin, card, fields, button, said) {
+  button.disabled = true;
+  said.textContent = 'Saving…';
+
+  try {
+    const response = await fetch('/api/screen/pins', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceAt: pin.sourceAt, ...fields }),
+    });
+    if (!response.ok) throw new Error(`pin update -> ${response.status}`);
+
+    const saved = await response.json();
+    pointsAll = pointsAll.map((p) => (p.sourceAt === pin.sourceAt ? saved : p));
+
+    // Only this card is redrawn. Redrawing the list would throw away a note
+    // half-typed on the card beside it, and there is no undo for that. The
+    // category chips do get redrawn, since a save can move a point between them.
+    renderPointCard(saved, card);
+    card.querySelector('.point-said').textContent = 'Saved.';
+    renderPointCategories();
+
+    // The Log aside shows the same points, and is cheap to keep honest.
+    renderScreenLog().catch(() => {});
+  } catch {
+    said.textContent = 'Could not save — is the app still running?';
+    button.disabled = false;
+  }
+}
+
+async function removePoint(pin, button, said) {
+  button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/screen/pins?at=${encodeURIComponent(pin.sourceAt)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`unpin -> ${response.status}`);
+
+    pointsAll = pointsAll.filter((p) => p.sourceAt !== pin.sourceAt);
+    renderPoints();
+    renderScreenLog().catch(() => {});
+  } catch {
+    said.textContent = 'Could not remove that point.';
+    button.disabled = false;
+  }
+}
+
+$('#points-search')?.addEventListener('input', () => renderPoints());
+
+/**
+ * Points other pilots sent, under the pilot's own. Read-only: they are
+ * somebody else's marks, kept apart so removing the file takes them away and
+ * leaves your own untouched. "Keep as mine" copies one across, deliberately.
+ *
+ * Unlike the blueprints page this one says when shared points are being
+ * hidden by the imports filter: a friend's points are the whole reason to
+ * open the file, and a page that silently showed none would read as the
+ * import having failed.
+ */
+async function renderSharedPoints() {
+  const host = $('#points-shared');
+  if (!host) return;
+
+  host.textContent = '';
+
+  const rows = await getJson(`/api/imports/points${importedQuery()}`).catch(() => []);
+  if (!rows.length) return;
+
+  if (showImported === 'none') {
+    const line = el('p', 'muted');
+    line.append(el('span', null,
+      `${rows.length} point${rows.length === 1 ? '' : 's'} from files you were sent ${rows.length === 1 ? 'is' : 'are'} not shown. `));
+    const show = el('button', 'ghost tiny', 'Show them');
+    show.addEventListener('click', () => setShowImported('all'));
+    line.append(show);
+    host.append(line);
+    return;
+  }
+
+  const block = el('section', 'shared-block');
+  block.append(el('h3', null, 'Shared by others'));
+  block.append(el('p', 'muted', 'Points from the files you were sent. The coordinates are exact; '
+    + 'the system is what the sender\'s logs believed unless they set it themselves, and the '
+    + 'note is theirs. Keep one and it becomes your own point, backed up and edited like the rest.'));
+
+  const list = el('div', 'points-list');
+  for (const row of rows) list.append(sharedPointCard(row));
+  block.append(list);
+  host.append(block);
+}
+
+function sharedPointCard(row) {
+  const card = el('article', 'point-card shared');
+
+  const head = el('div', 'point-head shared');
+  head.append(el('div', 'point-name-read', row.label));
+  head.append(el('div', 'muted', `${row.category || 'General'} · from ${row.imported?.handle || 'someone'}`));
+  card.append(head);
+
+  const facts = el('div', 'point-facts muted');
+  facts.append(el('span', 'mono',
+    `x ${Math.round(row.x).toLocaleString()} · y ${Math.round(row.y).toLocaleString()} · z ${Math.round(row.z).toLocaleString()}`));
+  facts.append(el('span', null, `${Number(row.gigametres).toFixed(4)} Gm from system centre`));
+  if (row.system) {
+    facts.append(el('span', null, row.systemByPilot
+      ? `in ${row.system}, as they set it`
+      : `in ${row.system}, as their logs believed${row.believed ? ` (near ${row.believed})` : ''}`));
+  } else {
+    facts.append(el('span', 'warn', 'system unknown — their logs could not place it'));
+  }
+  card.append(facts);
+
+  if (row.metres != null) {
+    const here = el('div', 'point-here');
+    here.append(row.sameSystem
+      ? el('span', null, `${distanceWord(row.metres)} from where you last copied`)
+      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+    card.append(here);
+  }
+
+  card.append(el('div', 'point-when muted', `They copied it ${dateOf(row.at)}, ${shortTimeOf(row.at)}`));
+  if (row.note) card.append(el('div', 'pin-note', row.note));
+
+  const actions = el('div', 'point-actions');
+  const said = el('span', 'muted point-said');
+  const keep = el('button', 'ghost point-keep', 'Keep as mine');
+  keep.type = 'button';
+  keep.title = 'Copy this point into your own, with a note saying who shared it';
+  keep.addEventListener('click', async () => {
+    keep.disabled = true;
+    try {
+      const response = await fetch(
+        `/api/imports/${encodeURIComponent(row.imported.id)}/points/keep?at=${encodeURIComponent(row.at)}`,
+        { method: 'POST' });
+      const answer = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(answer?.trouble || `keep -> ${response.status}`);
+      said.textContent = 'Kept — it is in your points above.';
+      loadOwnPoints().catch(() => {});
+    } catch (e) {
+      said.textContent = e.message || 'Could not keep that point.';
+      keep.disabled = false;
+    }
+  });
+  actions.append(keep, said);
+  card.append(actions);
+
+  return card;
+}
+
+/** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
+function fleetRow(row) {
+  const li = el('li');
+  li.append(el('span', 'what', row.ship || `read as “${row.read}”`));
+
+  const facts = [];
+  if (row.location) facts.push(`at ${row.location}`);
+  if (row.state) facts.push(row.state.toLowerCase());
+  if (row.focus) facts.push(row.focus);
+  if (row.cargo != null) facts.push(`${row.cargo} SCU`);
+  if (facts.length) li.append(el('span', 'd', ` · ${facts.join(' · ')}`));
+
+  if (!row.ship && row.looksLike?.length)
+    li.append(el('span', 'd', ` · looks like ${row.looksLike.join(' or ')}`));
+
+  return li;
+}
+
+/** The newest reading where a pilot is looking while they play. */
+function renderNowScreenCard(s) {
+  const card = $('#now-screen-card');
+  if (!card) return;
+
+  if (!s) {
+    card.hidden = true;
+    return;
+  }
+
+  card.hidden = false;
+
+  // The log is not polled, so a reading arriving on the stream is what tells
+  // it to redraw - and only when somebody is looking at it. The shot is marked
+  // seen here rather than left to the redraw: renderScreenLog gives up quietly
+  // when the fetch fails, and a shot that stayed unseen would ask again on
+  // every frame of the stream, once a second, for as long as the page was open.
+  if (s.shot !== screenLatestShot && $('#view-overlay')?.classList.contains('active')) {
+    screenLatestShot = s.shot;
+    renderScreenLog().catch(() => {});
+  }
+
+  // The cash card is drawn once, at boot, and a kiosk photographed since is
+  // exactly the thing it is waiting for. Only a frame whose wallet actually
+  // read moves it, and only once per frame.
+  if (s.shot !== ledgerWalletShot
+    && (s.checks || []).some((c) => c.subject === 'Wallet' && c.verdict !== 'unchecked')) {
+    ledgerWalletShot = s.shot;
+    loadLedgerWallet().catch(() => {});
+  }
+
+  $('#now-screen-summary').textContent = s.summary;
+  $('#now-screen-when').textContent =
+    `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString()} · ${s.shot}`;
+
+  const checks = $('#now-screen-checks');
+  checks.textContent = '';
+  for (const check of s.checks || []) checks.append(screenCheckRow(check));
+
+  const differs = (s.checks || []).filter((c) => c.verdict === 'differs').length;
+
+  $('#now-screen-note').textContent =
+    differs ? `${differs} thing${differs === 1 ? '' : 's'} the screen and the logs disagree on.`
+    : (s.checks || []).length ? 'The logs and the screen agree on everything checked.'
+    : 'Nothing on this screen the logs could be checked against.';
+}
+
+/**
+ * What each ship was last photographed carrying, on the fleet page.
+ *
+ * Dated, every time: a screenshot is a moment and not a state, and a loadout
+ * from last week shown as the loadout is lying by a week.
+ */
+async function renderFleetFittings() {
+  const title = $('#fleet-fittings-title');
+  const caption = $('#fleet-fittings-caption');
+  const grid = $('#fleet-fittings');
+  if (!grid) return;
+
+  let ships = [];
+
+  try {
+    ships = await getJson('/api/screen/fittings');
+  } catch {
+    ships = [];
+  }
+
+  grid.textContent = '';
+  const any = ships.length > 0;
+  if (title) title.hidden = !any;
+  if (caption) caption.hidden = !any;
+
+  renderFleetBerths().catch(() => {});
+
+  if (!any) return;
+
+  for (const s of ships) {
+    const card = el('article', 'ship-card');
+    card.append(el('div', 'strong', s.ship));
+    card.append(el('div', 'muted', `as photographed ${new Date(s.shotAt).toLocaleString()}`));
+    if (s.scope) card.append(el('div', 'muted', s.scope));
+
+    const list = el('ul', 'feed screen-fittings');
+
+    for (const f of s.fittings || []) {
+      const li = el('li');
+      li.append(el('span', 'what', f.slot));
+
+      if (f.nothingRead) li.append(el('span', 'd', ' · nothing read under it'));
+      else if (f.name) {
+        li.append(el('span', 'd', ` · ${f.name}`));
+        if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
+        if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
+      } else li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+
+      list.append(li);
+    }
+
+    card.append(list);
+    grid.append(card);
+  }
+}
+
+/**
+ * Where each ship was, the last time the Fleet Manager was photographed.
+ *
+ * Nothing in the logs says where a ship is stored, so this is the only
+ * source, and it is dated for the same reason the fittings are.
+ */
+async function renderFleetBerths() {
+  const title = $('#fleet-berths-title');
+  const list = $('#fleet-berths');
+  if (!list) return;
+
+  let got = { ships: [] };
+
+  try {
+    got = await getJson('/api/screen/fleet');
+  } catch {
+    got = { ships: [] };
+  }
+
+  list.textContent = '';
+  const rows = got.ships || [];
+  if (title) title.hidden = rows.length === 0;
+  if (!rows.length) return;
+
+  list.append(el('p', 'muted', `As photographed ${new Date(got.shotAt).toLocaleString()} · ${got.shot}`));
+
+  const feed = el('ul', 'feed screen-fittings');
+  for (const row of rows) feed.append(fleetRow(row));
+  list.append(feed);
+}
+
+$('#screen-log-refresh')?.addEventListener('click', () => {
+  renderScreenLog().catch(() => {});
+});
+
+/**
+ * Clearing is deliberate and immediate.
+ *
+ * No confirmation: everything in the log can be produced again by taking the
+ * screenshot again, and a dialog in front of a harmless button is the kind of
+ * thing that trains people to click through the ones that matter.
+ */
+$('#screen-log-clear')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await fetch('/api/screen/readings', { method: 'DELETE' });
+    screenLatestShot = null;
+    await renderScreenLog();
+  } catch {
+    screenSay('could not clear the log');
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#screen-mode')?.addEventListener('change', async () => {
+  await saveScreenSettings($('#screen-mode').value, $('#screen-watch')?.checked, $('#screen-watch-folder')?.checked);
+});
+
+$('#screen-watch')?.addEventListener('change', async () => {
+  await saveScreenSettings(screenSettings.mode, $('#screen-watch').checked, $('#screen-watch-folder')?.checked);
+});
+
+$('#screen-watch-folder')?.addEventListener('change', async () => {
+  await saveScreenSettings(screenSettings.mode, $('#screen-watch')?.checked, $('#screen-watch-folder').checked);
+});
+
+$('#screen-parse')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await parseClipboard();
+  } catch (err) {
+    screenSay(`could not read the clipboard: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#screen-scan')?.addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  button.disabled = true;
+
+  try {
+    await scanScreenshot();
+  } catch (err) {
+    screenSay(`could not read the screenshot: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function renderOverlayLayout() {
   let data;
   try {
@@ -6995,6 +8682,7 @@ function setShowImported(value) {
   loadTrips?.().catch(() => {});
   renderSharedReceipts().catch(() => {});
   renderSharedBlueprints().catch(() => {});
+  renderSharedPoints().catch(() => {});
 }
 
 /**
@@ -7039,6 +8727,7 @@ function countLine(counts) {
   if (counts.checklists) parts.push(`${counts.checklists} checklists`);
   if (counts.trips) parts.push(`${counts.trips} flight plans`);
   if (counts.runActions) parts.push(`${counts.runActions} run-sheet lines`);
+  if (counts.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
   return parts.join(' · ');
 }
 
@@ -7092,7 +8781,7 @@ function importCard(batch) {
 
   if (batch.classes.length) {
     const row = el('div', 'import-classes');
-    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists']];
+    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists'], ['points', 'points of interest']];
 
     for (const [key, label] of named) {
       if (!batch.classes.includes(key)) continue;
@@ -7338,6 +9027,7 @@ function exportChoice() {
     receipts: Boolean($('#export-receipts')?.checked),
     blueprints: Boolean($('#export-blueprints')?.checked),
     authored: Boolean($('#export-authored')?.checked),
+    points: Boolean($('#export-points')?.checked),
     handle: Boolean($('#export-handle')?.checked),
     days: exportDays(),
   };
@@ -7356,7 +9046,7 @@ async function renderExportPreview() {
 
   const choice = exportChoice();
 
-  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+  if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
     line.textContent = 'Nothing ticked, so there is nothing to save.';
     return;
   }
@@ -7364,7 +9054,7 @@ async function renderExportPreview() {
   try {
     const counts = await getJson(
       `/api/export/preview?receipts=${choice.receipts}&blueprints=${choice.blueprints}`
-      + `&authored=${choice.authored}&days=${choice.days}`);
+      + `&authored=${choice.authored}&points=${choice.points}&days=${choice.days}`);
 
     const parts = [];
     if (choice.receipts) {
@@ -7375,6 +9065,7 @@ async function renderExportPreview() {
     if (choice.authored) {
       parts.push(`${counts.jobs} jobs, ${counts.checklists} checklists, ${counts.trips} flight plans`);
     }
+    if (choice.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
 
     line.textContent = `Would save ${parts.join(' · ')}.`;
   } catch {
@@ -7423,7 +9114,8 @@ async function renderBackupPreview() {
   const parts = [
     [counts.jobs, 'job'], [counts.checklists, 'checklist'], [counts.trips, 'flight plan'],
     [counts.miningRuns, 'mining haul'], [counts.notes, 'map note'],
-  ].filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+    [counts.kits, 'kit'], [counts.pins, 'point of interest', 'points of interest'],
+  ].filter(([n]) => n > 0).map(([n, word, plural]) => `${n} ${n === 1 ? word : (plural || `${word}s`)}`);
 
   if (counts.goal) parts.push('your goal');
   if (counts.wipe) parts.push('your wipe line');
@@ -7662,7 +9354,7 @@ async function saveExport() {
   const status = $('#export-status');
   const choice = exportChoice();
 
-  if (!choice.receipts && !choice.blueprints && !choice.authored) {
+  if (!choice.receipts && !choice.blueprints && !choice.authored && !choice.points) {
     status.textContent = 'Tick at least one thing first.';
     return;
   }
@@ -7707,7 +9399,7 @@ async function saveExport() {
   }
 }
 
-for (const id of ['#export-receipts', '#export-blueprints', '#export-authored', '#export-days']) {
+for (const id of ['#export-receipts', '#export-blueprints', '#export-authored', '#export-points', '#export-days']) {
   $(id)?.addEventListener('change', () => renderExportPreview().catch(() => {}));
 }
 

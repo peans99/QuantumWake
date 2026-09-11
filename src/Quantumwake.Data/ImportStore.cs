@@ -41,7 +41,8 @@ public sealed record ImportBatch(
     ExportReceipts? Receipts = null,
     ExportBlueprints? Blueprints = null,
     ExportAuthored? Authored = null,
-    bool Hidden = false)
+    bool Hidden = false,
+    ExportPoints? Points = null)
 {
     /// <summary>
     /// Whether this build can still make sense of what is inside.
@@ -123,7 +124,8 @@ public sealed class ImportStore
             reading.Truncated,
             document.Receipts,
             document.Blueprints,
-            document.Authored);
+            document.Authored,
+            Points: document.Points);
 
         lock (_gate)
         {
@@ -167,6 +169,7 @@ public sealed class ImportStore
             {
                 ExportDocument.Receipts => batch with { Receipts = null, Counts = batch.Counts with { Receipts = 0 } },
                 ExportDocument.Blueprints => batch with { Blueprints = null, Counts = batch.Counts with { Blueprints = 0 } },
+                ExportDocument.Points => batch with { Points = null, Counts = batch.Counts with { Points = 0 } },
                 ExportDocument.Authored => batch with
                 {
                     Authored = null,

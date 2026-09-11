@@ -24,6 +24,7 @@ public class ExportDocumentTests : IDisposable
     private readonly ChecklistStore _checklists;
     private readonly TripStore _trips;
     private readonly WipeStore _wipe;
+    private readonly ScreenReadingStore _readings;
     private readonly ExportBuilder _builder;
 
     private static readonly DateTimeOffset Now = new(2026, 8, 24, 12, 0, 0, TimeSpan.Zero);
@@ -35,7 +36,8 @@ public class ExportDocumentTests : IDisposable
         _checklists = new ChecklistStore(_directory);
         _trips = new TripStore(_directory);
         _wipe = new WipeStore(_directory);
-        _builder = new ExportBuilder(_library, _jobs, _checklists, _trips, _wipe);
+        _readings = new ScreenReadingStore(_directory);
+        _builder = new ExportBuilder(_library, _jobs, _checklists, _trips, _wipe, _readings);
     }
 
     private void SaveSession(string id, DateTimeOffset started,
@@ -170,6 +172,41 @@ public class ExportDocumentTests : IDisposable
     }
 
     /// <summary>
+    /// A point travels with what the receiver needs - the coordinates, the
+    /// name, category and note, the system and whether the sender set it - and
+    /// without the provenance of the sender's belief, which is about the
+    /// sender's logs. The caveat says the system is a guess unless marked.
+    /// </summary>
+    [Fact]
+    public void Points_carry_the_coordinates_the_note_and_whose_word_the_system_is()
+    {
+        var readings = _readings;
+        var at = Now.AddDays(-2);
+        readings.AddClipboard(new ClipboardSighting(at, -9641671346.9, -11490734321.2, -91805.1, 14.99996, "Ruin Station", "Pyro",
+            BelievedBy: PlaceSignal.Jump, BelievedAt: at.AddMinutes(-10)));
+        readings.Pin(at, "Ruin mining shelf", "Mining");
+        readings.UpdatePin(at, null, null, "Two rocks left.", "Nyx");
+
+        var points = Build(new ExportChoice(Points: true)).Points!;
+
+        var row = Assert.Single(points.Rows);
+        Assert.Equal("Ruin mining shelf", row.Label);
+        Assert.Equal("Mining", row.Category);
+        Assert.Equal("Two rocks left.", row.Note);
+        Assert.Equal("Nyx", row.System);
+        Assert.True(row.SystemByPilot);
+        Assert.Equal("Ruin Station", row.Believed);
+        Assert.Equal(-9641671346.9, row.X);
+        Assert.Equal(at, row.At);
+        Assert.Contains(ExportCaveats.SystemInferred, points.Caveats);
+        Assert.Contains(ExportDocument.Points, Build(new ExportChoice(Points: true)).Classes);
+
+        Assert.Null(Build(new ExportChoice(Receipts: true)).Points);
+        Assert.Equal(1, _builder.Preview(new ExportChoice(Points: true)).Points);
+        Assert.False(new ExportChoice(Points: true).AskedForNothing);
+    }
+
+    /// <summary>
     /// The wire format is camelCase and must stay that way: the stores' PascalCase
     /// is JsonSerializer's default rather than anybody's decision, and an accident
     /// is not worth carrying across a machine boundary.
@@ -185,7 +222,7 @@ public class ExportDocumentTests : IDisposable
             Build(new ExportChoice(Receipts: true)), ExportDocument.Json);
 
         Assert.Contains("\"formatVersion\": 1", json);
-        Assert.Contains("\"contentVersion\": 2", json);
+        Assert.Contains("\"contentVersion\": 3", json);
         Assert.Contains("\"exportedAt\"", json);
         Assert.Contains("\"observedTo\"", json);
         Assert.Contains("\"resourceId\": \"guid-a\"", json);

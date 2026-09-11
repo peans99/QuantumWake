@@ -32,6 +32,7 @@ internal sealed class TrayPresence : IDisposable
     private Action? _balloonAction;
 
     public event Action? OpenDashboardRequested;
+    public event Action? MfdSetupRequested;
     public event Action<bool>? OverlayToggled;
 
     /// <summary>
@@ -81,6 +82,8 @@ internal sealed class TrayPresence : IDisposable
             (_, _) => OpenDashboardRequested?.Invoke()));
         menu.Items.Add(_overlayItem);
         menu.Items.Add(_pinItem);
+        menu.Items.Add(new ToolStripMenuItem("MFD setup…", null,
+            (_, _) => MfdSetupRequested?.Invoke()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Set Star Citizen folder…", null,
             (_, _) => SetInstallFolderRequested?.Invoke()));

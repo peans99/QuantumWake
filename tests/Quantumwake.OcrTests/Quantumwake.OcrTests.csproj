@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Its own project for one reason: the reader needs the Windows SDK target
+         and Quantumwake.Tests must not, or the parser suite becomes Windows-only
+         for the sake of thirty lines around an OS API. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+
+    <!-- The fixture images are drawn with WPF rather than checked in, so the
+         thing under test is fed real pixels without a binary in the repo. -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Quantumwake.Data\Quantumwake.Data.csproj" />
+    <ProjectReference Include="..\..\src\Quantumwake.Ocr\Quantumwake.Ocr.csproj" />
+  </ItemGroup>
+
+</Project>

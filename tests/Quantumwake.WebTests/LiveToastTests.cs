@@ -19,6 +19,10 @@ public class LiveToastTests
     private const string Arrival =
         "{at:'2026-05-03T18:04:00Z',kind:'location',text:'Arrived',detail:'Port Tressler'}";
 
+    private const string Differs =
+        "{at:'2026-05-03T18:05:30Z',kind:'screen-differs',text:'Ship: Argo MOLE',"
+        + "detail:'the logs last saw you in a Drake Cutlass Black'}";
+
     private static Page Live()
     {
         var page = new Page();
@@ -77,6 +81,41 @@ public class LiveToastTests
     /// is worth interrupting somebody for. A notifier that fires on everything
     /// gets ignored, which costs the two events that mattered.
     /// </summary>
+    /// <summary>
+    /// A session can open with nothing in its timeline - the dashboard left on
+    /// the menu, or the overlay reloaded before anything happened - and an
+    /// empty frame is still a frame. Anchoring only on a non-empty one meant
+    /// the first thing that ever happened became the anchor and was swallowed,
+    /// which for a screenshot is the one disagreement worth interrupting for.
+    /// </summary>
+    [Fact]
+    public void The_first_thing_to_happen_in_an_empty_session_is_toasted()
+    {
+        var page = Live();
+        Frame(page, "");
+        Frame(page, Differs);
+
+        Assert.Equal(1, page.Count("__dom.node('#toasts').querySelectorAll('.toast').length"));
+        Assert.Contains("Argo MOLE", page.NodeText("#toasts"));
+    }
+
+    /// <summary>
+    /// The empty frame says there is no backlog, so what follows is news rather
+    /// than history - but only once. The frame after it is the ordinary case
+    /// again and must not re-toast what it still carries.
+    /// </summary>
+    [Fact]
+    public void An_empty_session_still_toasts_each_thing_once()
+    {
+        var page = Live();
+        Frame(page, "");
+        Frame(page, Differs);
+        Frame(page, Differs);
+        Frame(page, $"{Payout},{Differs}");
+
+        Assert.Equal(2, page.Count("__dom.node('#toasts').querySelectorAll('.toast').length"));
+    }
+
     [Fact]
     public void Ordinary_feed_entries_are_not_toasted()
     {

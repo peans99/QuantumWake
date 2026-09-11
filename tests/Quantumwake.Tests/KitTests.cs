@@ -256,7 +256,7 @@ public class KitTests : IDisposable
             new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
             new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
             new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-            new KitStore(_root));
+            new KitStore(_root), new ScreenReadingStore(_root));
 
         Assert.Single(backup.Build(new ExportProducer("Quantumwake", "0.9.41"), Now).Backup!.Kits);
         Assert.Equal(1, backup.Preview().Kits);
