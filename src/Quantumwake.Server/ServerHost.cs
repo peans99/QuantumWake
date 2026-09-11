@@ -2288,10 +2288,16 @@ public static class ServerHost
                 ? Results.Ok(pin)
                 : Results.NotFound(new { trouble = "that point of interest is already gone" }));
 
-        app.MapDelete("/api/screen/pins", (DateTimeOffset at, ScreenReadingStore readings) =>
-            readings.Unpin(at)
-                ? Results.Ok(new { removed = true })
-                : Results.NotFound(new { trouble = "that point of interest is already gone" }));
+        app.MapDelete("/api/screen/pins", (DateTimeOffset at, ScreenReadingStore readings, TombstoneStore deleted) =>
+        {
+            if (!readings.Unpin(at))
+                return Results.NotFound(new { trouble = "that point of interest is already gone" });
+
+            // Remembered as removed, so a restore from an older backup asks
+            // before bringing it back rather than quietly undoing the removal.
+            deleted.Record(TombstoneStore.Kinds.Pins, PinnedLocation.IdFor(at));
+            return Results.Ok(new { removed = true });
+        });
 
         // The newest loadout read for each ship, for the fleet page - dated,
         // because a screenshot is a moment and never a state.

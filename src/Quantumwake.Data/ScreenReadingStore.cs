@@ -64,6 +64,10 @@ public sealed record ClipboardSighting(
 /// nothing in the logs says why anyone was there, and a point without the
 /// reason is a number that means nothing a month later.
 /// </param>
+/// <param name="ModifiedAt">
+/// When the name, category or note last changed; null until they have. The
+/// backup compares on it, the way it does for a job or a kit.
+/// </param>
 public sealed record PinnedLocation(
     DateTimeOffset SourceAt,
     DateTimeOffset PinnedAt,
@@ -75,7 +79,20 @@ public sealed record PinnedLocation(
     string? System,
     string? Label = null,
     string? Category = null,
-    string? Note = null);
+    string? Note = null,
+    DateTimeOffset? ModifiedAt = null) : IStamped<PinnedLocation>
+{
+    /// <summary>The copy it came from, to the tick - the only identity a point has.</summary>
+    public string StampId => IdFor(SourceAt);
+
+    public static string IdFor(DateTimeOffset sourceAt) => sourceAt.ToUniversalTime().ToString("o");
+
+    public PinnedLocation Bare() => this with { ModifiedAt = null };
+    public PinnedLocation Stamped(DateTimeOffset at) => this with { ModifiedAt = at };
+
+    /// <summary>When this last changed - see <see cref="Job.ChangedAt"/>.</summary>
+    public DateTimeOffset ChangedAt => ModifiedAt ?? PinnedAt;
+}
 
 /// <summary>
 /// Remembers what the screenshots said, and what was pasted.
@@ -169,11 +186,14 @@ public sealed class ScreenReadingStore
     }
 
     /// <summary>Forgets a point of interest without rewriting its source reading.</summary>
-    public bool Unpin(DateTimeOffset sourceAt)
+    public bool Unpin(DateTimeOffset sourceAt) => Unpin(PinnedLocation.IdFor(sourceAt));
+
+    /// <summary>The same, by the id a backup carries it under.</summary>
+    public bool Unpin(string stampId)
     {
         lock (_gate)
         {
-            if (_pins.RemoveAll(p => p.SourceAt == sourceAt) == 0) return false;
+            if (_pins.RemoveAll(p => p.StampId == stampId) == 0) return false;
             SavePins();
             return true;
         }
@@ -199,10 +219,27 @@ public sealed class ScreenReadingStore
                 Label = CleanLabel(label) ?? _pins[at].Label ?? "Copied location",
                 Category = CleanCategory(category) ?? _pins[at].Category ?? "General",
                 Note = note is null ? _pins[at].Note : CleanNote(note),
+                ModifiedAt = DateTimeOffset.UtcNow,
             };
             _pins[at] = updated;
             SavePins();
             return updated;
+        }
+    }
+
+    /// <summary>
+    /// Puts a point back exactly as a backup carried it, replacing whatever
+    /// sits on that copy. The restore is the only caller: everything else
+    /// goes through <see cref="Pin"/>, which needs the paste it came from.
+    /// </summary>
+    public void PutPin(PinnedLocation pin)
+    {
+        lock (_gate)
+        {
+            _pins.RemoveAll(p => p.SourceAt == pin.SourceAt);
+            _pins.Add(pin);
+            _pins.Sort((a, b) => b.PinnedAt.CompareTo(a.PinnedAt));
+            SavePins();
         }
     }
 

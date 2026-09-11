@@ -846,6 +846,11 @@ checked against the last one plus the ledger's movement in between. The
 difference is money that moved without a line in the log, which is the number
 the Ledger has never been able to show.
 
+That day came from a different screen. The mobiGlas bar still reads on none;
+the commodity kiosk on this install printed the balance in full on 10 Sep
+2026, and that figure is the baseline - see *The kiosk on this install*,
+below. "Still" in the heading is now about the bar, not about the number.
+
 ### The folder watch
 
 A listing every two seconds, not a file-system watcher: the folder does not
@@ -989,6 +994,46 @@ outright. It lists the hold rather than the shop and has no `SHOP QUANTITY`
 to anchor on. A sell-side kiosk is filed as a kiosk and kept whole, and
 claims no rows.
 
+### The kiosk on this install, sell side, and the balance printed in full
+
+On 10 Sep 2026 the pilot photographed a commodity terminal here -
+`ScreenShot-2026-09-10_20-53-54-CF5.jpg`, the sell side, with no ship
+selected - and two of the paragraphs above stopped being true.
+
+**The sell side reads.** The engine returned 56 lines in 265 ms, and the
+reader filed it as a kiosk selling with five commodities: Methane at
+`¤3.312/SCU` and four sizes of Ship Ammunition, two of which carried a
+price that read (`384/SCU`, `, 641/SCU`) and two of which did not and are
+absent. `NO OENAND` for *No demand* and `TO NAKE A TRANSACTION` are the
+engine's, and are kept as read.
+
+**The balance is printed in full here.** `¤2,092, 773 AUEC` - every digit, in
+the regular face, with the separator padded by the engine. So the rule above
+("never turned into a number") was too broad: it is a suffix that hides
+digits, not a kiosk. A figure with every digit on it is a figure and goes
+through the wallet check; one with a suffix is kept as printed and never
+becomes one. `2,092,773 aUEC` was the first balance any screen on this
+install had ever yielded, and the mobiGlas bar - the place the paragraph above
+said the number would come from - has still never read at all.
+
+**The first reading of this frame took the close button for the balance.**
+Measured on the frame's own geometry: `CURRENT BALANCE:` sits at
+(2391, 148), the window's `x` at (2661, 151) beside it, and the figure at
+(2429, 180) underneath. The reader asked for what was *beside* the label
+first and got `x`; the log kept `"BalanceRead": "x"` and no figure for a day.
+The balance is now the highest line on the frame that ends in `AUEC`, with
+"beside the label" only as the fallback - the unit is the tell, the position
+was not. The **Read again** button on the Log exists because of this frame:
+a reader learns from a frame already in the log, and the log otherwise keeps
+the old reading of it for good.
+
+What the figure was then good for: the Ledger, which had never been able to
+show a balance, shows one. The five item purchases logged after the shot
+net −10,974 aUEC by the ledger's amounts and by its running totals alike, so
+the card says `2,092,773`, dated by the shot, and *about 2,081,799 now* -
+called an estimate, because money that moved without a line in the log is
+not in it, and the next screenshot says by how much.
+
 ### How the feature is driven
 
 Worth writing down, because the first arrangement was wrong in a way that was
@@ -1074,7 +1119,7 @@ shared a loader and an early return.
 
 | Screen | What it would confirm |
 |---|---|
-| A commodity kiosk on this install, both sides | Everything above, against this pilot's own trades - and the sell side, which nothing reads yet |
+| A commodity kiosk on this install, buy side | The buy-side reader against this pilot's own terminal - the sell side was photographed on 10 Sep 2026 and reads, see above |
 | The Wallet app, past its start screen | Whether the balance is printed anywhere in a face that reads every time |
 
 **The inventory screen carries no names.** Photographed with a location's

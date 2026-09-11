@@ -30,7 +30,7 @@ public class RestoreReviewFixTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new LogLibrary(new SessionStore(":memory:")), new KitStore(_root));
+        new LogLibrary(new SessionStore(":memory:")), new KitStore(_root), new ScreenReadingStore(_root));
 
     private static Job AJob(string id, string title, DateTimeOffset changed) =>
         new(id, title, "list", null, Old, false, [], ModifiedAt: changed);
@@ -142,7 +142,7 @@ public class RestoreReviewFixTests : IDisposable
             new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
             new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
             new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root), library,
-            new KitStore(_root));
+            new KitStore(_root), new ScreenReadingStore(_root));
 
         var wiped = new Wipe(Newer, "Alpha 4.9", WipeScope.Money);
         var file = new ExportBackup([], [], [], [], [], [], [], Wipe: wiped);

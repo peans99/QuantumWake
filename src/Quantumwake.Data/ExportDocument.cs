@@ -154,7 +154,10 @@ public sealed record ExportBackup(
     IReadOnlyList<Kit> Kits,
     Goal? Goal = null,
     Wipe? Wipe = null,
-    TextOverlayOptions? Labels = null);
+    TextOverlayOptions? Labels = null,
+    // After the settings rather than beside the other lists: a backup written
+    // before points existed has no key for it, and the reader fills the null.
+    IReadOnlyList<PinnedLocation>? Pins = null);
 
 /// <summary>
 /// The user's own commodity trades.

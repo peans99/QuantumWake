@@ -224,4 +224,39 @@ public class RestorePlanPageTests
         Assert.True(page.Truth("__dom.node('#backup-plan').hidden"));
         Assert.True(page.Truth("restoreFile === null"));
     }
+
+    /// <summary>
+    /// The sentence before the button is the only place somebody learns what a
+    /// backup holds. A store the server backs up but the sentence leaves out
+    /// reads as "not covered" - which is how kits went unmentioned for a while.
+    /// </summary>
+    [Fact]
+    public void The_preview_names_every_store_the_backup_carries()
+    {
+        var page = new Page();
+        page.Serve("/api/backup/preview", """
+            {"jobs":2,"checklists":0,"trips":1,"miningRuns":0,"notes":0,"deleted":0,"kits":1,"goal":false,"wipe":true,"pins":3}
+            """);
+
+        page.Do("await renderBackupPreview();");
+
+        var line = page.NodeText("#backup-preview");
+        Assert.Contains("2 jobs", line);
+        Assert.Contains("1 flight plan", line);
+        Assert.Contains("1 kit", line);
+        Assert.Contains("3 points of interest", line);
+        Assert.Contains("your wipe line", line);
+        Assert.DoesNotContain("0 ", line);
+    }
+
+    [Fact]
+    public void One_point_of_interest_is_singular()
+    {
+        var page = new Page();
+        page.Serve("/api/backup/preview", """{"jobs":0,"checklists":0,"trips":0,"miningRuns":0,"notes":0,"deleted":0,"kits":0,"goal":false,"wipe":false,"pins":1}""");
+
+        page.Do("await renderBackupPreview();");
+
+        Assert.Equal("Would save 1 point of interest.", page.NodeText("#backup-preview"));
+    }
 }

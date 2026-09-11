@@ -318,7 +318,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.10.37
+### 0.10.38
+
+- **Points of interest are in the backup now.** Every pin - its name, category
+  and note - goes into the backup file and comes back through the same restore
+  review as your jobs and kits: a point you removed on purpose is not handed
+  back unasked, a newer note here is kept over an older one in the file, and
+  the sentence on the Backup page says how many points a backup would carry.
+  Backups taken before 0.10.38 hold no points; take a fresh one.
+
+- **On the Points page, saving one card no longer discards what you were typing
+  on another.** Only the saved card is redrawn.
 
 - **Points of interest have a page of their own, with room for why.** Under
   Flight, next to Places: every `/showlocation` you pinned, as a card with its

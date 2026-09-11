@@ -126,6 +126,43 @@ public class PointsTests
     }
 
     /// <summary>
+    /// Two notes half-typed, one saved: the other must still be on the page.
+    /// Redrawing the whole list on save threw it away, with no undo.
+    /// </summary>
+    [Fact]
+    public void Saving_one_card_keeps_what_was_typed_on_the_others()
+    {
+        var page = Loaded();
+        page.Serve("/api/screen/pins", """
+            {"sourceAt":"2026-09-09T02:10:00Z","x":1,"y":2,"z":3,"gigametres":15,
+             "label":"Ruin mining shelf","category":"Mining","note":"Saved note."}
+            """);
+        page.Serve("/api/screen/readings?take=50", """{"readings":[],"clipboard":[],"pins":[],"total":0,"pastes":0}""");
+
+        page.Do("""
+            const cards = __dom.node('#points-list').byClass('point-card');
+            cards[1].byClass('point-note')[0].value = 'Still being typed';
+            cards[1].byClass('point-note')[0].fire('input');
+            cards[0].byClass('point-note')[0].value = 'Saved note.';
+            await cards[0].byClass('point-save')[0].fire('click');
+            """);
+
+        Assert.Equal("Saved note.", page.Text("__dom.node('#points-list').byClass('point-note')[0].value"));
+        Assert.Equal("Saved.", page.Text("__dom.node('#points-list').byClass('point-said')[0].textContent"));
+        Assert.Equal("Still being typed", page.Text("__dom.node('#points-list').byClass('point-note')[1].value"));
+        Assert.True(page.Truth("__dom.node('#points-list').byClass('point-card')[1].classList.contains('dirty')"));
+        Assert.False(page.Truth("__dom.node('#points-list').byClass('point-card')[0].classList.contains('dirty')"));
+
+        // And the redrawn card is still live: a second save goes through it.
+        page.Do("""
+            const card = __dom.node('#points-list').byClass('point-card')[0];
+            card.byClass('point-note')[0].value = 'Saved twice.';
+            await card.byClass('point-save')[0].fire('click');
+            """);
+        Assert.Contains("\"note\":\"Saved twice.\"", page.BodyOf("/api/screen/pins"));
+    }
+
+    /// <summary>
     /// The only failure that loses a reason quietly: a save that fails must
     /// leave the typed note on the page and say so.
     /// </summary>

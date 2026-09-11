@@ -31,7 +31,8 @@ public sealed class RestoreService(
     ItemLabelStore labels,
     TombstoneStore deleted,
     LogLibrary library,
-    KitStore kits)
+    KitStore kits,
+    ScreenReadingStore readings)
 {
     /// <summary>Ids for the things there is only ever one of.</summary>
     private static class Single
@@ -107,6 +108,9 @@ public sealed class RestoreService(
 
         Compare(TombstoneStore.Kinds.Kits, file.Kits, kits.All(),
             k => k.Id, k => k.Name, k => k.ChangedAt);
+
+        Compare(TombstoneStore.Kinds.Pins, file.Pins ?? [], readings.Pinned(),
+            p => p.StampId, p => p.Label ?? p.Believed ?? "Copied location", p => p.ChangedAt);
 
         // The singular settings. There is only one of each, so there is nothing
         // to match on - the question is only whether the file's differs.
@@ -217,6 +221,13 @@ public sealed class RestoreService(
                 restored++;
             }
 
+            foreach (var pin in (file.Pins ?? []).Where(p => Wanted(TombstoneStore.Kinds.Pins, p.StampId)))
+            {
+                readings.PutPin(pin);
+                deleted.Forget(TombstoneStore.Kinds.Pins, pin.StampId);
+                restored++;
+            }
+
             if (file.Goal is { } goal && Wanted(Single.Goal, Single.Goal))
             {
                 goals.Save(goal);
@@ -274,6 +285,7 @@ public sealed class RestoreService(
         foreach (var id in mining.All().Select(r => $"{TombstoneStore.Kinds.Mining}:{r.Id}")) here.Add(id);
         foreach (var id in notes.All().Select(n => $"{TombstoneStore.Kinds.Notes}:{n.Id}")) here.Add(id);
         foreach (var id in kits.All().Select(k => $"{TombstoneStore.Kinds.Kits}:{k.Id}")) here.Add(id);
+        foreach (var id in readings.Pinned().Select(p => $"{TombstoneStore.Kinds.Pins}:{p.StampId}")) here.Add(id);
 
         foreach (var stone in file.Deleted)
         {
@@ -286,9 +298,10 @@ public sealed class RestoreService(
     /// <summary>Everything that could be written, as it stands right now.</summary>
     private (IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
         IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
-        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits) Photograph() =>
+        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits,
+        IReadOnlyList<PinnedLocation> Pins) Photograph() =>
         (jobs.All(), checklists.All(), trips.All(), mining.All(), notes.All(),
-         goals.Current, wipe.Current, labels.Current, deleted.All(), kits.All());
+         goals.Current, wipe.Current, labels.Current, deleted.All(), kits.All(), readings.Pinned());
 
     /// <summary>
     /// Puts a photograph back, and says whether all of it landed.
@@ -301,7 +314,8 @@ public sealed class RestoreService(
     /// </remarks>
     private bool PutBack((IReadOnlyList<Job> Jobs, IReadOnlyList<Checklist> Lists, IReadOnlyList<Trip> Trips,
         IReadOnlyList<MiningRun> Runs, IReadOnlyList<MapNote> Notes, Goal? Goal, Wipe? Wipe,
-        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits) before)
+        TextOverlayOptions Labels, IReadOnlyList<Tombstone> Deleted, IReadOnlyList<Kit> Kits,
+        IReadOnlyList<PinnedLocation> Pins) before)
     {
         var whole = true;
 
@@ -344,6 +358,7 @@ public sealed class RestoreService(
         Drop(mining.All(), before.Runs, r => r.Id, id => mining.RemoveLoudly(id));
         Drop(notes.All(), before.Notes, n => n.Id, id => notes.Remove(id));
         Drop(kits.All(), before.Kits, k => k.Id, id => kits.Remove(id));
+        Drop(readings.Pinned(), before.Pins, p => p.StampId, id => readings.Unpin(id));
 
         foreach (var job in before.Jobs) Try(() => jobs.Put(job));
         foreach (var list in before.Lists) Try(() => checklists.Put(list));
@@ -351,6 +366,7 @@ public sealed class RestoreService(
         foreach (var run in before.Runs) Try(() => mining.Put(run));
         foreach (var note in before.Notes) Try(() => notes.Put(note));
         foreach (var kit in before.Kits) Try(() => kits.Put(kit));
+        foreach (var pin in before.Pins) Try(() => readings.PutPin(pin));
 
         Try(() => goals.Save(before.Goal));
         Try(() => labels.Save(before.Labels));

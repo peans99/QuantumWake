@@ -26,7 +26,7 @@ public class BackupTests : IDisposable
         new JobStore(_root), new ChecklistStore(_root), new TripStore(_root),
         new MiningLogStore(_root), new MapNoteStore(_root), new GoalStore(_root),
         new WipeStore(_root), new ItemLabelStore(_root), new TombstoneStore(_root),
-        new KitStore(_root));
+        new KitStore(_root), new ScreenReadingStore(_root));
 
     private static ExportProducer Producer() => new("Quantumwake", "0.9.33");
 

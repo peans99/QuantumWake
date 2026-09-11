@@ -5447,8 +5447,11 @@ function renderPoints() {
   for (const pin of shown) list.append(renderPointCard(pin));
 }
 
-function renderPointCard(pin) {
-  const card = el('article', 'point-card');
+/** One card - new, or after a save redrawn in place so its neighbours keep their typing. */
+function renderPointCard(pin, into = null) {
+  const card = into || el('article', 'point-card');
+  card.textContent = '';
+  card.classList.remove('dirty');
   card.dataset.sourceAt = pin.sourceAt;
 
   const head = el('div', 'point-head');
@@ -5506,7 +5509,7 @@ function renderPointCard(pin) {
   const said = el('span', 'muted point-said');
   const save = el('button', 'ghost point-save', 'Save');
   save.type = 'button';
-  save.addEventListener('click', () => savePoint(pin, name.value, category.value, note.value, save, said));
+  save.addEventListener('click', () => savePoint(pin, card, name.value, category.value, note.value, save, said));
 
   const copy = el('button', 'ghost point-copy', 'Copy coordinates');
   copy.type = 'button';
@@ -5535,7 +5538,7 @@ function renderPointCard(pin) {
   return card;
 }
 
-async function savePoint(pin, label, category, note, button, said) {
+async function savePoint(pin, card, label, category, note, button, said) {
   button.disabled = true;
   said.textContent = 'Saving…';
 
@@ -5548,7 +5551,13 @@ async function savePoint(pin, label, category, note, button, said) {
 
     const saved = await response.json();
     pointsAll = pointsAll.map((p) => (p.sourceAt === pin.sourceAt ? saved : p));
-    renderPoints();
+
+    // Only this card is redrawn. Redrawing the list would throw away a note
+    // half-typed on the card beside it, and there is no undo for that. The
+    // category chips do get redrawn, since a save can move a point between them.
+    renderPointCard(saved, card);
+    card.querySelector('.point-said').textContent = 'Saved.';
+    renderPointCategories();
 
     // The Log aside shows the same points, and is cheap to keep honest.
     renderScreenLog().catch(() => {});
@@ -8780,7 +8789,8 @@ async function renderBackupPreview() {
   const parts = [
     [counts.jobs, 'job'], [counts.checklists, 'checklist'], [counts.trips, 'flight plan'],
     [counts.miningRuns, 'mining haul'], [counts.notes, 'map note'],
-  ].filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+    [counts.kits, 'kit'], [counts.pins, 'point of interest', 'points of interest'],
+  ].filter(([n]) => n > 0).map(([n, word, plural]) => `${n} ${n === 1 ? word : (plural || `${word}s`)}`);
 
   if (counts.goal) parts.push('your goal');
   if (counts.wipe) parts.push('your wipe line');
