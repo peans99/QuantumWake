@@ -5518,6 +5518,8 @@ function renderHangar() {
 
   const ships = hangarOrdered();
   const sized = ships.filter((s) => s.length > 0 && s.beam > 0);
+  const pictured = sized.filter((s) => s.icon);
+  const iconless = sized.filter((s) => !s.icon);
   const missing = ships.filter((s) => !(s.length > 0 && s.beam > 0));
 
   const unticked = (hangarShips?.ships || []).length - ships.length;
@@ -5535,10 +5537,11 @@ function renderHangar() {
     return;
   }
 
-  if (!sized.length) {
+  if (!pictured.length) {
     canvas.append(el('p', 'muted', ships.length
-      ? 'None of the ships flown is in the install\'s vehicle table, so there is nothing to draw to scale.'
+      ? 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
       : 'No ship has been flown in the logs yet, so there is nothing to draw.'));
+    showScaleOmissions(unsized, iconless, missing);
     return;
   }
 
@@ -5549,19 +5552,19 @@ function renderHangar() {
   // 90 m hull at full width is a 60 m tall row with the rest below the fold.
   const width = Math.max(600, canvas.clientWidth || 1200);
   const zoom = Number($('#hangar-zoom')?.value) || 1;
-  const longest = Math.max(...sized.map((s) => s.length));
+  const longest = Math.max(...pictured.map((s) => s.length));
   // The two widest cells also need the gap between them. Without taking it
   // out here, their right edges exceed the deck by the gap and the second
   // ship silently wraps onto its own oversized shelf.
   const scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
   const groups = [
-    ['Ships', sized.filter((s) => s.kind === 'Spaceship' || !s.kind)],
-    ['Ground vehicles', sized.filter((s) => s.kind && s.kind !== 'Spaceship')],
+    ['Ships', pictured.filter((s) => s.kind === 'Spaceship' || !s.kind)],
+    ['Ground vehicles', pictured.filter((s) => s.kind && s.kind !== 'Spaceship')],
   ];
 
-  // Ships on one shelf, ground vehicles on another, at the same scale - the
-  // point is how a Pulse stands beside a Starlancer, which a scale of its own
-  // for the vehicles would hide.
+  // Ships on one shelf and ground vehicles on another, at the same scale. A
+  // missing game icon is a missing shape, not permission to invent one or to
+  // turn its full bounding box into an empty slab on the deck.
   for (const [title, group] of groups) {
     if (!group.length) continue;
     canvas.append(el('h3', 'hangar-group', `${title} · ${group.length}`));
@@ -5577,15 +5580,28 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; where the game has none, a generic marker stays inside the exact box.`));
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; a hull without one is listed below rather than drawn as a guess.`));
     if (hangarComparison.size)
       scaleBox.append(el('span', 'muted', ` Comparing: ${[...hangarComparison].join(' · ')}.`));
   }
 
-  if (missing.length && unsized) {
-    unsized.hidden = false;
-    unsized.textContent = `Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`;
+  showScaleOmissions(unsized, iconless, missing);
+}
+
+/** States why a hull is absent from the physical drawing instead of inventing its shape. */
+function showScaleOmissions(note, iconless, missing) {
+  if (!note || (!iconless.length && !missing.length)) return;
+
+  const parts = [];
+  if (iconless.length) {
+    const names = iconless.map((s) => `${s.name} (${s.length} × ${s.beam} × ${s.height} m)`);
+    parts.push(`No top-down game icon, so not drawn to scale: ${names.join(', ')}.`);
   }
+  if (missing.length)
+    parts.push(`Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`);
+
+  note.hidden = false;
+  note.textContent = parts.join(' ');
 }
 
 /**
@@ -5674,39 +5690,21 @@ function drawToScale(ships, width, scale) {
     const offset = (cell - w) / 2;
     const top = (rowHeightOf(placed, sy) - h);   // ships in a row share a baseline
 
-    if (ship.icon) {
-      // The game's icon is white; the maker's tint is the app's, and the
-      // legend says so. feFlood through SourceAlpha keeps the shape exact.
-      const tintId = `hangar-tint-${ship.className.replace(/[^A-Za-z0-9_-]/g, '')}`;
-      const filter = svgEl('filter', { id: tintId });
-      filter.append(svgEl('feFlood', { 'flood-color': makerTint(makerOf(ship.name).code) }));
-      filter.append(svgEl('feComposite', { in2: 'SourceAlpha', operator: 'in' }));
-      // The glow rides in the same chain: a CSS filter on the image would win
-      // over this attribute and put the tint back to white.
-      filter.append(svgEl('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-color': '#35c8f0', 'flood-opacity': 0.3 }));
-      group.append(filter);
-      group.append(svgEl('image', {
-        href: `/api/fleet/icons/${encodeURIComponent(ship.className)}`,
-        x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
-        filter: `url(#${tintId})`,
-      }));
-    } else {
-      // The game gives this hull a size but no top-down icon. Keep the dashed
-      // box as the exact footprint, and give it a compact, obviously generic
-      // marker: filling the whole box made an absent icon more conspicuous
-      // than the ships the page can actually draw.
-      group.append(svgEl('rect', { class: 'hangar-box', x: offset, y: top, width: w, height: h, rx: 2 }));
-      const tint = makerTint(makerOf(ship.name).code);
-      const markerWidth = Math.min(w * 0.42, h * 1.1, 112);
-      const markerHeight = markerWidth * 0.56;
-      const centre = offset + w / 2;
-      const middle = top + h / 2;
-      group.append(svgEl('path', {
-        class: 'hangar-fallback',
-        d: `M ${centre - markerWidth / 2} ${middle} L ${centre - markerWidth * 0.16} ${middle - markerHeight / 2} L ${centre + markerWidth * 0.2} ${middle - markerHeight / 2} L ${centre + markerWidth / 2} ${middle} L ${centre + markerWidth * 0.2} ${middle + markerHeight / 2} L ${centre - markerWidth * 0.16} ${middle + markerHeight / 2} Z`,
-        fill: tint, 'fill-opacity': 0.18, stroke: tint, 'stroke-opacity': 0.78,
-      }));
-    }
+    // The game's icon is white; the maker's tint is the app's, and the
+    // legend says so. feFlood through SourceAlpha keeps the shape exact.
+    const tintId = `hangar-tint-${ship.className.replace(/[^A-Za-z0-9_-]/g, '')}`;
+    const filter = svgEl('filter', { id: tintId });
+    filter.append(svgEl('feFlood', { 'flood-color': makerTint(makerOf(ship.name).code) }));
+    filter.append(svgEl('feComposite', { in2: 'SourceAlpha', operator: 'in' }));
+    // The glow rides in the same chain: a CSS filter on the image would win
+    // over this attribute and put the tint back to white.
+    filter.append(svgEl('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-color': '#35c8f0', 'flood-opacity': 0.3 }));
+    group.append(filter);
+    group.append(svgEl('image', {
+      href: `/api/fleet/icons/${encodeURIComponent(ship.className)}`,
+      x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
+      filter: `url(#${tintId})`,
+    }));
 
     const baseline = rowHeightOf(placed, sy) + 14;
     const name = svgEl('text', { class: 'hangar-name', x: cell / 2, y: baseline, 'text-anchor': 'middle' });
@@ -10689,12 +10687,9 @@ function shipPicture(ship, maker, options = {}) {
     const paint = failed ? null : wanted;
 
     if (paint) {
-      // Some paint logos decode successfully but are transparent on the dark
-      // deck. Keep the known vehicle silhouette behind the render so a paint
-      // can add detail without ever making a Hangar card look empty.
+      // A paint render stands alone. The silhouette is the honest fallback if
+      // it fails; layering both draws two differently posed ships at once.
       const render = el('div', 'ship-render-wrap');
-      render.style.setProperty('--tint', makerTint(maker.code));
-      render.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(ship.className)}")`);
       const img = document.createElement('img');
       img.className = 'ship-render';
       img.src = `/api/fleet/paints/${encodeURIComponent(paint)}/render`;

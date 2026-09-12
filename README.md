@@ -358,22 +358,22 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.14
+### 0.11.15
 
-- **The Hangar's scale view no longer lets a missing game icon dominate the
-  deck.** Its real, dashed bounding box still shows the ship's size, while a
-  compact maker-coloured marker identifies the missing silhouette. Opening the
-  Hangar also measures the visible deck before drawing, so a narrow window no
-  longer starts with a needless horizontal scrollbar.
+- **Hangar paint renders no longer show a second, unpainted ship behind them.**
+  The chosen game render now stands on its own; if it cannot load, the card
+  falls back to the silhouette instead of layering both poses together.
 
-- **Ships without a game silhouette no longer leave a blank Hangar footprint.**
-  Their dashed size box now contains a maker-coloured generic marker. The box
-  remains the exact game size; the marker makes the missing icon visible without
-  pretending to be that ship's shape.
+- **The scale deck no longer reserves giant blank rectangles for hulls whose
+  top-down icon is missing.** Their exact installed dimensions appear below the
+  drawing, because a made-up marker is not a useful picture of a real ship.
 
-- **Hangar paint pictures always have a visible ship behind them.** A
-  maker-tinted silhouette now sits behind each game's paint render, so a
-  transparent or incomplete render cannot leave its Hangar card blank.
+- **The Hangar scale deck fits the visible window.** It measures after the
+  Hangar opens and redraws on resize, so a narrow window does not start with a
+  needless horizontal scrollbar.
+
+- **A Hangar paint that cannot load falls back to its maker-tinted silhouette.**
+  The fallback remains visible without placing two ship poses on the same card.
 
 - **The ship catalogue shows every shop and rental desk on hover.** The buy
   price and "Cheapest at" cells list everywhere UEX has seen the ship sold,

@@ -6,10 +6,10 @@ namespace Quantumwake.WebTests;
 /// </summary>
 /// <remarks>
 /// What is defended is the scale. Every ship must be sized by its own length
-/// against the longest, an icon-less ship must be a box at its size rather
-/// than nothing, a ship the install cannot size must be named below rather
-/// than drawn at a guess, and an install whose game data is unread must be
-/// told so rather than shown an empty deck.
+/// against the longest pictured hull. A ship whose game icon is absent is
+/// named with its verified dimensions below rather than given a made-up shape,
+/// and an install whose game data is unread must be told so rather than shown
+/// an empty deck.
 /// </remarks>
 public class HangarTests
 {
@@ -43,15 +43,15 @@ public class HangarTests
     {
         var page = Loaded();
 
-        Assert.Equal(4, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-ship').length")));
+        Assert.Equal(3, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-ship').length")));
 
         // Longest first, and the Corsair's drawn width is 53/16 of the Pisces's.
         var corsair = double.Parse(Attr(page, 0, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
-        var pisces = double.Parse(Attr(page, 2, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
+        var pisces = double.Parse(Attr(page, 1, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(53.0 / 16.0, corsair / pisces, 3);
         Assert.Contains("Drake Corsair", page.NodeText("#hangar-canvas"));
         Assert.Contains("/api/fleet/icons/DRAK_Corsair", Attr(page, 0, "image", "href"));
-        // Five flown, four drawn: the count is of the fleet, the drawing of what can be sized.
+        // Five flown, three pictured: the count is of the fleet, the drawing of what has a shape.
         Assert.Equal("5 ships", page.NodeText("#hangar-count"));
     }
 
@@ -68,29 +68,15 @@ public class HangarTests
     }
 
     [Fact]
-    public void A_ship_without_a_game_silhouette_has_a_visible_generic_marker_at_its_size()
+    public void A_ship_without_a_game_silhouette_is_listed_below_the_scale_drawing()
     {
         var page = Loaded();
 
-        // The Clipper (26.5 m) sits between the Corsair and the Pisces. Its
-        // dashed box is exact; the coloured marker only says the game omitted
-        // a top-down icon. The stub has no clientWidth, so the canvas is 1200 px
-        // and the scale is 566 / 53 px a metre.
-        Assert.Equal(26.5 * 566 / 53, double.Parse(Attr(page, 1, "rect", "width"), System.Globalization.CultureInfo.InvariantCulture), 2);
-        Assert.Contains("hangar-box", Attr(page, 1, "rect", "class"));
-        Assert.Contains("hangar-fallback", Attr(page, 1, "path", "class"));
-        Assert.Equal("#f0954a", Attr(page, 1, "path", "fill"));
-        // The dashed box, not a solid placeholder, carries the ship's scale.
-        // Its marker starts well inside the 26.5 m footprint rather than at
-        // the left edge as the old full-box arrow did.
-        var firstMarkerX = double.Parse(Attr(page, 1, "path", "d").Split(' ')[1], System.Globalization.CultureInfo.InvariantCulture);
-        var footprint = double.Parse(Attr(page, 1, "rect", "width"), System.Globalization.CultureInfo.InvariantCulture);
-        Assert.InRange(firstMarkerX, footprint * .25, footprint * .35);
-        Assert.Contains("Drake Clipper", page.NodeText("#hangar-canvas"));
-        Assert.Contains("generic marker", page.NodeText("#hangar-scale"));
-
         Assert.False(page.Truth("__dom.node('#hangar-unsized').hidden"));
-        Assert.Contains("Mystery Hull", page.NodeText("#hangar-unsized"));
+        var omitted = page.NodeText("#hangar-unsized");
+        Assert.Contains("Drake Clipper (26.5 × 18 × 21 m)", omitted);
+        Assert.Contains("Mystery Hull", omitted);
+        Assert.DoesNotContain("Drake Clipper", page.NodeText("#hangar-canvas"));
         Assert.DoesNotContain("Mystery Hull", page.NodeText("#hangar-canvas"));
     }
 
@@ -127,7 +113,7 @@ public class HangarTests
         Assert.Contains("Drake Corsair", page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[0].textContent"));
 
         page.Do("__dom.node('#hangar-sort').value = 'recent'; renderHangar();");
-        Assert.Contains("Drake Clipper", page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[0].textContent"));
+        Assert.Contains("Anvil C8X Pisces", page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[0].textContent"));
     }
 
     /// <summary>
@@ -154,7 +140,6 @@ public class HangarTests
         Assert.Contains("/api/fleet/paints/Paint_Corsair_Olive_Olive_Yellow/render",
             page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render')[0].src"));
         Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render-wrap').length")));
-        Assert.Equal("#f0954a", page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render-wrap')[0].style['--tint']"));
         Assert.Equal("#8fd18a", page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[2].byClass('ship-outline')[0].style['--tint']"));
 
         var text = page.NodeText("#hangar-canvas");
@@ -176,11 +161,11 @@ public class HangarTests
         var page = Loaded();
 
         Assert.Equal(2, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-group').length")));
-        Assert.Contains("Ships · 3", page.Text("__dom.node('#hangar-canvas').byClass('hangar-group')[0].textContent"));
+        Assert.Contains("Ships · 2", page.Text("__dom.node('#hangar-canvas').byClass('hangar-group')[0].textContent"));
         Assert.Contains("Ground vehicles · 1", page.Text("__dom.node('#hangar-canvas').byClass('hangar-group')[1].textContent"));
 
         var corsair = double.Parse(Attr(page, 0, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
-        var ptv = double.Parse(Attr(page, 3, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
+        var ptv = double.Parse(Attr(page, 2, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(53.0 / 4.0, corsair / ptv, 3);
     }
 
