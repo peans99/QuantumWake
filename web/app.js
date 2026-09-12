@@ -5441,6 +5441,7 @@ async function unpinLocation(pin, button) {
 
 // svgEl and SVG_NS are the map's, declared beside it further down.
 let hangarShips = null;
+const HANGAR_SHIP_GAP = 28;
 
 async function loadHangar() {
   const canvas = $('#hangar-canvas');
@@ -5529,7 +5530,10 @@ function renderHangar() {
   const width = Math.max(600, canvas.clientWidth || 1200);
   const zoom = Number($('#hangar-zoom')?.value) || 1;
   const longest = Math.max(...sized.map((s) => s.length));
-  const scale = ((width - 40) / 2 / longest) * zoom;   // px per metre
+  // The two widest cells also need the gap between them. Without taking it
+  // out here, their right edges exceed the deck by the gap and the second
+  // ship silently wraps onto its own oversized shelf.
+  const scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
   const groups = [
     ['Ships', sized.filter((s) => s.kind === 'Spaceship' || !s.kind)],
     ['Ground vehicles', sized.filter((s) => s.kind && s.kind !== 'Spaceship')],
@@ -5607,7 +5611,7 @@ function renderHangarGallery(canvas, ships) {
  * footprint is the real one.
  */
 function drawToScale(ships, width, scale) {
-  const gap = 28;
+  const gap = HANGAR_SHIP_GAP;
   const label = 40;
 
   // Flow layout: left to right, wrapping when the row is full. Each ship's

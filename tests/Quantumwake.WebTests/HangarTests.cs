@@ -56,14 +56,26 @@ public class HangarTests
     }
 
     [Fact]
+    public void Two_long_ships_fit_on_the_same_shelf_at_the_normal_zoom()
+    {
+        var page = Loaded();
+
+        // "Two big ships across" must not wrap the second one because its
+        // inter-ship gap was left out of the scale calculation.
+        var first = page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[0].getAttribute('transform')");
+        var second = page.Text("__dom.node('#hangar-canvas').byClass('hangar-ship')[1].getAttribute('transform')");
+        Assert.Equal(first.Split(' ')[1], second.Split(' ')[1]);
+    }
+
+    [Fact]
     public void A_ship_without_a_silhouette_is_a_box_at_its_size_and_one_without_a_size_is_named_below()
     {
         var page = Loaded();
 
         // The Clipper (26.5 m) sits between the Corsair and the Pisces, as a box at
         // its length: the stub has no clientWidth, so the canvas is 1200 px and the
-        // scale is 580 / 53 px a metre - the longest ship takes half the width.
-        Assert.Equal(26.5 * 580 / 53, double.Parse(Attr(page, 1, "rect", "width"), System.Globalization.CultureInfo.InvariantCulture), 2);
+        // scale is 566 / 53 px a metre: two long ships and their gap fit the deck.
+        Assert.Equal(26.5 * 566 / 53, double.Parse(Attr(page, 1, "rect", "width"), System.Globalization.CultureInfo.InvariantCulture), 2);
         Assert.Contains("hangar-box", Attr(page, 1, "rect", "class"));
         Assert.Contains("Drake Clipper", page.NodeText("#hangar-canvas"));
 

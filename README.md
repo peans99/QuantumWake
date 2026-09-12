@@ -358,7 +358,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.6
+### 0.11.7
+
+- **The Hangar's big ships share a shelf again.** In the to-scale view, the
+  gap between ships is now included when the deck is sized, so two large ships
+  fit side by side at the normal zoom instead of the second one wrapping below.
 
 - **Ships wear a paint before you pick one.** A ship you have not chosen a
   paint for shows the first paint the game pictures for its hull, on Fleet
