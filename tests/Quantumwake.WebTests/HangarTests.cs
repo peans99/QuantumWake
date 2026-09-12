@@ -96,6 +96,22 @@ public class HangarTests
     }
 
     [Fact]
+    public void The_scale_drawing_uses_the_paint_chosen_on_the_fleet_card()
+    {
+        var page = new Page();
+        page.Serve("/api/fleet/hangar", Fleet);
+        page.Do("""
+            __dom.node('#hangar-mode').value = 'scale'; __dom.node('#hangar-sort').value = 'length';
+            shipPaints = {DRAK_Corsair: 'Paint_Corsair_Olive_Olive_Yellow'};
+            await loadHangar();
+            """);
+
+        Assert.Contains("/api/fleet/paints/Paint_Corsair_Olive_Olive_Yellow/render", Attr(page, 0, "image", "href"));
+        Assert.Equal("", Attr(page, 0, "image", "filter"));
+        page.Do("shipPaints = {};");
+    }
+
+    [Fact]
     public void The_scale_bar_names_a_round_number_of_metres()
     {
         var scale = Loaded().NodeText("#hangar-scale");

@@ -5477,6 +5477,13 @@ async function loadHangar() {
 
   hangarShips = got;
   renderHangar();
+
+  // Gallery resolves its stand-in paints card by card. The scale drawing has
+  // one SVG instead, so redraw it once those same game paints are known.
+  const hulls = got.ships.filter((s) => s.className).map((s) => s.className);
+  Promise.all(hulls.map(paintsForHull)).then(() => {
+    if (hangarShips === got && $('#hangar-mode')?.value === 'scale') renderHangar();
+  });
 }
 
 /** Ships in the chosen order; the unsized ones are set aside for the note below the drawing. */
@@ -5690,21 +5697,32 @@ function drawToScale(ships, width, scale) {
     const offset = (cell - w) / 2;
     const top = (rowHeightOf(placed, sy) - h);   // ships in a row share a baseline
 
-    // The game's icon is white; the maker's tint is the app's, and the
-    // legend says so. feFlood through SourceAlpha keeps the shape exact.
-    const tintId = `hangar-tint-${ship.className.replace(/[^A-Za-z0-9_-]/g, '')}`;
-    const filter = svgEl('filter', { id: tintId });
-    filter.append(svgEl('feFlood', { 'flood-color': makerTint(makerOf(ship.name).code) }));
-    filter.append(svgEl('feComposite', { in2: 'SourceAlpha', operator: 'in' }));
-    // The glow rides in the same chain: a CSS filter on the image would win
-    // over this attribute and put the tint back to white.
-    filter.append(svgEl('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-color': '#35c8f0', 'flood-opacity': 0.3 }));
-    group.append(filter);
-    group.append(svgEl('image', {
-      href: `/api/fleet/icons/${encodeURIComponent(ship.className)}`,
-      x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
-      filter: `url(#${tintId})`,
-    }));
+    const paint = hangarPaintFor(ship);
+    if (paint) {
+      // The picture's perspective does not change the bounding box: the SVG
+      // cell remains the installed length and beam, while the finish matches
+      // the paint visible on the Gallery card.
+      group.append(svgEl('image', {
+        href: `/api/fleet/paints/${encodeURIComponent(paint)}/render`,
+        x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
+      }));
+    } else {
+      // The game's icon is white; the maker's tint is the app's, and the
+      // legend says so. feFlood through SourceAlpha keeps the shape exact.
+      const tintId = `hangar-tint-${ship.className.replace(/[^A-Za-z0-9_-]/g, '')}`;
+      const filter = svgEl('filter', { id: tintId });
+      filter.append(svgEl('feFlood', { 'flood-color': makerTint(makerOf(ship.name).code) }));
+      filter.append(svgEl('feComposite', { in2: 'SourceAlpha', operator: 'in' }));
+      // The glow rides in the same chain: a CSS filter on the image would win
+      // over this attribute and put the tint back to white.
+      filter.append(svgEl('feDropShadow', { dx: 0, dy: 0, stdDeviation: 3, 'flood-color': '#35c8f0', 'flood-opacity': 0.3 }));
+      group.append(filter);
+      group.append(svgEl('image', {
+        href: `/api/fleet/icons/${encodeURIComponent(ship.className)}`,
+        x: offset, y: top, width: w, height: h, preserveAspectRatio: 'xMidYMid meet',
+        filter: `url(#${tintId})`,
+      }));
+    }
 
     const baseline = rowHeightOf(placed, sy) + 14;
     const name = svgEl('text', { class: 'hangar-name', x: cell / 2, y: baseline, 'text-anchor': 'middle' });
@@ -10658,11 +10676,25 @@ function rememberShipPaint(vehicleClass, paintItem) {
 
 /** The paints the game pictures for a hull, fetched once per hull for the page. */
 const hullPaints = new Map();
+const resolvedHullPaints = new Map();
 function paintsForHull(vehicleClass) {
   if (!hullPaints.has(vehicleClass)) {
-    hullPaints.set(vehicleClass, getJson(`/api/fleet/paints/${encodeURIComponent(vehicleClass)}`).catch(() => []));
+    hullPaints.set(vehicleClass, getJson(`/api/fleet/paints/${encodeURIComponent(vehicleClass)}`)
+      .catch(() => [])
+      .then((paints) => {
+        resolvedHullPaints.set(vehicleClass, paints);
+        return paints;
+      }));
   }
   return hullPaints.get(vehicleClass);
+}
+
+/** The paint a scale drawing can show without claiming to know a ship's finish. */
+function hangarPaintFor(ship) {
+  const chosen = shipPaints[ship.className];
+  if (chosen && chosen !== SILHOUETTE) return chosen;
+  if (chosen === SILHOUETTE || shipPictureStyle !== 'paint') return null;
+  return resolvedHullPaints.get(ship.className)?.[0]?.item || null;
 }
 
 /**
@@ -10771,6 +10803,7 @@ async function openPaintChooser(ship, box, button) {
   select.addEventListener('change', () => {
     rememberShipPaint(ship.className, select.value || null);
     box.redraw?.();
+    renderHangar();
   });
 
   // The select takes the button's place in the box.

@@ -358,7 +358,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.15
+### 0.11.16
+
+- **To scale now wears the same chosen or default paint as Gallery.** The
+  picture is fitted inside the game's exact bounding box, so the paint is
+  visible without making a claim about the ship's real-world footprint.
 
 - **Hangar paint renders no longer show a second, unpainted ship behind them.**
   The chosen game render now stands on its own; if it cannot load, the card
