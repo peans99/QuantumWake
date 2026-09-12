@@ -4167,6 +4167,7 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .hangar-canvas { overflow-x: auto; border: 1px solid var(--rule); background: linear-gradient(158deg, var(--panel), var(--deep)); clip-path: var(--chamfer); }
 .hangar-svg { display: block; }
 .hangar-box { fill: none; stroke: var(--dim); stroke-dasharray: 4 3; }
+.hangar-fallback { stroke-width: 1.5; stroke-linejoin: round; }
 .hangar-name { fill: var(--text); font-size: 11px; font-family: var(--mono); }
 .hangar-dims { fill: var(--dim); font-size: 10px; }
 .hangar-scale { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 11.5px; }

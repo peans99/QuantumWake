@@ -358,7 +358,12 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.11
+### 0.11.12
+
+- **Ships without a game silhouette no longer leave a blank Hangar footprint.**
+  Their dashed size box now contains a maker-coloured generic marker. The box
+  remains the exact game size; the marker makes the missing icon visible without
+  pretending to be that ship's shape.
 
 - **Hangar paint pictures always have a visible ship behind them.** A
   maker-tinted silhouette now sits behind each game's paint render, so a

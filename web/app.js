@@ -5573,7 +5573,7 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons, tinted by maker (a hint at whose, not the finish)`));
+    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; where the game has none, a generic marker stays inside the exact box.`));
     if (hangarComparison.size)
       scaleBox.append(el('span', 'muted', ` Comparing: ${[...hangarComparison].join(' · ')}.`));
   }
@@ -5687,7 +5687,20 @@ function drawToScale(ships, width, scale) {
         filter: `url(#${tintId})`,
       }));
     } else {
+      // The game gives this hull a size but no top-down icon. Keep the dashed
+      // box as the exact footprint, and give it an obviously generic marker:
+      // an invented silhouette would look like a fact about a ship it is not.
       group.append(svgEl('rect', { class: 'hangar-box', x: offset, y: top, width: w, height: h, rx: 2 }));
+      const tint = makerTint(makerOf(ship.name).code);
+      const nose = offset + w;
+      const shoulder = offset + w * 0.64;
+      const tail = offset + w * 0.16;
+      const middle = top + h / 2;
+      group.append(svgEl('path', {
+        class: 'hangar-fallback',
+        d: `M ${offset} ${middle} L ${tail} ${top} L ${shoulder} ${top} L ${nose} ${middle} L ${shoulder} ${top + h} L ${tail} ${top + h} Z`,
+        fill: tint, 'fill-opacity': 0.45, stroke: tint, 'stroke-opacity': 0.9,
+      }));
     }
 
     const baseline = rowHeightOf(placed, sy) + 14;

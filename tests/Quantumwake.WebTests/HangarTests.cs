@@ -68,16 +68,20 @@ public class HangarTests
     }
 
     [Fact]
-    public void A_ship_without_a_silhouette_is_a_box_at_its_size_and_one_without_a_size_is_named_below()
+    public void A_ship_without_a_game_silhouette_has_a_visible_generic_marker_at_its_size()
     {
         var page = Loaded();
 
-        // The Clipper (26.5 m) sits between the Corsair and the Pisces, as a box at
-        // its length: the stub has no clientWidth, so the canvas is 1200 px and the
-        // scale is 566 / 53 px a metre: two long ships and their gap fit the deck.
+        // The Clipper (26.5 m) sits between the Corsair and the Pisces. Its
+        // dashed box is exact; the coloured marker only says the game omitted
+        // a top-down icon. The stub has no clientWidth, so the canvas is 1200 px
+        // and the scale is 566 / 53 px a metre.
         Assert.Equal(26.5 * 566 / 53, double.Parse(Attr(page, 1, "rect", "width"), System.Globalization.CultureInfo.InvariantCulture), 2);
         Assert.Contains("hangar-box", Attr(page, 1, "rect", "class"));
+        Assert.Contains("hangar-fallback", Attr(page, 1, "path", "class"));
+        Assert.Equal("#f0954a", Attr(page, 1, "path", "fill"));
         Assert.Contains("Drake Clipper", page.NodeText("#hangar-canvas"));
+        Assert.Contains("generic marker", page.NodeText("#hangar-scale"));
 
         Assert.False(page.Truth("__dom.node('#hangar-unsized').hidden"));
         Assert.Contains("Mystery Hull", page.NodeText("#hangar-unsized"));
