@@ -1146,10 +1146,157 @@ items are icons, and a stack count like `7x` is the only text on a tile.
 So the Stash page cannot be confirmed from a frame of the inventory; it can
 only be confirmed one item at a time, by hovering, which is the tooltip
 reader that already exists. Written down so nobody photographs the inventory
-again expecting a list.
+again expecting a list - though a list of names is not the only thing a frame
+of the inventory can give, which is the section below.
 
 The Wallet app's start screen was photographed and holds no figure; the
 screen behind **BEGIN** was not.
+
+### Reading the inventory by picture, measured
+
+The tiles carry no names, so the question is whether they can be recognised as
+pictures instead. Measured on `ScreenShot-2026-09-12_13-51-13-B21.jpg`, a
+3440x1440 frame with a location's stash open beside an empty personal
+inventory - four drinks on the local side, one of them stacked `3x`.
+
+**The panels are not flat against the screen.** Both are drawn on a tilted
+plane, angled towards the pilot, and the projection is plainly visible in the
+numbers rather than a matter of impression. The filter-glyph row - the same ten
+icons, drawn once on each panel - steps 46.0 px between glyphs at the left of
+the personal panel and 41.5 px at its right, while the local panel steps 42.5
+px at its left and 44.0 px at its right. Each panel recedes towards its far
+edge, and they recede in opposite directions. The local tile row's bottom edge
+rises 9 px across the four tiles, over 427 px of screen: about 1.2 degrees.
+
+So a tile is a quad, not a rectangle, and its size and skew depend on where the
+pilot was standing. Nothing can assume a fixed grid.
+
+**Matching survives that, and the number is high.** Those two filter rows are
+the same source art drawn at two different places, scales and angles on one
+frame, which is exactly the distortion a stored picture would have to survive.
+Resampled to 24x24 grey and correlated, best match over a search of +/-5 px
+horizontally, +/-14 px vertically and 0.82x to 1.24x scale:
+
+| | Score |
+|---|---|
+| Same glyph, worst of the ten | **0.947** |
+| Same glyph, mean | 0.970 |
+| Different glyph, best | 0.860 |
+| Different glyph, mean | 0.646 |
+| Worst margin over the runner-up | 0.119 |
+
+Ten of ten matched correctly. Note what the numbers say about the rule: a bare
+threshold would have to sit between 0.947 and 0.860 to work, which is too fine
+to trust. **The decision has to be the best match plus its margin over the
+runner-up**, not a score on its own. These ten are also a hard case in one
+respect and an easy one in another - all white line art on an identical button,
+so nothing separates them but shape, but equally they are flat art rather than
+lit 3D renders. Colour was not used at all and is there to be spent.
+
+**The search window is not optional, and the reason is the tilt.** With the
+vertical search capped at +/-5 px, five of the ten matched and every failure
+pinned `dy` at the limit. Widened to +/-14 px, all ten matched, and the winning
+offsets run +12.5, +10, +7, +4, +1, -2.5, -5.5, -9, -11.5, -14 px across the
+row - a straight line of about -2.9 px per glyph, which is the two panels'
+opposite tilt measured a second way. A fixed offset per tile would fail at the
+ends of a row while looking fine in the middle.
+
+**Two things to get right that the first attempt got wrong.** Raw grey
+correlation without a search scored 0.75 on the *wrong* glyph and ranked the
+row almost exactly backwards: the panels are translucent, the hangar shows
+through them, and the lighting ramp across a patch dominates the dot product
+when the glyph itself is a quarter of the pixels. High-pass filtering alone did
+not rescue it - only the offset and scale search did, because the error was
+alignment rather than brightness. Both are worth knowing before anyone reaches
+for a plain template match.
+
+**What this does not answer.** Every measurement above comes from one frame.
+That the same art matches itself across a frame says the renderer is
+consistent within a single shot; it does not say a bottle photographed today
+matches the same bottle photographed tomorrow, from a different stance, in a
+different hangar, under different light. That is the question the portfolio
+lives or dies on, and it needs **two frames of the same stash**, minutes apart
+and ideally from different positions. Until then nothing is stored and nothing
+is taught.
+
+A fuller stash would also be worth having. The band the tiles sit in is found
+easily here - mean luminance 30 across the tile row against 8 for the empty
+panel below it - but four tiles on an otherwise empty panel is a soft test for
+a detector, and a grid fitted to it would be fitted to one example.
+
+### What is built, and what it does on the frame
+
+The matcher, the decision rule and the tile detector are in
+`src/Quantumwake.Data/TilePicture.cs`, `TileVerdict.cs` and `TileGrid.cs`, with
+the decoder beside the OCR reader in `src/Quantumwake.Ocr` for the reason that
+one is there: an image decoder needs the Windows target and the server must not
+have it. The arithmetic is tested in the parser suite on drawn fixtures and
+needs no OS.
+
+**Nothing is stored and nothing is taught yet**, which is the gate above and not
+an oversight. What is built is the instrument that answers it.
+
+**The detector, on the real frame.** It finds the band at y 364 to 483 and four
+tiles in it. Against the tile edges measured by hand:
+
+| | Found | Measured | |
+|---|---|---|---|
+| Tile 1 | 2358, 143 wide | 2363, 130 | |
+| Tile 2 | 2502, 135 wide | 2501, 132 | |
+| Tile 3 | 2645, 139 wide | 2644, 132 | |
+| Tile 4 | 2763, **84 wide** | 2790, 131 | cut short |
+
+Three land within 5 px. The fourth is a dark red can, and it is worth saying
+exactly why it fails: a tile is found by standing brighter than the panel, and
+this item is dark enough and tall enough to sink two dozen columns of its own
+tile to 8.5 against a tile background of 25. The tile is cut in half and the
+larger piece kept. **An item darker than the tile it sits on is the case this
+detector gets wrong**, and fixing it on this one frame would be fitting to a
+single example, which is the thing the section above warns against.
+
+**Three thresholds were tried and the two that failed are the instructive
+ones.** A fraction of the way up from a low percentile fails because the floor
+lands *inside* a tile: the four tiles fill 89% of their panel and the gaps are
+6 to 15 px of 603, so a floor read at the 20th percentile is tile, the floor
+meets the peak, and the row is discarded as featureless. Otsu's method - the
+textbook answer - fails for a better reason: it splits two clusters and a row of
+tiles has three, the panel, the tile, and the item rendered on it. It duly
+separated the items from the tiles they stand on, cutting at 35 against a tile
+background of 25, and then found no tiles at all because what was left of each
+was too narrow to be one. What works is an offset from the floor - four levels
+of 255 - because the floor is the one level always measured well, a region of an
+inventory being mostly panel.
+
+**A column is read as a percentile down its own pixels, not a mean.** The mean
+of a column is an average of the tile and whatever is drawn on it, so a bright
+render lifts it and a dark one sinks it. A percentile returns the tile's own
+background whatever it is carrying. This is what took tile 4 from a third of its
+width to two thirds.
+
+**The whole path runs on the real frame.** Matching the frame against itself,
+each of the four tiles is searched for across the full 506 px of the band and
+finds itself, at its own position, scoring 0.994 to 0.999. That is not the
+determinism answer - it is the same pixels twice - but it says the search does
+not wander, the scale search is stable, and the decoder, detector, matcher and
+decision rule hold together end to end.
+
+**Running it on a pair.** The measurement stands down unless it is given
+frames, because it needs somebody's own screenshots and a build going green must
+not:
+
+```powershell
+$env:QUANTUMWAKE_TILE_FRAMES = "C:\one.jpg;C:\two.jpg"
+dotnet test tests\Quantumwake.OcrTests -c Release `
+  --filter FullyQualifiedName~TilePairMeasurement -l "console;verbosity=detailed"
+```
+
+It prints the tiles found in the first frame, then looks for each of them along
+the whole band of the second and prints where and how well each fitted. It
+searches rather than comparing tile to tile on purpose: the detector is the
+weakest part of this and should not be trusted twice in one measurement, and a
+stash does not keep its order between two visits. `QUANTUMWAKE_TILE_REGION`
+takes `left,top,right,bottom` in fractions when the panels were somewhere else;
+the default is the right-hand panel, where a location's stash sits.
 
 ---
 
