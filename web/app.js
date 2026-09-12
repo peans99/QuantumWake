@@ -3803,17 +3803,32 @@ function renderShipsRef() {
 
     tr.append(el('td', 'num muted', ship.expeditedCost > 0 ? money(ship.expeditedCost) : '—'));
     tr.append(el('td', 'num muted', ship.standardClaimTime > 0 ? `~${Math.round(ship.standardClaimTime)}m` : '—'));
-    tr.append(el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold'));
-    tr.append(el('td', 'muted', ship.price?.terminal ?? '—'));
+    // Every shop and every rental desk sit on the hover, cheapest first: the
+    // cheapest is the number, but the nearest is usually the one wanted.
+    const shops = ship.shops || [];
+    const buy = el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold');
+    const where = el('td', 'muted', ship.price?.terminal ?? '—');
+    if (shops.length > 1) where.append(el('span', 'note-inline', ` +${shops.length - 1}`));
+    if (shops.length) buy.title = where.title = placeList('Sold at', shops);
+    tr.append(buy, where);
 
     // Rentals only exist when that feed is on; otherwise the column is dashes.
+    const rentals = ship.rentals || [];
     const rent = el('td', ship.rental ? 'num' : 'num muted',
       ship.rental ? money(ship.rental.price) : '—');
-    if (ship.rental) rent.title = `at ${ship.rental.terminal}`;
+    if (ship.rental) {
+      rent.title = placeList('Rents at', rentals.length ? rentals : [ship.rental]);
+      if (rentals.length > 1) rent.append(el('span', 'note-inline', ` +${rentals.length - 1}`));
+    }
     tr.append(rent);
 
     body.append(tr);
   }
+}
+
+/** A hover list of places and prices, one a line, cheapest first as given. */
+function placeList(heading, places) {
+  return `${heading} (${places.length}):\n${places.map((p) => `${p.terminal} — ${money(p.price)}`).join('\n')}`;
 }
 
 async function loadPartsRef() {

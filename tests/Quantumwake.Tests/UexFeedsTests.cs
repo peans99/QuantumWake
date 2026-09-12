@@ -235,6 +235,29 @@ public class UexFeedsTests : IDisposable
         Assert.Equal(29000m, feeds.CheapestRental("Cutlass Black")!.Price);
     }
 
+    /// <summary>
+    /// The catalogue row shows every desk on hover, cheapest first, and a
+    /// desk the feed lists twice is one desk.
+    /// </summary>
+    [Fact]
+    public async Task Every_rental_desk_is_listed_cheapest_first_one_row_a_desk()
+    {
+        var feeds = NewFeeds();
+
+        await feeds.EnableAsync(UexFeeds.Rentals, Serving(
+            "{\"data\":["
+            + "{\"vehicle_name\":\"Cutlass Black\",\"terminal_name\":\"New Deal\",\"price_rent\":34000},"
+            + "{\"vehicle_name\":\"Cutlass Black\",\"terminal_name\":\"New Deal\",\"price_rent\":36000},"
+            + "{\"vehicle_name\":\"Cutlass Black\",\"terminal_name\":\"Astro Armada\",\"price_rent\":29000},"
+            + "{\"vehicle_name\":\"Idris\",\"terminal_name\":\"Nowhere\",\"price_rent\":1}]}"));
+
+        var desks = feeds.RentalDesks("Drake Cutlass Black");
+
+        Assert.Equal(["Astro Armada", "New Deal"], desks.Select(d => d.Terminal).ToArray());
+        Assert.Equal(34000m, desks[1].Price);
+        Assert.Empty(feeds.RentalDesks("Carrack"));
+    }
+
     [Fact]
     public async Task A_vehicle_nobody_rents_is_null_rather_than_a_nearest_guess()
     {

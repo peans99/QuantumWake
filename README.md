@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1821 tests](https://img.shields.io/badge/tests-1821%20passing-4fd48a)
+![1827 tests](https://img.shields.io/badge/tests-1827%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -358,7 +358,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.8
+### 0.11.9
+
+- **The ship catalogue shows every shop and rental desk on hover.** The buy
+  price and "Cheapest at" cells list everywhere UEX has seen the ship sold,
+  cheapest first, and the Rent cell lists every desk that rents it - with a
+  "+N" beside the cell when there is more than one. The cheapest is still
+  the number; the nearest is usually the one you want. The full shop list
+  fills in at the next UEX refresh; until then a ship shows the one shop it
+  already knew.
 
 - **Ships show their default livery when the game has a picture of it.** The
   paint folder in the game files holds the stock finish of 26 hulls that no

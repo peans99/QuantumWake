@@ -205,8 +205,11 @@ public sealed class UexData
     /// <summary>Every commodity price row per terminal - the route advisor's raw material.</summary>
     private Dictionary<string, List<UexMarketRow>> _matrix = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Cheapest in-game purchase per vehicle name (compact), for fleet value.</summary>
-    private Dictionary<string, UexVehiclePrice> _vehicles = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Every in-game shop selling each vehicle name (compact), cheapest first:
+    /// the first is the fleet's value, the whole list is where to go and buy one.
+    /// </summary>
+    private Dictionary<string, List<UexVehiclePrice>> _vehicles = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Cheapest buy per item uuid, for kit and stash value.</summary>
     private Dictionary<string, decimal> _itemPrices = new(StringComparer.OrdinalIgnoreCase);
@@ -247,10 +250,17 @@ public sealed class UexData
     /// names do ("Drake Corsair"), so the manufacturer word is stripped when
     /// the full name misses.
     /// </summary>
-    public UexVehiclePrice? VehiclePrice(string? vehicleName)
+    public UexVehiclePrice? VehiclePrice(string? vehicleName) =>
+        VehicleShops(vehicleName) is { Count: > 0 } shops ? shops[0] : null;
+
+    /// <summary>
+    /// Every shop selling a vehicle, cheapest first, matched as
+    /// <see cref="VehiclePrice"/> matches. Empty when none does.
+    /// </summary>
+    public IReadOnlyList<UexVehiclePrice> VehicleShops(string? vehicleName)
     {
         if (string.IsNullOrWhiteSpace(vehicleName))
-            return null;
+            return [];
 
         if (_vehicles.TryGetValue(Compact(vehicleName), out var exact))
             return exact;
@@ -259,7 +269,7 @@ public sealed class UexData
         if (words.Length == 2 && _vehicles.TryGetValue(Compact(words[1]), out var stripped))
             return stripped;
 
-        return null;
+        return [];
     }
 
     /// <summary>Cheapest known buy price for an item, by the game's entity uuid.</summary>
@@ -832,7 +842,7 @@ public sealed class UexData
         _commodityIds = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         _terminals = [];
         _matrix = new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
-        _vehicles = new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
+        _vehicles = new Dictionary<string, List<UexVehiclePrice>>(StringComparer.OrdinalIgnoreCase);
         _itemPrices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         _itemMarket = new Dictionary<string, List<UexItemRow>>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
@@ -1030,9 +1040,9 @@ public sealed class UexData
         return (prices, ids, matrix);
     }
 
-    private static Dictionary<string, UexVehiclePrice> DigestVehicles(JsonElement root)
+    private static Dictionary<string, List<UexVehiclePrice>> DigestVehicles(JsonElement root)
     {
-        var vehicles = new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
+        var vehicles = new Dictionary<string, List<UexVehiclePrice>>(StringComparer.OrdinalIgnoreCase);
 
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
             return vehicles;
@@ -1047,9 +1057,37 @@ public sealed class UexData
                 continue;
 
             var key = Compact(name);
+            if (!vehicles.TryGetValue(key, out var shops)) vehicles[key] = shops = [];
 
-            if (!vehicles.TryGetValue(key, out var existing) || price < existing.Price)
-                vehicles[key] = new UexVehiclePrice(price, terminal);
+            // UEX reports a terminal more than once when several players have;
+            // one row a shop, at the lowest price seen there.
+            var seen = shops.FindIndex(s => s.Terminal.Equals(terminal, StringComparison.OrdinalIgnoreCase));
+            if (seen < 0) shops.Add(new UexVehiclePrice(price, terminal));
+            else if (price < shops[seen].Price) shops[seen] = new UexVehiclePrice(price, terminal);
+        }
+
+        foreach (var shops in vehicles.Values)
+            shops.Sort((a, b) => a.Price.CompareTo(b.Price));
+
+        return vehicles;
+    }
+
+    /// <summary>
+    /// The stored shops per vehicle. A file written before 0.11.9 holds one
+    /// shop a vehicle - the cheapest - and is read as a list of one, so the
+    /// price survives until the next refresh fills the rest in.
+    /// </summary>
+    private static Dictionary<string, List<UexVehiclePrice>> ReadVehicles(string json)
+    {
+        var vehicles = new Dictionary<string, List<UexVehiclePrice>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? [])
+        {
+            var shops = entry.Value.ValueKind == JsonValueKind.Array
+                ? entry.Value.Deserialize<List<UexVehiclePrice>>()
+                : entry.Value.Deserialize<UexVehiclePrice>() is { } one ? [one] : null;
+
+            if (shops is { Count: > 0 }) vehicles[entry.Key] = shops;
         }
 
         return vehicles;
@@ -1130,9 +1168,7 @@ public sealed class UexData
                              : new Dictionary<string, List<UexMarketRow>>(StringComparer.OrdinalIgnoreCase);
 
             if (File.Exists(VehiclesPath))
-                _vehicles = JsonSerializer.Deserialize<Dictionary<string, UexVehiclePrice>>(File.ReadAllText(VehiclesPath))
-                    is { } v ? new Dictionary<string, UexVehiclePrice>(v, StringComparer.OrdinalIgnoreCase)
-                             : new Dictionary<string, UexVehiclePrice>(StringComparer.OrdinalIgnoreCase);
+                _vehicles = ReadVehicles(File.ReadAllText(VehiclesPath));
 
             if (File.Exists(ItemPricesPath))
                 _itemPrices = JsonSerializer.Deserialize<Dictionary<string, decimal>>(File.ReadAllText(ItemPricesPath))

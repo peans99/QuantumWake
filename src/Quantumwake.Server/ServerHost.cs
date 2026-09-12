@@ -1278,6 +1278,11 @@ public static class ServerHost
                 .Select(s => new
                 {
                     rental = feeds.CheapestRental(s.Name),
+                    // Every shop and every rental desk, cheapest first, for
+                    // the row to show on hover: the cheapest is not always
+                    // the nearest.
+                    shops = uex.VehicleShops(s.Name),
+                    rentals = feeds.RentalDesks(s.Name),
                     s.Name,
                     s.Career,
                     s.Role,
