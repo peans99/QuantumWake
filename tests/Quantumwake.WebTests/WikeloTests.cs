@@ -119,6 +119,21 @@ public class WikeloTests
         Assert.Contains("Listed on Jobs", page.Text("__dom.node('#wikelo-list').byClass('point-said')[0].textContent"));
     }
 
+    [Fact]
+    public void One_trade_can_be_kept_as_the_current_goal_across_groups()
+    {
+        var page = Loaded();
+        page.Do("wikeloGoalId = null; __dom.node('#wikelo-list').byClass('wikelo-pin')[0].fire('click');");
+
+        Assert.Contains("Current goal", page.NodeText("#wikelo-goal"));
+        Assert.Contains("Fortune ship for you", page.NodeText("#wikelo-goal"));
+        Assert.Equal("TheCollector_Vehicle_Small_Fortune", page.Text("wikeloGoalId"));
+
+        page.Do("wikeloGroup = 'favours'; renderWikelo();");
+        Assert.Contains("Fortune ship for you", page.NodeText("#wikelo-goal"));
+        Assert.Contains("Want Polaris?", page.NodeText("#wikelo-list"));
+    }
+
     /// <summary>An install whose game data is not read is told so, never shown an empty emporium.</summary>
     [Fact]
     public void Without_the_game_files_the_page_says_why_rather_than_listing_nothing()

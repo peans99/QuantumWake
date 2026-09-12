@@ -358,7 +358,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.9
+### 0.11.10
 
 - **The ship catalogue shows every shop and rental desk on hover.** The buy
   price and "Cheapest at" cells list everywhere UEX has seen the ship sold,
@@ -375,6 +375,20 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
   not picked a paint for wears that. For a hull without one - most of them,
   the Corsair included - there is no picture of the stock finish anywhere in
   the files; the first paint still stands in, and the card says why.
+
+- **Wikelo has a current goal.** Set one of his trades as your current goal to
+  keep it above the emporium while you browse other groups. The pin stays in
+  this browser, like the roster tick and paint choices.
+
+- **Fleet is easier to work from.** Favourite ships, filter to favourites,
+  ships, ground vehicles, or flights from the last seven days, and see those
+  states on each card. Click a ship picture for its flights, time aboard, last
+  flown, and its size from the installed vehicle table. Choose whether unpicked
+  ships show the game's first paint or the maker-tinted silhouette.
+
+- **Compare two ships in the Hangar.** Select two Fleet cards, then open their
+  shared to-scale Hangar view. The comparison is temporary and does not change
+  your roster.
 
 - **The Hangar's big ships share a shelf again.** In the to-scale view, the
   gap between ships is now included when the deck is sized, so two large ships

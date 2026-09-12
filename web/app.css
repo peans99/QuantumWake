@@ -4193,6 +4193,17 @@ button.search-hit:hover { background: var(--panel); color: var(--cyan-hot); }
 .ship-paint-select { font-size: 10px; max-width: 72px; padding: 2px 4px; }
 .ship-card.excluded .ship-picture { opacity: .3; }
 body.overlay .ship-picture { display: none; }
+.ship-picture-clickable { cursor: pointer; }
+.ship-status { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0 0; }
+.ship-status-mark { font: 9px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.ship-status-mark.favourite { color: var(--amber); }
+.ship-status-mark.recent { color: var(--green); }
+.ship-status-mark.excluded { color: var(--dim); text-decoration: line-through; }
+.ship-favourite { position: absolute; top: 7px; right: 34px; padding: 1px 4px; color: var(--dim); font-size: 15px; }
+.ship-favourite.active { color: var(--amber); }
+.ship-preview { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--rule); font-size: 10.5px; line-height: 1.5; color: var(--muted); }
+.fleet-compare { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
+.fleet-compare button { font-size: 10px; padding: 4px 7px; }
 /* Wikelo cards: the requirement list is the card, ticked from the stash. */
 .wikelo-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .wikelo-desc { font-size: 11.5px; line-height: 1.5; font-style: italic; }
@@ -4203,6 +4214,9 @@ body.overlay .ship-picture { display: none; }
 .wikelo-wants .have .mark { color: var(--cyan-hot); }
 .wikelo-wants .lack { color: var(--muted); }
 .wikelo-wants .lack .mark { color: var(--dim); }
+.wikelo-goal { margin: 0 0 var(--gap); padding: 9px 12px; border: 1px solid var(--cyan-deep); background: rgba(53, 200, 240, .06); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.wikelo-goal[hidden] { display: none; }
+.wikelo-current { border-color: var(--cyan-deep); }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
 #points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }

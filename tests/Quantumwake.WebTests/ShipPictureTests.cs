@@ -17,7 +17,7 @@ public class ShipPictureTests
     private static Page Fresh()
     {
         var page = new Page();
-        page.Do("shipPaints = {}; hullPaints.clear();");
+        page.Do("shipPaints = {}; hullPaints.clear(); shipPictureStyle = 'paint';");
         return page;
     }
 
@@ -117,6 +117,18 @@ public class ShipPictureTests
         Assert.Contains("paint_clipper_default/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
         Assert.Contains("in its default livery", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
         Assert.DoesNotContain("not necessarily", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
+    }
+
+    [Fact]
+    public void The_maker_tint_preference_keeps_an_unpicked_ship_as_a_silhouette()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Corsair", """[{"item":"Paint_Corsair_Commando","name":"Corsair Commando Livery"}]""");
+        page.Do($"shipPictureStyle = 'tint'; __dom.node('#t').append(shipPicture({Corsair}, {Maker})); await Promise.resolve();");
+
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-outline').length")));
+        Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render').length")));
+        Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
     }
 
     /// <summary>The pilot can still ask for the silhouette, and that choice is kept apart from never having picked.</summary>

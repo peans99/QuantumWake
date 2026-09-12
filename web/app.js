@@ -5480,7 +5480,8 @@ function hangarOrdered() {
   // The Fleet roster tick rules here too: a rental or a ship since sold is
   // unticked there, and a hangar that still showed it would be a second
   // opinion about what the pilot owns.
-  const ships = (hangarShips?.ships || []).filter((s) => !excludedShips.has(s.name));
+  const ships = (hangarShips?.ships || []).filter((s) =>
+    !excludedShips.has(s.name) && (!hangarComparison.size || hangarComparison.has(s.name)));
   const sort = $('#hangar-sort')?.value || 'length';
 
   ships.sort((a, b) => {
@@ -5573,6 +5574,8 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
     scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes, silhouettes its own vehicle icons, tinted by maker (a hint at whose, not the finish)`));
+    if (hangarComparison.size)
+      scaleBox.append(el('span', 'muted', ` Comparing: ${[...hangarComparison].join(' · ')}.`));
   }
 
   if (missing.length && unsized) {
@@ -5720,6 +5723,18 @@ const WIKELO_GROUPS = { vehicles: 'Ships & vehicles', favours: 'Favors & the way
 
 let wikeloAll = null;
 let wikeloGroup = 'vehicles';
+let wikeloGoalId = null;
+try {
+  wikeloGoalId = localStorage.getItem('qw-wikelo-goal') || null;
+} catch { /* private browsing keeps the pin only for this visit */ }
+
+function rememberWikeloGoal(id) {
+  wikeloGoalId = id || null;
+  try {
+    if (wikeloGoalId) localStorage.setItem('qw-wikelo-goal', wikeloGoalId);
+    else localStorage.removeItem('qw-wikelo-goal');
+  } catch { /* as above */ }
+}
 
 async function loadWikelo() {
   const list = $('#wikelo-list');
@@ -5758,6 +5773,28 @@ function renderWikeloGroups() {
   }
 }
 
+/** The one trade the pilot chose to keep in view, even after changing groups. */
+function renderWikeloGoal(trades) {
+  const goal = $('#wikelo-goal');
+  if (!goal) return;
+
+  goal.textContent = '';
+  const trade = trades.find((t) => t.id === wikeloGoalId);
+  if (!trade) {
+    if (wikeloGoalId) rememberWikeloGoal(null);
+    goal.hidden = true;
+    return;
+  }
+
+  goal.hidden = false;
+  goal.append(el('span', 'strong', 'Current goal'));
+  goal.append(el('span', null, trade.title));
+  const clear = el('button', 'ghost tiny wikelo-goal-clear', 'Clear');
+  clear.type = 'button';
+  clear.addEventListener('click', () => { rememberWikeloGoal(null); renderWikelo(); });
+  goal.append(clear);
+}
+
 function renderWikelo() {
   const list = $('#wikelo-list');
   if (!list) return;
@@ -5768,6 +5805,7 @@ function renderWikelo() {
   const count = $('#wikelo-count');
 
   if (!wikeloAll?.available) {
+    renderWikeloGoal([]);
     if (count) count.textContent = '';
     list.append(el('p', 'muted',
       'The emporium is read from the game files, and this install has not been read yet — '
@@ -5776,6 +5814,7 @@ function renderWikelo() {
   }
 
   const trades = wikeloTrades();
+  renderWikeloGoal(trades);
   const retired = (wikeloAll.trades || []).length - trades.length;
   if (count) {
     count.textContent = `${trades.length} trades`
@@ -5811,6 +5850,8 @@ function wikeloCard(trade, into = null) {
   const card = into || el('article', 'point-card wikelo-card');
   card.textContent = '';
   card.dataset.id = trade.id;
+  if (trade.id === wikeloGoalId) card.classList.add('wikelo-current');
+  else card.classList.remove('wikelo-current');
 
   const head = el('div', 'wikelo-head');
   head.append(el('div', 'point-name-read', trade.title));
@@ -5846,6 +5887,15 @@ function wikeloCard(trade, into = null) {
 
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
+
+  const pin = el('button', 'ghost wikelo-pin', trade.id === wikeloGoalId ? 'Current goal' : 'Set current goal');
+  pin.type = 'button';
+  pin.title = trade.id === wikeloGoalId ? 'Clear this as the current goal' : 'Keep this trade above the emporium while you work on it';
+  pin.addEventListener('click', () => {
+    rememberWikeloGoal(trade.id === wikeloGoalId ? null : trade.id);
+    renderWikelo();
+  });
+  actions.append(pin);
 
   if (trade.trackedJobId) {
     const open = el('button', 'ghost wikelo-open', 'Tracking — open the list');
@@ -8977,6 +9027,22 @@ try {
   excludedShips = new Set(JSON.parse(localStorage.getItem('qw-assets-excluded') || '[]'));
 } catch { /* private mode; exclusions just will not stick */ }
 
+/** A personal short-list, independent of the roster tick and kept in this browser. */
+let favouriteShips = new Set();
+try {
+  favouriteShips = new Set(JSON.parse(localStorage.getItem('qw-favourite-ships') || '[]'));
+} catch { /* private mode; favourites just will not stick */ }
+
+// A comparison is deliberately temporary: it is a way to reach a useful
+// Hangar view, not another roster the pilot has to maintain.
+let hangarComparison = new Set();
+const RECENTLY_FLOWN_MS = 7 * 24 * 60 * 60 * 1000;
+let hangarPreviewShips = null;
+
+function isRecentlyFlown(ship) {
+  return Date.now() - new Date(ship.lastFlown).getTime() <= RECENTLY_FLOWN_MS;
+}
+
 async function loadAssets() {
   assetsData = await getJson('/api/assets');
   renderAssets();
@@ -10551,6 +10617,13 @@ try {
   shipPaints = JSON.parse(localStorage.getItem('qw-ship-paints') || '{}') || {};
 } catch { /* private browsing; a silhouette is the honest default anyway */ }
 
+// The first pictured paint is useful as a stand-in, but some pilots prefer the
+// neutral maker tint until they have explicitly chosen their own paint.
+let shipPictureStyle = 'paint';
+try {
+  shipPictureStyle = localStorage.getItem('qw-ship-picture-style') === 'tint' ? 'tint' : 'paint';
+} catch { /* private browsing keeps the default */ }
+
 /** The pilot's word for "no paint, the silhouette" - distinct from never having picked. */
 const SILHOUETTE = 'silhouette';
 
@@ -10576,7 +10649,7 @@ function paintsForHull(vehicleClass) {
  * picks, the first paint the game lists stands in - and says it is standing
  * in, because which paint a ship wears is not in the logs.
  */
-function shipPicture(ship, maker) {
+function shipPicture(ship, maker, options = {}) {
   const box = el('div', 'ship-picture');
   let chosen = shipPaints[ship.className];
   // Unpicked: the first paint the game lists - the default livery when the
@@ -10586,7 +10659,8 @@ function shipPicture(ship, maker) {
 
   const draw = () => {
     box.textContent = '';
-    const wanted = chosen === undefined ? standIn?.item : chosen === SILHOUETTE ? null : chosen;
+    const wanted = chosen === undefined && shipPictureStyle === 'paint'
+      ? standIn?.item : chosen === SILHOUETTE ? null : chosen;
     const paint = failed ? null : wanted;
 
     if (paint) {
@@ -10600,6 +10674,11 @@ function shipPicture(ship, maker) {
         : standIn?.stock
           ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
           : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
+      if (options.onPreview) {
+        img.classList.add('ship-picture-clickable');
+        img.title += '; click for this ship\'s flight summary';
+        img.addEventListener('click', options.onPreview);
+      }
       // Shown as the silhouette for now, the pick kept: a render that fails once -
       // the server still converting, a request dropped - is not a retired paint.
       img.addEventListener('error', () => { failed = true; draw(); });
@@ -10608,8 +10687,8 @@ function shipPicture(ship, maker) {
       const outline = el('div', 'ship-outline');
       outline.style.setProperty('--tint', makerTint(maker.code));
       outline.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(ship.className)}")`);
-      outline.title = `${ship.name} — the game's silhouette, tinted ${maker.name}'s colour; see the fleet to scale on Hangar`;
-      outline.addEventListener('click', () => showView('hangar'));
+      outline.title = `${ship.name} — the game's silhouette, tinted ${maker.name}'s colour; ${options.onPreview ? 'click for this ship\'s flight summary' : 'see the fleet to scale on Hangar'}`;
+      outline.addEventListener('click', options.onPreview || (() => showView('hangar')));
 
       // The mask cannot say whether the file exists; an Image can.
       if (typeof Image === 'function') {
@@ -10632,7 +10711,7 @@ function shipPicture(ship, maker) {
   // Nothing picked yet: the silhouette shows while the first paint is looked
   // up, and the render replaces it once the list is in. A pick made in the
   // meantime wins - the lookup redraws only if the box is still unpicked.
-  if (chosen === undefined && ship.className) {
+  if (chosen === undefined && shipPictureStyle === 'paint' && ship.className) {
     paintsForHull(ship.className).then((paints) => {
       standIn = paints[0] || null;
       if (standIn && chosen === undefined) draw();
@@ -10762,7 +10841,61 @@ function shipPriceOf(name) {
   return row?.price ? Number(row.price.price) : 0;
 }
 
-/** Applies the search box and the last-flown period filter. */
+/** The compare button lives in the Fleet controls, while each card owns its selection. */
+function renderFleetComparison() {
+  const box = $('#fleet-compare');
+  if (!box) return;
+
+  box.textContent = '';
+  if (hangarComparison.size < 2) {
+    box.append(el('span', 'muted', `Compare ${hangarComparison.size}/2`));
+    return;
+  }
+
+  const open = el('button', 'ghost fleet-compare-open', 'Compare in Hangar');
+  open.type = 'button';
+  open.title = `Draw ${[...hangarComparison].join(' and ')} to one scale`;
+  open.addEventListener('click', () => {
+    const mode = $('#hangar-mode');
+    if (mode) mode.value = 'scale';
+    showView('hangar');
+  });
+  box.append(open);
+}
+
+/** Loads dimensions only for a preview: Fleet itself needs no game-data request to list flights. */
+async function hangarPreviewFor(ship) {
+  if (!hangarPreviewShips) {
+    hangarPreviewShips = getJson('/api/fleet/hangar')
+      .then((data) => data?.ships || [])
+      .catch(() => []);
+  }
+  return (await hangarPreviewShips).find((s) => s.className === ship.className || s.name === ship.name) || null;
+}
+
+function toggleShipPreview(ship, card) {
+  const body = card.querySelector('.ship-body');
+  const existing = body?.querySelector('.ship-preview');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  if (!body) return;
+
+  const preview = el('div', 'ship-preview', `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
+  body.append(preview);
+
+  hangarPreviewFor(ship).then((sized) => {
+    // The card may have been redrawn by a filter while the game-data request
+    // was in flight; never put a late answer into a discarded preview.
+    if (preview.parentElement !== body) return;
+    preview.textContent += sized?.length > 0
+      ? ` ${sized.length} × ${sized.beam} × ${sized.height} m from the installed vehicle table.`
+      : ' This install has no measured size for it.';
+  });
+}
+
+/** Applies the roster controls without changing what the flight log says. */
 function renderFleetShips() {
   const grid = $('#fleet-ships');
   const vehicleGrid = $('#fleet-vehicles');
@@ -10774,15 +10907,25 @@ function renderFleetShips() {
   const term = ($('#fleet-search').value || '').trim().toLowerCase();
   const days = Number($('#fleet-period').value) || 0;
   const cutoff = days ? Date.now() - days * 86400000 : null;
+  const filter = $('#fleet-filter')?.value || 'all';
+  const picture = $('#fleet-picture');
+  if (picture) picture.value = shipPictureStyle;
 
   // Unticked ships stay on the page, struck through - this is where the tick
   // lives, so hiding them would make the choice irreversible. They sort to
   // the back and count for nothing.
   const ships = libraryStats.ships.filter((s) => {
+    const grounded = s.reference && !s.reference.isSpaceship;
     if (term && !s.name.toLowerCase().includes(term)) return false;
     if (cutoff && new Date(s.lastFlown).getTime() < cutoff) return false;
+    if (filter === 'favourites' && !favouriteShips.has(s.name)) return false;
+    if (filter === 'recent' && !isRecentlyFlown(s)) return false;
+    if (filter === 'ships' && grounded) return false;
+    if (filter === 'ground' && !grounded) return false;
     return true;
-  }).sort((a, b) => Number(excludedShips.has(a.name)) - Number(excludedShips.has(b.name)));
+  }).sort((a, b) =>
+    Number(excludedShips.has(a.name)) - Number(excludedShips.has(b.name))
+    || Number(favouriteShips.has(b.name)) - Number(favouriteShips.has(a.name)));
 
   // Ships and ground vehicles part ways on the community reference; anything
   // unmatched is assumed to fly.
@@ -10794,6 +10937,8 @@ function renderFleetShips() {
       libraryStats.ships.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
     return;
   }
+
+  renderFleetComparison();
 
   for (const ship of ships) {
     const grounded = ship.reference && !ship.reference.isSpaceship;
@@ -10812,7 +10957,12 @@ function renderFleetShips() {
 
     box.addEventListener('change', () => {
       if (box.checked) excludedShips.delete(ship.name);
-      else excludedShips.add(ship.name);
+      else {
+        excludedShips.add(ship.name);
+        // A comparison promises two ships on the Hangar deck. Leaving an
+        // excluded ship selected would quietly turn it into a one-ship view.
+        hangarComparison.delete(ship.name);
+      }
       try {
         localStorage.setItem('qw-assets-excluded', JSON.stringify([...excludedShips]));
       } catch { /* fine */ }
@@ -10822,6 +10972,17 @@ function renderFleetShips() {
 
     tick.append(box);
     card.append(tick);
+
+    const favourite = el('button', favouriteShips.has(ship.name) ? 'ghost ship-favourite active' : 'ghost ship-favourite', favouriteShips.has(ship.name) ? '★' : '☆');
+    favourite.type = 'button';
+    favourite.title = favouriteShips.has(ship.name) ? 'Favourite — click to remove' : 'Favourite this ship';
+    favourite.addEventListener('click', () => {
+      if (favouriteShips.has(ship.name)) favouriteShips.delete(ship.name);
+      else favouriteShips.add(ship.name);
+      try { localStorage.setItem('qw-favourite-ships', JSON.stringify([...favouriteShips])); } catch { /* fine */ }
+      renderFleetShips();
+    });
+    card.append(favourite);
 
     const badge = el('div', 'ship-logo');
     if (maker.code && MANUFACTURER_LOGOS.has(maker.code)) {
@@ -10838,7 +10999,7 @@ function renderFleetShips() {
     // The ship's picture: the paint the pilot chose, painted, or the game's
     // silhouette tinted by maker. A missing silhouette takes the frame out
     // rather than leaving it broken - not every hull has one in the files.
-    if (ship.className) card.append(shipPicture(ship, maker));
+    if (ship.className) card.append(shipPicture(ship, maker, { onPreview: () => toggleShipPreview(ship, card) }));
 
     const body = el('div', 'ship-body');
     body.append(el('div', 'ship-name', maker.model));
@@ -10853,6 +11014,12 @@ function renderFleetShips() {
 
     body.append(stat);
     body.append(el('div', 'ship-seen', `last flown ${relative(ship.lastFlown)}`));
+
+    const statuses = el('div', 'ship-status');
+    if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', '★ favourite'));
+    if (isRecentlyFlown(ship)) statuses.append(el('span', 'ship-status-mark recent', '● flown this week'));
+    if (off) statuses.append(el('span', 'ship-status-mark excluded', '⊘ out of Hangar'));
+    if (statuses.children.length) body.append(statuses);
 
     // Community reference, when enabled and matched: what the ship is for and
     // what losing one costs.
@@ -10901,6 +11068,22 @@ function renderFleetShips() {
       upgrade.addEventListener('click', () => showUpgrades(ship.name, ship.className, card));
       body.append(upgrade);
     }
+
+    const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
+    compare.type = 'button';
+    compare.disabled = off;
+    compare.title = off
+      ? 'Tick this ship as owned before comparing it in Hangar'
+      : 'Select this ship and one other, then compare them in Hangar';
+    compare.addEventListener('click', () => {
+      if (hangarComparison.has(ship.name)) hangarComparison.delete(ship.name);
+      else {
+        if (hangarComparison.size === 2) hangarComparison.clear();
+        hangarComparison.add(ship.name);
+      }
+      renderFleetShips();
+    });
+    body.append(compare);
 
     card.append(body);
     (grounded ? vehicleGrid : grid).append(card);
@@ -16414,6 +16597,13 @@ async function refreshForPeriod(selectId, render) {
 
 onInput('#fleet-search', renderFleetShips);
 onInput('#fleet-period', renderFleetShips);
+onInput('#fleet-filter', renderFleetShips);
+$('#fleet-picture')?.addEventListener('change', () => {
+  shipPictureStyle = $('#fleet-picture').value === 'tint' ? 'tint' : 'paint';
+  try { localStorage.setItem('qw-ship-picture-style', shipPictureStyle); } catch { /* fine */ }
+  renderFleetShips();
+  renderHangar();
+});
 
 onInput('#spending-period', () => refreshForPeriod('#spending-period', renderSpending));
 onInput('#contracts-period', () => refreshForPeriod('#contracts-period', renderContracts));

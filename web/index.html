@@ -862,6 +862,18 @@
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
         <select id="fleet-period" class="select period" data-all="Any time" title="Filter by when last flown"></select>
+        <select id="fleet-filter" class="select" title="Filter the roster">
+          <option value="all">All roster</option>
+          <option value="favourites">Favourites</option>
+          <option value="recent">Flown this week</option>
+          <option value="ships">Ships only</option>
+          <option value="ground">Ground vehicles</option>
+        </select>
+        <select id="fleet-picture" class="select" title="How unpicked ship pictures appear">
+          <option value="paint">Show game paint</option>
+          <option value="tint">Use maker tint</option>
+        </select>
+        <span id="fleet-compare" class="fleet-compare"></span>
       </div>
     </div>
     <p class="muted caption">
@@ -1197,6 +1209,7 @@
       stash sightings — presence, never a count, because removals are not logged.
     </p>
     <div class="export-row" id="wikelo-groups"></div>
+    <div id="wikelo-goal" class="wikelo-goal" hidden></div>
     <div id="wikelo-list" class="points-list"></div>
   </section>
 
