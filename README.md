@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1817 tests](https://img.shields.io/badge/tests-1817%20passing-4fd48a)
+![1821 tests](https://img.shields.io/badge/tests-1821%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -358,7 +358,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.7
+### 0.11.8
+
+- **Ships show their default livery when the game has a picture of it.** The
+  paint folder in the game files holds the stock finish of 26 hulls that no
+  paint item points at - the Clipper, Hermes and Paladin among them. Those
+  now come first in the Paint list as "Default livery", and a ship you have
+  not picked a paint for wears that. For a hull without one - most of them,
+  the Corsair included - there is no picture of the stock finish anywhere in
+  the files; the first paint still stands in, and the card says why.
 
 - **The Hangar's big ships share a shelf again.** In the to-scale view, the
   gap between ships is now included when the deck is sized, so two large ships

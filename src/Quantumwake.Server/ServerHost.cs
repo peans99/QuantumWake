@@ -896,7 +896,7 @@ public static class ServerHost
         // The app never picks: which paint a ship wears is not in the logs.
         app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
             Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
-                .Select(p => new { p.Item, p.Name })));
+                .Select(p => new { p.Item, p.Name, p.Stock })));
 
         // The game's own picture of a hull in one paint: the paint item's logo.
         app.MapGet("/api/fleet/paints/{paintItem}/render", (string paintItem, LogLibrary lib) =>

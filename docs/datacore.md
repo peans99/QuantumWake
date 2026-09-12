@@ -504,8 +504,8 @@ Two more things the blob holds, both read since 0.11.2 by
 
 ### Paints, and the one painted picture of a ship the files hold (2026-09-11)
 
-There is no stock-finish render of any ship in the archive - the game draws
-ships live - but every paint item (`EntityClassDefinition.Paint_<model>_<scheme>`,
+The game draws ships live, so the archive has no stock-finish render of most
+hulls - but every paint item (`EntityClassDefinition.Paint_<model>_<scheme>`,
 `Type = Paints`) points at a manufacturer record whose `Logo` is a 256-square
 three-quarter render of that hull in that paint, under
 `Data\UI\SharedAssets\PaintColorLogos\`: 926 of them with a picture in the
@@ -518,3 +518,17 @@ in this install's fleet found its paints that way (Corsair 10, Cutter 26,
 Pisces 12, UTV 5). Which paint a pilot flies is not in the logs, so the Fleet
 page offers the list and the pilot picks; the pick lives in the browser like
 the roster tick.
+
+The same folder holds 26 renders that no paint item points at, and they are
+the default liveries of the hulls that have one: `paint_clipper_default.dds`,
+`Paint_RSI_Hermes_Default.dds`, `Paint_Paladin_Default_Icon.dds`,
+`Paint_Hornet_F7CR_MK2_Base_Grey_Red_Icon.dds`. Nothing in `Game2.dcb`
+references them - the Hermes has a `TintPaletteTree.rsi_hermes_default`, but
+that is colours, not a picture - so `GamePaints.Stock` lifts them from the
+archive listing by name (`_default` or `_base` under `PaintColorLogos`, not
+already some paint's render, and not a split mip chunk such as
+`Paint_Meteor_Default_Icon.dds.4`). They sort first for their hull, and a
+card with no pick shows that one as the ship's default. In this fleet three
+hulls have one - Clipper, Hermes, Paladin; the other sixteen have no picture
+of their stock finish anywhere in the files, and for those the first paint
+stands in and the card says so.

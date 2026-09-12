@@ -94,10 +94,29 @@ public class ShipPictureTests
 
         Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render').length")));
         Assert.Contains("Paint_Corsair_BIS2953_Purple_Blue_Cyan/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
-        Assert.Contains("not necessarily the one yours wears", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
+        Assert.Contains("the files hold no picture of its default livery", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
         Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-outline').length")));
         // Standing in is not picking: nothing is remembered for the hull.
         Assert.True(page.Truth("shipPaints.DRAK_Corsair === undefined"));
+    }
+
+    /// <summary>
+    /// When the files hold the hull's default livery, the server lists it
+    /// first, and the card says it is the default rather than a stand-in.
+    /// </summary>
+    [Fact]
+    public void A_default_livery_the_files_hold_is_shown_as_the_default()
+    {
+        var page = Fresh();
+        page.Serve("/api/fleet/paints/DRAK_Clipper", """
+            [{"item":"paint_clipper_default","name":"Default livery","stock":true},
+             {"item":"Paint_Clipper_Black_Cream_Red","name":"Clipper Auspicious Livery","stock":false}]
+            """);
+        page.Do("__dom.node('#t').append(shipPicture({name:'Drake Clipper', className:'DRAK_Clipper'}, {code:'DRAK', name:'Drake Interplanetary', model:'Clipper'})); await paintsForHull('DRAK_Clipper'); await Promise.resolve();");
+
+        Assert.Contains("paint_clipper_default/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
+        Assert.Contains("in its default livery", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
+        Assert.DoesNotContain("not necessarily", page.Text("__dom.node('#t').byClass('ship-render')[0].title"));
     }
 
     /// <summary>The pilot can still ask for the silhouette, and that choice is kept apart from never having picked.</summary>

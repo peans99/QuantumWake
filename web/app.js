@@ -10564,13 +10564,14 @@ function paintsForHull(vehicleClass) {
 function shipPicture(ship, maker) {
   const box = el('div', 'ship-picture');
   let chosen = shipPaints[ship.className];
-  // Unpicked: the first paint the game pictures, once known; null means "none".
+  // Unpicked: the first paint the game lists - the default livery when the
+  // files hold one - once known; null means "none".
   let standIn = null;
   let failed = false;
 
   const draw = () => {
     box.textContent = '';
-    const wanted = chosen === undefined ? standIn : chosen === SILHOUETTE ? null : chosen;
+    const wanted = chosen === undefined ? standIn?.item : chosen === SILHOUETTE ? null : chosen;
     const paint = failed ? null : wanted;
 
     if (paint) {
@@ -10581,7 +10582,9 @@ function shipPicture(ship, maker) {
       img.loading = 'lazy';
       img.title = chosen
         ? `${ship.name} in the paint you chose — the game's own picture`
-        : `${ship.name} in the first paint the game pictures for it — not necessarily the one yours wears; Paint… to choose`;
+        : standIn?.stock
+          ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
+          : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
       // Shown as the silhouette for now, the pick kept: a render that fails once -
       // the server still converting, a request dropped - is not a retired paint.
       img.addEventListener('error', () => { failed = true; draw(); });
@@ -10616,7 +10619,7 @@ function shipPicture(ship, maker) {
   // meantime wins - the lookup redraws only if the box is still unpicked.
   if (chosen === undefined && ship.className) {
     paintsForHull(ship.className).then((paints) => {
-      standIn = paints[0]?.item || null;
+      standIn = paints[0] || null;
       if (standIn && chosen === undefined) draw();
     });
   }

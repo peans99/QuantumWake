@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 29;
+    private const int CacheVersion = 30;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -240,6 +240,9 @@ public sealed partial class GameCommodities
             wikelo = GameWikelo.Read(core, text, facts);
             vehicles = GameVehicles.Read(core, text);
             paints = GamePaints.Read(core, text);
+            // The default liveries are files no record points at: only the
+            // archive's own listing knows they exist.
+            paints.AddRange(GamePaints.Stock(p4k.List(GamePaints.RenderFolder).Select(e => e.Path), paints));
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
