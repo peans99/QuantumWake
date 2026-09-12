@@ -10664,6 +10664,12 @@ function shipPicture(ship, maker, options = {}) {
     const paint = failed ? null : wanted;
 
     if (paint) {
+      // Some paint logos decode successfully but are transparent on the dark
+      // deck. Keep the known vehicle silhouette behind the render so a paint
+      // can add detail without ever making a Hangar card look empty.
+      const render = el('div', 'ship-render-wrap');
+      render.style.setProperty('--tint', makerTint(maker.code));
+      render.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(ship.className)}")`);
       const img = document.createElement('img');
       img.className = 'ship-render';
       img.src = `/api/fleet/paints/${encodeURIComponent(paint)}/render`;
@@ -10682,7 +10688,8 @@ function shipPicture(ship, maker, options = {}) {
       // Shown as the silhouette for now, the pick kept: a render that fails once -
       // the server still converting, a request dropped - is not a retired paint.
       img.addEventListener('error', () => { failed = true; draw(); });
-      box.append(img);
+      render.append(img);
+      box.append(render);
     } else {
       const outline = el('div', 'ship-outline');
       outline.style.setProperty('--tint', makerTint(maker.code));

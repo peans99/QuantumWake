@@ -143,6 +143,8 @@ public class HangarTests
         // The Corsair wears its chosen paint; the Pisces is the tinted silhouette.
         Assert.Contains("/api/fleet/paints/Paint_Corsair_Olive_Olive_Yellow/render",
             page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render')[0].src"));
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render-wrap').length")));
+        Assert.Equal("#f0954a", page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[0].byClass('ship-render-wrap')[0].style['--tint']"));
         Assert.Equal("#8fd18a", page.Text("__dom.node('#hangar-canvas').byClass('hangar-card')[2].byClass('ship-outline')[0].style['--tint']"));
 
         var text = page.NodeText("#hangar-canvas");

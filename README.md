@@ -358,7 +358,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.10
+### 0.11.11
+
+- **Hangar paint pictures always have a visible ship behind them.** A
+  maker-tinted silhouette now sits behind each game's paint render, so a
+  transparent or incomplete render cannot leave its Hangar card blank.
 
 - **The ship catalogue shows every shop and rental desk on hover.** The buy
   price and "Cheapest at" cells list everywhere UEX has seen the ship sold,

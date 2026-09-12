@@ -43,6 +43,8 @@ public class ShipPictureTests
         Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render').length")));
         Assert.Contains("/api/fleet/paints/Paint_Corsair_Black_Black_Gold_Camo/render", page.Text("__dom.node('#t').byClass('ship-render')[0].src"));
         Assert.Equal(0, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-outline').length")));
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#t').byClass('ship-render-wrap').length")));
+        Assert.Equal("#f0954a", page.Text("__dom.node('#t').byClass('ship-render-wrap')[0].style['--tint']"));
     }
 
     /// <summary>
