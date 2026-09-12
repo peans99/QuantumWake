@@ -358,7 +358,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.13
+### 0.11.14
+
+- **The Hangar's scale view no longer lets a missing game icon dominate the
+  deck.** Its real, dashed bounding box still shows the ship's size, while a
+  compact maker-coloured marker identifies the missing silhouette. Opening the
+  Hangar also measures the visible deck before drawing, so a narrow window no
+  longer starts with a needless horizontal scrollbar.
 
 - **Ships without a game silhouette no longer leave a blank Hangar footprint.**
   Their dashed size box now contains a maker-coloured generic marker. The box

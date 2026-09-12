@@ -80,6 +80,12 @@ public class HangarTests
         Assert.Contains("hangar-box", Attr(page, 1, "rect", "class"));
         Assert.Contains("hangar-fallback", Attr(page, 1, "path", "class"));
         Assert.Equal("#f0954a", Attr(page, 1, "path", "fill"));
+        // The dashed box, not a solid placeholder, carries the ship's scale.
+        // Its marker starts well inside the 26.5 m footprint rather than at
+        // the left edge as the old full-box arrow did.
+        var firstMarkerX = double.Parse(Attr(page, 1, "path", "d").Split(' ')[1], System.Globalization.CultureInfo.InvariantCulture);
+        var footprint = double.Parse(Attr(page, 1, "rect", "width"), System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(firstMarkerX, footprint * .25, footprint * .35);
         Assert.Contains("Drake Clipper", page.NodeText("#hangar-canvas"));
         Assert.Contains("generic marker", page.NodeText("#hangar-scale"));
 

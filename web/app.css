@@ -432,6 +432,20 @@ body.overlay .feed .d { display: none; }
 
 .status { display: flex; align-items: center; gap: 13px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 
+/* The grouped tabs still need to fit alongside the live search on a normal
+   narrow desktop window.  Letting the top bar determine the document width
+   gave the Hangar a horizontal scrollbar even when its scale drawing fitted. */
+@media (max-width: 1200px) {
+  .topbar { gap: 10px; padding-inline: 14px; }
+  .brand { gap: 7px; }
+  .brand .by { display: none; }
+  .brand .name { font-size: 11px; letter-spacing: .18em; }
+  .tabs { gap: 0; }
+  .tabs button { padding-inline: 8px; font-size: 10px; letter-spacing: .1em; }
+  .status { gap: 8px; font-size: 10px; }
+  .search-box .search { width: 140px; }
+}
+
 .dot {
   width: 8px; height: 8px;
   background: var(--dim);
