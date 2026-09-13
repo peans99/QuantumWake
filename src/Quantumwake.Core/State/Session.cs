@@ -247,11 +247,25 @@ public sealed record StashEntry(
     string ItemClass);
 
 /// <summary>An entry on the session timeline.</summary>
+/// <param name="Subject">
+/// The engine class the entry is about, when it is about one thing that has a
+/// name somewhere else - an item bought at a kiosk, say. Null otherwise.
+/// <para>
+/// It is here because <see cref="Text"/> is written while the log is parsed,
+/// and nothing at that moment can name an item: the catalogues that can are
+/// read out of the install by the app, not by the parser. So the class is kept
+/// beside the sentence and the name is put in when the feed is served. Before
+/// this, the feed read "Bought cds_legacy_armor_heavy_helmet_01_01_12" and
+/// went on doing so for ever, because a summary already written is never
+/// rewritten.
+/// </para>
+/// </param>
 public sealed record TimelineEntry(
     DateTimeOffset At,
     string Kind,
     string Text,
-    string? Detail);
+    string? Detail,
+    string? Subject = null);
 
 /// <summary>Everything known about one play session (one log file).</summary>
 public sealed record SessionSummary

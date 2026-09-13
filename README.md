@@ -358,7 +358,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.19
+### 0.11.20
+
+- **The activity feed names what you bought.** On the Now page and the in-game
+  HUD it read `Bought cds_legacy_armor_heavy_helmet_01_01_12`, because the
+  sentence is written while the log is read and nothing at that moment can name
+  an item. The line now keeps the engine class beside it and the name is put in
+  when the feed is shown, so it says what you actually bought. Sessions already
+  summarised are read again once on this update to pick it up.
 
 - **Things you bought, picked up, wear or have stored are named properly.**
   Some items came out as their raw engine class - `behr_gren_frag_01` rather

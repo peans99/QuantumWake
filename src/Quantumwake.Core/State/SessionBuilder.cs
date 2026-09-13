@@ -845,11 +845,15 @@ public sealed class SessionBuilder
 
         _purchases.Add(record);
 
+        // The class travels with the sentence so the feed can put a name in it
+        // later. Nothing here can: the item catalogues live in the install and
+        // are read by the app, not by the parser.
         Timeline(
             response.Timestamp,
             response.IsSelling ? "sold" : "bought",
             $"{(response.IsSelling ? "Sold" : "Bought")} {request.ItemName}",
-            $"{record.Total:N0} aUEC · {record.Shop}");
+            $"{record.Total:N0} aUEC · {record.Shop}",
+            request.ItemName);
     }
 
     /// <summary><c>SCShop_OmegaPro_NewBabbage</c> becomes <c>Omega Pro, New Babbage</c>.</summary>
@@ -1154,8 +1158,9 @@ public sealed class SessionBuilder
         }
     }
 
-    private void Timeline(DateTimeOffset at, string kind, string text, string? detail) =>
-        _timeline.Add(new TimelineEntry(at, kind, text, detail));
+    private void Timeline(
+        DateTimeOffset at, string kind, string text, string? detail, string? subject = null) =>
+        _timeline.Add(new TimelineEntry(at, kind, text, detail, subject));
 
     /// <summary>
     /// Builds the summary. Reads state without changing it, so the live feed can

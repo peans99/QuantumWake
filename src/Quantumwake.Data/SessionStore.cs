@@ -146,7 +146,13 @@ public sealed class SessionStore : IDisposable
     // 7: ship comms channels are kept, so sessions summarised before them know
     //    nobody was ever aboard anything and the Crew page's ships would be
     //    empty for every install except a brand new one.
-    private const int PayloadVersion = 11;
+    // 12: a timeline entry now carries the engine class it is about, so the
+    //     activity feed can put the item's name into a sentence written while
+    //     the log was parsed. Sessions summarised before it have no class
+    //     beside the sentence and nothing later can supply one, so every
+    //     existing install would have gone on reading
+    //     "Bought cds_legacy_armor_heavy_helmet_01_01_12" for ever.
+    private const int PayloadVersion = 12;
 
 
     /// <summary>

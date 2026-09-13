@@ -430,7 +430,29 @@ public sealed class LiveSessionService : BackgroundService
     /// The session's own timeline and the screen's notes, newest first.
     /// </summary>
     private IReadOnlyList<TimelineEntry> Feed() =>
-        [.. _recent.Concat(_screenNotes).OrderByDescending(entry => entry.At).Take(40)];
+        [.. _recent.Concat(_screenNotes)
+            .OrderByDescending(entry => entry.At)
+            .Take(40)
+            .Select(Named)];
+
+    /// <summary>Puts an item's name into a sentence written before it was known.</summary>
+    /// <remarks>
+    /// Done when the feed is served rather than when it is stored, because the
+    /// name comes from catalogues in the install that the parser cannot see -
+    /// and because a pilot who installs a later patch, or the app that learns a
+    /// name it did not have, should get the better sentence without every old
+    /// session having to be read again.
+    /// </remarks>
+    private TimelineEntry Named(TimelineEntry entry)
+    {
+        if (entry.Subject is not { Length: > 0 } itemClass) return entry;
+
+        var name = _library.ItemName(itemClass);
+
+        return name == itemClass
+            ? entry
+            : entry with { Text = entry.Text.Replace(itemClass, name, StringComparison.Ordinal) };
+    }
 
     /// <summary>
     /// The newest reading, and a note when it is the first sight of one that
