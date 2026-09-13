@@ -49,8 +49,8 @@ public class ScreenFrameTests
 
     private static readonly string[] Ships = ["Drake Corsair", "Drake Cutlass Black", "RSI Constellation Andromeda"];
 
-    private static ScreenFrame Read(ScreenTextLine[] lines, string? handle = "nekron") =>
-        ScreenFrames.Read(lines, Catalogue, Ships, handle);
+    private static ScreenFrame Read(ScreenTextLine[] lines) =>
+        ScreenFrames.Read(lines, Catalogue, Ships);
 
     // ---- the loadout ----
 
@@ -266,7 +266,7 @@ public class ScreenFrameTests
     }
 
     [Fact]
-    public void The_wallet_reads_when_the_engine_returns_a_figure_above_the_handle()
+    public void The_wallet_reads_the_figure_off_the_left_end_of_the_app_bar()
     {
         ScreenTextLine[] lines =
         [
@@ -280,13 +280,48 @@ public class ScreenFrameTests
         Assert.Null(wallet.Trouble);
     }
 
+    /// <summary>
+    /// The map prints the pilot's own marker as their name, at the far corner
+    /// from the bar, and punctuation does not survive folding - so <c>NE-KRON</c>
+    /// up there and <c>NEKRON</c> on the bar were one string to the reader that
+    /// used the name to find the money. It anchored on the marker, found
+    /// nothing above it, and reported that the balance was in a face it could
+    /// not read, on a frame where the balance had read perfectly.
+    /// </summary>
     [Fact]
-    public void Without_a_handle_the_wallet_cannot_be_looked_for_and_says_so()
+    public void A_handle_printed_twice_no_longer_hides_the_balance()
     {
-        var wallet = Read(ScreenFrameFixtures.Map, handle: null).Wallet!;
+        ScreenTextLine[] lines =
+        [
+            new("NE-KRON", 700, 170, 17),
+            new("YOU", 700, 195, 13),
+            new("3,265,516", 980, 1305, 17),
+            .. ScreenFrameFixtures.Map,
+        ];
 
-        Assert.Null(wallet.Balance);
-        Assert.Contains("handle", wallet.Trouble);
+        var wallet = Read(lines).Wallet!;
+
+        Assert.Equal(3_265_516, wallet.Balance);
+        Assert.Null(wallet.Trouble);
+    }
+
+    /// <summary>
+    /// A handle the engine mangles is no longer able to cost the balance
+    /// either, since nothing about the name is consulted to find it.
+    /// </summary>
+    [Fact]
+    public void A_handle_the_engine_misread_still_leaves_the_balance_readable()
+    {
+        ScreenTextLine[] lines =
+        [
+            new("1,971,263", 980, 1305, 17),
+            .. ScreenFrameFixtures.Map.Select(line =>
+                line.Text == "NEKRON" ? line with { Text = "NEKR0N_x" } : line),
+        ];
+
+        var wallet = Read(lines).Wallet!;
+
+        Assert.Equal(1_971_263, wallet.Balance);
     }
 
     // ---- the rest ----

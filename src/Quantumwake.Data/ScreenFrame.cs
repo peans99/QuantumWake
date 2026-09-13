@@ -194,7 +194,6 @@ public static partial class ScreenFrames
         IReadOnlyList<ScreenTextLine> lines,
         IReadOnlyList<ItemReference> items,
         IReadOnlyList<string> shipNames,
-        string? handle,
         IReadOnlyList<string>? commodityNames = null)
     {
         var all = lines
@@ -203,8 +202,9 @@ public static partial class ScreenFrames
             .ToList();
 
         var texts = all.Select(line => line.Text).ToList();
-        var bar = HasAppBar(all);
-        var wallet = bar ? ReadWallet(all, handle) : null;
+        var barRow = AppBarRow(all);
+        var bar = barRow is not null;
+        var wallet = barRow is null ? null : ReadWallet(all, barRow);
 
         // A loadout frame can carry a tooltip as well - the component the
         // pilot is hovering - so the tooltip is read on every frame and kept
@@ -261,55 +261,84 @@ public static partial class ScreenFrames
     private static bool Opens(string text, string anchor) =>
         ScreenInsight.Fold(text).StartsWith(ScreenInsight.Fold(anchor), StringComparison.Ordinal);
 
-    /// <summary>Whether the mobiGlas app bar is on the frame.</summary>
+    /// <summary>The mobiGlas app bar's own words, or null when it is not on the frame.</summary>
     /// <remarks>
     /// The bar's words sit on one row - Tops within a line height of each
     /// other on every frame measured - which is what separates the bar from
     /// the same words scattered through a contract's text.
+    /// <para>
+    /// The row is returned rather than a yes or no because the wallet is found
+    /// by where the bar is: see <see cref="ReadWallet"/>.
+    /// </para>
     /// </remarks>
-    private static bool HasAppBar(IReadOnlyList<ScreenTextLine> lines)
+    private static IReadOnlyList<ScreenTextLine>? AppBarRow(IReadOnlyList<ScreenTextLine> lines)
     {
         var words = lines
             .Where(line => AppBar.Any(word => Is(line.Text, word)))
             .ToList();
 
-        if (words.Count < EnoughOfTheBar) return false;
+        if (words.Count < EnoughOfTheBar) return null;
 
-        return words.Any(anchor =>
-            words.Count(w => Math.Abs(w.Top - anchor.Top) <= anchor.Height * 1.5) >= EnoughOfTheBar);
+        foreach (var anchor in words)
+        {
+            var row = words
+                .Where(w => Math.Abs(w.Top - anchor.Top) <= anchor.Height * 1.5)
+                .ToList();
+
+            if (row.Count >= EnoughOfTheBar) return row;
+        }
+
+        return null;
     }
 
     // ---- the wallet ----
 
-    /// <summary>The balance beside the handle on the mobiGlas bar.</summary>
+    /// <summary>The balance printed at the left-hand end of the mobiGlas bar.</summary>
     /// <remarks>
-    /// The figure is printed directly above the handle, about a line and a
-    /// half up and starting at the same left edge. When the handle is on the
-    /// frame and no figure is, the figure was there and did not read - which
-    /// is what was measured, twice, and is said as such.
+    /// <para>
+    /// The balance and the pilot's handle sit together in a panel off the left
+    /// end of the app bar, the figure a line or so above the name. So the
+    /// figure is looked for to the left of the bar's first app and within a
+    /// few line heights of the bar's own row.
+    /// </para>
+    /// <para>
+    /// <b>The handle is not used to find it, and that is the point.</b> It was
+    /// once: the figure was taken from directly above whichever line read as
+    /// the handle. That failed two ways, both of them silently. A handle that
+    /// did not survive the engine - one wrong character is enough, and this
+    /// engine reads "SELECTED: 0" as "SELECTED: O" - lost a balance that had
+    /// read perfectly. And a handle printed twice anchored the search on the
+    /// wrong copy: the map draws the pilot's own marker as their name over the
+    /// word YOU, at the top-left corner, and <c>Fold</c> keeps only letters
+    /// and digits, so the marker's <c>NE-KRON</c> and the bar's <c>NEKRON</c>
+    /// are one string by the time they are compared. The reader looked above
+    /// the marker, found nothing, and blamed the font, while "3,265,516" sat
+    /// unread at the other end of the frame.
+    /// </para>
+    /// <para>
+    /// The name was only ever a position marker, and it was the least reliable
+    /// text on the row to use as one. The bar is eleven words and needs six of
+    /// them, so it is the sturdiest landmark the frame has.
+    /// </para>
     /// </remarks>
-    private static WalletReading ReadWallet(IReadOnlyList<ScreenTextLine> lines, string? handle)
+    private static WalletReading ReadWallet(
+        IReadOnlyList<ScreenTextLine> lines, IReadOnlyList<ScreenTextLine> bar)
     {
-        if (handle is not { Length: > 0 })
-            return new WalletReading(null, "the app does not know your handle yet, so it cannot find the wallet on the bar");
-
-        var folded = ScreenInsight.Fold(handle);
-
-        var name = lines.FirstOrDefault(line => ScreenInsight.Fold(line.Text) == folded);
-
-        if (name is null)
-            return new WalletReading(null, "your handle is not on this frame, so the wallet is not either");
+        var firstApp = bar.Min(word => word.Left);
+        var row = bar.Average(word => word.Top);
+        var height = bar.Max(word => word.Height);
 
         var figure = lines
-            .Where(line => line.Top < name.Top && name.Top - line.Top <= name.Height * 4)
-            .Where(line => Math.Abs(line.Left - name.Left) <= name.Height * 4)
+            .Where(line => line.Left < firstApp)
+            .Where(line => Math.Abs(line.Top - row) <= height * 4)
+            .OrderBy(line => Math.Abs(line.Top - row))
             .Select(line => Figure(line.Text))
             .FirstOrDefault(value => value is not null);
 
         return figure is { } balance
             ? new WalletReading(balance, null)
             : new WalletReading(null,
-                "the balance is printed in a face this engine does not read - the handle beside it read fine");
+                "the balance is printed in a face this engine does not read - the bar beside it read fine");
     }
 
     /// <summary>A whole number with or without thousands separators, or null.</summary>

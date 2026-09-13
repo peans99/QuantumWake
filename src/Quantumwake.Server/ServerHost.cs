@@ -825,6 +825,86 @@ public static class ServerHost
             }
         });
 
+        // The hangar: every ship the logs say was flown, with the size the
+        // install gives it and whether the install has a silhouette for it,
+        // so the page can draw the fleet to one scale. A ship the install does
+        // not describe is still listed - the log flew it - with no size, and
+        // the page says so rather than drawing a guess.
+        app.MapGet("/api/fleet/hangar", (LogLibrary lib) =>
+        {
+            var game = lib.GameCommodities;
+            var ships = lib.Stats().Ships.Select(ship =>
+            {
+                var vehicle = game.Vehicle(ship.ClassName);
+                return new
+                {
+                    ship.Name,
+                    ship.ClassName,
+                    ship.Sorties,
+                    ship.LastFlown,
+                    hours = Math.Round(ship.EstimatedTime.TotalHours, 1),
+                    beam = vehicle?.Beam,
+                    length = vehicle?.Length,
+                    height = vehicle?.Height,
+                    icon = vehicle?.Icon is not null,
+                    kind = vehicle?.Kind,
+                };
+            });
+
+            return Results.Ok(new { available = game.Vehicles.Count > 0, ships });
+        });
+
+        // A picture out of the archive as a PNG, converted once and kept beside
+        // the other caches: BC3 decodes in milliseconds, but the page asks for
+        // twenty at a time and the archive walk to find each one is the slow
+        // part. The same route serves a ship's silhouette and a paint render.
+        IResult ArchivePicture(string entry, string cacheFolder)
+        {
+            if (install is null) return Results.NotFound();
+
+            var cacheDir = Path.Combine(Core.AppPaths.Root, cacheFolder);
+            var cached = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(entry) + ".png");
+
+            if (!File.Exists(cached))
+            {
+                var dds = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(entry);
+                if (dds is null || VehicleIcons.Convert(dds) is not { } picture)
+                    return Results.NotFound();
+
+                try
+                {
+                    Directory.CreateDirectory(cacheDir);
+                    File.WriteAllBytes(cached, picture.Png);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Losing the cache only costs the next request the decode.
+                    return Results.File(picture.Png, "image/png");
+                }
+            }
+
+            return Results.File(cached, "image/png");
+        }
+
+        // A ship's silhouette, from the game's own vehicle icon, cropped to the shape.
+        app.MapGet("/api/fleet/icons/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
+            lib.GameCommodities.Vehicle(vehicleClass)?.Icon is { } entry
+                ? ArchivePicture(entry, "vehicle-icons")
+                : Results.NotFound());
+
+        // The paints the game pictures for a hull, for the pilot to pick from.
+        // The app never picks: which paint a ship wears is not in the logs.
+        app.MapGet("/api/fleet/paints/{vehicleClass}", (string vehicleClass, LogLibrary lib) =>
+            Results.Ok(GamePaints.ForHull(lib.GameCommodities.Paints, vehicleClass)
+                .Select(p => new { p.Item, p.Name, p.Stock })));
+
+        // The game's own picture of a hull in one paint: the paint item's logo.
+        app.MapGet("/api/fleet/paints/{paintItem}/render", (string paintItem, LogLibrary lib) =>
+            lib.GameCommodities.Paints.FirstOrDefault(p =>
+                string.Equals(p.Item, paintItem, StringComparison.OrdinalIgnoreCase)) is { } paint
+                ? ArchivePicture(paint.Render, "paint-renders")
+                : Results.NotFound());
+
         app.MapGet("/api/fleet", (LogLibrary lib) =>
         {
             var stats = lib.Stats();
@@ -1198,6 +1278,11 @@ public static class ServerHost
                 .Select(s => new
                 {
                     rental = feeds.CheapestRental(s.Name),
+                    // Every shop and every rental desk, cheapest first, for
+                    // the row to show on hover: the cheapest is not always
+                    // the nearest.
+                    shops = uex.VehicleShops(s.Name),
+                    rentals = feeds.RentalDesks(s.Name),
                     s.Name,
                     s.Career,
                     s.Role,
@@ -1656,22 +1741,7 @@ public static class ServerHost
             ImportStore imports, string? imported) =>
         {
             var stats = lib.Stats();
-
-            // Where each held thing is. Stash listings are per location and
-            // record presence, not counts - removals are never logged - so a
-            // job can say WHERE something is but never how many.
-            var held = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var place in stats.Stash)
-                foreach (var group in place.Groups)
-                    foreach (var item in group.Items)
-                    {
-                        if (!held.TryGetValue(item.Name, out var places))
-                            held[item.Name] = places = [];
-
-                        if (!places.Contains(place.Name, StringComparer.OrdinalIgnoreCase))
-                            places.Add(place.Name);
-                    }
+            var held = HeldPlaces(stats);
 
             var worn = stats.Loadout
                 .SelectMany(slot => slot.Items)
@@ -1682,14 +1752,7 @@ public static class ServerHost
             {
                 var lines = job.Items.Select(item =>
                 {
-                    // Held: an exact stash name, else anything containing it -
-                    // "Hadanite" should find "Hadanite (Raw)".
-                    var where = held.TryGetValue(item.Name, out var exact)
-                        ? exact
-                        : held.Where(h => h.Key.Contains(item.Name, StringComparison.OrdinalIgnoreCase))
-                            .SelectMany(h => h.Value)
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .ToList();
+                    var where = HeldWhere(held, item.Name);
 
                     // Where to get what is missing: a commodity has a cheapest
                     // terminal, an item has a shop.
@@ -1751,6 +1814,66 @@ public static class ServerHost
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Jobs ?? [])
                         .Select(job => Project(job, batch))));
+        });
+
+        // ---- Wikelo: what the emporium trades, from the install, against what is held ----
+
+        // The emporium as the installed patch states it - every trade, its
+        // price and its reward - with each requirement marked held or not the
+        // way a job line is: a stash sighting is presence, never a count, so
+        // "have" means "seen somewhere", and the page says where. A trade the
+        // pilot is already collecting for names its job, so the button reads
+        // "tracking" rather than making a second list.
+        app.MapGet("/api/wikelo", (LogLibrary lib, JobStore jobs) =>
+        {
+            var catalogue = lib.GameCommodities.Wikelo;
+            var held = HeldPlaces(lib.Stats());
+            var tracked = jobs.All()
+                .Where(j => j.Source is { } s && s.StartsWith("wikelo:", StringComparison.Ordinal))
+                .ToDictionary(j => j.Source!["wikelo:".Length..], j => j, StringComparer.OrdinalIgnoreCase);
+
+            return Results.Ok(new
+            {
+                available = catalogue.Trades.Count > 0,
+                standings = catalogue.Standings,
+                trades = catalogue.Trades.Select(t => new
+                {
+                    t.Id, t.Title, t.Description, t.Group, t.Reputation, t.MinStanding, t.Retired,
+                    rewards = t.Rewards,
+                    requirements = t.Requirements.Select(r =>
+                    {
+                        var where = HeldWhere(held, r.Name);
+                        return new { r.Class, r.Name, r.Count, r.Unit, have = where.Count > 0, where };
+                    }),
+                    trackedJobId = tracked.TryGetValue(t.Id, out var job) && !job.Done ? job.Id : null,
+                    trackedDone = tracked.TryGetValue(t.Id, out var done) && done.Done,
+                }),
+            });
+        });
+
+        // Collecting for a trade is a shopping list: the requirements become
+        // its lines, held counts and prices come from the ordinary job join,
+        // and it shows on Now and the MFD like any other list. One per trade -
+        // a second press returns the list that exists.
+        app.MapPost("/api/wikelo/{id}/track", (string id, LogLibrary lib, JobStore jobs) =>
+        {
+            var trade = lib.GameCommodities.Wikelo.Trades.FirstOrDefault(t =>
+                string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (trade is null)
+                return Results.NotFound(new { trouble = "the installed game does not list that trade" });
+
+            var source = $"wikelo:{trade.Id}";
+            if (jobs.All().FirstOrDefault(j => j.Source == source && !j.Done) is { } existing)
+                return Results.Ok(new { job = existing, existed = true });
+
+            var reward = trade.Rewards.FirstOrDefault()?.Name;
+            var job = jobs.Add(
+                reward is { Length: > 0 } ? $"Wikelo: {reward}" : $"Wikelo: {trade.Title}",
+                "list",
+                source,
+                [.. trade.Requirements.Select(r => new JobItem(r.Name, r.Count, r.Unit))]);
+
+            return Results.Ok(new { job, existed = false });
         });
 
         app.MapPost("/api/jobs", (JobStore jobs, JobRequest body) =>
@@ -3128,6 +3251,39 @@ static WipeScope ScopeOf(List<string>? covers)
 /// safe because the answer is shown with its price and shop: the player sees
 /// what was matched before flying anywhere.
 /// </remarks>
+/// <summary>
+/// Where each held thing is. Stash listings are per location and record
+/// presence, not counts - removals are never logged - so a list can say WHERE
+/// something is but never how many. Shared by the jobs page and the Wikelo
+/// page so the two never disagree about what "have" means.
+/// </summary>
+static Dictionary<string, List<string>> HeldPlaces(LibraryStats stats)
+{
+    var held = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var place in stats.Stash)
+        foreach (var group in place.Groups)
+            foreach (var item in group.Items)
+            {
+                if (!held.TryGetValue(item.Name, out var places))
+                    held[item.Name] = places = [];
+
+                if (!places.Contains(place.Name, StringComparer.OrdinalIgnoreCase))
+                    places.Add(place.Name);
+            }
+
+    return held;
+}
+
+/// <summary>An exact stash name, else anything containing it - "Hadanite" should find "Hadanite (Raw)".</summary>
+static List<string> HeldWhere(Dictionary<string, List<string>> held, string name) =>
+    held.TryGetValue(name, out var exact)
+        ? exact
+        : held.Where(h => h.Key.Contains(name, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(h => h.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
 static ItemInfo? MatchItem(LogLibrary lib, string written)
 {
     var wanted = Compact(written);

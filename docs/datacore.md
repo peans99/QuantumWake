@@ -479,3 +479,56 @@ What it costs is a reader that has to be re-checked every patch, against a
 format CIG do not document. The download is somebody else carrying that burden,
 which is worth something, and it is still there for the two things this file
 cannot answer: live prices, and the ship specifications the game encrypts.
+
+## Vehicles: size and silhouette (2026-09-11)
+
+Two more things the blob holds, both read since 0.11.2 by
+`GameData/GameVehicles.cs` and drawn on the Hangar page:
+
+- **`maxBoundingBoxSize`** on every vehicle entity's `VehicleComponentParams`,
+  in metres. The Fortune reads x 16.5, y 26.5, z 8 - beam, length, height as the
+  wiki publishes them - and the pattern holds for every ship checked (Corsair
+  30 × 53, Starlancer MAX 60 × 90, Freelancer MAX 34 × 38, Aurora 27.4 × 27.7):
+  **y is length**. 1,094 vehicle entities carry a box; debris and templates
+  among them, which is why the page draws only what the logs say was flown.
+- **`displayIcon`** on the entity's `EntityUIDisplayParams`, a `.tif` path the
+  archive holds as `.dds`: `Data\UI\Textures\EA\VehicleIcons\VehicleIcon_<model>.dds`,
+  98 files, 79 referenced, one per base model (every Cutlass shares
+  `VehicleIcon_DRAK_Cutlass`). 1024-square BC3 (DXT5), white silhouette on
+  transparent, top-down, nose to the right, and - measured - normalised to fill
+  the square regardless of the ship's size, so an icon says nothing about scale
+  on its own. `GameData/VehicleIcons.cs` decodes BC3 (sixty lines, no library),
+  crops to the opaque bounds and writes a PNG; the server caches the PNG under
+  `vehicle-icons\` beside the other caches. 931 of the 1,094 entities name an
+  icon; the Clipper, Paladin and the ATLS do not.
+
+### Paints, and the one painted picture of a ship the files hold (2026-09-11)
+
+The game draws ships live, so the archive has no stock-finish render of most
+hulls - but every paint item (`EntityClassDefinition.Paint_<model>_<scheme>`,
+`Type = Paints`) points at a manufacturer record whose `Logo` is a 256-square
+three-quarter render of that hull in that paint, under
+`Data\UI\SharedAssets\PaintColorLogos\`: 926 of them with a picture in the
+archive, out of 1,087 paint items (the rest are templates whose logo is the
+maker's mark). The hull they fit is the item's `RequiredTags`
+(`Paint_Corsair`); the ship's side of that tag sits in its vehicle XML, so
+`GameData/GamePaints.cs` joins by name instead - `Paint_<model>_` against the
+class without its maker, longest prefix first, then each token - and every ship
+in this install's fleet found its paints that way (Corsair 10, Cutter 26,
+Pisces 12, UTV 5). Which paint a pilot flies is not in the logs, so the Fleet
+page offers the list and the pilot picks; the pick lives in the browser like
+the roster tick.
+
+The same folder holds 26 renders that no paint item points at, and they are
+the default liveries of the hulls that have one: `paint_clipper_default.dds`,
+`Paint_RSI_Hermes_Default.dds`, `Paint_Paladin_Default_Icon.dds`,
+`Paint_Hornet_F7CR_MK2_Base_Grey_Red_Icon.dds`. Nothing in `Game2.dcb`
+references them - the Hermes has a `TintPaletteTree.rsi_hermes_default`, but
+that is colours, not a picture - so `GamePaints.Stock` lifts them from the
+archive listing by name (`_default` or `_base` under `PaintColorLogos`, not
+already some paint's render, and not a split mip chunk such as
+`Paint_Meteor_Default_Icon.dds.4`). They sort first for their hull, and a
+card with no pick shows that one as the ship's default. In this fleet three
+hulls have one - Clipper, Hermes, Paladin; the other sixteen have no picture
+of their stock finish anywhere in the files, and for those the first paint
+stands in and the card says so.

@@ -222,24 +222,31 @@ public sealed class UexFeeds
     /// The cheapest rental of a vehicle, matched the way purchase prices are:
     /// UEX drops the manufacturer from names that our display names carry.
     /// </summary>
-    public UexRental? CheapestRental(string? vehicleName)
+    public UexRental? CheapestRental(string? vehicleName) =>
+        RentalDesks(vehicleName) is { Count: > 0 } rentals ? rentals[0] : null;
+
+    /// <summary>Everywhere a vehicle rents, cheapest first; empty when nowhere does.</summary>
+    public IReadOnlyList<UexRental> RentalDesks(string? vehicleName)
     {
         if (string.IsNullOrWhiteSpace(vehicleName))
-            return null;
+            return [];
 
         var rentals = RentalPrices;
         if (rentals.Count == 0)
-            return null;
+            return [];
 
         var compact = Compact(vehicleName);
         var words = vehicleName.Trim().Split(' ', 2);
         var stripped = words.Length == 2 ? Compact(words[1]) : null;
 
+        // One row a terminal: the feed can carry a terminal twice.
         return rentals
             .Where(r => Compact(r.Vehicle) == compact
                 || (stripped is not null && Compact(r.Vehicle) == stripped))
             .OrderBy(r => r.Price)
-            .FirstOrDefault();
+            .GroupBy(r => r.Terminal, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
     }
 
     private static string Compact(string value) => new([.. value.Where(char.IsLetterOrDigit)]);

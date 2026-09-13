@@ -32,6 +32,7 @@
         <button data-view="jobs">Shopping</button>
         <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
+        <button data-view="wikelo">Wikelo</button>
         <button data-view="routes">Routes</button>
       </div>
     </div>
@@ -41,6 +42,7 @@
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
         <button data-view="fleet">Fleet</button>
+        <button data-view="hangar">Hangar</button>
         <button data-view="places">Places</button>
         <button data-view="points">Points</button>
         <button data-view="contracts">Contracts</button>
@@ -860,6 +862,18 @@
         <input type="search" id="fleet-search" class="search" placeholder="Search ships…"
                autocomplete="off" spellcheck="false">
         <select id="fleet-period" class="select period" data-all="Any time" title="Filter by when last flown"></select>
+        <select id="fleet-filter" class="select" title="Filter the roster">
+          <option value="all">All roster</option>
+          <option value="favourites">Favourites</option>
+          <option value="recent">Flown this week</option>
+          <option value="ships">Ships only</option>
+          <option value="ground">Ground vehicles</option>
+        </select>
+        <select id="fleet-picture" class="select" title="How unpicked ship pictures appear">
+          <option value="paint">Show game paint</option>
+          <option value="tint">Use maker tint</option>
+        </select>
+        <span id="fleet-compare" class="fleet-compare"></span>
       </div>
     </div>
     <p class="muted caption">
@@ -1139,6 +1153,73 @@
     <div id="dests-chart" class="bars"></div>
   </section>
 
+  <!-- HANGAR: the fleet drawn to one scale, from the install's own vehicle
+       silhouettes and bounding boxes. Nothing here is downloaded. -->
+  <section id="view-hangar" class="view">
+    <div class="section-bar">
+      <h2>Hangar</h2>
+      <div class="controls">
+        <select id="hangar-mode" class="select" title="How to show the fleet">
+          <option value="gallery">Gallery</option>
+          <option value="scale">To scale</option>
+        </select>
+        <select id="hangar-sort" class="select" title="Order the ships">
+          <option value="length">Longest first</option>
+          <option value="sorties">Most flown first</option>
+          <option value="recent">Last flown first</option>
+        </select>
+        <select id="hangar-zoom" class="select" title="How much of the width the longest ship takes">
+          <option value="1">Two big ships across</option>
+          <option value="2">2× closer</option>
+          <option value="4">4× closer</option>
+        </select>
+        <select id="hangar-layout" class="select" title="How to arrange the scale deck" hidden>
+          <option value="type">By vehicle type</option>
+          <option value="size">By size band</option>
+          <option value="deck">One shared deck</option>
+        </select>
+        <button id="hangar-export-png" class="ghost tiny" title="Save the scale deck as a PNG picture" hidden>Export PNG</button>
+        <button id="hangar-export-svg" class="ghost tiny" title="Save the scale deck as a scalable picture" hidden>Export SVG</button>
+        <span class="muted" id="hangar-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      Every ship your logs say you have flown, from your installed game files. The
+      gallery shows the game's own render of a ship in the paint you chose on Fleet,
+      or its silhouette tinted by maker; <b>To scale</b> fits that same picture inside
+      the bounding box the game gives each ship. A ship the install has no icon for is
+      listed below with its exact dimensions; one it has no size for is listed below
+      rather than drawn as a guess.
+    </p>
+    <div id="hangar-scale" class="hangar-scale"></div>
+    <div id="hangar-canvas" class="hangar-canvas"></div>
+    <p class="muted" id="hangar-unsized" hidden></p>
+  </section>
+
+  <!-- WIKELO: the Banu trader's collection contracts, read from the installed
+       game rather than a guide, each checked against what the stash sightings
+       say is held. Tracking one makes a shopping list of its requirements. -->
+  <section id="view-wikelo" class="view">
+    <div class="section-bar">
+      <h2>Wikelo's emporium</h2>
+      <div class="controls">
+        <input type="search" id="wikelo-search" class="search" placeholder="Search trades or items…"
+               autocomplete="off" spellcheck="false">
+        <span class="muted" id="wikelo-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      What Wikelo will build, and what he wants for it — read from your installed game
+      files, so the numbers are this patch's. Ranks are in the file; your own standing is
+      not, so a gated trade is marked rather than hidden. <b>Track</b> turns a trade's
+      requirements into a shopping list on Jobs, where what you hold is ticked off from
+      stash sightings — presence, never a count, because removals are not logged.
+    </p>
+    <div class="export-row" id="wikelo-groups"></div>
+    <div id="wikelo-goal" class="wikelo-goal" hidden></div>
+    <div id="wikelo-list" class="points-list"></div>
+  </section>
+
   <!-- POINTS OF INTEREST: the coordinates the pilot chose to keep, with the
        reason. Places is what the logs saw; this is what the pilot marked. -->
   <section id="view-points" class="view">
@@ -1400,7 +1481,8 @@
     <p class="muted caption">
       Every flyable the community dataset describes — career, crew and what an
       insurance claim costs — priced at UEX in-game purchase prices where a
-      shop sells one. Pure reference: your own hangar lives on the Fleet page.
+      shop sells one; hover a price for every shop and rental desk, cheapest
+      first. Pure reference: your own hangar lives on the Fleet page.
       Needs the community dataset (and UEX for prices) in Settings.
     </p>
     <div class="table-wrap">

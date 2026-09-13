@@ -8,7 +8,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6)
 ![Licence Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)
-![1789 tests](https://img.shields.io/badge/tests-1789%20passing-4fd48a)
+![1827 tests](https://img.shields.io/badge/tests-1827%20passing-4fd48a)
 ![Network](https://img.shields.io/badge/network-opt--in%20only-46617a)
 
 Quantum Wake turns `Game.log` into a private local logbook for Star Citizen. It
@@ -322,7 +322,7 @@ Only the overlay is Windows-specific. The other projects target `net10.0`.
 dotnet test Quantumwake.slnx -c Release
 ```
 
-The repository currently has 1,789 tests. `Quantumwake.Tests` covers parsing,
+The repository currently has 1,815 tests. `Quantumwake.Tests` covers parsing,
 session state, stores and game-data readers. `Quantumwake.WebTests` executes the
 dashboard and MFD JavaScript against a stub DOM.
 
@@ -357,6 +357,157 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.11.21
+
+- **The HUD no longer prints the game's own markup at you.** Contract lines
+  arrived wrapped in tags - `Gabriel Lassort Elimination <EM4>[100 Rep]
+  [BP]*</EM4>` - and the in-game feed showed them as written. The dashboard had
+  been hiding them all along, which is why only the HUD looked wrong. They are
+  now taken off where the feed is served, so every surface gets the same clean
+  line.
+
+- **The activity feed names what you bought.** On the Now page and the in-game
+  HUD it read `Bought cds_legacy_armor_heavy_helmet_01_01_12`, because the
+  sentence is written while the log is read and nothing at that moment can name
+  an item. The line now keeps the engine class beside it and the name is put in
+  when the feed is shown, so it says what you actually bought. Sessions already
+  summarised are read again once on this update to pick it up.
+
+- **Things you bought, picked up, wear or have stored are named properly.**
+  Some items came out as their raw engine class - `behr_gren_frag_01` rather
+  than MK-4 Frag Grenade, `slaver_undersuit_01_01_01` rather than Stoneskin
+  Undersuit. Two catalogues in the install know item names and they do not know
+  the same items; only one was being asked. On one pilot's history that was 11
+  of 124 bought lines. Anything neither catalogue names still shows its class,
+  because a blank line would say less.
+
+- **The Fleet page shows what your ships were last photographed carrying, and
+  where they were parked.** Both sections were built and neither had ever
+  appeared: the line that drew them was missing, so the page looked as though
+  it had nothing to show. Photograph the Vehicle Loadout Manager and each
+  ship's fitting is listed with the date it was taken; photograph the Fleet
+  Manager and the page can say where each ship is, which nothing in the logs
+  ever records.
+
+- **Your balance is read from screenshots far more often.** The reader used to
+  find the figure by looking for your handle beside it, which quietly failed
+  twice over: on any map screen, where the game prints your name a second time
+  in the opposite corner, and for any handle the text reader garbles. One
+  measured frame reported the balance unreadable while it sat in the
+  screenshot, correct to the digit. It is now found by the mobiGlas bar itself
+  and your name is not involved.
+
+- **Save the Hangar scale deck as a picture.** Export PNG makes a 2× image
+  ready to share; Export SVG keeps the drawing sharp at any size. Both carry
+  the currently visible game paint renders, so the saved picture still works
+  after Quantum Wake is closed.
+
+- **Choose how the scale deck is arranged.** Keep ships and ground vehicles
+  separated, group them into useful size bands, or put the full fleet on one
+  shared deck. Each arrangement keeps one physical scale.
+
+- **To scale now wears the same chosen or default paint as Gallery.** The
+  picture is fitted inside the game's exact bounding box, so the paint is
+  visible without making a claim about the ship's real-world footprint.
+
+- **Hangar paint renders no longer show a second, unpainted ship behind them.**
+  The chosen game render now stands on its own; if it cannot load, the card
+  falls back to the silhouette instead of layering both poses together.
+
+- **The scale deck no longer reserves giant blank rectangles for hulls whose
+  top-down icon is missing.** Their exact installed dimensions appear below the
+  drawing, because a made-up marker is not a useful picture of a real ship.
+
+- **The Hangar scale deck fits the visible window.** It measures after the
+  Hangar opens and redraws on resize, so a narrow window does not start with a
+  needless horizontal scrollbar.
+
+- **A Hangar paint that cannot load falls back to its maker-tinted silhouette.**
+  The fallback remains visible without placing two ship poses on the same card.
+
+- **The ship catalogue shows every shop and rental desk on hover.** The buy
+  price and "Cheapest at" cells list everywhere UEX has seen the ship sold,
+  cheapest first, and the Rent cell lists every desk that rents it - with a
+  "+N" beside the cell when there is more than one. The cheapest is still
+  the number; the nearest is usually the one you want. The full shop list
+  fills in at the next UEX refresh; until then a ship shows the one shop it
+  already knew.
+
+- **Ships show their default livery when the game has a picture of it.** The
+  paint folder in the game files holds the stock finish of 26 hulls that no
+  paint item points at - the Clipper, Hermes and Paladin among them. Those
+  now come first in the Paint list as "Default livery", and a ship you have
+  not picked a paint for wears that. For a hull without one - most of them,
+  the Corsair included - there is no picture of the stock finish anywhere in
+  the files; the first paint still stands in, and the card says why.
+
+- **Wikelo has a current goal.** Set one of his trades as your current goal to
+  keep it above the emporium while you browse other groups. The pin stays in
+  this browser, like the roster tick and paint choices.
+
+- **Fleet is easier to work from.** Favourite ships, filter to favourites,
+  ships, ground vehicles, or flights from the last seven days, and see those
+  states on each card. Click a ship picture for its flights, time aboard, last
+  flown, and its size from the installed vehicle table. Choose whether unpicked
+  ships show the game's first paint or the maker-tinted silhouette.
+
+- **Compare two ships in the Hangar.** Select two Fleet cards, then open their
+  shared to-scale Hangar view. The comparison is temporary and does not change
+  your roster.
+
+- **The Hangar's big ships share a shelf again.** In the to-scale view, the
+  gap between ships is now included when the deck is sized, so two large ships
+  fit side by side at the normal zoom instead of the second one wrapping below.
+
+- **Ships wear a paint before you pick one.** A ship you have not chosen a
+  paint for shows the first paint the game pictures for its hull, on Fleet
+  and in the Hangar gallery, rather than the tinted silhouette. It is labelled
+  as a stand-in - which paint yours wears is not in the logs - and the Paint
+  list opens on it and says so. Choosing the silhouette is a choice too, and
+  it is kept.
+
+- **The Hangar keeps to your roster and shelves ships and vehicles apart.** A
+  ship you unticked on Fleet is not in the Hangar either, and the count says
+  how many it left out. In the to-scale view, ships sit on one shelf and
+  ground vehicles on another - the game's own word for what moves each - at
+  the same scale, so the Ursa beside the Starlancer is the real difference.
+  A paint picked on the Hangar now shows at once rather than after a reload,
+  and a render that fails to load once keeps your pick.
+
+- **The Hangar opens as a gallery.** One card a ship - the game's render in
+  the paint you chose on Fleet, or the tinted silhouette - with its size,
+  sorties and hours under it, and a Paint button on each. **To scale** is a
+  switch away for the plan view drawn at one scale; the gallery does not
+  pretend to be, which is why the scale bar leaves with it.
+
+- **Ships in colour.** The game's silhouettes are white, so on Fleet and Hangar
+  they are now tinted in their maker's colour - a hint at whose ship, said to
+  be one, not the finish. For the real thing, each Fleet card has a **Paint…**
+  button listing the liveries the game pictures for that hull (the Corsair has
+  ten, the Cutter twenty-six); pick yours and the card shows the game's own
+  render of it. The app never picks - which paint a ship wears is not in the
+  logs - and the choice stays in this browser, like the roster tick.
+
+- **Your fleet, drawn to scale.** Flight → Hangar draws every ship your logs
+  say you have flown at one scale, from your installed game files: the
+  silhouette is the game's own vehicle icon and the size is the bounding box
+  the game gives the ship, so a Pisces beside a Corsair is the real difference.
+  Sort by length, sorties or last flown; zoom in when the small ones get small.
+  A ship the install has no icon for is drawn as a box at its size; one it
+  cannot size is named below rather than drawn as a guess. The same silhouette
+  sits on each card on the Fleet page.
+
+- **Wikelo's emporium, from your game files.** Jobs → Wikelo lists every trade
+  the Banu collector offers - what he builds, what he wants for it, the rep it
+  pays and which rank it needs - read from the installed patch rather than a
+  guide, so the numbers are this build's (the Polaris is 50 Favors, whatever a
+  page from 4.9 says). Each requirement is ticked against your stash sightings
+  by the same rule the Jobs page uses: seen somewhere, never a count. **Track
+  as a goal** makes a shopping list of everything a trade wants; pin it and it
+  is on Now and the MFD like any other list. Retired trades still in the file
+  are counted and hidden; your standing with him is not in the logs, so a rank
+  gate is stated, not judged.
 
 ### 0.10.47
 

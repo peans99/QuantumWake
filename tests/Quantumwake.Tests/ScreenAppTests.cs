@@ -37,7 +37,7 @@ public class ScreenAppTests
     private static readonly string[] Ships =
         ["RSI Hermes", "Drake Corsair", "Drake Clipper", "Anvil C8X Pisces Expedition", "MISC Starfarer", "Mirai Fury"];
 
-    private static ScreenFrame Read(ScreenTextLine[] lines) => ScreenFrames.Read(lines, Catalogue, Ships, "nekron");
+    private static ScreenFrame Read(ScreenTextLine[] lines) => ScreenFrames.Read(lines, Catalogue, Ships);
 
     private static readonly DateTimeOffset At = new(2026, 9, 9, 1, 48, 31, TimeSpan.Zero);
 

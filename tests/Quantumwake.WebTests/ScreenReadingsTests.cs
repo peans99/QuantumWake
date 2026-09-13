@@ -231,4 +231,34 @@ public class ScreenReadingsTests
 
         Assert.True(page.Truth("__dom.node('#fleet-fittings-title').hidden"));
     }
+
+    /// <summary>
+    /// Opening the page has to draw them, which is the part that was missing.
+    /// </summary>
+    /// <remarks>
+    /// Both fleet sections above were built, documented and covered by the two
+    /// tests before this one - and no one had ever seen either, because the
+    /// tests called the render directly and nothing else called it at all.
+    /// <c>showView</c> had an arm for a dozen views and none for the fleet, so
+    /// the headings stayed hidden and the page looked as though it had nothing
+    /// to say. A test that only calls the renderer cannot notice that; this one
+    /// opens the view the way a pilot does.
+    /// </remarks>
+    [Fact]
+    public void Opening_the_fleet_view_draws_the_photographed_sections()
+    {
+        var page = new Page();
+        page.Serve("/api/screen/fittings", """
+            [{"shot":"ScreenShot-2026-09-07_21-08-59-905.jpg","shotAt":"2026-09-08T01:08:59Z",
+              "ship":"Drake Corsair","scope":"Only showing ships and equipment located in Nyx.",
+              "fittings":[
+                {"slot":"Cooler 2","read":"Civ/2/C Frost-Star EX","name":"Frost-Star EX","tier":"Exact","agrees":[],"disagrees":[],"stock":true,"nothingRead":false}
+              ]}]
+            """);
+
+        page.Do("window.scrollTo = () => {}; showView('fleet');");
+
+        Assert.Contains("Drake Corsair", page.NodeText("#fleet-fittings"));
+        Assert.False(page.Truth("__dom.node('#fleet-fittings-title').hidden"));
+    }
 }

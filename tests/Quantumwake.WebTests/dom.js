@@ -263,8 +263,8 @@ const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
-  '#tabs button': ['#test-tab-now', '#test-tab-about'],
-  '.view': ['#view-now', '#view-about', '#view-help'],
+  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet'],
+  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
     '#now-location-card', '#now-briefing-card', '#now-ship-card', '#now-session-card',
@@ -329,6 +329,13 @@ node('#contracts-stats-toggle').dataset.statsToggle = 'contracts';
 
 node('#test-tab-now').dataset.view = 'now';
 node('#test-tab-about').dataset.view = 'about';
+
+/* A third tab, so opening a view can be tested and not only the renderer it
+   calls. The Fleet page's two screenshot sections were written, documented and
+   covered by tests that called their renderer directly - and nothing else
+   called it at all, so no pilot ever saw either. showView gives up when no tab
+   carries the name, which is why the view has to be reachable here. */
+node('#test-tab-fleet').dataset.view = 'fleet';
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';

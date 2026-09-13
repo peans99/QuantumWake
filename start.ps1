@@ -76,13 +76,29 @@ if ($Rescan) {
 # QuantumWake.exe is the whole application - it hosts the server in-process and
 # puts an icon in the notification area. -NoOverlay runs the bare server
 # instead, which is also what a headless or second-machine setup wants.
-$serverExe = if ($NoOverlay) {
-    'src\Quantumwake.Server\bin\Release\net10.0\Quantumwake.Server.exe'
+#
+# The target framework is part of the output path, so it is matched with a
+# wildcard and the newest match wins rather than being written out in full.
+# Spelling it out once cost an afternoon: the overlay moved from
+# net10.0-windows to net10.0-windows10.0.19041.0, the old folder kept the
+# executable built before the move, and this script went on launching it. The
+# build above succeeded every time and Test-Path found a file every time, so
+# there was nothing to notice - the dashboard simply came up five versions
+# behind, and said so only on /api/version, which nobody reads.
+#
+# The build has already been checked above, so the freshest match is the one it
+# just produced.
+$pattern = if ($NoOverlay) {
+    'src\Quantumwake.Server\bin\Release\net10.0*\Quantumwake.Server.exe'
 } else {
-    'src\Quantumwake.Overlay\bin\Release\net10.0-windows\QuantumWake.exe'
+    'src\Quantumwake.Overlay\bin\Release\net10.0-windows*\QuantumWake.exe'
 }
 
-if (-not (Test-Path $serverExe)) { throw "Not built: $serverExe" }
+$serverExe = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTimeUtc -Descending |
+    Select-Object -First 1 -ExpandProperty FullName
+
+if (-not $serverExe) { throw "Not built: nothing matching $pattern" }
 
 $serverArgs = @()
 if ($Path) { $serverArgs += @('--path', $Path) }
