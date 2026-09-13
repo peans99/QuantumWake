@@ -222,6 +222,15 @@ function showView(name) {
   // wide, which leaves a needless horizontal scrollbar on narrower windows.
   if (name === 'hangar') loadHangar().catch(() => {});
 
+  // Both of the Fleet page's screenshot sections hang off this call, and
+  // without it neither has ever been drawn outside a test: what each ship was
+  // last photographed carrying, and where the Fleet Manager last showed each
+  // one parked - the only source for that, since the logs never say where a
+  // ship sits. They were written, documented and covered by tests, and the one
+  // line that runs them was missing, so the headings stayed hidden and the
+  // page looked like it had nothing to show.
+  if (name === 'fleet') renderFleetFittings().catch(() => {});
+
   // A group lights up when the active view lives inside it, so the strip
   // still shows where you are even with the menu closed.
   $$('#tabs .tab-group').forEach((g) => {
@@ -11946,13 +11955,6 @@ function expandableList(card, items, limit, renderItem, expanded) {
 }
 
 /** A category heading with a count on the right. */
-function sectionHeading(title, meta) {
-  const head = el('div', 'group-head');
-  head.append(el('h3', null, title));
-  if (meta) head.append(el('span', 'group-meta', meta));
-  return head;
-}
-
 const prettyItem = (name) => name.replace(/_/g, ' ');
 
 /* ---------- stash ---------- */

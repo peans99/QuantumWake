@@ -714,9 +714,10 @@ Built and measured on the same eight frames, plus the app's own session data.
 The sorter is `src/Quantumwake.Data/ScreenFrame.cs`, the checks are
 `ScreenChecks.cs`, the beliefs they check against come from
 `LibraryBeliefs.cs`, and the harness is still the CLI:
-`dotnet run --project src\Quantumwake.Cli -- --screen <boxes.txt> --handle nekron`
+`dotnet run --project src\Quantumwake.Cli -- --screen <boxes.txt>`
 now prints which screen a frame is and what that screen carries before it
-asks the tooltip question.
+asks the tooltip question. It took a `--handle` until the wallet stopped
+needing one; see **The wallet is found by the bar, not by the name** below.
 
 ### The idea, in one sentence
 
@@ -890,6 +891,42 @@ face. So the earlier finding was too strong: the face is marginal rather
 than unreadable, and the check built for the day it reads had that day the
 first night it was tried. Two readings a minute apart reconciled against a
 ledger that had not moved.
+
+### The wallet is found by the bar, not by the name
+
+**And at least one of those nineteen failures was not the face at all.** On
+12 Sep 2026 a mobiGlas Maps frame reported that the balance was "printed in a
+face this engine does not read - the handle beside it read fine". The engine
+had in fact returned it, exactly: line 15 of that frame is `Ä 3,265,516`,
+which the wallet's own figure pattern parses to 3265516 without complaint.
+
+The reader was looking in the wrong place. It found the balance by taking the
+first line that folded to the pilot's handle and reading the figure printed
+above it — and the map draws the pilot's own marker as their name, over the
+word `YOU`, in the opposite corner from the bar. `Fold` keeps only letters and
+digits, so the marker's `NE-KRON` and the bar's `NEKRON` are one string by the
+time they are compared. It anchored on the marker, found nothing above it, and
+blamed the font.
+
+The same anchor failed a second way for anyone whose handle does not survive
+the engine. One wrong character was enough to lose a balance that had read
+perfectly, and this engine misreads freely: the warehouse frame photographed
+the same afternoon gave `SELECTED: O` for `SELECTED: 0` and `NVENTORY` for
+`INVENTORY`. A handle carrying digits or punctuation is exactly the fragile
+case, and `NEKRON` — six capitals, no digits — is the easy one that hid it.
+
+**So the name is not consulted at all any more.** The figure is looked for to
+the left of the bar's first app and within a few line heights of the bar's own
+row, which is where the game prints it. The bar is eleven words and needs six
+of them to be recognised, making it the sturdiest landmark a frame has; the
+handle was only ever a position marker, and it was the least reliable text on
+that row to use as one. Two failure modes went with it — "your handle is not
+on this frame" and "the app does not know your handle yet" are no longer
+things the wallet can say — and so did the CLI's `--handle`.
+
+This does not make the face read. It stops a balance that **did** read from
+being thrown away, which is a different and smaller claim: one frame is proven,
+and how many of the other eighteen were this rather than the face is not known.
 
 **The Contracts app is the richest screen so far.** The tab prints
 `ACCEPTED (5/10)`, which is an exact count; each card prints a title, a
@@ -1279,6 +1316,45 @@ finds itself, at its own position, scoring 0.994 to 0.999. That is not the
 determinism answer - it is the same pixels twice - but it says the search does
 not wander, the scale search is stable, and the decoder, detector, matcher and
 decision rule hold together end to end.
+
+### The warehouse kiosk, where the tiles have no background
+
+A second frame, `ScreenShot-2026-09-12_14-53-41-E7E.jpg`: the Freight Manager
+at a station, its warehouse side holding two items - a green jar and a cluster
+of white crystals, `X1` each - photographed off-angle on the physical screen
+rather than on the personal inventory's holographic panel. It was taken to test
+the angle. The angle turned out not to be the difficulty.
+
+**The angle is 7 degrees and costs nothing.** Measured two ways that agree: the
+two info icons on the row sit 195 px apart and 24 px down, and the two `X1`
+badges 198 px apart and 25 px down - 7.1 and 7.2 degrees. The matcher's search
+covers that without being asked to.
+
+**The tiles have no background, and that breaks the detector.** On this screen
+a tile is not a lighter quad on a darker panel. It is nothing at all: the panel
+beside the items reads 53 to 57, the tile interior between them reads 55 to 57,
+and a row straight across the boundary between the two tiles reads a flat 50 to
+58 with no edge in it. What looks like a rectangle to the eye is inside the
+noise of a dark, compressed image of a lit screen.
+
+So the detector finds one box 449 px wide spanning both items, where the
+furniture says the tiles repeat every 195 to 198 px. It found the art, not the
+tiles - which is all there is to find here.
+
+**The matcher, on the same frame, is untroubled.** Each item searched for along
+the row finds itself, and the best it scores anywhere more than 80 px away is
+0.51 for the jar and 0.45 for the crystals. That is a margin of about 0.5,
+where the filter glyphs managed 0.119 - unsurprising, since a lit 3D render has
+far more to distinguish it than white line art, and it is the first evidence
+that real items separate more easily than the hardest case measured so far.
+
+**What this settles.** *A tile stands brighter than the panel* is not a fact
+about this game's inventories, it is a fact about the personal inventory's
+holographic panel. Two screens, two constructions. A detector that looked for
+the item rather than the tile would cover both, and that is the likely shape of
+the answer - but it is not built, because building a second detector before
+knowing whether a stored picture survives two frames is the same mistake in a
+new place. The gate comes first.
 
 **Running it on a pair.** The measurement stands down unless it is given
 frames, because it needs somebody's own screenshots and a build going green must

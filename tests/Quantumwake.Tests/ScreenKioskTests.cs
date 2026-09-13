@@ -20,7 +20,7 @@ public class ScreenKioskTests
     private static readonly string[] Ships = ["MISC Hull A", "Drake Caterpillar", "Drake Corsair"];
 
     private static ScreenFrame Read(ScreenTextLine[] lines) =>
-        ScreenFrames.Read(lines, [], Ships, "nekron", Commodities);
+        ScreenFrames.Read(lines, [], Ships, Commodities);
 
     private sealed class Beliefs : IScreenBeliefs
     {

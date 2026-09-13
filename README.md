@@ -358,7 +358,23 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.17
+### 0.11.18
+
+- **The Fleet page shows what your ships were last photographed carrying, and
+  where they were parked.** Both sections were built and neither had ever
+  appeared: the line that drew them was missing, so the page looked as though
+  it had nothing to show. Photograph the Vehicle Loadout Manager and each
+  ship's fitting is listed with the date it was taken; photograph the Fleet
+  Manager and the page can say where each ship is, which nothing in the logs
+  ever records.
+
+- **Your balance is read from screenshots far more often.** The reader used to
+  find the figure by looking for your handle beside it, which quietly failed
+  twice over: on any map screen, where the game prints your name a second time
+  in the opposite corner, and for any handle the text reader garbles. One
+  measured frame reported the balance unreadable while it sat in the
+  screenshot, correct to the digit. It is now found by the mobiGlas bar itself
+  and your name is not involved.
 
 - **Save the Hangar scale deck as a picture.** Export PNG makes a 2× image
   ready to share; Export SVG keeps the drawing sharp at any size. Both carry

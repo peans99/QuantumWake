@@ -36,7 +36,7 @@ if (install is null)
 // lets a bad match be reproduced by editing a file.
 if (GetOption(args, "--screen") is { } screenFile)
 {
-    return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"), GetOption(args, "--handle"));
+    return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"));
 }
 
 var liveOnly = args.Contains("--live-only");
@@ -164,7 +164,7 @@ static List<ScreenTextLine> Placed(IEnumerable<string> raw)
 /// in anybody's logs, and parsing 400 MB to answer it would make the harness
 /// too slow to use while iterating on the matcher.
 /// </remarks>
-static int Screen(string linesFile, string installRoot, string? catalogueQuery, string? handle)
+static int Screen(string linesFile, string installRoot, string? catalogueQuery)
 {
     if (!File.Exists(linesFile))
     {
@@ -222,7 +222,7 @@ static int Screen(string linesFile, string installRoot, string? catalogueQuery, 
         .ToList();
 
     var commodities = game.All.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-    var frame = ScreenFrames.Read(lines, items, shipNames, handle, commodities);
+    var frame = ScreenFrames.Read(lines, items, shipNames, commodities);
 
     Console.WriteLine();
     Console.WriteLine($"Screen    : {frame.Kind}");

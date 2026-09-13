@@ -137,7 +137,7 @@ public sealed class ScreenInsightService(
         var items = library.Items();
         var ships = ShipNames(items);
 
-        var frame = ScreenFrames.Read(lines, items, ships, library.Handle(), CommodityNames());
+        var frame = ScreenFrames.Read(lines, items, ships, CommodityNames());
         var beliefs = new LibraryBeliefs(library);
         var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet());
 
