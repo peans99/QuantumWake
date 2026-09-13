@@ -358,7 +358,14 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.20
+### 0.11.21
+
+- **The HUD no longer prints the game's own markup at you.** Contract lines
+  arrived wrapped in tags - `Gabriel Lassort Elimination <EM4>[100 Rep]
+  [BP]*</EM4>` - and the in-game feed showed them as written. The dashboard had
+  been hiding them all along, which is why only the HUD looked wrong. They are
+  now taken off where the feed is served, so every surface gets the same clean
+  line.
 
 - **The activity feed names what you bought.** On the Now page and the in-game
   HUD it read `Bought cds_legacy_armor_heavy_helmet_01_01_12`, because the

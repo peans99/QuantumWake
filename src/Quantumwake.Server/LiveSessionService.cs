@@ -3,6 +3,7 @@ using Quantumwake.Core.Events;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.State;
 using Quantumwake.Data;
+using System.Text.RegularExpressions;
 
 namespace Quantumwake.Server;
 
@@ -202,7 +203,7 @@ public sealed class LiveHub : Hub
 /// view and the historical views share exactly one aggregation implementation.
 /// On log rotation the finished session is persisted and a fresh builder starts.
 /// </remarks>
-public sealed class LiveSessionService : BackgroundService
+public sealed partial class LiveSessionService : BackgroundService
 {
     private readonly IHubContext<LiveHub> _hub;
     private readonly LogLibrary _library;
@@ -433,7 +434,8 @@ public sealed class LiveSessionService : BackgroundService
         [.. _recent.Concat(_screenNotes)
             .OrderByDescending(entry => entry.At)
             .Take(40)
-            .Select(Named)];
+            .Select(Named)
+            .Select(Plain)];
 
     /// <summary>Puts an item's name into a sentence written before it was known.</summary>
     /// <remarks>
@@ -453,6 +455,42 @@ public sealed class LiveSessionService : BackgroundService
             ? entry
             : entry with { Text = entry.Text.Replace(itemClass, name, StringComparison.Ordinal) };
     }
+
+    /// <summary>
+    /// The game's own emphasis markup, which belongs to its HUD and not to ours.
+    /// </summary>
+    /// <remarks>
+    /// Contract notifications arrive wrapped in it - "Gabriel Lassort
+    /// Elimination &lt;EM4&gt;[100 Rep] [BP]*&lt;/EM4&gt;" - and the tags are
+    /// meaningless anywhere the game is not doing the drawing.
+    /// </remarks>
+    [GeneratedRegex(@"</?EM\d*>", RegexOptions.IgnoreCase)]
+    private static partial Regex EmphasisRegex();
+
+    /// <summary>Strips the game's markup from a feed entry.</summary>
+    /// <remarks>
+    /// Here rather than in each page that shows a feed. The dashboard had been
+    /// doing it in the browser since the tags first appeared, and the in-game
+    /// HUD - the one place the pilot cannot look away from - had not, so it
+    /// printed the tags. Anything served this text gets it clean now, and the
+    /// page's own guard can stay as a guard.
+    /// </remarks>
+    internal static TimelineEntry Plain(TimelineEntry entry)
+    {
+        var text = Tidy(entry.Text);
+        var detail = entry.Detail is null ? null : Tidy(entry.Detail);
+
+        return text == entry.Text && detail == entry.Detail
+            ? entry
+            : entry with { Text = text, Detail = detail };
+    }
+
+    /// <summary>
+    /// Removing a tag can leave two spaces where one word met another, so the
+    /// gap is closed rather than left for the reader to notice.
+    /// </summary>
+    private static string Tidy(string text) =>
+        EmphasisRegex().Replace(text, "").Replace("  ", " ").Trim();
 
     /// <summary>
     /// The newest reading, and a note when it is the first sight of one that
