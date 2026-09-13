@@ -5537,12 +5537,17 @@ function renderHangar() {
 
   const mode = $('#hangar-mode')?.value || 'gallery';
   const zoomSelect = $('#hangar-zoom');
+  const layoutSelect = $('#hangar-layout');
   if (zoomSelect) zoomSelect.hidden = mode !== 'scale';
+  if (layoutSelect) layoutSelect.hidden = mode !== 'scale';
 
   if (mode === 'gallery') {
+    setHangarExportVisible(false);
     renderHangarGallery(canvas, ships);
     return;
   }
+
+  setHangarExportVisible(pictured.length > 0);
 
   if (!pictured.length) {
     canvas.append(el('p', 'muted', ships.length
@@ -5564,10 +5569,7 @@ function renderHangar() {
   // out here, their right edges exceed the deck by the gap and the second
   // ship silently wraps onto its own oversized shelf.
   const scale = ((width - 40 - HANGAR_SHIP_GAP) / 2 / longest) * zoom;   // px per metre
-  const groups = [
-    ['Ships', pictured.filter((s) => s.kind === 'Spaceship' || !s.kind)],
-    ['Ground vehicles', pictured.filter((s) => s.kind && s.kind !== 'Spaceship')],
-  ];
+  const groups = hangarScaleGroups(pictured);
 
   // Ships on one shelf and ground vehicles on another, at the same scale. A
   // missing game icon is a missing shape, not permission to invent one or to
@@ -5593,6 +5595,176 @@ function renderHangar() {
   }
 
   showScaleOmissions(unsized, iconless, missing);
+}
+
+/** The same global scale can be read in the most useful arrangement for the question at hand. */
+function hangarScaleGroups(pictured) {
+  const layout = $('#hangar-layout')?.value || 'type';
+
+  if (layout === 'deck') return [['All vehicles', pictured]];
+
+  if (layout === 'size') {
+    const bands = [
+      ['Under 10 m', (s) => s.length < 10],
+      ['10–25 m', (s) => s.length >= 10 && s.length < 25],
+      ['25–50 m', (s) => s.length >= 25 && s.length < 50],
+      ['50 m+', (s) => s.length >= 50],
+    ];
+    return bands.map(([title, includes]) => [title, pictured.filter(includes)]);
+  }
+
+  return [
+    ['Ships', pictured.filter((s) => s.kind === 'Spaceship' || !s.kind)],
+    ['Ground vehicles', pictured.filter((s) => s.kind && s.kind !== 'Spaceship')],
+  ];
+}
+
+function setHangarExportVisible(visible) {
+  for (const id of ['hangar-export-png', 'hangar-export-svg']) {
+    const button = $(`#${id}`);
+    if (button) button.hidden = !visible;
+  }
+}
+
+/**
+ * A saved deck must carry its game pictures with it. Leaving local API URLs in
+ * the SVG made a download look right only while Quantum Wake was still open.
+ */
+async function inlineHangarPictures(svg) {
+  const pictures = [...svg.querySelectorAll('image')];
+  await Promise.all(pictures.map(async (picture) => {
+    const href = picture.getAttribute('href');
+    if (!href || href.startsWith('data:')) return;
+
+    const response = await fetch(new URL(href, location.href));
+    if (!response.ok) throw new Error(`ship picture -> ${response.status}`);
+    picture.setAttribute('href', await blobDataUrl(await response.blob()));
+  }));
+}
+
+function blobDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('could not read ship picture'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Build one self-contained SVG from the visible scale groups. */
+async function hangarPictureSvg() {
+  const decks = [...document.querySelectorAll('#hangar-canvas .hangar-svg')];
+  if (!decks.length) throw new Error('there is no scale deck to export');
+
+  const width = Math.max(...decks.map((deck) => Number(deck.getAttribute('width')) || 0));
+  const note = $('#hangar-unsized')?.hidden ? '' : ($('#hangar-unsized')?.textContent || '');
+  const groups = decks.map((deck) => ({
+    deck,
+    title: deck.previousElementSibling?.textContent || 'Vehicles',
+    height: Number(deck.getAttribute('height')) || 0,
+  }));
+  const noteLines = wrapHangarExportText(note, Math.max(50, Math.floor((width - 40) / 7)));
+  const height = 28 + groups.reduce((total, group) => total + 28 + group.height + 18, 0)
+    + noteLines.length * 16 + (noteLines.length ? 18 : 0);
+  const exported = svgEl('svg', {
+    xmlns: SVG_NS, width, height, viewBox: `0 0 ${width} ${height}`, role: 'img',
+  });
+  exported.append(svgEl('title', {}));
+  exported.lastChild.textContent = 'Quantum Wake Hangar — fleet to scale';
+  exported.append(svgEl('style', {}));
+  exported.lastChild.textContent = '.hangar-name{fill:#dcebf7;font-size:11px;font-family:ui-monospace,Consolas,monospace}.hangar-dims{fill:#7691a8;font-size:10px}.hangar-export-heading{fill:#8be7ff;font-size:12px;font-family:ui-monospace,Consolas,monospace;letter-spacing:2px}.hangar-export-note{fill:#7691a8;font-size:11px;font-family:ui-monospace,Consolas,monospace}';
+  exported.append(svgEl('rect', { x: 0, y: 0, width, height, fill: '#070c14' }));
+
+  let y = 20;
+  for (const group of groups) {
+    const heading = svgEl('text', { class: 'hangar-export-heading', x: 20, y });
+    heading.textContent = group.title.toUpperCase();
+    exported.append(heading);
+    y += 8;
+
+    const copy = group.deck.cloneNode(true);
+    copy.setAttribute('x', 0);
+    copy.setAttribute('y', y);
+    await inlineHangarPictures(copy);
+    exported.append(copy);
+    y += group.height + 28;
+  }
+
+  for (const line of noteLines) {
+    const text = svgEl('text', { class: 'hangar-export-note', x: 20, y });
+    text.textContent = line;
+    exported.append(text);
+    y += 16;
+  }
+
+  return exported;
+}
+
+function wrapHangarExportText(text, maxChars) {
+  if (!text) return [];
+  const lines = [];
+  let line = '';
+  for (const word of text.split(/\s+/)) {
+    if (`${line} ${word}`.trim().length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else line = `${line} ${word}`.trim();
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function saveHangarBlob(blob, extension) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(blob);
+  const link = el('a');
+  link.href = url;
+  link.download = `quantumwake-hangar-${stamp}.${extension}`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+async function exportHangarPicture(kind, button) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Exporting…';
+
+  try {
+    const svg = await hangarPictureSvg();
+    const source = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
+
+    if (kind === 'svg') {
+      saveHangarBlob(source, 'svg');
+    } else {
+      const url = URL.createObjectURL(source);
+      try {
+        const image = new Image();
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = () => reject(new Error('could not draw the scale deck'));
+          image.src = url;
+        });
+        const resolution = 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = Number(svg.getAttribute('width')) * resolution;
+        canvas.height = Number(svg.getAttribute('height')) * resolution;
+        const context = canvas.getContext('2d');
+        context.scale(resolution, resolution);
+        context.drawImage(image, 0, 0);
+        const png = await new Promise((resolve, reject) => canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error('could not make the PNG')), 'image/png'));
+        saveHangarBlob(png, 'png');
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+    button.textContent = 'Saved';
+  } catch (error) {
+    button.textContent = 'Could not export';
+    console.error(error);
+  } finally {
+    setTimeout(() => { button.textContent = label; button.disabled = false; }, 1800);
+  }
 }
 
 /** States why a hull is absent from the physical drawing instead of inventing its shape. */
@@ -5748,6 +5920,13 @@ function rowHeightOf(placed, y) {
 $('#hangar-mode')?.addEventListener('change', () => renderHangar());
 $('#hangar-sort')?.addEventListener('change', () => renderHangar());
 $('#hangar-zoom')?.addEventListener('change', () => renderHangar());
+$('#hangar-layout')?.addEventListener('change', () => renderHangar());
+$('#hangar-export-svg')?.addEventListener('click', async (e) => {
+  await exportHangarPicture('svg', e.currentTarget);
+});
+$('#hangar-export-png')?.addEventListener('click', async (e) => {
+  await exportHangarPicture('png', e.currentTarget);
+});
 window.addEventListener('resize', () => {
   // SVG width is fixed at render time. Without rebuilding a visible scale
   // drawing after a window resize, it keeps the old deck width and creates

@@ -31,7 +31,7 @@ public class HangarTests
     {
         var page = new Page();
         page.Serve("/api/fleet/hangar", fleet);
-        page.Do("__dom.node('#hangar-mode').value = 'scale'; __dom.node('#hangar-sort').value = 'length'; __dom.node('#hangar-zoom').value = '1'; shipPaints = {}; await loadHangar();");
+        page.Do("__dom.node('#hangar-mode').value = 'scale'; __dom.node('#hangar-sort').value = 'length'; __dom.node('#hangar-zoom').value = '1'; __dom.node('#hangar-layout').value = 'type'; shipPaints = {}; await loadHangar();");
         return page;
     }
 
@@ -165,6 +165,8 @@ public class HangarTests
         Assert.Contains("no size", text);
         Assert.Equal("", page.NodeText("#hangar-scale"));
         Assert.True(page.Truth("__dom.node('#hangar-zoom').hidden"));
+        Assert.True(page.Truth("__dom.node('#hangar-layout').hidden"));
+        Assert.True(page.Truth("__dom.node('#hangar-export-png').hidden"));
     }
 
     /// <summary>
@@ -183,6 +185,26 @@ public class HangarTests
         var corsair = double.Parse(Attr(page, 0, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
         var ptv = double.Parse(Attr(page, 2, "image", "width"), System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(53.0 / 4.0, corsair / ptv, 3);
+    }
+
+    [Fact]
+    public void The_scale_deck_can_be_arranged_by_size_or_as_one_shared_deck()
+    {
+        var page = Loaded();
+
+        Assert.False(page.Truth("__dom.node('#hangar-layout').hidden"));
+        Assert.False(page.Truth("__dom.node('#hangar-export-png').hidden"));
+        Assert.False(page.Truth("__dom.node('#hangar-export-svg').hidden"));
+
+        page.Do("__dom.node('#hangar-layout').value = 'size'; renderHangar();");
+        var sizeGroups = page.Text("__dom.node('#hangar-canvas').byClass('hangar-group').map(x => x.textContent).join('|')");
+        Assert.Contains("Under 10 m · 1", sizeGroups);
+        Assert.Contains("10–25 m · 1", sizeGroups);
+        Assert.Contains("50 m+ · 1", sizeGroups);
+
+        page.Do("__dom.node('#hangar-layout').value = 'deck'; renderHangar();");
+        Assert.Equal(1, Convert.ToInt32(page.Eval("__dom.node('#hangar-canvas').byClass('hangar-group').length")));
+        Assert.Contains("All vehicles · 3", page.NodeText("#hangar-canvas"));
     }
 
     /// <summary>The Fleet roster tick rules the hangar too, and the count says how many it hid.</summary>

@@ -358,7 +358,16 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.16
+### 0.11.17
+
+- **Save the Hangar scale deck as a picture.** Export PNG makes a 2× image
+  ready to share; Export SVG keeps the drawing sharp at any size. Both carry
+  the currently visible game paint renders, so the saved picture still works
+  after Quantum Wake is closed.
+
+- **Choose how the scale deck is arranged.** Keep ships and ground vehicles
+  separated, group them into useful size bands, or put the full fleet on one
+  shared deck. Each arrangement keeps one physical scale.
 
 - **To scale now wears the same chosen or default paint as Gallery.** The
   picture is fitted inside the game's exact bounding box, so the paint is
