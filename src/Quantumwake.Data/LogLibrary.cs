@@ -713,6 +713,35 @@ public sealed class LogLibrary : IDisposable
     /// </summary>
     public GameCommodities GameCommodities { get; private set; } = GameCommodities.Empty;
 
+    /// <summary>What to call an item class on screen.</summary>
+    /// <remarks>
+    /// <para>
+    /// Two sources know item names and they do not know the same items, so
+    /// both are asked. <see cref="Names"/> is the game's localisation table;
+    /// <see cref="GameCommodities"/> is the item catalogue read out of the
+    /// install, and it is the one that knows the awkward classes. Before this
+    /// existed, the lists showing purchases, pickups and stash asked only the
+    /// localisation table, which hands a class straight back when it does not
+    /// recognise it - so 11 of one pilot's 124 bought lines read
+    /// <c>slaver_undersuit_01_01_01</c> and <c>behr_gren_frag_01</c> while the
+    /// catalogue had "Stoneskin Undersuit" and "MK-4 Frag Grenade" all along.
+    /// </para>
+    /// <para>
+    /// The <c>_SCItem</c> retry is not decoration: some classes are catalogued
+    /// under that suffix and logged without it.
+    /// </para>
+    /// <para>
+    /// An empty catalogue name is passed over rather than returned. Some 8,149
+    /// of the install's items resolve to CIG's own placeholder and come back
+    /// unnamed, and a blank line is worse than the class with its underscores
+    /// opened out, which is what the last resort gives.
+    /// </para>
+    /// </remarks>
+    public string ItemName(string itemClass) =>
+        GameCommodities.Item(itemClass)?.Name is { Length: > 0 } named ? named
+        : GameCommodities.Item($"{itemClass}_SCItem")?.Name is { Length: > 0 } suffixed ? suffixed
+        : Names.Item(itemClass);
+
     /// <summary>
     /// What the game calls a logged resource id.
     /// </summary>
@@ -1100,7 +1129,7 @@ public sealed class LogLibrary : IDisposable
         {
             foreach (var purchase in session.Purchases)
             {
-                movements.Add((purchase.At, "Item bought", Names.Item(purchase.Item),
+                movements.Add((purchase.At, "Item bought", ItemName(purchase.Item),
                     PlaceAt(session, purchase.At), ShopLabel(purchase.Shop),
                     -purchase.Total, purchase.Quantity, purchase.Confirmed));
             }
@@ -1748,7 +1777,7 @@ public sealed class LogLibrary : IDisposable
                     .ToList();
 
                 var groups = ItemCategories.Group(
-                    items, Names.Item, c => GameCommodities.Item(c)?.MicroScu ?? 0);
+                    items, ItemName, c => GameCommodities.Item(c)?.MicroScu ?? 0);
 
                 return new StashLocation(
                     g.Key,
@@ -1818,7 +1847,7 @@ public sealed class LogLibrary : IDisposable
 
                 firsts.Add(new PickupRecord(
                     pickup.At,
-                    Names.Item(pickup.ItemClass),
+                    ItemName(pickup.ItemClass),
                     pickup.ItemClass,
                     PlaceAt(session, pickup.At),
                     ItemCategories.Of(pickup.ItemClass)));
@@ -2146,7 +2175,7 @@ public sealed class LogLibrary : IDisposable
         // Grouped by display name rather than class, so the same weapon bought
         // in two colourways adds up as one line instead of two mystery ids.
         var items = purchases
-            .GroupBy(p => Names.Item(p.Item), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(p => ItemName(p.Item), StringComparer.OrdinalIgnoreCase)
             .Select(g => new SpendTotal(g.Key, g.Sum(p => p.Total), g.Sum(p => p.Quantity)))
             .OrderByDescending(i => i.Total)
             .ToList();
@@ -2197,7 +2226,7 @@ public sealed class LogLibrary : IDisposable
                 var items = equipped
                     .GroupBy(l => l.ItemClass, StringComparer.OrdinalIgnoreCase)
                     .Select(i => new LoadoutEntry(
-                        Names.Item(i.Key), i.Count(), i.Max(l => l.LastSeen),
+                        ItemName(i.Key), i.Count(), i.Max(l => l.LastSeen),
                         Community.Item(i.Key)))
                     .OrderByDescending(i => i.Count)
                     .ThenByDescending(i => i.LastSeen)

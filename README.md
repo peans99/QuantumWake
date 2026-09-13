@@ -358,7 +358,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.11.18
+### 0.11.19
+
+- **Things you bought, picked up, wear or have stored are named properly.**
+  Some items came out as their raw engine class - `behr_gren_frag_01` rather
+  than MK-4 Frag Grenade, `slaver_undersuit_01_01_01` rather than Stoneskin
+  Undersuit. Two catalogues in the install know item names and they do not know
+  the same items; only one was being asked. On one pilot's history that was 11
+  of 124 bought lines. Anything neither catalogue names still shows its class,
+  because a blank line would say less.
 
 - **The Fleet page shows what your ships were last photographed carrying, and
   where they were parked.** Both sections were built and neither had ever
