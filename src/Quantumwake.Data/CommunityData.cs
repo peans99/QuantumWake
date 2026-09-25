@@ -1,4 +1,5 @@
 using Quantumwake.Core;
+using Quantumwake.Core.GameData;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -391,7 +392,7 @@ public sealed partial class CommunityData
         // while declining to name its dump is better than no dataset.
         var dump = await ReadDumpAsync(http, token);
 
-        File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow, dump)));
+        File.WriteAllText(MetaPath, JsonSerializer.Serialize(new Meta(DateTimeOffset.UtcNow, dump, IndustrialPorts: true)));
 
 
         _byId = digest;
@@ -405,6 +406,7 @@ public sealed partial class CommunityData
         _placeLore = lore;
         _parts = partStats;
         _shipBases = shipStats;
+        HasIndustrialPorts = true;
         FetchedAt = DateTimeOffset.UtcNow;
         Dump = dump;
         return _byId.Count;
@@ -463,6 +465,7 @@ public sealed partial class CommunityData
         _placeLore = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         FetchedAt = null;
         Dump = null;
+        HasIndustrialPorts = false;
     }
 
     private void TryLoad()
@@ -523,6 +526,7 @@ public sealed partial class CommunityData
                 var meta = JsonSerializer.Deserialize<Meta>(File.ReadAllText(MetaPath));
                 FetchedAt = meta?.FetchedAt;
                 Dump = meta?.Dump;
+                HasIndustrialPorts = meta?.IndustrialPorts == true;
             }
 
         }
@@ -761,6 +765,7 @@ public sealed partial class CommunityData
 
         static void Keep(JsonElement port, List<ShipSlot> into)
         {
+            if (IndustrialFit.IsBespoke(Str(port, "ClassName"))) return;
             if (!port.TryGetProperty("Editable", out var editable) || editable.ValueKind != JsonValueKind.True)
                 return;
 
@@ -812,6 +817,7 @@ public sealed partial class CommunityData
         "QuantumDrive", "Shield", "PowerPlant", "Cooler",
         "WeaponGun", "Turret", "MissileLauncher", "Missile",
         "Radar", "EMP", "QuantumInterdictionGenerator", "MiningArm",
+        "WeaponMining", "SalvageHead",
     };
 
     /// <summary>
@@ -1199,5 +1205,5 @@ public sealed partial class CommunityData
             ? value.GetDouble()
             : null;
 
-    private sealed record Meta(DateTimeOffset FetchedAt, string? Dump = null);
+    private sealed record Meta(DateTimeOffset FetchedAt, string? Dump = null, bool IndustrialPorts = false);
 }

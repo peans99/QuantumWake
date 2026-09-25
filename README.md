@@ -365,7 +365,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.32
+### 0.15.33
+
+- **Mining and salvage heads appear in the Garage.** Mining lasers and
+  salvage heads now have fitted slots and compatible replacement choices.
+  Older reference caches explain when a Settings refresh is needed.
+- **The Golem keeps its bespoke Pitman.** Garage and Mining label the fixed
+  head and prevent ordinary laser swaps; mining modules remain configurable.
+  Mining's fit calculator separates ship equipment and scanned-rock inputs
+  into matching panels that stack on smaller screens.
 
 - **Hauling runs start from your last known location.** A pickup where you
   already are comes first, with body and system used to group later stops.

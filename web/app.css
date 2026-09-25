@@ -5129,9 +5129,15 @@ body.overlay .ship-picture { display: none; }
 /* ---------- can it be cracked? ---------- */
 .mining-crack-head { margin-top: 0; }
 .crack { margin: 12px 0 18px; display: grid; gap: 10px; }
-.crack-rock { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; align-items: end; padding: 14px; border: 1px solid var(--rule); border-top: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(14, 25, 38, .98), rgba(6, 12, 19, .92)); }
-.crack-rock label { display: flex; flex-direction: column; gap: 4px; font-size: 9.5px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
-.crack-rock .select, .crack-rock .search { min-width: 0; width: 100%; }
+.crack-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto 1fr; gap: 14px; align-items: start; }
+.crack-fit-panel { grid-row: 1 / span 2; }
+.crack-inputs > .crack-verdict { grid-column: 2; display: grid; gap: 8px; min-width: 0; }
+.crack-fit-panel, .crack-rock { min-width: 0; display: grid; gap: 12px; align-content: start; padding: 16px; border: 1px solid var(--rule); border-top: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(14, 25, 38, .98), rgba(6, 12, 19, .92)); }
+.crack-rock { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
+.crack-inputs h4 { grid-column: 1 / -1; margin: 0; font: 11px var(--mono); color: var(--cyan); letter-spacing: .1em; text-transform: uppercase; }
+.crack-inputs label { min-width: 0; display: flex; flex-direction: column; gap: 5px; font-size: 9.5px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.crack-inputs .select, .crack-inputs .search { min-width: 0; width: 100%; box-sizing: border-box; }
+#crack-use-scan { grid-column: 1 / -1; justify-self: start; }
 .crack-rock .unit { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: var(--muted); pointer-events: none; }
 .crack-rock label:has(.unit) { position: relative; }
 .crack-heads { display: grid; gap: 7px; }
@@ -5143,7 +5149,10 @@ body.overlay .ship-picture { display: none; }
   font: 10px var(--mono);
   letter-spacing: .08em;
 }
-.crack-head { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 9px 10px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
+.crack-head { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 12px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
+.crack-head-label, .crack-head .crack-laser, .crack-head-note { grid-column: 1 / -1; }
+.crack-head-note { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.crack-laser:disabled, .garage-rig-slot:disabled { opacity: 1; cursor: default; }
 .crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--cyan); min-width: 9ch; }
 .crack-head .crack-laser { flex: 1 1 26ch; min-width: 0; }
 .crack-head .crack-module { flex: 1 1 18ch; min-width: 0; }
@@ -5179,6 +5188,9 @@ body.overlay .ship-picture { display: none; }
 .mining-pane.active { display: block; }
 @keyframes mining-pane-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (max-width: 850px) {
+  .crack-inputs { grid-template-columns: 1fr; }
+  .crack-fit-panel { grid-row: auto; }
+  .crack-inputs > .crack-verdict { grid-column: auto; }
   .mining-waiting { grid-template-columns: minmax(0, 1fr) auto; }
   .mining-waiting .mining-waiting-time { grid-column: 1 / -1; text-align: left; }
   .mining-view > .section-bar { align-items: start; }

@@ -1,5 +1,20 @@
 # Garage: a ship's numbers, and what a part would do to them
 
+Industrial heads (0.15.33): `WeaponMining` and `SalvageHead` were absent
+from the digest's shopping filter. Regression checks against the extracted
+loadout branches expose one Prospector head, three MOLE heads and two heads
+each on the Vulture and Reclaimer. The salvage modules remain non-editable
+as marked in that dataset. Existing caches discarded compatibility, so their
+heads are shown with a refresh explanation until Settings rebuilds the data.
+
+The Golem is an explicit exception: the inspected dump marks the Pitman port
+editable, indistinguishable from a generic S1 port. Neither that flag nor its
+ancestor flags detect the bespoke restriction. `IndustrialFit` enforces
+the restriction documented in [RSI's Golem Q&A](https://robertsspaceindustries.com/en/comm-link/engineering/20509-Q-A-Drake-Golem)
+by the stock Pitman class, including hull variants, while leaving modules
+available. This is a documented exception, not automatic detection from
+the dump's editability flag.
+
 Plan for 0.13.0, written 2026-09-14 before any code. The question was whether
 the app can show every stat for one of your ships, let you try a different
 component and see what moves - DPS, shield, EM, IR, cross-section - and then

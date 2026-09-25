@@ -5166,17 +5166,22 @@ function renderCrackHeads() {
 
     const laser = document.createElement('select');
     laser.className = 'select crack-laser';
-    for (const l of crackModel.lasers.filter((l) => l.size === head.size)) {
+    const locked = head.editable === false || head.editable === null;
+    for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
+      : l.size === head.size && !l.bespoke)) {
       laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
-    laser.title = 'The head; the ship\'s own is picked first';
+    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · figures unavailable`, head.stock));
+    laser.disabled = locked;
+    laser.title = head.note || 'The head; the ship\'s own is picked first';
     laser.addEventListener('change', () => {
       renderCrackSlots(row);
       renderCrackFitSummary();
       assessCrack().catch(() => {});
     });
     row.append(laser);
+    if (head.note) row.append(el('span', 'crack-head-note', head.note));
     renderCrackSlots(row);
     host.append(row);
   });
@@ -5238,6 +5243,7 @@ function crackRequest() {
     modules: [...row.querySelectorAll('.crack-module')].map((s) => s.value).filter(Boolean),
   }));
   return {
+    ship: $('#crack-ship').value || null,
     massKg: Number($('#crack-mass').value) || 0,
     resistance: Number($('#crack-resistance').value) || 0,
     instability: Number($('#crack-instability').value) || 0,
@@ -5319,7 +5325,10 @@ async function assessCrack() {
     body.append(tr);
   }
   const heads = request.heads.length;
-  $('#crack-matrix-note').textContent = `Every S${crackModel.ships.find((s) => s.class === $('#crack-ship').value)?.heads[0]?.size ?? '?'} head on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
+  const hull = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
+  $('#crack-matrix-note').textContent = hull?.heads.some((h) => h.editable === false || h.editable === null)
+    ? 'Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.'
+    : `Compatible S${hull?.heads[0]?.size ?? '?'} heads on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
 }
 
 $('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
@@ -12947,6 +12956,7 @@ const GARAGE_GROUP_WORDS = {
   EMP: 'EMP',
   QuantumInterdictionGenerator: 'Quantum interdiction',
   WeaponMining: 'Mining laser',
+  SalvageHead: 'Salvage head',
   Armor: 'Armour',
   LifeSupportGenerator: 'Life support',
   FlightController: 'Flight controller',
@@ -13688,6 +13698,10 @@ function renderGarage(data, stock) {
   notes.textContent = '';
   notes.hidden = !(s.notes && s.notes.length);
   for (const note of s.notes || []) notes.append(el('div', null, note));
+  if (data.industrialPortsKnown === false && /mining|salvage/i.test(`${ship.role || ''} ${ship.career || ''}`)) {
+    notes.hidden = false;
+    notes.append(el('div', null, 'Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.'));
+  }
 
   renderBench(data);
 }
@@ -13763,6 +13777,8 @@ function garageRigSlot(port, ship) {
   const many = port.portIds.length > 1;
   const name = port.name || port.class || 'Empty port';
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
+  button.disabled = !!port.fixedReason;
+  if (port.fixedReason) button.title = port.fixedReason;
   button.append(partMark(port.fitted, true));
 
   const body = el('span', 'garage-rig-slot-body');
@@ -13771,6 +13787,7 @@ function garageRigSlot(port, ship) {
   if (port.fitted) part.append(partChip(port.fitted));
   if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
   body.append(part);
+  if (port.fixedReason) body.append(el('span', 'garage-rig-slot-spec', port.fixedReason));
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
   button.append(body);
@@ -13912,7 +13929,7 @@ let garageOptions = null;
 
 /** The kinds in the order a pilot thinks about them, and the figure that heads each. */
 const BENCH_KINDS = ['PowerPlant', 'Cooler', 'Shield', 'QuantumDrive', 'WeaponGun', 'MissileLauncher', 'Missile', 'Radar',
-  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining'];
+  'EMP', 'QuantumInterdictionGenerator', 'WeaponMining', 'SalvageHead'];
 
 
 /**
@@ -14143,6 +14160,7 @@ function renderBench(data) {
       const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
       if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
       mid.append(sub);
+      if (port.fixedReason) mid.append(el('span', 'muted small', port.fixedReason));
       rowEl.append(mid);
 
       const figure = el('div', 'figure');
@@ -14151,7 +14169,7 @@ function renderBench(data) {
       if (second) figure.append(document.createTextNode(`${second[2]} ${second[0]}`));
       rowEl.append(figure);
 
-      rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
+      if (!port.fixedReason) rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
       list.append(rowEl);
     }
   }
@@ -14159,6 +14177,7 @@ function renderBench(data) {
 
 /** Opens the candidates for one port. */
 async function selectBenchPort(portId, revealChoices = false) {
+  if (garageBenchPorts.find((p) => p.portId === portId)?.fixedReason) return;
   const request = ++benchRequest;
   const cls = garageClass;
   garageSelectedPort = portId;

@@ -1,0 +1,3641 @@
+[
+  {
+    "className": "Mining_Laser_SHIN_Hofstede_S0",
+    "type": "WeaponMining",
+    "size": 0,
+    "grade": 1,
+    "name": "S00 Hofstede",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "S00 Hofstede",
+      "Manufacturer": {
+        "Code": "SHIN",
+        "Name": "Shubin Interstellar",
+        "UUID": "ab35f85f-919f-4457-8d58-4e885ea6c5c0"
+      },
+      "UUID": "1c2bab01-941b-4515-a6a4-5845aaa95696",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_SHIN_Hofstede_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Hofstede-S1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Hofstede-S1 Mining Laser",
+      "Manufacturer": {
+        "Code": "SHIN",
+        "Name": "Shubin Interstellar",
+        "UUID": "ab35f85f-919f-4457-8d58-4e885ea6c5c0"
+      },
+      "UUID": "077a4a94-6296-4a83-a6c4-f215f7efd1df",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_TEST_Best",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Impact II Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Impact II Mining Laser",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "ac0185ec-c252-4958-b4cb-b295e91fc809",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "WEP_TractorBeam_S3_template",
+    "type": "SalvageHead",
+    "size": 3,
+    "grade": 1,
+    "name": "SureGrip TH3 Tractor Beam",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "SureGrip TH3 Tractor Beam",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "82c34cf7-866d-4b4f-abd9-051ad1cc4b9d",
+      "Mass": 100,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Health": 1050,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 3,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 3,
+            "Maximum": 3
+          },
+          "Coolant": {
+            "Minimum": 3,
+            "Maximum": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_SHIN_Hofstede_S2",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Hofstede-S2 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Hofstede-S2 Mining Laser",
+      "Manufacturer": {
+        "Code": "SHIN",
+        "Name": "Shubin Interstellar",
+        "UUID": "ab35f85f-919f-4457-8d58-4e885ea6c5c0"
+      },
+      "UUID": "b422bcf8-b553-4b09-b2be-e92ab2f80e9a",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_GRIN_Arbor_S0",
+    "type": "WeaponMining",
+    "size": 0,
+    "grade": 1,
+    "name": "Arbor MHV Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MHV Mining Laser",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "0982203d-579f-4c3c-8b7a-c5f1c4a7ddd6",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_GRIN_Arbor_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Arbor MH1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MH1 Mining Laser",
+      "Manufacturer": {
+        "Code": "MISC",
+        "Name": "Musashi Industrial and Starflight Concern",
+        "UUID": "b28a5c61-63a4-478b-8047-5fba545d5b8a"
+      },
+      "UUID": "8bfc261a-6c67-4bec-b5b5-71407e086ec9",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_GRIN_Arbor_S2",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Arbor MH2 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MH2 Mining Laser",
+      "Manufacturer": {
+        "Code": "MISC",
+        "Name": "Musashi Industrial and Starflight Concern",
+        "UUID": "b28a5c61-63a4-478b-8047-5fba545d5b8a"
+      },
+      "UUID": "4435898e-a6cc-4f51-ab2a-805d0cf1a44a",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "WEP_TowingBeam_S3_template",
+    "type": "SalvageHead",
+    "size": 3,
+    "grade": 1,
+    "name": "SureGrip TH3 Tractor Beam",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "SureGrip TH3 Tractor Beam",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "0d787e94-efce-4316-a30b-6eb672badf1d",
+      "Mass": 100,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Health": 1050,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 3,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 3,
+            "Maximum": 3
+          },
+          "Coolant": {
+            "Minimum": 3,
+            "Maximum": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_SHIN_Klein_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Klein-S1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Klein-S1 Mining Laser",
+      "Manufacturer": {
+        "Code": "SHIN",
+        "Name": "Shubin Interstellar",
+        "UUID": "ab35f85f-919f-4457-8d58-4e885ea6c5c0"
+      },
+      "UUID": "e6b284b9-456a-4444-b5fc-7c33bf5a6945",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "WEP_TractorBeam_S3_Utility_1",
+    "type": "SalvageHead",
+    "size": 3,
+    "grade": 1,
+    "name": "SureGrip HV-S3 Tractor Beam",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "SureGrip HV-S3 Tractor Beam",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "3fb9a8c1-adee-4ace-a90c-17d4340c2b67",
+      "Mass": 100,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Health": 1050,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 3,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 3,
+            "Maximum": 3
+          },
+          "Coolant": {
+            "Minimum": 3,
+            "Maximum": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_SHIN_Klein_S0",
+    "type": "WeaponMining",
+    "size": 0,
+    "grade": 1,
+    "name": "Lawson Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Lawson Mining Laser",
+      "Manufacturer": {
+        "Code": "SHIN",
+        "Name": "Shubin Interstellar",
+        "UUID": "ab35f85f-919f-4457-8d58-4e885ea6c5c0"
+      },
+      "UUID": "40bd6a85-5695-409c-9d6c-ae1babde416a",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_SHIN_Klein_S2",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Klein-S2 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Klein-S2 Mining Laser",
+      "Manufacturer": {
+        "Code": "SHIN",
+        "Name": "Shubin Interstellar",
+        "UUID": "ab35f85f-919f-4457-8d58-4e885ea6c5c0"
+      },
+      "UUID": "41850766-d4a8-4255-be75-0d24af7280b0",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "WEP_TractorBeam_S3_Utility_2",
+    "type": "SalvageHead",
+    "size": 3,
+    "grade": 1,
+    "name": "SureGrip PR-S3 Tractor Beam",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "SureGrip PR-S3 Tractor Beam",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "254af384-de0f-4882-9e2f-23f55f66f63a",
+      "Mass": 100,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Health": 1050,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 3,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 3,
+            "Maximum": 3
+          },
+          "Coolant": {
+            "Minimum": 3,
+            "Maximum": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_TEST",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Impact II Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Impact II Mining Laser",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "5b3a2200-4b1d-4b08-9e67-88e3c62728ae",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_GRIN_Arbor_S1_Test_Active_1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Arbor MH1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MH1 Mining Laser",
+      "Manufacturer": {
+        "Code": "MISC",
+        "Name": "Musashi Industrial and Starflight Concern",
+        "UUID": "b28a5c61-63a4-478b-8047-5fba545d5b8a"
+      },
+      "UUID": "7a5a7439-15c6-4fae-ba64-788bb905af22",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "WEP_TractorBeam_S3_Military_1",
+    "type": "SalvageHead",
+    "size": 3,
+    "grade": 1,
+    "name": "ViseLock S3 Tractor Beam",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "ViseLock S3 Tractor Beam",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "1d92edcc-21c8-4a41-aa1d-9b46daa1ee94",
+      "Mass": 100,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Health": 1050,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 3,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 3,
+            "Maximum": 3
+          },
+          "Coolant": {
+            "Minimum": 3,
+            "Maximum": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_S1_Template",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Arbor MH1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MH1 Mining Laser",
+      "Manufacturer": {
+        "Code": "MISC",
+        "Name": "Musashi Industrial and Starflight Concern",
+        "UUID": "b28a5c61-63a4-478b-8047-5fba545d5b8a"
+      },
+      "UUID": "f200ee06-6fad-4bbc-8d9c-8908ac7aeb6e",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_DRAK_Golem_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Pitman Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Pitman Mining Laser",
+      "Manufacturer": {
+        "Code": "DRAK",
+        "Name": "Drake Interplanetary",
+        "UUID": "6116471c-891d-4830-8968-650b6deafc00"
+      },
+      "UUID": "5a704f96-c339-43e7-b918-7fc9957673ed",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_S0_Template",
+    "type": "WeaponMining",
+    "size": 0,
+    "grade": 1,
+    "name": "Arbor MHV Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MHV Mining Laser",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "4f04ce3b-abfd-4e2a-8c69-c00e477d3fd8",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "GRIN_TractorBeam_S3",
+    "type": "SalvageHead",
+    "size": 3,
+    "grade": 1,
+    "name": "SureGrip S3 Tractor Beam",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "SureGrip S3 Tractor Beam",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "ae2b705a-10ff-4551-aa98-c9803194e17a",
+      "Mass": 100,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Health": 1050,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 3,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 3,
+            "Maximum": 3
+          },
+          "Coolant": {
+            "Minimum": 3,
+            "Maximum": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_THCN_Impact_S2",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Impact II Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Impact II Mining Laser",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "30545178-b09e-495d-a8b8-c6267ce2b495",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_MPUV_Arm",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Arbor MH1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Arbor MH1 Mining Laser",
+      "Manufacturer": {
+        "Code": "MISC",
+        "Name": "Musashi Industrial and Starflight Concern",
+        "UUID": "b28a5c61-63a4-478b-8047-5fba545d5b8a"
+      },
+      "UUID": "5b5d11f8-a2b0-4e6e-80c3-2437cc0accae",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_THCN_Impact_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Impact I Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Impact I Mining Laser",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "6429e3d3-c813-4dfc-bc68-c95b54123722",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_THCN_Helix_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Helix I Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Helix I Mining Laser",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "81e1a10a-c7bd-401f-92e1-284115dcd6e1",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_GRIN_Lancet_S2",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Lancet MH2 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Lancet MH2 Mining Laser",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "c2006c91-f8f7-4bda-ae38-e0ca5af5c737",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_THCN_Helix_S0",
+    "type": "WeaponMining",
+    "size": 0,
+    "grade": 1,
+    "name": "S0 Helix",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "S0 Helix",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "8c95c978-9e47-46ec-88e3-a0662c13d76a",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_THCN_Helix_S2",
+    "type": "WeaponMining",
+    "size": 2,
+    "grade": 1,
+    "name": "Helix II Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Helix II Mining Laser",
+      "Manufacturer": {
+        "Code": "THCN",
+        "Name": "Thermyte Concern",
+        "UUID": "d1a1bf03-89d9-4eae-ac34-11eeb8e45d8f"
+      },
+      "UUID": "3bcde69d-3e3a-4f78-b2cb-8189b349e4d2",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 2,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 2,
+            "Maximum": 2
+          },
+          "Coolant": {
+            "Minimum": 2,
+            "Maximum": 2
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Mining_Laser_GRIN_Lancet_S1",
+    "type": "WeaponMining",
+    "size": 1,
+    "grade": 1,
+    "name": "Lancet MH1 Mining Laser",
+    "subType": "Gun",
+    "stdItem": {
+      "Name": "Lancet MH1 Mining Laser",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "ba94a262-bc0a-4484-9bbd-a4be7a2ec3e7",
+      "Mass": 1,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 100,
+        "Health": 8000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Scraper_Salvation_Small",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "Hart Scraper Module",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Hart Scraper Module",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "1743f1e2-0558-45f6-bc80-d604daf97123",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Scraper_Medium",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "Abrade Scraper Module",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Abrade Scraper Module",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "98e0e5ac-3a76-4f3f-be2f-7fabf65a8826",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Tractor_Small",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "ReadyGrip Tractor Module",
+    "subType": "SalvageModifier_TractorBeam",
+    "stdItem": {
+      "Name": "ReadyGrip Tractor Module",
+      "Manufacturer": {
+        "Name": "Unknown Manufacturer",
+        "Code": "UNKN",
+        "UUID": "00000000-0000-0000-0000-000000000000"
+      },
+      "UUID": "cdcddccb-247c-4fcb-ab5b-915822159c87",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Tractor_Template",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "Tractor Beam Module",
+    "subType": "SalvageModifier_TractorBeam",
+    "stdItem": {
+      "Name": "Tractor Beam Module",
+      "Manufacturer": {
+        "Name": "Unknown Manufacturer",
+        "Code": "UNKN",
+        "UUID": "00000000-0000-0000-0000-000000000000"
+      },
+      "UUID": "5057e573-e307-404c-be70-09ddfd28154e",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Scraper_Salvation_Medium",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "Comer Scraper Module",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Comer Scraper Module",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "089f7dc6-8ff1-415b-832d-7a96b92afdfc",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Scraper_Template",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "<= PLACEHOLDER =>",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "<= PLACEHOLDER =>",
+      "Manufacturer": {
+        "Name": "Unknown Manufacturer",
+        "Code": "UNKN",
+        "UUID": "00000000-0000-0000-0000-000000000000"
+      },
+      "UUID": "98724f48-8ed4-4ece-9911-d0a485addd37",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Scraper_Small",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "Cinch Scraper Module",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Cinch Scraper Module",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "81d7c828-42b2-46e8-b2e3-6798bdc32c23",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Scraper_Large",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "Trawler Scraper Module",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Trawler Scraper Module",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "9dd4d8a5-49ab-493f-93cb-0536050cd9b4",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Modifier_Template",
+    "type": "SalvageModifier",
+    "size": 1,
+    "grade": 1,
+    "name": "<= PLACEHOLDER =>",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "<= PLACEHOLDER =>",
+      "Manufacturer": {
+        "Name": "Unknown Manufacturer",
+        "Code": "UNKN",
+        "UUID": "00000000-0000-0000-0000-000000000000"
+      },
+      "UUID": "dddf3ee3-5713-4f2b-8b9d-be369b61e6ce",
+      "Mass": 0.1,
+      "Emission": null,
+      "Durability": null,
+      "ResourceNetwork": null
+    }
+  },
+  {
+    "className": "Salvage_Head_standard",
+    "type": "SalvageHead",
+    "size": 2,
+    "grade": 1,
+    "name": "Baler Salvage Head",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Baler Salvage Head",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "f8aabcb1-83b9-4b08-8846-acc77082cd4d",
+      "Mass": 5,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 720,
+        "Health": 5000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Salvage_Head_Template",
+    "type": "SalvageHead",
+    "size": 2,
+    "grade": 1,
+    "name": "<= PLACEHOLDER =>",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "<= PLACEHOLDER =>",
+      "Manufacturer": {
+        "Name": "Unknown Manufacturer",
+        "Code": "UNKN",
+        "UUID": "00000000-0000-0000-0000-000000000000"
+      },
+      "UUID": "6e6dca8d-1391-453e-9fd5-4321269e0392",
+      "Mass": 50,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 720,
+        "Health": 5000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  },
+  {
+    "className": "Salvage_Head_Salvation",
+    "type": "SalvageHead",
+    "size": 2,
+    "grade": 1,
+    "name": "Salvation Salvage Head",
+    "subType": "UNDEFINED",
+    "stdItem": {
+      "Name": "Salvation Salvage Head",
+      "Manufacturer": {
+        "Code": "GRIN",
+        "Name": "Greycat Industrial",
+        "UUID": "819545f4-18af-49a6-814e-ca4fd08f56e5"
+      },
+      "UUID": "f11efdf3-d564-4122-be35-6d00be27ac9a",
+      "Mass": 5,
+      "Emission": {
+        "Em": {
+          "Maximum": 0,
+          "Minimum": 0,
+          "Decay": 0.15
+        },
+        "Ir": 0
+      },
+      "Durability": {
+        "Lifetime": 720,
+        "Health": 5000,
+        "Salvageable": 1,
+        "Repairable": 1,
+        "Resistance": {
+          "Physical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Energy": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Distortion": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Thermal": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Biochemical": {
+            "Multiplier": 1,
+            "Threshold": 0
+          },
+          "Stun": {
+            "Multiplier": 1,
+            "Threshold": 0
+          }
+        }
+      },
+      "ResourceNetwork": {
+        "IsNetworked": true,
+        "IsRelay": false,
+        "DefaultPriority": 50,
+        "States": [
+          {
+            "Name": "Online",
+            "Deltas": [
+              {
+                "Type": "Consumption",
+                "Resource": "Power",
+                "Rate": 1,
+                "MinimumFraction": 1
+              }
+            ],
+            "PowerRanges": [
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              },
+              {
+                "Start": 0,
+                "Modifier": 1,
+                "RegisterRange": 0
+              }
+            ]
+          }
+        ],
+        "Repair": {
+          "MaxRepairCount": 1,
+          "TimeToRepair": 120,
+          "HealthRatio": 0.2
+        },
+        "Usage": {
+          "Power": {
+            "Minimum": 1,
+            "Maximum": 1
+          },
+          "Coolant": {
+            "Minimum": 1,
+            "Maximum": 1
+          }
+        }
+      }
+    }
+  }
+]

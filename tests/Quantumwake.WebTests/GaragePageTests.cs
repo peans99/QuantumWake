@@ -46,6 +46,50 @@ public class GaragePageTests
         return page;
     }
 
+    [Theory]
+    [InlineData("WeaponMining", "Mining laser", "Arbor MH1 Mining Laser")]
+    [InlineData("SalvageHead", "Salvage head", "Baler Salvage Head")]
+    public void Industrial_heads_are_visible_and_open_their_options(string kind, string label, string name)
+    {
+        var page = Opened();
+        page.Do($$"""
+            garageStock.ports = [{portId:'head', hardpoint:'industrial_head', group:'{{kind}}', minSize:1, maxSize:2,
+                class:'stock_head', stockClass:'stock_head', name:'{{name}}', fitted:{type:'{{kind}}',name:'{{name}}',size:1} }];
+            renderGarage(garageStock);
+            """);
+        Assert.Contains(name, page.NodeText("#garage-rig-right"));
+        Assert.Contains(label, page.NodeText("#garage-bench-ports"));
+        page.Serve("/api/garage/AEGS_Gladius/options?port=head", """{"port":{"portId":"head","kinds":[],"minSize":1,"maxSize":2},"options":[]}""");
+        page.Do("await __dom.node('#garage-rig-right').descendants().find(n => n.classList.contains('garage-rig-slot')).fire('click');");
+        Assert.Contains("GET /api/garage/AEGS_Gladius/options?port=head", page.Fetched());
+    }
+
+    [Fact]
+    public void An_old_industrial_cache_explains_the_missing_heads()
+    {
+        var page = Opened();
+        page.Do("garageStock.industrialPortsKnown = false; garageStock.ship.role = 'Light Salvage'; garageStock.sheet.notes = []; renderGarage(garageStock);");
+        Assert.False(page.Truth("__dom.node('#garage-notes').hidden"));
+        Assert.Contains("Refresh the community dataset", page.NodeText("#garage-notes"));
+        page.Do("garageStock.industrialPortsKnown = true; renderGarage(garageStock);");
+        Assert.DoesNotContain("Refresh the community dataset", page.NodeText("#garage-notes"));
+    }
+
+    [Fact]
+    public void Fixed_heads_stay_visible_without_a_swap_control()
+    {
+        var page = Opened();
+        page.Do("""
+            garageStock.ports = [{portId:'fixed',hardpoint:'head',group:'WeaponMining',name:'Pitman',class:'pitman',stockClass:'pitman',minSize:1,maxSize:1,
+                fixedReason:'Fixed Pitman head — bespoke to the Golem.'}];
+            renderGarage(garageStock);
+            """);
+        Assert.Contains("Pitman", page.NodeText("#garage-rig-right"));
+        Assert.True(page.Truth("__dom.node('#garage-rig-right').descendants().find(n => n.classList.contains('garage-rig-slot')).disabled"));
+        page.Do("await selectBenchPort('fixed');");
+        Assert.DoesNotContain("GET /api/garage/AEGS_Gladius/options?port=fixed", page.Fetched());
+    }
+
     [Fact]
     public void The_most_flown_ship_opens_first_and_the_pickers_name_it()
     {

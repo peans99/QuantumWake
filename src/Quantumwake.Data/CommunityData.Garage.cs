@@ -25,6 +25,9 @@ public sealed partial class CommunityData
     /// </summary>
     public bool HasGarage => _shipBases.Count > 0 && _parts.Count > 0;
 
+    /// <summary>Older digests discarded industrial port compatibility and need a refresh.</summary>
+    public bool HasIndustrialPorts { get; private set; }
+
     /// <summary>
     /// Whether the ship digest carries cargo grids. A digest written before
     /// 0.14.9 has the ships and not their grids - null, not empty - and the

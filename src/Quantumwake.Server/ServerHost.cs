@@ -1126,7 +1126,7 @@ public static class ServerHost
                 // Ship heads only: the S0 heads are the ROC's and the hand tool's,
                 // and the MPUV arm reuses the Arbor's name for a weaker beam.
                 lasers = mining.Lasers.Where(l => l.Size >= 1 && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
-                    .Select(l => new { l.Class, l.Name, l.Size, l.Power, l.ExtractionPower, l.FilterModifier, l.ThrottleMinimum, l.Modifiers, l.Manufacturer, l.Slots, market = Priced(l.Class) }),
+                    .Select(l => new { l.Class, l.Name, l.Size, l.Power, l.ExtractionPower, l.FilterModifier, l.ThrottleMinimum, l.Modifiers, l.Manufacturer, l.Slots, bespoke = IndustrialFit.IsBespoke(l.Class), market = Priced(l.Class) }),
                 modules = mining.Modules.Select(m => new { m.Class, m.Name, m.Active, m.Lifetime, m.Charges, m.PowerMultiplier, m.ExtractionMultiplier, m.FilterModifier, m.Modifiers, m.Manufacturer, market = Priced(m.Class) }),
                 gadgets = mining.Gadgets.Select(g => new { g.Class, g.Name, g.Modifiers, g.Manufacturer, market = Priced(g.Class) }),
                 minerals = mining.Minerals.Where(m => m.Method == "Ship"),
@@ -1234,6 +1234,15 @@ public static class ServerHost
             var modules = mining.Modules.ToDictionary(m => m.Class, StringComparer.OrdinalIgnoreCase);
             var gadget = request.Gadget is { Length: > 0 } g ? mining.Gadgets.FirstOrDefault(x => x.Class.Equals(g, StringComparison.OrdinalIgnoreCase)) : null;
 
+            var hull = request.Ship is { Length: > 0 }
+                ? MiningShips(lib.Community).FirstOrDefault(s => s.Class.Equals(request.Ship, StringComparison.OrdinalIgnoreCase)) : null;
+            if (request.Ship is { Length: > 0 } && hull is null)
+                return Results.BadRequest(new { message = "The reference does not know this mining ship." });
+            if (hull is not null && (request.Heads?.Count != hull.Heads.Count
+                || request.Heads.Where((h, i) => !lasers.TryGetValue(h.Laser, out var laser)
+                    || !IndustrialFit.Allows(hull.Heads[i].Stock, hull.Heads[i].Editable, hull.Heads[i].Size, laser.Class, laser.Size)).Any()))
+                return Results.BadRequest(new { message = "This head does not fit the ship. Fixed heads must keep their stock laser." });
+
             var heads = (request.Heads ?? [])
                 .Where(h => h.Laser is { Length: > 0 } && lasers.ContainsKey(h.Laser))
                 .Select(h => new LaserFit(lasers[h.Laser],
@@ -1248,6 +1257,11 @@ public static class ServerHost
             var size = heads.FirstOrDefault()?.Laser.Size ?? 1;
             var matrix = mining.Lasers
                 .Where(l => l.Size == size && !l.Class.Contains("MPUV", StringComparison.OrdinalIgnoreCase))
+                .Where(l => hull is not null
+                    ? hull.Heads.All(h => IndustrialFit.Allows(h.Stock, h.Editable, h.Size, l.Class, l.Size))
+                    : heads.Any(h => IndustrialFit.IsBespoke(h.Laser.Class))
+                        ? heads.All(h => h.Laser.Class.Equals(l.Class, StringComparison.OrdinalIgnoreCase))
+                        : !IndustrialFit.IsBespoke(l.Class))
                 .Select(l =>
                 {
                     var swapped = heads.Count == 0
@@ -3723,6 +3737,8 @@ public static class ServerHost
             if (ship is null) return Results.NotFound();
 
             var swaps = body.Swaps ?? new Dictionary<string, string?>();
+            if (IndustrialSwapError(community, ship, swaps) is { } fitError)
+                return Results.BadRequest(new { message = fitError });
 
             // Only what actually changed, and only what can be bought: a port
             // emptied is not a purchase, and a port put back to stock is not
@@ -3978,6 +3994,8 @@ public static class ServerHost
 
             var target = FindPort(ship.Loadout, port);
             if (target is null) return Results.NotFound(new { message = $"{ship.Name} has no port {port}." });
+            if (IndustrialPortNote(community, target) is { } fixedReason)
+                return Results.Ok(new { fixedReason, options = Array.Empty<object>() });
 
             var kinds = target.Accepts.Where(GarageKinds.Contains).ToHashSet(StringComparer.Ordinal);
 
@@ -3998,6 +4016,8 @@ public static class ServerHost
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var options = community.Parts.Values
                 .Where(p => kinds.Contains(p.Type) && p.Size >= target.MinSize && p.Size <= target.MaxSize)
+                .Where(p => !IndustrialFit.IsBespoke(p.Class) || p.Class.Equals(target.Class, StringComparison.OrdinalIgnoreCase))
+                .Where(p => p.Type != "WeaponMining" || IndustrialFit.IsMiningCandidate(p.Class))
                 .Where(p => !p.Name.Equals(p.Class, StringComparison.Ordinal) && !p.Name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase))
                 .Select(p =>
                 {
@@ -4790,7 +4810,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
     /// <summary>One mining head on a hull: the port, its size, and the laser it ships with.</summary>
-    public sealed record MiningHead(string PortId, int Size, string? Stock);
+    public sealed record MiningHead(string PortId, int Size, string? Stock, bool? Editable = null, string? Note = null);
 
     /// <summary>A hull with mining heads.</summary>
     public sealed record MiningShip(string Class, string Name, IReadOnlyList<MiningHead> Heads);
@@ -4849,7 +4869,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     /// the top level. Variants (Alliance, Teach's) are their own hulls and
     /// come out on their own.
     /// </summary>
-    static IEnumerable<MiningShip> MiningShips(CommunityData community)
+    public static IEnumerable<MiningShip> MiningShips(CommunityData community)
     {
         foreach (var ship in community.GarageShips.Values.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
         {
@@ -4863,7 +4883,9 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
                 {
                     if (string.Equals(port.Type, "WeaponMining", StringComparison.Ordinal)
                         || (port.Class?.StartsWith("Mining_Laser_", StringComparison.OrdinalIgnoreCase) ?? false))
-                        heads.Add(new MiningHead(port.PortId, port.MaxSize, port.Class));
+                        heads.Add(new MiningHead(port.PortId, port.MaxSize, port.Class,
+                            IndustrialFit.IsBespoke(port.Class) ? false : community.HasIndustrialPorts ? port.Editable : null,
+                            IndustrialPortNote(community, port)));
                     Walk(port.Children);
                 }
             }
@@ -4979,6 +5001,8 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         var ship = community.GarageShip(cls);
         if (ship is null)
             return Results.NotFound(new { message = $"The reference does not know a ship called {cls}." });
+        if (IndustrialSwapError(community, ship, swaps) is { } fitError)
+            return Results.BadRequest(new { message = fitError });
 
         var sheet = ShipSheet.Compute(ship, community.Parts, swaps);
 
@@ -4986,11 +5010,12 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         // nobody can change - life support, armour, the thrusters - shape the
         // numbers but are not offered as decisions.
         var ports = sheet.Parts
-            .Where(p => IsEditable(ship.Loadout, p.PortId))
+            .Where(p => IsEditable(ship.Loadout, p.PortId) || p.Group is "WeaponMining" or "SalvageHead")
             .Select(p => new
             {
                 p.PortId, p.Hardpoint, p.Group, p.MinSize, p.MaxSize,
                 p.Class, p.Name, p.StockClass, p.Changed,
+                fixedReason = FindPort(ship.Loadout, p.PortId) is { } port ? IndustrialPortNote(community, port) : null,
                 stockName = p.StockClass is not null && community.Parts.TryGetValue(p.StockClass, out var stock) ? stock.Name : null,
                 fitted = p.Class is not null && community.Parts.TryGetValue(p.Class, out var part) ? PartCard(part) : null
             });
@@ -4999,6 +5024,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         {
             known = true,
             dump = community.Dump,
+            industrialPortsKnown = community.HasIndustrialPorts,
             ship = new
             {
                 ship.Class, ship.Name, ship.Manufacturer, ship.Role, ship.Career, ship.Size, ship.Crew,
@@ -5022,12 +5048,32 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         }
     }
 
+    static string? IndustrialPortNote(CommunityData community, FitPort port)
+    {
+        if (port.Type is not ("WeaponMining" or "SalvageHead")) return null;
+        return IndustrialFit.FixedReason(port.Class)
+            ?? (!community.HasIndustrialPorts ? "Refresh the community dataset in Settings to check this head's compatibility."
+                : !port.Editable ? "Fixed head — the reference loadout does not allow replacements." : null);
+    }
+
+    static string? IndustrialSwapError(CommunityData community, ShipBase ship, IReadOnlyDictionary<string, string?>? swaps)
+    {
+        foreach (var (id, candidate) in swaps ?? new Dictionary<string, string?>())
+        {
+            var port = FindPort(ship.Loadout, id);
+            if (port is null || string.Equals(candidate, port.Class, StringComparison.OrdinalIgnoreCase)) continue;
+            if (IndustrialPortNote(community, port) is { } reason) return reason;
+            if (IndustrialFit.IsBespoke(candidate)) return "The Pitman head is bespoke to the Golem.";
+        }
+        return null;
+    }
+
     /// <summary>The kinds the bench offers - what a shop counter sells and a pilot swaps.</summary>
     static readonly HashSet<string> GarageKinds = new(StringComparer.Ordinal)
     {
         "QuantumDrive", "Shield", "PowerPlant", "Cooler",
         "WeaponGun", "MissileLauncher", "Missile",
-        "Radar", "EMP", "QuantumInterdictionGenerator", "WeaponMining",
+        "Radar", "EMP", "QuantumInterdictionGenerator", "WeaponMining", "SalvageHead",
     };
 
     /// <summary>A port anywhere in the tree, by the dump's id for it.</summary>
@@ -5372,7 +5418,7 @@ public sealed record ReadingDismissRequest(string Shot, bool Dismissed = true);
 public sealed record ReadingRereadRequest(string Shot);
 
 /// <summary>Body of POST /api/mining/crack: the rock as the HUD scanned it, and the fit.</summary>
-public sealed record MiningCrackRequest(double MassKg, double Resistance, double Instability, List<MiningHeadRequest>? Heads, string? Gadget);
+public sealed record MiningCrackRequest(double MassKg, double Resistance, double Instability, List<MiningHeadRequest>? Heads, string? Gadget, string? Ship = null);
 
 /// <summary>A load to fit: crates by size, and the hull to draw it in, or none for the fleet answer alone.</summary>
 public sealed record CargoFitRequest(string? Ship, Dictionary<int, int>? Crates);

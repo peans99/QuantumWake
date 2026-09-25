@@ -1,0 +1,620 @@
+[
+  {
+    "ClassName": "MISC_Prospector",
+    "Name": "MISC Prospector",
+    "Loadout": [
+      {
+        "PortId": "loadout.50",
+        "HardpointName": "hardpoint_mining_arm",
+        "ClassName": "MISC_Prospector_Mining_Arm",
+        "Type": "ToolArm.UNDEFINED",
+        "Editable": false,
+        "MinSize": 1,
+        "MaxSize": 1,
+        "CompatibleTypes": [
+          {
+            "Type": "ToolArm"
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.50.loadout.0",
+            "HardpointName": "hardpoint_mining_laser",
+            "ClassName": "Mount_Gimbal_Mining",
+            "Type": "UtilityTurret.GunTurret",
+            "Editable": true,
+            "MinSize": 1,
+            "MaxSize": 1,
+            "CompatibleTypes": [
+              {
+                "Type": "UtilityTurret",
+                "SubTypes": [
+                  "GunTurret"
+                ]
+              }
+            ],
+            "Loadout": [
+              {
+                "PortId": "loadout.50.loadout.0.loadout.0",
+                "HardpointName": "hardpoint_mining_laser",
+                "ClassName": "Mining_Laser_GRIN_Arbor_S1",
+                "Type": "WeaponMining.Gun",
+                "Editable": true,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "WeaponMining",
+                    "SubTypes": [
+                      "Gun"
+                    ]
+                  }
+                ],
+                "Loadout": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ClassName": "ARGO_MOLE",
+    "Name": "Argo MOLE",
+    "Loadout": [
+      {
+        "PortId": "loadout.22",
+        "HardpointName": "hardpoint_mining_cab_front",
+        "ClassName": "ARGO_MOLE_Turret_Front",
+        "Type": "UtilityTurret.MannedTurret",
+        "Editable": false,
+        "MinSize": 4,
+        "MaxSize": 4,
+        "CompatibleTypes": [
+          {
+            "Type": "UtilityTurret",
+            "SubTypes": [
+              "MannedTurret"
+            ]
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.22.loadout.0",
+            "HardpointName": "hardpoint_weapon_mining",
+            "ClassName": "Mining_Laser_GRIN_Arbor_S2",
+            "Type": "WeaponMining.Gun",
+            "Editable": true,
+            "MinSize": 2,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "WeaponMining",
+                "SubTypes": [
+                  "Gun"
+                ]
+              }
+            ],
+            "Loadout": []
+          }
+        ]
+      },
+      {
+        "PortId": "loadout.75",
+        "HardpointName": "hardpoint_mining_cab_right",
+        "ClassName": "ARGO_MOLE_Turret_Right",
+        "Type": "UtilityTurret.MannedTurret",
+        "Editable": false,
+        "MinSize": 4,
+        "MaxSize": 4,
+        "CompatibleTypes": [
+          {
+            "Type": "UtilityTurret",
+            "SubTypes": [
+              "MannedTurret"
+            ]
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.75.loadout.0",
+            "HardpointName": "hardpoint_weapon_mining",
+            "ClassName": "Mining_Laser_GRIN_Arbor_S2",
+            "Type": "WeaponMining.Gun",
+            "Editable": true,
+            "MinSize": 2,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "WeaponMining",
+                "SubTypes": [
+                  "Gun"
+                ]
+              }
+            ],
+            "Loadout": []
+          }
+        ]
+      },
+      {
+        "PortId": "loadout.77",
+        "HardpointName": "hardpoint_mining_cab_left",
+        "ClassName": "ARGO_MOLE_Turret_Left",
+        "Type": "UtilityTurret.MannedTurret",
+        "Editable": false,
+        "MinSize": 4,
+        "MaxSize": 4,
+        "CompatibleTypes": [
+          {
+            "Type": "UtilityTurret",
+            "SubTypes": [
+              "MannedTurret"
+            ]
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.77.loadout.0",
+            "HardpointName": "hardpoint_weapon_mining",
+            "ClassName": "Mining_Laser_GRIN_Arbor_S2",
+            "Type": "WeaponMining.Gun",
+            "Editable": true,
+            "MinSize": 2,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "WeaponMining",
+                "SubTypes": [
+                  "Gun"
+                ]
+              }
+            ],
+            "Loadout": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ClassName": "DRAK_Vulture",
+    "Name": "Drake Vulture",
+    "Loadout": [
+      {
+        "PortId": "loadout.28",
+        "HardpointName": "hardpoint_salvage_arm_right",
+        "ClassName": "DRAK_Vulture_Salvage_Arm_Right",
+        "Type": "ToolArm.UNDEFINED",
+        "Editable": false,
+        "MinSize": 1,
+        "MaxSize": 1,
+        "CompatibleTypes": [
+          {
+            "Type": "ToolArm"
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.28.loadout.0",
+            "HardpointName": "hardpoint_salvage_laser",
+            "ClassName": "Salvage_Head_standard",
+            "Type": "SalvageHead.UNDEFINED",
+            "Editable": true,
+            "MinSize": 1,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "SalvageHead"
+              }
+            ],
+            "Loadout": [
+              {
+                "PortId": "loadout.28.loadout.0.loadout.0",
+                "HardpointName": "hardpoint_salvage_subItem01",
+                "ClassName": "Salvage_Modifier_Scraper_Small",
+                "Type": "SalvageModifier.UNDEFINED",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              },
+              {
+                "PortId": "loadout.28.loadout.0.loadout.1",
+                "HardpointName": "hardpoint_salvage_subItem02",
+                "ClassName": "Salvage_Modifier_Scraper_Medium",
+                "Type": "SalvageModifier.UNDEFINED",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "PortId": "loadout.35",
+        "HardpointName": "hardpoint_salvage_arm_left",
+        "ClassName": "DRAK_Vulture_Salvage_Arm_Left",
+        "Type": "ToolArm.UNDEFINED",
+        "Editable": false,
+        "MinSize": 1,
+        "MaxSize": 1,
+        "CompatibleTypes": [
+          {
+            "Type": "ToolArm"
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.35.loadout.0",
+            "HardpointName": "hardpoint_salvage_laser",
+            "ClassName": "Salvage_Head_standard",
+            "Type": "SalvageHead.UNDEFINED",
+            "Editable": true,
+            "MinSize": 1,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "SalvageHead"
+              }
+            ],
+            "Loadout": [
+              {
+                "PortId": "loadout.35.loadout.0.loadout.0",
+                "HardpointName": "hardpoint_salvage_subItem01",
+                "ClassName": "Salvage_Modifier_Scraper_Small",
+                "Type": "SalvageModifier.UNDEFINED",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              },
+              {
+                "PortId": "loadout.35.loadout.0.loadout.1",
+                "HardpointName": "hardpoint_salvage_subItem02",
+                "ClassName": "Salvage_Modifier_Tractor_Small",
+                "Type": "SalvageModifier.SalvageModifier_TractorBeam",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ClassName": "AEGS_Reclaimer",
+    "Name": "Aegis Reclaimer",
+    "Loadout": [
+      {
+        "PortId": "loadout.42",
+        "HardpointName": "hardpoint_remote_turret_salvage_right",
+        "ClassName": "AEGS_Reclaimer_SCItem_Remote_Salvage_Turret_Right",
+        "Type": "Turret.Utility",
+        "Editable": false,
+        "MinSize": 1,
+        "MaxSize": 6,
+        "CompatibleTypes": [
+          {
+            "Type": "Turret",
+            "SubTypes": [
+              "Utility"
+            ]
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.42.loadout.0",
+            "HardpointName": "hardpoint_weapon_salvage",
+            "ClassName": "Salvage_Head_standard",
+            "Type": "SalvageHead.UNDEFINED",
+            "Editable": true,
+            "MinSize": 1,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "SalvageHead"
+              }
+            ],
+            "Loadout": [
+              {
+                "PortId": "loadout.42.loadout.0.loadout.0",
+                "HardpointName": "hardpoint_salvage_subItem01",
+                "ClassName": "Salvage_Modifier_Tractor_Small",
+                "Type": "SalvageModifier.SalvageModifier_TractorBeam",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              },
+              {
+                "PortId": "loadout.42.loadout.0.loadout.1",
+                "HardpointName": "hardpoint_salvage_subItem02",
+                "ClassName": "Salvage_Modifier_Scraper_Large",
+                "Type": "SalvageModifier.UNDEFINED",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "PortId": "loadout.43",
+        "HardpointName": "hardpoint_remote_turret_salvage_left",
+        "ClassName": "AEGS_Reclaimer_SCItem_Remote_Salvage_Turret_Left",
+        "Type": "Turret.Utility",
+        "Editable": false,
+        "MinSize": 1,
+        "MaxSize": 6,
+        "CompatibleTypes": [
+          {
+            "Type": "Turret",
+            "SubTypes": [
+              "Utility"
+            ]
+          }
+        ],
+        "Loadout": [
+          {
+            "PortId": "loadout.43.loadout.0",
+            "HardpointName": "hardpoint_weapon_salvage",
+            "ClassName": "Salvage_Head_standard",
+            "Type": "SalvageHead.UNDEFINED",
+            "Editable": true,
+            "MinSize": 1,
+            "MaxSize": 2,
+            "CompatibleTypes": [
+              {
+                "Type": "SalvageHead"
+              }
+            ],
+            "Loadout": [
+              {
+                "PortId": "loadout.43.loadout.0.loadout.0",
+                "HardpointName": "hardpoint_salvage_subItem01",
+                "ClassName": "Salvage_Modifier_Tractor_Small",
+                "Type": "SalvageModifier.SalvageModifier_TractorBeam",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              },
+              {
+                "PortId": "loadout.43.loadout.0.loadout.1",
+                "HardpointName": "hardpoint_salvage_subItem02",
+                "ClassName": "Salvage_Modifier_Scraper_Large",
+                "Type": "SalvageModifier.UNDEFINED",
+                "Editable": false,
+                "MinSize": 1,
+                "MaxSize": 1,
+                "CompatibleTypes": [
+                  {
+                    "Type": "SalvageModifier"
+                  }
+                ],
+                "Loadout": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ClassName": "DRAK_Golem",
+    "Name": "Drake Golem",
+    "Loadout": [
+      {
+        "HardpointName": "hardpoint_mining_arm",
+        "ClassName": "DRAK_Golem_Mining_Arm",
+        "UUID": "d5c7bdc2-c1a2-4576-ae4e-42bd76d7f981",
+        "Name": "Mining Arm",
+        "ManufacturerName": "Drake Interplanetary",
+        "Type": "ToolArm.UNDEFINED",
+        "Grade": 1,
+        "Loadout": [
+          {
+            "HardpointName": "hardpoint_mining_laser",
+            "ClassName": "Mount_Gimbal_Mining_Golem",
+            "UUID": "2c7b13dc-5539-4b0f-9437-419bf98bce90",
+            "Name": "",
+            "ManufacturerName": "Unknown Manufacturer",
+            "Type": "UtilityTurret.GunTurret",
+            "Grade": 1,
+            "Loadout": [
+              {
+                "HardpointName": "hardpoint_mining_laser",
+                "ClassName": "Mining_Laser_DRAK_Golem_S1",
+                "UUID": "5a704f96-c339-43e7-b918-7fc9957673ed",
+                "Name": "Pitman Mining Laser",
+                "ManufacturerName": "Drake Interplanetary",
+                "Type": "WeaponMining.Gun",
+                "Grade": 1,
+                "Loadout": [
+                  {
+                    "HardpointName": "BONE_ItemPort_Consumable_1",
+                    "Editable": true,
+                    "EditableChildren": true,
+                    "CompatibleTypes": [
+                      {
+                        "Type": "MiningModifier",
+                        "SubTypes": [
+                          "Gun"
+                        ]
+                      }
+                    ],
+                    "MaxSize": 1,
+                    "MinSize": 1,
+                    "RequiredTags": [
+                      "miningConsumable"
+                    ],
+                    "PortId": "loadout.48.loadout.0.loadout.0.loadout.0",
+                    "ParentPortId": "loadout.48.loadout.0.loadout.0",
+                    "RootPortId": "loadout.48",
+                    "Path": [
+                      "hardpoint_mining_arm",
+                      "hardpoint_mining_laser",
+                      "hardpoint_mining_laser",
+                      "BONE_ItemPort_Consumable_1"
+                    ]
+                  },
+                  {
+                    "HardpointName": "BONE_ItemPort_Consumable_2",
+                    "Editable": true,
+                    "EditableChildren": true,
+                    "CompatibleTypes": [
+                      {
+                        "Type": "MiningModifier",
+                        "SubTypes": [
+                          "Gun"
+                        ]
+                      }
+                    ],
+                    "MaxSize": 1,
+                    "MinSize": 1,
+                    "RequiredTags": [
+                      "miningConsumable"
+                    ],
+                    "PortId": "loadout.48.loadout.0.loadout.0.loadout.1",
+                    "ParentPortId": "loadout.48.loadout.0.loadout.0",
+                    "RootPortId": "loadout.48",
+                    "Path": [
+                      "hardpoint_mining_arm",
+                      "hardpoint_mining_laser",
+                      "hardpoint_mining_laser",
+                      "BONE_ItemPort_Consumable_2"
+                    ]
+                  },
+                  {
+                    "HardpointName": "VEN",
+                    "Editable": false,
+                    "EditableChildren": false,
+                    "CompatibleTypes": [
+                      {
+                        "Type": "WeaponAttachment",
+                        "SubTypes": [
+                          "Ventilation"
+                        ]
+                      }
+                    ],
+                    "MaxSize": 1,
+                    "MinSize": 1,
+                    "PortId": "loadout.48.loadout.0.loadout.0.loadout.2",
+                    "ParentPortId": "loadout.48.loadout.0.loadout.0",
+                    "RootPortId": "loadout.48",
+                    "Path": [
+                      "hardpoint_mining_arm",
+                      "hardpoint_mining_laser",
+                      "hardpoint_mining_laser",
+                      "VEN"
+                    ]
+                  }
+                ],
+                "Editable": true,
+                "EditableChildren": false,
+                "CompatibleTypes": [
+                  {
+                    "Type": "WeaponMining",
+                    "SubTypes": [
+                      "Gun"
+                    ]
+                  }
+                ],
+                "MaxSize": 1,
+                "MinSize": 1,
+                "RequiredTags": [
+                  "miningMount"
+                ],
+                "PortId": "loadout.48.loadout.0.loadout.0",
+                "ParentPortId": "loadout.48.loadout.0",
+                "RootPortId": "loadout.48",
+                "Path": [
+                  "hardpoint_mining_arm",
+                  "hardpoint_mining_laser",
+                  "hardpoint_mining_laser"
+                ]
+              }
+            ],
+            "Editable": false,
+            "EditableChildren": false,
+            "CompatibleTypes": [
+              {
+                "Type": "WeaponMining",
+                "SubTypes": [
+                  "Gun"
+                ]
+              }
+            ],
+            "MaxSize": 1,
+            "MinSize": 1,
+            "RequiredTags": [
+              "miningMount"
+            ],
+            "PortId": "loadout.48.loadout.0",
+            "ParentPortId": "loadout.48",
+            "RootPortId": "loadout.48",
+            "Path": [
+              "hardpoint_mining_arm",
+              "hardpoint_mining_laser"
+            ]
+          }
+        ],
+        "Editable": false,
+        "EditableChildren": false,
+        "CompatibleTypes": [
+          {
+            "Type": "ToolArm"
+          }
+        ],
+        "MaxSize": 1,
+        "MinSize": 1,
+        "PortId": "loadout.48",
+        "RootPortId": "loadout.48",
+        "Path": [
+          "hardpoint_mining_arm"
+        ]
+      }
+    ]
+  }
+]
