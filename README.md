@@ -365,9 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.53
+### 0.15.54
 
-- **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
+- **Prepare the full flight, then choose the cargo run.** Routes now opens as a flight plan: choose a ship, see the active plan's next stop and progress, find nearby refuel support, and keep cargo filters out of the way until you need them.
 
 - **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
 

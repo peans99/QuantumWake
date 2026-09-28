@@ -518,64 +518,104 @@
 
   <!-- ROUTES -->
   <section id="view-routes" class="view">
-    <div class="section-bar">
-      <div class="route-heading">
-        <h2>Trade routes</h2>
-        <div class="route-header-status" aria-live="polite">
-          <span id="route-ship-context">No ship selected · SCU unknown · no source</span>
-          <span class="route-readiness needs-cargo" id="route-readiness">Needs cargo SCU</span>
+    <div class="section-bar flight-toolbar">
+      <div>
+        <span class="operations-kicker">Flight</span>
+        <div class="route-heading">
+          <h2>Flight plan</h2>
+          <div class="route-header-status" aria-live="polite">
+            <span id="route-ship-context">No ship selected · SCU unknown · no source</span>
+            <span class="route-readiness needs-cargo" id="route-readiness">Needs cargo SCU</span>
+          </div>
         </div>
       </div>
-      <div class="controls">
-        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
-        <select id="routes-ranking" class="select" title="How to rank trade routes">
-          <option value="reliable">Reliable first</option>
-          <option value="profit">Highest estimated profit</option>
-        </select>
-        <select id="routes-evidence" class="select" title="How much reported availability a route needs">
-          <option value="reported">Reported capacity</option>
-          <option value="full">Reported full load</option>
-          <option value="any">Include unknown capacity</option>
-        </select>
-        <select id="routes-safety" class="select" title="How route endpoints are filtered or ranked by system security">
-          <option value="any">Any security</option>
-          <option value="prefer-monitored">Prefer monitored</option>
-          <option value="avoid-lawless">Avoid lawless</option>
-          <option value="monitored">Monitored only</option>
-          <option value="lawless">Lawless routes</option>
-        </select>
-        <select id="routes-pad" class="select" title="How much landing-pad evidence each endpoint needs">
-          <option value="any">Any landing record</option>
-          <option value="known">Known landing pads</option>
-          <option value="xl">XL pad both ends</option>
-        </select>
-        <select id="routes-profile" class="select" title="Saved route-planning presets"></select>
-        <button class="ghost tiny" id="routes-profile-save" title="Save the current ship and route filters as a local preset">Save preset</button>
-        <button class="ghost tiny" id="routes-best-safe" title="Find and highlight the most reliable route for this ship, wallet, and current pad/security choices">Best safe route</button>
-        <label class="toggle" title="Only routes starting where you are now">
-          <input type="checkbox" id="routes-here">
-          <span>From here</span>
-        </label>
-        <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
-          <input type="checkbox" id="routes-fresh-only">
-          <span>Fresh only</span>
-        </label>
+      <div class="flight-toolbar-actions">
+        <a class="ghost" href="#map" id="routes-open-plan" title="Open the active flight plan on the star map">Open active plan</a>
+        <a class="ghost" href="#map">Star map</a>
       </div>
     </div>
-    <section class="ship-plan" id="ship-plan" aria-live="polite">
+
+    <section class="flight-deck" aria-label="Flight preparation">
+      <section class="ship-plan flight-ship-card" id="ship-plan" aria-live="polite">
       <div class="ship-plan-head">
         <div>
-          <div class="card-label">Plan with this ship</div>
+          <div class="card-label">Ship for this run</div>
           <div class="ship-plan-title" id="ship-plan-title">Choose a ship from your flown roster</div>
         </div>
         <label class="ship-plan-picker" for="routes-ship">
-          <span class="muted">Current ship</span>
+          <span class="muted">Planning ship</span>
           <select id="routes-ship" class="select" title="Use this ship to constrain planning"></select>
         </label>
       </div>
       <div class="ship-plan-options" id="ship-plan-options"></div>
       <p class="muted ship-plan-limit" id="ship-plan-limit"></p>
+      </section>
+
+      <article class="flight-deck-card flight-active-plan" id="route-active-plan" aria-live="polite">
+        <span class="operations-kicker">Active route</span>
+        <h3 id="route-active-plan-status">Checking flight plans…</h3>
+        <p class="muted" id="route-active-plan-detail">Your next stop and progress will appear here.</p>
+        <a class="ghost tiny" href="#map" id="routes-open-plan-card">Open on map</a>
+      </article>
+
+      <article class="flight-deck-card flight-support-card">
+        <span class="operations-kicker">Turnaround support</span>
+        <h3>Find the nearest refuel</h3>
+        <p class="muted">Use your last known location to find a nearby refuel point, then check clinics and refinery facilities on the map.</p>
+        <button class="ghost tiny" id="routes-open-support">Find support on map</button>
+      </article>
     </section>
+
+    <section class="route-run-controls" aria-labelledby="route-run-title">
+      <div class="route-run-controls-head">
+        <div>
+          <span class="operations-kicker">Cargo run</span>
+          <h3 id="route-run-title">Find a run worth taking</h3>
+        </div>
+        <p class="muted">Rank the current price reports against your ship and available capital.</p>
+      </div>
+      <div class="route-run-primary">
+        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <select id="routes-ranking" class="select" title="How to rank trade routes">
+          <option value="reliable">Reliable first</option>
+          <option value="profit">Highest estimated profit</option>
+        </select>
+        <button class="ghost" id="routes-best-safe" title="Find and highlight the most reliable route for this ship, wallet, and current pad/security choices">Find best safe run</button>
+      </div>
+      <details class="route-advanced-controls">
+        <summary>Route filters <span>availability, security, landing pads, and saved presets</span></summary>
+        <div class="controls">
+          <select id="routes-evidence" class="select" title="How much reported availability a route needs">
+            <option value="reported">Reported capacity</option>
+            <option value="full">Reported full load</option>
+            <option value="any">Include unknown capacity</option>
+          </select>
+          <select id="routes-safety" class="select" title="How route endpoints are filtered or ranked by system security">
+            <option value="any">Any security</option>
+            <option value="prefer-monitored">Prefer monitored</option>
+            <option value="avoid-lawless">Avoid lawless</option>
+            <option value="monitored">Monitored only</option>
+            <option value="lawless">Lawless routes</option>
+          </select>
+          <select id="routes-pad" class="select" title="How much landing-pad evidence each endpoint needs">
+            <option value="any">Any landing record</option>
+            <option value="known">Known landing pads</option>
+            <option value="xl">XL pad both ends</option>
+          </select>
+          <select id="routes-profile" class="select" title="Saved route-planning presets"></select>
+          <button class="ghost tiny" id="routes-profile-save" title="Save the current ship and route filters as a local preset">Save preset</button>
+          <label class="toggle" title="Only routes starting where you are now">
+            <input type="checkbox" id="routes-here">
+            <span>From here</span>
+          </label>
+          <label class="toggle" title="Only routes whose buy and sell reports are under a day old">
+            <input type="checkbox" id="routes-fresh-only">
+            <span>Fresh only</span>
+          </label>
+        </div>
+      </details>
+    </section>
+
     <section class="route-dashboard" id="route-dashboard" hidden>
       <div class="route-dashboard-head">
         <div>
@@ -587,29 +627,29 @@
       <div class="route-watch-list" id="route-watch-list"></div>
       <div class="route-history-list" id="route-history-list"></div>
     </section>
-    <p class="muted caption">
-      Estimated UEX hauls, sized to the selected ship's documented hold and wallet. Security is by
-      system: Stanton is monitored; Pyro and Nyx are lawless; an unmatched terminal stays unknown.
-      Pad labels are the game map's recorded amenities, not a clearance guarantee for this hull. “Reported capacity”
-      requires a stock and demand report on both ends; “full load” also requires
-      those reports to cover your target SCU. A price report is not live
-      inventory, terminal access, or travel time — each row shows the evidence
-      behind its estimate and the age of its two quotes.
-      <span id="routes-origin-note"></span>
-    </p>
-    <div class="table-wrap">
-      <table id="routes-table">
-        <thead>
-          <tr>
-            <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
-            <th>Sell at</th><th class="num">Sell</th>
-            <th class="num">Margin</th><th class="num">SCU</th>
-            <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <section class="route-results-workspace" aria-labelledby="route-results-title">
+      <div class="route-results-head">
+        <div>
+          <span class="operations-kicker">Route intelligence</span>
+          <h3 id="route-results-title">Cargo opportunities</h3>
+        </div>
+        <p class="muted">Prices are leads, not live inventory. Each result shows the evidence and age behind it.</p>
+      </div>
+      <p class="muted caption">Estimated UEX hauls are sized to the selected ship's documented hold and wallet. Security is by system: Stanton is monitored; Pyro and Nyx are lawless; an unmatched terminal stays unknown. Pad labels are recorded amenities, not a clearance guarantee. <span id="routes-origin-note"></span></p>
+      <div class="table-wrap">
+        <table id="routes-table">
+          <thead>
+            <tr>
+              <th>Commodity</th><th>Buy at</th><th class="num">Buy</th>
+              <th>Sell at</th><th class="num">Sell</th>
+              <th class="num">Margin</th><th class="num">SCU</th>
+              <th class="num">Outlay</th><th class="num">Est. profit</th><th>Evidence</th><th>Capped by</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
     <section class="route-circuits" id="route-circuits" hidden>
       <div class="section-bar"><h3>Return-load circuits</h3></div>
       <p class="muted caption">Two commodity legs that return to the first terminal. Both price reports can change before you arrive; this is a loop candidate, not a guaranteed settlement.</p>

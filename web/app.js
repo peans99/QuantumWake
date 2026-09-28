@@ -11651,6 +11651,35 @@ function renderRouteHeader() {
     cargo > 0 ? 'The selected ship has a cargo constraint, so routes can be sized.' : 'No verified cargo capacity is available for the selected ship.');
 }
 
+/** The plan is authored work, so give it equal weight with the price feed.
+ *  A ship without a cargo grid can still fly a useful multi-stop plan. */
+function renderRouteFlightBrief() {
+  const card = $('#route-active-plan');
+  const status = $('#route-active-plan-status');
+  const detail = $('#route-active-plan-detail');
+  const actions = [$('#routes-open-plan'), $('#routes-open-plan-card')].filter(Boolean);
+  if (!card || !status || !detail) return;
+
+  const trip = tracked();
+  if (!trip || !trip.stops?.length) {
+    card.dataset.state = 'waiting';
+    status.textContent = 'No active plan';
+    detail.textContent = 'Choose a trade run, a shopping list, or map stops to create a shared flight plan.';
+    for (const action of actions) action.textContent = 'Start on map';
+    return;
+  }
+
+  const complete = trip.stops.filter((stop) => stop.done).length;
+  const next = nextStop(trip);
+  card.dataset.state = trip.flying ? 'flying' : complete === trip.stops.length ? 'complete' : 'ready';
+  status.textContent = trip.flying ? 'Run in progress'
+    : complete === trip.stops.length ? 'Flight plan complete' : 'Plan ready';
+  detail.textContent = next
+    ? `${trip.title} · next: ${next.place} · ${complete} of ${trip.stops.length} stops complete`
+    : `${trip.title} · every stop is crossed off`;
+  for (const action of actions) action.textContent = 'Open active plan';
+}
+
 let planningHangarLoad = null;
 async function loadPlanningInstallData() {
   if (hangarShips) return hangarShips;
@@ -12007,6 +12036,7 @@ async function loadRoutes() {
   if (!select) return;
 
   if (libraryStats) renderShipPlan();
+  renderRouteFlightBrief();
   let active = activePlanningShip();
   // The Hangar page may never have been opened this session. Fetch the same
   // installed hull record here so an optional-community-data outage does not
@@ -12242,6 +12272,20 @@ $('#routes-profile')?.addEventListener('change', () => {
 });
 $('#routes-profile-save')?.addEventListener('click', saveRouteProfile);
 $('#routes-best-safe')?.addEventListener('click', chooseBestSafeRoute);
+function openRoutePlanOnMap() {
+  showTripPanel();
+}
+
+$('#routes-open-plan')?.addEventListener('click', openRoutePlanOnMap);
+$('#routes-open-plan-card')?.addEventListener('click', openRoutePlanOnMap);
+$('#routes-open-support')?.addEventListener('click', () => {
+  window.location.hash = 'map';
+  // The map owns its service rules and closest-place explanation. Enter it
+  // through the same controls a pilot would use rather than duplicating an
+  // approximate facility answer here.
+  document.querySelector('#map-service-filter button[data-service="refuel"]')?.click();
+  $('#map-closest')?.click();
+});
 $('#routes-history-clear')?.addEventListener('click', () => {
   routeHistory = [];
   routeWatches = [];
@@ -22019,6 +22063,7 @@ const nextStop = (trip) => trip?.stops.find((s) =>
 async function loadTrips() {
   trips = await getJson(`/api/trips${importedQuery()}`);
   renderTripCard();
+  renderRouteFlightBrief();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
   // A plan can itself be the active map layer; rebuild then so adding,
