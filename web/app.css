@@ -3028,6 +3028,34 @@ td.with-track .track:focus-visible { opacity: 1; }
 
 /* ---------- jobs ---------- */
 
+/* Operations has six capable tools. The deck names the action before the
+   implementation, so an empty shopping list is still a useful first screen. */
+.operations-toolbar { align-items: center; }
+.operations-kicker { display: block; color: var(--cyan); font: 9px var(--mono); letter-spacing: .17em; text-transform: uppercase; }
+.operations-toolbar h2 { margin-top: 3px; }
+.operations-deck { margin: 0 0 18px; padding: 14px; border: 1px solid var(--rule-hot); background: linear-gradient(145deg, rgba(12, 49, 65, .22), rgba(5, 12, 20, .48) 48%, rgba(5, 12, 20, .22)); box-shadow: inset 0 1px 0 rgba(53, 200, 240, .08), 0 12px 28px rgba(0, 0, 0, .13); }
+.operations-deck-head { display: flex; justify-content: space-between; gap: 18px; align-items: end; padding: 1px 2px 12px; border-bottom: 1px solid var(--rule); }
+.operations-deck-head h3, .operations-workspace-head h3 { margin: 3px 0 0; font-size: 15px; }
+.operations-deck-head p { max-width: 53ch; margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; text-align: right; }
+.operations-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.operation-card { position: relative; display: grid; grid-template-columns: 33px minmax(0, 1fr); gap: 0 10px; min-height: 118px; padding: 12px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(140deg, rgba(12, 39, 53, .6), rgba(5, 12, 20, .34)); color: var(--text); text-align: left; text-decoration: none; font: inherit; cursor: pointer; transition: border-color .14s ease, transform .14s ease, background .14s ease; }
+.operation-card::after { content: ''; position: absolute; right: 10px; bottom: 10px; width: 18px; height: 1px; background: var(--rule-hot); transition: width .14s ease, background .14s ease; }
+.operation-card:hover, .operation-card:focus-visible { border-color: var(--cyan); background: linear-gradient(140deg, rgba(18, 69, 88, .72), rgba(5, 12, 20, .44)); transform: translateY(-1px); outline: none; }
+.operation-card:hover::after, .operation-card:focus-visible::after { width: 34px; background: var(--cyan); }
+.operation-card-primary { border-left-color: var(--cyan); background: linear-gradient(140deg, rgba(17, 75, 94, .64), rgba(6, 17, 27, .5)); }
+.operation-icon { display: flex; align-items: center; justify-content: center; width: 27px; height: 27px; border: 1px solid var(--cyan-deep); background: rgba(53, 200, 240, .08); color: var(--cyan-hot); font: 16px/1 var(--mono); clip-path: var(--chamfer); }
+.operation-card-main { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.operation-card-main b { color: var(--text); font-size: 13px; }
+.operation-card-main span { color: var(--muted); font-size: 11px; line-height: 1.42; }
+.operation-status { grid-column: 1 / -1; align-self: end; margin-top: 10px; padding-top: 7px; border-top: 1px solid rgba(53, 200, 240, .12); color: var(--dim); font: 9.5px var(--mono); letter-spacing: .06em; }
+.operation-status[data-state="active"] { color: var(--green); }
+.operations-workspace { margin-top: 14px; border: 1px solid var(--rule); border-left: 3px solid var(--cyan-deep); background: linear-gradient(150deg, rgba(9, 27, 39, .32), rgba(5, 12, 20, .18)); padding: 12px 14px 14px; }
+.operations-live-workspace { border-left-color: var(--green); }
+.operations-workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.operations-workspace-head > .muted { max-width: 56ch; font-size: 11px; line-height: 1.42; text-align: right; }
+@media (max-width: 980px) { .operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .operations-deck-head, .operations-workspace-head { align-items: start; flex-direction: column; gap: 7px; } .operations-deck-head p, .operations-workspace-head > .muted { text-align: left; } .operations-grid { grid-template-columns: 1fr; } .operation-card { min-height: 102px; } }
+
 /* The pinned job on Now, and so in the overlay: title, bar, what is missing. */
 .now-job-title { font-size: 15px; color: var(--cyan-hot, #7fe4ff); margin-bottom: 2px; }
 

@@ -365,9 +365,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.15.52
+### 0.15.53
 
-- **Find reference data faster.** Ships and parts now keep their filters, live match count, and table together, with names anchored while you inspect prices and specifications.
+- **Start each operation from one place.** The Operations menu now opens a command deck for supplies, routes, contracts, departure checks, blueprints, and Wikelo trades, with your active shopping and live contract state shown at a glance.
 
 - **Read the evidence without wading through it.** Log keeps the newest capture open, compacts earlier screenshots into an expandable timeline, and folds capture and saved-point controls away until needed.
 

@@ -15376,6 +15376,14 @@ async function loadJobs() {
   await Promise.all([loadJobContracts(), loadJobList(), fillBlueprintGoals()]);
 }
 
+/** The command deck is a door into the existing tools, not a second data model. */
+function setOperationsStatus(id, text, state = '') {
+  const status = $(id);
+  if (!status) return;
+  status.textContent = text;
+  status.dataset.state = state;
+}
+
 /**
  * The goal picker: blueprints the game has actually given you, so a craft can
  * be started from the page where progress is tracked rather than by hunting
@@ -15506,6 +15514,7 @@ async function loadJobContracts() {
   } catch { /* server not answering; treat as not playing */ }
 
   if (!live?.inGame) {
+    setOperationsStatus('#operations-contract-status', 'Waiting for a game session');
     host.append(el('p', 'muted',
       'Nothing active — the game is not running. Contracts are dropped when you leave, '
       + 'so only a live session can have any.'));
@@ -15528,12 +15537,17 @@ async function loadJobContracts() {
     c.outcome === 'InProgress' && new Date(c.at).getTime() >= since);
 
   if (!open.length && !plan?.contracts?.length) {
+    setOperationsStatus('#operations-contract-status', 'No live contracts');
     host.append(el('p', 'muted', 'No contract open in this session.'));
     landOnJobs();
     return;
   }
 
   if (plan?.contracts?.length) renderHaulPlan(host, plan);
+
+  const activeCount = Math.max(open.length, plan?.contracts?.length || 0);
+  setOperationsStatus('#operations-contract-status',
+    `${activeCount} live contract${activeCount === 1 ? '' : 's'}`, 'active');
 
   // Everything that is not a haul keeps its plain card; the hauls are on
   // the run above, with their legs.
@@ -15925,6 +15939,11 @@ async function loadJobList() {
   // pages; the cards themselves are identical.
   const lists = jobs.filter((j) => j.kind !== 'craft');
   const builds = jobs.filter((j) => j.kind === 'craft');
+  const openLists = lists.filter((j) => !j.done);
+  const missing = openLists.reduce((sum, j) => sum + Math.max(0, (j.totalCount || 0) - (j.haveCount || 0)), 0);
+  setOperationsStatus('#operations-shopping-status', openLists.length
+    ? `${openLists.length} active ${openLists.length === 1 ? 'list' : 'lists'}${missing ? ` · ${missing} item${missing === 1 ? '' : 's'} to find` : ' · all items in hand'}`
+    : 'Start a shopping list', openLists.length ? 'active' : '');
 
   if (!lists.length) {
     host.append(el('p', 'muted',
@@ -16168,13 +16187,25 @@ async function fillItemOptions(select) {
   add('Ship parts and gear', catalogue.items);
 }
 
-$('#jobs-new')?.addEventListener('click', () => {
+function openJobForm() {
   const form = $('#job-form');
-  form.hidden = !form.hidden;
+  form.hidden = false;
   fillPlaceOptions($('#job-place'), '');
   fillItemOptions($('#job-add'));
   if (!form.hidden) $('#job-title').focus();
-});
+}
+
+function toggleJobForm() {
+  const form = $('#job-form');
+  if (!form.hidden) {
+    form.hidden = true;
+    return;
+  }
+  openJobForm();
+}
+
+$('#jobs-new')?.addEventListener('click', toggleJobForm);
+$('#operations-new-list')?.addEventListener('click', openJobForm);
 
 // Picking a name writes it into the box, where it can be given a quantity like
 // any other line. The box stays the list; this only spells things.

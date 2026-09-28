@@ -29,7 +29,7 @@
     <div class="tab-group">
       <button type="button" class="group-btn">Operations<span class="caret">▾</span></button>
       <div class="group-menu">
-        <button data-view="jobs">Shopping</button>
+        <button data-view="jobs">Command deck</button>
         <button data-view="routes">Routes</button>
         <button data-view="contracts">Contracts</button>
         <button data-view="checklists">Checklists</button>
@@ -813,18 +813,62 @@
 
   <!-- JOBS -->
   <section id="view-jobs" class="view">
-    <div class="section-bar">
-      <h2>Shopping</h2>
+    <div class="section-bar operations-toolbar">
+      <div>
+        <span class="operations-kicker">Operations</span>
+        <h2>Command deck</h2>
+      </div>
       <div class="controls">
-        <button class="ghost" id="jobs-new">New list</button>
+        <button class="ghost" id="jobs-new">New shopping list</button>
       </div>
     </div>
-    <p class="muted caption">
-      Lists of things to gather, checked against what your stashes hold — so a
-      list knows what is still missing, where the rest of it is, and what the
-      missing part costs. The <em>+ list</em> button on Market, Parts and
-      Mining adds to whichever list you are filling.
-    </p>
+    <section class="operations-deck" aria-labelledby="operations-deck-title">
+      <div class="operations-deck-head">
+        <div>
+          <span class="operations-kicker">Choose a workspace</span>
+          <h3 id="operations-deck-title">What are you preparing to do?</h3>
+        </div>
+        <p>Start with the task in front of you; each workspace keeps its related planning tools together.</p>
+      </div>
+      <div class="operations-grid">
+        <button type="button" class="operation-card operation-card-primary" id="operations-new-list">
+          <span class="operation-icon" aria-hidden="true">▦</span>
+          <span class="operation-card-main"><b>Gather supplies</b><span>Make a list and check what is already in your stashes.</span></span>
+          <span class="operation-status" id="operations-shopping-status" aria-live="polite">Loading lists…</span>
+        </button>
+        <a class="operation-card" href="#routes">
+          <span class="operation-icon" aria-hidden="true">↗</span>
+          <span class="operation-card-main"><b>Plan a run</b><span>Compare cargo, ship capacity, and current trade routes.</span></span>
+          <span class="operation-status">Open route planner</span>
+        </a>
+        <a class="operation-card" href="#contracts">
+          <span class="operation-icon" aria-hidden="true">◈</span>
+          <span class="operation-card-main"><b>Review contracts</b><span>See your completed work and the live contracts from this session.</span></span>
+          <span class="operation-status" id="operations-contract-status" aria-live="polite">Checking session…</span>
+        </a>
+        <a class="operation-card" href="#checklists">
+          <span class="operation-icon" aria-hidden="true">✓</span>
+          <span class="operation-card-main"><b>Prepare departure</b><span>Keep authored checks, notes, and important tasks in one place.</span></span>
+          <span class="operation-status">Open checklists</span>
+        </a>
+        <a class="operation-card" href="#blueprints">
+          <span class="operation-icon" aria-hidden="true">✦</span>
+          <span class="operation-card-main"><b>Build a project</b><span>Turn an owned blueprint into a material goal.</span></span>
+          <span class="operation-status">Open blueprints</span>
+        </a>
+        <a class="operation-card" href="#wikelo">
+          <span class="operation-icon" aria-hidden="true">◇</span>
+          <span class="operation-card-main"><b>Browse Wikelo trades</b><span>Check collection requirements against what you already hold.</span></span>
+          <span class="operation-status">Open emporium</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="operations-workspace" aria-labelledby="shopping-workspace-title">
+      <div class="operations-workspace-head">
+        <div><span class="operations-kicker">Supplies</span><h3 id="shopping-workspace-title">Shopping lists</h3></div>
+        <span class="muted">Lists can also be filled from Market, Parts, and Mining.</span>
+      </div>
 
     <form class="job-form" id="job-form" hidden>
       <input type="text" id="job-title" placeholder="What is this for? e.g. Restock after Pyro" autocomplete="off">
@@ -841,13 +885,15 @@
     </form>
 
     <div id="jobs-list"></div>
+    </section>
 
-    <h2 class="spaced">Contracts in progress</h2>
-    <p class="muted caption">
-      Taken from the running session only — contracts are dropped when you
-      leave the game, so a closed game has none.
-    </p>
-    <div id="jobs-contracts"></div>
+    <section class="operations-workspace operations-live-workspace" aria-labelledby="contracts-workspace-title">
+      <div class="operations-workspace-head">
+        <div><span class="operations-kicker">Live session</span><h3 id="contracts-workspace-title">Contracts in progress</h3></div>
+        <span class="muted">The game drops these when you leave, so only a running session can have any.</span>
+      </div>
+      <div id="jobs-contracts"></div>
+    </section>
   </section>
 
   <!-- BLUEPRINTS -->
