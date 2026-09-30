@@ -21181,15 +21181,24 @@ let viewAnimation = null;
 let viewAnimFrom = null;
 let viewAnimTarget = null;
 
+// Which glide owns the endpoints above. applyView can start a new glide from
+// inside a step - crossing into the detailed zoom re-lays the bodies and
+// re-centres - and the old step then cleared the new glide's endpoints on its
+// way out, so the new one's first frame read null. A first visit, starting
+// zoomed right out, crossed that line on the very first search.
+let viewAnimId = 0;
+
 function animateViewTo(target, ms = 420) {
   cancelAnimationFrame(viewAnimation);
 
+  const id = ++viewAnimId;
   viewAnimFrom = { ...view };
   viewAnimTarget = { ...target };
   const start = performance.now();
   const ease = (t) => 1 - Math.pow(1 - t, 3);
 
   const step = (now) => {
+    if (id !== viewAnimId) return;
     const k = ease(Math.min(1, (now - start) / ms));
     const from = viewAnimFrom;
     const to = viewAnimTarget;
@@ -21202,6 +21211,8 @@ function animateViewTo(target, ms = 420) {
     };
     applyView();
 
+    // A newer glide started inside applyView: it owns the endpoints now.
+    if (id !== viewAnimId) return;
     if (k < 1) viewAnimation = requestAnimationFrame(step);
     else viewAnimFrom = viewAnimTarget = null;
   };

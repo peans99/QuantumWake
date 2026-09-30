@@ -385,6 +385,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.16.17
+
+- **The star map's first search opens its place.** On a first visit the map starts zoomed right out, and searching for a place could stop the map mid-glide with an error and leave the place panel shut. It now glides in and opens every time.
+
 ### 0.16.16
 
 **Pages that fit, and say things once.** A round of fixes to text that overlapped, was cut off or showed the game's own markup, found by filming every page at 125% Windows scaling.
