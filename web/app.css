@@ -503,7 +503,10 @@ body.overlay .feed .d { display: none; }
 .tabs button.active::after { opacity: 1; }
 
 .status { display: flex; align-items: center; gap: 9px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
-.status #install { max-width: 13ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Room for "LIVE · 1000 LOGS". 13ch looked like thirteen characters and held
+   about ten: the label is upper case and letter-spaced, so any install with
+   more than nine logs - every real one - read "LIVE · 60 LO…". */
+.status #install { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status .dot { box-shadow: 0 0 9px currentColor; }
 
 /* The grouped tabs still need to fit alongside the live search on a normal

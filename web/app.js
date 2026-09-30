@@ -26339,6 +26339,9 @@ async function boot() {
   try {
     const install = await getJson('/api/install');
     $('#install').textContent = `${install.channel} · ${install.backups} logs`;
+    // Said in full on hover: on a window too narrow for the top bar the label
+    // still gives way to an ellipsis, and a count cut to "60 LO…" says nothing.
+    $('#install').title = `${install.channel} install · ${install.backups} logs read`;
     $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
   } catch {
     $('#install').textContent = 'no install found';
