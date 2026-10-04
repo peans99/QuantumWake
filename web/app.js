@@ -348,6 +348,7 @@ function showView(name) {
     loadMiningPlaces().catch(() => {});
     loadLikelyMined().catch(() => {});
     loadMiningLog().catch(() => {});
+    loadRefineryOrders().catch(() => {});
     loadCrackModel().catch(() => {});
     loadSalvage().catch(() => {});
     // A rock handed over from the Log opens on the calculator; otherwise the
@@ -1110,6 +1111,7 @@ function renderNow(state) {
   renderNowFocus(state);
 
   raiseToasts(state.recentEvents);
+  noticeRefineryChanges(state);
 
   const feed = $('#now-feed');
   feed.textContent = '';
@@ -1162,6 +1164,10 @@ const TOAST_KINDS = {
   // Only disagreements. A pilot photographing a loadout takes several frames
   // in a row, and a toast apiece would teach them to ignore the toasts.
   'screen-differs': 'Screenshot differs',
+
+  // The game's own word that a refinery order finished - unless the pilot
+  // asked for the terminal's clock only, or for nothing; see refineryNotifyMode.
+  refinery: 'Refinery order complete',
 };
 
 /**
@@ -1247,6 +1253,7 @@ function raiseToasts(entries) {
 
   for (const entry of fresh.reverse()) {
     const label = TOAST_KINDS[entry.kind];
+    if (entry.kind === 'refinery' && !['mixed', 'log'].includes(refineryNotifyMode())) continue;
     if (label) toast(entry.kind, entry.text, entry.detail);
   }
 }
@@ -4623,8 +4630,8 @@ const KIND_LABELS = {
 /**
  * Ore sold that was never bought.
  *
- * The logs record no mining whatsoever - no extraction, no scan, no refinery
- * job - so this is the only trace that something was dug up rather than hauled.
+ * The logs record almost no mining - no extraction, no scan, only a refinery
+ * order finishing - so this is the only trace that something was dug up rather than hauled.
  * It is an inference and the note says so: buying somewhere the app never read
  * a log for would look exactly the same.
  */
@@ -4673,7 +4680,11 @@ function renderMiningMethods() {
   if (box.hidden) return;
   body.textContent = '';
   const pips = (n) => '●'.repeat(Math.max(0, Math.min(3, n))) + '○'.repeat(3 - Math.max(0, Math.min(3, n)));
-  for (const m of [...methods].sort((a, b) => b.yieldRating - a.yieldRating || a.costRating - b.costRating || a.name.localeCompare(b.name))) {
+  // Three is the good end on every axis, cost included. The refinery terminal
+  // describes Pyrometric Chromalysis - UEX's 3/3/1 - as "HIGH YIELD // LOW COST
+  // // SLOWEST", and with no method picked it shows Cormack's 1/2/3 as "LOW
+  // YIELD // MODERATE COST // VERY FAST". This table had read a 3 as dearest.
+  for (const m of [...methods].sort((a, b) => b.yieldRating - a.yieldRating || b.costRating - a.costRating || a.name.localeCompare(b.name))) {
     const tr = el('tr');
     tr.append(el('td', null, m.name));
     tr.append(el('td', 'muted', m.code));
@@ -4682,7 +4693,7 @@ function renderMiningMethods() {
     tr.append(el('td', 'num', pips(m.speedRating)));
     body.append(tr);
   }
-  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the dearest, the fastest. The percentages behind them are the server’s - the install names the nine methods and nothing more, and no feed carries them - so a run’s estimate above is before the method.';
+  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the cheapest, the fastest - the refinery terminal calls a three for cost “LOW COST”. The percentages behind them are the server’s and no feed carries them; the yields a refinery actually quoted you are in the table above, read off your screenshots.';
 }
 
 async function loadMiningPending() {
@@ -4745,6 +4756,272 @@ async function loadMiningPending() {
 
     list.append(row);
   }
+}
+
+/* ---------- refinery orders ---------- */
+
+/** A scan's SCU as the panel prints it: a gem cluster's in thousandths, "3.15m SCU". */
+function scanScu(scu) {
+  const n = Number(scu);
+  return n > 0 && n < 1 ? `${+(n * 1000).toFixed(2)}m SCU` : `${n} SCU`;
+}
+
+/** The terminal's own way of writing a duration: "6m 35s", "2h 10m". */
+function refineryClock(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+}
+
+/**
+ * How the pilot wants to hear that an order is ready.
+ *
+ * mixed - the game's own toast when the log says so, and the terminal's clock
+ *         a minute later if the log has not: the game was closed, or the
+ *         order was never confirmed.
+ * log   - only when the game says so.
+ * timer - only the terminal's clock, at the moment it runs out.
+ * off   - neither.
+ *
+ * A per-viewer convenience, so it is localStorage: the overlay and a browser
+ * on another screen can want different things.
+ */
+const REFINERY_NOTIFY_KEY = 'qw.refinery.notify';
+const REFINERY_NOTIFY_MODES = ['mixed', 'log', 'timer', 'off'];
+
+/** The choice made on this page, which outlives a storage that refused to keep it. */
+let refineryNotifyChoice = null;
+
+function refineryNotifyMode() {
+  if (refineryNotifyChoice) return refineryNotifyChoice;
+
+  try {
+    const saved = localStorage.getItem(REFINERY_NOTIFY_KEY);
+    return REFINERY_NOTIFY_MODES.includes(saved) ? saved : 'mixed';
+  } catch {
+    return 'mixed';
+  }
+}
+
+let refineryPicture = null;
+
+/** Timers armed for the terminal's countdowns, by order. */
+const refineryTimers = new Map();
+
+/** What the stream last showed that could change the orders: a new screenshot, or the game's toast. */
+let refineryStreamKey = null;
+
+const refineryOrderKey = (order) => `${order.station}|${order.seenAt}`;
+
+/**
+ * Where an order stands.
+ *
+ * Ready is only ever said one of two ways, and they read differently on the
+ * page and in the toast: the game said so, or the terminal's clock ran out
+ * and the game has not said so. The second is an estimate - a quote may never
+ * have been confirmed - and is worded as one.
+ */
+function refineryState(order, nowMs) {
+  if (order.completedAt) return 'done';
+  if (order.dueAt && Date.parse(order.dueAt) <= nowMs) return 'due';
+  return 'running';
+}
+
+async function loadRefineryOrders() {
+  const picture = await getJson('/api/mining/refinery').catch(() => null);
+  if (!picture) return;
+
+  refineryPicture = picture;
+  renderRefineryOrders();
+  armRefineryTimers();
+}
+
+function renderRefineryOrders() {
+  const box = $('#refinery-orders');
+  const list = $('#refinery-orders-list');
+  if (!box || !list) return;
+
+  const picture = refineryPicture;
+  const orders = picture?.orders || [];
+  const unmatched = picture?.unmatched || [];
+
+  box.hidden = orders.length === 0 && unmatched.length === 0;
+  if (box.hidden) return;
+
+  const select = $('#refinery-notify');
+  if (select) select.value = refineryNotifyMode();
+
+  $('#refinery-orders-note').textContent =
+    'Read off your screenshots of a refinery terminal - the PROCESSING screen starts the clock for certain; '
+    + 'a quote starts it only if you confirmed it. The game’s log says when an order finishes, and nothing else, '
+    + 'so “ready” is either the game’s word or the terminal’s clock, and the line says which.';
+
+  list.textContent = '';
+  const now = Date.now();
+
+  for (const order of orders) {
+    const state = refineryState(order, now);
+    const row = el('div', `mining-waiting refinery-order ${state}`);
+
+    row.append(el('span', 'name', `${order.method || 'Method not read'} · ${order.station}`));
+    row.append(el('span', 'muted', `seen ${shortTimeOf(order.seenAt)}, ${dateOf(order.seenAt)}`));
+
+    const due = order.dueAt ? shortTimeOf(order.dueAt) : null;
+    const quote = order.basis === 'quote' ? ' if you confirmed the quote' : '';
+    const said = state === 'done'
+      ? `ready — the game said so at ${timeOf(order.completedAt)}`
+      : state === 'due'
+        ? `should be ready since ${due}${quote}, by the terminal’s clock — the game has not said`
+        : `due ${due} (${refineryClock((Date.parse(order.dueAt) - now) / 1000)})${quote}`;
+    row.append(el('span', `${state === 'running' ? 'muted' : 'want'} mining-waiting-time`, said));
+
+    const detail = [
+      order.inCscu != null ? `${order.inCscu} cSCU in` : null,
+      order.outCscu != null ? `${order.outCscu} cSCU back` : null,
+      order.cost != null ? `cost ${money(order.cost)}` : null,
+    ].filter(Boolean).join(' · ');
+    if (detail) row.append(el('span', 'mining-waiting-detail', detail));
+
+    const lots = (order.lots || [])
+      .map((lot) => `${lot.mineral || lot.read}${lot.quality != null ? ` q${lot.quality}` : ''}`
+        + `${lot.quantity != null ? ` ${lot.quantity}` : ''}${lot.yield != null ? ` → ${lot.yield}` : ''}`)
+      .join(' · ');
+    if (lots) row.append(el('span', 'muted small', lots));
+
+    list.append(row);
+  }
+
+  for (const done of unmatched) {
+    const row = el('div', 'mining-waiting refinery-order done');
+    row.append(el('span', 'name', `An order at ${done.station}`));
+    row.append(el('span', 'want mining-waiting-time', `ready — the game said so at ${timeOf(done.at)}, ${dateOf(done.at)}`));
+    row.append(el('span', 'muted small', 'No screenshot of it, so nothing is known of what was in it.'));
+    list.append(row);
+  }
+
+  renderRefineryMeasured(picture?.measured || []);
+
+  // While something is counting down the line says how long is left, so it
+  // is redrawn once a minute until nothing is.
+  clearTimeout(renderRefineryOrders.tick);
+  if (orders.some((o) => refineryState(o, now) === 'running'))
+    renderRefineryOrders.tick = setTimeout(renderRefineryOrders, 60000);
+}
+
+/**
+ * The yields a refinery quoted, lot by lot: the number nobody publishes.
+ *
+ * Each row is one quote at one station's load on one evening, and the note
+ * says so - a pilot with three rows of Pyrometric Chromalysis has three
+ * readings, not a table of the method.
+ */
+function renderRefineryMeasured(rows) {
+  const box = $('#refinery-measured');
+  const body = $('#refinery-measured-table tbody');
+  if (!box || !body) return;
+
+  box.hidden = rows.length === 0;
+  if (box.hidden) return;
+
+  body.textContent = '';
+  for (const y of [...rows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))) {
+    const tr = el('tr');
+    tr.append(el('td', 'muted', `${dateOf(y.at)} ${shortTimeOf(y.at)}`));
+    tr.append(el('td', null, y.station));
+    tr.append(el('td', null, y.method));
+    tr.append(el('td', null, y.mineral));
+    tr.append(el('td', 'num', y.quality != null ? String(y.quality) : '—'));
+    tr.append(el('td', 'num', `${y.inCscu}`));
+    tr.append(el('td', 'num', `${y.outCscu}`));
+    tr.append(el('td', 'num', `${Math.round((y.outCscu / y.inCscu) * 100)}%`));
+    body.append(tr);
+  }
+
+  $('#refinery-measured-note').textContent =
+    'In and out in cSCU, as the terminal quoted them before you confirmed - the station’s bonus and its load '
+    + 'are already in the figure. One row is one quote; a small lot rounds hard, so 6 in and 2 out is not a third.';
+}
+
+/**
+ * Arms a timer for each order still counting down.
+ *
+ * Only for countdowns still in the future. An order that ran out before the
+ * page loaded is already on the list as due; announcing it now would be the
+ * page replaying history every time it is opened, which the stream's toasts
+ * are careful never to do either.
+ */
+function armRefineryTimers() {
+  for (const id of refineryTimers.values()) clearTimeout(id);
+  refineryTimers.clear();
+
+  const mode = refineryNotifyMode();
+  if (mode === 'off' || mode === 'log') return;
+
+  const graceMs = mode === 'mixed' ? (refineryPicture?.graceSeconds ?? 60) * 1000 : 0;
+  const now = Date.now();
+
+  for (const order of refineryPicture?.orders || []) {
+    if (order.completedAt || !order.dueAt) continue;
+
+    const fireAt = Date.parse(order.dueAt) + graceMs;
+    if (fireAt <= now) continue;
+
+    const key = refineryOrderKey(order);
+    refineryTimers.set(key, setTimeout(() => refineryTimerFired(key), fireAt - now));
+  }
+}
+
+/**
+ * The terminal's clock has run out. Asks the server once more first: in mixed
+ * mode the game has had a minute to say so itself, and if it has, its own
+ * toast has already been shown and this one would be the same news twice.
+ */
+async function refineryTimerFired(key) {
+  refineryTimers.delete(key);
+
+  const fresh = await getJson('/api/mining/refinery').catch(() => null);
+  if (fresh) refineryPicture = fresh;
+
+  const order = (refineryPicture?.orders || []).find((o) => refineryOrderKey(o) === key);
+  renderRefineryOrders();
+
+  if (!order || order.completedAt) return;
+
+  const mode = refineryNotifyMode();
+  if (mode === 'off' || mode === 'log') return;
+
+  const quote = order.basis === 'quote' ? ', if you confirmed the quote' : '';
+  toast('refinery-due', 'Refinery order should be ready',
+    mode === 'mixed'
+      ? `${order.station} — by the terminal’s clock${quote}; the game has not said so`
+      : `${order.station} — by the terminal’s clock${quote}`);
+}
+
+/**
+ * Called on every frame of the stream: a new screenshot or the game's own
+ * toast can change the orders, so either one fetches them again.
+ */
+function noticeRefineryChanges(state) {
+  const refineryEntries = (state.recentEvents || []).filter((e) => e.kind === 'refinery').length;
+  const key = `${state.screen?.shot || ''}|${refineryEntries}`;
+  if (key === refineryStreamKey) return;
+
+  const first = refineryStreamKey === null;
+  refineryStreamKey = key;
+  if (!first) loadRefineryOrders().catch(() => {});
+}
+
+function bindRefineryNotify() {
+  const select = $('#refinery-notify');
+  if (!select) return;
+
+  select.value = refineryNotifyMode();
+  select.addEventListener('change', () => {
+    refineryNotifyChoice = REFINERY_NOTIFY_MODES.includes(select.value) ? select.value : 'mixed';
+    try { localStorage.setItem(REFINERY_NOTIFY_KEY, refineryNotifyChoice); } catch { /* the choice lasts this page */ }
+    armRefineryTimers();
+  });
 }
 
 /**
@@ -7048,6 +7325,7 @@ const SCREEN_KINDS = {
   Reputation: 'reputation',
   Kiosk: 'kiosk',
   Mining: 'rock scan',
+  Refinery: 'refinery',
   MobiGlas: 'mobiGlas',
   Unknown: 'unread',
 };
@@ -7200,7 +7478,7 @@ function renderSighting(box, s, { full = true } = {}) {
       m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : 'mass did not read',
       m.resistancePercent != null ? `${m.resistancePercent}% resistance` : 'resistance did not read',
       m.instability != null ? `instability ${m.instability}` : 'instability did not read',
-      m.scu != null ? `${m.scu} SCU` : null,
+      m.scu != null ? scanScu(m.scu) : null,
       m.difficulty ? m.difficulty.toLowerCase() : null,
     ].filter(Boolean);
     box.append(el('div', 'muted', facts.join(' · ')));
@@ -7210,16 +7488,66 @@ function renderSighting(box, s, { full = true } = {}) {
       for (const part of m.parts) {
         const li = el('li');
         li.append(el('span', 'what', part.mineral || `read as “${part.read}”`));
-        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : 'share did not read'}${part.quality != null ? ` · quality ${part.quality}` : ''}`));
+        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : 'share did not read'}`
+          + ` · ${part.quality != null ? `quality ${part.quality}` : 'quality did not read'}`));
         list.append(li);
       }
       box.append(list);
+
+      // The panel's own checksum: shares printed to two places come to 100.
+      // Two reads agreeing is not proof - both once took 23.74% for 3.74%.
+      if (m.sharesAddUp === false)
+        box.append(el('div', 'want', `The shares add up to ${m.shareTotal}%, not 100 — at least one is misread, and the screenshot is the one to trust.`));
     }
 
     const go = el('button', 'ghost tiny', 'Mining fit');
     go.type = 'button';
     go.title = 'Open the Mining page with this rock in the calculator';
     go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });
+    box.append(go);
+  }
+
+  // A refinery terminal: the order on it, and what each lot would give back.
+  if (s.refinery) {
+    const r = s.refinery;
+    const title = {
+      processing: 'a refinery order running',
+      setup: 'a refinery quote',
+    }[r.stage] || 'a refinery terminal';
+    box.append(el('div', 'strong', `${title} at ${r.station || 'a station that did not read'}`));
+
+    const facts = [
+      r.method || (r.methodRead ? `“${r.methodRead}”` : (r.stage === 'setup' ? 'no method picked' : null)),
+      r.ratings ? r.ratings.toLowerCase() : null,
+      r.toRefine != null ? `${r.toRefine} cSCU in` : null,
+      r.cost != null ? money(r.cost) : null,
+      r.seconds != null ? (r.stage === 'processing' ? `${refineryClock(r.seconds)} left` : refineryClock(r.seconds)) : null,
+      r.capacityPercent != null ? `station at ${fmtInt(r.capacityPercent)}% capacity` : null,
+    ].filter(Boolean);
+    if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
+
+    if (full && (r.lots || []).length) {
+      const list = el('ul', 'feed screen-fittings');
+      for (const lot of r.lots) {
+        const li = el('li');
+        li.append(el('span', 'what', lot.mineral || `read as “${lot.read}”`));
+        const bits = [
+          lot.quality != null ? `quality ${lot.quality}` : null,
+          lot.quantity != null ? `${lot.quantity} cSCU` : null,
+          lot.yield != null ? `→ ${lot.yield} cSCU back` : null,
+          lot.toDo != null ? `${lot.toDo} to do` : null,
+          lot.done != null ? `${lot.done} done` : null,
+        ].filter(Boolean);
+        li.append(el('span', 'd', bits.length ? ` · ${bits.join(' · ')}` : ''));
+        list.append(li);
+      }
+      box.append(list);
+    }
+
+    const go = el('button', 'ghost tiny', 'Refinery orders');
+    go.type = 'button';
+    go.title = 'Open the Mining page on the orders read off the terminal';
+    go.addEventListener('click', () => { miningPane = 'runs'; showView('mining'); });
     box.append(go);
   }
 
@@ -26369,6 +26697,11 @@ async function boot() {
   if (!isSnapshot) {
     connectStream();
     watchScan();
+
+    // Whichever page is open: a refinery's countdown is armed from here, so
+    // its toast arrives on the Now page as well as on Mining.
+    bindRefineryNotify();
+    loadRefineryOrders().catch(() => { /* the Mining page asks again when opened */ });
 
     // Once per load, never on a timer: the offer to renew a price table that
     // has gone a day old, and the line the wipe draws under the history.

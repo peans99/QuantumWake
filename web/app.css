@@ -4874,6 +4874,20 @@ body.overlay .toast {
 .mining-waiting .want { color: var(--amber); }
 .mining-waiting-detail { grid-column: 1 / -1; color: var(--dim); font: 10px var(--mono); }
 
+/* Refinery orders read off the terminal. The two kinds of ready read apart:
+   green when the game's log said so, amber when only the terminal's clock
+   has run out - the same split the toasts make. */
+#refinery-orders { margin-bottom: 22px; }
+#refinery-orders-list { display: grid; gap: 7px; }
+.refinery-orders-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.refinery-notify { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--dim); font-size: 12px; }
+.refinery-order .muted.small { grid-column: 1 / -1; }
+.refinery-order.done { border-left-color: var(--green); }
+.refinery-order.done .want { color: var(--green); }
+.refinery-order.due { border-left-color: var(--amber); }
+.toast.refinery { border-left-color: var(--green); }
+.toast.refinery-due { border-left-color: var(--amber); }
+
 /* A haul the app believes is due back. Amber because it is the app noticing
    your own estimate has passed, not the game telling it anything. */
 #mining-log td.want { color: var(--amber); }

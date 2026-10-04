@@ -195,21 +195,28 @@ public sealed class ScreenInsightService(
         lines = await WalletSecondLook.TakeAsync(lines,
             (patch, treatment, t) => reader.ReadAsync(path, patch, treatment, t), token);
 
+        // The scan panel loses most of its figures in the whole read; see
+        // MiningSecondLook. Only runs when the whole read already made the
+        // frame a scan.
+        var scan = await MiningSecondLook.SettleAsync(lines,
+            (patch, treatment, t) => reader.ReadAsync(path, patch, treatment, t), CommodityNames(), token);
+
         watch.Stop();
 
-        var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds);
+        var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds, scan);
         readings.Add(sighting);
         return sighting;
     }
 
     /// <summary>Everything after the engine, with nothing written: what a frame's lines mean.</summary>
     public ScreenSighting Understand(
-        string shot, DateTimeOffset shotAt, IReadOnlyList<ScreenTextLine> lines, long tookMs)
+        string shot, DateTimeOffset shotAt, IReadOnlyList<ScreenTextLine> lines, long tookMs,
+        MiningScanReading? settledScan = null)
     {
         var items = library.Items();
         var ships = ShipNames(items);
 
-        var frame = ScreenFrames.Read(lines, items, ships, CommodityNames());
+        var frame = ScreenFrames.Read(lines, items, ships, CommodityNames(), settledScan);
         var beliefs = new LibraryBeliefs(library);
         var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet(before: shotAt));
 
@@ -238,7 +245,8 @@ public sealed class ScreenInsightService(
             shot, shotAt, frame.Kind,
             Summarise(frame, loadout, item),
             checks, item, loadout, frame.Map, frame.Wallet, frame.Lines, tookMs,
-            frame.Contracts, frame.Fleet, frame.Reputation, frame.Kiosk, Mining: frame.Mining);
+            frame.Contracts, frame.Fleet, frame.Reputation, frame.Kiosk, Mining: frame.Mining,
+            Refinery: frame.Refinery);
     }
 
     /// <summary>Reads the clipboard for a <c>/showlocation</c> reading.</summary>
@@ -330,14 +338,49 @@ public sealed class ScreenInsightService(
                 : "the Rep app",
         ScreenKind.Kiosk when frame.Kiosk is not null =>
             $"a kiosk {(frame.Kiosk.Buying == false ? "selling" : "buying")}, {frame.Kiosk.Rows.Count} commodities listed",
+        // A gem cluster's mass is 0.12 and its yield thousandths of a SCU, so
+        // neither is rounded to a whole number - "0 kg, 0 SCU" was the first
+        // summary of an aphorite scan.
         ScreenKind.Mining when frame.Mining is not null =>
             $"a rock scanned: {frame.Mining.Primary ?? frame.Mining.PrimaryRead ?? "mineral unread"}"
-            + (frame.Mining.MassKg is { } kg ? $", {kg:N0} kg" : ", mass unread")
+            + (frame.Mining.MassKg is { } kg ? $", {kg:#,0.##} kg" : ", mass unread")
             + (frame.Mining.ResistancePercent is { } r ? $", {r:0}% resistance" : "")
-            + (frame.Mining.Scu is { } scu ? $", {scu:0.##} SCU" : ""),
+            + (frame.Mining.Scu is { } scu ? scu is > 0 and < 1 ? $", {scu * 1000:0.##}m SCU" : $", {scu:0.##} SCU" : ""),
+        ScreenKind.Refinery when frame.Refinery is { } refinery =>
+            RefinerySummary(refinery),
         ScreenKind.MobiGlas => "a mobiGlas screen this app cannot read yet",
         _ => "nothing this app knows how to read",
     };
+
+    private static string RefinerySummary(RefineryReading refinery)
+    {
+        var at = refinery.Station ?? "a refinery";
+        var time = refinery.Seconds is { } s ? RefineryClock(s) : null;
+
+        return refinery.Stage switch
+        {
+            "processing" =>
+                $"a refinery order running at {at}"
+                + (refinery.Lots.Sum(l => l.Yield ?? 0) is > 0 and var back ? $", {back} cSCU coming back" : "")
+                + (time is null ? "" : $", {time} left"),
+            "setup" =>
+                $"a refinery quote at {at}"
+                + (refinery.Method is { } m ? $": {m}" : refinery.MethodRead is null ? ", no method picked" : $": {refinery.MethodRead}")
+                + (refinery.ToRefine is > 0 and var n ? $", {n} cSCU in" : "")
+                + (refinery.Cost is { } c ? $", {c:#,0.##} aUEC" : "")
+                + (time is null ? "" : $", {time}"),
+            _ => $"the refinery at {at}" + (refinery.CapacityPercent is { } p ? $", at {p:#,0}% capacity" : ""),
+        };
+    }
+
+    /// <summary>The terminal's own way of writing a duration: "6m 35s", "2h 10m".</summary>
+    internal static string RefineryClock(int seconds)
+    {
+        var t = TimeSpan.FromSeconds(seconds);
+        return t.TotalHours >= 1
+            ? $"{(int)t.TotalHours}h {t.Minutes}m"
+            : $"{t.Minutes}m {t.Seconds}s";
+    }
 
     private static ScreenScan ItemScan(
         string shot, DateTimeOffset shotAt, ScreenFrame frame,

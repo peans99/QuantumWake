@@ -14,7 +14,8 @@ question was whether this install holds enough to do the same. It holds all
 of it and a little more. None of it was being read: the Garage's community
 part digest carries a mining laser's mass and health and nothing it does to a
 rock, and the logs record no mining at all - no scan, no fracture, no
-extraction - which is why the Mining page's "mine" figure is ore sold that
+extraction; the one exception, a refinery order finishing, turned up on
+2026-10-04 and is under *Refinery orders* below - which is why the Mining page's "mine" figure is ore sold that
 was never bought, an inference, and stays so - kept to the minerals the
 deposit tables name since 0.14.5, because a mission reward or a found
 trinket leaves the hold the same way (a Year of the Rat Envelope sold for
@@ -149,10 +150,10 @@ tables and never multiplies it in as a yield.
 **Refining itself is not in the files.** `RefiningProcess` has nine records
 and each is two enums and a name - Slow/Normal/Fast × Careful/Normal/
 Wasteful - with no yield, cost or time on any of them; those are the
-server's. The community tables (and UEX's yields feed) are the only source,
-which is why the yield column reads from the feed and the app has no
-refinery calculator of its own beyond the mining log's "waiting on a
-refinery" and the yields it already shows.
+server's. The community tables (and UEX's yields feed) were the only source
+until 0.16.19, when the refinery terminal's own screen started being read -
+see *Refinery orders* below: it prints the yield, the cost and the time for
+the ore in front of it.
 
 **The methods, since 0.14.10.** UEX's `refineries_methods` is nine records
 with the game's own three-point ratings - `rating_yield`, `rating_cost`,
@@ -170,6 +171,13 @@ containing the other and not at all otherwise: a bonus at the wrong station
 is worse than none. "Dinyx or Cormack, at which station, for this ore" is
 therefore answered as far as the data goes - the station from the yields
 feed, the method from its pips - and no further.
+
+**Three is the cheap end.** Until 0.16.19 the methods table said a cost of
+3 was dearest. The terminal says otherwise, twice on one evening: it
+describes Pyrometric Chromalysis - UEX's 3 / 3 / 1 - as "HIGH YIELD // LOW
+COST // SLOWEST", and with no method picked shows "LOW YIELD // MODERATE
+COST // VERY FAST", which is Cormack's 1 / 2 / 3. Every axis runs 1 worst to
+3 best, cost included, and the table now sorts and says so.
 
 ## The scan panel, read
 
@@ -200,9 +208,92 @@ and leaves instability as typed, and says so.
 
 The Log tab lists a scan with its figures and offers *Can it be cracked?*,
 which opens the Mining page with the rock in the form; the page's *Use the
-last scanned rock* does the same from the newest scan read. **The first scan
-frame a pilot on this install takes replaces the wiki crop as the fixture**;
-the reader is expected to move.
+last scanned rock* does the same from the newest scan read.
+
+**The first frames from this install, and what they changed (0.16.19).** On
+2026-10-03 a Golem at Daymar took three scans (16:02:48, 16:02:49, 16:15:38,
+3440 × 1440) and the reader filed every one as nothing. The live panel does
+not say what the wiki's said: its title is RESULTS, its labels MASS:, RES:,
+INST: and COMP., and each composition row is one line, share and name
+together - "8.56% SILICON (RAW)". The reader now takes both layouts, finds
+the labels in the title's column (the fracture HUD's RESISTANCE and
+INSTABILITY sit on the same frame, in another), and finds the mass label by
+position alone - the engine read it as "uss•.", "mss•.", "nss•.", "mgs:",
+"HAss:" and "RAss•." and never as MASS.
+
+The whole frame loses most of the panel's figures - orange on a glow - so
+the panel is read again at x2, x2.5, x3 and x1.5 (`MiningSecondLook`) and a
+figure counts when two sizes agree, the wallet's rule. On the silicon frame
+that recovered the mass (4294, at three sizes), the instability (21.89, four;
+the whole read made "21 .eø" of it), every share and both Heph qualities
+(572 and 692; x3 read the first as 72 and was outvoted). The silicon rows'
+qualities, 510 and 310, read at no size and are shown as unread. The HUD
+names minerals "SILICON (RAW)" and "HEPH (RAW)" where the install's table
+has "Raw Silicon" and "Raw Hephaestanite", so names are matched with the
+raw/ore marker taken off both sides and a four-letter stem allowed to stand
+for the one name it begins.
+
+Two findings worth keeping. **Agreement is not proof**: on the aphorite
+frame two sizes both read 23.74% as "3.74%", so the reading carries its
+shares' total (79.99 there) and the Log says when it is not 100. **The
+whole-frame read sits 33 px high**: RESULTS at y=512 whole and 545 in every
+patch, and 542 in a plain crop of the file, the same 33 px on CARGO 423 px
+lower - an offset, not a scale. The patch reaches past it and the second
+look never mixes its lines with the whole read's. The wallet's "33 px above
+the row" in `WalletPanel` is very likely this offset under another name.
+
+A gem cluster prints its SCU in thousandths - "3.15m SCU" - and its mass as
+0.12. **Mass to SCU is not one ratio**: the silicon rock is 4,294 to 16.74
+(3.90 SCU a tonne), the wiki's aluminium 6,295 to 21.07 (3.35). Each scan
+read is one more point; two do not make a density.
+
+## Refinery orders
+
+**The terminal.** Four frames at MIC-L5 on 2026-10-03, 23:08 to 23:10 - the
+station profile, a work order set up before and after picking a method, and
+the order running - are read by `ScreenFrame.Refinery.cs`. White on dark and
+upright, the terminal reads almost whole: station, stage, method and its
+ratings line, IN MANIFEST and TO REFINE, every lot's quality, quantity and
+yield, the cost, the time, the station's load and the pilot's balance. It
+missed one yield of three on the quote and the silicon's quality while
+running; the station bonuses are small green type and never read, and UEX
+carries them anyway.
+
+**What the quote measured.** Pyrometric Chromalysis at MIC-L5, at 5,435 %
+of capacity with a surcharge warning: 142 cSCU of silicon at quality 510 for
+64 back, 33 of agricium at 588 for 15 - 45 % both - and 6 of aslarite for 2;
+182 cSCU in for 121 aUEC and 6 m 35 s. The balance on the next frame was
+867,069 against 867,190 - the quote's cost to the unit, a figure the reader
+did not use. Each quote is one reading at one station's load on one evening;
+the page lists them as that, not as the method's yield.
+
+**The log.** One line, once in 234 logs:
+
+```
+<2026-10-04T03:16:54.738Z> [Notice] <SHUDEvent_OnNotification> Added notification
+"A Refinery Work Order has been Completed at MIC-L5 Modern Icarus Station: " [42] to queue. ...
+```
+
+Placing an order writes nothing; collecting it writes nothing; this toast is
+all. It is kept on the session as a `RefineryCompletion` (payload 17) and
+reaches the timeline as *Refinery order complete*.
+
+**Joined.** The running screen at 23:10:19 local read 6 m 26 s left, so due
+23:16:45; the log says 23:16:54. Nine seconds - the terminal's clock is a
+good timer and the log is the confirmation. `RefineryOrders` joins frames to
+orders (a running frame belongs to the quote whose countdown it falls
+inside) and each completion to the open order at its station whose due time
+it lies nearest. A completion with no screenshot is listed on its own; a
+quote with no running frame counts down "if you confirmed the quote".
+
+**Telling the pilot.** The *Refinery orders* block on *Haul & refinery* has
+four modes, kept per viewer: the game's toast, then the terminal's clock a
+minute after it runs out if the game has not spoken (the default - the
+minute is several times the nine seconds measured); the game's toast only;
+the clock only; neither. The two kinds of ready never share words or colour:
+green when the game said so, amber when only the clock has. A countdown that
+ran out before the page was opened is listed as due and not announced,
+because a reload must not replay history.
 
 ## The dump
 

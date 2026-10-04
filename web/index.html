@@ -2260,11 +2260,44 @@
     <div class="summary-strip" id="mining-mine"></div>
     <p class="muted caption" id="mining-mine-note" hidden></p>
 
+    <!-- Refinery orders: what the terminal's screenshots showed, and the
+         game's own toast when each one finished - the only refining the log
+         records. Hidden until there is an order or a completion to show. -->
+    <div id="refinery-orders" hidden>
+      <div class="refinery-orders-head">
+        <h4 class="spaced">Refinery orders</h4>
+        <label class="refinery-notify">Tell me when one is ready
+          <select id="refinery-notify" class="select tiny">
+            <option value="mixed">Game log, then the timer</option>
+            <option value="log">Game log only</option>
+            <option value="timer">Timer only</option>
+            <option value="off">Don't</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted caption" id="refinery-orders-note"></p>
+      <div id="refinery-orders-list"></div>
+
+      <div id="refinery-measured" hidden>
+        <h4 class="spaced">Yields your refinery quoted</h4>
+        <p class="muted caption" id="refinery-measured-note"></p>
+        <div class="table-wrap">
+          <table id="refinery-measured-table">
+            <thead><tr>
+              <th>When</th><th>Station</th><th>Method</th><th>Ore</th>
+              <th class="num">Quality</th><th class="num">In</th><th class="num">Out</th><th class="num">Yield</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <p class="muted caption">
-      The game writes down no mining at all &mdash; no rock scanned, no refinery
-      job &mdash; so this half is yours to keep. Anything you record here is your
-      own note, and it is never added to the figures above, which come from your
-      logs.
+      The game&rsquo;s log writes down almost no mining &mdash; no rock scanned, no
+      refinery order placed or collected, only an order finishing &mdash; so this
+      half is yours to keep. Anything you record here is your own note, and it is
+      never added to the figures above, which come from your logs.
     </p>
 
     <form class="mining-form" id="mining-log-form">
@@ -2313,7 +2346,7 @@
           <thead><tr>
             <th>Method</th><th>Code</th>
             <th class="num" title="UEX's rating, 1 to 3 - the game's own pips">Yield</th>
-            <th class="num" title="1 is cheapest, 3 dearest">Cost</th>
+            <th class="num" title="3 is cheapest - the terminal calls a 3 LOW COST">Cost</th>
             <th class="num" title="3 is fastest">Speed</th>
           </tr></thead>
           <tbody></tbody>

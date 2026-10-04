@@ -70,6 +70,19 @@ public enum ContractOutcome
 public sealed record BlueprintReceipt(DateTimeOffset At, string Name);
 
 /// <summary>
+/// The game saying a refinery work order finished, and where.
+/// </summary>
+/// <remarks>
+/// The one thing the log says about refining. Placing an order writes nothing,
+/// and neither does collecting it; this toast fires when the order completes.
+/// Seen once in this install's 234 logs, on 2026-10-04 at 03:16:54 UTC - nine
+/// seconds after the terminal's own countdown, read off a screenshot, said it
+/// would.
+/// </remarks>
+/// <param name="Station">The station as the toast names it - "MIC-L5 Modern Icarus Station".</param>
+public sealed record RefineryCompletion(DateTimeOffset At, string Station);
+
+/// <summary>
 /// Money a contract paid out, as the game reported it.
 /// </summary>
 /// <remarks>
@@ -346,6 +359,9 @@ public sealed record SessionSummary
 
     /// <summary>Crafting blueprints the game said were received this session.</summary>
     public IReadOnlyList<BlueprintReceipt> Blueprints { get; init; } = [];
+
+    /// <summary>Refinery work orders the game said were completed this session.</summary>
+    public IReadOnlyList<RefineryCompletion> RefineryCompletions { get; init; } = [];
 
     /// <summary>
     /// Contract payouts. A floor over cargo hauling rather than session income:

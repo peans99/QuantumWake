@@ -1008,8 +1008,31 @@ public static class ServerHost
             });
         });
 
-        // Ore sold that was never bought. The logs record no mining at all - no
-        // extraction, no scan, no refinery job - so this is the only trace that
+        // Refinery orders: what the terminal's screenshots said, and the game's
+        // log saying each one finished. The live session is asked as well as
+        // the store because the completion that matters most is the one that
+        // landed a minute ago, before any scan has stored it.
+        app.MapGet("/api/mining/refinery", (LogLibrary lib, LiveSessionService live, ScreenReadingStore readings) =>
+        {
+            var completions = lib.RefineryCompletions()
+                .Concat(live.LiveSummary.RefineryCompletions)
+                .DistinctBy(c => (c.At, c.Station))
+                .ToList();
+
+            var picture = RefineryOrders.Build(readings.All(), completions);
+
+            return new
+            {
+                picture.Orders,
+                picture.Unmatched,
+                picture.Measured,
+                graceSeconds = (int)RefineryOrders.Grace.TotalSeconds,
+                now = DateTimeOffset.UtcNow,
+            };
+        });
+
+        // Ore sold that was never bought. The logs record almost no mining - no
+        // extraction, no scan, only a refinery order finishing - so this is the only trace that
         // somebody dug it up rather than hauled it, and it is an inference
         // rather than an observation. Worded that way on the page.
         app.MapGet("/api/mining/mine", (LogLibrary lib, UexData uex) =>
@@ -1594,7 +1617,7 @@ public static class ServerHost
          */
         /*
          * A haul from the rock to the money. Every stage is typed, because the
-         * game logs no extraction, no refinery job and no collection - so this
+         * game logs no extraction, no refinery order placed and no collection - so this
          * is the pilot writing down what they did, and it stays on its own side
          * of the wall from anything observed.
          */
@@ -1640,8 +1663,8 @@ public static class ServerHost
 
                     // Said rather than computed on the page, so one build cannot
                     // word this differently from another.
-                    Caveat = "The game keeps the refinery timer and logs nothing about it, "
-                        + "so this is the time you told us to expect.",
+                    Caveat = "The game logs a refinery order only when it finishes, so this is the time you told us to expect. "
+                        + "A screenshot of the terminal puts the order under Refinery orders on the game's own clock.",
                 };
             }));
 

@@ -1964,6 +1964,14 @@ public sealed class LogLibrary : IDisposable
         ];
     }
 
+    /// <summary>Every refinery order the game said had completed, oldest first.</summary>
+    /// <remarks>
+    /// Counted with the inventory, because a refinery holds goods: a wipe that
+    /// empties stashes empties its queue too.
+    /// </remarks>
+    public IReadOnlyList<RefineryCompletion> RefineryCompletions() =>
+        [.. Counted(WipeScope.Inventory).SelectMany(s => s.RefineryCompletions).OrderBy(c => c.At)];
+
     public IReadOnlyList<BlueprintReceipt> Blueprints()
     {
         return
