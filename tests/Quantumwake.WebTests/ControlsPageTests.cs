@@ -324,7 +324,7 @@ public class ControlsPageTests
     /// <summary>
     /// Mapping: a control given an action from the stick's table, an action
     /// taken off a stick from the Actions pane, both staged into one list
-    /// with the clash the game would flag named, and applied as one write.
+    /// with one exact input moving to its newest action, and applied as one write.
     /// </summary>
     [Fact]
     public void Binding_changes_stage_from_either_pane_and_apply_together()
@@ -347,15 +347,17 @@ public class ControlsPageTests
 
         // Staging a second action on the same control replaces the first, not adds.
         page.Do("controlsStage({actionMap:'seat_general', action:'v_light_amplification_toggle', input:'js4_button6', label:'Light amplification'});");
-        Assert.Contains("3 changes", page.NodeText("#controls-pending-title"));
+        Assert.Contains("2 changes", page.NodeText("#controls-pending-title"));
         page.Do("controlsStage({actionMap:'seat_general', action:'v_light_amplification_toggle', input:'js4_button15', label:'Light amplification'});");
-        Assert.Contains("3 changes", page.NodeText("#controls-pending-title"));
+        Assert.Contains("2 changes", page.NodeText("#controls-pending-title"));
         Assert.DoesNotContain("button6 → Light", page.NodeText("#controls-pending-list"));
 
-        // A clash the game would flag: Yaw's group already has Pitch on... no; the same control in the same group.
+        // A plain button moves to its newest action instead of being staged
+        // against every action that already uses it.
         page.Do("controlsStage({actionMap:'spaceship_targeting_advanced', action:'v_target_cycle_hostile_fwd', input:'js4_button4', label:'Cycle Lock - Hostiles - Forward'});");
         page.Do("controlsStage({actionMap:'seat_general', action:'v_self_destruct', input:'js4_button4', label:'Self destruct'});");
-        Assert.Contains("also Eject in the same group", page.NodeText("#controls-pending-list"));
+        Assert.DoesNotContain("Cycle Lock - Hostiles - Forward", page.NodeText("#controls-pending-list"));
+        Assert.Contains("Eject: unbind", page.NodeText("#controls-pending-list"));
 
         page.Do("await controlsApplyBindings(__dom.node('#controls-pending-apply'));");
         var sent = page.BodyOf("/api/controls/bindings");

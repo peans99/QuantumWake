@@ -10587,15 +10587,32 @@ function paintControlsLive() {
  * Changes are staged, from either pane, and written together: one write
  * to the profile with the game closed, or one import file with it open.
  * A change is keyed by action and device, since the game keeps one binding
- * per device per action - staging a second control for the same action on
- * the same stick replaces the first.
+ * per device per action. An exact input is also exclusive: assigning Button
+ * 7 to a new action stages the old Button 7 assignment for removal instead
+ * of leaving the profile to decide which action should fire.
  */
 let controlsPending = [];
 
 function controlsStage(change) {
   const key = (c) => `${c.actionMap}/${c.action}/${ControlInput_deviceKey(c.input)}`;
-  controlsPending = controlsPending.filter((c) => key(c) !== key(change));
-  controlsPending.push(change);
+  const sameInput = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  let staged = controlsPending.filter((c) => key(c) !== key(change));
+
+  if (!change.remove) {
+    // The most recently chosen action owns an exact input. Chords deliberately
+    // do not match here: a button used as a modifier is not a plain-button
+    // binding, and Star Citizen gives that combination separate semantics.
+    staged = staged.filter((c) => c.remove || !sameInput(c.input, change.input));
+    for (const bound of controlsModel?.profile?.bindings || []) {
+      if (!sameInput(bound.input.raw, change.input)
+        || (bound.actionMap === change.actionMap && bound.action === change.action)) continue;
+      const removal = { actionMap: bound.actionMap, action: bound.action, input: bound.input.raw, remove: true, label: bound.label };
+      if (!staged.some((c) => key(c) === key(removal) && c.remove)) staged.push(removal);
+    }
+  }
+
+  staged.push(change);
+  controlsPending = staged;
   renderControlsPending();
 }
 
@@ -10630,11 +10647,11 @@ function renderControlsPending() {
     const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
     li.append(el('span', null, c.remove ? `${c.label}: unbind from ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
     if (!c.remove) {
-      // The game flags two actions on one control in the same group; say so before it does.
-      const also = (controlsModel?.profile?.bindings || []).filter((b) => b.input.raw.toLowerCase() === c.input.toLowerCase() && b.actionMap === c.actionMap && b.action !== c.action);
-      if (also.length) li.append(el('span', 'controls-warn', ` also ${also.map((b) => b.label).join(', ')} in the same group - the game will flag the clash`));
+      // A staged change replaces the exact input's current assignment. A
+      // second action is never left sharing the same plain button to be
+      // resolved differently by the game's context rules.
       const now = controlsBoundNow(c.input).filter((l) => l !== c.label);
-      if (now.length && !also.length) li.append(el('span', 'muted', ` (was ${now.join(', ')})`));
+      if (now.length) li.append(el('span', 'muted', ` (was ${now.join(', ')})`));
     }
     const undo = el('button', 'ghost small', 'undo');
     undo.type = 'button';

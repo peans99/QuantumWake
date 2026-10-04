@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.16
+### 0.16.17
+
+**One button now has one direct action.** Reassigning a joystick button moves its old direct action out of the way, so the profile never leaves the game to choose between two competing assignments. Button chords remain available for deliberate modifier combinations.
 
 **Pages that fit, and say things once.** A round of fixes to text that overlapped, was cut off or showed the game's own markup, found by filming every page at 125% Windows scaling.
 

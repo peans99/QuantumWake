@@ -183,11 +183,11 @@ public static class ControlsExport
 
     /// <summary>
     /// The profile with bindings changed. Setting an input on an action
-    /// replaces whatever that action had on the same device - the game
-    /// keeps one binding per device per action - and leaves its bindings on
-    /// other devices alone; removing one takes that rebind off, which is
-    /// the game's default back, not a cleared default. An action map or
-    /// action the profile has no line for yet is made.
+    /// replaces whatever that action had on the same device, and an exact
+    /// input belongs to one action only. Chords are separate inputs, so a
+    /// button can still be used as a modifier. Removing one takes that
+    /// rebind off, which is the game's default back, not a cleared default.
+    /// An action map or action the profile has no line for yet is made.
     /// </summary>
     public static XDocument ApplyBindings(XDocument source, IReadOnlyList<BindingChange> changes)
     {
@@ -221,6 +221,20 @@ public static class ControlsExport
             }
             else
             {
+                // The game can retain duplicate direct inputs across action
+                // maps, but which one fires is context-dependent and a
+                // mapping editor has no honest way to present that as one
+                // button. Move this exact input to the chosen action instead.
+                foreach (var other in profile.Elements("actionmap")
+                    .SelectMany(m => m.Elements("action"))
+                    .Where(a => a != action).ToList())
+                {
+                    foreach (var rebind in other.Elements("rebind")
+                        .Where(r => string.Equals((string?)r.Attribute("input"), change.Input, StringComparison.OrdinalIgnoreCase)).ToList())
+                        rebind.Remove();
+                    if (!other.HasElements) other.Remove();
+                }
+
                 // One binding per device on an action: the old one on this
                 // device goes, one on a keyboard or another stick stays.
                 foreach (var rebind in action.Elements("rebind").Where(r => ControlInput.Parse((string?)r.Attribute("input") ?? "").DeviceKey == input.DeviceKey).ToList())
