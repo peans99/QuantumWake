@@ -385,7 +385,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.20
+### 0.16.21
 
 **Mining screenshots that read, and a refinery that tells you when it's done.** Built from one evening's Golem run at Daymar and MIC-L5.
 
@@ -401,7 +401,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 - **The refining-methods table had cost upside down.** It said three pips of cost was the dearest; the refinery terminal itself calls a three "LOW COST". It now sorts and explains cost the right way round.
 
+- **Refinery jobs now read as a queue.** The Mining log brings jobs waiting at a refinery into one compact status panel, with ready collections in amber and remaining processing work in cyan. Each haul keeps its station, due estimate, refining method and value ceiling close at hand.
+
 - Existing logs are read again once after updating, so the refinery order that finished before you updated is there too.
+
+**Also in this release**
+
+- **One button now has one direct action.** Reassigning a joystick button moves its old direct action out of the way, so the profile never leaves the game to choose between two competing assignments. Button chords remain available for deliberate modifier combinations.
 
 ### 0.16.18
 

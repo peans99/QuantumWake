@@ -141,6 +141,21 @@ public sealed class ControlsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Binding_an_exact_input_moves_it_off_the_other_action()
+    {
+        var changed = ControlsExport.ApplyBindings(XDocument.Parse(Live),
+        [
+            new BindingChange("spaceship_targeting", "v_target_cycle_all_fwd", "js2_button7"),
+        ]);
+        var profile = ControlProfile.Parse(changed);
+
+        Assert.DoesNotContain(profile.Bindings, b => b.Action == "v_eject");
+        var cycle = Assert.Single(profile.Bindings, b => b.Action == "v_target_cycle_all_fwd");
+        Assert.Equal("js2_button7", cycle.Input.Raw);
+        Assert.Contains(profile.Bindings, b => b.Input.Raw == "js2_button5+js2_button11");
+    }
+
+    [Fact]
     public void The_diff_names_what_moved_what_went_and_what_arrived()
     {
         var older = ControlProfile.Parse(XDocument.Parse(Live));
