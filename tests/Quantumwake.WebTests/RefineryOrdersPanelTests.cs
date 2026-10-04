@@ -24,7 +24,7 @@ namespace Quantumwake.WebTests;
 public class RefineryOrdersPanelTests
 {
     private const string Running = """
-        {"orders":[{"station":"MIC-L5 Modern Icarus Station","seenAt":"2026-10-04T03:10:04+00:00","shot":"running.jpg",
+        {"orders":[{"id":"order:MIC:1","station":"MIC-L5 Modern Icarus Station","seenAt":"2026-10-04T03:10:04+00:00","shot":"running.jpg",
           "basis":"running","dueAt":"2026-10-04T03:16:45+00:00","method":"Pyrometric Chromalysis","cost":121,
           "inCscu":182,"outCscu":81,"completedAt":null,
           "lots":[{"read":"SILICON (RAW)","mineral":"Raw Silicon","quality":510,"quantity":142,"yield":64}]}],
@@ -90,13 +90,13 @@ public class RefineryOrdersPanelTests
     public void A_completion_with_no_screenshot_is_listed_for_what_it_is()
     {
         var page = Opened("""
-            {"orders":[],"unmatched":[{"at":"2026-10-04T03:16:54+00:00","station":"MIC-L5 Modern Icarus Station"}],
+            {"orders":[],"unmatched":[{"id":"done:MIC:2","at":"2026-10-04T03:16:54+00:00","station":"MIC-L5 Modern Icarus Station"}],
              "measured":[],"graceSeconds":60}
             """);
 
         var text = page.NodeText("#refinery-orders-list");
         Assert.Contains("An order at MIC-L5 Modern Icarus Station", text);
-        Assert.Contains("nothing is known of what was in it", text);
+        Assert.Contains("Nothing is known of what was in it", text);
     }
 
     [Fact]
@@ -237,7 +237,113 @@ public class RefineryOrdersPanelTests
         Assert.Equal("timer", page.Text("refineryNotifyMode()"));
     }
 
-    // ---- the Log tab ----
+    // ---- waiting, refining, collected ----
+
+    private static string CollectedAt(string picture) =>
+        picture.Replace("\"completedAt\":\"2026-10-04T03:16:54+00:00\"",
+            "\"completedAt\":\"2026-10-04T03:16:54+00:00\",\"collectedAt\":\"2026-10-04T03:40:00+00:00\"");
+
+    [Fact]
+    public void A_ready_order_not_yet_collected_is_waiting_and_says_where()
+    {
+        var page = Opened(Completed);
+
+        var text = page.NodeText("#refinery-orders-list");
+        Assert.Contains("Waiting for you at MIC-L5 Modern Icarus Station", text);
+        Assert.Contains("Waiting for you", text);
+        Assert.Contains("Collected", text);   // the button
+
+        // The pane's header says it too, when the pane is the one open.
+        page.Do("miningPane = 'runs'; renderMiningWorkspaceHeader();");
+        Assert.Contains("Waiting for you at MIC-L5 Modern Icarus Station", page.NodeText("#mining-workspace-status"));
+    }
+
+    [Fact]
+    public void A_running_order_is_refining_and_cannot_be_collected_yet()
+    {
+        var page = Opened(Running);
+
+        var text = page.NodeText("#refinery-orders-list");
+        Assert.Contains("Nothing waiting at a refinery.", text);
+        Assert.Contains("Refining", text);
+        Assert.Equal(0, page.Count("__dom.node('#refinery-orders-list').querySelectorAll('button').length"));
+    }
+
+    /// <summary>Collected moves it to the history, and can be taken back: a misclick must not lose where the ore is.</summary>
+    [Fact]
+    public void A_collected_order_is_history_with_a_way_back()
+    {
+        var page = Opened(CollectedAt(Completed));
+
+        var text = page.NodeText("#refinery-orders-list");
+        Assert.Contains("Nothing waiting at a refinery.", text);
+        Assert.Contains("collected", text);
+        Assert.Contains("Not collected", text);
+
+        page.Do("miningPane = 'runs'; renderMiningWorkspaceHeader();");
+        Assert.DoesNotContain("Waiting for you at", page.NodeText("#mining-workspace-status"));
+    }
+
+    [Fact]
+    public void Pressing_collected_tells_the_server_which_order()
+    {
+        var page = Opened(Completed);
+        page.Serve("/api/mining/refinery/collected?id=order%3AMIC%3A1", CollectedAt(Completed));
+        page.Do("Array.from(__dom.node('#refinery-orders-list').querySelectorAll('button')).find((b) => b.textContent === 'Collected').click();");
+
+        Assert.Contains("POST /api/mining/refinery/collected?id=order%3AMIC%3A1", page.Fetched());
+        Assert.Contains("Not collected", page.NodeText("#refinery-orders-list"));
+        Assert.True(page.Truth("__dom.node('#now-refinery-card').hidden"));
+    }
+
+    [Fact]
+    public void A_collected_order_arms_no_timer()
+    {
+        var page = Opened(Running.Replace("\"completedAt\":null", "\"completedAt\":null,\"collectedAt\":\"2026-10-04T03:11:00+00:00\""));
+        Assert.Equal(0, page.Count(Armed + ".length"));
+    }
+
+    // ---- the Now card ----
+
+    [Fact]
+    public void The_now_card_says_where_your_ore_is_waiting()
+    {
+        var page = Opened(Completed);
+
+        Assert.False(page.Truth("__dom.node('#now-refinery-card').hidden"));
+        Assert.Equal("Waiting for you at MIC-L5 Modern Icarus Station", page.NodeText("#now-refinery"));
+        Assert.Contains("ready — the game said so", page.NodeText("#now-refinery-list"));
+        Assert.Contains("Collected", page.NodeText("#now-refinery-list"));
+    }
+
+    [Fact]
+    public void The_now_card_shows_what_is_still_refining()
+    {
+        var page = Opened(Running);
+
+        Assert.False(page.Truth("__dom.node('#now-refinery-card').hidden"));
+        Assert.Equal("Refining at MIC-L5 Modern Icarus Station", page.NodeText("#now-refinery"));
+        Assert.Contains("(4m 45s)", page.NodeText("#now-refinery-list"));
+    }
+
+    [Fact]
+    public void With_everything_collected_the_now_card_stays_away()
+    {
+        Assert.True(Opened(CollectedAt(Completed)).Truth("__dom.node('#now-refinery-card').hidden"));
+    }
+
+    [Fact]
+    public void A_lone_completion_waits_on_the_now_card_too()
+    {
+        var page = Opened("""
+            {"orders":[],"unmatched":[{"id":"done:MIC:2","at":"2026-10-04T03:16:54+00:00","station":"MIC-L5 Modern Icarus Station"}],
+             "measured":[],"graceSeconds":60}
+            """);
+
+        Assert.Equal("Waiting for you at MIC-L5 Modern Icarus Station", page.NodeText("#now-refinery"));
+    }
+
+        // ---- the Log tab ----
 
     [Fact]
     public void A_refinery_reading_lists_its_lots_on_the_log()

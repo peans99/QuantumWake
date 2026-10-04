@@ -384,6 +384,19 @@
         <div class="note" id="now-earning-note"></div>
       </article>
 
+      <!-- Where your ore is waiting. The game toasts once when an order
+           finishes and never again, and logs no collection, so this card
+           stays until you say you picked it up. -->
+      <article class="card span2" id="now-refinery-card" data-card="refinery" hidden>
+        <div class="card-label">Refinery</div>
+        <div class="card-source source-slot" data-sources="logs screenshot"></div>
+        <div class="value" id="now-refinery">&mdash;</div>
+        <ul class="feed now-refinery-list" id="now-refinery-list"></ul>
+        <div class="actions">
+          <button type="button" class="ghost tiny" id="now-refinery-open">Refinery orders…</button>
+        </div>
+      </article>
+
       <article class="card span2" id="now-job-card" data-card="job" hidden>
         <div class="card-label">Job in hand</div>
         <div class="now-job-title" id="now-job-title"></div>

@@ -295,6 +295,18 @@ green when the game said so, amber when only the clock has. A countdown that
 ran out before the page was opened is listed as due and not announced,
 because a reload must not replay history.
 
+**Finding it again (0.16.20).** The log says an order completed and then
+nothing: no collection line exists. So an order stays "ready" until the
+pilot presses **Collected**, a mark kept by order id in
+`refinery-collected.json` (`RefineryCollectedStore`) - the station folded
+and the first screenshot's moment, or for a completion with no screenshot the
+moment the log gave. The block sorts orders into *Waiting for you* (ready,
+not collected), *Refining* and *Collected* (the last five, with *Not
+collected* to undo), and leads with "Waiting for you at <station>". The same
+line is the Now page's *Refinery* card, selectable in the overlay, and the
+pane's header. The marks are not in the backup: a restore puts old orders
+back under waiting, one press each to clear.
+
 ## The dump
 
 `--mining` on this install, 2026-09-15:

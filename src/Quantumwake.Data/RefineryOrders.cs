@@ -19,6 +19,7 @@ namespace Quantumwake.Data;
 /// <param name="InCscu">What went in, from the quote's TO REFINE.</param>
 /// <param name="OutCscu">What the terminal said would come back - summed over the lots whose yield read.</param>
 /// <param name="CompletedAt">When the game's log said this order completed; null until it does.</param>
+/// <param name="CollectedAt">When the pilot said they picked it up - the game logs no collection.</param>
 public sealed record RefineryOrder(
     string Station,
     DateTimeOffset SeenAt,
@@ -30,7 +31,23 @@ public sealed record RefineryOrder(
     int? InCscu,
     int? OutCscu,
     IReadOnlyList<RefineryLot> Lots,
-    DateTimeOffset? CompletedAt = null);
+    DateTimeOffset? CompletedAt = null,
+    DateTimeOffset? CollectedAt = null)
+{
+    /// <summary>
+    /// The order's name for a collected mark: its station and the moment it was
+    /// first photographed, which nothing later changes.
+    /// </summary>
+    public string Id => RefineryOrders.IdOf("order", Station, SeenAt);
+}
+
+/// <summary>
+/// An order the log said had completed, with no screenshot of it to join.
+/// </summary>
+public sealed record RefineryDone(DateTimeOffset At, string Station, DateTimeOffset? CollectedAt = null)
+{
+    public string Id => RefineryOrders.IdOf("done", Station, At);
+}
 
 /// <summary>
 /// One lot's yield as a refinery quoted it: what went in and what it said would
@@ -56,7 +73,7 @@ public sealed record RefineryYield(
 /// </param>
 public sealed record RefineryPicture(
     IReadOnlyList<RefineryOrder> Orders,
-    IReadOnlyList<RefineryCompletion> Unmatched,
+    IReadOnlyList<RefineryDone> Unmatched,
     IReadOnlyList<RefineryYield> Measured);
 
 /// <summary>
@@ -96,8 +113,14 @@ public static class RefineryOrders
     /// </summary>
     private static readonly TimeSpan SameQuote = TimeSpan.FromMinutes(15);
 
-    public static RefineryPicture Build(IEnumerable<ScreenSighting> readings, IEnumerable<RefineryCompletion> completions)
+    /// <param name="collected">The pilot's collected marks, by order id.</param>
+    public static RefineryPicture Build(
+        IEnumerable<ScreenSighting> readings,
+        IEnumerable<RefineryCompletion> completions,
+        IReadOnlyDictionary<string, DateTimeOffset>? collected = null)
     {
+        collected ??= new Dictionary<string, DateTimeOffset>();
+
         var frames = readings
             .Where(r => !r.Dismissed && r.Refinery is { Station: not null, Seconds: > 0 } refinery
                 && (refinery.Stage == "processing" || (refinery.Stage == "setup" && (refinery.Method ?? refinery.MethodRead) is not null)))
@@ -177,9 +200,12 @@ public static class RefineryOrders
             .Select(g => g.First())
             .ToList();
 
+        DateTimeOffset? Collected(string id) => collected.TryGetValue(id, out var at) ? at : null;
+
         return new RefineryPicture(
-            [.. orders.OrderByDescending(o => o.SeenAt)],
-            [.. unmatched.OrderByDescending(c => c.At)],
+            [.. orders.Select(o => o with { CollectedAt = Collected(o.Id) }).OrderByDescending(o => o.SeenAt)],
+            [.. unmatched.Select(c => new RefineryDone(c.At, c.Station)).Select(d => d with { CollectedAt = Collected(d.Id) })
+                .OrderByDescending(d => d.At)],
             measured);
     }
 
@@ -188,6 +214,10 @@ public static class RefineryOrders
     /// the one pair measured; one containing the other also takes a title the
     /// engine read short.
     /// </summary>
+    /// <summary>A stable id: what kind, the station folded, and the moment to the tick.</summary>
+    internal static string IdOf(string kind, string station, DateTimeOffset at) =>
+        $"{kind}:{ScreenInsight.Fold(station)}:{at.UtcTicks}";
+
     internal static bool SameStation(string a, string b)
     {
         var x = ScreenInsight.Fold(a);

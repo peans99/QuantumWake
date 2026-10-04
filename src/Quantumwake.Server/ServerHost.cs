@@ -163,6 +163,7 @@ public static class ServerHost
         builder.Services.AddSingleton<ItemLabelStore>();
         builder.Services.AddSingleton<GoalStore>();
         builder.Services.AddSingleton<MiningLogStore>();
+        builder.Services.AddSingleton<RefineryCollectedStore>();
         builder.Services.AddSingleton<GameDataStatus>();
         builder.Services.AddSingleton<TextOverlayService>();
 
@@ -1012,23 +1013,43 @@ public static class ServerHost
         // log saying each one finished. The live session is asked as well as
         // the store because the completion that matters most is the one that
         // landed a minute ago, before any scan has stored it.
-        app.MapGet("/api/mining/refinery", (LogLibrary lib, LiveSessionService live, ScreenReadingStore readings) =>
+        RefineryPicture Refinery(LogLibrary lib, LiveSessionService live, ScreenReadingStore readings, RefineryCollectedStore collected)
         {
             var completions = lib.RefineryCompletions()
                 .Concat(live.LiveSummary.RefineryCompletions)
                 .DistinctBy(c => (c.At, c.Station))
                 .ToList();
 
-            var picture = RefineryOrders.Build(readings.All(), completions);
+            return RefineryOrders.Build(readings.All(), completions, collected.All());
+        }
 
-            return new
-            {
-                picture.Orders,
-                picture.Unmatched,
-                picture.Measured,
-                graceSeconds = (int)RefineryOrders.Grace.TotalSeconds,
-                now = DateTimeOffset.UtcNow,
-            };
+        static object Shaped(RefineryPicture picture) => new
+        {
+            picture.Orders,
+            picture.Unmatched,
+            picture.Measured,
+            graceSeconds = (int)RefineryOrders.Grace.TotalSeconds,
+            now = DateTimeOffset.UtcNow,
+        };
+
+        app.MapGet("/api/mining/refinery", (LogLibrary lib, LiveSessionService live, ScreenReadingStore readings, RefineryCollectedStore collected) =>
+            Shaped(Refinery(lib, live, readings, collected)));
+
+        // The pilot saying an order has been picked up, or taking that back.
+        // Only an order the server can see is accepted: a mark on an id that
+        // matches nothing would sit in the file for ever, meaning nothing.
+        app.MapPost("/api/mining/refinery/collected", (
+            string? id, bool? undo,
+            LogLibrary lib, LiveSessionService live, ScreenReadingStore readings, RefineryCollectedStore collected) =>
+        {
+            var picture = Refinery(lib, live, readings, collected);
+            var known = picture.Orders.Select(o => o.Id).Concat(picture.Unmatched.Select(d => d.Id));
+
+            if (string.IsNullOrWhiteSpace(id) || !known.Contains(id, StringComparer.Ordinal))
+                return Results.NotFound(new { trouble = "no such refinery order" });
+
+            collected.Set(id, undo == true ? null : DateTimeOffset.UtcNow);
+            return Results.Ok(Shaped(Refinery(lib, live, readings, collected)));
         });
 
         // Ore sold that was never bought. The logs record almost no mining - no

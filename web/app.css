@@ -4885,6 +4885,14 @@ body.overlay .toast {
 .refinery-order.done { border-left-color: var(--green); }
 .refinery-order.done .want { color: var(--green); }
 .refinery-order.due { border-left-color: var(--amber); }
+.refinery-order.collected { opacity: .62; border-left-color: var(--rule); }
+.refinery-order .refinery-collect { grid-column: 1 / -1; justify-self: start; }
+.refinery-waiting-line { font: 600 13px var(--display); letter-spacing: .02em; padding: 2px 0 4px; }
+.refinery-waiting-line.want { color: var(--amber); }
+.refinery-group { margin-top: 8px; color: var(--dim); font: 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.now-refinery-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.now-refinery-list li.want .what { color: var(--amber); }
+.now-refinery-list .refinery-collect { margin-left: auto; }
 .toast.refinery { border-left-color: var(--green); }
 .toast.refinery-due { border-left-color: var(--amber); }
 

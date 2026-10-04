@@ -152,6 +152,59 @@ public class RefineryOrdersTests
         Assert.Contains(session.Timeline, t => t.Kind == "refinery" && t.Detail == Mic);
     }
 
+    /// <summary>
+    /// The game logs no collection, so a collected mark is the pilot's, kept by
+    /// an id that does not move when the orders are worked out again.
+    /// </summary>
+    [Fact]
+    public void A_collected_mark_lands_on_its_order_by_a_stable_id()
+    {
+        var readings = new[] { Sighting("quote.jpg", Quoted, Quote()), Sighting("running.jpg", Running, Processing()) };
+        var completions = new[] { new RefineryCompletion(Completed, Mic) };
+
+        var first = Assert.Single(RefineryOrders.Build(readings, completions).Orders);
+        Assert.Null(first.CollectedAt);
+
+        var pickedUp = Completed.AddMinutes(20);
+        var again = Assert.Single(RefineryOrders.Build(readings, completions,
+            new Dictionary<string, DateTimeOffset> { [first.Id] = pickedUp }).Orders);
+
+        Assert.Equal(first.Id, again.Id);
+        Assert.Equal(pickedUp, again.CollectedAt);
+    }
+
+    [Fact]
+    public void A_lone_completion_can_be_marked_collected_too()
+    {
+        var lone = new RefineryCompletion(Completed, Mic);
+        var id = Assert.Single(RefineryOrders.Build([], [lone]).Unmatched).Id;
+
+        var marked = Assert.Single(RefineryOrders.Build([], [lone],
+            new Dictionary<string, DateTimeOffset> { [id] = Completed.AddHours(1) }).Unmatched);
+
+        Assert.Equal(Completed.AddHours(1), marked.CollectedAt);
+        Assert.Equal(Mic, marked.Station);
+    }
+
+    [Fact]
+    public void Collected_marks_survive_a_restart_and_can_be_taken_back()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "qw-refinery-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            new RefineryCollectedStore(folder).Set("order:MIC:1", Completed);
+            Assert.Equal(Completed, new RefineryCollectedStore(folder).All()["order:MIC:1"]);
+
+            new RefineryCollectedStore(folder).Set("order:MIC:1", null);
+            Assert.Empty(new RefineryCollectedStore(folder).All());
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("Received Blueprint: Refinery Work Order")]
     [InlineData("A Refinery Work Order has been Completed at")]

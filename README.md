@@ -385,7 +385,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.19
+### 0.16.20
 
 **Mining screenshots that read, and a refinery that tells you when it's done.** Built from one evening's Golem run at Daymar and MIC-L5.
 
@@ -394,6 +394,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 - **The refinery terminal is read.** A screenshot of a station's refinery shows on the Log with the station, method, what each lot gives back, the cost, the time and the station's load, and its balance is checked like any other.
 
 - **Refinery orders, with a timer and the game's word.** *Mining → Haul & refinery* lists every order you photographed: counting down on the terminal's own clock, then **ready** — in green when the game's log said so, in amber when only the clock has run out. Choose how you're told: the game's toast, then the timer a minute later if the game hasn't said (the default); the game only; the timer only; or nothing. Screenshot the PROCESSING screen for a sure start; a quote counts down "if you confirmed it".
+
+- **Where your ore is waiting.** The game says once that an order is done and never logs you picking it up, so the app now keeps track: *Haul & refinery* opens with "Waiting for you at MIC-L5…" and lists what is waiting, what is still refining and what you have collected. Press **Collected** when you pick an order up (and **Not collected** if you pressed it by mistake). A new **Refinery** card on the Now page — and in the overlay — shows the same thing at a glance, so the station with your ore is never more than one look away.
 
 - **Your refinery's actual yields.** Each quote you photograph adds what went in and what came back, per ore and quality — the figure no game file or feed publishes. Pyrometric Chromalysis at MIC-L5 gave back 45% of silicon and agricium on the first one.
 

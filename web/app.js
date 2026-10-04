@@ -4837,16 +4837,127 @@ async function loadRefineryOrders() {
   armRefineryTimers();
 }
 
+/**
+ * Every order and lone completion in one shape, sorted into what the pilot
+ * needs: what is waiting for them, what is still refining, what they took.
+ *
+ * Waiting is ready and not collected - ready by the game's word or by the
+ * terminal's clock, said apart on every line. The game logs no collection, so
+ * an order leaves "waiting" only when the pilot says they picked it up.
+ */
+function refineryGroups(picture, nowMs) {
+  const rows = [
+    ...(picture?.orders || []).map((order) => ({ kind: 'order', order, state: refineryState(order, nowMs) })),
+    ...(picture?.unmatched || []).map((done) => ({ kind: 'done', done, state: 'done' })),
+  ];
+  const at = (row) => Date.parse(row.kind === 'order' ? (row.order.completedAt || row.order.dueAt || row.order.seenAt) : row.done.at);
+  const collectedAt = (row) => (row.kind === 'order' ? row.order.collectedAt : row.done.collectedAt);
+
+  return {
+    waiting: rows.filter((r) => !collectedAt(r) && r.state !== 'running').sort((a, b) => at(a) - at(b)),
+    refining: rows.filter((r) => !collectedAt(r) && r.state === 'running').sort((a, b) => at(a) - at(b)),
+    collected: rows.filter((r) => collectedAt(r)).sort((a, b) => Date.parse(collectedAt(b)) - Date.parse(collectedAt(a))),
+  };
+}
+
+const refineryRowStation = (row) => (row.kind === 'order' ? row.order.station : row.done.station);
+const refineryRowId = (row) => (row.kind === 'order' ? row.order.id : row.done.id);
+
+/** One line on how ready a row is, and on whose word. */
+function refineryReadyText(row, nowMs) {
+  if (row.kind === 'done') return `ready — the game said so at ${timeOf(row.done.at)}, ${dateOf(row.done.at)}`;
+
+  const order = row.order;
+  const due = order.dueAt ? shortTimeOf(order.dueAt) : null;
+  const quote = order.basis === 'quote' ? ' if you confirmed the quote' : '';
+
+  if (row.state === 'done') return `ready — the game said so at ${timeOf(order.completedAt)}`;
+  if (row.state === 'due') return `should be ready since ${due}${quote}, by the terminal’s clock — the game has not said`;
+  return `due ${due} (${refineryClock((Date.parse(order.dueAt) - nowMs) / 1000)})${quote}`;
+}
+
+/** "Waiting for you at MIC-L5 Modern Icarus Station" - the line the pilot opened the page for. */
+function refineryWaitingLine(groups) {
+  const stations = [...new Set(groups.waiting.map(refineryRowStation))];
+  if (!stations.length) return null;
+  const orders = groups.waiting.length;
+  return `Waiting for you at ${stations.join(', ')}${orders > stations.length ? ` — ${orders} orders` : ''}`;
+}
+
+/** Marks a row picked up, or takes that back, and redraws both places it shows. */
+async function setRefineryCollected(id, undo) {
+  const response = await fetch(`/api/mining/refinery/collected?id=${encodeURIComponent(id)}${undo ? '&undo=true' : ''}`,
+    { method: 'POST' }).catch(() => null);
+  if (response?.ok) refineryPicture = await response.json();
+  renderRefineryOrders();
+  armRefineryTimers();
+}
+
+function refineryRow(row, nowMs) {
+  const collected = row.kind === 'order' ? row.order.collectedAt : row.done.collectedAt;
+  const state = collected ? 'collected' : row.state;
+  const line = el('div', `mining-waiting refinery-order ${state}`);
+
+  if (row.kind === 'order') {
+    const order = row.order;
+    line.append(el('span', 'name', `${order.method || 'Method not read'} · ${order.station}`));
+    line.append(el('span', 'muted', `seen ${shortTimeOf(order.seenAt)}, ${dateOf(order.seenAt)}`));
+  } else {
+    line.append(el('span', 'name', `An order at ${row.done.station}`));
+    line.append(el('span', 'muted', 'no screenshot of it'));
+  }
+
+  line.append(el('span', `${state === 'running' || state === 'collected' ? 'muted' : 'want'} mining-waiting-time`,
+    collected ? `collected ${shortTimeOf(collected)}, ${dateOf(collected)}` : refineryReadyText(row, nowMs)));
+
+  if (row.kind === 'order') {
+    const order = row.order;
+    const detail = [
+      order.inCscu != null ? `${order.inCscu} cSCU in` : null,
+      order.outCscu != null ? `${order.outCscu} cSCU back` : null,
+      order.cost != null ? `cost ${money(order.cost)}` : null,
+    ].filter(Boolean).join(' · ');
+    if (detail) line.append(el('span', 'mining-waiting-detail', detail));
+
+    const lots = (order.lots || [])
+      .map((lot) => `${lot.mineral || lot.read}${lot.quality != null ? ` q${lot.quality}` : ''}`
+        + `${lot.quantity != null ? ` ${lot.quantity}` : ''}${lot.yield != null ? ` → ${lot.yield}` : ''}`)
+      .join(' · ');
+    if (lots) line.append(el('span', 'muted small', lots));
+  } else {
+    line.append(el('span', 'muted small', 'Nothing is known of what was in it - only where and when the game said it finished.'));
+  }
+
+  // Ready rows can be picked up; a collected one can be put back, because a
+  // misclick should not lose the only pointer to ore still at a station.
+  if (state !== 'running') {
+    const button = el('button', 'ghost tiny refinery-collect', collected ? 'Not collected' : 'Collected');
+    button.type = 'button';
+    button.title = collected ? 'Put it back under waiting' : 'You picked it up - the game logs no collection, so say so here';
+    button.addEventListener('click', () => setRefineryCollected(refineryRowId(row), !!collected));
+    line.append(button);
+  }
+
+  return line;
+}
+
+/** How many collected orders the history shows before saying how many more. */
+const REFINERY_HISTORY = 5;
+
 function renderRefineryOrders() {
+  renderNowRefinery();
+  renderMiningWorkspaceHeader();
+
   const box = $('#refinery-orders');
   const list = $('#refinery-orders-list');
   if (!box || !list) return;
 
   const picture = refineryPicture;
-  const orders = picture?.orders || [];
-  const unmatched = picture?.unmatched || [];
+  const now = Date.now();
+  const groups = refineryGroups(picture, now);
+  const total = groups.waiting.length + groups.refining.length + groups.collected.length;
 
-  box.hidden = orders.length === 0 && unmatched.length === 0;
+  box.hidden = total === 0;
   if (box.hidden) return;
 
   const select = $('#refinery-notify');
@@ -4855,58 +4966,70 @@ function renderRefineryOrders() {
   $('#refinery-orders-note').textContent =
     'Read off your screenshots of a refinery terminal - the PROCESSING screen starts the clock for certain; '
     + 'a quote starts it only if you confirmed it. The game’s log says when an order finishes, and nothing else, '
-    + 'so “ready” is either the game’s word or the terminal’s clock, and the line says which.';
+    + 'so “ready” is either the game’s word or the terminal’s clock, and the line says which. It logs no collection '
+    + 'either: press Collected when you pick one up, and it moves to the history.';
 
   list.textContent = '';
-  const now = Date.now();
 
-  for (const order of orders) {
-    const state = refineryState(order, now);
-    const row = el('div', `mining-waiting refinery-order ${state}`);
+  const section = (title, rows, className) => {
+    if (!rows.length) return;
+    list.append(el('div', `refinery-group ${className}`, title));
+    for (const row of rows) list.append(refineryRow(row, now));
+  };
 
-    row.append(el('span', 'name', `${order.method || 'Method not read'} · ${order.station}`));
-    row.append(el('span', 'muted', `seen ${shortTimeOf(order.seenAt)}, ${dateOf(order.seenAt)}`));
+  const waitingLine = refineryWaitingLine(groups);
+  list.append(el('div', `refinery-waiting-line ${waitingLine ? 'want' : 'muted'}`, waitingLine || 'Nothing waiting at a refinery.'));
 
-    const due = order.dueAt ? shortTimeOf(order.dueAt) : null;
-    const quote = order.basis === 'quote' ? ' if you confirmed the quote' : '';
-    const said = state === 'done'
-      ? `ready — the game said so at ${timeOf(order.completedAt)}`
-      : state === 'due'
-        ? `should be ready since ${due}${quote}, by the terminal’s clock — the game has not said`
-        : `due ${due} (${refineryClock((Date.parse(order.dueAt) - now) / 1000)})${quote}`;
-    row.append(el('span', `${state === 'running' ? 'muted' : 'want'} mining-waiting-time`, said));
+  section('Waiting for you', groups.waiting, 'waiting');
+  section('Refining', groups.refining, 'refining');
+  section('Collected', groups.collected.slice(0, REFINERY_HISTORY), 'collected');
 
-    const detail = [
-      order.inCscu != null ? `${order.inCscu} cSCU in` : null,
-      order.outCscu != null ? `${order.outCscu} cSCU back` : null,
-      order.cost != null ? `cost ${money(order.cost)}` : null,
-    ].filter(Boolean).join(' · ');
-    if (detail) row.append(el('span', 'mining-waiting-detail', detail));
-
-    const lots = (order.lots || [])
-      .map((lot) => `${lot.mineral || lot.read}${lot.quality != null ? ` q${lot.quality}` : ''}`
-        + `${lot.quantity != null ? ` ${lot.quantity}` : ''}${lot.yield != null ? ` → ${lot.yield}` : ''}`)
-      .join(' · ');
-    if (lots) row.append(el('span', 'muted small', lots));
-
-    list.append(row);
-  }
-
-  for (const done of unmatched) {
-    const row = el('div', 'mining-waiting refinery-order done');
-    row.append(el('span', 'name', `An order at ${done.station}`));
-    row.append(el('span', 'want mining-waiting-time', `ready — the game said so at ${timeOf(done.at)}, ${dateOf(done.at)}`));
-    row.append(el('span', 'muted small', 'No screenshot of it, so nothing is known of what was in it.'));
-    list.append(row);
-  }
+  if (groups.collected.length > REFINERY_HISTORY)
+    list.append(el('div', 'muted small', `${groups.collected.length - REFINERY_HISTORY} older collected orders not shown.`));
 
   renderRefineryMeasured(picture?.measured || []);
 
   // While something is counting down the line says how long is left, so it
   // is redrawn once a minute until nothing is.
   clearTimeout(renderRefineryOrders.tick);
-  if (orders.some((o) => refineryState(o, now) === 'running'))
+  if (groups.refining.length)
     renderRefineryOrders.tick = setTimeout(renderRefineryOrders, 60000);
+}
+
+/**
+ * The Now page's refinery card: what is waiting and where, and what is still
+ * refining - so the station with your ore is one glance away on whichever
+ * screen is open, the overlay included.
+ */
+function renderNowRefinery() {
+  const card = $('#now-refinery-card');
+  if (!card) return;
+
+  const now = Date.now();
+  const groups = refineryGroups(refineryPicture, now);
+  card.hidden = !groups.waiting.length && !groups.refining.length;
+  if (card.hidden) return;
+
+  $('#now-refinery').textContent = refineryWaitingLine(groups)
+    || `Refining at ${[...new Set(groups.refining.map(refineryRowStation))].join(', ')}`;
+
+  const list = $('#now-refinery-list');
+  list.textContent = '';
+
+  for (const row of [...groups.waiting, ...groups.refining]) {
+    const li = el('li', row.state === 'running' ? null : 'want');
+    li.append(el('span', 'what', refineryRowStation(row)));
+    li.append(el('span', 'd', ` · ${refineryReadyText(row, now)}`));
+
+    if (row.state !== 'running') {
+      const button = el('button', 'ghost tiny refinery-collect', 'Collected');
+      button.type = 'button';
+      button.addEventListener('click', () => setRefineryCollected(refineryRowId(row), false));
+      li.append(button);
+    }
+
+    list.append(li);
+  }
 }
 
 /**
@@ -4962,7 +5085,7 @@ function armRefineryTimers() {
   const now = Date.now();
 
   for (const order of refineryPicture?.orders || []) {
-    if (order.completedAt || !order.dueAt) continue;
+    if (order.completedAt || order.collectedAt || !order.dueAt) continue;
 
     const fireAt = Date.parse(order.dueAt) + graceMs;
     if (fireAt <= now) continue;
@@ -4986,7 +5109,7 @@ async function refineryTimerFired(key) {
   const order = (refineryPicture?.orders || []).find((o) => refineryOrderKey(o) === key);
   renderRefineryOrders();
 
-  if (!order || order.completedAt) return;
+  if (!order || order.completedAt || order.collectedAt) return;
 
   const mode = refineryNotifyMode();
   if (mode === 'off' || mode === 'log') return;
@@ -5013,6 +5136,8 @@ function noticeRefineryChanges(state) {
 }
 
 function bindRefineryNotify() {
+  $('#now-refinery-open')?.addEventListener('click', () => { miningPane = 'runs'; showView('mining'); });
+
   const select = $('#refinery-notify');
   if (!select) return;
 
@@ -5368,10 +5493,14 @@ function renderMiningWorkspaceHeader() {
     heading.textContent = 'Haul & refinery';
     bar.dataset.workspace = 'HAUL // REFINERY';
     bar.dataset.workspaceIcon = '';
-    if (miningPendingJobs === null) status.textContent = 'Refinery job status is unavailable.';
-    else status.textContent = miningPendingJobs.length
-      ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
-      : 'No refinery jobs await your update.';
+    // Ore waiting at a station comes first: it is the one thing on this pane
+    // the game will never remind you of once its toast has gone.
+    const waiting = refineryWaitingLine(refineryGroups(refineryPicture, Date.now()));
+    const jobs = miningPendingJobs === null ? 'Refinery job status is unavailable.'
+      : miningPendingJobs.length
+        ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
+        : 'No refinery jobs await your update.';
+    status.textContent = waiting ? `${waiting}. ${jobs}` : jobs;
     return;
   }
 
@@ -7085,7 +7214,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
-  checklist: 'Checklist',
+  checklist: 'Checklist', refinery: 'Refinery',
 };
 
 /**
