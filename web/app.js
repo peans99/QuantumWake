@@ -4701,6 +4701,16 @@ async function loadMiningPending() {
   panel.hidden = waiting.length === 0;
   if (!waiting.length) return;
 
+  const ready = waiting.filter(run => run.stage === 'Ready').length;
+  const processing = waiting.length - ready;
+  panel.dataset.state = ready ? 'ready' : 'processing';
+  $('#mining-pending-title').textContent = ready
+    ? 'Refinery jobs ready to collect'
+    : 'Refinery jobs in progress';
+  $('#mining-pending-summary').textContent = [
+    ready ? `${ready} ready to collect` : null,
+    processing ? `${processing} processing` : null,
+  ].filter(Boolean).join(' · ');
   $('#mining-pending-note').textContent = waiting[0].caveat;
 
   const list = $('#mining-pending-list');
@@ -4708,9 +4718,15 @@ async function loadMiningPending() {
 
   for (const run of waiting) {
     const row = el('div', 'mining-waiting');
+    row.dataset.state = run.stage === 'Ready' ? 'ready' : 'processing';
 
-    row.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
-    row.append(el('span', 'muted', run.refinery.place || 'Refinery not named'));
+    const identity = el('div', 'mining-waiting-main');
+    identity.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
+    identity.append(el('span', 'mining-waiting-place', run.refinery.place || 'Refinery not named'));
+    row.append(identity);
+
+    row.append(el('span', `mining-waiting-state ${run.stage === 'Ready' ? 'ready' : 'processing'}`,
+      run.stage === 'Ready' ? 'Ready to collect' : 'Processing'));
 
     // The two states read differently on purpose: one is waiting, the other is
     // the app pointing out that your own estimate has passed.

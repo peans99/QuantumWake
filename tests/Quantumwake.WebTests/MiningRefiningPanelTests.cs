@@ -125,6 +125,28 @@ public class MiningRefiningPanelTests
     }
 
     [Fact]
+    public void Refinery_queue_makes_the_next_action_and_remaining_work_scannable()
+    {
+        var pending = """
+          [{"id":"m2","place":"Yela","resource":"Taranite","scu":16,"stage":"Ready",
+            "refinery":{"place":"ArcCorp 141","method":"Dinyx Solventation","cost":4800,
+                        "expectedAt":"2026-09-05T15:00:00+00:00"},
+            "caveat":"The game keeps the refinery timer and logs nothing about it, so this is the time you told us to expect."},
+           {"id":"m4","place":"Lyria","resource":"Bexalite","scu":8,"stage":"Submitted",
+            "refinery":{"place":"ARC-L1","method":null,"cost":null,"expectedAt":"2030-09-05T15:00:00+00:00"},
+            "caveat":"The game keeps the refinery timer and logs nothing about it, so this is the time you told us to expect."}]
+          """;
+        var page = Logged(pending: pending);
+
+        Assert.Equal("ready", page.Text("__dom.node('#mining-pending').dataset.state"));
+        Assert.Equal("Refinery jobs ready to collect", page.NodeText("#mining-pending-title"));
+        Assert.Contains("1 ready to collect · 1 processing", page.NodeText("#mining-pending-summary"));
+        Assert.Equal("ready", page.Text("__dom.node('#mining-pending-list').children[0].dataset.state"));
+        Assert.Contains("Ready to collect", page.NodeText("#mining-pending-list"));
+        Assert.Contains("Processing", page.NodeText("#mining-pending-list"));
+    }
+
+    [Fact]
     public void With_nothing_at_a_refinery_the_block_stays_away()
     {
         Assert.True(Logged(Log, "[]").Truth("__dom.node('#mining-pending').hidden"));

@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.17
+### 0.16.18
+
+**Refinery jobs now read as a queue.** The Mining log brings jobs waiting at a refinery into one compact status panel, with ready collections in amber and remaining processing work in cyan. Each haul keeps its station, due estimate, refining method and value ceiling close at hand.
 
 **One button now has one direct action.** Reassigning a joystick button moves its old direct action out of the way, so the profile never leaves the game to choose between two competing assignments. Button chords remain available for deliberate modifier combinations.
 

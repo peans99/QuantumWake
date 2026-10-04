@@ -2281,11 +2281,17 @@
       <button type="submit" class="ghost">Record</button>
     </form>
 
-    <div id="mining-pending" hidden>
-      <h4 class="spaced">Waiting on a refinery</h4>
+    <section id="mining-pending" hidden aria-labelledby="mining-pending-title">
+      <div class="mining-pending-head">
+        <div>
+          <span class="mining-overline">Refinery queue</span>
+          <h4 id="mining-pending-title">Refinery jobs in progress</h4>
+        </div>
+        <span class="mining-pending-summary" id="mining-pending-summary" aria-live="polite"></span>
+      </div>
       <p class="muted caption" id="mining-pending-note"></p>
       <div id="mining-pending-list"></div>
-    </div>
+    </section>
 
     <div class="table-wrap">
       <table id="mining-log">

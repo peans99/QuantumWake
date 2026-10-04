@@ -4849,20 +4849,69 @@ body.overlay .toast {
 #kit-prepare-table td:last-child { width: 120px; }
 
 /* ---------- refining a haul ---------- */
+#mining-pending {
+  margin: 18px 0;
+  padding: 13px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cyan-deep);
+  background: linear-gradient(112deg, rgba(13, 39, 55, .25), rgba(6, 12, 19, .78) 48%);
+}
+#mining-pending[data-state="ready"] {
+  border-color: rgba(255, 171, 61, .45);
+  border-left-color: var(--amber);
+  background: linear-gradient(112deg, rgba(255, 171, 61, .12), rgba(8, 13, 20, .82) 48%);
+}
+.mining-pending-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: end;
+  padding-bottom: 9px;
+  margin-bottom: 9px;
+  border-bottom: 1px solid var(--rule);
+}
+.mining-pending-head h4 { margin: 3px 0 0; color: var(--text); }
+.mining-pending-summary {
+  padding: 4px 7px;
+  border: 1px solid var(--cyan-deep);
+  background: rgba(53, 200, 240, .08);
+  color: var(--cyan-hot);
+  font: 9.5px var(--mono);
+  letter-spacing: .06em;
+  text-align: right;
+}
+#mining-pending[data-state="ready"] .mining-pending-summary {
+  border-color: rgba(255, 171, 61, .45);
+  background: rgba(255, 171, 61, .08);
+  color: var(--amber);
+}
+#mining-pending-note { margin: 0 0 10px; line-height: 1.45; }
 #mining-pending-list { display: grid; gap: 7px; }
 .mining-waiting {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) minmax(150px, auto);
+  grid-template-columns: minmax(0, 1fr) auto minmax(150px, auto);
   gap: 5px 16px;
-  align-items: baseline;
+  align-items: center;
   padding: 10px 12px;
   border: 1px solid var(--rule);
   border-left: 3px solid var(--cyan-deep);
   background: linear-gradient(105deg, rgba(12, 31, 45, .54), rgba(5, 12, 19, .66));
   font-size: 12px;
 }
-
+.mining-waiting[data-state="ready"] { border-left-color: var(--amber); background: linear-gradient(105deg, rgba(255, 171, 61, .1), rgba(8, 13, 20, .72)); }
+.mining-waiting-main { display: grid; gap: 2px; min-width: 0; }
 .mining-waiting .name { color: var(--text); }
+.mining-waiting-place { color: var(--muted); font-size: 10.5px; }
+.mining-waiting-state {
+  padding: 3px 6px;
+  border: 1px solid var(--cyan-deep);
+  background: rgba(53, 200, 240, .07);
+  color: var(--cyan-hot);
+  font: 9px var(--mono);
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+.mining-waiting-state.ready { border-color: rgba(255, 171, 61, .45); background: rgba(255, 171, 61, .08); color: var(--amber); }
 
 /* The time sits right whichever state it is in. Hanging the alignment off the
    amber class put waiting hauls and overdue ones in different columns, which
@@ -6056,6 +6105,8 @@ body.overlay .ship-picture { display: none; }
   .mining-form button { grid-column: auto; }
   .mining-waiting { grid-template-columns: 1fr; gap: 4px; }
   .mining-waiting .mining-waiting-time { grid-column: auto; }
+  .mining-pending-head { align-items: start; flex-direction: column; gap: 7px; }
+  .mining-pending-summary { text-align: left; }
   .mining-salvage-brief { grid-template-columns: 1fr; gap: 5px; }
 }
 .ship-card.unflown { opacity: .92; }
