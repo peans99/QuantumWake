@@ -151,7 +151,7 @@ tables and never multiplies it in as a yield.
 and each is two enums and a name - Slow/Normal/Fast × Careful/Normal/
 Wasteful - with no yield, cost or time on any of them; those are the
 server's. The community tables (and UEX's yields feed) were the only source
-until 0.16.19, when the refinery terminal's own screen started being read -
+until 0.16.21, when the refinery terminal's own screen started being read -
 see *Refinery orders* below: it prints the yield, the cost and the time for
 the ore in front of it.
 
@@ -172,7 +172,7 @@ is worse than none. "Dinyx or Cormack, at which station, for this ore" is
 therefore answered as far as the data goes - the station from the yields
 feed, the method from its pips - and no further.
 
-**Three is the cheap end.** Until 0.16.19 the methods table said a cost of
+**Three is the cheap end.** Until 0.16.21 the methods table said a cost of
 3 was dearest. The terminal says otherwise, twice on one evening: it
 describes Pyrometric Chromalysis - UEX's 3 / 3 / 1 - as "HIGH YIELD // LOW
 COST // SLOWEST", and with no method picked shows "LOW YIELD // MODERATE
@@ -210,7 +210,7 @@ The Log tab lists a scan with its figures and offers *Can it be cracked?*,
 which opens the Mining page with the rock in the form; the page's *Use the
 last scanned rock* does the same from the newest scan read.
 
-**The first frames from this install, and what they changed (0.16.19).** On
+**The first frames from this install, and what they changed (0.16.21).** On
 2026-10-03 a Golem at Daymar took three scans (16:02:48, 16:02:49, 16:15:38,
 3440 × 1440) and the reader filed every one as nothing. The live panel does
 not say what the wiki's said: its title is RESULTS, its labels MASS:, RES:,
@@ -295,7 +295,7 @@ green when the game said so, amber when only the clock has. A countdown that
 ran out before the page was opened is listed as due and not announced,
 because a reload must not replay history.
 
-**Finding it again (0.16.20).** The log says an order completed and then
+**Finding it again (0.16.21).** The log says an order completed and then
 nothing: no collection line exists. So an order stays "ready" until the
 pilot presses **Collected**, a mark kept by order id in
 `refinery-collected.json` (`RefineryCollectedStore`) - the station folded
