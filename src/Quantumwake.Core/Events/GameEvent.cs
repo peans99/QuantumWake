@@ -203,6 +203,23 @@ public sealed partial record NotificationEvent(
     /// cannot be read out of one.
     /// </summary>
     public bool IsParty => State.Party.IsParty(Text);
+
+    /// <summary>
+    /// The station a refinery work order just completed at, or null when this
+    /// toast is not one.
+    /// </summary>
+    /// <remarks>
+    /// <c>A Refinery Work Order has been Completed at MIC-L5 Modern Icarus
+    /// Station: </c> - the whole of it, the trailing colon included, as every
+    /// toast carries one. Once in this install's 234 logs.
+    /// </remarks>
+    public string? RefineryStation =>
+        RefineryRegex.Match(Text) is { Success: true } m && m.Groups["station"].Value.Trim() is { Length: > 0 } station
+            ? station
+            : null;
+
+    [GeneratedRegex(@"^A Refinery Work Order has been Completed at\s+(?<station>.+?)\s*:?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex RefineryRegex { get; }
 }
 
 /// <summary>

@@ -163,6 +163,7 @@ public static class ServerHost
         builder.Services.AddSingleton<ItemLabelStore>();
         builder.Services.AddSingleton<GoalStore>();
         builder.Services.AddSingleton<MiningLogStore>();
+        builder.Services.AddSingleton<RefineryCollectedStore>();
         builder.Services.AddSingleton<GameDataStatus>();
         builder.Services.AddSingleton<TextOverlayService>();
 
@@ -1008,8 +1009,51 @@ public static class ServerHost
             });
         });
 
-        // Ore sold that was never bought. The logs record no mining at all - no
-        // extraction, no scan, no refinery job - so this is the only trace that
+        // Refinery orders: what the terminal's screenshots said, and the game's
+        // log saying each one finished. The live session is asked as well as
+        // the store because the completion that matters most is the one that
+        // landed a minute ago, before any scan has stored it.
+        RefineryPicture Refinery(LogLibrary lib, LiveSessionService live, ScreenReadingStore readings, RefineryCollectedStore collected)
+        {
+            var completions = lib.RefineryCompletions()
+                .Concat(live.LiveSummary.RefineryCompletions)
+                .DistinctBy(c => (c.At, c.Station))
+                .ToList();
+
+            return RefineryOrders.Build(readings.All(), completions, collected.All());
+        }
+
+        static object Shaped(RefineryPicture picture) => new
+        {
+            picture.Orders,
+            picture.Unmatched,
+            picture.Measured,
+            graceSeconds = (int)RefineryOrders.Grace.TotalSeconds,
+            now = DateTimeOffset.UtcNow,
+        };
+
+        app.MapGet("/api/mining/refinery", (LogLibrary lib, LiveSessionService live, ScreenReadingStore readings, RefineryCollectedStore collected) =>
+            Shaped(Refinery(lib, live, readings, collected)));
+
+        // The pilot saying an order has been picked up, or taking that back.
+        // Only an order the server can see is accepted: a mark on an id that
+        // matches nothing would sit in the file for ever, meaning nothing.
+        app.MapPost("/api/mining/refinery/collected", (
+            string? id, bool? undo,
+            LogLibrary lib, LiveSessionService live, ScreenReadingStore readings, RefineryCollectedStore collected) =>
+        {
+            var picture = Refinery(lib, live, readings, collected);
+            var known = picture.Orders.Select(o => o.Id).Concat(picture.Unmatched.Select(d => d.Id));
+
+            if (string.IsNullOrWhiteSpace(id) || !known.Contains(id, StringComparer.Ordinal))
+                return Results.NotFound(new { trouble = "no such refinery order" });
+
+            collected.Set(id, undo == true ? null : DateTimeOffset.UtcNow);
+            return Results.Ok(Shaped(Refinery(lib, live, readings, collected)));
+        });
+
+        // Ore sold that was never bought. The logs record almost no mining - no
+        // extraction, no scan, only a refinery order finishing - so this is the only trace that
         // somebody dug it up rather than hauled it, and it is an inference
         // rather than an observation. Worded that way on the page.
         app.MapGet("/api/mining/mine", (LogLibrary lib, UexData uex) =>
@@ -1594,7 +1638,7 @@ public static class ServerHost
          */
         /*
          * A haul from the rock to the money. Every stage is typed, because the
-         * game logs no extraction, no refinery job and no collection - so this
+         * game logs no extraction, no refinery order placed and no collection - so this
          * is the pilot writing down what they did, and it stays on its own side
          * of the wall from anything observed.
          */
@@ -1640,8 +1684,8 @@ public static class ServerHost
 
                     // Said rather than computed on the page, so one build cannot
                     // word this differently from another.
-                    Caveat = "The game keeps the refinery timer and logs nothing about it, "
-                        + "so this is the time you told us to expect.",
+                    Caveat = "The game logs a refinery order only when it finishes, so this is the time you told us to expect. "
+                        + "A screenshot of the terminal puts the order under Refinery orders on the game's own clock.",
                 };
             }));
 
