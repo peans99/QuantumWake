@@ -64,6 +64,7 @@ public sealed class SessionBuilder
 
     private readonly HashSet<string> _blueprints = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<BlueprintReceipt> _blueprintReceipts = [];
+    private readonly List<RefineryCompletion> _refineryCompletions = [];
     private readonly List<ContractPayout> _payouts = [];
 
     /// <summary>
@@ -838,6 +839,16 @@ public sealed class SessionBuilder
             return;
         }
 
+        // The only refining the log records: an order finishing, and where.
+        // Nothing marks it being placed or collected, so this is kept as the
+        // game said it and joined to the terminal's screenshots later.
+        if (notification.RefineryStation is { } station)
+        {
+            _refineryCompletions.Add(new RefineryCompletion(notification.Timestamp, station));
+            Timeline(notification.Timestamp, "refinery", "Refinery order complete", station);
+            return;
+        }
+
         // Blueprints arrive only as this notification - nothing else in the log
         // says which recipes a player holds, so the toast IS the record.
         const string blueprintPrefix = "Received Blueprint:";
@@ -1271,6 +1282,7 @@ public sealed class SessionBuilder
             Trades = _trades,
             Pickups = _pickups,
             Blueprints = _blueprintReceipts,
+            RefineryCompletions = _refineryCompletions,
             Payouts = _payouts,
             Respawns = _respawns,
             MedicalBeds = _medicalBeds,

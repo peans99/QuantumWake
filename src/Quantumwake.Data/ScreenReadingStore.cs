@@ -39,7 +39,8 @@ public sealed record ScreenSighting(
     ReputationReading? Reputation = null,
     KioskReading? Kiosk = null,
     bool Dismissed = false,
-    MiningScanReading? Mining = null);
+    MiningScanReading? Mining = null,
+    RefineryReading? Refinery = null);
 
 /// <summary>The paint a loadout screenshot showed a ship wearing, and which shot.</summary>
 public sealed record PhotographedPaint(string Item, string Name, string Shot, DateTimeOffset ShotAt);

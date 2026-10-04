@@ -43,6 +43,9 @@ public enum ScreenKind
 
     /// <summary>The mining HUD's scan results: a rock's mass, resistance, instability and mix.</summary>
     Mining,
+
+    /// <summary>A station's refinery terminal: its load, and a work order being priced or run.</summary>
+    Refinery,
 }
 
 /// <summary>One port on the loadout screen and what the frame says is in it.</summary>
@@ -136,7 +139,8 @@ public sealed record ScreenFrame(
     FleetReading? Fleet = null,
     ReputationReading? Reputation = null,
     KioskReading? Kiosk = null,
-    MiningScanReading? Mining = null);
+    MiningScanReading? Mining = null,
+    RefineryReading? Refinery = null);
 
 /// <summary>
 /// Sorts a frame into the screen it is and reads what that screen carries.
@@ -194,14 +198,22 @@ public static partial class ScreenFrames
 
     /// <summary>Reads a frame whose boxes were kept.</summary>
     /// <param name="commodityNames">
-    /// What the game calls its commodities, for a kiosk's list. Defaulted
-    /// because every other screen is read without them.
+    /// What the game calls its commodities, for a kiosk's list, a scanned rock
+    /// and a refinery's lots. Defaulted because every other screen is read
+    /// without them.
+    /// </param>
+    /// <param name="settledScan">
+    /// The scan panel as <see cref="MiningSecondLook"/> read it, when it took
+    /// one. Used in place of what the whole frame made of the panel, which on
+    /// the frames measured lost most of the figures; whether the frame is a
+    /// scan at all is still decided here, from the whole read.
     /// </param>
     public static ScreenFrame Read(
         IReadOnlyList<ScreenTextLine> lines,
         IReadOnlyList<ItemReference> items,
         IReadOnlyList<string> shipNames,
-        IReadOnlyList<string>? commodityNames = null)
+        IReadOnlyList<string>? commodityNames = null,
+        MiningScanReading? settledScan = null)
     {
         var all = lines
             .Select(line => line with { Text = line.Text.Trim() })
@@ -250,10 +262,18 @@ public static partial class ScreenFrames
                 kiosk.Balance is { } balance ? new WalletReading(balance, null) : wallet, Kiosk: kiosk);
         }
 
+        // The refinery terminal carries its own balance under // FUNDS, and it
+        // goes through the same check as the bar's would.
+        if (ReadRefinery(all, commodityNames ?? []) is { } refinery)
+        {
+            return new ScreenFrame(ScreenKind.Refinery, texts, null, null, null,
+                RefineryFunds(all) is { } funds ? new WalletReading(funds, null) : wallet, Refinery: refinery);
+        }
+
         // The scan panel has no app bar and names no item the tooltip matcher
-        // would take; it is its own three labels.
+        // would take; it is its own title and three labels.
         if (ReadMiningScan(all, commodityNames ?? []) is { } scan)
-            return new ScreenFrame(ScreenKind.Mining, texts, null, null, null, wallet, Mining: scan);
+            return new ScreenFrame(ScreenKind.Mining, texts, null, null, null, wallet, Mining: settledScan ?? scan);
 
         if (hasTooltip)
             return new ScreenFrame(ScreenKind.Tooltip, texts, tooltip, null, null, wallet);

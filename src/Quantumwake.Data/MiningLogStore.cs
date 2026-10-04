@@ -31,9 +31,11 @@ public enum MiningStage
 /// A refinery job, as the pilot recorded it.
 /// </summary>
 /// <param name="ExpectedAt">
-/// When they expect it done. The game keeps that timer and logs nothing about
-/// it, so this is their reading of a screen rather than anything observed - and
-/// anything built on it has to be worded as a reminder of what they typed.
+/// When they expect it done. The game logs an order only once it completes,
+/// and nothing joins that line to a haul typed here, so this is their reading
+/// of a screen rather than anything observed - and anything built on it has to
+/// be worded as a reminder of what they typed. Orders read off the terminal's
+/// screenshots are <see cref="RefineryOrders"/>, which is the observed side.
 /// </param>
 /// <param name="Yield">
 /// What came back, in SCU. Less than what went in is normal, and the difference
@@ -112,7 +114,7 @@ public sealed record MiningRun(
 /// <para>
 /// This is the one page in the app whose numbers are typed rather than read.
 /// That is not a shortcut: <c>Game.log</c> records no extraction, no rock
-/// scanned and no refinery job. The only trace mining leaves is ore turning up
+/// scanned and no refinery order until one finishes. The only trace mining leaves is ore turning up
 /// in a sale that was never a purchase, which the page already shows and which
 /// cannot say where it came from or what it assayed at.
 /// </para>

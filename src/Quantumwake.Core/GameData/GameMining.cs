@@ -143,7 +143,7 @@ public sealed record GameMiningData(
 /// <para>
 /// None of this is in the community dataset the Garage runs on - its part
 /// digest carries a mining laser's mass and health and nothing it does to a
-/// rock - and none of it is in the logs, which record no mining at all. It
+/// rock - and none of it is in the logs, which record nothing of a rock. It
 /// is all in <c>Game2.dcb</c>, under structs that name themselves:
 /// <c>MiningGlobalParams</c>, <c>MineableElement</c>,
 /// <c>MineableComposition</c>, <c>SEntityComponentMiningLaserParams</c>,
