@@ -6,11 +6,23 @@ let layout = { enabled: false, blackout: true, brightness: 1, textScale: 1, slee
   { id: 'left', monitor: 'example', x: 360, y: 280, width: 480, height: 480, cougar: 1 },
   { id: 'right', monitor: 'example', x: 960, y: 280, width: 480, height: 480, cougar: 2 }
 ] };
-let selected = 0, transform, dragging, previewing = false;
+let selected = 0, transform, dragging, previewing = false, savedLayout = null, dirty = false;
 const desktop = setupElement('desktop');
 const selectedPanel = () => layout.panels[selected];
 function send(type) { host?.postMessage({ type, layout }); }
 function status(text, error = false) { setupElement('status').textContent = text; setupElement('status').classList.toggle('error', error); }
+function snapshot(value) { return JSON.parse(JSON.stringify(value)); }
+// Preview applies changes immediately, so compare against the host-supplied layout to make drafts visible.
+function syncDirty() {
+  if (!savedLayout) return;
+  const next = JSON.stringify(layout) !== JSON.stringify(savedLayout);
+  if (next === dirty) return;
+  dirty = next;
+  setupElement('save-state').hidden = !dirty;
+  setupElement('save').textContent = dirty ? 'Save layout · unsaved' : 'Save layout';
+  host?.postMessage({ type: 'dirty', dirty });
+}
+function changedStatus() { status('Changes are in preview only. Save layout to keep them.'); }
 /* Coalesced to one send a frame. A drag raises pointermove far faster than a
    window can be moved, and each message crosses into the host, repositions two
    displays and recuts a full-screen backdrop; sending them all would queue up
@@ -21,7 +33,7 @@ function pushPreview() {
   previewQueued = true;
   requestAnimationFrame(() => { previewQueued = false; if (previewing) send('preview'); });
 }
-function changed() { draw(); pushPreview(); }
+function changed() { syncDirty(); changedStatus(); draw(); pushPreview(); }
 function fillEditor() {
   const panel = selectedPanel();
   setupElement('selected-title').textContent = panel.id === 'left' ? 'Left MFD' : 'Right MFD';
@@ -135,7 +147,7 @@ for (const edge of ['left', 'right', 'top', 'bottom']) setupElement('inset-' + e
 };
 for (let n = 1; n <= 8; n++) setupElement('cougar').add(new Option('F16 MFD ' + n, n));
 setupElement('cougar').onchange = event => { selectedPanel().cougar = Number(event.target.value); changed(); };
-setupElement('enabled').onchange = event => { layout.enabled = event.target.checked; };
+setupElement('enabled').onchange = event => { layout.enabled = event.target.checked; changed(); };
 setupElement('blackout').onchange = event => { layout.blackout = event.target.checked; changed(); };
 /* Percentages on the text slider, fractions in the file: a pilot reads 70%, and
    the display multiplies by .7. Brightness is four numbered levels instead,
@@ -151,6 +163,7 @@ function showScreen() {
 }
 setupElement('sleep-after').onchange = event => {
   layout.sleepAfterMinutes = Number(event.target.value) || 0;
+  syncDirty();
   if (previewing) send('preview');
   status(layout.sleepAfterMinutes
     ? 'Frames dim after ' + layout.sleepAfterMinutes + ' idle minutes. Save to keep it.'
@@ -158,12 +171,14 @@ setupElement('sleep-after').onchange = event => {
 };
 setupElement('text-scale').oninput = event => {
   layout.textScale = Number(event.target.value) / 100;
+  syncDirty();
   showScreen();
   // Under the hand, like a drag: the preview is what you are judging it by.
   pushPreview();
 };
 setupElement('brightness').oninput = event => {
   layout.brightness = QwMfd.brightnessAt(Number(event.target.value));
+  syncDirty();
   showScreen();
   pushPreview();
 };
@@ -218,6 +233,7 @@ function assign(number, id) {
   const next = QwMfd.buttons(layout.buttons);
   if (id) next[number] = id; else delete next[number];
   layout.buttons = next;
+  syncDirty();
   drawButtons();
   if (previewing) send('preview');
   status('Button ' + String(number).padStart(2, '0') + ': '
@@ -298,12 +314,13 @@ function drawButtons() {
 }
 setupElement('restore').onclick = () => {
   layout.buttons = null;
+  syncDirty();
   drawButtons();
   if (previewing) send('preview');
   status('Shipped button profile restored. Save to keep it.');
 };
 setupElement('preview').onclick = () => { previewing = true; send('preview'); };
-setupElement('stop-preview').onclick = () => { previewing = false; send('stopPreview'); status('Preview stopped. Saved placement restored.'); };
+setupElement('stop-preview').onclick = () => { previewing = false; send('stopPreview'); status(dirty ? 'Preview stopped. Unsaved changes remain; save them or close and discard.' : 'Preview stopped. Saved placement restored.'); };
 /* Saving keeps the preview running. Turning it off here was the bug that made
    the whole editor feel dead: after one save nothing else reached the displays,
    so every later change needed another save to be seen at all. Saving writes
@@ -315,7 +332,9 @@ function showDevices(devices) {
 }
 host?.addEventListener('message', ({ data }) => {
   if (data.type === 'setup') {
-    monitors = data.monitors; layout = data.layout; previewing = false;
+    monitors = data.monitors; layout = data.layout; savedLayout = snapshot(layout); previewing = false; dirty = false;
+    setupElement('save-state').hidden = true;
+    setupElement('save').textContent = 'Save layout';
     showDevices(data.devices); drawButtons(); draw();
   }
   if (data.type === 'monitors') {
@@ -332,7 +351,15 @@ host?.addEventListener('message', ({ data }) => {
     for (const lit of document.querySelectorAll('.key.hit')) lit.classList.remove('hit');
     setupElement('bind-' + data.button)?.classList.add('hit');
   }
-  if (data.type === 'result') status(data.message, !data.ok);
+  if (data.type === 'result') {
+    if (data.ok && data.saved) {
+      savedLayout = snapshot(layout);
+      dirty = false;
+      setupElement('save-state').hidden = true;
+      setupElement('save').textContent = 'Save layout';
+    }
+    status(data.message, !data.ok);
+  }
 });
 if (!host) {
   setupElement('host-note').hidden = false;

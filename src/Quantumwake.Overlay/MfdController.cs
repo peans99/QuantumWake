@@ -18,6 +18,8 @@ internal sealed class MfdController : IDisposable
     private CougarInput? _input;
     private MfdWindow? _setup;
     private bool _preview;
+    private bool _dirty;
+    private bool _disposing;
 
     /// <summary>The monitor the backdrop is currently keeping clear for setup.</summary>
     private string? _busy;
@@ -51,10 +53,27 @@ internal sealed class MfdController : IDisposable
     public void OpenSetup()
     {
         if (_setup is not null) { _setup.Activate(); return; }
+        _dirty = false;
         _setup = new MfdWindow(_root + "mfd-setup.html", setup: true);
         _setup.Ready += SendState;
         _setup.Message += Receive;
-        _setup.Closed += (_, _) => { _setup = null; Apply(_saved, false); };
+        _setup.Closing += (_, close) =>
+        {
+            if (_disposing || !_dirty) return;
+
+            // The preview follows every edit, so a closing setup window once
+            // looked like a saved one until its frames sprang back. Ask here,
+            // at the moment the transient layout would actually be discarded.
+            var discard = System.Windows.MessageBox.Show(
+                _setup,
+                "Discard the unsaved MFD changes? The frames will return to the last saved layout.",
+                "Discard MFD changes?",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning,
+                System.Windows.MessageBoxResult.No);
+            if (discard != System.Windows.MessageBoxResult.Yes) close.Cancel = true;
+        };
+        _setup.Closed += (_, _) => { _setup = null; _dirty = false; Apply(_saved, false); };
         // Dragged onto the cockpit monitor, setup takes that monitor's backdrop
         // down with it; dragged off again, it comes back. Only on a change of
         // monitor - a drag raises this on every pixel.
@@ -76,6 +95,11 @@ internal sealed class MfdController : IDisposable
         try
         {
             var type = message.GetProperty("type").GetString();
+            if (type == "dirty")
+            {
+                _dirty = message.TryGetProperty("dirty", out var dirty) && dirty.ValueKind == JsonValueKind.True;
+                return;
+            }
             if (type == "stopPreview") { Apply(_saved, false); return; }
             if (type is not ("save" or "preview")) return;
             var layout = message.GetProperty("layout").Deserialize<MfdLayout>(MfdLayout.JsonOptions)
@@ -86,6 +110,7 @@ internal sealed class MfdController : IDisposable
                 File.WriteAllText(_path + ".tmp", JsonSerializer.Serialize(layout, MfdLayout.JsonOptions));
                 File.Move(_path + ".tmp", _path, overwrite: true);
                 _saved = layout;
+                _dirty = false;
             }
             // A save while the preview is up leaves it up. Writing the file is
             // not a reason to take the picture away, and dropping the preview
@@ -93,11 +118,11 @@ internal sealed class MfdController : IDisposable
             // until the pilot saved again.
             var previewing = type == "preview" || _preview;
             Apply(layout, previewing);
-            _setup?.Send(new { type = "result", ok = true, message = type switch
+            _setup?.Send(new { type = "result", ok = true, saved = type == "save", message = type switch
             {
                 "save" when previewing => "Layout saved. The preview is still following the editor.",
                 "save" => "Layout saved.",
-                _ => "Alignment preview is visible. It follows the editor as you drag."
+                _ => "Alignment preview is visible. Save layout to keep these changes."
             } });
         }
         catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException
@@ -215,6 +240,7 @@ internal sealed class MfdController : IDisposable
 
     public void Dispose()
     {
+        _disposing = true;
         _displays.Stop();
         _setup?.Close();
         _input?.Dispose();

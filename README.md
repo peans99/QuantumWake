@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.21
+### 0.16.22
+
+**MFD setup now protects drafts.** The setup window marks every placement, display, screen or button-map edit as unsaved, keeps that warning visible until **Save layout**, and asks before closing would discard a live preview.
 
 **Mining screenshots that read, and a refinery that tells you when it's done.** Built from one evening's Golem run at Daymar and MIC-L5.
 
