@@ -9483,9 +9483,17 @@ function eventPlan(event) {
   head.append(el('span', 'card-label', 'Next event target'));
   head.append(el('strong', 'event-plan-target', `${track.toNext.toLocaleString()} pts to ${track.name} tier ${track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1}`));
   plan.append(head);
+  const top = track.tiers[track.tiers.length - 1]?.minPoints || track.nextTier;
+  const bar = el('div', 'event-plan-bar'); const fill = el('span'); fill.style.width = `${Math.min(100, (track.points / top) * 100)}%`; bar.append(fill); plan.append(bar);
+  const milestones = el('div', 'event-milestones');
+  track.tiers.forEach((tier, index) => milestones.append(el('span', `event-milestone${tier.minPoints === track.nextTier ? ' next' : ''}`, `T${index + 1} · ${tier.minPoints.toLocaleString()}`)));
+  plan.append(milestones);
   const choices = event.contracts.filter(eventMatchesPreference).map(c => ({ ...c, needed: Math.ceil(track.toNext / c.points) }))
     .sort((a,b) => a.needed - b.needed || b.points - a.points).slice(0, 3);
   plan.append(el('p', 'muted', choices.length ? `Best ${eventPreference === 'all' ? 'available' : eventPreference} path: ${choices.map(c => `${c.needed} × ${c.title} (${c.points.toLocaleString()} pts)`).join(' · ')}` : `No ${eventPreference} contracts are listed for this event; choose Any activity to see every path.`));
+  const lanes = el('div', 'event-lanes');
+  for (const [name, icon] of [['combat','✦'],['mining','◇'],['hauling','↗']]) { const pick = event.contracts.filter(c => { const saved = eventPreference; eventPreference = name; const hit = eventMatchesPreference(c); eventPreference = saved; return hit; }).sort((a,b)=>b.points-a.points)[0]; const lane = el('div','event-lane'); lane.append(el('b',null,`${icon} ${name}`)); lane.append(el('span',null,pick ? `${pick.title} · ${pick.points.toLocaleString()} pts` : 'No listed path')); lanes.append(lane); }
+  plan.append(lanes);
   const actions = el('div', 'event-plan-actions');
   for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', label); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
   plan.append(actions); return plan;

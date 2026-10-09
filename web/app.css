@@ -5337,8 +5337,19 @@ body.overlay .ship-picture { display: none; }
 .event-preferences { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin: 0 0 8px; }
 .event-preferences .active { color:var(--cyan-hot); border-color:var(--cyan); background:rgba(53,200,240,.1); }
 .event-plan { margin: 0 0 var(--gap); padding: 13px 15px; border:1px solid var(--cyan-deep); background:linear-gradient(110deg,rgba(53,200,240,.1),transparent 52%); }
+.event-plan::before { content:''; display:block; width:72px; height:2px; background:var(--cyan); box-shadow:0 0 12px var(--cyan); margin-bottom:9px; }
 .event-plan-head { display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap; }
 .event-plan-target { color:var(--cyan-hot); font:600 17px var(--mono); }
+.event-plan-bar { height:7px; margin:10px 0 7px; border:1px solid var(--rule); background:var(--deep); overflow:hidden; }
+.event-plan-bar > span { display:block; height:100%; background:linear-gradient(90deg,var(--cyan-deep),var(--cyan-hot)); box-shadow:0 0 14px rgba(53,200,240,.55); }
+.event-milestones { display:flex; gap:5px; flex-wrap:wrap; margin:0 0 10px; }
+.event-milestone { padding:3px 6px; border:1px solid var(--rule); color:var(--dim); font:9px var(--mono); }
+.event-milestone.next { border-color:var(--cyan); color:var(--cyan-hot); }
+.event-lanes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+.event-lane { padding:8px; border:1px solid var(--rule); background:rgba(0,0,0,.18); }
+.event-lane b { display:block; color:var(--cyan); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+.event-lane span { display:block; margin-top:4px; color:var(--muted); font-size:10.5px; line-height:1.35; }
+@media (max-width:700px){.event-lanes{grid-template-columns:1fr;}}
 .event-plan-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
 .event-details { margin-top:8px; border-top:1px solid var(--rule); }
 .event-details > summary { cursor:pointer; padding:9px 0; color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
