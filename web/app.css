@@ -5337,7 +5337,7 @@ body.overlay .ship-picture { display: none; }
 .event-facts { font-size: 12px; margin: 0 0 var(--gap); }
 .event-unrecognised { font-size: 12px; }
 .event-open { margin: 0 0 var(--gap); }
-.event-seen { color: var(--cyan); font-size: 9px; }
+.event-seen { color: var(--cyan); font-size: 9px; margin-left: 7px; letter-spacing: 0; vertical-align: middle; }
 .event-tracks { margin-bottom: var(--gap); }
 .event-overall { border-color: var(--cyan-deep); }
 .event-total { font-family: var(--mono); font-size: 15px; }
@@ -5350,6 +5350,20 @@ body.overlay .ship-picture { display: none; }
 .event-fastest .feed { margin: 2px 0 0; }
 .event-contracts { margin-top: var(--gap); }
 .now-event-list { margin-top: 4px; }
+.event-pts { margin-left: 6px; font-family: var(--mono); color: var(--text); }
+/* The glance view's event line: a tracked event as one dense row under the
+   status card, inside the 270-pixel footprint the shell gives the glance. */
+/* First, not after the status card: that card fills the glance on its own, and
+   an event the pilot chose to track is the line they asked to keep in view. */
+body.overlay.glance .now-grid:has(> #now-event-card.event-tracked:not([hidden])) { display: flex; flex-direction: column; gap: 5px; }
+body.overlay.glance .now-grid:has(> #now-event-card.event-tracked:not([hidden])) > .card { width: 100%; box-sizing: border-box; }
+body.overlay.glance #now-event-card.event-tracked { order: -1; padding: 5px 9px; min-height: 0; }
+body.overlay.glance #now-event-card .card-source,
+body.overlay.glance #now-event-card .actions { display: none; }
+body.overlay.glance #now-event-card .card-label { margin-bottom: 1px; }
+body.overlay.glance #now-event-card .value { font-size: 12px; margin: 0 0 2px; }
+body.overlay.glance #now-event-list { display: flex; flex-wrap: wrap; gap: 0 12px; margin: 0; }
+body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
 #points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }

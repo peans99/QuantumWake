@@ -9239,9 +9239,18 @@ function eventRecent(event, nowMs = Date.now()) {
   return !!event?.lastSeen && nowMs - Date.parse(event.lastSeen) < EVENT_RECENT_DAYS * 86400000;
 }
 
-/** The event being played: the one a contract in the journal pays into, else the one played lately. */
+/**
+ * The event for the Now card: the one the pilot chose to track, else the one a
+ * contract in the journal pays into, else the one played lately.
+ */
 function currentEvent(data = eventsData, nowMs = Date.now()) {
   const events = data?.events || [];
+
+  // A choice wins: an event the pilot means to play and has not started, or
+  // wants in view between sessions, is one play alone would never surface.
+  const tracked = events.find((e) => e.id === data?.tracked);
+  if (tracked) return tracked;
+
   const open = (data?.open || [])[0];
   if (open) return events.find((e) => e.title === open.event) || null;
   return events.find((e) => eventRecent(e, nowMs)) || null;
@@ -9299,7 +9308,7 @@ function renderEvents() {
     const button = el('button', event.id === shown?.id ? 'ghost' : 'ghost off', event.title);
     button.type = 'button';
     button.title = event.firstSeen ? `In your logs since ${dateOf(event.firstSeen)}` : 'Not in your logs yet';
-    if (event.firstSeen) button.append(el('span', 'event-seen', ' ●'));
+    if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
     button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
     picker.append(button);
   }
@@ -9321,6 +9330,17 @@ function eventView(event) {
   if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · counting from your wipe on ${dayUtc(eventsData.countedFrom)}`));
   if (event.percent) facts.append(el('span', 'muted', ' · the journal shows these bars in percent; here they are in points'));
   box.append(facts);
+
+  const actions = el('div', 'point-actions event-actions');
+  const tracked = eventsData?.tracked === event.id;
+  const track = el('button', 'ghost event-track-now', tracked ? 'Tracked on Now — stop' : 'Track on Now');
+  track.type = 'button';
+  track.title = tracked
+    ? 'Let the Now card follow what you play again'
+    : 'Keep this event on the Now page and the overlay, whatever you are playing';
+  track.addEventListener('click', () => trackEvent(tracked ? null : event.id, track));
+  actions.append(track);
+  box.append(actions);
 
   // A renamed contract would leave the bars short and say nothing, so a
   // contract that looks like this event's and is not in the table is named.
@@ -9431,6 +9451,21 @@ function eventContractsTable(event) {
   return wrap;
 }
 
+/** Keeps an event on the Now page, or with null lets the card follow play again. */
+async function trackEvent(id, button) {
+  if (button) button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/events/track${id ? `?id=${encodeURIComponent(id)}` : ''}`, { method: 'POST' });
+    if (response.ok && eventsData) eventsData.tracked = (await response.json()).tracked ?? null;
+  } catch {
+    /* the button comes back as it was, which says the choice did not take */
+  }
+
+  renderEvents();
+  renderNowEvent();
+}
+
 /**
  * The Now page's event card: the bars of the event being played against their
  * next tiers, and what finishing each contract in the journal would add.
@@ -9445,9 +9480,13 @@ function renderNowEvent() {
 
   if (!card) return;
   card.hidden = !event;
+
+  // A tracked event also earns a line in the overlay's glance view, which
+  // otherwise keeps only the status card: the pilot asked for it to stay in view.
+  card.classList.toggle('event-tracked', !!event && eventsData?.tracked === event.id);
   if (!event) return;
 
-  $('#now-event-label').textContent = event.title;
+  $('#now-event-label').textContent = eventsData?.tracked === event.id ? `${event.title} · tracked` : event.title;
   $('#now-event').textContent = overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : '—';
 
   const list = $('#now-event-list');
@@ -9460,10 +9499,15 @@ function renderNowEvent() {
     list.append(li);
   }
 
+  // The figures sit outside the feed's detail span on purpose: the overlay
+  // drops every .d to stay dense, and a bar's name without its number is
+  // exactly the part of the card worth having in game.
   for (const track of event.tracks.filter((t) => t !== overall)) {
     const li = el('li');
     li.append(el('span', 'what', track.name));
-    li.append(el('span', 'd', ` · ${track.points.toLocaleString()}${track.nextTier != null ? ` / ${track.nextTier.toLocaleString()}` : ' · every tier reached'}`));
+    li.append(el('span', 'event-pts', track.nextTier != null
+      ? `${track.points.toLocaleString()} / ${track.nextTier.toLocaleString()}`
+      : `${track.points.toLocaleString()} · every tier`));
     list.append(li);
   }
 }

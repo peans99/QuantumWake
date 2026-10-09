@@ -134,9 +134,9 @@ public class EventsTests
         var page = Loaded();
 
         var picker = page.NodeText("#events-picker");
-        Assert.Contains("RSI Discovery Event ●", picker);
+        Assert.Contains("RSI Discovery Event●", picker);
         Assert.Contains("Orison Relief", picker);
-        Assert.DoesNotContain("Orison Relief ●", picker);
+        Assert.DoesNotContain("Orison Relief●", picker);
         Assert.Equal("2 in this patch", page.NodeText("#events-count"));
     }
 
@@ -167,7 +167,7 @@ public class EventsTests
 
         var list = page.NodeText("#now-event-list");
         Assert.Contains("+417 · RSI Disc. Month: Orange Lvl. - Neutralize Threats", list);
-        Assert.Contains("Defense · 2,085 / 4,000", list);
+        Assert.Contains("Defense2,085 / 4,000", list);
     }
 
     /// <summary>
@@ -216,5 +216,77 @@ public class EventsTests
         Assert.DoesNotContain("—417", text);
         Assert.Contains("RSI Discovery Event: counts toward Your total, Defense",
             page.Text("__dom.node('#contracts-table tbody').byClass('tag-event')[0].title"));
+    }
+
+    /// <summary>
+    /// An event the pilot means to play, or wants in view between sessions,
+    /// is one play alone never puts on the Now page - so a choice puts it
+    /// there, even with nothing played for a year.
+    /// </summary>
+    [Fact]
+    public void A_tracked_event_is_on_the_now_card_whatever_was_played()
+    {
+        var stale = Events
+            .Replace("\"lastSeen\":\"2026-10-09T19:00:00Z\"", "\"lastSeen\":\"2025-01-01T00:00:00Z\"")
+            .Replace("\"open\":[{", "\"openWas\":[{")
+            .Replace("\"countedFrom\":null,", "\"countedFrom\":null,\"tracked\":\"ORS_ScenarioProgress\",");
+
+        var page = Loaded(stale);
+
+        Assert.False(page.Truth("__dom.node('#now-event-card').hidden"));
+        Assert.Equal("Orison Relief · tracked", page.NodeText("#now-event-label"));
+        Assert.Equal("0 pts · 10,800 to tier 1 (10,800)", page.NodeText("#now-event"));
+    }
+
+    /// <summary>
+    /// A choice beats play: with a Discovery contract open in the journal,
+    /// the card still shows the event the pilot pinned.
+    /// </summary>
+    [Fact]
+    public void A_tracked_event_beats_the_one_an_open_contract_pays_into()
+    {
+        var page = Loaded(Events.Replace("\"countedFrom\":null,", "\"countedFrom\":null,\"tracked\":\"ORS_ScenarioProgress\","));
+
+        Assert.Equal("Orison Relief · tracked", page.NodeText("#now-event-label"));
+    }
+
+    /// <summary>
+    /// A tracked event the installed game no longer lists - a patch retired
+    /// it - is no choice at all, and the card goes back to following play.
+    /// </summary>
+    [Fact]
+    public void A_tracked_event_the_game_no_longer_lists_is_ignored()
+    {
+        var page = Loaded(Events.Replace("\"countedFrom\":null,", "\"countedFrom\":null,\"tracked\":\"Gone_ScenarioProgress\","));
+
+        Assert.Equal("RSI Discovery Event", page.NodeText("#now-event-label"));
+    }
+
+    [Fact]
+    public void Track_on_now_asks_the_server_to_keep_this_event()
+    {
+        var page = Loaded();
+        page.Serve("/api/events/track?id=Iasi_ScenarioProgress", """{"tracked":"Iasi_ScenarioProgress"}""");
+
+        Assert.Contains("Track on Now", page.NodeText("#events-body"));
+        page.Do("await trackEvent('Iasi_ScenarioProgress');");
+
+        Assert.Contains("POST /api/events/track?id=Iasi_ScenarioProgress", page.Fetched());
+        Assert.Contains("Tracked on Now — stop", page.NodeText("#events-body"));
+        Assert.Equal("RSI Discovery Event · tracked", page.NodeText("#now-event-label"));
+    }
+
+    [Fact]
+    public void Stop_lets_the_card_follow_play_again()
+    {
+        var page = Loaded(Events.Replace("\"countedFrom\":null,", "\"countedFrom\":null,\"tracked\":\"Iasi_ScenarioProgress\","));
+        page.Serve("/api/events/track", """{"tracked":null}""");
+
+        page.Do("await trackEvent(null);");
+
+        Assert.Contains("POST /api/events/track", page.Fetched());
+        Assert.Contains("Track on Now", page.NodeText("#events-body"));
+        Assert.DoesNotContain("Tracked on Now", page.NodeText("#events-body"));
+        Assert.Equal("RSI Discovery Event", page.NodeText("#now-event-label"));
     }
 }

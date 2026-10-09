@@ -128,10 +128,16 @@ Every total is a floor, and the page says so:
   reward at each tier and the contracts that reach the next one in the fewest
   completions. Below that, every paying contract with its points, its bar and
   how many times this install has finished it.
-- **Now → Event card**, also on the overlay. It shows the event being played:
-  one with a contract open in the journal, or one played in the last fortnight.
-  It gives the overall bar against its next tier, every other bar's points,
-  and what finishing each open contract adds.
+- **Now → Event card**, also on the overlay. It shows the event you chose with
+  **Track on Now**, if you chose one. Otherwise it follows play: an event with
+  a contract open in the journal, or one played in the last fortnight. It gives
+  the overall bar against its next tier, every other bar's points, and what
+  finishing each open contract adds. The choice is kept on the server
+  (`event-track.json`, `POST /api/events/track`), because the overlay runs in
+  its own browser profile and would never see a choice kept in browser storage.
+- **Overlay glance view.** A tracked event is one line above Current status:
+  the overall points and every bar against its next tier. The overlay drops
+  the feed's detail text to stay dense, so the bar figures sit outside it.
 - **Focus strip.** An open event contract leads it: "+417 pts to Your total,
   Defense".
 - **Contracts table.** Every row that pays into an event carries a `pts` chip.

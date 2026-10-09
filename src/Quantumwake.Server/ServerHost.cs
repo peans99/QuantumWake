@@ -119,6 +119,7 @@ public static class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<EventTrackStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
         builder.Services.AddSingleton<ScreenReadingStore>();
 
@@ -2664,7 +2665,7 @@ public static class ServerHost
         // landed a minute ago, before any scan has stored it - and an event
         // started today has nothing else yet. Totals are floors; see
         // EventProgress for why, and the page says so.
-        app.MapGet("/api/events", (LogLibrary lib, LiveSessionService live) =>
+        app.MapGet("/api/events", (LogLibrary lib, LiveSessionService live, EventTrackStore track) =>
         {
             var catalogue = lib.GameCommodities.Scenarios;
             var current = live.LiveSummary.Contracts;
@@ -2673,6 +2674,11 @@ public static class ServerHost
             return Results.Ok(new
             {
                 available = catalogue.Scenarios.Count > 0,
+
+                // The event the pilot chose to keep on the Now page. Sent as
+                // stored: one the installed game no longer lists is dropped
+                // by the page, and the card goes back to following play.
+                tracked = track.Tracked,
                 countedFrom = lib.Wipe is { At: var at, Scope: var scope } && at > DateTimeOffset.MinValue && scope.HasFlag(WipeScope.History)
                     ? at : (DateTimeOffset?)null,
                 events = EventProgress.Build(catalogue, lib.ContractRecords().Concat(current)),
@@ -2693,6 +2699,20 @@ public static class ServerHost
                         since = x.Contract.FirstSeen,
                     }),
             });
+        });
+
+        // Keep an event on the Now page whatever is being played, or let it
+        // follow play again. Only an event the installed game lists can be
+        // chosen, so a typo cannot pin the card to nothing.
+        app.MapPost("/api/events/track", (LogLibrary lib, EventTrackStore track, string? id) =>
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return Results.Ok(new { tracked = track.Save(null) });
+
+            if (!lib.GameCommodities.Scenarios.Scenarios.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal)))
+                return Results.NotFound(new { trouble = "the installed game does not list that event" });
+
+            return Results.Ok(new { tracked = track.Save(id) });
         });
 
         app.MapGet("/api/wikelo", (LogLibrary lib, JobStore jobs) =>
