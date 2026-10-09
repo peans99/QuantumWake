@@ -45,6 +45,48 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- A native popup must still look like part of the instrument panel;
+             the platform menu is otherwise a bright rectangle over the game. -->
+        <Style x:Key="OverlayPresetMenu" TargetType="ContextMenu">
+            <Setter Property="Background" Value="#F00A121C" />
+            <Setter Property="BorderBrush" Value="#1E4763" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+        <Style x:Key="OverlayPresetMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#A9C9DD" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontFamily" Value="Bahnschrift, Segoe UI" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="MinWidth" Value="146" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Item" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Item" Property="Background" Value="#12314A" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="OverlayPresetSeparator" TargetType="Separator">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Margin="4,3" Background="#1E4763" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <!-- The outer border is the resize gutter. WebView2 is inset by GutterWidth
@@ -119,6 +161,22 @@
                                 Style="{StaticResource HeaderButton}"
                                 Click="NextButton_Click" FontSize="9"
                                 ToolTip="Next tab (Ctrl+Alt+→)" />
+                        <Button x:Name="PresetButton" Content="▦"
+                                Style="{StaticResource HeaderButton}"
+                                Click="PresetButton_Click" FontSize="13"
+                                ToolTip="Switch overlay layout">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource OverlayPresetMenu}">
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Flight" Tag="flight" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Mining" Tag="mining" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Combat" Tag="combat" Click="PresetMenuItem_Click" />
+                                    <Separator Style="{StaticResource OverlayPresetSeparator}" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Trading" Tag="trading" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Minimal" Tag="minimal" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Full layout" Tag="full" Click="PresetMenuItem_Click" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
                         <Button x:Name="CompactButton" Content="▾"
                                 Style="{StaticResource HeaderButton}"
                                 Click="CompactButton_Click" FontSize="12"

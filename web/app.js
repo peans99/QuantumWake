@@ -390,6 +390,7 @@ function showView(name) {
   if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
+  if (name === 'events') loadEvents().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
@@ -983,11 +984,39 @@ function initNowCardCollapsers() {
 }
 
 document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    openCommandPalette();
+    return;
+  }
   if (!event.ctrlKey || !event.altKey) return;
 
   if (event.key === 'ArrowRight') { window.scCycleView(1); event.preventDefault(); }
   if (event.key === 'ArrowLeft') { window.scCycleView(-1); event.preventDefault(); }
 });
+
+let commandIndex = 0;
+function commandEntries() {
+  const pages = $$('#tabs button[data-view]').map(button => ({
+    label: `Open ${button.textContent.trim()}`, hint: 'page', run: () => showView(button.dataset.view),
+  }));
+  const presets = ['flight', 'mining', 'combat', 'trading', 'minimal', 'full'].map(name => ({
+    label: `${name[0].toUpperCase() + name.slice(1)} overlay layout`, hint: 'overlay', run: () => window.scOverlayPreset?.(name),
+  }));
+  return [...pages, ...presets, { label: 'Show overlay', hint: 'overlay', run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) }];
+}
+function renderCommandPalette() {
+  const query = $('#command-query').value.trim().toLowerCase();
+  const matches = commandEntries().filter(entry => entry.label.toLowerCase().includes(query));
+  commandIndex = Math.max(0, Math.min(commandIndex, matches.length - 1));
+  const host = $('#command-results'); host.textContent = '';
+  matches.forEach((entry, index) => { const button = el('button', `command-result${index === commandIndex ? ' active' : ''}`, entry.label); button.type = 'button'; button.append(el('small', null, entry.hint)); button.onclick = () => { entry.run(); closeCommandPalette(); }; host.append(button); });
+  return matches;
+}
+function openCommandPalette() { if (isOverlay) return; const dialog = $('#command-palette'); dialog.hidden = false; $('#command-query').value = ''; commandIndex = 0; renderCommandPalette(); $('#command-query').focus(); }
+function closeCommandPalette() { $('#command-palette').hidden = true; }
+$('#command-query')?.addEventListener('input', () => { commandIndex = 0; renderCommandPalette(); });
+$('#command-query')?.addEventListener('keydown', event => { const matches = renderCommandPalette(); if (event.key === 'Escape') { closeCommandPalette(); return; } if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { commandIndex = Math.max(0, Math.min(matches.length - 1, commandIndex + (event.key === 'ArrowDown' ? 1 : -1))); renderCommandPalette(); event.preventDefault(); } if (event.key === 'Enter' && matches[commandIndex]) { matches[commandIndex].run(); closeCommandPalette(); } });
 
 /* ---------- live view ---------- */
 
@@ -1037,6 +1066,18 @@ function contractFocus(contracts) {
     // Shopping keeps the run under the lists, off the bottom of the page
     // when a list is open: the button lands on the run, not on the header.
     return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run', anchor: '#jobs-contracts' };
+  }
+
+  // An event contract says what finishing it is worth: the journal shows the
+  // bar move afterwards, in percent, and never the number beforehand.
+  const paying = contracts.find((c) => c.eventPoints);
+  if (paying) {
+    return {
+      title: 'Event contract',
+      detail: `${paying.name || 'Open contract'} · +${paying.eventPoints.toLocaleString()} pts to ${(paying.eventTracks || []).join(', ') || paying.event}`,
+      view: 'events',
+      action: 'Event progress',
+    };
   }
 
   return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
@@ -1126,6 +1167,7 @@ function renderNow(state) {
 
   raiseToasts(state.recentEvents);
   noticeRefineryChanges(state);
+  noticeEventChanges(state);
 
   const feed = $('#now-feed');
   feed.textContent = '';
@@ -2647,7 +2689,15 @@ async function loadContractList() {
       pays.append(chip);
     }
 
-    if (!row.rep && !row.blueprint) pays.append(el('span', 'muted', '—'));
+    // What it pays into an event journal, from the installed game's own
+    // points table - not annotated by anyone, so it is shown on every row.
+    if (row.eventPoints) {
+      const chip = el('span', 'tag-event', `${row.eventPoints.toLocaleString()} pts`);
+      chip.title = `${row.event}: counts toward ${(row.eventTracks || []).join(', ')}`;
+      pays.append(chip);
+    }
+
+    if (!row.rep && !row.blueprint && !row.eventPoints) pays.append(el('span', 'muted', '—'));
 
     tr.append(pays);
 
@@ -7244,7 +7294,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
-  checklist: 'Checklist', refinery: 'Refinery',
+  checklist: 'Checklist', refinery: 'Refinery', event: 'Event',
 };
 
 /**
@@ -9150,6 +9200,532 @@ async function trackWikelo(trade, card, button, said) {
 }
 
 $('#wikelo-search')?.addEventListener('input', () => renderWikelo());
+
+/* ---- Events: an event journal's bars in points, from the game files and the logs ----
+ *
+ * The game draws each event bar as a percentage and never says what a contract
+ * is worth. The installed files say both - every tier's points and every
+ * contract's - and the logs say which contracts were finished, so the page can
+ * put a number on the bar and say which contracts close the gap soonest.
+ *
+ * Every total is a floor, and the page says so: a contract is counted when the
+ * game raised an objective marker for it and then ended it as complete.
+ */
+let eventsData = null;
+let eventsChosen = null;
+let eventsStreamKey = null;
+
+const EVENT_KEY = 'qw-event';
+
+// How long after its last contract an event still counts as the one being
+// played, for the Now card. Discovery Month runs a month; a fortnight without
+// one of its contracts is a pilot who has moved on.
+const EVENT_RECENT_DAYS = 14;
+const EVENT_PREFERENCE_KEY = 'qw-event-preference';
+let eventPreference = 'all';
+
+try { eventsChosen = localStorage.getItem(EVENT_KEY) || null; } catch { /* optional */ }
+try { eventPreference = localStorage.getItem(EVENT_PREFERENCE_KEY) || 'all'; } catch { /* optional */ }
+
+async function loadEvents() {
+  const before = eventsData;
+
+  try {
+    eventsData = await getJson('/api/events');
+  } catch {
+    eventsData = null;
+  }
+
+  renderEvents();
+  renderNowEvent();
+  announceEventTiers(before, eventsData);
+}
+
+/** Every tier reached, as event|bar|points, so two reads can be compared. */
+function eventTiersReached(data) {
+  const reached = new Set();
+  for (const event of data?.events || [])
+    for (const track of event.tracks)
+      for (const tier of track.tiers)
+        if (tier.reached) reached.add(`${event.id}|${track.id}|${tier.minPoints}`);
+  return reached;
+}
+
+/**
+ * A tier crossed since the last read raises a toast with what it gives - the
+ * journal moves the bar, in percent, and says nothing. Only a change between
+ * two reads counts: the first read of a page load is history, and toasting
+ * every tier already held would bury the one just earned.
+ */
+function announceEventTiers(before, after) {
+  if (!before?.events || !after?.events) return;
+
+  const had = eventTiersReached(before);
+
+  for (const event of after.events) {
+    for (const track of event.tracks) {
+      track.tiers.forEach((tier, index) => {
+        if (!tier.reached || had.has(`${event.id}|${track.id}|${tier.minPoints}`)) return;
+        toast('event-tier', `${track.name} tier ${index + 1} reached`,
+          tier.reward ? `${event.title} - ${tier.reward}` : event.title);
+      });
+    }
+  }
+}
+
+function eventRecent(event, nowMs = Date.now()) {
+  return !!event?.lastSeen && nowMs - Date.parse(event.lastSeen) < EVENT_RECENT_DAYS * 86400000;
+}
+
+/**
+ * The event for the Now card: the one the pilot chose to track, else the one a
+ * contract in the journal pays into, else the one played lately.
+ */
+function currentEvent(data = eventsData, nowMs = Date.now()) {
+  const events = data?.events || [];
+
+  // A choice wins: an event the pilot means to play and has not started, or
+  // wants in view between sessions, is one play alone would never surface.
+  const tracked = events.find((e) => e.id === data?.tracked);
+  if (tracked) return tracked;
+
+  const open = (data?.open || [])[0];
+  if (open) return events.find((e) => e.title === open.event) || null;
+  return events.find((e) => eventRecent(e, nowMs)) || null;
+}
+
+/** What the page shows: the pilot's pick, else the event being played, else the first. */
+function chosenEvent(data = eventsData) {
+  const events = data?.events || [];
+  return events.find((e) => e.id === eventsChosen) || currentEvent(data) || events[0] || null;
+}
+
+function rememberEvent(id) {
+  eventsChosen = id || null;
+  try {
+    if (eventsChosen) localStorage.setItem(EVENT_KEY, eventsChosen);
+    else localStorage.removeItem(EVENT_KEY);
+  } catch { /* optional */ }
+}
+
+const eventPoints = (n) => `${Number(n || 0).toLocaleString()} pts`;
+
+/** The tier the bar is working towards, as words: "750 to tier 2 (4,000)". */
+function eventNextText(track) {
+  if (track.nextTier == null) return 'every tier reached';
+  const index = track.tiers.findIndex((t) => t.minPoints === track.nextTier);
+  return `${track.toNext.toLocaleString()} to tier ${index + 1} (${track.nextTier.toLocaleString()})`;
+}
+
+function renderEvents() {
+  const body = $('#events-body');
+  const picker = $('#events-picker');
+  if (!body || !picker) return;
+
+  body.textContent = '';
+  picker.textContent = '';
+
+  if (!eventsData) {
+    body.append(el('p', 'muted', 'Could not load the events — is the app still running?'));
+    return;
+  }
+
+  // An install whose game data has not been read is told so, not shown a
+  // patch with no events in it.
+  if (!eventsData.available) {
+    $('#events-count').textContent = '';
+    body.append(el('p', 'muted', 'The game files have not been read yet, so the event tiers and contract points are not known. Point Settings at your Star Citizen install and they will be.'));
+    return;
+  }
+
+  const events = eventsData.events || [];
+  $('#events-count').textContent = `${events.length} in this patch`;
+
+  const shown = chosenEvent();
+  for (const event of events) {
+    const state = eventsData.tracked === event.id ? 'tracked' : (eventsData.open || []).some(o => o.event === event.title) ? 'open' : eventRecent(event) ? 'recent' : '';
+    const button = el('button', event.id === shown?.id ? 'ghost' : 'ghost off', event.title);
+    button.type = 'button';
+    button.title = event.firstSeen ? `In your logs since ${dateOf(event.firstSeen)}` : 'Not in your logs yet';
+    if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
+    if (state) button.append(el('span', 'muted', ` · ${state}`));
+    button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
+    picker.append(button);
+  }
+
+  $$('#event-preferences [data-event-preference]').forEach(button => button.classList.toggle('active', button.dataset.eventPreference === eventPreference));
+
+  if (shown) body.append(eventView(shown));
+}
+
+function eventView(event) {
+  const box = el('div', 'event-view');
+
+  if (event.description) box.append(el('p', 'muted event-desc', withoutMarkup(event.description.replace(/\\n/g, '\n'))));
+
+  box.append(eventPlan(event));
+
+  const facts = el('p', 'event-facts');
+  if (event.firstSeen) {
+    facts.append(el('span', null, `${event.completed.toLocaleString()} of its contracts finished since ${dateOf(event.firstSeen)}`));
+  } else {
+    facts.append(el('span', 'muted', 'None of its contracts are in your logs yet. Finish one and it is counted from then.'));
+  }
+  if (event.lastSeen) facts.append(el('span', 'muted', ` · last event contract seen ${dateOf(event.lastSeen)}`));
+  if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · counting from your wipe on ${dayUtc(eventsData.countedFrom)}`));
+  if (event.percent) facts.append(el('span', 'muted', ' · the journal shows these bars in percent; here they are in points'));
+  box.append(facts);
+
+  const actions = el('div', 'point-actions event-actions');
+  const tracked = eventsData?.tracked === event.id;
+  const track = el('button', 'ghost event-track-now', tracked ? 'Tracked on Now — stop' : 'Track on Now');
+  track.type = 'button';
+  track.title = tracked
+    ? 'Let the Now card follow what you play again'
+    : 'Keep this event on the Now page and the overlay, whatever you are playing';
+  track.addEventListener('click', () => trackEvent(tracked ? null : event.id, track));
+  actions.append(track);
+  box.append(actions);
+
+  // A renamed contract would leave the bars short and say nothing, so a
+  // contract that looks like this event's and is not in the table is named.
+  if (event.unrecognised) {
+    box.append(el('p', 'warn event-unrecognised',
+      `${event.unrecognised} contract${event.unrecognised === 1 ? '' : 's'} in your logs look like this event's but are not in the installed game's points table, so they are not counted.`));
+  }
+
+  const open = (eventsData?.open || []).filter((o) => o.event === event.title);
+  if (open.length) {
+    const now = el('ul', 'feed event-open');
+    for (const contract of open) {
+      const li = el('li', 'want');
+      li.append(el('span', 'what', `+${contract.points.toLocaleString()}`));
+      li.append(el('span', 'd', ` · ${contract.title} — counts toward ${contract.tracks.join(', ')}`));
+      now.append(li);
+    }
+    box.append(el('div', 'card-label', 'In your journal now'));
+    box.append(now);
+  }
+
+  const tracks = el('div', 'points-list event-tracks');
+  for (const track of event.tracks) tracks.append(eventTrackCard(track));
+  box.append(tracks);
+
+  const details = document.createElement('details'); details.className = 'event-details';
+  details.append(el('summary', null, `All ${event.contracts.length} paying contracts`));
+  details.append(eventContractsTable(event)); box.append(details);
+  return box;
+}
+
+/** Readable names for the catalogue types an event reward can be. */
+const REWARD_KINDS = {
+  Paint: 'Livery', Cooler: 'Cooler', Radar: 'Radar', PowerPlant: 'Power plant',
+  FlightController: 'Flight blade', WeaponPersonal: 'Personal gear',
+};
+
+/** The kinds whose size and grade are worth stating. */
+const REWARD_GRADED = new Set(['Cooler', 'Radar', 'PowerPlant', 'Shield', 'QuantumDrive']);
+
+/** A mark per kind for a reward with no picture, so the card still reads at a glance. */
+const REWARD_GLYPHS = {
+  Paint: '◐', Cooler: '❄', Radar: '◎', PowerPlant: 'ϟ', FlightController: '⟁', WeaponPersonal: '⌖',
+};
+
+/** "Power plant · S1 · grade C · Sovereign": what a reward is, from the install's catalogue. */
+function rewardKindLine(item, facts) {
+  const type = facts?.type || item.kind;
+  const bits = [REWARD_KINDS[type] || prettyType(type)];
+  // Size and grade mean something on a ship component; on a livery, a blade or
+  // a handheld tool the file still says S1 grade A, which would read as a fact.
+  if (REWARD_GRADED.has(type)) {
+    if (facts?.size) bits.push(`S${facts.size}`);
+    if (facts?.grade) bits.push(`grade ${gradeLetter(facts.grade)}`);
+  }
+  if (facts?.maker) bits.push(facts.maker);
+  return bits.filter((b) => b && b !== '—').join(' · ');
+}
+
+function rewardGlyph(kind) {
+  return el('div', 'event-reward-glyph', REWARD_GLYPHS[kind] || '◇');
+}
+
+/**
+ * What a tier hands over, item by item: the picture the install or the wiki
+ * has, what the catalogue says it is, and what UEX says it costs. An item the
+ * text names but the catalogue lacks is still listed, as text, rather than
+ * dropped - and a name that fits several items says it is one of them.
+ */
+function eventRewardItems(items) {
+  const box = el('div', 'event-reward-items');
+
+  // An event reward is rarely on sale, so "not sold" on every card is the same
+  // sentence eight times. When nothing in the tier has a price it is said once
+  // for the tier; a card says it only beside others that do have one.
+  const priced = items.filter((i) => i.class && eventsData?.rewards?.[i.class]?.price != null).length;
+  const sayUnsoldPerCard = priced > 0;
+
+  for (const item of items) {
+    const facts = item.class ? eventsData?.rewards?.[item.class] : null;
+    const card = el('div', `event-reward${item.class ? '' : ' unmatched'}`);
+
+    if (item.class) {
+      const picture = el('img', 'event-reward-pic');
+      picture.alt = '';
+      picture.loading = 'lazy';
+      // No picture is the usual answer for a part the wiki has not
+      // photographed yet; the kind's mark stands in rather than a broken image.
+      picture.addEventListener('error', () => picture.replaceWith(rewardGlyph(facts?.type || item.kind)));
+      picture.src = `/api/events/picture/${encodeURIComponent(item.class)}`;
+      card.append(picture);
+    } else {
+      card.append(rewardGlyph(''));
+    }
+
+    const text = el('div', 'event-reward-text');
+    text.append(el('div', 'event-reward-name', `${item.oneOf ? 'One of: ' : ''}${item.name}`));
+    text.append(el('div', 'muted event-reward-kind', item.class
+      ? rewardKindLine(item, facts)
+      : 'not in the installed game’s catalogue under this name'));
+
+    if (item.class && eventsData?.prices) {
+      if (facts?.price != null) text.append(el('div', 'event-reward-price', `≈ ${money(facts.price)} · UEX typical`));
+      else if (sayUnsoldPerCard) text.append(el('div', 'muted event-reward-price', 'not sold at any terminal UEX lists'));
+    }
+
+    card.append(text);
+    box.append(card);
+  }
+
+  if (eventsData?.prices && !sayUnsoldPerCard && items.some((i) => i.class)) {
+    box.append(el('div', 'muted event-reward-unsold', 'None of these is sold at any terminal UEX lists - event rewards usually are not.'));
+  }
+
+  return box;
+}
+
+function eventMatchesPreference(contract) {
+  if (eventPreference === 'all') return true;
+  const words = `${contract.title} ${contract.issuer}`.toLowerCase();
+  if (eventPreference === 'combat') return /patrol|bounty|combat|neutralize|defen/.test(words);
+  if (eventPreference === 'mining') return /mining|ore|quantanium|salvage|procure/.test(words);
+  return /cargo|haul|delivery|courier|transport|refuel|package/.test(words);
+}
+function eventPlan(event) {
+  const track = event.tracks.find(t => t.overall && t.nextTier != null) || event.tracks.find(t => t.nextTier != null);
+  const plan = el('section', 'event-plan');
+  if (!track) { plan.append(el('div', 'event-plan-target', 'Every recorded tier reached')); return plan; }
+  const head = el('div', 'event-plan-head');
+  head.append(el('span', 'card-label', 'Next event target'));
+  head.append(el('strong', 'event-plan-target', `${track.toNext.toLocaleString()} pts to ${track.name} tier ${track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1}`));
+  plan.append(head);
+  const top = track.tiers[track.tiers.length - 1]?.minPoints || track.nextTier;
+  const bar = el('div', 'event-plan-bar'); const fill = el('span'); fill.style.width = `${Math.min(100, (track.points / top) * 100)}%`; bar.append(fill); plan.append(bar);
+  const milestones = el('div', 'event-milestones');
+  track.tiers.forEach((tier, index) => milestones.append(el('span', `event-milestone${tier.minPoints === track.nextTier ? ' next' : ''}`, `T${index + 1} · ${tier.minPoints.toLocaleString()}`)));
+  plan.append(milestones);
+  const choices = event.contracts.filter(eventMatchesPreference).map(c => ({ ...c, needed: Math.ceil(track.toNext / c.points) }))
+    .sort((a,b) => a.needed - b.needed || b.points - a.points).slice(0, 3);
+  plan.append(el('p', 'muted', choices.length ? `Best ${eventPreference === 'all' ? 'available' : eventPreference} path: ${choices.map(c => `${c.needed} × ${c.title} (${c.points.toLocaleString()} pts)`).join(' · ')}` : `No ${eventPreference} contracts are listed for this event; choose Any activity to see every path.`));
+  const lanes = el('div', 'event-lanes');
+  for (const [name, icon] of [['combat','✦'],['mining','◇'],['hauling','↗']]) { const pick = event.contracts.filter(c => { const saved = eventPreference; eventPreference = name; const hit = eventMatchesPreference(c); eventPreference = saved; return hit; }).sort((a,b)=>b.points-a.points)[0]; const lane = el('div','event-lane'); lane.append(el('b',null,`${icon} ${name}`)); lane.append(el('span',null,pick ? `${pick.title} · ${pick.points.toLocaleString()} pts` : 'No listed path')); lanes.append(lane); }
+  plan.append(lanes);
+  const actions = el('div', 'event-plan-actions');
+  for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', label); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
+  plan.append(actions); return plan;
+}
+
+function eventTrackCard(track) {
+  const card = el('article', `point-card event-track${track.overall ? ' event-overall' : ''}`);
+
+  const head = el('div', 'wikelo-head');
+  head.append(el('div', 'point-name-read', track.name));
+  head.append(el('div', 'strong event-total', eventPoints(track.points)));
+  card.append(head);
+
+  // The bar is drawn against its last tier, with a tick at each one, so how
+  // far the next tier is reads at a glance before any number is read.
+  const top = track.tiers.length ? track.tiers[track.tiers.length - 1].minPoints : 0;
+  const bar = el('div', 'event-bar');
+  const fill = el('div', 'event-fill');
+  fill.style.width = `${top ? Math.min(100, (track.points / top) * 100) : 0}%`;
+  if (track.color) fill.style.background = track.color;
+  bar.append(fill);
+  for (const tier of track.tiers) {
+    const tick = el('span', `event-tick${tier.reached ? ' reached' : ''}`);
+    tick.style.left = `${top ? (tier.minPoints / top) * 100 : 0}%`;
+    tick.title = `${tier.minPoints.toLocaleString()} pts`;
+    bar.append(tick);
+  }
+  card.append(bar);
+  card.append(el('div', 'muted event-next', eventNextText(track)));
+
+  const tiers = el('ul', 'wikelo-wants event-tiers');
+  track.tiers.forEach((tier, index) => {
+    const li = el('li', tier.reached ? 'have' : 'lack');
+    const items = tier.items || [];
+
+    // A tier whose reward names catalogue items opens into them; one whose
+    // text matched nothing stays a plain line rather than a button to nothing.
+    const head = el(items.length ? 'button' : 'div', 'event-tier-head');
+    head.append(el('span', 'mark', tier.reached ? '✓' : '○'));
+    const line = el('span', 'event-tier-line');
+    line.append(el('span', 'what', `Tier ${index + 1} · ${tier.minPoints.toLocaleString()}`));
+    if (tier.reward) line.append(el('span', 'muted', ` — ${tier.reward}`));
+    head.append(line);
+    li.append(head);
+
+    if (items.length) {
+      head.type = 'button';
+      head.title = 'Show what this tier gives';
+      head.setAttribute('aria-expanded', 'false');
+      head.append(el('span', 'event-tier-caret', '▸'));
+
+      const detail = eventRewardItems(items);
+      detail.hidden = true;
+      li.append(detail);
+
+      head.addEventListener('click', () => {
+        detail.hidden = !detail.hidden;
+        head.setAttribute('aria-expanded', String(!detail.hidden));
+        li.classList.toggle('open', !detail.hidden);
+      });
+    }
+
+    tiers.append(li);
+  });
+  const tierDetails = document.createElement('details');
+  tierDetails.className = 'event-details';
+  tierDetails.append(el('summary', null, `${track.tiers.length} tiers and rewards`));
+  tierDetails.append(tiers); card.append(tierDetails);
+
+  if (track.fastest.length) {
+    const fast = el('div', 'event-fastest');
+    fast.append(el('div', 'card-label', 'Fewest contracts to the next tier'));
+    const list = el('ul', 'feed');
+    for (const s of track.fastest) {
+      const li = el('li');
+      li.append(el('span', 'what', `${s.needed} ×`));
+      li.append(el('span', 'd', ` ${s.title} (${s.points.toLocaleString()} each${s.done ? `, done ${s.done}× before` : ''})`));
+      list.append(li);
+    }
+    fast.append(list);
+    card.append(fast);
+  }
+
+  return card;
+}
+
+function eventContractsTable(event) {
+  const wrap = el('div', 'table-wrap event-contracts');
+  const table = el('table', 'data');
+  const head = el('tr');
+  for (const [label, cls] of [['Contract', null], ['Offered by', null], ['Counts toward', null], ['Points', 'num'], ['Done', 'num']])
+    head.append(el('th', cls, label));
+  const thead = el('thead');
+  thead.append(head);
+  table.append(thead);
+
+  const body = el('tbody');
+  for (const c of event.contracts) {
+    const tr = el('tr');
+    tr.title = c.id;
+    tr.append(el('td', null, c.title));
+    tr.append(el('td', 'muted', c.issuer || '—'));
+    // The overall bar takes every contract, so naming it on every row says
+    // nothing; the rows name the bar that sets them apart.
+    const bars = c.tracks.slice(1);
+    tr.append(el('td', bars.length ? null : 'muted', bars.length ? bars.join(', ') : (c.tracks[0] || '—')));
+    tr.append(el('td', 'num', c.points.toLocaleString()));
+    tr.append(el('td', c.completed ? 'num' : 'num muted', c.completed ? `${c.completed}` : '—'));
+    body.append(tr);
+  }
+  table.append(body);
+  wrap.append(table);
+  return wrap;
+}
+
+/** Keeps an event on the Now page, or with null lets the card follow play again. */
+async function trackEvent(id, button) {
+  if (button) button.disabled = true;
+
+  try {
+    const response = await fetch(`/api/events/track${id ? `?id=${encodeURIComponent(id)}` : ''}`, { method: 'POST' });
+    if (response.ok && eventsData) eventsData.tracked = (await response.json()).tracked ?? null;
+  } catch {
+    const status = $('#events-plan-status');
+    if (status) status.textContent = 'Could not save the tracked event. It will keep following your current contracts.';
+  }
+
+  renderEvents();
+  renderNowEvent();
+}
+
+$('#event-preferences')?.addEventListener('click', event => {
+  const preference = event.target?.dataset?.eventPreference;
+  if (!preference) return;
+  eventPreference = preference;
+  try { localStorage.setItem(EVENT_PREFERENCE_KEY, preference); } catch { /* optional */ }
+  renderEvents();
+});
+
+/**
+ * The Now page's event card: the bars of the event being played against their
+ * next tiers, and what finishing each contract in the journal would add.
+ */
+function renderNowEvent() {
+  const card = $('#now-event-card');
+  const status = $('#operations-event-status');
+  const event = currentEvent();
+  const overall = event ? (event.tracks.find((t) => t.overall) || event.tracks[0]) : null;
+
+  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : 'Open events';
+
+  if (!card) return;
+  card.hidden = !event;
+
+  // A tracked event also earns a line in the overlay's glance view, which
+  // otherwise keeps only the status card: the pilot asked for it to stay in view.
+  card.classList.toggle('event-tracked', !!event && eventsData?.tracked === event.id);
+  if (!event) return;
+
+  $('#now-event-label').textContent = eventsData?.tracked === event.id ? `${event.title} · tracked` : event.title;
+  $('#now-event').textContent = overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : '—';
+
+  const list = $('#now-event-list');
+  list.textContent = '';
+
+  for (const contract of (eventsData?.open || []).filter((o) => o.event === event.title)) {
+    const li = el('li', 'want');
+    li.append(el('span', 'what', `+${contract.points.toLocaleString()}`));
+    li.append(el('span', 'd', ` · ${contract.title}`));
+    list.append(li);
+  }
+
+  // The figures sit outside the feed's detail span on purpose: the overlay
+  // drops every .d to stay dense, and a bar's name without its number is
+  // exactly the part of the card worth having in game.
+  for (const track of event.tracks.filter((t) => t !== overall)) {
+    const li = el('li');
+    li.append(el('span', 'what', track.name));
+    li.append(el('span', 'event-pts', track.nextTier != null
+      ? `${track.points.toLocaleString()} / ${track.nextTier.toLocaleString()}`
+      : `${track.points.toLocaleString()} · every tier`));
+    list.append(li);
+  }
+}
+
+/**
+ * Called on every frame of the stream: a contract taken or finished changes
+ * the open list, and only then are the totals worth asking for again.
+ */
+function noticeEventChanges(state) {
+  const key = (state.contracts || []).map((c) => `${c.name}|${c.since}`).join('\n');
+  if (key === eventsStreamKey) return;
+
+  const first = eventsStreamKey === null;
+  eventsStreamKey = key;
+  if (!first) loadEvents().catch(() => {});
+}
 
 /* ---- Points of interest: the pilot's own marks, and why ----
    Places is what the logs saw. This is what the pilot chose to keep - exact
@@ -12125,9 +12701,13 @@ $('#overlay-reload')?.addEventListener('click', async (e) => {
   }
 });
 
-async function saveOverlayLayout() {
+async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
   const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
-  const density = $$('#overlay-density input').find((r) => r.checked)?.value || 'normal';
+  const layout = chosen || {
+    tabs: pick('#overlay-tabs'),
+    cards: pick('#overlay-cards'),
+    density: $$('#overlay-density input').find((r) => r.checked)?.value || 'normal',
+  };
 
   const status = $('#overlay-layout-status');
   status.textContent = 'saving…';
@@ -12136,29 +12716,59 @@ async function saveOverlayLayout() {
     await fetch('/api/overlay/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tabs: pick('#overlay-tabs'), cards: pick('#overlay-cards'), density }),
+      body: JSON.stringify(layout),
     });
-    status.textContent = 'saved';
+    status.textContent = savedMessage;
   } catch {
     status.textContent = 'could not save';
   }
 }
 
+/*
+ * The Current status card gathered what were the location, ship, session,
+ * handle and respawn cards, and every layout - saved ones and the presets -
+ * still names those. Its own name, "status", is in none of them, so matching
+ * on it alone switched the card off in every overlay and left the glance
+ * view, which is that card and nothing else, empty.
+ */
+const OVERLAY_STATUS_PARTS = ['location', 'ship', 'session', 'handle', 'respawn'];
+
 const OVERLAY_PRESETS = {
-  flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed'], density: 'compact' },
-  trading: { tabs: ['now', 'jobs', 'cargo', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade'], density: 'compact' },
+  // The event card hides itself when no event is being played, so the layouts
+  // whose work pays into one carry it without costing anyone a row.
+  flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'event'], density: 'compact' },
+  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
+  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
+  trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade', 'event'], density: 'compact' },
   minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
   full: null,
 };
-$('#overlay-presets')?.addEventListener('click', event => {
-  const preset = OVERLAY_PRESETS[event.target?.dataset?.preset];
+
+/** Applies a named layout from either the dashboard or the overlay's header. */
+async function applyOverlayPreset(name) {
+  const preset = OVERLAY_PRESETS[name];
   if (preset === undefined) return;
+
   const all = (host, values) => $$(`${host} input`).forEach(box => { box.checked = values.includes(box.value); });
-  const next = preset || { tabs: overlayLayoutData?.tabs || [], cards: overlayLayoutData?.cards || [], density: 'normal' };
+  // Full is the only layout whose contents change as the app gains cards. The
+  // header menu lives in a page that has not opened Settings, so read the
+  // offered lists when this browser has no cached copy yet.
+  const available = overlayLayoutData || (preset ? null : await getJson('/api/overlay/layout'));
+  const next = preset || { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal' };
   all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
-  saveOverlayLayout();
+  await saveOverlayLayout(
+    `${name === 'full' ? 'Full' : name[0].toUpperCase() + name.slice(1)} layout saved`, next);
+}
+
+$('#overlay-presets')?.addEventListener('click', event => {
+  applyOverlayPreset(event.target?.dataset?.preset).catch(() => {});
 });
+
+// The native shell owns the compact header, while the dashboard owns the
+// layout API. Keeping the named layouts here means both routes save exactly
+// the same JSON and a future card only needs one preset definition.
+window.scOverlayPreset = name => applyOverlayPreset(String(name));
 
 /**
  * In the widget, applies the chosen layout: which tabs appear, which Now cards
@@ -12191,7 +12801,8 @@ async function applyOverlayLayout() {
     button.hidden = !expanded && !layout.tabs.includes(button.dataset.view);
 
   for (const card of $$('#view-now [data-card]')) {
-    const wanted = expanded || layout.cards.includes(card.dataset.card);
+    const wanted = expanded || layout.cards.includes(card.dataset.card)
+      || (card.dataset.card === 'status' && OVERLAY_STATUS_PARTS.some((part) => layout.cards.includes(part)));
     card.classList.toggle('layout-off', !wanted);
   }
 
@@ -17518,9 +18129,15 @@ async function loadTextOverlay() {
 
   // Which file it builds on decides whether another mod survives, so it is
   // stated rather than assumed.
-  $('#textoverlay-source').textContent = state.baseSource === 'StarStrings'
+  // A base written before the last patch lacks its new strings; installing adds
+  // them in the game's own words, and the page says so beside the button.
+  const filledNote = state.filled
+    ? ` Installing also adds ${state.filled.toLocaleString()} strings the game has added since that text was written, which would otherwise show in game as raw keys.`
+    : '';
+
+  $('#textoverlay-source').textContent = (state.baseSource === 'StarStrings'
     ? 'Built on top of the StarStrings text, so both survive.'
-    : "Built on the game's own text.";
+    : "Built on the game's own text.") + filledNote;
 
   labelChanges = state.changes || [];
   renderLabelChanges();
@@ -17622,6 +18239,7 @@ function initTextOverlay() {
     }
 
     await loadTextOverlay();
+    checkTextFreshness().catch(() => {});
     alertLine($('#textoverlay-status').parentElement, 'Installed. Restart Star Citizen to see it.');
   });
 
@@ -26006,6 +26624,61 @@ async function checkPriceAge() {
   notice.hidden = false;
 }
 
+/*
+ * The loose text file the game reads, fallen behind the game. A loose
+ * global.ini replaces the game's table, and nothing updates it when the game
+ * patches: 4.10.2 added 521 strings, every Discovery Month contract title among
+ * them, and a file written before the patch has none. What fixes it depends on
+ * whose file it is, so the notice says which.
+ */
+const TEXT_STALE_DISMISSED = 'qw-text-stale-dismissed';
+
+function textStaleDetail(fresh) {
+  const count = `${fresh.missing.toLocaleString()} of the game's strings are missing from it`;
+  const what = ' - this patch’s new items and contract titles among them - so the game may show those as raw text keys.';
+
+  if (fresh.owner === 'overlay' || fresh.owner === 'overlay+StarStrings')
+    return `${count}${what} Reinstalling the item labels adds them back in the game's own words.`;
+  if (fresh.owner === 'StarStrings')
+    return `${count}${what} Install a StarStrings release made for this patch, or remove StarStrings, to get them back.`;
+  return `${count}${what} It belongs to a text mod Quantum Wake did not install; update or remove that mod.`;
+}
+
+async function checkTextFreshness() {
+  const notice = $('#text-stale');
+  if (!notice) return;
+
+  let fresh;
+  try {
+    fresh = await getJson('/api/labels/freshness');
+  } catch {
+    return;
+  }
+
+  if (!fresh?.present || !fresh.missing) {
+    notice.hidden = true;
+    return;
+  }
+
+  // "Not now" holds until the gap changes: the next patch is news again.
+  try {
+    if (localStorage.getItem(TEXT_STALE_DISMISSED) === String(fresh.missing)) return;
+  } catch { /* optional */ }
+
+  $('#text-stale-detail').textContent = textStaleDetail(fresh);
+  notice.dataset.missing = String(fresh.missing);
+  notice.hidden = false;
+}
+
+function initTextStaleNotice() {
+  $('#text-stale-open')?.addEventListener('click', () => showView('labels'));
+  $('#text-stale-dismiss')?.addEventListener('click', () => {
+    const notice = $('#text-stale');
+    try { localStorage.setItem(TEXT_STALE_DISMISSED, notice.dataset.missing || ''); } catch { /* optional */ }
+    notice.hidden = true;
+  });
+}
+
 function initStaleNotice() {
   const notice = $('#stale');
   if (!notice) return;
@@ -26509,6 +27182,7 @@ function initWipePrompt() {
 : neither belongs to a
    view, and both must work before anything has been rendered. */
 initStaleNotice();
+initTextStaleNotice();
 initWipe();
 initWipePrompt();
 initUpdates();
@@ -26880,9 +27554,15 @@ async function boot() {
     bindRefineryNotify();
     loadRefineryOrders().catch(() => { /* the Mining page asks again when opened */ });
 
+    // The Now card and the Operations line want the event totals whichever
+    // page is open; the stream asks again whenever a contract comes or goes.
+    $('#now-event-open')?.addEventListener('click', () => showView('events'));
+    loadEvents().catch(() => { /* the Events page asks again when opened */ });
+
     // Once per load, never on a timer: the offer to renew a price table that
     // has gone a day old, and the line the wipe draws under the history.
     checkPriceAge().catch(() => { /* prices are usable whatever their age */ });
+    checkTextFreshness().catch(() => { /* the game still runs; only some names read as keys */ });
     checkForWipe().catch(() => { /* the Settings page still carries the line */ });
     checkForUpdate().catch(() => { /* an unanswered question is not a failure */ });
   }

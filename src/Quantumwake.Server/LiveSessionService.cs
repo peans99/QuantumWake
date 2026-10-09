@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Quantumwake.Core.Events;
+using Quantumwake.Core.GameData;
 using Quantumwake.Core.Logging;
 using Quantumwake.Core.State;
 using Quantumwake.Data;
@@ -118,7 +119,10 @@ public sealed record NowContract(
     int Pickups = 0,
     int PickupsDone = 0,
     int Deliveries = 0,
-    int DeliveriesDone = 0)
+    int DeliveriesDone = 0,
+    int? EventPoints = null,
+    string? Event = null,
+    IReadOnlyList<string>? EventTracks = null)
 {
     /// <summary>
     /// The contracts a session took and has not closed, newest first.
@@ -137,7 +141,7 @@ public sealed record NowContract(
     /// a log carrying 24 acceptance toasts.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<NowContract> OpenIn(SessionSummary summary) =>
+    public static IReadOnlyList<NowContract> OpenIn(SessionSummary summary, EventPay? events = null) =>
         [.. summary.Contracts
             .Where(c => c.CompletedAt is null
                 && c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress)
@@ -166,7 +170,10 @@ public sealed record NowContract(
                 c.Pickups,
                 c.PickupsDone,
                 c.Deliveries,
-                c.DeliveriesDone);
+                c.DeliveriesDone,
+                events?.Pay(c.Raw)?.Points,
+                events?.Pay(c.Raw)?.Event,
+                events?.Pay(c.Raw)?.Tracks);
             })];
 }
 
@@ -255,6 +262,10 @@ public sealed partial class LiveSessionService : BackgroundService
 {
     private readonly IHubContext<LiveHub> _hub;
     private readonly LogLibrary _library;
+
+    // What each contract pays into an event, rebuilt only when the game data
+    // is: the stream asks on every frame, and the catalogue changes per patch.
+    private (GameScenarioCatalogue Catalogue, EventPay Pay)? _eventPay;
     private readonly GameInstall? _install;
     private readonly ILogger<LiveSessionService> _logger;
     private readonly TripStore? _trips;
@@ -517,7 +528,7 @@ public sealed partial class LiveSessionService : BackgroundService
             Kills = summary.Kills,
             RecentEvents = Feed(),
             Screen = screen,
-            Contracts = NowContract.OpenIn(summary),
+            Contracts = NowContract.OpenIn(summary, EventsPaid()),
             Cargo = NowCargo.From(summary, _library.CommodityName),
             Party = ReadParty(summary.PartyNotes),
             PartyDisbanded = summary.PartyNotes.Count > 0
@@ -528,6 +539,14 @@ public sealed partial class LiveSessionService : BackgroundService
     /// <summary>
     /// The session's own timeline and the screen's notes, newest first.
     /// </summary>
+    private EventPay EventsPaid()
+    {
+        var catalogue = _library.GameCommodities.Scenarios;
+        if (_eventPay is not { } cached || !ReferenceEquals(cached.Catalogue, catalogue))
+            _eventPay = cached = (catalogue, EventPay.For(catalogue));
+        return cached.Pay;
+    }
+
     private IReadOnlyList<TimelineEntry> Feed() =>
         [.. _recent.Concat(_screenNotes)
             .OrderByDescending(entry => entry.At)

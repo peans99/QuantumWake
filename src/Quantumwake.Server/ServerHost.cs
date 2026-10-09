@@ -119,6 +119,7 @@ public static class ServerHost
         builder.Services.AddSingleton<BackupBuilder>();
         builder.Services.AddSingleton<RestoreService>();
         builder.Services.AddSingleton<RunSettingsStore>();
+        builder.Services.AddSingleton<EventTrackStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
         builder.Services.AddSingleton<ScreenReadingStore>();
 
@@ -592,6 +593,11 @@ public static class ServerHost
         // Asking what would change writes nothing. Installing is a separate
         // call because the file lands in the player's game folder.
         app.MapGet("/api/labels", (TextOverlayService overlay) => overlay.Status(install));
+
+        // Whether the loose text file the game reads has fallen behind the game's
+        // own - after a patch, every new string is missing from it. Asked on every
+        // load for the notice; cached on both files' write times.
+        app.MapGet("/api/labels/freshness", (TextOverlayService overlay) => overlay.Freshness(install));
 
         app.MapPost("/api/labels/install", (TextOverlayService overlay) =>
         {
@@ -2658,6 +2664,116 @@ public static class ServerHost
         // "have" means "seen somewhere", and the page says where. A trade the
         // pilot is already collecting for names its job, so the button reads
         // "tracking" rather than making a second list.
+        // Event journals: the installed game's points table against the
+        // contracts this install finished. The live session is asked as well as
+        // the store because the completion that matters most is the one that
+        // landed a minute ago, before any scan has stored it - and an event
+        // started today has nothing else yet. Totals are floors; see
+        // EventProgress for why, and the page says so.
+        app.MapGet("/api/events", (LogLibrary lib, LiveSessionService live, EventTrackStore track, UexData uex) =>
+        {
+            var catalogue = lib.GameCommodities.Scenarios;
+            var current = live.LiveSummary.Contracts;
+            var pay = EventPay.For(catalogue);
+
+            return Results.Ok(new
+            {
+                available = catalogue.Scenarios.Count > 0,
+
+                // The event the pilot chose to keep on the Now page. Sent as
+                // stored: one the installed game no longer lists is dropped
+                // by the page, and the card goes back to following play.
+                tracked = track.Tracked,
+                countedFrom = lib.Wipe is { At: var at, Scope: var scope } && at > DateTimeOffset.MinValue && scope.HasFlag(WipeScope.History)
+                    ? at : (DateTimeOffset?)null,
+                events = EventProgress.Build(catalogue, lib.ContractRecords().Concat(current)),
+
+                // What each reward item is and what it costs, by class, for the
+                // tier rows to expand into. The price is UEX's typical one and
+                // only when that feed is on; null with the feed on means no
+                // terminal UEX knows stocks it, which for an event reward is
+                // the usual answer and worth saying.
+                prices = uex.IsEnabled,
+                rewards = catalogue.Scenarios
+                    .SelectMany(s => s.Tracks).SelectMany(t => t.Tiers).SelectMany(t => t.Items ?? [])
+                    .Where(i => i.Class is not null)
+                    .DistinctBy(i => i.Class, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(i => i.Class!, i =>
+                    {
+                        var facts = lib.GameCommodities.Item(i.Class);
+                        var uuid = lib.GameCommodities.ItemUuid(i.Class);
+                        return new
+                        {
+                            // A livery's item says "Paints"; the reward is the paint.
+                            type = i.Kind == "Paint" ? "Paint" : facts?.Type ?? i.Kind,
+                            subType = facts?.SubType,
+                            size = facts?.Size,
+                            grade = facts?.Grade,
+                            maker = facts?.Manufacturer,
+                            price = uex.IsEnabled ? uex.TypicalItemPrice(uuid) : null,
+                        };
+                    }, StringComparer.OrdinalIgnoreCase),
+
+                // What is in the journal right now and pays into an event, so
+                // the page and the Now card can say what finishing it is worth.
+                open = current
+                    .Where(c => c.Outcome is ContractOutcome.InProgress or ContractOutcome.Unknown)
+                    .Select(c => (Contract: c, Pay: pay.Pay(c.Raw)))
+                    .Where(x => x.Pay is not null)
+                    .Select(x => new
+                    {
+                        contract = x.Contract.Raw,
+                        title = ContractTags.Clean(x.Contract.Name),
+                        points = x.Pay!.Points,
+                        @event = x.Pay.Event,
+                        tracks = x.Pay.Tracks,
+                        since = x.Contract.FirstSeen,
+                    }),
+            });
+        });
+
+        // A picture of an event reward, by class: the game's own paint render
+        // for a livery, else the wiki's picture once the community dataset is
+        // on - the same route the Garage and the Armoury take for a cooler or
+        // a rifle. Only a class some event tier names is served, so this
+        // cannot be used to look up arbitrary items.
+        app.MapGet("/api/events/picture/{cls}", async (string cls, LogLibrary lib, PartPictures pictures, IHttpClientFactory httpFactory, HttpContext ctx) =>
+        {
+            var game = lib.GameCommodities;
+            var named = game.Scenarios.Scenarios
+                .SelectMany(s => s.Tracks).SelectMany(t => t.Tiers).SelectMany(t => t.Items ?? [])
+                .FirstOrDefault(i => string.Equals(i.Class, cls, StringComparison.OrdinalIgnoreCase));
+            if (named is null) return Results.NotFound();
+
+            if (game.Paints.FirstOrDefault(p => string.Equals(p.Item, cls, StringComparison.OrdinalIgnoreCase)) is { } paint)
+            {
+                ctx.Response.Headers.CacheControl = "private, max-age=86400";
+                return ArchivePicture(paint.Render, "paint-renders");
+            }
+
+            if (!lib.Community.IsEnabled) return Results.NotFound();
+
+            var picture = await pictures.GetItemAsync(httpFactory.CreateClient("community"), game.ItemUuid(cls), named.Name, ctx.RequestAborted);
+            if (picture is null) return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.File(picture.Bytes, picture.ContentType);
+        });
+
+        // Keep an event on the Now page whatever is being played, or let it
+        // follow play again. Only an event the installed game lists can be
+        // chosen, so a typo cannot pin the card to nothing.
+        app.MapPost("/api/events/track", (LogLibrary lib, EventTrackStore track, string? id) =>
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return Results.Ok(new { tracked = track.Save(null) });
+
+            if (!lib.GameCommodities.Scenarios.Scenarios.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal)))
+                return Results.NotFound(new { trouble = "the installed game does not list that event" });
+
+            return Results.Ok(new { tracked = track.Save(id) });
+        });
+
         app.MapGet("/api/wikelo", (LogLibrary lib, JobStore jobs) =>
         {
             var catalogue = lib.GameCommodities.Wikelo;

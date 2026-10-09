@@ -150,7 +150,7 @@ click away; everything else sits in a menu.
 | **Now** | Where am I, what am I flying, where will I wake up, and what changed this session? The overlay carries the same answers into the game. |
 | **Map** | Where have I been, what does a place offer, and which refuel, clinic or repair is closest to my last known location? |
 | **Log** | What did a saved screenshot or a copied `/showlocation` say, checked against the logbook where possible? |
-| **Operations** | A command deck for shopping lists, cargo runs and flight plans, live contracts, departure checklists, blueprints and Wikelo trades. |
+| **Operations** | A command deck for shopping lists, cargo runs and flight plans, live contracts, departure checklists, blueprints, Wikelo trades and event progress. |
 | **Flight** | What happened on each run: the after-action logbook, session debriefs, servers, places, pinned points, crew and casualties. |
 | **Economy** | Which transactions were confirmed, where the money went, what a counter recorded, and where a commodity is traded. |
 | **Reference** | What the installed game data says about ships, parts, mining deposits and crafting recipes. |
@@ -158,6 +158,17 @@ click away; everything else sits in a menu.
 | **Settings** | Data sources, the overlay, controls, item labels, shared files, backups and the problem report. |
 | **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, tasks, cargo, contracts, money and the live feed. |
 | **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear. |
+
+**Events.** During an in-game event such as RSI Discovery Month, the journal
+shows each bar as a percentage and never says what a contract is worth.
+Operations → Events reads both from your installed game: what every tier
+costs, what it awards (each item with its picture, what it is and its price),
+and how many points each of the event's contracts pays. It counts the
+contracts your logs show you finishing, plans the fewest contracts to the next
+tier for the kind of work you prefer, and can keep the event on the Now page
+and in the overlay's glance view.
+
+![Events](docs/images/events.png)
 
 Selecting a map place, a planning ship, a shopping list or a live contract puts
 it in an *In focus* rail that follows you between pages. Tables can be sorted by
@@ -229,6 +240,13 @@ No game data is committed to this repository.
   total income.
 - **Crew is a floor, not a roster.** A player who was already connected may
   produce no join event.
+- **Event totals are a floor, and new.** A contract counts when the game put an
+  objective marker up for it and later ended it as complete. Anything finished
+  without a marker, or in a log that has rolled out of the backups, is missing,
+  and the in-game journal stays the final word. RSI Discovery Month started the
+  day this shipped, so its contract names and point values come from the game
+  files and have not yet been checked against a played session. If your
+  journal disagrees with the Events page, a problem report from Settings helps.
 
 Account wipes can be recorded in Settings. Older sessions stay available, but
 totals exclude data from the reset categories you select.
@@ -384,6 +402,38 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.17.5
+
+**0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files and haven't yet been checked against a played session. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
+
+**A toast when you reach a tier.** Cross a tier on any event bar and the app says so, in the overlay too, with what the tier gives: "Defense tier 1 reached - Scorpius Echo Livery and Sovereign IP-20 Power Plant". The journal moves the bar and says nothing.
+
+**A warning when your in-game text file is older than the game.** A text mod's file, or Quantum Wake's item labels, replaces the game's own text table, and nothing updates it when the game patches. 4.10.2 added 521 strings, every Discovery Month contract title among them, and a file written before the patch has none of them. The app now notices and says what fixes it. If the file is your item labels, reinstalling now adds the missing strings in the game's own words, even on top of an older StarStrings.
+
+**A clearer campaign board.** Event plans now lead with a luminous next-tier bar, reward milestones, and compact Combat, Mining and Hauling lanes.
+
+**Events now help you choose the next job.** Set a Combat, Mining or Hauling preference, see the points still needed for the next tier, and jump from the plan to contracts, routes or the map. Event state, recent evidence and detailed tiers remain available without turning the page into a wall of tables.
+
+**Current status is back in the overlay, and the glance view is no longer empty.** When the location, ship and session cards were merged into the one Current status card, the overlay stopped recognising it and switched it off. So the glance view, which is that card and nothing else, came up blank. Your overlay layouts now show it again.
+
+**Page headings' diamond sits beside the title** instead of below it and over the first letter.
+
+**RSI Discovery Month, in points.** The event journal draws each bar as a percentage and never says what a contract is worth. The new **Events** page (Operations → Events) reads both from your installed game: what each tier of Your total, Transport, Collection and Defense costs, what it awards, and what each of the event's 31 contracts pays. It then counts the ones your logs show you finishing, and says which contracts reach the next tier in the fewest runs.
+
+- **An Event card on the Now page**, and in the overlay, for the event you're playing: your points against the next tier, and what the contract in your journal adds when you finish it. An open event contract also leads the focus strip: "+417 pts to Your total, Defense".
+- **Track an event on the Now page.** **Track on Now** on the Events page keeps that event on the Now card and the overlay whatever you're playing, including one you haven't started. In the overlay's glance view it's a single line above Current status: your points and every bar against its next tier.
+- **See what each tier gives.** Click a tier and it opens into the items it awards. Each one shows its picture (every livery uses the game's own render), what it is (a size 2 power plant, a flight blade, a tractor beam) and its UEX price if anything sells it. Where the game's wording fits more than one item, as with the Zeus Mk II blades, every match is shown, marked "One of".
+- **Contract rows carry a pts chip** for any contract that pays into an event.
+- **Older journals are there too.** Orison Relief, Alliance Aid and Return of XenoThreat are still in the game files, so your Orison Relief history is added up as well.
+- **Every total is a floor.** A contract counts when the game put up an objective marker for it and later ended it as complete, so the in-game journal stays the final word. The page says what it can't see.
+- The game data is read again once after updating, which takes a few seconds on the first start.
+
+**Things that should have gone away now do.** Nine parts of the dashboard stayed on screen after the app had hidden them. You could see it as an empty strip at the top of the Now page, a blank gap beside your ship's name when it has no maker logo, a cash line with nothing in it, the earnings-goal form still open under a goal you had already set, the rock-crack calculator next to its own "not ready yet" note, and an empty controls panel. Each one now disappears when it should.
+
+**Find any workspace or overlay layout with Ctrl+K.** The new Command palette jumps directly to a page, selects a Flight, Mining or Combat overlay layout, or brings the overlay back without adding another permanent control.
+
+**Switch overlay layouts for what you are flying.** Flight, Mining and Combat now choose a focused set of overlay pages and Current-status readings. Pick one from Settings or the new compact ▦ menu in the overlay header; Trading, Minimal and Full remain available there too.
 
 ### 0.16.24
 

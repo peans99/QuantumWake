@@ -33,6 +33,54 @@ public class StylesheetTests
         Assert.Equal(0, depth);
     }
 
+    /// <summary>
+    /// A rule that sets <c>display</c> outranks the <c>hidden</c> attribute,
+    /// so each of these - which the script shows and hides by that attribute -
+    /// needs its own <c>[hidden]</c> rule or it never goes away. The command
+    /// palette covered the dashboard on every load that way; the rest were
+    /// found by hooking the <c>hidden</c> setter in a real browser and asking
+    /// which elements stayed displayed: an empty focus strip, a gap where no
+    /// ship logo is, the crack calculator beside its own "not ready" note, the
+    /// goal form still open under a goal already set.
+    /// </summary>
+    [Theory]
+    [InlineData("command-palette")]
+    [InlineData("now-focus")]
+    [InlineData("now-ship-logo")]
+    [InlineData("statline")]
+    [InlineData("mining-salvage-brief")]
+    [InlineData("crack")]
+    [InlineData("controls-device")]
+    [InlineData("part-tags")]
+    [InlineData("map-info-services")]
+    [InlineData("map-info-amenities")]
+    [InlineData("goal-form")]
+    public void An_element_the_script_hides_by_attribute_is_not_kept_on_screen_by_its_display_rule(string name)
+    {
+        var css = Css();
+
+        Assert.Matches(new System.Text.RegularExpressions.Regex(
+            $@"^\s*\.{name}\s*\{{[^}}]*display\s*:\s*(grid|flex)", System.Text.RegularExpressions.RegexOptions.Multiline), css);
+        Assert.Matches($@"\.{name}\[hidden\][^{{]*\{{\s*display\s*:\s*none", css);
+    }
+
+    /// <summary>
+    /// The page-heading diamond overrides the plain heading's tick, which is
+    /// absolutely placed, filled and centred by a translate. Leaving any of
+    /// that to inheritance drew the diamond solid, low and over the title's
+    /// first letter on every page, so the override restates all three.
+    /// </summary>
+    [Fact]
+    public void The_page_heading_diamond_is_hollow_centred_and_clear_of_the_title()
+    {
+        var rule = System.Text.RegularExpressions.Regex.Match(Css(), @"\.section-bar h2::before\s*\{(?<body>[^}]*)\}").Groups["body"].Value;
+
+        Assert.Contains("position: absolute", rule);
+        Assert.Contains("background: transparent", rule);
+        Assert.Contains("translateY(-50%) rotate(45deg)", rule);
+        Assert.Matches(@"\.section-bar h2\s*\{\s*padding-left:\s*1[6-9]px", Css());
+    }
+
     [Fact]
     public void Comments_open_and_close_in_pairs()
     {

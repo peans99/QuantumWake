@@ -347,6 +347,23 @@ body.overlay .feed .d { display: none; }
   box-shadow: 0 1px 0 rgba(53, 200, 240, .18), 0 6px 22px rgba(0, 0, 0, .6);
 }
 
+.command-palette { position: fixed; inset: 0; z-index: 80; display: grid; place-items: start center; padding-top: min(18vh, 150px); background: rgba(2, 7, 12, .68); backdrop-filter: blur(5px); }
+/* The rule above sets display, which outranks the hidden attribute: without this the palette covers the page on every load. */
+.command-palette[hidden] { display: none; }
+/* The same trap, found by asking a browser which hidden elements still display: each of these sets display on its own rule, and the script hides them by the attribute - an empty focus strip, a gap where no ship logo is, the crack calculator beside its own "not ready" note, the goal form still open under a goal already set. */
+.now-focus[hidden], .now-ship-logo[hidden], .statline[hidden], .mining-salvage-brief[hidden], .crack[hidden],
+.controls-device[hidden], .part-tags[hidden], .map-info-services[hidden], .map-info-amenities[hidden], .goal-form[hidden] { display: none; }
+.command-panel { width: min(560px, calc(100vw - 32px)); border: 1px solid var(--cyan-deep); background: linear-gradient(145deg, #101e2b, #070e16); box-shadow: 0 22px 70px rgba(0,0,0,.6), 0 0 30px rgba(53,200,240,.12); }
+.command-head { display:flex; justify-content:space-between; padding: 11px 14px; color: var(--cyan); font: 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; border-bottom:1px solid var(--rule); }
+.command-head kbd, .command-hint kbd { color: var(--muted); font: inherit; }
+.command-query { width:100%; box-sizing:border-box; border:0; border-bottom:1px solid var(--rule); background:transparent; padding:15px; color:var(--text); font: 15px var(--mono); outline:0; }
+.command-results { max-height: 350px; overflow:auto; padding:6px; }
+.command-result { display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; color:var(--text); text-align:left; padding:10px; cursor:pointer; }
+.command-result:hover, .command-result.active { background:rgba(53,200,240,.12); color:#fff; }
+.command-result small { margin-left:auto; color:var(--muted); font:10px var(--mono); }
+.command-hint { margin:0; padding:9px 14px; border-top:1px solid var(--rule); color:var(--dim); font:10px var(--mono); }
+body.overlay .command-palette { display:none; }
+
 /* A single selected thing can travel between pages without turning the header
    into a second dashboard. The rail exists only after an explicit choice. */
 .context-rail {
@@ -1178,7 +1195,7 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .muted.warn code { color: inherit; }
 
 /* What a contract's own title claims it pays, when somebody has annotated it. */
-.tag-rep, .tag-bp {
+.tag-rep, .tag-bp, .tag-event {
   font-size: 10px;
   letter-spacing: .06em;
   padding: 1px 6px;
@@ -1188,6 +1205,8 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 }
 .tag-rep { color: var(--cyan); border-color: #1d4d63; }
 .tag-bp { color: var(--green); border-color: #1f5c3d; }
+/* What the installed game says a contract pays into an event journal. */
+.tag-event { color: var(--violet); border-color: #4a3a66; }
 
 /* ---------- buttons ---------- */
 
@@ -2006,13 +2025,21 @@ body.overlay .scan-file { display: none; }
   border-left: 3px solid var(--cyan-deep);
   background: linear-gradient(90deg, rgba(16, 57, 73, .24), rgba(10, 18, 28, .15) 42%, transparent);
 }
+/* Every property the plain h2 tick sets is restated here. Inheriting them is
+   what drew this diamond solid, below the middle and over the first letter:
+   the tick is absolutely placed, so the margin meant to clear the title did
+   nothing, its fill came through, and rotate() replaced the translate that
+   centred it. */
+.section-bar h2 { padding-left: 19px; }
 .section-bar h2::before {
   content: "";
-  display: inline-block;
+  position: absolute;
+  left: 2px; top: 50%;
   width: 7px; height: 7px;
-  margin: 0 9px 1px 0;
+  margin: 0;
+  background: transparent;
   border: 1px solid var(--cyan);
-  transform: rotate(45deg);
+  transform: translateY(-50%) rotate(45deg);
   box-shadow: 0 0 8px rgba(53, 200, 240, .55);
 }
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -4298,9 +4325,11 @@ body.overlay.glance .topbar,
 body.overlay.glance .now-focus,
 body.overlay.glance .view:not(#view-now),
 body.overlay.glance #view-now > .now-card-visibility,
-body.overlay.glance #view-now .now-grid > .card:not(.now-status-card) { display: none !important; }
+body.overlay.glance #view-now .now-grid > .card:not(.now-status-card):not(.event-tracked) { display: none !important; }
 body.overlay.glance main { padding: 4px 7px 7px; }
 body.overlay.glance #view-now { display: block !important; }
+/* The glance view is the status card; a layout that switched it off cannot leave the glance empty. */
+body.overlay.glance .now-status-card.layout-off { display: block; }
 body.overlay.glance .now-grid { display: block; }
 body.overlay.glance .now-status-card { min-height: 0; padding: 7px 9px; }
 body.overlay.glance .now-status-card .card-label { margin-bottom: 4px; }
@@ -5302,6 +5331,79 @@ body.overlay .ship-picture { display: none; }
 .wikelo-goal { margin: 0 0 var(--gap); padding: 9px 12px; border: 1px solid var(--cyan-deep); background: rgba(53, 200, 240, .06); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
 .wikelo-goal[hidden] { display: none; }
 .wikelo-current { border-color: var(--cyan-deep); }
+
+/* Events: each journal bar in points, ticked at its tiers. */
+.event-desc { font-size: 12px; line-height: 1.5; white-space: pre-line; max-width: 980px; }
+.event-preferences { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin: 0 0 8px; }
+.event-preferences .active { color:var(--cyan-hot); border-color:var(--cyan); background:rgba(53,200,240,.1); }
+.event-plan { margin: 0 0 var(--gap); padding: 13px 15px; border:1px solid var(--cyan-deep); background:linear-gradient(110deg,rgba(53,200,240,.1),transparent 52%); }
+.event-plan::before { content:''; display:block; width:72px; height:2px; background:var(--cyan); box-shadow:0 0 12px var(--cyan); margin-bottom:9px; }
+.event-plan-head { display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap; }
+.event-plan-target { color:var(--cyan-hot); font:600 17px var(--mono); }
+.event-plan-bar { height:7px; margin:10px 0 7px; border:1px solid var(--rule); background:var(--deep); overflow:hidden; }
+.event-plan-bar > span { display:block; height:100%; background:linear-gradient(90deg,var(--cyan-deep),var(--cyan-hot)); box-shadow:0 0 14px rgba(53,200,240,.55); }
+.event-milestones { display:flex; gap:5px; flex-wrap:wrap; margin:0 0 10px; }
+.event-milestone { padding:3px 6px; border:1px solid var(--rule); color:var(--dim); font:9px var(--mono); }
+.event-milestone.next { border-color:var(--cyan); color:var(--cyan-hot); }
+.event-lanes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+.event-lane { padding:8px; border:1px solid var(--rule); background:rgba(0,0,0,.18); }
+.event-lane b { display:block; color:var(--cyan); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+.event-lane span { display:block; margin-top:4px; color:var(--muted); font-size:10.5px; line-height:1.35; }
+@media (max-width:700px){.event-lanes{grid-template-columns:1fr;}}
+.event-plan-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.event-details { margin-top:8px; border-top:1px solid var(--rule); }
+.event-details > summary { cursor:pointer; padding:9px 0; color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.event-facts { font-size: 12px; margin: 0 0 var(--gap); }
+.event-unrecognised { font-size: 12px; }
+.event-open { margin: 0 0 var(--gap); }
+.event-seen { color: var(--cyan); font-size: 9px; margin-left: 7px; letter-spacing: 0; vertical-align: middle; }
+.event-tracks { margin-bottom: var(--gap); }
+.event-overall { border-color: var(--cyan-deep); }
+.event-total { font-family: var(--mono); font-size: 15px; }
+.event-bar { position: relative; height: 10px; background: var(--deep); border: 1px solid var(--rule); margin: 4px 0 2px; }
+.event-fill { position: absolute; inset: 0 auto 0 0; background: var(--cyan); max-width: 100%; }
+.event-tick { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--dim); }
+.event-tick.reached { background: var(--cyan-hot); }
+.event-next { font-size: 11.5px; }
+.event-tiers .what { font-family: var(--mono); }
+/* A tier row that opens into its reward items. Reset to read as the list line
+   it replaces, with a caret saying it opens. */
+.event-tier-head { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: baseline; width: 100%; padding: 1px 0; border: 0; background: none; color: inherit; font: inherit; text-transform: none; letter-spacing: normal; text-align: left; min-height: 0; box-shadow: none; clip-path: none; }
+button.event-tier-head { cursor: pointer; }
+button.event-tier-head:hover:not(:disabled), button.event-tier-head:active:not(:disabled) { background: none; border: 0; color: inherit; }
+button.event-tier-head:focus-visible { color: inherit; box-shadow: inset 0 0 0 1px var(--cyan-deep); }
+button.event-tier-head:hover .what, button.event-tier-head:focus-visible .what { color: var(--cyan-hot); }
+.event-tier-caret { padding-left: 8px; color: var(--dim); font-size: 10px; transition: transform .15s ease; }
+.event-tiers li.open .event-tier-caret { transform: rotate(90deg); color: var(--cyan); }
+.event-reward-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin: 5px 0 8px 16px; }
+.event-reward-items[hidden] { display: none; }
+.event-reward { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 9px; align-items: center; padding: 6px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
+.event-reward.unmatched { border-style: dashed; }
+.event-reward-pic, .event-reward-glyph { width: 52px; height: 52px; }
+.event-reward-pic { object-fit: contain; background: radial-gradient(circle at 50% 45%, rgba(53, 200, 240, .10), transparent 70%); }
+.event-reward-glyph { display: grid; place-items: center; border: 1px solid var(--rule); color: var(--cyan-deep); font-size: 22px; }
+.event-reward-name { color: var(--text); font-size: 12px; line-height: 1.3; }
+.event-reward-kind { font-size: 10.5px; line-height: 1.35; }
+.event-reward-price { margin-top: 2px; font-family: var(--mono); font-size: 10.5px; color: var(--amber); }
+.event-reward-price.muted { color: var(--muted); }
+.event-reward-unsold { grid-column: 1 / -1; font-size: 10.5px; }
+.event-fastest .feed { margin: 2px 0 0; }
+.event-contracts { margin-top: var(--gap); }
+.now-event-list { margin-top: 4px; }
+.event-pts { margin-left: 6px; font-family: var(--mono); color: var(--text); }
+/* The glance view's event line: a tracked event as one dense row under the
+   status card, inside the 270-pixel footprint the shell gives the glance. */
+/* First, not after the status card: that card fills the glance on its own, and
+   an event the pilot chose to track is the line they asked to keep in view. */
+body.overlay.glance .now-grid:has(> #now-event-card.event-tracked:not([hidden])) { display: flex; flex-direction: column; gap: 5px; }
+body.overlay.glance .now-grid:has(> #now-event-card.event-tracked:not([hidden])) > .card { width: 100%; box-sizing: border-box; }
+body.overlay.glance #now-event-card.event-tracked { order: -1; padding: 5px 9px; min-height: 0; }
+body.overlay.glance #now-event-card .card-source,
+body.overlay.glance #now-event-card .actions { display: none; }
+body.overlay.glance #now-event-card .card-label { margin-bottom: 1px; }
+body.overlay.glance #now-event-card .value { font-size: 12px; margin: 0 0 2px; }
+body.overlay.glance #now-event-list { display: flex; flex-wrap: wrap; gap: 0 12px; margin: 0; }
+body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
 #points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }

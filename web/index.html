@@ -35,6 +35,7 @@
         <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="wikelo">Wikelo</button>
+        <button data-view="events">Events</button>
       </div>
     </div>
     <div class="tab-group">
@@ -111,6 +112,15 @@
   </div>
 </header>
 
+<section id="command-palette" class="command-palette" hidden aria-label="Command palette" role="dialog" aria-modal="true">
+  <div class="command-panel">
+    <div class="command-head"><span>Command</span><kbd>Esc</kbd></div>
+    <input id="command-query" class="command-query" type="search" placeholder="Jump to a page or action…" autocomplete="off" spellcheck="false">
+    <div id="command-results" class="command-results" role="listbox"></div>
+    <p class="command-hint"><kbd>↑↓</kbd> choose <kbd>Enter</kbd> run</p>
+  </div>
+</section>
+
 <!-- A chosen place, hull, list or flight plan stays available while the pilot
      moves through the workspaces. It is absent until there is a real choice,
      so the shared navigation does not become another dashboard. -->
@@ -174,6 +184,18 @@
     <div class="notice-actions">
       <button class="ghost" id="patch-wiped">It wiped — start there</button>
       <button class="ghost" id="patch-kept">It did not wipe</button>
+    </div>
+  </div>
+
+  <!-- The loose text file the game reads, fallen behind a patch. -->
+  <div class="notice" id="text-stale" hidden>
+    <div class="notice-body">
+      <b>Your in-game text file is older than the game</b>
+      <span class="muted" id="text-stale-detail"></span>
+    </div>
+    <div class="notice-actions">
+      <button class="ghost" id="text-stale-open">Fix it</button>
+      <button class="ghost" id="text-stale-dismiss">Not now</button>
     </div>
   </div>
 
@@ -394,6 +416,19 @@
         <ul class="feed now-refinery-list" id="now-refinery-list"></ul>
         <div class="actions">
           <button type="button" class="ghost tiny" id="now-refinery-open">Refinery orders…</button>
+        </div>
+      </article>
+
+      <!-- The event being played: each bar's points against its next tier, and
+           what the contracts open right now are worth. Hidden when no event
+           contract has been seen lately. -->
+      <article class="card span2" id="now-event-card" data-card="event" hidden>
+        <div class="card-label" id="now-event-label">Event</div>
+        <div class="card-source source-slot" data-sources="logs"></div>
+        <div class="value" id="now-event">&mdash;</div>
+        <ul class="feed now-event-list" id="now-event-list"></ul>
+        <div class="actions">
+          <button type="button" class="ghost tiny" id="now-event-open">Event progress…</button>
         </div>
       </article>
 
@@ -930,6 +965,11 @@
           <span class="operation-icon" aria-hidden="true">◇</span>
           <span class="operation-card-main"><b>Browse Wikelo trades</b><span>Check collection requirements against what you already hold.</span></span>
           <span class="operation-status">Open emporium</span>
+        </a>
+        <a class="operation-card" href="#events">
+          <span class="operation-icon" aria-hidden="true">◆</span>
+          <span class="operation-card-main"><b>Work an event</b><span>See the points behind each event bar, and which contracts reach the next tier soonest.</span></span>
+          <span class="operation-status" id="operations-event-status">Open events</span>
         </a>
       </div>
     </section>
@@ -1678,6 +1718,37 @@
     <div class="export-row" id="wikelo-groups"></div>
     <div id="wikelo-goal" class="wikelo-goal" hidden></div>
     <div id="wikelo-list" class="points-list"></div>
+  </section>
+
+  <!-- EVENTS: an event journal's bars with the numbers behind them. The game
+       shows each bar as a percentage; the installed files say what every tier
+       costs and what every contract pays, and the logs say which contracts were
+       finished. Totals are floors - the page says why. -->
+  <section id="view-events" class="view">
+    <div class="section-bar">
+      <h2>Events</h2>
+      <div class="controls">
+        <span class="muted" id="events-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      What each event bar costs and what each contract pays, read from your installed game
+      files, against the contracts your logs show you finishing. Every total is a
+      <b>floor</b>: a contract counts when the game put up an objective marker for it and
+      then ended it as complete, so anything finished without a marker, or in a log that has
+      rolled out of the backups, is missing. The journal in game is the truth; this is the
+      part of it your logs can prove, in points rather than percent.
+    </p>
+    <div class="export-row" id="events-picker"></div>
+    <div class="event-preferences" id="event-preferences" aria-label="Preferred event activity">
+      <span class="muted">Prioritise</span>
+      <button type="button" class="ghost tiny" data-event-preference="all">Any activity</button>
+      <button type="button" class="ghost tiny" data-event-preference="combat">Combat</button>
+      <button type="button" class="ghost tiny" data-event-preference="mining">Mining</button>
+      <button type="button" class="ghost tiny" data-event-preference="hauling">Hauling</button>
+    </div>
+    <p class="muted small" id="events-plan-status"></p>
+    <div id="events-body"></div>
   </section>
 
   <!-- POINTS OF INTEREST: the coordinates the pilot chose to keep, with the
@@ -3233,6 +3304,8 @@
 
       <div class="overlay-presets" id="overlay-presets" aria-label="Overlay presets">
         <button type="button" class="ghost" data-preset="flight">Flight</button>
+        <button type="button" class="ghost" data-preset="mining">Mining</button>
+        <button type="button" class="ghost" data-preset="combat">Combat</button>
         <button type="button" class="ghost" data-preset="trading">Trading</button>
         <button type="button" class="ghost" data-preset="minimal">Minimal</button>
         <button type="button" class="ghost" data-preset="full">Full</button>
