@@ -34,18 +34,34 @@ public class StylesheetTests
     }
 
     /// <summary>
-    /// A rule that sets <c>display</c> outranks the <c>hidden</c> attribute.
-    /// The command palette's does, and without its own <c>[hidden]</c> rule the
-    /// dialog covered the dashboard on every load - nothing in the script ever
-    /// hides it again, because as far as the script knew it was hidden.
+    /// A rule that sets <c>display</c> outranks the <c>hidden</c> attribute,
+    /// so each of these - which the script shows and hides by that attribute -
+    /// needs its own <c>[hidden]</c> rule or it never goes away. The command
+    /// palette covered the dashboard on every load that way; the rest were
+    /// found by hooking the <c>hidden</c> setter in a real browser and asking
+    /// which elements stayed displayed: an empty focus strip, a gap where no
+    /// ship logo is, the crack calculator beside its own "not ready" note, the
+    /// goal form still open under a goal already set.
     /// </summary>
-    [Fact]
-    public void The_command_palette_stays_hidden_until_it_is_opened()
+    [Theory]
+    [InlineData("command-palette")]
+    [InlineData("now-focus")]
+    [InlineData("now-ship-logo")]
+    [InlineData("statline")]
+    [InlineData("mining-salvage-brief")]
+    [InlineData("crack")]
+    [InlineData("controls-device")]
+    [InlineData("part-tags")]
+    [InlineData("map-info-services")]
+    [InlineData("map-info-amenities")]
+    [InlineData("goal-form")]
+    public void An_element_the_script_hides_by_attribute_is_not_kept_on_screen_by_its_display_rule(string name)
     {
         var css = Css();
 
-        Assert.Matches(@"\.command-palette\s*\{[^}]*display\s*:\s*grid", css);
-        Assert.Matches(@"\.command-palette\[hidden\]\s*\{\s*display\s*:\s*none", css);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(
+            $@"^\s*\.{name}\s*\{{[^}}]*display\s*:\s*(grid|flex)", System.Text.RegularExpressions.RegexOptions.Multiline), css);
+        Assert.Matches($@"\.{name}\[hidden\][^{{]*\{{\s*display\s*:\s*none", css);
     }
 
     [Fact]

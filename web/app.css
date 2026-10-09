@@ -350,6 +350,9 @@ body.overlay .feed .d { display: none; }
 .command-palette { position: fixed; inset: 0; z-index: 80; display: grid; place-items: start center; padding-top: min(18vh, 150px); background: rgba(2, 7, 12, .68); backdrop-filter: blur(5px); }
 /* The rule above sets display, which outranks the hidden attribute: without this the palette covers the page on every load. */
 .command-palette[hidden] { display: none; }
+/* The same trap, found by asking a browser which hidden elements still display: each of these sets display on its own rule, and the script hides them by the attribute - an empty focus strip, a gap where no ship logo is, the crack calculator beside its own "not ready" note, the goal form still open under a goal already set. */
+.now-focus[hidden], .now-ship-logo[hidden], .statline[hidden], .mining-salvage-brief[hidden], .crack[hidden],
+.controls-device[hidden], .part-tags[hidden], .map-info-services[hidden], .map-info-amenities[hidden], .goal-form[hidden] { display: none; }
 .command-panel { width: min(560px, calc(100vw - 32px)); border: 1px solid var(--cyan-deep); background: linear-gradient(145deg, #101e2b, #070e16); box-shadow: 0 22px 70px rgba(0,0,0,.6), 0 0 30px rgba(53,200,240,.12); }
 .command-head { display:flex; justify-content:space-between; padding: 11px 14px; color: var(--cyan); font: 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; border-bottom:1px solid var(--rule); }
 .command-head kbd, .command-hint kbd { color: var(--muted); font: inherit; }

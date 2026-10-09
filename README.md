@@ -385,7 +385,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.27
+### 0.16.28
 
 **RSI Discovery Month, in points.** The event journal draws each bar as a percentage and never says what a contract is worth. The new **Events** page (Operations → Events) reads both from your installed game: what each tier of Your total, Transport, Collection and Defense costs, what it awards, and what each of the event's 31 contracts pays. It then counts the ones your logs show you finishing, and says which contracts reach the next tier in the fewest runs.
 
@@ -394,6 +394,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 - **Older journals are there too.** Orison Relief, Alliance Aid and Return of XenoThreat are still in the game files, so your Orison Relief history is added up as well.
 - **Every total is a floor.** A contract counts when the game put up an objective marker for it and later ended it as complete, so the in-game journal stays the final word. The page says what it can't see.
 - The game data is read again once after updating, which takes a few seconds on the first start.
+
+**Things that should have gone away now do.** Nine parts of the dashboard stayed on screen after the app had hidden them. You could see it as an empty strip at the top of the Now page, a blank gap beside your ship's name when it has no maker logo, a cash line with nothing in it, the earnings-goal form still open under a goal you had already set, the rock-crack calculator next to its own "not ready yet" note, and an empty controls panel. Each one now disappears when it should.
 
 **Find any workspace or overlay layout with Ctrl+K.** The new Command palette jumps directly to a page, selects a Flight, Mining or Combat overlay layout, or brings the overlay back without adding another permanent control.
 
