@@ -33,6 +33,21 @@ public class StylesheetTests
         Assert.Equal(0, depth);
     }
 
+    /// <summary>
+    /// A rule that sets <c>display</c> outranks the <c>hidden</c> attribute.
+    /// The command palette's does, and without its own <c>[hidden]</c> rule the
+    /// dialog covered the dashboard on every load - nothing in the script ever
+    /// hides it again, because as far as the script knew it was hidden.
+    /// </summary>
+    [Fact]
+    public void The_command_palette_stays_hidden_until_it_is_opened()
+    {
+        var css = Css();
+
+        Assert.Matches(@"\.command-palette\s*\{[^}]*display\s*:\s*grid", css);
+        Assert.Matches(@"\.command-palette\[hidden\]\s*\{\s*display\s*:\s*none", css);
+    }
+
     [Fact]
     public void Comments_open_and_close_in_pairs()
     {
