@@ -17,7 +17,15 @@ public sealed record TextOverlayStatus(
     IReadOnlyList<TextOverlayLine> Changes,
     string? Problem,
     int Annotated = 0,
-    TextOverlayOptions? Options = null);
+    TextOverlayOptions? Options = null,
+    int Filled = 0);
+
+/// <summary>Whether the loose text file the game reads has fallen behind the game's own.</summary>
+/// <param name="Present">Whether there is a loose file at all; with none the game uses its own and nothing is behind.</param>
+/// <param name="Owner">Whose file it is: "overlay", "overlay+StarStrings", "StarStrings" or "unknown".</param>
+/// <param name="Missing">Keys the game's table has and the file lacks.</param>
+/// <param name="Sample">A few of those keys, so the notice can show what kind of thing is missing.</param>
+public sealed record TextFreshness(bool Present, string Owner, int Missing, IReadOnlyList<string> Sample);
 
 /// <summary>
 /// Builds and installs the in-game text overlay.
@@ -124,6 +132,98 @@ public sealed class TextOverlayService(
             : (GameText.WithoutBom(Encoding.UTF8.GetString(raw)), "the game", null);
     }
 
+    // The game's own table, read once per archive: it is 10 MB out of a 150 GB
+    // archive, and both the notice and the page ask for it.
+    private readonly Lock _gameTableGate = new();
+    private (long Stamp, string Ini)? _gameTable;
+    private (string Key, TextFreshness Result)? _freshness;
+
+    private string? GameTable(GameInstall game)
+    {
+        var archive = P4kArchive.PathFor(game.RootPath);
+        if (!File.Exists(archive)) return null;
+
+        var stamp = new FileInfo(archive).LastWriteTimeUtc.Ticks;
+
+        lock (_gameTableGate)
+        {
+            if (_gameTable is { } cached && cached.Stamp == stamp) return cached.Ini;
+        }
+
+        try
+        {
+            var raw = new P4kArchive(archive).TryRead(LocalisationEntry);
+            if (raw is null) return null;
+
+            var ini = GameText.WithoutBom(Encoding.UTF8.GetString(raw));
+            lock (_gameTableGate) _gameTable = (stamp, ini);
+            return ini;
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            log.LogWarning(e, "game text table unreadable");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A base that is not the game's own - StarStrings, or the table ours
+    /// displaced - with the game's current strings it lacks added. Without
+    /// this, reinstalling over a text mod written before a patch rebuilt the
+    /// same gap: 4.10.2's new contract titles stayed raw keys however often
+    /// the marks were reapplied.
+    /// </summary>
+    private (string Ini, int Filled) Filled(GameInstall game, string ini, string source)
+    {
+        if (source == "the game" || GameTable(game) is not { } gameIni) return (ini, 0);
+        return (TextTables.WithMissing(ini, gameIni, out var added), added);
+    }
+
+    /// <summary>
+    /// Whether the loose file the game reads lacks strings the game now has.
+    /// Cached on the archive's and the file's write times, so asking on every
+    /// page load costs nothing after the first.
+    /// </summary>
+    public TextFreshness Freshness(GameInstall? game)
+    {
+        if (game is null) return new(false, "unknown", 0, []);
+
+        var loose = Path.Combine(game.RootPath, LooseRelative);
+        if (!File.Exists(loose)) return new(false, "unknown", 0, []);
+
+        var owner = store.StillPresent()
+            ? (store.Current?.Layered == true ? "overlay+StarStrings" : "overlay")
+            : starStrings.StillPresent() ? "StarStrings" : "unknown";
+
+        var archive = P4kArchive.PathFor(game.RootPath);
+        var info = new FileInfo(loose);
+        var key = $"{(File.Exists(archive) ? new FileInfo(archive).LastWriteTimeUtc.Ticks : 0)}|{info.LastWriteTimeUtc.Ticks}|{info.Length}|{owner}";
+
+        lock (_gameTableGate)
+        {
+            if (_freshness is { } cached && cached.Key == key) return cached.Result;
+        }
+
+        if (GameTable(game) is not { } gameIni) return new(true, owner, 0, []);
+
+        TextFreshness result;
+        try
+        {
+            var missing = TextTables.Missing(GameText.WithoutBom(File.ReadAllText(loose)), gameIni);
+            result = new(true, owner, missing.Count,
+                missing.Take(5).Select(l => TextTables.KeyOf(l) ?? "").Where(k => k.Length > 0).ToList());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The game holds the file open while it runs; unreadable is not stale.
+            log.LogWarning(e, "loose text table unreadable");
+            return new(true, owner, 0, []);
+        }
+
+        lock (_gameTableGate) _freshness = (key, result);
+        return result;
+    }
+
     /// <summary>What installing would change. Writes nothing.</summary>
     public TextOverlayStatus Status(GameInstall? game)
     {
@@ -140,11 +240,12 @@ public sealed class TextOverlayService(
             return new(installed, install?.InstalledAt, install?.Layered ?? false,
                 source, 0, 0, 0, [], problem);
 
-        var plan = Plan(ini);
+        var (complete, filled) = Filled(game, ini, source);
+        var plan = Plan(complete);
 
         return new(installed, install?.InstalledAt, install?.Layered ?? false,
             source, plan.Marked, plan.Sold, plan.Skipped, plan.Changes, null, plan.Annotated,
-            options.Current);
+            options.Current, filled);
     }
 
     /// <summary>Writes the overlay into the game folder.</summary>
@@ -177,7 +278,9 @@ public sealed class TextOverlayService(
         if (ini is null)
             return (null, problem);
 
-        var plan = Plan(ini);
+        // Built on the complete table, so a string the base was missing is
+        // there to be marked as well as to be read.
+        var plan = Plan(Filled(game, ini, source).Ini);
 
         if (plan.Marked == 0 && plan.Annotated == 0)
             return (null, "Nothing would be marked, so there is no reason to write a file.");

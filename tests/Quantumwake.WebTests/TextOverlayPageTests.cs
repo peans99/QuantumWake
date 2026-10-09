@@ -128,6 +128,19 @@ public class TextOverlayPageTests
         Assert.Contains("the game's own text", Loaded().NodeText("#textoverlay-source"));
     }
 
+    /// <summary>
+    /// A base written before the last patch lacks its new strings; installing
+    /// adds them, and the page says how many beside the button that does it.
+    /// </summary>
+    [Fact]
+    public void It_says_how_many_new_game_strings_installing_adds()
+    {
+        var behind = Plan.Replace("\"baseSource\": \"the game\"", "\"baseSource\": \"StarStrings\", \"filled\": 521");
+
+        Assert.Contains("Installing also adds 521 strings the game has added", Loaded(behind).NodeText("#textoverlay-source"));
+        Assert.DoesNotContain("Installing also adds", Loaded().NodeText("#textoverlay-source"));
+    }
+
     /// <summary>Remove only appears when there is something to remove.</summary>
     [Fact]
     public void Remove_is_hidden_until_it_is_installed()

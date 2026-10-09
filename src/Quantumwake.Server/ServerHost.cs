@@ -594,6 +594,11 @@ public static class ServerHost
         // call because the file lands in the player's game folder.
         app.MapGet("/api/labels", (TextOverlayService overlay) => overlay.Status(install));
 
+        // Whether the loose text file the game reads has fallen behind the game's
+        // own - after a patch, every new string is missing from it. Asked on every
+        // load for the notice; cached on both files' write times.
+        app.MapGet("/api/labels/freshness", (TextOverlayService overlay) => overlay.Freshness(install));
+
         app.MapPost("/api/labels/install", (TextOverlayService overlay) =>
         {
             var (done, problem) = overlay.Install(install);

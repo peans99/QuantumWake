@@ -150,7 +150,7 @@ click away; everything else sits in a menu.
 | **Now** | Where am I, what am I flying, where will I wake up, and what changed this session? The overlay carries the same answers into the game. |
 | **Map** | Where have I been, what does a place offer, and which refuel, clinic or repair is closest to my last known location? |
 | **Log** | What did a saved screenshot or a copied `/showlocation` say, checked against the logbook where possible? |
-| **Operations** | A command deck for shopping lists, cargo runs and flight plans, live contracts, departure checklists, blueprints and Wikelo trades. |
+| **Operations** | A command deck for shopping lists, cargo runs and flight plans, live contracts, departure checklists, blueprints, Wikelo trades and event progress. |
 | **Flight** | What happened on each run: the after-action logbook, session debriefs, servers, places, pinned points, crew and casualties. |
 | **Economy** | Which transactions were confirmed, where the money went, what a counter recorded, and where a commodity is traded. |
 | **Reference** | What the installed game data says about ships, parts, mining deposits and crafting recipes. |
@@ -158,6 +158,17 @@ click away; everything else sits in a menu.
 | **Settings** | Data sources, the overlay, controls, item labels, shared files, backups and the problem report. |
 | **Cockpit HUD** | Optional paired Cougar MFD pages for navigation, tasks, cargo, contracts, money and the live feed. |
 | **Item labels** | Optional in-game marks for component size, grade, armour class and hard-to-buy gear. |
+
+**Events.** During an in-game event such as RSI Discovery Month, the journal
+shows each bar as a percentage and never says what a contract is worth.
+Operations → Events reads both from your installed game: what every tier
+costs, what it awards (each item with its picture, what it is and its price),
+and how many points each of the event's contracts pays. It counts the
+contracts your logs show you finishing, plans the fewest contracts to the next
+tier for the kind of work you prefer, and can keep the event on the Now page
+and in the overlay's glance view.
+
+![Events](docs/images/events.png)
 
 Selecting a map place, a planning ship, a shopping list or a live contract puts
 it in an *In focus* rail that follows you between pages. Tables can be sorted by
@@ -229,6 +240,13 @@ No game data is committed to this repository.
   total income.
 - **Crew is a floor, not a roster.** A player who was already connected may
   produce no join event.
+- **Event totals are a floor, and new.** A contract counts when the game put an
+  objective marker up for it and later ended it as complete. Anything finished
+  without a marker, or in a log that has rolled out of the backups, is missing,
+  and the in-game journal stays the final word. RSI Discovery Month started the
+  day this shipped, so its contract names and point values come from the game
+  files and have not yet been checked against a played session. If your
+  journal disagrees with the Events page, a problem report from Settings helps.
 
 Account wipes can be recorded in Settings. Older sessions stay available, but
 totals exclude data from the reset categories you select.
@@ -385,7 +403,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.4
+### 0.17.5
+
+**0.17 is the events release, and it needs testers.** RSI Discovery Month started the day this shipped, so the Events page's contract names and point values come straight from the game files and haven't yet been checked against a played session. If the Events page and your in-game journal disagree, a problem report from Settings is the most useful thing you can send.
+
+**A toast when you reach a tier.** Cross a tier on any event bar and the app says so, in the overlay too, with what the tier gives: "Defense tier 1 reached - Scorpius Echo Livery and Sovereign IP-20 Power Plant". The journal moves the bar and says nothing.
+
+**A warning when your in-game text file is older than the game.** A text mod's file, or Quantum Wake's item labels, replaces the game's own text table, and nothing updates it when the game patches. 4.10.2 added 521 strings, every Discovery Month contract title among them, and a file written before the patch has none of them. The app now notices and says what fixes it. If the file is your item labels, reinstalling now adds the missing strings in the game's own words, even on top of an older StarStrings.
 
 **A clearer campaign board.** Event plans now lead with a luminous next-tier bar, reward milestones, and compact Combat, Mining and Hauling lanes.
 

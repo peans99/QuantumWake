@@ -415,4 +415,40 @@ public class EventsTests
 
         Assert.Contains("No hauling contracts are listed for this event", Plan(page));
     }
+
+    /// <summary>
+    /// A tier crossed between two reads raises a toast with what it gives -
+    /// the journal moves the bar and says nothing.
+    /// </summary>
+    [Fact]
+    public void A_tier_crossed_since_the_last_read_raises_a_toast_with_its_reward()
+    {
+        var page = Loaded();
+        Assert.DoesNotContain("tier", page.NodeText("#toasts"));
+
+        // The overall bar's first tier, 4,500, reached on the next read.
+        page.Serve("/api/events", Events.Replace(
+            "\"minPoints\":4500,\"badge\":\"R_PU_IASI_OP_1\",\"reward\":\"BriskAir IC-10 Cooler\",\"reached\":false",
+            "\"minPoints\":4500,\"badge\":\"R_PU_IASI_OP_1\",\"reward\":\"BriskAir IC-10 Cooler\",\"reached\":true"));
+        page.Do("await loadEvents();");
+
+        var toasts = page.NodeText("#toasts");
+        Assert.Contains("Your total tier 1 reached", toasts);
+        Assert.Contains("RSI Discovery Event - BriskAir IC-10 Cooler", toasts);
+    }
+
+    /// <summary>
+    /// The first read of a page load is history: a tier already held raises
+    /// nothing, or every one ever reached would toast on each start.
+    /// </summary>
+    [Fact]
+    public void Tiers_already_held_at_the_first_read_raise_no_toast()
+    {
+        var page = Loaded();
+
+        Assert.DoesNotContain("Defense tier 1 reached", page.NodeText("#toasts"));
+
+        page.Do("await loadEvents();");
+        Assert.DoesNotContain("reached", page.NodeText("#toasts"));
+    }
 }

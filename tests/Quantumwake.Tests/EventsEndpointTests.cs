@@ -85,3 +85,22 @@ public class EventTrackStoreTests : IDisposable
         Assert.Null(new EventTrackStore(_directory).Tracked);
     }
 }
+
+/// <summary>The text freshness check over a server with no game install.</summary>
+[Collection("server")]
+public class TextFreshnessEndpointTests : IClassFixture<ServerUnderTest>
+{
+    private readonly ServerUnderTest _server;
+
+    public TextFreshnessEndpointTests(ServerUnderTest server) => _server = server;
+
+    /// <summary>No install means no loose file to fall behind, and no notice.</summary>
+    [Fact]
+    public async Task With_no_game_install_nothing_is_behind()
+    {
+        var got = await _server.Get("/api/labels/freshness");
+
+        Assert.False(got.GetProperty("present").GetBoolean());
+        Assert.Equal(0, got.GetProperty("missing").GetInt32());
+    }
+}

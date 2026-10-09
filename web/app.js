@@ -9228,6 +9228,8 @@ try { eventsChosen = localStorage.getItem(EVENT_KEY) || null; } catch { /* optio
 try { eventPreference = localStorage.getItem(EVENT_PREFERENCE_KEY) || 'all'; } catch { /* optional */ }
 
 async function loadEvents() {
+  const before = eventsData;
+
   try {
     eventsData = await getJson('/api/events');
   } catch {
@@ -9236,6 +9238,39 @@ async function loadEvents() {
 
   renderEvents();
   renderNowEvent();
+  announceEventTiers(before, eventsData);
+}
+
+/** Every tier reached, as event|bar|points, so two reads can be compared. */
+function eventTiersReached(data) {
+  const reached = new Set();
+  for (const event of data?.events || [])
+    for (const track of event.tracks)
+      for (const tier of track.tiers)
+        if (tier.reached) reached.add(`${event.id}|${track.id}|${tier.minPoints}`);
+  return reached;
+}
+
+/**
+ * A tier crossed since the last read raises a toast with what it gives - the
+ * journal moves the bar, in percent, and says nothing. Only a change between
+ * two reads counts: the first read of a page load is history, and toasting
+ * every tier already held would bury the one just earned.
+ */
+function announceEventTiers(before, after) {
+  if (!before?.events || !after?.events) return;
+
+  const had = eventTiersReached(before);
+
+  for (const event of after.events) {
+    for (const track of event.tracks) {
+      track.tiers.forEach((tier, index) => {
+        if (!tier.reached || had.has(`${event.id}|${track.id}|${tier.minPoints}`)) return;
+        toast('event-tier', `${track.name} tier ${index + 1} reached`,
+          tier.reward ? `${event.title} - ${tier.reward}` : event.title);
+      });
+    }
+  }
 }
 
 function eventRecent(event, nowMs = Date.now()) {
@@ -18094,9 +18129,15 @@ async function loadTextOverlay() {
 
   // Which file it builds on decides whether another mod survives, so it is
   // stated rather than assumed.
-  $('#textoverlay-source').textContent = state.baseSource === 'StarStrings'
+  // A base written before the last patch lacks its new strings; installing adds
+  // them in the game's own words, and the page says so beside the button.
+  const filledNote = state.filled
+    ? ` Installing also adds ${state.filled.toLocaleString()} strings the game has added since that text was written, which would otherwise show in game as raw keys.`
+    : '';
+
+  $('#textoverlay-source').textContent = (state.baseSource === 'StarStrings'
     ? 'Built on top of the StarStrings text, so both survive.'
-    : "Built on the game's own text.";
+    : "Built on the game's own text.") + filledNote;
 
   labelChanges = state.changes || [];
   renderLabelChanges();
@@ -18198,6 +18239,7 @@ function initTextOverlay() {
     }
 
     await loadTextOverlay();
+    checkTextFreshness().catch(() => {});
     alertLine($('#textoverlay-status').parentElement, 'Installed. Restart Star Citizen to see it.');
   });
 
@@ -26582,6 +26624,61 @@ async function checkPriceAge() {
   notice.hidden = false;
 }
 
+/*
+ * The loose text file the game reads, fallen behind the game. A loose
+ * global.ini replaces the game's table, and nothing updates it when the game
+ * patches: 4.10.2 added 521 strings, every Discovery Month contract title among
+ * them, and a file written before the patch has none. What fixes it depends on
+ * whose file it is, so the notice says which.
+ */
+const TEXT_STALE_DISMISSED = 'qw-text-stale-dismissed';
+
+function textStaleDetail(fresh) {
+  const count = `${fresh.missing.toLocaleString()} of the game's strings are missing from it`;
+  const what = ' - this patch’s new items and contract titles among them - so the game may show those as raw text keys.';
+
+  if (fresh.owner === 'overlay' || fresh.owner === 'overlay+StarStrings')
+    return `${count}${what} Reinstalling the item labels adds them back in the game's own words.`;
+  if (fresh.owner === 'StarStrings')
+    return `${count}${what} Install a StarStrings release made for this patch, or remove StarStrings, to get them back.`;
+  return `${count}${what} It belongs to a text mod Quantum Wake did not install; update or remove that mod.`;
+}
+
+async function checkTextFreshness() {
+  const notice = $('#text-stale');
+  if (!notice) return;
+
+  let fresh;
+  try {
+    fresh = await getJson('/api/labels/freshness');
+  } catch {
+    return;
+  }
+
+  if (!fresh?.present || !fresh.missing) {
+    notice.hidden = true;
+    return;
+  }
+
+  // "Not now" holds until the gap changes: the next patch is news again.
+  try {
+    if (localStorage.getItem(TEXT_STALE_DISMISSED) === String(fresh.missing)) return;
+  } catch { /* optional */ }
+
+  $('#text-stale-detail').textContent = textStaleDetail(fresh);
+  notice.dataset.missing = String(fresh.missing);
+  notice.hidden = false;
+}
+
+function initTextStaleNotice() {
+  $('#text-stale-open')?.addEventListener('click', () => showView('labels'));
+  $('#text-stale-dismiss')?.addEventListener('click', () => {
+    const notice = $('#text-stale');
+    try { localStorage.setItem(TEXT_STALE_DISMISSED, notice.dataset.missing || ''); } catch { /* optional */ }
+    notice.hidden = true;
+  });
+}
+
 function initStaleNotice() {
   const notice = $('#stale');
   if (!notice) return;
@@ -27085,6 +27182,7 @@ function initWipePrompt() {
 : neither belongs to a
    view, and both must work before anything has been rendered. */
 initStaleNotice();
+initTextStaleNotice();
 initWipe();
 initWipePrompt();
 initUpdates();
@@ -27464,6 +27562,7 @@ async function boot() {
     // Once per load, never on a timer: the offer to renew a price table that
     // has gone a day old, and the line the wipe draws under the history.
     checkPriceAge().catch(() => { /* prices are usable whatever their age */ });
+    checkTextFreshness().catch(() => { /* the game still runs; only some names read as keys */ });
     checkForWipe().catch(() => { /* the Settings page still carries the line */ });
     checkForUpdate().catch(() => { /* an unanswered question is not a failure */ });
   }

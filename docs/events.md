@@ -124,10 +124,16 @@ Every total is a floor, and the page says so:
 
 ## In the app
 
-- **Operations → Events.** Each bar in points, ticked at its tiers, with the
-  reward at each tier and the contracts that reach the next one in the fewest
-  completions. Below that, every paying contract with its points, its bar and
-  how many times this install has finished it.
+- **Operations → Events.** Opens on a campaign board: the next target on the
+  overall bar ("4,500 pts to Your total tier 1"), with a bar and a milestone
+  for each tier. Below that is the fewest-contracts path to it, filtered by a
+  **Prioritise** choice of any activity, combat, mining or hauling, and a lane
+  for each activity showing its best-paying contract. The preference is
+  matched on the contract's title and issuer, so it is a reading of the words
+  and not a field the game sets. Under the board, each bar in points, ticked
+  at its tiers, with its tiers and rewards folded away. Every paying contract,
+  with its points, its bar and how many times this install has finished it,
+  is folded at the bottom.
 - **Tier rewards, item by item.** A tier opens into what it gives. The badge
   names no item, so the reward line is matched to the catalogue by name
   (`GameData/RewardItems.cs`), and only lines the game words itself are
@@ -152,7 +158,36 @@ Every total is a floor, and the page says so:
 - **Focus strip.** An open event contract leads it: "+417 pts to Your total,
   Defense".
 - **Contracts table.** Every row that pays into an event carries a `pts` chip.
+- **Tier toasts.** A tier crossed between two reads of `/api/events` raises
+  the app's toast, in the overlay too, with what the tier gives. The first
+  read of a page load is taken as history, so tiers already held stay quiet.
 
-`/api/events` serves all of it. The reader is
+`/api/events` serves all of it.
+
+## The text file after a patch
+
+Found while reading Discovery Month and fixed alongside it, because it
+decides whether the event can be read in game at all.
+
+A loose `data\localization\english\global.ini` replaces the game's text table
+rather than adding to it. StarStrings writes one, and so do Quantum Wake's item
+labels. Nothing updates it when the game patches. 4.10.2's table has 521 keys
+that this install's loose file, written on 2026-09-19, does not: every
+Discovery Month contract title, the badge rewards, the new items and the Mk V
+Constellations.
+
+- **The notice.** `/api/labels/freshness` compares the loose file's keys with
+  the game's own and gives the count. The page then says what fixes it, which
+  depends on whose file it is: reinstall the labels for ours, a StarStrings
+  release made for the patch for theirs, and another mod's file is not ours to
+  touch. "Not now" holds until the count changes, so the next patch raises it
+  again.
+- **The fill.** When the labels are installed over a base that is not the
+  game's own (StarStrings, or the table ours displaced), any key the base lacks
+  is added in the game's own English before the marks are applied. A mod's
+  wording is never replaced; only keys it has no line for are added. On this
+  install the preview went from 3,123 marked names to 3,233, the difference
+  being new items that now get marks too. `Data/TextTables.cs` does the
+  comparison. The reader is
 `Quantumwake.Core/GameData/GameScenarios.cs` and the totals are
 `Quantumwake.Core/State/EventProgress.cs`.
