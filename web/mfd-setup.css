@@ -100,6 +100,14 @@ footer {
   padding: 13px 26px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
 }
 footer .toggle { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.save-state {
+  display: flex; align-items: center; gap: 7px; padding: 5px 8px;
+  border: 1px solid rgba(255, 171, 61, .52); background: rgba(255, 171, 61, .08);
+  color: var(--amber); font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+}
+.save-state[hidden] { display: none; }
+.save-state span { width: 6px; height: 6px; background: var(--amber); box-shadow: 0 0 8px rgba(255, 171, 61, .72); }
+footer:has(.save-state:not([hidden])) { border-top-color: rgba(255, 171, 61, .7); }
 #status { width: 100%; margin: 0; font-size: 11.5px; }
 #status.error { color: var(--red); }
 

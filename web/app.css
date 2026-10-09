@@ -515,7 +515,10 @@ body.overlay .command-palette { display:none; }
 .tabs button.active::after { opacity: 1; }
 
 .status { display: flex; align-items: center; gap: 9px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
-.status #install { max-width: 13ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Room for "LIVE · 1000 LOGS". 13ch looked like thirteen characters and held
+   about ten: the label is upper case and letter-spaced, so any install with
+   more than nine logs - every real one - read "LIVE · 60 LO…". */
+.status #install { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status .dot { box-shadow: 0 0 9px currentColor; }
 
 /* The grouped tabs still need to fit alongside the live search on a normal
@@ -4300,6 +4303,22 @@ body.overlay .now-status-location { grid-column: 1 / -1; grid-row: auto; padding
 body.overlay .now-status-field { padding: 4px 0; }
 body.overlay .now-status-label { font-size: 7px; }
 body.overlay .now-status-field .value { font-size: 12px; }
+
+/* The native shell lowers itself to this card. It remains a flight status, not
+   a shrunken dashboard: selected status fields still decide what is useful. */
+body.overlay.glance .topbar,
+body.overlay.glance .now-focus,
+body.overlay.glance .view:not(#view-now),
+body.overlay.glance #view-now > .now-card-visibility,
+body.overlay.glance #view-now .now-grid > .card:not(.now-status-card) { display: none !important; }
+body.overlay.glance main { padding: 4px 7px 7px; }
+body.overlay.glance #view-now { display: block !important; }
+body.overlay.glance .now-grid { display: block; }
+body.overlay.glance .now-status-card { min-height: 0; padding: 7px 9px; }
+body.overlay.glance .now-status-card .card-label { margin-bottom: 4px; }
+body.overlay.glance .now-status-readings { grid-template-columns: 1.25fr 1fr; gap: 0 8px; }
+body.overlay.glance .now-status-location { padding-bottom: 4px; }
+body.overlay.glance .now-status-field { padding: 3px 0; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
@@ -4931,6 +4950,28 @@ body.overlay .toast {
 .mining-waiting .mining-waiting-time { text-align: right; }
 .mining-waiting .want { color: var(--amber); }
 .mining-waiting-detail { grid-column: 1 / -1; color: var(--dim); font: 10px var(--mono); }
+
+/* Refinery orders read off the terminal. The two kinds of ready read apart:
+   green when the game's log said so, amber when only the terminal's clock
+   has run out - the same split the toasts make. */
+#refinery-orders { margin-bottom: 22px; }
+#refinery-orders-list { display: grid; gap: 7px; }
+.refinery-orders-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.refinery-notify { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--dim); font-size: 12px; }
+.refinery-order .muted.small { grid-column: 1 / -1; }
+.refinery-order.done { border-left-color: var(--green); }
+.refinery-order.done .want { color: var(--green); }
+.refinery-order.due { border-left-color: var(--amber); }
+.refinery-order.collected { opacity: .62; border-left-color: var(--rule); }
+.refinery-order .refinery-collect { grid-column: 1 / -1; justify-self: start; }
+.refinery-waiting-line { font: 600 13px var(--display); letter-spacing: .02em; padding: 2px 0 4px; }
+.refinery-waiting-line.want { color: var(--amber); }
+.refinery-group { margin-top: 8px; color: var(--dim); font: 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.now-refinery-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.now-refinery-list li.want .what { color: var(--amber); }
+.now-refinery-list .refinery-collect { margin-left: auto; }
+.toast.refinery { border-left-color: var(--green); }
+.toast.refinery-due { border-left-color: var(--amber); }
 
 /* A haul the app believes is due back. Amber because it is the app noticing
    your own estimate has passed, not the game telling it anything. */

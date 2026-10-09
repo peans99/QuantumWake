@@ -212,7 +212,11 @@ public sealed class SessionStore : IDisposable
     //     Contracts are also keyed by mission id now rather than archetype, so
     //     two of one kind in a session are two records - one session of 209
     //     folded a pair of Covalex recoveries into one.
-    private const int PayloadVersion = 16;
+    // 17: refinery work orders the game says completed are kept. One in 234
+    //     logs on this install, and the build running that night summarises
+    //     the log with no such field when it becomes a backup - without this
+    //     the one completion there is would never be shown.
+    private const int PayloadVersion = 17;
 
 
     /// <summary>

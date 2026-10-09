@@ -10,7 +10,14 @@ namespace Quantumwake.Overlay;
 /// Stored beside the session cache in local app data. Nothing is written to the
 /// game directory - the overlay's read-only stance covers its own settings too.
 /// </remarks>
-internal sealed record OverlayGeometry(double Left, double Top, double Width, double Height)
+internal sealed record OverlayGeometry(
+    double Left,
+    double Top,
+    double Width,
+    double Height,
+    bool Glance = false,
+    double? ExpandedWidth = null,
+    double? ExpandedHeight = null)
 {
     private static string Path_ =>
         System.IO.Path.Combine(Quantumwake.Core.AppPaths.Root, "overlay.json");

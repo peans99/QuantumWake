@@ -385,15 +385,51 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.20
+### 0.16.25
 
 **Find any workspace or overlay layout with Ctrl+K.** The new Command palette jumps directly to a page, selects a Flight, Mining or Combat overlay layout, or brings the overlay back without adding another permanent control.
 
 **Switch overlay layouts for what you are flying.** Flight, Mining and Combat now choose a focused set of overlay pages and Current-status readings. Pick one from Settings or the new compact ▦ menu in the overlay header; Trading, Minimal and Full remain available there too.
 
-**Refinery jobs now read as a queue.** The Mining log brings jobs waiting at a refinery into one compact status panel, with ready collections in amber and remaining processing work in cyan. Each haul keeps its station, due estimate, refining method and value ceiling close at hand.
+### 0.16.24
 
-**One button now has one direct action.** Reassigning a joystick button moves its old direct action out of the way, so the profile never leaves the game to choose between two competing assignments. Button chords remain available for deliberate modifier combinations.
+**The in-game overlay can now become a glance view.** Use the new header control or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> to collapse it to the current status card; use it again to restore the resizable widget. The choice survives a restart.
+
+**MFD setup now protects drafts.** The setup window marks every placement, display, screen or button-map edit as unsaved, keeps that warning visible until **Save layout**, and asks before closing would discard a live preview.
+
+### 0.16.21
+
+**Mining screenshots that read, and a refinery that tells you when it's done.** Built from one evening's Golem run at Daymar and MIC-L5.
+
+- **Scans read at last.** The scan panel's reader had been written from a wiki picture of an older patch, and filed every real scan as nothing. It now reads today's panel — mass, instability, SCU (a gem cluster's in thousandths), every share and the qualities it can see — by reading the panel a second time at several sizes and keeping only what two of them agree on. A figure none of them read is left blank, and when the shares don't add up to 100 the Log says one of them is misread.
+
+- **The refinery terminal is read.** A screenshot of a station's refinery shows on the Log with the station, method, what each lot gives back, the cost, the time and the station's load, and its balance is checked like any other.
+
+- **Refinery orders, with a timer and the game's word.** *Mining → Haul & refinery* lists every order you photographed: counting down on the terminal's own clock, then **ready** — in green when the game's log said so, in amber when only the clock has run out. Choose how you're told: the game's toast, then the timer a minute later if the game hasn't said (the default); the game only; the timer only; or nothing. Screenshot the PROCESSING screen for a sure start; a quote counts down "if you confirmed it".
+
+- **Where your ore is waiting.** The game says once that an order is done and never logs you picking it up, so the app now keeps track: *Haul & refinery* opens with "Waiting for you at MIC-L5…" and lists what is waiting, what is still refining and what you have collected. Press **Collected** when you pick an order up (and **Not collected** if you pressed it by mistake). A new **Refinery** card on the Now page — and in the overlay — shows the same thing at a glance, so the station with your ore is never more than one look away.
+
+- **Your refinery's actual yields.** Each quote you photograph adds what went in and what came back, per ore and quality — the figure no game file or feed publishes. Pyrometric Chromalysis at MIC-L5 gave back 45% of silicon and agricium on the first one.
+
+- **The refining-methods table had cost upside down.** It said three pips of cost was the dearest; the refinery terminal itself calls a three "LOW COST". It now sorts and explains cost the right way round.
+
+- **Refinery jobs now read as a queue.** The Mining log brings jobs waiting at a refinery into one compact status panel, with ready collections in amber and remaining processing work in cyan. Each haul keeps its station, due estimate, refining method and value ceiling close at hand.
+
+- Existing logs are read again once after updating, so the refinery order that finished before you updated is there too.
+
+**Also in this release**
+
+- **One button now has one direct action.** Reassigning a joystick button moves its old direct action out of the way, so the profile never leaves the game to choose between two competing assignments. Button chords remain available for deliberate modifier combinations.
+
+### 0.16.18
+
+- **The top bar says how many logs it read.** The status beside the live dot was cut to "LIVE · 60 LO…" on every install with more than nine logs; it now reads in full, and hovering it says so in words.
+
+### 0.16.17
+
+- **The star map's first search opens its place.** On a first visit the map starts zoomed right out, and searching for a place could stop the map mid-glide with an error and leave the place panel shut. It now glides in and opens every time.
+
+### 0.16.16
 
 **Pages that fit, and say things once.** A round of fixes to text that overlapped, was cut off or showed the game's own markup, found by filming every page at 125% Windows scaling.
 
