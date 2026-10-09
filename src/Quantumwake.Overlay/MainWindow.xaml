@@ -119,6 +119,10 @@
                                 Style="{StaticResource HeaderButton}"
                                 Click="NextButton_Click" FontSize="9"
                                 ToolTip="Next tab (Ctrl+Alt+→)" />
+                        <Button x:Name="CompactButton" Content="▾"
+                                Style="{StaticResource HeaderButton}"
+                                Click="CompactButton_Click" FontSize="12"
+                                ToolTip="Glance view (Ctrl+Alt+C)" />
                         <Button x:Name="FullscreenButton" Content="⛶"
                                 Style="{StaticResource HeaderButton}"
                                 Click="FullscreenButton_Click" FontSize="13"

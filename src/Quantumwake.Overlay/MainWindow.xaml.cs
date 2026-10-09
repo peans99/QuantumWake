@@ -31,9 +31,11 @@ public partial class MainWindow : Window
     private const int PrevViewHotkeyId = 0xA12;
     private const int NextViewHotkeyId = 0xA13;
     private const int FullscreenHotkeyId = 0xA14;
+    private const int GlanceHotkeyId = 0xA15;
 
     private const uint VkO = 0x4F;
     private const uint VkF = 0x46;
+    private const uint VkC = 0x43;
     private const uint VkLeft = 0x25;
     private const uint VkRight = 0x27;
 
@@ -56,6 +58,11 @@ public partial class MainWindow : Window
     /// <summary>The widget-sized bounds to return to when fullscreen ends.</summary>
     private Rect _restoreBounds;
     private bool _isFullscreen;
+    private Rect _glanceRestoreBounds;
+    private bool _isGlance;
+
+    /// <summary>Height that holds the live status card without turning it into a scroll pane.</summary>
+    private const double GlanceHeight = 270;
 
     /// <summary>
     /// Width of the transparent gutter around the WebView2 that acts as the
@@ -75,6 +82,12 @@ public partial class MainWindow : Window
             Top = saved.Top;
             Width = saved.Width;
             Height = saved.Height;
+            _isGlance = saved.Glance;
+            _glanceRestoreBounds = new Rect(
+                Left,
+                Top,
+                Math.Max(MinWidth, saved.ExpandedWidth ?? Width),
+                Math.Max(MinHeight, saved.ExpandedHeight ?? 460));
         }
         else
         {
@@ -82,7 +95,10 @@ public partial class MainWindow : Window
             var work = SystemParameters.WorkArea;
             Left = work.Right - Width - 24;
             Top = work.Top + 24;
+            _glanceRestoreBounds = new Rect(Left, Top, Width, Height);
         }
+
+        UpdateGlanceControl();
     }
 
     protected override async void OnSourceInitialized(EventArgs e)
@@ -115,6 +131,8 @@ public partial class MainWindow : Window
         NativeWindowStyles.RegisterGlobalHotKey(this, NextViewHotkeyId, ctrlAlt, VkRight);
         NativeWindowStyles.RegisterGlobalHotKey(
             this, FullscreenHotkeyId, ctrlAlt | NativeWindowStyles.Modifiers.NoRepeat, VkF);
+        NativeWindowStyles.RegisterGlobalHotKey(
+            this, GlanceHotkeyId, ctrlAlt | NativeWindowStyles.Modifiers.NoRepeat, VkC);
 
         await StartAsync();
     }
@@ -153,7 +171,7 @@ public partial class MainWindow : Window
         settings.IsStatusBarEnabled = false;
         settings.AreBrowserAcceleratorKeysEnabled = false;
 
-        Browser.Source = new Uri(ServerRoot, "?overlay=1");
+        Browser.Source = new Uri(ServerRoot, _isGlance ? "?overlay=1&glance=1" : "?overlay=1");
         Browser.NavigationCompleted += (_, _) => Splash.Visibility = Visibility.Collapsed;
     }
 
@@ -211,6 +229,11 @@ public partial class MainWindow : Window
 
                 case FullscreenHotkeyId:
                     ToggleFullscreen();
+                    handled = true;
+                    return IntPtr.Zero;
+
+                case GlanceHotkeyId:
+                    ToggleGlance();
                     handled = true;
                     return IntPtr.Zero;
             }
@@ -308,7 +331,60 @@ public partial class MainWindow : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
     private void PrevButton_Click(object sender, RoutedEventArgs e) => CycleView(-1);
     private void NextButton_Click(object sender, RoutedEventArgs e) => CycleView(1);
+    private void CompactButton_Click(object sender, RoutedEventArgs e) => ToggleGlance();
     private void FullscreenButton_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
+
+    /// <summary>
+    /// Switches between the resizable widget and a short, status-only readout.
+    /// </summary>
+    /// <remarks>
+    /// The browser can hide cards, but it cannot shrink the native window that
+    /// covers the game behind it. The shell owns the bounds while the page owns
+    /// the content, so they change together and the larger size is remembered.
+    /// </remarks>
+    private async void ToggleGlance()
+    {
+        if (_isFullscreen) return;
+
+        _isGlance = !_isGlance;
+        if (_isGlance)
+        {
+            _glanceRestoreBounds = new Rect(Left, Top, Width, Height);
+            Height = GlanceHeight;
+        }
+        else
+        {
+            var left = Left;
+            var top = Top;
+            Width = _glanceRestoreBounds.Width;
+            Height = _glanceRestoreBounds.Height;
+            Left = left;
+            Top = top;
+        }
+
+        UpdateGlanceControl();
+
+        if (Browser.CoreWebView2 is null) return;
+
+        try
+        {
+            await Browser.ExecuteScriptAsync(
+                $"window.scOverlayGlance && window.scOverlayGlance({(_isGlance ? "true" : "false")})");
+        }
+        catch (InvalidOperationException)
+        {
+            // Still initialising; the glance query on the next page load agrees.
+        }
+    }
+
+    private void UpdateGlanceControl()
+    {
+        CompactButton.Content = _isGlance ? "▴" : "▾";
+        CompactButton.ToolTip = _isGlance
+            ? "Expand widget (Ctrl+Alt+C)"
+            : "Glance view — current status only (Ctrl+Alt+C)";
+        CompactButton.IsEnabled = !_isFullscreen;
+    }
 
     /// <summary>
     /// Grows the widget to cover the monitor it is on, and back. The page is
@@ -350,13 +426,15 @@ public partial class MainWindow : Window
         FullscreenButton.ToolTip = _isFullscreen
             ? "Back to widget size (Ctrl+Alt+F)"
             : "Fullscreen (Ctrl+Alt+F)";
+        UpdateGlanceControl();
 
         if (Browser.CoreWebView2 is not null)
         {
             try
             {
                 await Browser.ExecuteScriptAsync(
-                    $"window.scOverlayExpanded && window.scOverlayExpanded({(_isFullscreen ? "true" : "false")})");
+                    $"window.scOverlayExpanded && window.scOverlayExpanded({(_isFullscreen ? "true" : "false")}); " +
+                    $"window.scOverlayGlance && window.scOverlayGlance({(!_isFullscreen && _isGlance ? "true" : "false")})");
             }
             catch (InvalidOperationException)
             {
@@ -442,12 +520,21 @@ public partial class MainWindow : Window
             ? _restoreBounds
             : new Rect(Left, Top, Width, Height);
 
-        new OverlayGeometry(saved.Left, saved.Top, saved.Width, saved.Height).Save();
+        var expanded = _isGlance ? _glanceRestoreBounds : saved;
+        new OverlayGeometry(
+            saved.Left,
+            saved.Top,
+            saved.Width,
+            saved.Height,
+            _isGlance,
+            expanded.Width,
+            expanded.Height).Save();
 
         NativeWindowStyles.UnregisterGlobalHotKey(this, ToggleHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, PrevViewHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, NextViewHotkeyId);
         NativeWindowStyles.UnregisterGlobalHotKey(this, FullscreenHotkeyId);
+        NativeWindowStyles.UnregisterGlobalHotKey(this, GlanceHotkeyId);
 
         _http.Dispose();
         base.OnClosed(e);
