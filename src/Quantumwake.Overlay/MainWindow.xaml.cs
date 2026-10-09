@@ -310,6 +310,34 @@ public partial class MainWindow : Window
     private void NextButton_Click(object sender, RoutedEventArgs e) => CycleView(1);
     private void FullscreenButton_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
 
+    /// <summary>Opens the named layouts without adding another permanent widget control.</summary>
+    private void PresetButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (PresetButton.ContextMenu is not null)
+        {
+            PresetButton.ContextMenu.PlacementTarget = PresetButton;
+            PresetButton.ContextMenu.IsOpen = true;
+        }
+    }
+
+    /// <summary>Asks the shared page to save the selected named layout.</summary>
+    private async void PresetMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem { Tag: string name }
+            || Browser.CoreWebView2 is null)
+            return;
+
+        try
+        {
+            await Browser.ExecuteScriptAsync(
+                $"window.scOverlayPreset && window.scOverlayPreset({System.Text.Json.JsonSerializer.Serialize(name)})");
+        }
+        catch (InvalidOperationException)
+        {
+            // The browser has not finished initialising; the next click can retry.
+        }
+    }
+
     /// <summary>
     /// Grows the widget to cover the monitor it is on, and back. The page is
     /// told, because at full size the six-tab whitelist lifts and the widget

@@ -11654,9 +11654,13 @@ $('#overlay-reload')?.addEventListener('click', async (e) => {
   }
 });
 
-async function saveOverlayLayout() {
+async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
   const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
-  const density = $$('#overlay-density input').find((r) => r.checked)?.value || 'normal';
+  const layout = chosen || {
+    tabs: pick('#overlay-tabs'),
+    cards: pick('#overlay-cards'),
+    density: $$('#overlay-density input').find((r) => r.checked)?.value || 'normal',
+  };
 
   const status = $('#overlay-layout-status');
   status.textContent = 'saving…';
@@ -11665,9 +11669,9 @@ async function saveOverlayLayout() {
     await fetch('/api/overlay/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tabs: pick('#overlay-tabs'), cards: pick('#overlay-cards'), density }),
+      body: JSON.stringify(layout),
     });
-    status.textContent = 'saved';
+    status.textContent = savedMessage;
   } catch {
     status.textContent = 'could not save';
   }
@@ -11675,19 +11679,38 @@ async function saveOverlayLayout() {
 
 const OVERLAY_PRESETS = {
   flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed'], density: 'compact' },
-  trading: { tabs: ['now', 'jobs', 'cargo', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade'], density: 'compact' },
+  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade'], density: 'compact' },
+  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn'], density: 'compact' },
+  trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade'], density: 'compact' },
   minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
   full: null,
 };
-$('#overlay-presets')?.addEventListener('click', event => {
-  const preset = OVERLAY_PRESETS[event.target?.dataset?.preset];
+
+/** Applies a named layout from either the dashboard or the overlay's header. */
+async function applyOverlayPreset(name) {
+  const preset = OVERLAY_PRESETS[name];
   if (preset === undefined) return;
+
   const all = (host, values) => $$(`${host} input`).forEach(box => { box.checked = values.includes(box.value); });
-  const next = preset || { tabs: overlayLayoutData?.tabs || [], cards: overlayLayoutData?.cards || [], density: 'normal' };
+  // Full is the only layout whose contents change as the app gains cards. The
+  // header menu lives in a page that has not opened Settings, so read the
+  // offered lists when this browser has no cached copy yet.
+  const available = overlayLayoutData || (preset ? null : await getJson('/api/overlay/layout'));
+  const next = preset || { tabs: available?.tabs || [], cards: available?.cards || [], density: 'normal' };
   all('#overlay-tabs', next.tabs); all('#overlay-cards', next.cards);
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
-  saveOverlayLayout();
+  await saveOverlayLayout(
+    `${name === 'full' ? 'Full' : name[0].toUpperCase() + name.slice(1)} layout saved`, next);
+}
+
+$('#overlay-presets')?.addEventListener('click', event => {
+  applyOverlayPreset(event.target?.dataset?.preset).catch(() => {});
 });
+
+// The native shell owns the compact header, while the dashboard owns the
+// layout API. Keeping the named layouts here means both routes save exactly
+// the same JSON and a future card only needs one preset definition.
+window.scOverlayPreset = name => applyOverlayPreset(String(name));
 
 /**
  * In the widget, applies the chosen layout: which tabs appear, which Now cards

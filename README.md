@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.18
+### 0.16.19
+
+**Switch overlay layouts for what you are flying.** Flight, Mining and Combat now choose a focused set of overlay pages and Current-status readings. Pick one from Settings or the new compact ▦ menu in the overlay header; Trading, Minimal and Full remain available there too.
 
 **Refinery jobs now read as a queue.** The Mining log brings jobs waiting at a refinery into one compact status panel, with ready collections in amber and remaining processing work in cyan. Each haul keeps its station, due estimate, refining method and value ceiling close at hand.
 
