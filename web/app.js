@@ -12,6 +12,7 @@ const params = new URLSearchParams(location.search);
 
 /** True when hosted in the overlay shell, which wants a denser layout. */
 const isOverlay = params.has('overlay');
+const isOverlayGlance = isOverlay && params.has('glance');
 
 /**
  * True for ?snapshot=1, which loads the data once and then leaves the page
@@ -562,6 +563,19 @@ window.scOverlayExpanded = (on) => {
 
   // Fullscreen shows everything; going back re-applies the chosen few.
   if (isOverlay) applyOverlayLayout().catch(() => {});
+};
+
+/* The shell owns the footprint; this owns the single card that belongs in it.
+   Keeping those responsibilities separate lets the same page be both a full
+   dashboard and a short in-game readout without a second, drifting markup. */
+window.scOverlayGlance = (on) => {
+  const glance = Boolean(on);
+  document.body.classList.toggle('glance', glance);
+  const url = new URL(location.href);
+  if (glance) url.searchParams.set('glance', '1');
+  else url.searchParams.delete('glance');
+  window.history.replaceState(null, '', url);
+  if (glance) showView('now');
 };
 
 /* ---------- page stats collapse ----------
@@ -26795,6 +26809,7 @@ async function boot() {
 
   if (isOverlay) {
     document.body.classList.add('overlay');
+    window.scOverlayGlance(isOverlayGlance);
 
     // The widget's layout is chosen in the dashboard, a different browser, so
     // it is polled rather than pushed.

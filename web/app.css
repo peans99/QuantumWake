@@ -4291,6 +4291,22 @@ body.overlay .now-status-location { grid-column: 1 / -1; grid-row: auto; padding
 body.overlay .now-status-field { padding: 4px 0; }
 body.overlay .now-status-label { font-size: 7px; }
 body.overlay .now-status-field .value { font-size: 12px; }
+
+/* The native shell lowers itself to this card. It remains a flight status, not
+   a shrunken dashboard: selected status fields still decide what is useful. */
+body.overlay.glance .topbar,
+body.overlay.glance .now-focus,
+body.overlay.glance .view:not(#view-now),
+body.overlay.glance #view-now > .now-card-visibility,
+body.overlay.glance #view-now .now-grid > .card:not(.now-status-card) { display: none !important; }
+body.overlay.glance main { padding: 4px 7px 7px; }
+body.overlay.glance #view-now { display: block !important; }
+body.overlay.glance .now-grid { display: block; }
+body.overlay.glance .now-status-card { min-height: 0; padding: 7px 9px; }
+body.overlay.glance .now-status-card .card-label { margin-bottom: 4px; }
+body.overlay.glance .now-status-readings { grid-template-columns: 1.25fr 1fr; gap: 0 8px; }
+body.overlay.glance .now-status-location { padding-bottom: 4px; }
+body.overlay.glance .now-status-field { padding: 3px 0; }
 body.overlay .briefing-head { margin-bottom: 6px; }
 body.overlay .briefing-title { font-size: 13px; }
 body.overlay .briefing-sub, body.overlay .briefing-detail { font-size: 9px; }
