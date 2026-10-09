@@ -289,4 +289,82 @@ public class EventsTests
         Assert.DoesNotContain("Tracked on Now", page.NodeText("#events-body"));
         Assert.Equal("RSI Discovery Event", page.NodeText("#now-event-label"));
     }
+
+    private static string WithRewards(bool prices) => Events
+        .Replace("\"countedFrom\":null,", $"\"countedFrom\":null,\"prices\":{(prices ? "true" : "false")},\"rewards\":{{"
+            + "\"Paint_Scorpius_Blue_Purple_Purple\":{\"type\":\"Paint\",\"size\":null,\"grade\":null,\"maker\":null,\"price\":null},"
+            + "\"POWR_S02_IASI_Name_SCItem\":{\"type\":\"PowerPlant\",\"subType\":\"Power\",\"size\":2,\"grade\":2,\"maker\":\"Roberts Space Industries\",\"price\":18450}},")
+        .Replace("\"reward\":\"Scorpius Echo Livery and Sovereign IP-20 Power Plant\",\"reached\":true}",
+            "\"reward\":\"Scorpius Echo Livery and Sovereign IP-20 Power Plant\",\"reached\":true,\"items\":["
+            + "{\"part\":\"Scorpius Echo Livery\",\"class\":\"Paint_Scorpius_Blue_Purple_Purple\",\"name\":\"Scorpius Echo Livery\",\"kind\":\"Paint\",\"oneOf\":false},"
+            + "{\"part\":\"Sovereign IP-20 Power Plant\",\"class\":\"POWR_S02_IASI_Name_SCItem\",\"name\":\"Sovereign IP-20\",\"kind\":\"PowerPlant\",\"oneOf\":false},"
+            + "{\"part\":\"Mystery Crate\",\"class\":null,\"name\":\"Mystery Crate\",\"kind\":\"\",\"oneOf\":false}]}");
+
+    private static string Rewards(Page page) =>
+        page.Text("__dom.node('#events-body').byClass('event-reward-items').map(n => n.textContent).join('|')");
+
+    /// <summary>
+    /// A tier opens into what it gives: each item with what the install's
+    /// catalogue says it is and what UEX says it costs, closed until asked.
+    /// </summary>
+    [Fact]
+    public void A_tier_opens_into_its_items_with_what_each_is_and_costs()
+    {
+        var page = Loaded(WithRewards(prices: true));
+
+        Assert.True(page.Truth("__dom.node('#events-body').byClass('event-reward-items')[0].hidden"));
+        page.Do("__dom.node('#events-body').byClass('event-tier-head').find(n => n.tagName === 'button').click();");
+        Assert.False(page.Truth("__dom.node('#events-body').byClass('event-reward-items')[0].hidden"));
+
+        var text = Rewards(page);
+        Assert.Contains("Sovereign IP-20Power plant · S2 · grade B · Roberts Space Industries≈ 18,450 aUEC · UEX typical", text);
+        Assert.Contains("Scorpius Echo LiveryLivery", text);
+    }
+
+    /// <summary>
+    /// With prices on, no price is a finding - no terminal stocks it, the usual
+    /// answer for an event reward - and is said; with them off, nothing is.
+    /// </summary>
+    [Fact]
+    public void An_unpriced_reward_says_no_terminal_sells_it_only_when_prices_are_on()
+    {
+        Assert.Contains("not sold at any terminal UEX lists", Rewards(Loaded(WithRewards(prices: true))));
+
+        var off = Rewards(Loaded(WithRewards(prices: false)));
+        Assert.DoesNotContain("not sold", off);
+        Assert.DoesNotContain("aUEC", off);
+    }
+
+    [Fact]
+    public void A_matched_item_asks_for_its_picture_and_an_unmatched_one_is_listed_as_text()
+    {
+        var page = Loaded(WithRewards(prices: true));
+
+        Assert.Equal("/api/events/picture/POWR_S02_IASI_Name_SCItem",
+            page.Text("__dom.node('#events-body').byClass('event-reward-pic')[1].src"));
+        Assert.Contains("Mystery Cratenot in the installed game’s catalogue under this name", Rewards(page));
+        Assert.Equal(1, page.Count("__dom.node('#events-body').byClass('unmatched').length"));
+    }
+
+    /// <summary>
+    /// An event reward is rarely on sale; when nothing in a tier has a price
+    /// that is said once for the tier rather than on every card.
+    /// </summary>
+    [Fact]
+    public void A_tier_with_nothing_on_sale_says_so_once()
+    {
+        var page = Loaded(WithRewards(prices: true).Replace("\"price\":18450", "\"price\":null"));
+        var text = Rewards(page);
+
+        Assert.Contains("None of these is sold at any terminal UEX lists", text);
+        Assert.DoesNotContain("not sold at any terminal UEX lists", text);
+    }
+
+    [Fact]
+    public void A_tier_whose_line_matched_nothing_is_a_plain_line_not_a_button()
+    {
+        var page = Loaded(WithRewards(prices: true));
+
+        Assert.Equal(1, page.Count("__dom.node('#events-body').byClass('event-tier-head').filter(n => n.tagName === 'button').length"));
+    }
 }

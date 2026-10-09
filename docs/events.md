@@ -128,6 +128,17 @@ Every total is a floor, and the page says so:
   reward at each tier and the contracts that reach the next one in the fewest
   completions. Below that, every paying contract with its points, its bar and
   how many times this install has finished it.
+- **Tier rewards, item by item.** A tier opens into what it gives. The badge
+  names no item, so the reward line is matched to the catalogue by name
+  (`GameData/RewardItems.cs`), and only lines the game words itself are
+  matched, not ones made up from a badge id. All 34 items across Discovery
+  Month's tiers match, and the 22 plain ones match exactly once "Cooler",
+  "Radar" or "Power Plant" is taken off. "Zeus Mk II PHB" fits two blades and
+  "Constellation Starwalker Livery" two liveries; both are listed as one of.
+  Pictures: a livery's is the game's own paint render; anything else is the
+  wiki's, once the community dataset is on (`/api/events/picture/{class}`),
+  else a mark for its kind. On 2026-10-09 no Discovery reward had a UEX
+  price, and the tier says so once.
 - **Now → Event card**, also on the overlay. It shows the event you chose with
   **Track on Now**, if you chose one. Otherwise it follows play: an event with
   a contract open in the journal, or one played in the last fortnight. It gives

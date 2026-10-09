@@ -3,7 +3,8 @@ using Quantumwake.Core.GameData;
 namespace Quantumwake.Core.State;
 
 /// <summary>One tier on a bar, and whether the logs say it has been reached.</summary>
-public sealed record EventTierStatus(int MinPoints, string Badge, string Reward, bool Reached);
+/// <param name="Items">What the reward line names, matched to the catalogue where it could be.</param>
+public sealed record EventTierStatus(int MinPoints, string Badge, string Reward, bool Reached, IReadOnlyList<GameRewardItem> Items);
 
 /// <summary>A contract worth doing next to reach a bar's next tier.</summary>
 /// <param name="Needed">How many completions of it close the gap on their own.</param>
@@ -160,7 +161,7 @@ public static class EventProgress
 
             return new EventTrackStatus(
                 track.Id, track.Name, track.Overall, track.Color, points,
-                track.Tiers.Select(t => new EventTierStatus(t.MinPoints, t.Badge, t.Reward, points >= t.MinPoints)).ToList(),
+                track.Tiers.Select(t => new EventTierStatus(t.MinPoints, t.Badge, t.Reward, points >= t.MinPoints, t.Items ?? [])).ToList(),
                 next?.MinPoints, toNext, fastest);
         }).ToList();
 

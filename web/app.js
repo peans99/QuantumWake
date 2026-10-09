@@ -9370,6 +9370,92 @@ function eventView(event) {
   return box;
 }
 
+/** Readable names for the catalogue types an event reward can be. */
+const REWARD_KINDS = {
+  Paint: 'Livery', Cooler: 'Cooler', Radar: 'Radar', PowerPlant: 'Power plant',
+  FlightController: 'Flight blade', WeaponPersonal: 'Personal gear',
+};
+
+/** The kinds whose size and grade are worth stating. */
+const REWARD_GRADED = new Set(['Cooler', 'Radar', 'PowerPlant', 'Shield', 'QuantumDrive']);
+
+/** A mark per kind for a reward with no picture, so the card still reads at a glance. */
+const REWARD_GLYPHS = {
+  Paint: '◐', Cooler: '❄', Radar: '◎', PowerPlant: 'ϟ', FlightController: '⟁', WeaponPersonal: '⌖',
+};
+
+/** "Power plant · S1 · grade C · Sovereign": what a reward is, from the install's catalogue. */
+function rewardKindLine(item, facts) {
+  const type = facts?.type || item.kind;
+  const bits = [REWARD_KINDS[type] || prettyType(type)];
+  // Size and grade mean something on a ship component; on a livery, a blade or
+  // a handheld tool the file still says S1 grade A, which would read as a fact.
+  if (REWARD_GRADED.has(type)) {
+    if (facts?.size) bits.push(`S${facts.size}`);
+    if (facts?.grade) bits.push(`grade ${gradeLetter(facts.grade)}`);
+  }
+  if (facts?.maker) bits.push(facts.maker);
+  return bits.filter((b) => b && b !== '—').join(' · ');
+}
+
+function rewardGlyph(kind) {
+  return el('div', 'event-reward-glyph', REWARD_GLYPHS[kind] || '◇');
+}
+
+/**
+ * What a tier hands over, item by item: the picture the install or the wiki
+ * has, what the catalogue says it is, and what UEX says it costs. An item the
+ * text names but the catalogue lacks is still listed, as text, rather than
+ * dropped - and a name that fits several items says it is one of them.
+ */
+function eventRewardItems(items) {
+  const box = el('div', 'event-reward-items');
+
+  // An event reward is rarely on sale, so "not sold" on every card is the same
+  // sentence eight times. When nothing in the tier has a price it is said once
+  // for the tier; a card says it only beside others that do have one.
+  const priced = items.filter((i) => i.class && eventsData?.rewards?.[i.class]?.price != null).length;
+  const sayUnsoldPerCard = priced > 0;
+
+  for (const item of items) {
+    const facts = item.class ? eventsData?.rewards?.[item.class] : null;
+    const card = el('div', `event-reward${item.class ? '' : ' unmatched'}`);
+
+    if (item.class) {
+      const picture = el('img', 'event-reward-pic');
+      picture.alt = '';
+      picture.loading = 'lazy';
+      // No picture is the usual answer for a part the wiki has not
+      // photographed yet; the kind's mark stands in rather than a broken image.
+      picture.addEventListener('error', () => picture.replaceWith(rewardGlyph(facts?.type || item.kind)));
+      picture.src = `/api/events/picture/${encodeURIComponent(item.class)}`;
+      card.append(picture);
+    } else {
+      card.append(rewardGlyph(''));
+    }
+
+    const text = el('div', 'event-reward-text');
+    text.append(el('div', 'event-reward-name', `${item.oneOf ? 'One of: ' : ''}${item.name}`));
+    text.append(el('div', 'muted event-reward-kind', item.class
+      ? rewardKindLine(item, facts)
+      : 'not in the installed game’s catalogue under this name'));
+
+    if (item.class && eventsData?.prices) {
+      if (facts?.price != null) text.append(el('div', 'event-reward-price', `≈ ${money(facts.price)} · UEX typical`));
+      else if (sayUnsoldPerCard) text.append(el('div', 'muted event-reward-price', 'not sold at any terminal UEX lists'));
+    }
+
+    card.append(text);
+    box.append(card);
+  }
+
+  if (eventsData?.prices && !sayUnsoldPerCard && items.some((i) => i.class)) {
+    box.append(el('div', 'muted event-reward-unsold', 'None of these is sold at any terminal UEX lists - event rewards usually are not.'));
+  }
+
+  return box;
+}
+
 function eventTrackCard(track) {
   const card = el('article', `point-card event-track${track.overall ? ' event-overall' : ''}`);
 
@@ -9398,9 +9484,35 @@ function eventTrackCard(track) {
   const tiers = el('ul', 'wikelo-wants event-tiers');
   track.tiers.forEach((tier, index) => {
     const li = el('li', tier.reached ? 'have' : 'lack');
-    li.append(el('span', 'mark', tier.reached ? '✓' : '○'));
-    li.append(el('span', 'what', `Tier ${index + 1} · ${tier.minPoints.toLocaleString()}`));
-    if (tier.reward) li.append(el('span', 'muted', ` — ${tier.reward}`));
+    const items = tier.items || [];
+
+    // A tier whose reward names catalogue items opens into them; one whose
+    // text matched nothing stays a plain line rather than a button to nothing.
+    const head = el(items.length ? 'button' : 'div', 'event-tier-head');
+    head.append(el('span', 'mark', tier.reached ? '✓' : '○'));
+    const line = el('span', 'event-tier-line');
+    line.append(el('span', 'what', `Tier ${index + 1} · ${tier.minPoints.toLocaleString()}`));
+    if (tier.reward) line.append(el('span', 'muted', ` — ${tier.reward}`));
+    head.append(line);
+    li.append(head);
+
+    if (items.length) {
+      head.type = 'button';
+      head.title = 'Show what this tier gives';
+      head.setAttribute('aria-expanded', 'false');
+      head.append(el('span', 'event-tier-caret', '▸'));
+
+      const detail = eventRewardItems(items);
+      detail.hidden = true;
+      li.append(detail);
+
+      head.addEventListener('click', () => {
+        detail.hidden = !detail.hidden;
+        head.setAttribute('aria-expanded', String(!detail.hidden));
+        li.classList.toggle('open', !detail.hidden);
+      });
+    }
+
     tiers.append(li);
   });
   card.append(tiers);

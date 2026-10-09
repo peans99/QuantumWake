@@ -10,7 +10,8 @@ namespace Quantumwake.Core.GameData;
 /// when the text names nothing - ORS's tiers have no text, and "ORS Heavy
 /// Armor" is still the game's own word for it.
 /// </param>
-public sealed record GameScenarioTier(int MinPoints, string Badge, string Reward);
+/// <param name="Items">What the reward line names, matched to the catalogue - see <see cref="RewardItems"/>.</param>
+public sealed record GameScenarioTier(int MinPoints, string Badge, string Reward, IReadOnlyList<GameRewardItem>? Items = null);
 
 /// <summary>One bar in an event's journal.</summary>
 /// <param name="Id">The track's text key - <c>iasi_Journal_Transport</c> - which is stable across reads.</param>
@@ -112,8 +113,12 @@ public static partial class GameScenarios
     // handlers. Service beacons and PvP bounties pay into nothing.
     private static readonly string[] ContractArrays = ["contracts", "introContracts", "legacyContracts"];
 
-    public static GameScenarioCatalogue Read(DataCore core, IReadOnlyDictionary<string, string> text)
+    public static GameScenarioCatalogue Read(
+        DataCore core, IReadOnlyDictionary<string, string> text,
+        IReadOnlyDictionary<string, GameItem>? facts = null, IReadOnlyList<GamePaint>? paints = null)
     {
+        var byName = Catalogue(facts, paints);
+
         var progressRecords = new List<DataRecord>();
         var journals = new List<DataRecord>();
         var generators = new List<DataRecord>();
@@ -131,7 +136,7 @@ public static partial class GameScenarios
         var headings = Headings(core, text, journals, byHash);
 
         var scenarios = progressRecords
-            .Select(r => Scenario(core, text, r, headings.GetValueOrDefault(r.Hash)))
+            .Select(r => Scenario(core, text, byName, r, headings.GetValueOrDefault(r.Hash)))
             .Where(s => s.Tracks.Count > 0)
             .ToList();
 
@@ -201,7 +206,9 @@ public static partial class GameScenarios
     }
 
     private static GameScenario Scenario(
-        DataCore core, IReadOnlyDictionary<string, string> text, DataRecord record, (string Title, string Description) heading)
+        DataCore core, IReadOnlyDictionary<string, string> text,
+        IReadOnlyDictionary<string, (string Class, string Kind)> byName,
+        DataRecord record, (string Title, string Description) heading)
     {
         var id = record.Name[ProgressPrefix.Length..];
         var at = core.InstanceAt(record, record.VariantIndex);
@@ -245,7 +252,10 @@ public static partial class GameScenarios
                     var badge = core.StringAt(rewardAt, reward.StructIndex, "badgeToAward")
                         ?? core.EnumAt(rewardAt, reward.StructIndex, "badgeToAward") ?? "";
 
-                    steps.Add(new GameScenarioTier(points, badge, RewardText(text, badgePrefix, badge)));
+                    // Items only from the game's own words: a line made up from the
+                    // badge id - "CA OP 1" - names nothing to look for.
+                    var (line, written) = RewardText(text, badgePrefix, badge);
+                    steps.Add(new GameScenarioTier(points, badge, line, written ? RewardItems.Match(line, byName) : []));
                 }
 
                 if (steps.Count == 0) continue;
@@ -328,6 +338,31 @@ public static partial class GameScenarios
             issuer, points, tags.Distinct().ToList());
     }
 
+    /// <summary>
+    /// Every name a reward line could mean: the paints first, since a livery's
+    /// item and its paint share a name and only the paint carries the game's
+    /// picture, then the item catalogue. A name several classes share keeps the
+    /// shortest class - the plain item rather than a display or a variant.
+    /// </summary>
+    private static Dictionary<string, (string Class, string Kind)> Catalogue(
+        IReadOnlyDictionary<string, GameItem>? facts, IReadOnlyList<GamePaint>? paints)
+    {
+        var byName = new Dictionary<string, (string Class, string Kind)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var paint in paints ?? [])
+            if (!paint.Stock && paint.Name.Length > 0) byName.TryAdd(paint.Name, (paint.Item, "Paint"));
+
+        foreach (var (cls, item) in (facts ?? new Dictionary<string, GameItem>()).OrderBy(f => f.Key.Length).ThenBy(f => f.Key, StringComparer.Ordinal))
+        {
+            // Placeholder names are the game admitting it has no words yet.
+            if (item.Name.Length == 0 || item.Name.StartsWith("PH - ", StringComparison.Ordinal) || item.Name.StartsWith("<=", StringComparison.Ordinal))
+                continue;
+            byName.TryAdd(item.Name, (cls, item.Type));
+        }
+
+        return byName;
+    }
+
     /// <summary>A handler's contracts, whether the array holds them inline or by pointer.</summary>
     private static IReadOnlyList<DataCore.Pointer> ContractsIn(DataCore core, long at, int structIndex, string field)
     {
@@ -360,11 +395,11 @@ public static partial class GameScenarios
     /// <c>R_PU_IASI_TRANSPORT_1</c> is <c>IASI_Badge_Reward_Transport_T1_Desc</c>,
     /// and the overall bar's <c>OP</c> badges are its "Personal" tiers.
     /// </summary>
-    private static string RewardText(IReadOnlyDictionary<string, string> text, string prefix, string badge)
+    private static (string Line, bool Written) RewardText(IReadOnlyDictionary<string, string> text, string prefix, string badge)
     {
         // Return of XenoThreat awards "None" at every tier: its prizes are
         // granted some other way, and the file says nothing about them.
-        if (badge.Length == 0 || badge.Equals("None", StringComparison.OrdinalIgnoreCase)) return "";
+        if (badge.Length == 0 || badge.Equals("None", StringComparison.OrdinalIgnoreCase)) return ("", false);
 
         var match = BadgeShape().Match(badge);
 
@@ -374,10 +409,10 @@ public static partial class GameScenarios
             if (track.Equals("OP", StringComparison.OrdinalIgnoreCase)) track = "Personal";
 
             if (text.TryGetValue($"{prefix}_Badge_Reward_{track}_T{match.Groups["tier"].Value}_Desc", out var line))
-                return AwardedPrefix().Replace(line, "").Trim();
+                return (AwardedPrefix().Replace(line, "").Trim(), true);
         }
 
-        return Readable(badge.StartsWith("R_PU_", StringComparison.OrdinalIgnoreCase) ? badge[5..] : badge);
+        return (Readable(badge.StartsWith("R_PU_", StringComparison.OrdinalIgnoreCase) ? badge[5..] : badge), false);
     }
 
     private static string? Localised(IReadOnlyDictionary<string, string> text, string? key)

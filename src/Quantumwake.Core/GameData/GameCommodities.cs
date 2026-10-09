@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 46;
+    private const int CacheVersion = 47;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -302,7 +302,7 @@ public sealed partial class GameCommodities
             crates = GameCrates.Read(core);
             salvage = GameSalvage.Read(core, facts, result);
             controls = Quantumwake.Core.Controls.GameControls.Read(p4k, text);
-            scenarios = GameScenarios.Read(core, text);
+            scenarios = GameScenarios.Read(core, text, facts, paints);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {

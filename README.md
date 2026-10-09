@@ -385,7 +385,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.0
+### 0.17.1
 
 **Current status is back in the overlay, and the glance view is no longer empty.** When the location, ship and session cards were merged into the one Current status card, the overlay stopped recognising it and switched it off. So the glance view, which is that card and nothing else, came up blank. Your overlay layouts now show it again.
 
@@ -395,6 +395,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 - **An Event card on the Now page**, and in the overlay, for the event you're playing: your points against the next tier, and what the contract in your journal adds when you finish it. An open event contract also leads the focus strip: "+417 pts to Your total, Defense".
 - **Track an event on the Now page.** **Track on Now** on the Events page keeps that event on the Now card and the overlay whatever you're playing, including one you haven't started. In the overlay's glance view it's a single line above Current status: your points and every bar against its next tier.
+- **See what each tier gives.** Click a tier and it opens into the items it awards. Each one shows its picture (every livery uses the game's own render), what it is (a size 2 power plant, a flight blade, a tractor beam) and its UEX price if anything sells it. Where the game's wording fits more than one item, as with the Zeus Mk II blades, every match is shown, marked "One of".
 - **Contract rows carry a pts chip** for any contract that pays into an event.
 - **Older journals are there too.** Orison Relief, Alliance Aid and Return of XenoThreat are still in the game files, so your Orison Relief history is added up as well.
 - **Every total is a floor.** A contract counts when the game put up an objective marker for it and later ended it as complete, so the in-game journal stays the final word. The page says what it can't see.
