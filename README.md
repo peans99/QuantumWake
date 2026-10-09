@@ -385,7 +385,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.30
+### 0.17.0
 
 **Current status is back in the overlay, and the glance view is no longer empty.** When the location, ship and session cards were merged into the one Current status card, the overlay stopped recognising it and switched it off. So the glance view, which is that card and nothing else, came up blank. Your overlay layouts now show it again.
 
