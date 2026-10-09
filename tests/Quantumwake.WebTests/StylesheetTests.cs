@@ -64,6 +64,23 @@ public class StylesheetTests
         Assert.Matches($@"\.{name}\[hidden\][^{{]*\{{\s*display\s*:\s*none", css);
     }
 
+    /// <summary>
+    /// The page-heading diamond overrides the plain heading's tick, which is
+    /// absolutely placed, filled and centred by a translate. Leaving any of
+    /// that to inheritance drew the diamond solid, low and over the title's
+    /// first letter on every page, so the override restates all three.
+    /// </summary>
+    [Fact]
+    public void The_page_heading_diamond_is_hollow_centred_and_clear_of_the_title()
+    {
+        var rule = System.Text.RegularExpressions.Regex.Match(Css(), @"\.section-bar h2::before\s*\{(?<body>[^}]*)\}").Groups["body"].Value;
+
+        Assert.Contains("position: absolute", rule);
+        Assert.Contains("background: transparent", rule);
+        Assert.Contains("translateY(-50%) rotate(45deg)", rule);
+        Assert.Matches(@"\.section-bar h2\s*\{\s*padding-left:\s*1[6-9]px", Css());
+    }
+
     [Fact]
     public void Comments_open_and_close_in_pairs()
     {

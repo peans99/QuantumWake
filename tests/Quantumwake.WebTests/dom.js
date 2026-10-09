@@ -284,6 +284,11 @@ const GROUPS = {
     '#now-status-card', '#now-briefing-card', '#now-feed-card',
     '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
   ],
+  // The overlay layout sweeps the same cards by a looser selector.
+  '#view-now [data-card]': [
+    '#now-status-card', '#now-briefing-card', '#now-feed-card',
+    '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',
+  ],
 };
 
 globalThis.__dom = {

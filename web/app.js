@@ -12478,6 +12478,15 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
   }
 }
 
+/*
+ * The Current status card gathered what were the location, ship, session,
+ * handle and respawn cards, and every layout - saved ones and the presets -
+ * still names those. Its own name, "status", is in none of them, so matching
+ * on it alone switched the card off in every overlay and left the glance
+ * view, which is that card and nothing else, empty.
+ */
+const OVERLAY_STATUS_PARTS = ['location', 'ship', 'session', 'handle', 'respawn'];
+
 const OVERLAY_PRESETS = {
   // The event card hides itself when no event is being played, so the layouts
   // whose work pays into one carry it without costing anyone a row.
@@ -12546,7 +12555,8 @@ async function applyOverlayLayout() {
     button.hidden = !expanded && !layout.tabs.includes(button.dataset.view);
 
   for (const card of $$('#view-now [data-card]')) {
-    const wanted = expanded || layout.cards.includes(card.dataset.card);
+    const wanted = expanded || layout.cards.includes(card.dataset.card)
+      || (card.dataset.card === 'status' && OVERLAY_STATUS_PARTS.some((part) => layout.cards.includes(part)));
     card.classList.toggle('layout-off', !wanted);
   }
 

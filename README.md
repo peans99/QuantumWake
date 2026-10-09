@@ -385,7 +385,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.28
+### 0.16.29
+
+**Current status is back in the overlay, and the glance view is no longer empty.** When the location, ship and session cards were merged into the one Current status card, the overlay stopped recognising it and switched it off. So the glance view, which is that card and nothing else, came up blank. Your overlay layouts now show it again.
+
+**Page headings' diamond sits beside the title** instead of below it and over the first letter.
 
 **RSI Discovery Month, in points.** The event journal draws each bar as a percentage and never says what a contract is worth. The new **Events** page (Operations → Events) reads both from your installed game: what each tier of Your total, Transport, Collection and Defense costs, what it awards, and what each of the event's 31 contracts pays. It then counts the ones your logs show you finishing, and says which contracts reach the next tier in the fewest runs.
 

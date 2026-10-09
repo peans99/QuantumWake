@@ -2025,13 +2025,21 @@ body.overlay .scan-file { display: none; }
   border-left: 3px solid var(--cyan-deep);
   background: linear-gradient(90deg, rgba(16, 57, 73, .24), rgba(10, 18, 28, .15) 42%, transparent);
 }
+/* Every property the plain h2 tick sets is restated here. Inheriting them is
+   what drew this diamond solid, below the middle and over the first letter:
+   the tick is absolutely placed, so the margin meant to clear the title did
+   nothing, its fill came through, and rotate() replaced the translate that
+   centred it. */
+.section-bar h2 { padding-left: 19px; }
 .section-bar h2::before {
   content: "";
-  display: inline-block;
+  position: absolute;
+  left: 2px; top: 50%;
   width: 7px; height: 7px;
-  margin: 0 9px 1px 0;
+  margin: 0;
+  background: transparent;
   border: 1px solid var(--cyan);
-  transform: rotate(45deg);
+  transform: translateY(-50%) rotate(45deg);
   box-shadow: 0 0 8px rgba(53, 200, 240, .55);
 }
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -4317,9 +4325,11 @@ body.overlay.glance .topbar,
 body.overlay.glance .now-focus,
 body.overlay.glance .view:not(#view-now),
 body.overlay.glance #view-now > .now-card-visibility,
-body.overlay.glance #view-now .now-grid > .card:not(.now-status-card) { display: none !important; }
+body.overlay.glance #view-now .now-grid > .card:not(.now-status-card):not(.event-tracked) { display: none !important; }
 body.overlay.glance main { padding: 4px 7px 7px; }
 body.overlay.glance #view-now { display: block !important; }
+/* The glance view is the status card; a layout that switched it off cannot leave the glance empty. */
+body.overlay.glance .now-status-card.layout-off { display: block; }
 body.overlay.glance .now-grid { display: block; }
 body.overlay.glance .now-status-card { min-height: 0; padding: 7px 9px; }
 body.overlay.glance .now-status-card .card-label { margin-bottom: 4px; }
