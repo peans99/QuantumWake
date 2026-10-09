@@ -390,6 +390,7 @@ function showView(name) {
   if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
+  if (name === 'events') loadEvents().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
   if (name === 'overlay') {
@@ -1067,6 +1068,18 @@ function contractFocus(contracts) {
     return { title: hauls.length === 1 ? 'Hauling' : 'Hauling run', detail, view: 'jobs', action: 'Plan the run', anchor: '#jobs-contracts' };
   }
 
+  // An event contract says what finishing it is worth: the journal shows the
+  // bar move afterwards, in percent, and never the number beforehand.
+  const paying = contracts.find((c) => c.eventPoints);
+  if (paying) {
+    return {
+      title: 'Event contract',
+      detail: `${paying.name || 'Open contract'} · +${paying.eventPoints.toLocaleString()} pts to ${(paying.eventTracks || []).join(', ') || paying.event}`,
+      view: 'events',
+      action: 'Event progress',
+    };
+  }
+
   return { title: 'Active contract', detail: contracts[0].name || 'Open contract', view: 'contracts', action: 'Contracts' };
 }
 
@@ -1154,6 +1167,7 @@ function renderNow(state) {
 
   raiseToasts(state.recentEvents);
   noticeRefineryChanges(state);
+  noticeEventChanges(state);
 
   const feed = $('#now-feed');
   feed.textContent = '';
@@ -2675,7 +2689,15 @@ async function loadContractList() {
       pays.append(chip);
     }
 
-    if (!row.rep && !row.blueprint) pays.append(el('span', 'muted', '—'));
+    // What it pays into an event journal, from the installed game's own
+    // points table - not annotated by anyone, so it is shown on every row.
+    if (row.eventPoints) {
+      const chip = el('span', 'tag-event', `${row.eventPoints.toLocaleString()} pts`);
+      chip.title = `${row.event}: counts toward ${(row.eventTracks || []).join(', ')}`;
+      pays.append(chip);
+    }
+
+    if (!row.rep && !row.blueprint && !row.eventPoints) pays.append(el('span', 'muted', '—'));
 
     tr.append(pays);
 
@@ -7272,7 +7294,7 @@ const OVERLAY_LABELS = {
   loadout: 'Loadout', stash: 'Stash', logbook: 'Logbook', fleet: 'Fleet', places: 'Places',
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
-  checklist: 'Checklist', refinery: 'Refinery',
+  checklist: 'Checklist', refinery: 'Refinery', event: 'Event',
 };
 
 /**
@@ -9178,6 +9200,286 @@ async function trackWikelo(trade, card, button, said) {
 }
 
 $('#wikelo-search')?.addEventListener('input', () => renderWikelo());
+
+/* ---- Events: an event journal's bars in points, from the game files and the logs ----
+ *
+ * The game draws each event bar as a percentage and never says what a contract
+ * is worth. The installed files say both - every tier's points and every
+ * contract's - and the logs say which contracts were finished, so the page can
+ * put a number on the bar and say which contracts close the gap soonest.
+ *
+ * Every total is a floor, and the page says so: a contract is counted when the
+ * game raised an objective marker for it and then ended it as complete.
+ */
+let eventsData = null;
+let eventsChosen = null;
+let eventsStreamKey = null;
+
+const EVENT_KEY = 'qw-event';
+
+// How long after its last contract an event still counts as the one being
+// played, for the Now card. Discovery Month runs a month; a fortnight without
+// one of its contracts is a pilot who has moved on.
+const EVENT_RECENT_DAYS = 14;
+
+try { eventsChosen = localStorage.getItem(EVENT_KEY) || null; } catch { /* optional */ }
+
+async function loadEvents() {
+  try {
+    eventsData = await getJson('/api/events');
+  } catch {
+    eventsData = null;
+  }
+
+  renderEvents();
+  renderNowEvent();
+}
+
+function eventRecent(event, nowMs = Date.now()) {
+  return !!event?.lastSeen && nowMs - Date.parse(event.lastSeen) < EVENT_RECENT_DAYS * 86400000;
+}
+
+/** The event being played: the one a contract in the journal pays into, else the one played lately. */
+function currentEvent(data = eventsData, nowMs = Date.now()) {
+  const events = data?.events || [];
+  const open = (data?.open || [])[0];
+  if (open) return events.find((e) => e.title === open.event) || null;
+  return events.find((e) => eventRecent(e, nowMs)) || null;
+}
+
+/** What the page shows: the pilot's pick, else the event being played, else the first. */
+function chosenEvent(data = eventsData) {
+  const events = data?.events || [];
+  return events.find((e) => e.id === eventsChosen) || currentEvent(data) || events[0] || null;
+}
+
+function rememberEvent(id) {
+  eventsChosen = id || null;
+  try {
+    if (eventsChosen) localStorage.setItem(EVENT_KEY, eventsChosen);
+    else localStorage.removeItem(EVENT_KEY);
+  } catch { /* optional */ }
+}
+
+const eventPoints = (n) => `${Number(n || 0).toLocaleString()} pts`;
+
+/** The tier the bar is working towards, as words: "750 to tier 2 (4,000)". */
+function eventNextText(track) {
+  if (track.nextTier == null) return 'every tier reached';
+  const index = track.tiers.findIndex((t) => t.minPoints === track.nextTier);
+  return `${track.toNext.toLocaleString()} to tier ${index + 1} (${track.nextTier.toLocaleString()})`;
+}
+
+function renderEvents() {
+  const body = $('#events-body');
+  const picker = $('#events-picker');
+  if (!body || !picker) return;
+
+  body.textContent = '';
+  picker.textContent = '';
+
+  if (!eventsData) {
+    body.append(el('p', 'muted', 'Could not load the events — is the app still running?'));
+    return;
+  }
+
+  // An install whose game data has not been read is told so, not shown a
+  // patch with no events in it.
+  if (!eventsData.available) {
+    $('#events-count').textContent = '';
+    body.append(el('p', 'muted', 'The game files have not been read yet, so the event tiers and contract points are not known. Point Settings at your Star Citizen install and they will be.'));
+    return;
+  }
+
+  const events = eventsData.events || [];
+  $('#events-count').textContent = `${events.length} in this patch`;
+
+  const shown = chosenEvent();
+  for (const event of events) {
+    const button = el('button', event.id === shown?.id ? 'ghost' : 'ghost off', event.title);
+    button.type = 'button';
+    button.title = event.firstSeen ? `In your logs since ${dateOf(event.firstSeen)}` : 'Not in your logs yet';
+    if (event.firstSeen) button.append(el('span', 'event-seen', ' ●'));
+    button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
+    picker.append(button);
+  }
+
+  if (shown) body.append(eventView(shown));
+}
+
+function eventView(event) {
+  const box = el('div', 'event-view');
+
+  if (event.description) box.append(el('p', 'muted event-desc', withoutMarkup(event.description.replace(/\\n/g, '\n'))));
+
+  const facts = el('p', 'event-facts');
+  if (event.firstSeen) {
+    facts.append(el('span', null, `${event.completed.toLocaleString()} of its contracts finished since ${dateOf(event.firstSeen)}`));
+  } else {
+    facts.append(el('span', 'muted', 'None of its contracts are in your logs yet. Finish one and it is counted from then.'));
+  }
+  if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · counting from your wipe on ${dayUtc(eventsData.countedFrom)}`));
+  if (event.percent) facts.append(el('span', 'muted', ' · the journal shows these bars in percent; here they are in points'));
+  box.append(facts);
+
+  // A renamed contract would leave the bars short and say nothing, so a
+  // contract that looks like this event's and is not in the table is named.
+  if (event.unrecognised) {
+    box.append(el('p', 'warn event-unrecognised',
+      `${event.unrecognised} contract${event.unrecognised === 1 ? '' : 's'} in your logs look like this event's but are not in the installed game's points table, so they are not counted.`));
+  }
+
+  const open = (eventsData?.open || []).filter((o) => o.event === event.title);
+  if (open.length) {
+    const now = el('ul', 'feed event-open');
+    for (const contract of open) {
+      const li = el('li', 'want');
+      li.append(el('span', 'what', `+${contract.points.toLocaleString()}`));
+      li.append(el('span', 'd', ` · ${contract.title} — counts toward ${contract.tracks.join(', ')}`));
+      now.append(li);
+    }
+    box.append(el('div', 'card-label', 'In your journal now'));
+    box.append(now);
+  }
+
+  const tracks = el('div', 'points-list event-tracks');
+  for (const track of event.tracks) tracks.append(eventTrackCard(track));
+  box.append(tracks);
+
+  box.append(eventContractsTable(event));
+  return box;
+}
+
+function eventTrackCard(track) {
+  const card = el('article', `point-card event-track${track.overall ? ' event-overall' : ''}`);
+
+  const head = el('div', 'wikelo-head');
+  head.append(el('div', 'point-name-read', track.name));
+  head.append(el('div', 'strong event-total', eventPoints(track.points)));
+  card.append(head);
+
+  // The bar is drawn against its last tier, with a tick at each one, so how
+  // far the next tier is reads at a glance before any number is read.
+  const top = track.tiers.length ? track.tiers[track.tiers.length - 1].minPoints : 0;
+  const bar = el('div', 'event-bar');
+  const fill = el('div', 'event-fill');
+  fill.style.width = `${top ? Math.min(100, (track.points / top) * 100) : 0}%`;
+  if (track.color) fill.style.background = track.color;
+  bar.append(fill);
+  for (const tier of track.tiers) {
+    const tick = el('span', `event-tick${tier.reached ? ' reached' : ''}`);
+    tick.style.left = `${top ? (tier.minPoints / top) * 100 : 0}%`;
+    tick.title = `${tier.minPoints.toLocaleString()} pts`;
+    bar.append(tick);
+  }
+  card.append(bar);
+  card.append(el('div', 'muted event-next', eventNextText(track)));
+
+  const tiers = el('ul', 'wikelo-wants event-tiers');
+  track.tiers.forEach((tier, index) => {
+    const li = el('li', tier.reached ? 'have' : 'lack');
+    li.append(el('span', 'mark', tier.reached ? '✓' : '○'));
+    li.append(el('span', 'what', `Tier ${index + 1} · ${tier.minPoints.toLocaleString()}`));
+    if (tier.reward) li.append(el('span', 'muted', ` — ${tier.reward}`));
+    tiers.append(li);
+  });
+  card.append(tiers);
+
+  if (track.fastest.length) {
+    const fast = el('div', 'event-fastest');
+    fast.append(el('div', 'card-label', 'Fewest contracts to the next tier'));
+    const list = el('ul', 'feed');
+    for (const s of track.fastest) {
+      const li = el('li');
+      li.append(el('span', 'what', `${s.needed} ×`));
+      li.append(el('span', 'd', ` ${s.title} (${s.points.toLocaleString()} each${s.done ? `, done ${s.done}× before` : ''})`));
+      list.append(li);
+    }
+    fast.append(list);
+    card.append(fast);
+  }
+
+  return card;
+}
+
+function eventContractsTable(event) {
+  const wrap = el('div', 'table-wrap event-contracts');
+  const table = el('table', 'data');
+  const head = el('tr');
+  for (const [label, cls] of [['Contract', null], ['Offered by', null], ['Counts toward', null], ['Points', 'num'], ['Done', 'num']])
+    head.append(el('th', cls, label));
+  const thead = el('thead');
+  thead.append(head);
+  table.append(thead);
+
+  const body = el('tbody');
+  for (const c of event.contracts) {
+    const tr = el('tr');
+    tr.title = c.id;
+    tr.append(el('td', null, c.title));
+    tr.append(el('td', 'muted', c.issuer || '—'));
+    // The overall bar takes every contract, so naming it on every row says
+    // nothing; the rows name the bar that sets them apart.
+    const bars = c.tracks.slice(1);
+    tr.append(el('td', bars.length ? null : 'muted', bars.length ? bars.join(', ') : (c.tracks[0] || '—')));
+    tr.append(el('td', 'num', c.points.toLocaleString()));
+    tr.append(el('td', c.completed ? 'num' : 'num muted', c.completed ? `${c.completed}` : '—'));
+    body.append(tr);
+  }
+  table.append(body);
+  wrap.append(table);
+  return wrap;
+}
+
+/**
+ * The Now page's event card: the bars of the event being played against their
+ * next tiers, and what finishing each contract in the journal would add.
+ */
+function renderNowEvent() {
+  const card = $('#now-event-card');
+  const status = $('#operations-event-status');
+  const event = currentEvent();
+  const overall = event ? (event.tracks.find((t) => t.overall) || event.tracks[0]) : null;
+
+  if (status) status.textContent = event && overall ? `${event.title} · ${eventPoints(overall.points)}` : 'Open events';
+
+  if (!card) return;
+  card.hidden = !event;
+  if (!event) return;
+
+  $('#now-event-label').textContent = event.title;
+  $('#now-event').textContent = overall ? `${eventPoints(overall.points)} · ${eventNextText(overall)}` : '—';
+
+  const list = $('#now-event-list');
+  list.textContent = '';
+
+  for (const contract of (eventsData?.open || []).filter((o) => o.event === event.title)) {
+    const li = el('li', 'want');
+    li.append(el('span', 'what', `+${contract.points.toLocaleString()}`));
+    li.append(el('span', 'd', ` · ${contract.title}`));
+    list.append(li);
+  }
+
+  for (const track of event.tracks.filter((t) => t !== overall)) {
+    const li = el('li');
+    li.append(el('span', 'what', track.name));
+    li.append(el('span', 'd', ` · ${track.points.toLocaleString()}${track.nextTier != null ? ` / ${track.nextTier.toLocaleString()}` : ' · every tier reached'}`));
+    list.append(li);
+  }
+}
+
+/**
+ * Called on every frame of the stream: a contract taken or finished changes
+ * the open list, and only then are the totals worth asking for again.
+ */
+function noticeEventChanges(state) {
+  const key = (state.contracts || []).map((c) => `${c.name}|${c.since}`).join('\n');
+  if (key === eventsStreamKey) return;
+
+  const first = eventsStreamKey === null;
+  eventsStreamKey = key;
+  if (!first) loadEvents().catch(() => {});
+}
 
 /* ---- Points of interest: the pilot's own marks, and why ----
    Places is what the logs saw. This is what the pilot chose to keep - exact
@@ -12177,10 +12479,12 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
 }
 
 const OVERLAY_PRESETS = {
-  flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed'], density: 'compact' },
-  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade'], density: 'compact' },
-  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn'], density: 'compact' },
-  trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade'], density: 'compact' },
+  // The event card hides itself when no event is being played, so the layouts
+  // whose work pays into one carry it without costing anyone a row.
+  flight: { tabs: ['now', 'map', 'logbook'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'event'], density: 'compact' },
+  mining: { tabs: ['now', 'map', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'session', 'feed', 'trade', 'event'], density: 'compact' },
+  combat: { tabs: ['now', 'jobs', 'map', 'loadout', 'stash'], cards: ['location', 'briefing', 'ship', 'session', 'handle', 'feed', 'stats', 'respawn', 'event'], density: 'compact' },
+  trading: { tabs: ['now', 'jobs', 'commodities', 'market'], cards: ['location', 'briefing', 'ship', 'trip', 'trade', 'event'], density: 'compact' },
   minimal: { tabs: ['now', 'map'], cards: ['location', 'ship', 'session'], density: 'tiny' },
   full: null,
 };
@@ -26930,6 +27234,11 @@ async function boot() {
     // its toast arrives on the Now page as well as on Mining.
     bindRefineryNotify();
     loadRefineryOrders().catch(() => { /* the Mining page asks again when opened */ });
+
+    // The Now card and the Operations line want the event totals whichever
+    // page is open; the stream asks again whenever a contract comes or goes.
+    $('#now-event-open')?.addEventListener('click', () => showView('events'));
+    loadEvents().catch(() => { /* the Events page asks again when opened */ });
 
     // Once per load, never on a timer: the offer to renew a price table that
     // has gone a day old, and the line the wipe draws under the history.

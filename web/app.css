@@ -1192,7 +1192,7 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .muted.warn code { color: inherit; }
 
 /* What a contract's own title claims it pays, when somebody has annotated it. */
-.tag-rep, .tag-bp {
+.tag-rep, .tag-bp, .tag-event {
   font-size: 10px;
   letter-spacing: .06em;
   padding: 1px 6px;
@@ -1202,6 +1202,8 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 }
 .tag-rep { color: var(--cyan); border-color: #1d4d63; }
 .tag-bp { color: var(--green); border-color: #1f5c3d; }
+/* What the installed game says a contract pays into an event journal. */
+.tag-event { color: var(--violet); border-color: #4a3a66; }
 
 /* ---------- buttons ---------- */
 
@@ -5316,6 +5318,25 @@ body.overlay .ship-picture { display: none; }
 .wikelo-goal { margin: 0 0 var(--gap); padding: 9px 12px; border: 1px solid var(--cyan-deep); background: rgba(53, 200, 240, .06); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
 .wikelo-goal[hidden] { display: none; }
 .wikelo-current { border-color: var(--cyan-deep); }
+
+/* Events: each journal bar in points, ticked at its tiers. */
+.event-desc { font-size: 12px; line-height: 1.5; white-space: pre-line; max-width: 980px; }
+.event-facts { font-size: 12px; margin: 0 0 var(--gap); }
+.event-unrecognised { font-size: 12px; }
+.event-open { margin: 0 0 var(--gap); }
+.event-seen { color: var(--cyan); font-size: 9px; }
+.event-tracks { margin-bottom: var(--gap); }
+.event-overall { border-color: var(--cyan-deep); }
+.event-total { font-family: var(--mono); font-size: 15px; }
+.event-bar { position: relative; height: 10px; background: var(--deep); border: 1px solid var(--rule); margin: 4px 0 2px; }
+.event-fill { position: absolute; inset: 0 auto 0 0; background: var(--cyan); max-width: 100%; }
+.event-tick { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--dim); }
+.event-tick.reached { background: var(--cyan-hot); }
+.event-next { font-size: 11.5px; }
+.event-tiers .what { font-family: var(--mono); }
+.event-fastest .feed { margin: 2px 0 0; }
+.event-contracts { margin-top: var(--gap); }
+.now-event-list { margin-top: 4px; }
 .point-here { font-size: 12px; color: var(--cyan-hot); }
 #points-from { margin: 10px 0 14px; }
 .point-here .muted { color: var(--dim); }

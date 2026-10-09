@@ -2658,6 +2658,43 @@ public static class ServerHost
         // "have" means "seen somewhere", and the page says where. A trade the
         // pilot is already collecting for names its job, so the button reads
         // "tracking" rather than making a second list.
+        // Event journals: the installed game's points table against the
+        // contracts this install finished. The live session is asked as well as
+        // the store because the completion that matters most is the one that
+        // landed a minute ago, before any scan has stored it - and an event
+        // started today has nothing else yet. Totals are floors; see
+        // EventProgress for why, and the page says so.
+        app.MapGet("/api/events", (LogLibrary lib, LiveSessionService live) =>
+        {
+            var catalogue = lib.GameCommodities.Scenarios;
+            var current = live.LiveSummary.Contracts;
+            var pay = EventPay.For(catalogue);
+
+            return Results.Ok(new
+            {
+                available = catalogue.Scenarios.Count > 0,
+                countedFrom = lib.Wipe is { At: var at, Scope: var scope } && at > DateTimeOffset.MinValue && scope.HasFlag(WipeScope.History)
+                    ? at : (DateTimeOffset?)null,
+                events = EventProgress.Build(catalogue, lib.ContractRecords().Concat(current)),
+
+                // What is in the journal right now and pays into an event, so
+                // the page and the Now card can say what finishing it is worth.
+                open = current
+                    .Where(c => c.Outcome is ContractOutcome.InProgress or ContractOutcome.Unknown)
+                    .Select(c => (Contract: c, Pay: pay.Pay(c.Raw)))
+                    .Where(x => x.Pay is not null)
+                    .Select(x => new
+                    {
+                        contract = x.Contract.Raw,
+                        title = ContractTags.Clean(x.Contract.Name),
+                        points = x.Pay!.Points,
+                        @event = x.Pay.Event,
+                        tracks = x.Pay.Tracks,
+                        since = x.Contract.FirstSeen,
+                    }),
+            });
+        });
+
         app.MapGet("/api/wikelo", (LogLibrary lib, JobStore jobs) =>
         {
             var catalogue = lib.GameCommodities.Wikelo;

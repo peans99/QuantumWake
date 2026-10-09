@@ -385,7 +385,15 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.26
+### 0.16.27
+
+**RSI Discovery Month, in points.** The event journal draws each bar as a percentage and never says what a contract is worth. The new **Events** page (Operations → Events) reads both from your installed game: what each tier of Your total, Transport, Collection and Defense costs, what it awards, and what each of the event's 31 contracts pays. It then counts the ones your logs show you finishing, and says which contracts reach the next tier in the fewest runs.
+
+- **An Event card on the Now page**, and in the overlay, for the event you're playing: your points against the next tier, and what the contract in your journal adds when you finish it. An open event contract also leads the focus strip: "+417 pts to Your total, Defense".
+- **Contract rows carry a pts chip** for any contract that pays into an event.
+- **Older journals are there too.** Orison Relief, Alliance Aid and Return of XenoThreat are still in the game files, so your Orison Relief history is added up as well.
+- **Every total is a floor.** A contract counts when the game put up an objective marker for it and later ended it as complete, so the in-game journal stays the final word. The page says what it can't see.
+- The game data is read again once after updating, which takes a few seconds on the first start.
 
 **Find any workspace or overlay layout with Ctrl+K.** The new Command palette jumps directly to a page, selects a Flight, Mining or Combat overlay layout, or brings the overlay back without adding another permanent control.
 

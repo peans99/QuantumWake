@@ -257,6 +257,46 @@ if (args.Contains("--cargo", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Event progress, the evidence behind docs/events.md: every campaign the
+// install describes, its bars and tiers, what each contract pays, and what
+// this install's logs have earned against it. Run it after a patch - an event
+// arriving or leaving shows here first.
+if (args.Contains("--events", StringComparer.OrdinalIgnoreCase))
+{
+    var cache = Path.Combine(Path.GetDirectoryName(SessionStore.DatabasePathFor(install.RootPath))!, "commodities.json");
+    var catalogue = GameCommodities.Load(install.RootPath, cache).Scenarios;
+    var all = new List<ContractRecord>();
+
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        all.AddRange(builder.Build().Contracts);
+    }
+
+    Console.WriteLine($"{catalogue.Scenarios.Count} campaigns, {catalogue.Contracts.Count} paying contracts; {all.Count} contracts in the logs");
+
+    foreach (var status in EventProgress.Build(catalogue, all))
+    {
+        Console.WriteLine($"\n== {status.Title}  [{status.Id}]{(status.Percent ? "  (journal shows %)" : "")}");
+        Console.WriteLine(status.FirstSeen is { } first
+            ? $"   seen {first:yyyy-MM-dd} .. {status.LastSeen:yyyy-MM-dd}, {status.Completed} completed" + (status.Unrecognised > 0 ? $", {status.Unrecognised} unrecognised" : "")
+            : "   not in these logs");
+
+        foreach (var track in status.Tracks)
+        {
+            Console.WriteLine($"   {track.Name,-14} {track.Points,7:N0} pts  tiers " + string.Join(" / ", track.Tiers.Select(t => (t.Reached ? "*" : "") + t.MinPoints.ToString("N0"))));
+            foreach (var tier in track.Tiers) Console.WriteLine($"      {tier.MinPoints,7:N0}  {tier.Reward}");
+            foreach (var s in track.Fastest) Console.WriteLine($"      next: {s.Needed} x {s.Title} ({s.Points})");
+        }
+
+        foreach (var c in status.Contracts)
+            Console.WriteLine($"   {c.Points,6:N0}  {c.Id,-46} {string.Join("+", c.Tracks.Skip(1)),-12} {c.Completed,3} done  {c.Title}");
+    }
+
+    return 0;
+}
+
 // Hauling as the logs have it: every hauling contract folded out of the
 // backups with what its title and archetype say about the route, and the
 // totals that decide how much a screenshot still has to add. The evidence

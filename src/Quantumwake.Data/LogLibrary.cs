@@ -149,6 +149,12 @@ public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset L
 /// <param name="Delivery">Where it goes, when the title says - "to Stanton Gateway".</param>
 /// <param name="Commodity">The cargo, when the archetype id spells it.</param>
 /// <param name="Pickups">Journal pickup steps, and how many finished; likewise deliveries.</param>
+/// <param name="EventPoints">
+/// What the installed game says the contract pays into an event journal, when
+/// it pays into one - the number the journal itself only ever shows as a
+/// percentage. <paramref name="Event"/> names the journal and
+/// <paramref name="EventTracks"/> the bars it counts on.
+/// </param>
 public sealed record ContractLine(
     DateTimeOffset At,
     string Name,
@@ -169,7 +175,10 @@ public sealed record ContractLine(
     int Pickups = 0,
     int PickupsDone = 0,
     int Deliveries = 0,
-    int DeliveriesDone = 0);
+    int DeliveriesDone = 0,
+    int? EventPoints = null,
+    string? Event = null,
+    IReadOnlyList<string>? EventTracks = null);
 
 /// <summary>
 /// How much work this install has done for one faction.
@@ -1554,6 +1563,7 @@ public sealed class LogLibrary : IDisposable
     public IReadOnlyList<ContractLine> Contracts(int days = 0)
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+        var events = EventPay.For(GameCommodities.Scenarios);
 
         return
         [
@@ -1591,10 +1601,21 @@ public sealed class LogLibrary : IDisposable
                     c.Pickups,
                     c.PickupsDone,
                     c.Deliveries,
-                    c.DeliveriesDone);
+                    c.DeliveriesDone,
+                    events.Pay(c.Raw)?.Points,
+                    events.Pay(c.Raw)?.Event,
+                    events.Pay(c.Raw)?.Tracks);
                 })
         ];
     }
+
+    /// <summary>
+    /// Every contract record in the history the wipe leaves counted, for the
+    /// event journals to total. Unsorted and unshaped: the totals want the
+    /// mission ids and outcomes, not the logbook lines.
+    /// </summary>
+    public IEnumerable<ContractRecord> ContractRecords() =>
+        Counted(WipeScope.History).SelectMany(s => s.Contracts);
 
     /// <summary>
     /// Work done per faction, most first.
