@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.3`r`n`r`n**A clearer campaign board.** Event plans now lead with a luminous next-tier bar, reward milestones, and compact Combat, Mining and Hauling lanes.
+### 0.17.4
+
+**A clearer campaign board.** Event plans now lead with a luminous next-tier bar, reward milestones, and compact Combat, Mining and Hauling lanes.
 
 **Events now help you choose the next job.** Set a Combat, Mining or Hauling preference, see the points still needed for the next tier, and jump from the plan to contracts, routes or the map. Event state, recent evidence and detailed tiers remain available without turning the page into a wall of tables.
 

@@ -371,6 +371,9 @@ public class EventsTests
     private static string Plan(Page page) =>
         page.Text("__dom.node('#events-body').byClass('event-plan').map(n => n.textContent).join('|')");
 
+    private static string PathLine(Page page) =>
+        page.Text("(__dom.node('#events-body').byClass('event-plan')[0].children.find(n => n.tagName === 'p' && /path:|contracts are listed/.test(n.textContent)) || {}).textContent || ''");
+
     /// <summary>
     /// The plan leads with the next target on the overall bar: 2,085 of 4,500
     /// is 2,415 short, which three Quantainium orders close and nothing else
@@ -393,12 +396,15 @@ public class EventsTests
         var page = Loaded();
 
         page.Do("eventPreference = 'combat'; renderEvents();");
-        var combat = Plan(page);
+        // The lanes beside it show every activity's best contract whatever the
+        // preference, so the narrowing is read off the path line alone.
+        var combat = PathLine(page);
+        Assert.StartsWith("Best combat path:", combat);
         Assert.Contains("6 × RSI Disc. Month: Orange Lvl. - Neutralize Threats (417 pts)", combat);
         Assert.DoesNotContain("Quantainium", combat);
 
         page.Do("eventPreference = 'mining'; renderEvents();");
-        Assert.Contains("Procure Refined Quantainium", Plan(page));
+        Assert.Contains("Procure Refined Quantainium", PathLine(page));
     }
 
     [Fact]
