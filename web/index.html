@@ -111,6 +111,15 @@
   </div>
 </header>
 
+<section id="command-palette" class="command-palette" hidden aria-label="Command palette" role="dialog" aria-modal="true">
+  <div class="command-panel">
+    <div class="command-head"><span>Command</span><kbd>Esc</kbd></div>
+    <input id="command-query" class="command-query" type="search" placeholder="Jump to a page or action…" autocomplete="off" spellcheck="false">
+    <div id="command-results" class="command-results" role="listbox"></div>
+    <p class="command-hint"><kbd>↑↓</kbd> choose <kbd>Enter</kbd> run</p>
+  </div>
+</section>
+
 <!-- A chosen place, hull, list or flight plan stays available while the pilot
      moves through the workspaces. It is absent until there is a real choice,
      so the shared navigation does not become another dashboard. -->

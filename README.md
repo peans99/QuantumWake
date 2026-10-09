@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.16.19
+### 0.16.20
+
+**Find any workspace or overlay layout with Ctrl+K.** The new Command palette jumps directly to a page, selects a Flight, Mining or Combat overlay layout, or brings the overlay back without adding another permanent control.
 
 **Switch overlay layouts for what you are flying.** Flight, Mining and Combat now choose a focused set of overlay pages and Current-status readings. Pick one from Settings or the new compact ▦ menu in the overlay header; Trading, Minimal and Full remain available there too.
 

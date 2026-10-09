@@ -968,11 +968,39 @@ function initNowCardCollapsers() {
 }
 
 document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    openCommandPalette();
+    return;
+  }
   if (!event.ctrlKey || !event.altKey) return;
 
   if (event.key === 'ArrowRight') { window.scCycleView(1); event.preventDefault(); }
   if (event.key === 'ArrowLeft') { window.scCycleView(-1); event.preventDefault(); }
 });
+
+let commandIndex = 0;
+function commandEntries() {
+  const pages = $$('#tabs button[data-view]').map(button => ({
+    label: `Open ${button.textContent.trim()}`, hint: 'page', run: () => showView(button.dataset.view),
+  }));
+  const presets = ['flight', 'mining', 'combat', 'trading', 'minimal', 'full'].map(name => ({
+    label: `${name[0].toUpperCase() + name.slice(1)} overlay layout`, hint: 'overlay', run: () => window.scOverlayPreset?.(name),
+  }));
+  return [...pages, ...presets, { label: 'Show overlay', hint: 'overlay', run: () => fetch('/api/overlay?visible=true', { method: 'POST' }) }];
+}
+function renderCommandPalette() {
+  const query = $('#command-query').value.trim().toLowerCase();
+  const matches = commandEntries().filter(entry => entry.label.toLowerCase().includes(query));
+  commandIndex = Math.max(0, Math.min(commandIndex, matches.length - 1));
+  const host = $('#command-results'); host.textContent = '';
+  matches.forEach((entry, index) => { const button = el('button', `command-result${index === commandIndex ? ' active' : ''}`, entry.label); button.type = 'button'; button.append(el('small', null, entry.hint)); button.onclick = () => { entry.run(); closeCommandPalette(); }; host.append(button); });
+  return matches;
+}
+function openCommandPalette() { if (isOverlay) return; const dialog = $('#command-palette'); dialog.hidden = false; $('#command-query').value = ''; commandIndex = 0; renderCommandPalette(); $('#command-query').focus(); }
+function closeCommandPalette() { $('#command-palette').hidden = true; }
+$('#command-query')?.addEventListener('input', () => { commandIndex = 0; renderCommandPalette(); });
+$('#command-query')?.addEventListener('keydown', event => { const matches = renderCommandPalette(); if (event.key === 'Escape') { closeCommandPalette(); return; } if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { commandIndex = Math.max(0, Math.min(matches.length - 1, commandIndex + (event.key === 'ArrowDown' ? 1 : -1))); renderCommandPalette(); event.preventDefault(); } if (event.key === 'Enter' && matches[commandIndex]) { matches[commandIndex].run(); closeCommandPalette(); } });
 
 /* ---------- live view ---------- */
 

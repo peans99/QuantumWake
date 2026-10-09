@@ -347,6 +347,18 @@ body.overlay .feed .d { display: none; }
   box-shadow: 0 1px 0 rgba(53, 200, 240, .18), 0 6px 22px rgba(0, 0, 0, .6);
 }
 
+.command-palette { position: fixed; inset: 0; z-index: 80; display: grid; place-items: start center; padding-top: min(18vh, 150px); background: rgba(2, 7, 12, .68); backdrop-filter: blur(5px); }
+.command-panel { width: min(560px, calc(100vw - 32px)); border: 1px solid var(--cyan-deep); background: linear-gradient(145deg, #101e2b, #070e16); box-shadow: 0 22px 70px rgba(0,0,0,.6), 0 0 30px rgba(53,200,240,.12); }
+.command-head { display:flex; justify-content:space-between; padding: 11px 14px; color: var(--cyan); font: 10px var(--mono); letter-spacing:.16em; text-transform:uppercase; border-bottom:1px solid var(--rule); }
+.command-head kbd, .command-hint kbd { color: var(--muted); font: inherit; }
+.command-query { width:100%; box-sizing:border-box; border:0; border-bottom:1px solid var(--rule); background:transparent; padding:15px; color:var(--text); font: 15px var(--mono); outline:0; }
+.command-results { max-height: 350px; overflow:auto; padding:6px; }
+.command-result { display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; color:var(--text); text-align:left; padding:10px; cursor:pointer; }
+.command-result:hover, .command-result.active { background:rgba(53,200,240,.12); color:#fff; }
+.command-result small { margin-left:auto; color:var(--muted); font:10px var(--mono); }
+.command-hint { margin:0; padding:9px 14px; border-top:1px solid var(--rule); color:var(--dim); font:10px var(--mono); }
+body.overlay .command-palette { display:none; }
+
 /* A single selected thing can travel between pages without turning the header
    into a second dashboard. The rail exists only after an explicit choice. */
 .context-rail {
