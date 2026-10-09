@@ -9221,8 +9221,11 @@ const EVENT_KEY = 'qw-event';
 // played, for the Now card. Discovery Month runs a month; a fortnight without
 // one of its contracts is a pilot who has moved on.
 const EVENT_RECENT_DAYS = 14;
+const EVENT_PREFERENCE_KEY = 'qw-event-preference';
+let eventPreference = 'all';
 
 try { eventsChosen = localStorage.getItem(EVENT_KEY) || null; } catch { /* optional */ }
+try { eventPreference = localStorage.getItem(EVENT_PREFERENCE_KEY) || 'all'; } catch { /* optional */ }
 
 async function loadEvents() {
   try {
@@ -9305,13 +9308,17 @@ function renderEvents() {
 
   const shown = chosenEvent();
   for (const event of events) {
+    const state = eventsData.tracked === event.id ? 'tracked' : (eventsData.open || []).some(o => o.event === event.title) ? 'open' : eventRecent(event) ? 'recent' : '';
     const button = el('button', event.id === shown?.id ? 'ghost' : 'ghost off', event.title);
     button.type = 'button';
     button.title = event.firstSeen ? `In your logs since ${dateOf(event.firstSeen)}` : 'Not in your logs yet';
     if (event.firstSeen) button.append(el('span', 'event-seen', '●'));
+    if (state) button.append(el('span', 'muted', ` · ${state}`));
     button.addEventListener('click', () => { rememberEvent(event.id); renderEvents(); });
     picker.append(button);
   }
+
+  $$('#event-preferences [data-event-preference]').forEach(button => button.classList.toggle('active', button.dataset.eventPreference === eventPreference));
 
   if (shown) body.append(eventView(shown));
 }
@@ -9321,12 +9328,15 @@ function eventView(event) {
 
   if (event.description) box.append(el('p', 'muted event-desc', withoutMarkup(event.description.replace(/\\n/g, '\n'))));
 
+  box.append(eventPlan(event));
+
   const facts = el('p', 'event-facts');
   if (event.firstSeen) {
     facts.append(el('span', null, `${event.completed.toLocaleString()} of its contracts finished since ${dateOf(event.firstSeen)}`));
   } else {
     facts.append(el('span', 'muted', 'None of its contracts are in your logs yet. Finish one and it is counted from then.'));
   }
+  if (event.lastSeen) facts.append(el('span', 'muted', ` · last event contract seen ${dateOf(event.lastSeen)}`));
   if (eventsData?.countedFrom) facts.append(el('span', 'muted', ` · counting from your wipe on ${dayUtc(eventsData.countedFrom)}`));
   if (event.percent) facts.append(el('span', 'muted', ' · the journal shows these bars in percent; here they are in points'));
   box.append(facts);
@@ -9366,7 +9376,9 @@ function eventView(event) {
   for (const track of event.tracks) tracks.append(eventTrackCard(track));
   box.append(tracks);
 
-  box.append(eventContractsTable(event));
+  const details = document.createElement('details'); details.className = 'event-details';
+  details.append(el('summary', null, `All ${event.contracts.length} paying contracts`));
+  details.append(eventContractsTable(event)); box.append(details);
   return box;
 }
 
@@ -9456,6 +9468,29 @@ function eventRewardItems(items) {
   return box;
 }
 
+function eventMatchesPreference(contract) {
+  if (eventPreference === 'all') return true;
+  const words = `${contract.title} ${contract.issuer}`.toLowerCase();
+  if (eventPreference === 'combat') return /patrol|bounty|combat|neutralize|defen/.test(words);
+  if (eventPreference === 'mining') return /mining|ore|quantanium|salvage|procure/.test(words);
+  return /cargo|haul|delivery|courier|transport|refuel|package/.test(words);
+}
+function eventPlan(event) {
+  const track = event.tracks.find(t => t.overall && t.nextTier != null) || event.tracks.find(t => t.nextTier != null);
+  const plan = el('section', 'event-plan');
+  if (!track) { plan.append(el('div', 'event-plan-target', 'Every recorded tier reached')); return plan; }
+  const head = el('div', 'event-plan-head');
+  head.append(el('span', 'card-label', 'Next event target'));
+  head.append(el('strong', 'event-plan-target', `${track.toNext.toLocaleString()} pts to ${track.name} tier ${track.tiers.findIndex(t => t.minPoints === track.nextTier) + 1}`));
+  plan.append(head);
+  const choices = event.contracts.filter(eventMatchesPreference).map(c => ({ ...c, needed: Math.ceil(track.toNext / c.points) }))
+    .sort((a,b) => a.needed - b.needed || b.points - a.points).slice(0, 3);
+  plan.append(el('p', 'muted', choices.length ? `Best ${eventPreference === 'all' ? 'available' : eventPreference} path: ${choices.map(c => `${c.needed} × ${c.title} (${c.points.toLocaleString()} pts)`).join(' · ')}` : `No ${eventPreference} contracts are listed for this event; choose Any activity to see every path.`));
+  const actions = el('div', 'event-plan-actions');
+  for (const [label, view] of [['View contracts', 'contracts'], ['Plan route', 'routes'], ['Open map', 'map']]) { const button = el('button', 'ghost tiny', label); button.type = 'button'; button.onclick = () => showView(view); actions.append(button); }
+  plan.append(actions); return plan;
+}
+
 function eventTrackCard(track) {
   const card = el('article', `point-card event-track${track.overall ? ' event-overall' : ''}`);
 
@@ -9515,7 +9550,10 @@ function eventTrackCard(track) {
 
     tiers.append(li);
   });
-  card.append(tiers);
+  const tierDetails = document.createElement('details');
+  tierDetails.className = 'event-details';
+  tierDetails.append(el('summary', null, `${track.tiers.length} tiers and rewards`));
+  tierDetails.append(tiers); card.append(tierDetails);
 
   if (track.fastest.length) {
     const fast = el('div', 'event-fastest');
@@ -9571,12 +9609,21 @@ async function trackEvent(id, button) {
     const response = await fetch(`/api/events/track${id ? `?id=${encodeURIComponent(id)}` : ''}`, { method: 'POST' });
     if (response.ok && eventsData) eventsData.tracked = (await response.json()).tracked ?? null;
   } catch {
-    /* the button comes back as it was, which says the choice did not take */
+    const status = $('#events-plan-status');
+    if (status) status.textContent = 'Could not save the tracked event. It will keep following your current contracts.';
   }
 
   renderEvents();
   renderNowEvent();
 }
+
+$('#event-preferences')?.addEventListener('click', event => {
+  const preference = event.target?.dataset?.eventPreference;
+  if (!preference) return;
+  eventPreference = preference;
+  try { localStorage.setItem(EVENT_PREFERENCE_KEY, preference); } catch { /* optional */ }
+  renderEvents();
+});
 
 /**
  * The Now page's event card: the bars of the event being played against their

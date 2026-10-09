@@ -5334,6 +5334,14 @@ body.overlay .ship-picture { display: none; }
 
 /* Events: each journal bar in points, ticked at its tiers. */
 .event-desc { font-size: 12px; line-height: 1.5; white-space: pre-line; max-width: 980px; }
+.event-preferences { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin: 0 0 8px; }
+.event-preferences .active { color:var(--cyan-hot); border-color:var(--cyan); background:rgba(53,200,240,.1); }
+.event-plan { margin: 0 0 var(--gap); padding: 13px 15px; border:1px solid var(--cyan-deep); background:linear-gradient(110deg,rgba(53,200,240,.1),transparent 52%); }
+.event-plan-head { display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap; }
+.event-plan-target { color:var(--cyan-hot); font:600 17px var(--mono); }
+.event-plan-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.event-details { margin-top:8px; border-top:1px solid var(--rule); }
+.event-details > summary { cursor:pointer; padding:9px 0; color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
 .event-facts { font-size: 12px; margin: 0 0 var(--gap); }
 .event-unrecognised { font-size: 12px; }
 .event-open { margin: 0 0 var(--gap); }

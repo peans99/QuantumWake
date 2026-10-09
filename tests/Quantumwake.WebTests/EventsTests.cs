@@ -367,4 +367,46 @@ public class EventsTests
 
         Assert.Equal(1, page.Count("__dom.node('#events-body').byClass('event-tier-head').filter(n => n.tagName === 'button').length"));
     }
+
+    private static string Plan(Page page) =>
+        page.Text("__dom.node('#events-body').byClass('event-plan').map(n => n.textContent).join('|')");
+
+    /// <summary>
+    /// The plan leads with the next target on the overall bar: 2,085 of 4,500
+    /// is 2,415 short, which three Quantainium orders close and nothing else
+    /// on the list closes in fewer.
+    /// </summary>
+    [Fact]
+    public void The_plan_names_the_next_target_and_the_fewest_contracts_to_it()
+    {
+        var page = Loaded();
+        page.Do("eventPreference = 'all'; renderEvents();");
+
+        var plan = Plan(page);
+        Assert.Contains("2,415 pts to Your total tier 1", plan);
+        Assert.Contains("3 × RSI Disc. Month: Procure Refined Quantainium (1,142 pts)", plan);
+    }
+
+    [Fact]
+    public void A_preference_narrows_the_plan_to_that_kind_of_work()
+    {
+        var page = Loaded();
+
+        page.Do("eventPreference = 'combat'; renderEvents();");
+        var combat = Plan(page);
+        Assert.Contains("6 × RSI Disc. Month: Orange Lvl. - Neutralize Threats (417 pts)", combat);
+        Assert.DoesNotContain("Quantainium", combat);
+
+        page.Do("eventPreference = 'mining'; renderEvents();");
+        Assert.Contains("Procure Refined Quantainium", Plan(page));
+    }
+
+    [Fact]
+    public void A_preference_with_nothing_on_offer_says_so_rather_than_showing_an_empty_plan()
+    {
+        var page = Loaded();
+        page.Do("eventPreference = 'hauling'; renderEvents();");
+
+        Assert.Contains("No hauling contracts are listed for this event", Plan(page));
+    }
 }

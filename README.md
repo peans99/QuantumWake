@@ -385,7 +385,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.17.1
+### 0.17.2
+
+**Events now help you choose the next job.** Set a Combat, Mining or Hauling preference, see the points still needed for the next tier, and jump from the plan to contracts, routes or the map. Event state, recent evidence and detailed tiers remain available without turning the page into a wall of tables.
 
 **Current status is back in the overlay, and the glance view is no longer empty.** When the location, ship and session cards were merged into the one Current status card, the overlay stopped recognising it and switched it off. So the glance view, which is that card and nothing else, came up blank. Your overlay layouts now show it again.
 
