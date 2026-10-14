@@ -115,15 +115,51 @@ jobs:
 
           $scanPath = (Resolve-Path 'dist').Path
           $scanStartedAt = Get-Date
-          Start-MpScan -ScanType CustomScan -ScanPath $scanPath -ErrorAction Stop
 
-          $threats = @(Get-MpThreatDetection -ErrorAction Stop | Where-Object {
-            $_.InitialDetectionTime -ge $scanStartedAt -and
-            ($_.Resources | Where-Object { $_ -like "*$scanPath*" } | Measure-Object).Count -gt 0
-          })
-          if ($threats) {
-            $names = ($threats | ForEach-Object ThreatName | Select-Object -Unique) -join ', '
-            throw "Microsoft Defender detected a threat in the release files: $names"
+          # The Mp* cmdlets reach Defender through WMI, and on 2026-10-14 two
+          # fresh windows-2025 runners in a row could not load that provider
+          # ("The remote procedure call failed", "Provider load failure") while
+          # the engine itself was running. A few tries cover a service still
+          # starting; after that MpCmdRun asks the engine directly. Either way
+          # a release nothing could scan is still refused below.
+          $scanned = $false
+          foreach ($attempt in 1..3) {
+            try {
+              Start-MpScan -ScanType CustomScan -ScanPath $scanPath -ErrorAction Stop
+              $scanned = $true
+              break
+            } catch {
+              Write-Warning "Start-MpScan attempt $attempt failed: $($_.Exception.Message)"
+              Start-Sleep -Seconds 20
+            }
+          }
+
+          if ($scanned) {
+            $threats = @(Get-MpThreatDetection -ErrorAction Stop | Where-Object {
+              $_.InitialDetectionTime -ge $scanStartedAt -and
+              ($_.Resources | Where-Object { $_ -like "*$scanPath*" } | Measure-Object).Count -gt 0
+            })
+            if ($threats) {
+              $names = ($threats | ForEach-Object ThreatName | Select-Object -Unique) -join ', '
+              throw "Microsoft Defender detected a threat in the release files: $names"
+            }
+          } else {
+            $mpcmd = Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe'
+            if (-not (Test-Path $mpcmd)) {
+              throw 'Microsoft Defender could not be asked to scan; refusing to publish an unscanned release.'
+            }
+
+            # Type 3 is a custom scan of the path given. Exit 0 is clean and 2
+            # is a detection; anything else means no verdict, which is not clean.
+            & $mpcmd -Scan -ScanType 3 -File $scanPath -DisableRemediation
+            $verdict = $LASTEXITCODE
+            if ($verdict -eq 2) {
+              throw 'Microsoft Defender detected a threat in the release files (MpCmdRun exit 2).'
+            }
+            if ($verdict -ne 0) {
+              throw "Microsoft Defender could not scan the release files (MpCmdRun exit $verdict); refusing to publish an unscanned release."
+            }
+            Write-Host 'Scanned with MpCmdRun: the Defender cmdlets were unavailable on this runner.'
           }
 
           # Defender quarantines a detected file. Checking the published files
