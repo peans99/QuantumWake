@@ -323,7 +323,7 @@ public static class ServerHost
                 ? Results.BadRequest(new
                 {
                     message = "No Star Citizen logs there. Pick the folder holding Game.log "
-                        + @"or its parent - usually ...\StarCitizen\LIVE."
+                        + "or its parent - usually ...\\StarCitizen\\LIVE."
                 })
                 : Results.Ok(new { resolved.Channel, resolved.RootPath, restartNeeded = true });
         });

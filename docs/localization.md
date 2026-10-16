@@ -577,3 +577,38 @@ trouble, the Fleet Manager's scope line. 90 entries added, 3,948 in all.
   condition, crafting's "any 2 of:", the haul plan's pickups clause, why the
   sticks cannot be read live. Those are what "the same catalogue, read in
   C#" is for.
+
+### 0.18.16
+
+Phase 3, second half: every other sentence the server writes. The Garage's
+notes and the pilot-DPS caveat, the cargo fit's reasons, the rock
+calculator's notes, a fire mode's condition, a recipe's "any 2 of:", the
+item card's facts, holding line and subtitle, the haul plan's notes, the kit
+rule, and the server's error messages. 123 entries added, 4,071 in all.
+Probed against this install in French on every view, nothing English is
+left but game text (item, ship, place and contract names, OCR lines, port
+labels) and what the pilot typed.
+
+- **Not "the same catalogue, read in C#" after all.** The plan was a C#
+  reader for server sentences; most of them turned out not to be computed on
+  request. A fire mode's condition and a recipe's materials come out of the
+  game files once and are cached; screen readings are stored. Translating in
+  C# would freeze each in whatever language was on when it was made. So
+  `serverText()` - the same shape matcher as `screenText()` - translates them
+  on the page, and the per-request ones (Garage, cargo, rock, item card, haul
+  plan, messages) go the same way so there is one mechanism. It is still one
+  catalogue, and the orphan test still reads the C# literals, so a reworded
+  server sentence names the entry it orphans.
+- **The orphan test now escapes backslashes** in a key before looking for it
+  among the C# literals: a path in a message ("...\\StarCitizen\\LIVE") was
+  unfindable. The one verbatim `@"…"` piece of a message became an ordinary
+  literal so the `+` join reads it.
+- **Shapes before the "; " split.** Several server sentences carry a "; " of
+  their own; a list shape stops at ";" instead, so two joined notes still
+  split.
+- **English is untouched**: `screenText()` returns early in English, so a
+  shape's corrected plural ("1 of your things is here") only exists in the
+  catalogue's French.
+- **Messages from JavaScript errors stay as they are** - "Failed to fetch" is
+  the browser's, not the app's; only what the server sends is wrapped.
+- `ServerTextFrenchTests` holds the server's wording one row per shape.

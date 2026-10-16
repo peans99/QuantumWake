@@ -2212,7 +2212,7 @@ function closeEntity() {
 function renderEntity(card) {
   $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] ? tx(ENTITY_KICKER[card.kind]) : card.kind;
   $('#entity-name').textContent = card.name;
-  $('#entity-sub').textContent = card.subtitle || '';
+  $('#entity-sub').textContent = serverText(card.subtitle) || '';
 
   renderEntityHolding(card);
   renderEntityPrice(card);
@@ -2266,8 +2266,8 @@ function renderEntityHolding(card) {
   node.hidden = !card.holding;
   if (node.hidden) return;
 
-  node.append(el('b', null, card.holding.status));
-  if (card.holding.detail) node.append(el('div', 'entity-detail', card.holding.detail));
+  node.append(el('b', null, serverText(card.holding.status)));
+  if (card.holding.detail) node.append(el('div', 'entity-detail', serverText(card.holding.detail)));
 }
 
 /**
@@ -2290,7 +2290,7 @@ function renderEntityPrice(card) {
 
   const detail = [
     price.where ? tx('at {place}', { place: price.where }) : null,
-    price.asOf ? `${price.source}, ${ageWord(price.asOf)}` : price.source,
+    price.asOf ? `${tx(price.source)}, ${ageWord(price.asOf)}` : tx(price.source),
   ].filter(Boolean).join(' · ');
 
   node.append(el('div', 'entity-detail', detail));
@@ -2318,9 +2318,9 @@ function renderEntityFacts(card) {
 
   for (const fact of card.facts || []) {
     const row = el('div', 'entity-fact');
-    row.append(el('span', 'entity-fact-label', fact.label));
-    const value = el('span', 'entity-fact-value', fact.value);
-    value.append(el('span', 'entity-source', fact.source));
+    row.append(el('span', 'entity-fact-label', tx(fact.label)));
+    const value = el('span', 'entity-fact-value', serverText(fact.value));
+    value.append(el('span', 'entity-source', tx(fact.source)));
     row.append(value);
     list.append(row);
   }
@@ -2375,7 +2375,7 @@ function renderEntityWhere(card) {
       row.append(el('span', 'entity-where-name', place.name));
     }
 
-    if (place.note) row.append(el('span', 'entity-detail', place.note));
+    if (place.note) row.append(el('span', 'entity-detail', serverText(place.note)));
     node.append(row);
   }
 }
@@ -6202,7 +6202,7 @@ async function assessCrack() {
   // The mineral is for the notes: what the game says about it, in its own figures.
   // The verdict's own notes are the server's and wait for phase 3.
   const mineral = crackModel.minerals.find((m) => m.class === $('#crack-mineral').value);
-  const notes = [...(v.notes || [])].map((n) => tx(n));
+  const notes = [...(v.notes || [])].map(serverText);
   if (mineral) {
     notes.push(tx('{mineral}: element resistance {resistance}, instability {instability}, window at {mid}%±{spread} of the gauge, overcharge blast ×{blast}', {
       mineral: mineral.name, resistance: mineral.resistance, instability: mineral.instability,
@@ -7121,7 +7121,7 @@ function renderArmouryGuns() {
     const list = el('div', 'armoury-modes');
     for (const m of w.modes) {
       const line = el('span', null, armouryMode(m));
-      if (m.condition) line.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: m.condition })}`));
+      if (m.condition) line.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: serverText(m.condition) })}`));
       list.append(line);
     }
     modes.append(list);
@@ -7169,7 +7169,7 @@ function renderArmouryGunDetail(w) {
   for (const m of w.modes) {
     const tr = el('tr');
     const label = el('td', null, armouryMode(m));
-    if (m.condition) label.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: m.condition })}`));
+    if (m.condition) label.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: serverText(m.condition) })}`));
     if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ` · ${tx('the magazine’s second load')}`));
     tr.append(label);
     tr.append(el('td', 'num', m.kind === 'Beam' ? `${fmtDamage(m.damagePerSecond)}/s` : `${fmtDamage(m.damagePerShot)} (${armouryHit(m.hit)}${m.pellets > 1 || m.chargePellets > 0 ? ` × ${m.chargePellets > 0 && m.kind === 'Charge' ? m.chargePellets : m.pellets}` : ''}${m.kind === 'Charge' ? ` × ${m.chargeDamageMultiplier}` : ''})`));
@@ -7459,7 +7459,7 @@ function renderCraftingRef() {
     tr.append(el('td', 'muted', prettyType(bp.type)));
     tr.append(el('td', 'num', gradeLetter(bp.grade)));
     tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
-    tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.join(', ') : '—'));
+    tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.map(serverText).join(', ') : '—'));
 
     // How you get the blueprint; the pool names ride the tooltip.
     const how = el('td', 'muted', bp.default
@@ -7791,7 +7791,7 @@ const SCREEN_SENTENCES = [
   [/^(\d+) accepted of (\d+)(?:: (.+))?$/, (m) => screenListed(tx('{count} accepted of {capacity}', { count: m[1], capacity: m[2] }), m[3])],
   [/^(\d+) accepted(?:: (.+))?$/, (m) => screenListed(tx('{count} accepted', { count: m[1] }), m[2])],
   [/^(\d+) cards read(?:: (.+))?$/, (m) => screenListed(txn(Number(m[1]), '{count} card read', '{count} cards read'), m[2])],
-  [/^on screen but not in the logs: (.+)$/, (m) => tx('on screen but not in the logs: {names}', { names: m[1] })],
+  [/^on screen but not in the logs: ([^;]+)$/, (m) => tx('on screen but not in the logs: {names}', { names: m[1] })],
   [/^the tab says (\d+), the logs say (\d+)$/, (m) => tx('the tab says {screen}, the logs say {logs}', { screen: m[1], logs: m[2] })],
   [/^(\d+) ships? listed(?:: (.*?))?(?: \((\d+) names? did not read\))?$/, (m) => [
     screenListed(txn(Number(m[1]), '{count} ship listed', '{count} ships listed'),
@@ -7819,6 +7819,63 @@ const SCREEN_SENTENCES = [
   [/^The loadout estimate at the Fleet Manager, replacement fee (.+) aUEC\.$/, (m) => tx('The loadout estimate at the Fleet Manager, replacement fee {fee} aUEC.', { fee: m[1] })],
   // The fitted-parts claim: "3 parts named, 1 port empty, …", a piece at a time.
   [/^(\d+ parts? named(?:, .+)?)$/, (m) => m[1].split(', ').map(screenPiece).join(', ')],
+  // The Garage's notes on a fit.
+  [/^The dataset's own total puts (.+) DPS in the pilot's hands for this hull and the rest on turrets; here the stock fit reads (.+), because its remote turrets are named as pilot mounts in the loadout and the file that says who fires them is not published\. The guns are on the sheet either way; only the row differs\.$/,
+    (m) => tx('The dataset\'s own total puts {published} DPS in the pilot\'s hands for this hull and the rest on turrets; here the stock fit reads {reads}, because its remote turrets are named as pilot mounts in the loadout and the file that says who fires them is not published. The guns are on the sheet either way; only the row differs.', { published: m[1], reads: m[2] })],
+  [/^(.+) is fitted with nothing counted on it: the reference says what the stock (.+) carried \((\d+)\), not what this one does\.$/,
+    (m) => tx('{part} is fitted with nothing counted on it: the reference says what the stock {type} carried ({count}), not what this one does.', { part: m[1], type: m[2] === 'part' ? tx('part') : garageWord(m[2]), count: m[3] })],
+  [/^Draws (.+) power segments with shields up; the plant provides (.+)\. The game will brown out something\.$/,
+    (m) => tx('Draws {drawn} power segments with shields up; the plant provides {available}. The game will brown out something.', { drawn: m[1], available: m[2] })],
+  [/^Cooling load (.+) with shields up: the coolers cannot keep up at full draw\.$/,
+    (m) => tx('Cooling load {load} with shields up: the coolers cannot keep up at full draw.', { load: m[1] })],
+  [/^(.+) is fitted but the reference has no figures for it; it counts for nothing here\.$/,
+    (m) => tx('{part} is fitted but the reference has no figures for it; it counts for nothing here.', { part: m[1] })],
+  [/^The pilot's guns fire at (\d+) speeds - (.+) - so the HUD shows \d+ pips, and a lead that lands one gun misses the other\.$/,
+    (m) => tx('The pilot\'s guns fire at {count} speeds - {guns} - so the HUD shows {count} pips, and a lead that lands one gun misses the other.', {
+      count: m[1],
+      guns: m[2].split(', ').map((row) => row.replace(/^(.+) at (.+) m\/s$/, (all, guns, speed) => tx('{guns} at {speed} m/s', { guns, speed }))).join(', '),
+    })],
+  // The cargo fit's reasons.
+  [/^No crate of (\d+) SCU is known; the install describes 1, 2, 4, 8, 16, 24 and 32\.$/,
+    (m) => tx('No crate of {size} SCU is known; the install describes 1, 2, 4, 8, 16, 24 and 32.', { size: m[1] })],
+  [/^A (\d+) SCU crate is bigger than any box this hull's grids accept - the largest they take is (.+)\.$/,
+    (m) => tx('A {size} SCU crate is bigger than any box this hull\'s grids accept - the largest they take is {box}.', { size: m[1], box: m[2] })],
+  // A fire mode's condition, read from the game files.
+  [/^heat at or above (\d+)%$/, (m) => tx('heat at or above {percent}%', { percent: m[1] })],
+  [/^heat above (\d+)%$/, (m) => tx('heat above {percent}%', { percent: m[1] })],
+  [/^heat at or below (\d+)%$/, (m) => tx('heat at or below {percent}%', { percent: m[1] })],
+  [/^heat below (\d+)%$/, (m) => tx('heat below {percent}%', { percent: m[1] })],
+  [/^heat at (\d+)%$/, (m) => tx('heat at {percent}%', { percent: m[1] })],
+  // A recipe's choice of materials.
+  [/^any (\d+) of: (.+)$/, (m) => tx('any {count} of: {materials}', { count: m[1], materials: m[2] })],
+  // The rock calculator's notes on a fit.
+  [/^Short by (\d+)%: a gadget that cuts resistance, or an active module that raises power, is expected to make it up\.$/, (m) => tx('Short by {percent}%: a gadget that cuts resistance, or an active module that raises power, is expected to make it up.', { percent: m[1] })],
+  [/^Delivers (.+) of (.+) needed: more heads on the rock, or a lighter rock\.$/, (m) => tx('Delivers {delivered} of {required} needed: more heads on the rock, or a lighter rock.', { delivered: m[1], required: m[2] })],
+  [/^Instability (\d+)% after the fit: the charge will wander; a module or gadget that damps it helps more than power here\.$/, (m) => tx('Instability {percent}% after the fit: the charge will wander; a module or gadget that damps it helps more than power here.', { percent: m[1] })],
+  [/^By the game's constants the rock holds (.+) energy and sheds (.+) a second; the window is (\d+)% of the gauge\.$/, (m) => tx('By the game\'s constants the rock holds {capacity} energy and sheds {decay} a second; the window is {window}% of the gauge.', { capacity: m[1], decay: m[2], window: m[3] })],
+  // An entity card's facts, holding and subtitle.
+  [/^(\d[\d,]*) recorded, last (.+)$/, (m) => tx('{count} recorded, last {date}', { count: m[1], date: m[2] })],
+  [/^(\d[\d,]*) recorded$/, (m) => tx('{count} recorded', { count: m[1] })],
+  [/^(.+) SCU sold over (\d+) runs?(?:, (.+) aUEC)?$/, (m) => `${txn(Number(m[2]), '{scu} SCU sold over {count} run', '{scu} SCU sold over {count} runs', { scu: m[1] })}${m[3] ? `, ${m[3]} aUEC` : ''}`],
+  [/^(\d+) buy it from you, (\d+) sell it$/, (m) => tx('{buy} buy it from you, {sell} sell it', { buy: m[1], sell: m[2] })],
+  [/^(.+) aUEC to expedite, ~(.+)m standard$/, (m) => tx('{fee} aUEC to expedite, ~{minutes}m standard', { fee: m[1], minutes: m[2] })],
+  [/^(.+) aUEC to expedite$/, (m) => tx('{fee} aUEC to expedite', { fee: m[1] })],
+  [/^(?:(S\d+) · )?grade ([A-Z])$/, (m) => [m[1], tx('grade {grade}', { grade: m[2] })].filter(Boolean).join(' · ')],
+  [/^(\d+) of your things are here$/, (m) => txn(Number(m[1]), '{count} of your things is here', '{count} of your things are here')],
+  [/^flown (\d+) times?$/, (m) => txn(Number(m[1]), 'flown {count} time', 'flown {count} times')],
+  [/^across (\d+) sessions?, last (.+)$/, (m) => txn(Number(m[1]), 'across {count} session, last {date}', 'across {count} sessions, last {date}', { date: m[2] })],
+  [/^best price at (.+)$/, (m) => tx('best price at {place}', { place: m[1] })],
+  [/^sell (.+) here$/, (m) => tx('sell {commodity} here', { commodity: m[1] })],
+  // The haul plan's notes.
+  [/^1 of (\d+) contracts? has no screenshot of its card: open it on the Contracts app's Accepted tab and take one, and its pickups and SCU will be read\.$/,
+    (m) => txn(Number(m[1]), '1 of {count} contract has no screenshot of its card: open it on the Contracts app\'s Accepted tab and take one, and its pickups and SCU will be read.', '1 of {count} contracts has no screenshot of its card: open it on the Contracts app\'s Accepted tab and take one, and its pickups and SCU will be read.')],
+  [/^(\d+) of (\d+) contracts have no screenshot of their card: open each on the Contracts app's Accepted tab and take one, and its pickups and SCU will be read\.$/,
+    (m) => tx('{unread} of {count} contracts have no screenshot of their card: open each on the Contracts app\'s Accepted tab and take one, and its pickups and SCU will be read.', { unread: m[1], count: m[2] })],
+  [/^Not on the map yet: (.+)\. A place is on the map once the logs have seen you there; the stop keeps its name either way\.$/,
+    (m) => tx('Not on the map yet: {places}. A place is on the map once the logs have seen you there; the stop keeps its name either way.', { places: m[1] })],
+  [/^(\d+) pickups, places unknown until this card is photographed$/, (m) => tx('{count} pickups, places unknown until this card is photographed', { count: m[1] })],
+  [/^(\d+) drop-offs, places unknown until this card is photographed$/, (m) => tx('{count} drop-offs, places unknown until this card is photographed', { count: m[1] })],
+  [/^(\d[\d,]*) SCU remaining for this contract; the amount at each pickup was not read$/, (m) => tx('{scu} SCU remaining for this contract; the amount at each pickup was not read', { scu: m[1] })],
   // Summaries.
   [/^(.+), (\d+) parts named$/, (m) => txn(Number(m[2]), '{ship}, {count} part named', '{ship}, {count} parts named', { ship: tx(m[1]) })],
   [/^(\d+) things named$/, (m) => txn(Number(m[1]), '{count} thing named', '{count} things named')],
@@ -7873,14 +7930,25 @@ function screenText(text) {
   if (QW_LANGUAGE === 'en' || typeof text !== 'string' || !text) return text;
   const fixed = tx(text);
   if (fixed !== text) return fixed;
-  // Two notes joined into one: each is its own sentence. Split before the
-  // shapes, or the first one swallows the second as its list.
-  if (text.includes('; ')) return text.split('; ').map(screenText).join('; ');
+  // Whole sentences first: several carry a "; " of their own. A list shape
+  // stops at ";" so it cannot swallow a second note joined after it.
   for (const [shape, say] of SCREEN_SENTENCES) {
     const match = shape.exec(text);
     if (match) return say(match);
   }
+  // Two notes joined into one: each is its own sentence.
+  if (text.includes('; ')) return text.split('; ').map(screenText).join('; ');
   return text;
+}
+
+/*
+ * Every other sentence the server writes goes through the same shapes. Most
+ * of them are stored or cached - a fire mode's condition and a recipe's
+ * materials come out of the game files once - and the rest are computed on
+ * each request; one mechanism for both keeps one catalogue and one test.
+ */
+function serverText(text) {
+  return screenText(text);
 }
 
 /** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
@@ -9537,7 +9605,7 @@ async function trackWikelo(trade, card, button, said) {
   try {
     const response = await fetch(`/api/wikelo/${encodeURIComponent(trade.id)}/track`, { method: 'POST' });
     const answer = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(answer?.trouble || `track -> ${response.status}`);
+    if (!response.ok) throw new Error(serverText(answer?.trouble) || `track -> ${response.status}`);
 
     // The card alone is redrawn as tracked; the rest of the page keeps its
     // scroll and its search, and the sentence below the button stays put.
@@ -10555,7 +10623,7 @@ function sharedPointCard(row) {
         `/api/imports/${encodeURIComponent(row.imported.id)}/points/keep?at=${encodeURIComponent(row.at)}`,
         { method: 'POST' });
       const answer = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(answer?.trouble || `keep -> ${response.status}`);
+      if (!response.ok) throw new Error(serverText(answer?.trouble) || `keep -> ${response.status}`);
       said.textContent = tx('Kept — it is in your points above.');
       loadOwnPoints().catch(() => {});
     } catch (e) {
@@ -11304,7 +11372,7 @@ async function controlsApplyAxes(device, button) {
       body: JSON.stringify({ instance: device.instance, curves, deadzones, how: controlsModel.gameRunning ? 'export' : 'live' }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) { note.textContent = result.message || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
+    if (!response.ok) { note.textContent = serverText(result.message) || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
     note.textContent = result.how === 'live'
       ? tx('Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.')
       : tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
@@ -11425,7 +11493,7 @@ async function loadControlsCheck() {
   try { result = await getJson('/api/controls/check'); }
   catch { note.textContent = tx('The check could not be run.'); return; }
 
-  if (!result.ready) { note.textContent = result.reason || tx('Not ready.'); return; }
+  if (!result.ready) { note.textContent = serverText(result.reason) || tx('Not ready.'); return; }
 
   const c = result.counts || {};
   const names = result.names || {};
@@ -11985,7 +12053,7 @@ function paintControlsLive() {
   if (!note) return;
   if (!controlsLive) { note.textContent = ''; return; }
   if (!controlsLive.available) {
-    note.textContent = controlsLive.reason || tx('The sticks cannot be read here.');
+    note.textContent = serverText(controlsLive.reason) || tx('The sticks cannot be read here.');
     return;
   }
   const live = controlsLiveDevice(device);
@@ -12143,7 +12211,7 @@ async function controlsApplyBindings(button) {
       }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) { note.textContent = result.message || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
+    if (!response.ok) { note.textContent = serverText(result.message) || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
     controlsPending = [];
     if (result.how === 'live') {
       await loadControls();
@@ -12505,7 +12573,7 @@ async function controlsRestore(backup, button) {
     const response = await fetch('/api/controls/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: backup.id }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      note.textContent = result.message || result.title || tx('The restore failed ({status}).', { status: response.status });
+      note.textContent = serverText(result.message) || result.title || tx('The restore failed ({status}).', { status: response.status });
       return;
     }
     note.textContent = result.keptBefore
@@ -12539,7 +12607,7 @@ async function controlsImportFile(file) {
     body: file,
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || String(response.status));
+  if (!response.ok) throw new Error(serverText(result.message) || String(response.status));
   note.textContent = result.taken
     ? tx('Added: {bindings} on {devices}.', {
       bindings: txn(result.bindings, '{count} binding', '{count} bindings'),
@@ -13103,7 +13171,7 @@ $('#install-path-save')?.addEventListener('click', async (e) => {
 
     status.textContent = response.ok
       ? tx('Found {channel}. Restart Quantum Wake to read it.', { channel: result.channel })
-      : result.message || tx('That folder does not hold Star Citizen logs.');
+      : serverText(result.message) || tx('That folder does not hold Star Citizen logs.');
 
     if (response.ok) status.classList.add('inward');
   } catch {
@@ -13195,7 +13263,7 @@ async function openMfdSetup() {
       return true;
     }
     const answer = await response.json().catch(() => ({}));
-    if (status) status.textContent = answer.message || tx('MFD setup could not be opened from here.');
+    if (status) status.textContent = serverText(answer.message) || tx('MFD setup could not be opened from here.');
   } catch {
     if (status) status.textContent = tx('The app did not answer. Use MFD setup… in the tray, or Ctrl+Alt+M.');
   }
@@ -15211,7 +15279,7 @@ async function fitCargo() {
       body: JSON.stringify({ ship: garageCargo.class, crates }),
     });
     data = await response.json();
-    if (!response.ok) { verdict.textContent = data.message || tx('The fit could not be worked out.'); verdict.className = 'garage-cargo-verdict'; return; }
+    if (!response.ok) { verdict.textContent = serverText(data.message) || tx('The fit could not be worked out.'); verdict.className = 'garage-cargo-verdict'; return; }
   } catch {
     verdict.textContent = tx('The fit could not be worked out.');
     verdict.className = 'garage-cargo-verdict';
@@ -15242,7 +15310,7 @@ function renderCargoVerdict(data) {
     verdict.textContent = load.scu > s.capacityScu
       ? tx('Does not fit: {scu} SCU asked of a {capacity} SCU hold. Left out: {left}.', { scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu), left })
       : byRule
-        ? `${tx('Does not fit: {left} left out.', { left })} ${s.reasons.map((r) => tx(r)).join(' ')}`
+        ? `${tx('Does not fit: {left} left out.', { left })} ${s.reasons.map(serverText).join(' ')}`
         : tx('No packing found for {left}: {placed} of {scu} SCU placed in {capacity}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.',
           { left, placed: fmtInt(s.placedScu), scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu) });
   }
@@ -15648,7 +15716,7 @@ function renderGarage(data, stock) {
   sheet.append(sheetGroup('Weapons', 'parts', [
     // The caveat rides on both rows it moves guns between: the split is the
     // one figure read from a port name, and on seven hulls the dump disagrees.
-    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : tx('No guns the pilot fires.'), w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
+    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : tx('No guns the pilot fires.'), serverText(w.caveat)].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
     row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
     row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
     // One lead indicator per projectile speed: two speeds is two pips on the
@@ -15709,7 +15777,7 @@ function renderGarage(data, stock) {
   const notes = $('#garage-notes');
   notes.textContent = '';
   notes.hidden = !(s.notes && s.notes.length);
-  for (const note of s.notes || []) notes.append(el('div', null, tx(note)));
+  for (const note of s.notes || []) notes.append(el('div', null, serverText(note)));
   if (data.industrialPortsKnown === false && /mining|salvage/i.test(`${ship.role || ''} ${ship.career || ''}`)) {
     notes.hidden = false;
     notes.append(el('div', null, tx('Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.')));
@@ -16718,7 +16786,7 @@ async function shopForBench(onlyIfExists = false) {
     const problem = await res.json().catch(() => null);
     result.textContent = '';
     result.hidden = false;
-    result.append(el('span', 'muted', problem?.message || tx('The list could not be written.')));
+    result.append(el('span', 'muted', serverText(problem?.message) || tx('The list could not be written.')));
     return;
   }
 
@@ -17617,7 +17685,7 @@ function renderHaulPlan(host, plan) {
       card.append(el('div', 'muted haul-progress', bits.join(' · ')));
     }
 
-    if (c.note) card.append(el('div', 'muted haul-note', c.note));
+    if (c.note) card.append(el('div', 'muted haul-note', serverText(c.note)));
     if (c.shot) card.append(el('div', 'muted haul-note', tx('read from {file}', { file: c.shot })));
 
     section.append(card);
@@ -17643,7 +17711,7 @@ function renderHaulPlan(host, plan) {
         const delivered = a.scuDone ? ` (${tx('{count} delivered', { count: a.scuDone })})` : '';
         const verb = a.kind === 'load' ? tx('load') : a.kind === 'unload' ? tx('unload') : a.kind;
         what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
-          `${verb} ${scu}${a.commodity || tx('cargo')}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+          `${verb} ${scu}${a.commodity || tx('cargo')}${delivered} — ${a.contractTitle}${a.note ? ` (${serverText(a.note)})` : ''}`));
       }
       if (stop.aboard?.length) {
         const cargo = stop.aboard.map((item) => {
@@ -17654,7 +17722,7 @@ function renderHaulPlan(host, plan) {
         }).join(' · ');
         what.append(el('div', 'muted haul-aboard', tx('projected aboard after this stop: {cargo}', { cargo })));
         for (const item of stop.aboard.filter((item) => item.amountUnknown)) {
-          what.append(el('div', 'muted haul-cargo-note', item.note
+          what.append(el('div', 'muted haul-cargo-note', serverText(item.note)
             || tx('The amount of {commodity} at each pickup was not read. Check this contract\'s cargo details before loading.', { commodity: item.commodity })));
         }
       }
@@ -17685,7 +17753,7 @@ function renderHaulPlan(host, plan) {
           make.textContent = `✓ ${result.title} — ${txn(result.stops, '{count} stop, tracked', '{count} stops, tracked')}`;
           if (typeof loadTrips === 'function') loadTrips().catch(() => {});
         } else {
-          make.textContent = result?.message || tx('could not plan');
+          make.textContent = serverText(result?.message) || tx('could not plan');
           make.disabled = false;
 
           // The run moved under it: show the new one rather than leave the
@@ -17693,7 +17761,7 @@ function renderHaulPlan(host, plan) {
           // goes with it - re-rendering the panel takes this button, and its
           // text, with it.
           if (result?.planId) {
-            haulPlanNotice = result.message;
+            haulPlanNotice = serverText(result.message);
             loadJobContracts().catch(() => {});
           }
         }
@@ -17708,7 +17776,7 @@ function renderHaulPlan(host, plan) {
       tx('Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.')));
   }
 
-  for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));
+  for (const note of plan.notes || []) section.append(el('p', 'muted caption', serverText(note)));
 
   host.append(section);
 }
@@ -18643,7 +18711,7 @@ async function loadTextOverlay() {
   $('#textoverlay-install').disabled = !!state.problem;
 
   if (state.problem) {
-    status.textContent = state.problem;
+    status.textContent = serverText(state.problem);
     tiles('#textoverlay-summary', []);
     $('#textoverlay-table tbody').textContent = '';
     return;
@@ -18761,7 +18829,7 @@ function initTextOverlay() {
       .catch(() => ({ problem: tx('The write did not finish.') }));
 
     if (answer.problem) {
-      $('#textoverlay-status').textContent = answer.problem;
+      $('#textoverlay-status').textContent = serverText(answer.problem);
       return;
     }
 
@@ -18778,7 +18846,7 @@ function initTextOverlay() {
       .then((r) => r.json())
       .catch(() => ({ problem: tx('The removal could not be started.') }));
 
-    if (answer.problem) $('#textoverlay-status').textContent = answer.problem;
+    if (answer.problem) $('#textoverlay-status').textContent = serverText(answer.problem);
 
     await loadTextOverlay();
   });
@@ -18804,7 +18872,7 @@ function initStarStrings() {
     install.disabled = false;
 
     if (answer.problem) {
-      $('#starstrings-status').textContent = answer.problem;
+      $('#starstrings-status').textContent = serverText(answer.problem);
       return;
     }
 
@@ -19354,7 +19422,7 @@ async function sendImport(text, sourceName, force) {
   }
 
   if (!response.ok) {
-    status.textContent = (answer && answer.message) || tx('That file could not be read.');
+    status.textContent = serverText((answer && answer.message)) || tx('That file could not be read.');
     return;
   }
 
@@ -19671,7 +19739,7 @@ async function planRestore(text) {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    status.textContent = body?.problem || tx('That file could not be read.');
+    status.textContent = serverText(body?.problem) || tx('That file could not be read.');
     return;
   }
 
@@ -19782,7 +19850,7 @@ async function applyRestore() {
     const body = await response.json().catch(() => null);
 
     if (!response.ok) {
-      status.textContent = body?.problem || tx('Nothing was restored.');
+      status.textContent = serverText(body?.problem) || tx('Nothing was restored.');
       return;
     }
 
@@ -20091,7 +20159,7 @@ async function saveExport() {
 
     if (!response.ok) {
       const problem = await response.json().catch(() => null);
-      status.textContent = problem?.message || tx('The file could not be built.');
+      status.textContent = serverText(problem?.message) || tx('The file could not be built.');
       return;
     }
 
@@ -22269,7 +22337,7 @@ async function loadGameData() {
   }[state?.state] || '';
 
   if (problem) {
-    problem.textContent = state?.problem || '';
+    problem.textContent = serverText(state?.problem) || '';
     problem.hidden = !state?.problem;
   }
 
@@ -22302,7 +22370,7 @@ function gameDataExcuse() {
   }
 
   if (gameDataState?.state === 'noinstall') return tx('No game install was found.');
-  if (gameDataState?.state === 'failed') return gameDataState.problem;
+  if (gameDataState?.state === 'failed') return serverText(gameDataState.problem);
 
   return null;
 }
@@ -24887,7 +24955,7 @@ function renderKitPrepare() {
   if (!preparing) return;
 
   $('#kit-prepare-title').textContent = tx('Preparing {kit}', { kit: preparing.name });
-  $('#kit-prepare-rule').textContent = preparing.rule;
+  $('#kit-prepare-rule').textContent = serverText(preparing.rule);
 
   const body = $('#kit-prepare-table').querySelector('tbody');
   body.textContent = '';
@@ -27654,7 +27722,7 @@ function updateNowButton(result) {
       if (!response.ok) {
         // The server's own words: it knows whether the folder was writable,
         // the download was short, or something had the file open.
-        $('#update-detail').textContent = answer?.message || tx('The update could not be applied.');
+        $('#update-detail').textContent = serverText(answer?.message) || tx('The update could not be applied.');
         install.textContent = tx('Try again');
         install.disabled = false;
         return;

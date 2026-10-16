@@ -94,8 +94,9 @@ public class LocaleCatalogueTests
             scripts.Contains($"'{key.Replace("'", "\\'")}'", StringComparison.Ordinal)
             || scripts.Contains($"\"{key}\"", StringComparison.Ordinal);
 
+        // Escaped as C# writes it: a path's backslashes are doubled in the source.
         bool InServer(string key) =>
-            server.Contains($"\"{key.Replace("\"", "\\\"")}\"", StringComparison.Ordinal);
+            server.Contains($"\"{key.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"", StringComparison.Ordinal);
 
         var orphans = Read(language).Keys
             .Where(key => !markup.Contains(Plain(key), StringComparison.Ordinal) && !InScript(key) && !InServer(key))

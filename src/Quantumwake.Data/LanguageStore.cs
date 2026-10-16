@@ -37,8 +37,8 @@ public sealed class LanguageStore
     [
         new(English, "English", null),
         new("fr", "Français",
-            "traduit pour l’instant : la navigation, la recherche, la palette de commandes, "
-            + "les bandeaux d’avertissement, la page Direct, la Carte, le Journal, tous les Réglages et toutes les pages Opérations, Vol, Économie, Référence et Hangar, et l’aide ; quelques phrases écrites par le serveur sont encore en anglais"),
+            "traduit pour l’instant : tout le tableau de bord et l’overlay, ce que l’application écrit elle-même compris ; "
+            + "les pages MFD et le menu de la zone de notification sont encore en anglais"),
     ];
 
     private readonly string _path;
