@@ -549,3 +549,31 @@ in the same order and zipped onto it, which keeps 30-odd long keys with
   "{shown} sur {total}".
 - No WebTest: the stub page has no static markup, so Help is checked by the
   render, as captions and headings have been since 0.18.9.
+
+### 0.18.15
+
+Phase 3, first half: what a screenshot reading says - its summary, the
+checks against the logs (subject, claim, belief, note), a wallet or tooltip
+trouble, the Fleet Manager's scope line. 90 entries added, 3,948 in all.
+
+- **Translated on the page, by shape, not in C#.** A reading's sentences are
+  written when the screenshot is read and stored in
+  `screen-readings.json`, so translating them at the source would leave every
+  reading already taken in English - and every new one in whatever language
+  was on when it was read. `screenText()` matches the shapes ScreenChecks and
+  the frame readers write ("{n} aUEC from the ledger", "the {ship} as it
+  ships", "3 parts named, 1 port empty, …") and translates those, keeping the
+  names and figures, as `feedText()` does for the Now feed. A sentence it does
+  not know is shown as written.
+- **Notes joined with "; " are split before the shapes**, or the first shape
+  swallows the second as its list.
+- **A list after a head takes the page's colon** through a `{label}: {value}`
+  key, so French gets its space.
+- `ScreenFrenchTests` holds the shapes as the server writes them, one row
+  each; a change to the server's wording shows up there as English rather
+  than on a reader's page.
+- Still English, for the second half: sentences the server computes on each
+  request rather than stores - Garage notes, cargo-fit reasons, a fire mode's
+  condition, crafting's "any 2 of:", the haul plan's pickups clause, why the
+  sticks cannot be read live. Those are what "the same catalogue, read in
+  C#" is for.

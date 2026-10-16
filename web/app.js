@@ -7710,7 +7710,7 @@ async function parseClipboard(quiet = false) {
 
   if (!found.found) {
     if (!quiet) {
-      screenSay(found.trouble || tx('nothing to read'));
+      screenSay(screenText(found.trouble) || tx('nothing to read'));
       screenShow(() => {});
     }
     return;
@@ -7770,19 +7770,132 @@ const SCREEN_VERDICTS = {
   unchecked: tx('not checked'),
 };
 
+/*
+ * What a screen reading says, in the page language.
+ *
+ * The server writes a reading's summary and checks in English when the
+ * screenshot is read, and keeps them that way in screen-readings.json, so
+ * translating at the source would leave every reading already taken in the
+ * language it was read in. They come in a fixed set of shapes - "{n} aUEC
+ * from the ledger", "the {ship} as it ships" - so the page matches the shape
+ * and translates that, keeping the names and figures, as the Now feed does.
+ * A sentence that matches nothing is shown as written.
+ */
+const SCREEN_SENTENCES = [
+  [/^nothing in the atlas reads like "(.+)", so only the system was compared$/, (m) => tx('nothing in the atlas reads like "{place}", so only the system was compared', { place: m[1] })],
+  [/^nothing in the atlas reads like "(.+)"$/, (m) => tx('nothing in the atlas reads like "{place}"', { place: m[1] })],
+  [/^nothing in the catalogue reads like "(.+)"$/, (m) => tx('nothing in the catalogue reads like "{name}"', { name: m[1] })],
+  [/^(\d+) things in the catalogue read the same$/, (m) => tx('{count} things in the catalogue read the same', { count: m[1] })],
+  [/^the footer reads as (.+)$/, (m) => tx('the footer reads as {place}', { place: m[1] })],
+  [/^(\d+) open: (.+)$/, (m) => txn(Number(m[1]), '{count} open: {names}', '{count} open: {names}', { names: m[2] })],
+  [/^(\d+) accepted of (\d+)(?:: (.+))?$/, (m) => screenListed(tx('{count} accepted of {capacity}', { count: m[1], capacity: m[2] }), m[3])],
+  [/^(\d+) accepted(?:: (.+))?$/, (m) => screenListed(tx('{count} accepted', { count: m[1] }), m[2])],
+  [/^(\d+) cards read(?:: (.+))?$/, (m) => screenListed(txn(Number(m[1]), '{count} card read', '{count} cards read'), m[2])],
+  [/^on screen but not in the logs: (.+)$/, (m) => tx('on screen but not in the logs: {names}', { names: m[1] })],
+  [/^the tab says (\d+), the logs say (\d+)$/, (m) => tx('the tab says {screen}, the logs say {logs}', { screen: m[1], logs: m[2] })],
+  [/^(\d+) ships? listed(?:: (.*?))?(?: \((\d+) names? did not read\))?$/, (m) => [
+    screenListed(txn(Number(m[1]), '{count} ship listed', '{count} ships listed'),
+      m[2] && m[2].split(', ').map((row) => row.replace(/^(.+) at (.+)$/, (all, ship, place) => tx('{ship} at {place}', { ship, place }))).join(', ')),
+    m[3] ? ` (${txn(Number(m[3]), '{count} name did not read', '{count} names did not read')})` : '',
+  ].join('')],
+  [/^(\d+) ships? flown$/, (m) => txn(Number(m[1]), '{count} ship flown', '{count} ships flown')],
+  [/^never flown in the logs: (.+)$/, (m) => tx('never flown in the logs: {ships}', { ships: m[1] })],
+  [/^(\d+) commodit(?:y|ies) listed(?:, (\d+) named)?(?:: (.+))?$/, (m) => [
+    txn(Number(m[1]), '{count} commodity listed', '{count} commodities listed'),
+    m[2] ? `, ${txn(Number(m[2]), '{count} named', '{count} named')}` : '',
+  ].join('') + (m[3] ? screenListed('', m[3].split(', ').map((row) => row.replace(/^(.+) at (.+) per (.+)$/, (all, commodity, price, unit) => tx('{commodity} at {price} per {unit}', { commodity, price, unit }))).join(', ')) : '')],
+  [/^this kiosk prices in (.+) on the same screen, so the two are kept apart and never converted$/, (m) => tx('this kiosk prices in {units} on the same screen, so the two are kept apart and never converted', { units: m[1].split(' and ').join(` ${tx('and')} `) })],
+  [/^(\d+) organisations listed$/, (m) => txn(Number(m[1]), '{count} organisation listed', '{count} organisations listed')],
+  [/^the dropdown read "(.*)" - looks like (.+), which is not the same as reading it$/, (m) => tx('the dropdown read "{read}" - looks like {ships}, which is not the same as reading it', { read: tx(m[1]), ships: m[2].split(' or ').join(` ${tx('or')} `) })],
+  [/^the dropdown read "(.*)"$/, (m) => tx('the dropdown read "{read}"', { read: tx(m[1]) })],
+  [/^nothing - no factory loadout on file for the (.+)$/, (m) => tx('nothing - no factory loadout on file for the {ship}', { ship: m[1] })],
+  [/^the (.+) as it ships$/, (m) => tx('the {ship} as it ships', { ship: m[1] })],
+  [/^not stock: (.+)$/, (m) => tx('not stock: {parts}', { parts: m[1].split(', ').map((row) => row.replace(/^(.+) in (.+)$/, (all, part, slot) => tx('{part} in {slot}', { part, slot }))).join(', ') })],
+  [/^([\d,]+) aUEC from the ledger$/, (m) => tx('{amount} aUEC from the ledger', { amount: m[1] })],
+  [/^([\d,]+) aUEC arrived without a line in the log since (.+)$/, (m) => tx('{amount} aUEC arrived without a line in the log since {when}', { amount: m[1], when: m[2] })],
+  [/^([\d,]+) aUEC left without a line in the log since (.+)$/, (m) => tx('{amount} aUEC left without a line in the log since {when}', { amount: m[1], when: m[2] })],
+  [/^The loadout estimate at the Fleet Manager: (\d+) items, replacement fee (.+) aUEC\.$/, (m) => txn(Number(m[1]), 'The loadout estimate at the Fleet Manager: {count} item, replacement fee {fee} aUEC.', 'The loadout estimate at the Fleet Manager: {count} items, replacement fee {fee} aUEC.', { fee: m[2] })],
+  [/^The loadout estimate at the Fleet Manager: (\d+) items\.$/, (m) => txn(Number(m[1]), 'The loadout estimate at the Fleet Manager: {count} item.', 'The loadout estimate at the Fleet Manager: {count} items.')],
+  [/^The loadout estimate at the Fleet Manager, replacement fee (.+) aUEC\.$/, (m) => tx('The loadout estimate at the Fleet Manager, replacement fee {fee} aUEC.', { fee: m[1] })],
+  // The fitted-parts claim: "3 parts named, 1 port empty, …", a piece at a time.
+  [/^(\d+ parts? named(?:, .+)?)$/, (m) => m[1].split(', ').map(screenPiece).join(', ')],
+  // Summaries.
+  [/^(.+), (\d+) parts named$/, (m) => txn(Number(m[2]), '{ship}, {count} part named', '{ship}, {count} parts named', { ship: tx(m[1]) })],
+  [/^(\d+) things named$/, (m) => txn(Number(m[1]), '{count} thing named', '{count} things named')],
+  [/^(\d+) contracts accepted$/, (m) => txn(Number(m[1]), '{count} contract accepted', '{count} contracts accepted')],
+  [/^(\d+) contracts read$/, (m) => txn(Number(m[1]), '{count} contract read', '{count} contracts read')],
+  [/^(\d+) ships at the Fleet Manager$/, (m) => txn(Number(m[1]), '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager')],
+  [/^reputation with (.+?)(?:: (.+))?$/, (m) => `${tx('reputation with {organisation}', { organisation: m[1] })}${m[2] ? `: ${m[2]}` : ''}`],
+  [/^a kiosk selling, (\d+) commodities listed$/, (m) => txn(Number(m[1]), 'a kiosk selling, {count} commodity listed', 'a kiosk selling, {count} commodities listed')],
+  [/^a kiosk buying, (\d+) commodities listed$/, (m) => txn(Number(m[1]), 'a kiosk buying, {count} commodity listed', 'a kiosk buying, {count} commodities listed')],
+  [/^a rock scanned: (.+)$/, (m) => tx('a rock scanned: {details}', { details: m[1].split(', ').map(screenPiece).join(', ') })],
+  [/^a refinery order running at (.+?)((?:, .+)?)$/, (m) => `${tx('a refinery order running at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+  [/^a refinery quote at (.+?)((?:[:,] .+)?)$/, (m) => `${tx('a refinery quote at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+  [/^the refinery at (.+?)((?:, .+)?)$/, (m) => `${tx('the refinery at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+];
+
+/* A head and the list after it, joined by the page language's colon. */
+function screenListed(head, list) {
+  if (!list) return head;
+  return head ? tx('{label}: {value}', { label: head, value: list }) : `${tx('{label}: {value}', { label: '', value: list })}`;
+}
+
+/* The clauses a summary strings together after its head, each on its own. */
+const SCREEN_PIECES = [
+  [/^mass unread$/, () => tx('mass unread')],
+  [/^(\d+) parts? named$/, (m) => txn(Number(m[1]), '{count} part named', '{count} parts named')],
+  [/^(\d+) ports? empty$/, (m) => txn(Number(m[1]), '{count} port empty', '{count} ports empty')],
+  [/^(\d+) ports? with nothing read under (?:it|them)$/, (m) => txn(Number(m[1]), '{count} port with nothing read under it', '{count} ports with nothing read under them')],
+  [/^(\d+) not matched$/, (m) => txn(Number(m[1]), '{count} not matched', '{count} not matched')],
+  [/^(\d+)% resistance$/, (m) => tx('{percent}% resistance', { percent: m[1] })],
+  [/^(\d[\d,.]*) cSCU coming back$/, (m) => tx('{amount} cSCU coming back', { amount: m[1] })],
+  [/^(\d[\d,.]*) cSCU in$/, (m) => tx('{amount} cSCU in', { amount: m[1] })],
+  [/^at (\d[\d,.]*)% capacity$/, (m) => tx('at {percent}% capacity', { percent: m[1] })],
+  [/^(.+) left$/, (m) => tx('{time} left', { time: m[1] })],
+];
+
+function screenPiece(text) {
+  for (const [shape, say] of SCREEN_PIECES) {
+    const match = shape.exec(text);
+    if (match) return say(match);
+  }
+  return tx(text);
+}
+
+/* ", a, b" or ": a, b" after a summary's head, each piece translated. */
+function screenPieces(rest) {
+  if (!rest) return '';
+  const lead = rest.slice(0, 2);
+  return lead + rest.slice(2).split(', ').map(screenPiece).join(', ');
+}
+
+function screenText(text) {
+  if (QW_LANGUAGE === 'en' || typeof text !== 'string' || !text) return text;
+  const fixed = tx(text);
+  if (fixed !== text) return fixed;
+  // Two notes joined into one: each is its own sentence. Split before the
+  // shapes, or the first one swallows the second as its list.
+  if (text.includes('; ')) return text.split('; ').map(screenText).join('; ');
+  for (const [shape, say] of SCREEN_SENTENCES) {
+    const match = shape.exec(text);
+    if (match) return say(match);
+  }
+  return text;
+}
+
 /** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
 function screenCheckRow(check) {
   const li = el('li');
   li.append(el('span', `k ${check.verdict}`, SCREEN_VERDICTS[check.verdict] || check.verdict));
 
-  const what = el('span', 'what', `${check.subject}: ${check.claim}`);
+  const what = el('span', 'what', `${tx(check.subject)}: ${screenText(check.claim)}`);
   li.append(what);
 
   // The belief is shown whatever the verdict: an agreement with nothing
   // beside it looks like a screen that was taken on trust.
-  li.append(el('span', 'd', ` · ${tx('logs: {belief}', { belief: check.belief })}`));
+  li.append(el('span', 'd', ` · ${tx('logs: {belief}', { belief: screenText(check.belief) })}`));
 
-  if (check.note) li.append(el('span', 'd', ` · ${check.note}`));
+  if (check.note) li.append(el('span', 'd', ` · ${screenText(check.note)}`));
   return li;
 }
 
@@ -7817,7 +7930,7 @@ function renderSighting(box, s, { full = true } = {}) {
     }
 
     // Said out loud rather than left to be inferred from an empty space.
-    if (s.item.trouble) box.append(el('div', 'muted', s.item.trouble));
+    if (s.item.trouble) box.append(el('div', 'muted', screenText(s.item.trouble)));
 
     const named = (s.item.named || []).filter((n) => n.exact);
 
@@ -7838,14 +7951,14 @@ function renderSighting(box, s, { full = true } = {}) {
 
     // The game's own caveat, carried through as written: this is the ships
     // at one place, not the fleet.
-    if (s.loadout.scope) box.append(el('div', 'muted', s.loadout.scope));
+    if (s.loadout.scope) box.append(el('div', 'muted', screenText(s.loadout.scope)));
 
     if (full) {
       const list = el('ul', 'feed screen-fittings');
 
       for (const f of s.loadout.fittings || []) {
         const li = el('li');
-        li.append(el('span', 'what', f.slot));
+        li.append(el('span', 'what', screenText(f.slot)));
 
         if (f.nothingRead) {
           li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
@@ -8062,14 +8175,14 @@ function renderSighting(box, s, { full = true } = {}) {
 
   if (s.wallet) {
     box.append(el('div', 'muted', tx('Wallet: {balance}', {
-      balance: s.wallet.balance != null ? `${Number(s.wallet.balance).toLocaleString()} aUEC` : s.wallet.trouble,
+      balance: s.wallet.balance != null ? `${Number(s.wallet.balance).toLocaleString()} aUEC` : screenText(s.wallet.trouble),
     })));
   }
 
   if (s.kind === 'MobiGlas' || s.kind === 'Unknown') {
     // The server's summary: the fixed ones translate, the counted ones wait
     // for the server to speak the language, as on the Now card.
-    box.append(el('div', 'muted', tx(s.summary)));
+    box.append(el('div', 'muted', screenText(s.summary)));
 
     // The text is the whole point for a screen with no reader: it is what a
     // reader gets written from.
@@ -8095,7 +8208,7 @@ async function scanScreenshot() {
   const s = await getJson2('/api/screen/scan');
 
   if (!s.shot) {
-    screenSay(s.summary ? tx(s.summary) : tx('nothing read'));
+    screenSay(s.summary ? screenText(s.summary) : tx('nothing read'));
     return;
   }
 
@@ -8275,7 +8388,7 @@ async function renderScreenLog() {
 /** A closed timeline entry still says what the reader found before it asks for attention. */
 function screenReadingTimelineLabel(reading) {
   const kind = SCREEN_KINDS[reading.kind] || reading.kind;
-  let finding = reading.summary ? tx(reading.summary) : '';
+  let finding = reading.summary ? screenText(reading.summary) : '';
   if (!finding && reading.contracts) finding = screenContractsLine(reading.contracts);
   if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || tx('loadout read');
   if (!finding && reading.fleet) finding = txn((reading.fleet.ships || []).length, '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager');
@@ -8352,7 +8465,7 @@ function renderScreenReviewInbox(readings) {
     item.className = 'screen-review-item';
     const summary = document.createElement('summary');
     summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString(QW_DATE_LOCALES)}`;
-    item.append(summary, el('p', 'muted', tx(reading.summary)));
+    item.append(summary, el('p', 'muted', screenText(reading.summary)));
     const image = document.createElement('a');
     image.href = `/api/screen/shots/${encodeURIComponent(reading.shot)}`;
     image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = tx('Open screenshot');
@@ -8398,10 +8511,10 @@ async function rereadReading(reading, button) {
     // the game has since deleted.
     if (!response.ok) {
       const why = await response.json().catch(() => null);
-      throw new Error(why?.trouble || tx('could not read that screenshot again - is it still in the game\'s folder?'));
+      throw new Error(screenText(why?.trouble) || tx('could not read that screenshot again - is it still in the game\'s folder?'));
     }
     const got = await response.json();
-    screenSay(tx('Read again: {summary}', { summary: tx(got.summary) }));
+    screenSay(tx('Read again: {summary}', { summary: screenText(got.summary) }));
     await renderScreenLog();
     loadLedgerWallet().catch(() => {});
   } catch (e) {
@@ -10507,7 +10620,7 @@ function renderNowScreenCard(s) {
 
   // The server's summary: the fixed ones translate, the ones built around a
   // count or a name stay as written until the server speaks the language.
-  $('#now-screen-summary').textContent = tx(s.summary);
+  $('#now-screen-summary').textContent = screenText(s.summary);
   $('#now-screen-when').textContent =
     `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString(QW_DATE_LOCALES)} · ${s.shot}`;
 
@@ -10568,13 +10681,13 @@ async function renderFleetFittings() {
     const card = el('article', 'ship-card');
     card.append(el('div', 'strong', s.ship));
     card.append(el('div', 'muted', tx('as photographed {when}', { when: new Date(s.shotAt).toLocaleString(QW_DATE_LOCALES) })));
-    if (s.scope) card.append(el('div', 'muted', s.scope));
+    if (s.scope) card.append(el('div', 'muted', screenText(s.scope)));
 
     const list = el('ul', 'feed screen-fittings');
 
     for (const f of s.fittings || []) {
       const li = el('li');
-      li.append(el('span', 'what', f.slot));
+      li.append(el('span', 'what', screenText(f.slot)));
 
       if (f.nothingRead) li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
       else if (f.name) {
@@ -15342,7 +15455,7 @@ function renderGaragePhoto() {
   sub.push(txn(fit.ports.length, '{applied} of {count} port read as one part', '{applied} of {count} ports read as one part', { applied: fit.applied }));
   sub.push(fit.changed ? txn(fit.changed, '{count} differs from stock', '{count} differ from stock') : tx('none differ from stock'));
   if (unsettled.length) sub.push(txn(unsettled.length, '{count} not settled by the screenshot and left as stock', '{count} not settled by the screenshot and left as stock'));
-  if (fit.scope) sub.push(fit.scope);
+  if (fit.scope) sub.push(screenText(fit.scope));
   sub.push(tx('from {shot}', { shot: fit.shot }));
   $('#garage-photo-sub').textContent = `${sub.join(' · ')}. ${tx('Ports are matched to the screen\'s labels by kind and order; a screenshot is a moment, not a state.')}`;
 

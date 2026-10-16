@@ -4303,5 +4303,149 @@
   "It sends no identifier, usage or statistics. Version checks and market refreshes are off until you enable them in Settings. Community datasets are also opt-in. Update checks use GitHub's public release feed; nothing is downloaded or installed without your action.": "Il n’envoie aucun identifiant, aucune utilisation ni statistique. Les vérifications de version et les actualisations du marché sont désactivées tant que vous ne les activez pas dans les Réglages. Les données communautaires sont aussi optionnelles. Les vérifications de mise à jour utilisent le flux public des versions de GitHub ; rien n’est téléchargé ni installé sans votre action.",
   "Something is wrong or missing. Where do I say so?": "Quelque chose est faux ou manque. Où le dire ?",
   "Please do. Ask on the <a href=\"https://discord.gg/AV3cDzRs39\" target=\"_blank\" rel=\"noopener noreferrer\">Discord</a>, or raise an issue at <a href=\"https://github.com/peans99/QuantumWake/issues\" target=\"_blank\" rel=\"noreferrer\">github.com/peans99/QuantumWake/issues</a>. A report with the source shown beside the number, or the log line itself, is especially useful.": "Faites-le, s’il vous plaît. Demandez sur le <a href=\"https://discord.gg/AV3cDzRs39\" target=\"_blank\" rel=\"noopener noreferrer\">Discord</a>, ou ouvrez un ticket sur <a href=\"https://github.com/peans99/QuantumWake/issues\" target=\"_blank\" rel=\"noreferrer\">github.com/peans99/QuantumWake/issues</a>. Un rapport avec la source affichée à côté du nombre, ou la ligne de journal elle-même, est particulièrement utile.",
-  "No question matches that. The <a href=\"https://discord.gg/AV3cDzRs39\" target=\"_blank\" rel=\"noopener noreferrer\">Discord</a> is the place to ask one.": "Aucune question ne correspond. Le <a href=\"https://discord.gg/AV3cDzRs39\" target=\"_blank\" rel=\"noopener noreferrer\">Discord</a> est l’endroit pour en poser une."
+  "No question matches that. The <a href=\"https://discord.gg/AV3cDzRs39\" target=\"_blank\" rel=\"noopener noreferrer\">Discord</a> is the place to ask one.": "Aucune question ne correspond. Le <a href=\"https://discord.gg/AV3cDzRs39\" target=\"_blank\" rel=\"noopener noreferrer\">Discord</a> est l’endroit pour en poser une.",
+  "nothing in the atlas reads like \"{place}\", so only the system was compared": "rien dans l’atlas ne ressemble à « {place} », donc seul le système a été comparé",
+  "nothing in the atlas reads like \"{place}\"": "rien dans l’atlas ne ressemble à « {place} »",
+  "the footer reads as {place}": "le pied de carte se lit comme {place}",
+  "on screen but not in the logs: {names}": "à l’écran mais pas dans les journaux : {names}",
+  "the tab says {screen}, the logs say {logs}": "l’onglet dit {screen}, les journaux disent {logs}",
+  "{ship} at {place}": "{ship} à {place}",
+  "never flown in the logs: {ships}": "jamais pilotés dans les journaux : {ships}",
+  "{commodity} at {price} per {unit}": "{commodity} à {price} par {unit}",
+  "this kiosk prices in {units} on the same screen, so the two are kept apart and never converted": "ce kiosque affiche des prix en {units} sur le même écran, donc les deux sont tenus à part et jamais convertis",
+  "the dropdown read \"{read}\" - looks like {ships}, which is not the same as reading it": "la liste déroulante s’est lue « {read} » - ressemble à {ships}, ce qui n’est pas la même chose que de le lire",
+  "the dropdown read \"{read}\"": "la liste déroulante s’est lue « {read} »",
+  "nothing - no factory loadout on file for the {ship}": "rien - aucun équipement d’usine enregistré pour ce vaisseau ({ship})",
+  "the {ship} as it ships": "{ship} tel que livré",
+  "not stock: {parts}": "pas d’origine : {parts}",
+  "{part} in {slot}": "{part} dans {slot}",
+  "{amount} aUEC from the ledger": "{amount} aUEC d’après les comptes",
+  "{amount} aUEC arrived without a line in the log since {when}": "{amount} aUEC arrivés sans ligne dans le journal depuis {when}",
+  "{amount} aUEC left without a line in the log since {when}": "{amount} aUEC partis sans ligne dans le journal depuis {when}",
+  "The loadout estimate at the Fleet Manager, replacement fee {fee} aUEC.": "L’estimation d’équipement au Fleet Manager, frais de remplacement {fee} aUEC.",
+  "reputation with {organisation}": "réputation auprès de {organisation}",
+  "a rock scanned: {details}": "un rocher scanné : {details}",
+  "a refinery order running at {place}": "une commande de raffinage en cours à {place}",
+  "a refinery quote at {place}": "un devis de raffinage à {place}",
+  "the refinery at {place}": "la raffinerie à {place}",
+  "{amount} cSCU coming back": "{amount} cSCU en retour",
+  "at {percent}% capacity": "à {percent} % de capacité",
+  "{count} open: {names}": {
+    "one": "{count} ouvert : {names}",
+    "other": "{count} ouverts : {names}"
+  },
+  "{count} cards read": {
+    "one": "{count} carte lue",
+    "other": "{count} cartes lues"
+  },
+  "{count} ships listed": {
+    "one": "{count} vaisseau listé",
+    "other": "{count} vaisseaux listés"
+  },
+  "{count} names did not read": {
+    "one": "{count} nom illisible",
+    "other": "{count} noms illisibles"
+  },
+  "{count} ships flown": {
+    "one": "{count} vaisseau piloté",
+    "other": "{count} vaisseaux pilotés"
+  },
+  "{count} commodities listed": {
+    "one": "{count} marchandise listée",
+    "other": "{count} marchandises listées"
+  },
+  "{count} organisations listed": {
+    "one": "{count} organisation listée",
+    "other": "{count} organisations listées"
+  },
+  "The loadout estimate at the Fleet Manager: {count} items, replacement fee {fee} aUEC.": {
+    "one": "L’estimation d’équipement au Fleet Manager : {count} objet, frais de remplacement {fee} aUEC.",
+    "other": "L’estimation d’équipement au Fleet Manager : {count} objets, frais de remplacement {fee} aUEC."
+  },
+  "The loadout estimate at the Fleet Manager: {count} items.": {
+    "one": "L’estimation d’équipement au Fleet Manager : {count} objet.",
+    "other": "L’estimation d’équipement au Fleet Manager : {count} objets."
+  },
+  "{ship}, {count} parts named": {
+    "one": "{ship}, {count} pièce nommée",
+    "other": "{ship}, {count} pièces nommées"
+  },
+  "{count} things named": {
+    "one": "{count} chose nommée",
+    "other": "{count} choses nommées"
+  },
+  "{count} contracts accepted": {
+    "one": "{count} contrat accepté",
+    "other": "{count} contrats acceptés"
+  },
+  "a kiosk selling, {count} commodities listed": {
+    "one": "un kiosque qui vend, {count} marchandise listée",
+    "other": "un kiosque qui vend, {count} marchandises listées"
+  },
+  "a kiosk buying, {count} commodities listed": {
+    "one": "un kiosque qui achète, {count} marchandise listée",
+    "other": "un kiosque qui achète, {count} marchandises listées"
+  },
+  "Kiosk": "Kiosque",
+  "Reputation": "Réputation",
+  "Fitted parts": "Pièces montées",
+  "Wallet": "Portefeuille",
+  "(the footer named no place)": "(le pied de carte n’a nommé aucun lieu)",
+  "nothing - no session covers that moment": "rien - aucune session ne couvre ce moment",
+  "the logs have no session running when this was taken": "les journaux n’ont aucune session en cours au moment de la capture",
+  "the footer did not read": "le pied de carte ne s’est pas lu",
+  "accepted contracts listed": "contrats acceptés listés",
+  "no accepted contracts": "aucun contrat accepté",
+  "none open": "aucun ouvert",
+  "the game lists some; the logs saw no acceptance": "le jeu en liste ; les journaux n’ont vu aucune acceptation",
+  "the game says none; the logs may have missed an ending": "le jeu dit aucun ; les journaux ont peut-être manqué une fin",
+  "nothing - the logs have not seen a ship flown yet": "rien - les journaux n’ont encore vu aucun vaisseau piloté",
+  "no ship name read well enough to compare": "aucun nom de vaisseau assez bien lu pour comparer",
+  "where each is stored is new: the logs never say": "l’endroit où chacun est stocké est nouveau : les journaux ne le disent jamais",
+  "the logs record what was paid, never what was asked": "les journaux enregistrent ce qui a été payé, jamais ce qui était demandé",
+  "nothing - the logs never carry a shop's price": "rien - les journaux ne portent jamais le prix d’une boutique",
+  "nothing - the logs never carry reputation": "rien - les journaux ne portent jamais la réputation",
+  "the rank is a highlighted card among identical ones, and a highlight is not text, so it does not read": "le rang est une carte mise en évidence parmi des cartes identiques, et une mise en évidence n’est pas du texte, donc il ne se lit pas",
+  "nothing - the ship did not read": "rien - le vaisseau ne s’est pas lu",
+  "(no ship read)": "(aucun vaisseau lu)",
+  "nothing named, so nothing compared": "rien de nommé, donc rien de comparé",
+  "(did not read)": "(illisible)",
+  "the logs never carry a balance": "les journaux ne portent jamais de solde",
+  "nothing - the logs never carry a balance": "rien - les journaux ne portent jamais de solde",
+  "kept as a baseline; the next wallet read is checked against the ledger's movement since this one": "gardé comme référence ; la prochaine lecture du portefeuille sera vérifiée par rapport aux mouvements des comptes depuis celle-ci",
+  "nothing counted in the ledger yet": "rien de compté dans les comptes pour l’instant",
+  "the balance did not read on this frame - the bar beside it did; another screenshot usually reads": "le solde ne s’est pas lu sur cette image - la barre à côté, si ; une autre capture se lit en général",
+  "(port label did not read)": "(libellé d’emplacement illisible)",
+  "(type did not read)": "(type illisible)",
+  "mass unread": "masse non lue",
+  "a refinery": "une raffinerie",
+  "the map, with no footer read": "la carte, sans pied de carte lu",
+  "{count} parts named": {
+    "one": "{count} pièce nommée",
+    "other": "{count} pièces nommées"
+  },
+  "{count} ports empty": {
+    "one": "{count} emplacement vide",
+    "other": "{count} emplacements vides"
+  },
+  "{count} ports with nothing read under them": {
+    "one": "{count} emplacement sans rien de lu dessous",
+    "other": "{count} emplacements sans rien de lu dessous"
+  },
+  "{count} not matched": {
+    "one": "{count} non associée",
+    "other": "{count} non associées"
+  },
+  "{label}: {value}": "{label} : {value}",
+  "nothing in the catalogue reads like \"{name}\"": "rien dans le catalogue ne ressemble à « {name} »",
+  "{count} things in the catalogue read the same": "{count} choses du catalogue se lisent pareil",
+  "nothing on this frame looked like an item tooltip": "rien sur cette image ne ressemblait à une infobulle d’objet",
+  "the name matched but the details do not": "le nom correspond mais pas les détails",
+  "the name is close but nothing else vouches for it": "le nom est proche mais rien d’autre ne le confirme",
+  "this copy cannot read screenshots - the overlay does that": "cette copie ne peut pas lire les captures - l’overlay s’en charge",
+  "no Star Citizen install found to take screenshots from": "aucune installation de Star Citizen trouvée d’où prendre des captures",
+  "no screenshots yet - press Print Screen in the game and try again": "pas encore de capture - appuyez sur Impr. écran dans le jeu et réessayez",
+  "this copy cannot read the clipboard - the overlay does that": "cette copie ne peut pas lire le presse-papiers - l’overlay s’en charge",
+  "nothing copied": "rien de copié",
+  "what you copied is not a location - type /showlocation in the game first": "ce que vous avez copié n’est pas une position - tapez d’abord /showlocation dans le jeu"
 }
