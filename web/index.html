@@ -1181,7 +1181,7 @@
               <th class="num">Size</th>
               <th>Written</th>
               <th>Session</th>
-              <th class="num">Length</th>
+              <th class="num">Duration</th>
               <th>Handle</th>
               <th>Read</th>
             </tr>
@@ -2690,7 +2690,7 @@
           <option value="power">Most power headroom</option>
         </select>
         <label class="toggle" title="Only consider parts with a known NPC-terminal aUEC seller; crafting and player listings are not included">
-          <input type="checkbox" id="garage-optimise-buyable" /> Terminal aUEC only
+          <input type="checkbox" id="garage-optimise-buyable" /> <span>Terminal aUEC only</span>
         </label>
         <button type="button" class="ghost tiny" id="garage-optimise">Optimise fit</button>
       </div>
@@ -2729,7 +2729,7 @@
       </div>
       <div class="garage-photo-tools" id="garage-photo-tools">
         <label class="muted" title="Open a ship on the bench already fitted as its newest screenshot showed it. Untick to open every ship at stock and start from a photograph only when you press the button.">
-          <input type="checkbox" id="garage-photo-auto" checked> Start from the newest photograph
+          <input type="checkbox" id="garage-photo-auto" checked> <span>Start from the newest photograph</span>
         </label>
         <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
         <span class="muted" id="garage-photo-state"></span>
@@ -2740,7 +2740,7 @@
       <h2 class="spaced">Bench</h2>
       <div class="bench-state">
         <span id="garage-changes" class="muted">Stock fit</span>
-        <label class="toggle compare-against">Compare against
+        <label class="toggle compare-against"><span>Compare against</span>
           <select id="garage-compare" class="select tiny" title="What the struck figures are measured from">
             <option value="">Stock</option>
           </select>
@@ -2853,7 +2853,7 @@
           <option value="price">Cheapest first</option>
           <option value="name">By name</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> Only guns UEX prices</label>
+        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> <span>Only guns UEX prices</span></label>
       </div>
       <p class="muted small" id="armoury-gun-count"></p>
       <div class="table-wrap">
@@ -2865,7 +2865,7 @@
             <th class="num" title="The best mode's damage a second with the trigger held - derived, not the game's">DPS</th>
             <th class="num" title="Rounds in the magazine it ships with">Mag</th>
             <th class="num" title="What a whole magazine does in the best mode - derived">Per mag</th>
-            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop</th>
+            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop-off</th>
             <th class="num" title="UEX's cheapest terminal for the plain gun, or a finish the game names the same">Price</th>
             <th>Cheapest at</th>
           </tr></thead>
@@ -2899,7 +2899,7 @@
           <option value="2">Size 2</option>
           <option value="3">Size 3</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="armoury-kit-priced"> Only ones UEX prices</label>
+        <label class="toggle"><input type="checkbox" id="armoury-kit-priced"> <span>Only ones UEX prices</span></label>
       </div>
       <p class="muted small" id="armoury-kit-count"></p>
 
@@ -3002,7 +3002,7 @@
           <option value="light">Lightest</option>
           <option value="price">Cheapest first</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> Only sets UEX prices</label>
+        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> <span>Only sets UEX prices</span></label>
       </div>
       <p class="muted small" id="armoury-armour-count"></p>
       <p class="muted small" id="armoury-armour-note"></p>

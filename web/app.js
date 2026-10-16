@@ -4438,7 +4438,7 @@ async function loadLoot() {
  * which happens when the date window moves and takes the last of something
  * with it.
  */
-function fillLootFilter(select, all, label) {
+function fillLootFilter(select, all, label, show = (value) => value) {
   if (!select) return '';
 
   const chosen = select.value;
@@ -4454,7 +4454,7 @@ function fillLootFilter(select, all, label) {
   for (const value of values) {
     const option = document.createElement('option');
     option.value = value;
-    option.textContent = value;
+    option.textContent = show(value);
     select.append(option);
   }
 
@@ -4473,7 +4473,7 @@ function fillLootFilter(select, all, label) {
 function lootPriceCell(pickup) {
   if (!(pickup.price > 0)) {
     const td = el('td', 'num muted', '—');
-    td.title = 'No terminal UEX knows about stocks this, so it has no price to report.';
+    td.title = tx('No terminal UEX knows about stocks this, so it has no price to report.');
     return td;
   }
 
@@ -4485,8 +4485,8 @@ function renderLoot(pickups) {
 
   // Built from everything the window holds, not from what survives the other
   // filters - or choosing a kind would empty the place list and strand you.
-  const kind = fillLootFilter($('#loot-kind'), pickups.map((p) => p.category), 'Any kind');
-  const place = fillLootFilter($('#loot-place'), pickups.map((p) => p.place), 'Anywhere');
+  const kind = fillLootFilter($('#loot-kind'), pickups.map((p) => p.category), tx('Any kind'), (kind) => tx(kind));
+  const place = fillLootFilter($('#loot-place'), pickups.map((p) => p.place), tx('Anywhere'));
 
   const rows = pickups.filter((p) =>
     (!term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term))
@@ -4494,13 +4494,13 @@ function renderLoot(pickups) {
     && (!place || p.place === place));
 
   tiles('#loot-summary', [
-    ['New items', rows.length],
-    ['Last 7 days', rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
-    ['Places', new Set(rows.map((p) => p.place)).size],
+    [tx('New items'), rows.length],
+    [tx('Last 7 days'), rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
+    [tx('Places'), new Set(rows.map((p) => p.place)).size],
 
     // What share carries a price, rather than a total: these are first
     // sightings, so summing them would value a wardrobe nobody owns twice over.
-    ['Priced', `${rows.filter((p) => p.price > 0).length} of ${rows.length}`],
+    [tx('Priced'), tx('{shown} of {total}', { shown: rows.filter((p) => p.price > 0).length, total: rows.length })],
   ]);
 
   const body = $('#loot-table tbody');
@@ -4512,8 +4512,8 @@ function renderLoot(pickups) {
     // Name the filter that emptied it. "Nothing in that range" is the wrong
     // explanation for a table a dropdown hid every row from.
     const td = el('td', 'muted', kind || place
-      ? `Nothing matching ${[kind, place].filter(Boolean).join(' at ')} in that range.`
-      : 'Nothing in that range.');
+      ? tx('Nothing matching {filter} in that range.', { filter: [kind, place].filter(Boolean).join(` ${tx('at')} `) })
+      : tx('Nothing in that range.'));
 
     td.colSpan = 5;
     tr.append(td);
@@ -4526,7 +4526,7 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
-    tr.append(el('td', 'muted', pickup.category));
+    tr.append(el('td', 'muted', tx(pickup.category)));
     tr.append(lootPriceCell(pickup));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
@@ -6540,12 +6540,14 @@ function renderArmouryBrief() {
   const pricedWeapons = weapons.filter((w) => w.market?.price).length;
 
   const write = (id, text) => { const node = $(id); if (node) node.textContent = text; };
-  write('#armoury-guns-brief-title', `${fmtInt(weaponFamilies)} weapon ${weaponFamilies === 1 ? 'family' : 'families'}`);
-  write('#armoury-guns-brief-detail', `${fmtInt(counts.weapons ?? weapons.length)} finishes read${armouryModel.itemPricesKnown ? ` · UEX prices ${fmtInt(pricedWeapons)}` : ' · UEX prices unavailable'}`);
-  write('#armoury-armour-brief-title', `${fmtInt(armourSets)} armour ${armourSets === 1 ? 'set' : 'sets'}`);
-  write('#armoury-armour-brief-detail', `${fmtInt(counts.armour ?? armour.length)} pieces read · compare protection and carry space`);
-  write('#armoury-kit-brief-title', `${fmtInt(attachments.length)} attachments`);
-  write('#armoury-kit-brief-detail', `${fmtInt(throwables.length)} grenades · ${fmtInt(knives.length)} knives`);
+  write('#armoury-guns-brief-title', txn(weaponFamilies, '{count} weapon family', '{count} weapon families', { count: fmtInt(weaponFamilies) }));
+  write('#armoury-guns-brief-detail', `${tx('{count} finishes read', { count: fmtInt(counts.weapons ?? weapons.length) })} · ${armouryModel.itemPricesKnown
+    ? tx('UEX prices {count}', { count: fmtInt(pricedWeapons) })
+    : tx('UEX prices unavailable')}`);
+  write('#armoury-armour-brief-title', txn(armourSets, '{count} armour set', '{count} armour sets', { count: fmtInt(armourSets) }));
+  write('#armoury-armour-brief-detail', tx('{count} pieces read · compare protection and carry space', { count: fmtInt(counts.armour ?? armour.length) }));
+  write('#armoury-kit-brief-title', tx('{count} attachments', { count: fmtInt(attachments.length) }));
+  write('#armoury-kit-brief-detail', tx('{grenades} grenades · {knives} knives', { grenades: fmtInt(throwables.length), knives: fmtInt(knives.length) }));
 }
 
 async function loadArmoury() {
@@ -6577,7 +6579,7 @@ async function loadArmoury() {
   if (kind) {
     const keep = kind.value;
     kind.textContent = '';
-    kind.append(new Option('Every kind', ''));
+    kind.append(new Option(tx('Every kind'), ''));
     for (const k of kinds) kind.append(new Option(k, k));
     kind.value = kinds.includes(keep) ? keep : '';
   }
@@ -6589,7 +6591,7 @@ async function loadArmoury() {
   if (slot) {
     const keep = slot.value;
     slot.textContent = '';
-    slot.append(new Option('Every slot', ''));
+    slot.append(new Option(tx('Every slot'), ''));
     for (const s of slots) slot.append(new Option(s, s));
     slot.value = slots.includes(keep) ? keep : '';
   }
@@ -6613,11 +6615,11 @@ function armouryEffectWords(e) {
   const words = [];
   const mul = (value, word, better) => {
     if (value == null || value === 1) return;
-    const span = el('span', `armoury-effect ${(better === 'low' ? value < 1 : better === 'high' ? value > 1 : true) ? 'gain' : 'cost'}`, `×${Math.round(value * 1000) / 1000} ${word}`);
+    const span = el('span', `armoury-effect ${(better === 'low' ? value < 1 : better === 'high' ? value > 1 : true) ? 'gain' : 'cost'}`, `×${Math.round(value * 1000) / 1000} ${tx(word)}`);
     words.push(span);
   };
-  if (e.zoom > 0) words.push(el('span', 'armoury-effect gain', `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''} zoom`));
-  if (e.zeroingMax > 0) words.push(el('span', 'armoury-effect', `zero to ${fmtInt(e.zeroingMax)} m by ${fmtInt(e.zeroingStep)}`));
+  if (e.zoom > 0) words.push(el('span', 'armoury-effect gain', `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''} ${tx('zoom')}`));
+  if (e.zeroingMax > 0) words.push(el('span', 'armoury-effect', tx('zero to {max} m by {step}', { max: fmtInt(e.zeroingMax), step: fmtInt(e.zeroingStep) })));
   mul(e.damage, 'damage', 'high');
   mul(e.fireRate, 'rate', 'high');
   mul(e.spread, 'spread', 'low');
@@ -6629,8 +6631,8 @@ function armouryEffectWords(e) {
   mul(e.chargeTime, 'charge time', 'low');
   mul(e.projectileSpeed, 'projectile speed', 'high');
   mul(e.zoomTime, 'aim-down time', 'low');
-  if (e.pellets) words.push(el('span', `armoury-effect ${e.pellets > 0 ? 'gain' : 'cost'}`, `${e.pellets > 0 ? '+' : ''}${e.pellets} pellets`));
-  if (e.burstShots) words.push(el('span', `armoury-effect ${e.burstShots > 0 ? 'gain' : 'cost'}`, `${e.burstShots > 0 ? '+' : ''}${e.burstShots} burst shots`));
+  if (e.pellets) words.push(el('span', `armoury-effect ${e.pellets > 0 ? 'gain' : 'cost'}`, tx('{count} pellets', { count: `${e.pellets > 0 ? '+' : ''}${e.pellets}` })));
+  if (e.burstShots) words.push(el('span', `armoury-effect ${e.burstShots > 0 ? 'gain' : 'cost'}`, tx('{count} burst shots', { count: `${e.burstShots > 0 ? '+' : ''}${e.burstShots}` })));
   return words;
 }
 
@@ -6642,7 +6644,7 @@ function armouryWhereCell(market) {
   const td = el('td', 'muted', armouryWhere(market));
   const others = (market?.shops || []).slice(1);
   if (others.length) {
-    td.title = `Also at ${others.map((s) => `${s.terminal}${s.place && !s.terminal.toLowerCase().includes(s.place.toLowerCase()) ? `, ${s.place}` : ''} · ${fmtInt(s.price)} aUEC`).join('\n')}`;
+    td.title = tx('Also at {places}', { places: others.map((s) => `${s.terminal}${s.place && !s.terminal.toLowerCase().includes(s.place.toLowerCase()) ? `, ${s.place}` : ''} · ${fmtInt(s.price)} aUEC`).join('\n') });
     td.classList.add('armoury-more');
   }
   return td;
@@ -6651,15 +6653,15 @@ function armouryWhereCell(market) {
 /** Every terminal UEX records for the item, cheapest first, or why there are none. */
 function armouryShopTable(market) {
   const wrap = el('div');
-  wrap.append(el('h4', null, `Sold at${market?.shops?.length ? ` (${market.shops.length})` : ''}`));
+  wrap.append(el('h4', null, `${tx('Sold at')}${market?.shops?.length ? ` (${market.shops.length})` : ''}`));
   if (!market?.shops?.length) {
-    wrap.append(el('p', 'muted small', armouryModel?.itemPricesKnown ? 'UEX records no terminal selling this.' : 'Prices and terminals need UEX, in Settings.'));
+    wrap.append(el('p', 'muted small', armouryModel?.itemPricesKnown ? tx('UEX records no terminal selling this.') : tx('Prices and terminals need UEX, in Settings.')));
     return wrap;
   }
   const table = el('table');
   const head = el('thead');
   const hr = el('tr');
-  for (const [label, cls] of [['Terminal', null], ['Place', null], ['System', null], ['Price', 'num']]) hr.append(el('th', cls, label));
+  for (const [label, cls] of [['Terminal', null], ['Place', null], ['System', null], ['Price', 'num']]) hr.append(el('th', cls, tx(label)));
   head.append(hr);
   table.append(head);
   const body = el('tbody');
@@ -6673,7 +6675,7 @@ function armouryShopTable(market) {
   }
   table.append(body);
   wrap.append(table);
-  wrap.append(el('p', 'muted small', 'UEX\'s price at each terminal, cheapest first; across the item\'s finishes where UEX files them under the same name.'));
+  wrap.append(el('p', 'muted small', tx('UEX\'s price at each terminal, cheapest first; across the item\'s finishes where UEX files them under the same name.')));
   return wrap;
 }
 
@@ -6682,19 +6684,32 @@ function armouryShopTable(market) {
  * picture, every figure the files give it, every terminal that sells it,
  * and its finishes - a click on a finish swaps the picture, as a gun's does.
  */
+/*
+ * The two sentences that name what a kit item is, one pair per noun: French
+ * agrees "seul" and "même" with the noun, so the noun cannot be slotted in.
+ */
+const KIT_NOUN_LINES = {
+  sight: ['The plain sight only.', 'A finish is the same sight in another colour: same figures, its own price.'],
+  barrel: ['The plain barrel only.', 'A finish is the same barrel in another colour: same figures, its own price.'],
+  piece: ['The plain piece only.', 'A finish is the same piece in another colour: same figures, its own price.'],
+  grenade: ['The plain grenade only.', 'A finish is the same grenade in another colour: same figures, its own price.'],
+  knife: ['The plain knife only.', 'A finish is the same knife in another colour: same figures, its own price.'],
+};
+
 function armouryKitDetail(item, noun, facts) {
+  const [plainOnly, sameFinish] = KIT_NOUN_LINES[noun] || KIT_NOUN_LINES.piece;
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', item.name));
-  inner.append(el('div', 'panel-sub', [item.family, item.kind, item.manufacturer || 'maker unnamed', item.class].filter(Boolean).join(' · ')));
+  inner.append(el('div', 'panel-sub', [item.family, item.kind, item.manufacturer || tx('maker unnamed'), item.class].filter(Boolean).join(' · ')));
   let picture = armouryPicture(item.uuid, item.name, item.pictured);
-  if (item.pictured) picture.append(el('span', 'muted small', "The game's own icon of it."));
+  if (item.pictured) picture.append(el('span', 'muted small', tx("The game's own icon of it.")));
   inner.append(picture);
 
-  inner.append(el('h4', null, 'From the files'));
+  inner.append(el('h4', null, tx('From the files')));
   const list = el('dl', 'armoury-facts');
   for (const [label, value] of facts) {
     if (value == null || value === '') continue;
-    list.append(el('dt', null, label));
+    list.append(el('dt', null, tx(label)));
     const dd = el('dd');
     if (Array.isArray(value)) for (const node of value) dd.append(node);
     else dd.textContent = String(value);
@@ -6704,19 +6719,19 @@ function armouryKitDetail(item, noun, facts) {
 
   inner.append(armouryShopTable(item.market));
 
-  inner.append(el('h4', null, `Finishes${item.finishes?.length ? ` (${item.finishes.length})` : ''}`));
-  if (!item.finishes?.length) inner.append(el('p', 'muted small', `The plain ${noun} only.`));
+  inner.append(el('h4', null, `${tx('Finishes')}${item.finishes?.length ? ` (${item.finishes.length})` : ''}`));
+  if (!item.finishes?.length) inner.append(el('p', 'muted small', tx(plainOnly)));
   else {
     const chips = el('div', 'armoury-finishes');
     for (const f of item.finishes) {
       const chip = el('span', 'armoury-finish clickable', f.name);
-      chip.title = 'Show this finish';
+      chip.title = tx('Show this finish');
       chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name, f.pictured); });
-      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : tx('no terminal recorded')));
       chips.append(chip);
     }
     inner.append(chips);
-    inner.append(el('p', 'muted small', `A finish is the same ${noun} in another colour: same figures, its own price.`));
+    inner.append(el('p', 'muted small', tx(sameFinish)));
   }
   return inner;
 }
@@ -6726,20 +6741,23 @@ function armouryAttachmentDetail(a) {
   // The zoom and the zeroing have lines of their own above the chips.
   const words = armouryEffectWords({ ...e, zoom: 0, secondZoom: 0, zeroingMax: 0 });
   return armouryKitDetail(a, a.kind === 'Sight' ? 'sight' : a.kind === 'Barrel' ? 'barrel' : 'piece', [
-    ['Slot', `${a.kind}, size ${a.size}`],
-    ['Zoom', e.zoom > 1 ? `×${e.zoom}${e.secondZoom > 0 ? `, second setting ×${e.secondZoom}` : ''}` : e.zoom === 1 ? 'none: a 1x sight' : null],
-    ['Zeroes to', e.zeroingMax > 0 ? `${fmtInt(e.zeroingMax)} m, in steps of ${fmtInt(e.zeroingStep)}` : null],
-    ['Does', words.length ? words : 'nothing the files put a number on'],
+    ['Slot', tx('{kind}, size {size}', { kind: a.kind, size: a.size })],
+    ['Zoom', e.zoom > 1 ? `×${e.zoom}${e.secondZoom > 0 ? `, ${tx('second setting ×{zoom}', { zoom: e.secondZoom })}` : ''}` : e.zoom === 1 ? tx('none: a 1x sight') : null],
+    ['Zeroes to', e.zeroingMax > 0 ? tx('{max} m, in steps of {step}', { max: fmtInt(e.zeroingMax), step: fmtInt(e.zeroingStep) }) : null],
+    ['Does', words.length ? words : tx('nothing the files put a number on')],
     ['Mass', a.mass ? `${a.mass} kg` : null],
   ]);
 }
 
 function armouryGrenadeDetail(g) {
   return armouryKitDetail(g, 'grenade', [
-    ['Sets off', g.trigger === 'timer' ? `a ${g.fuseSeconds} s fuse` : g.trigger === 'impact' ? 'on impact' : null],
-    ['Blast', g.blast ? `${armouryHit(g.blast.damage)}, full to ${g.blast.radius} m, none past ${g.blast.outerRadius} m` : 'none'],
-    ['Pressure', g.pressure > 0 ? `${fmtInt(g.pressure)}, the game\'s own unit for what it throws` : null],
-    ['Leaves', g.hazard ? `${armouryHit(g.hazard.perHit)} every ${g.hazard.periodSeconds} s within ${g.hazard.radius} m, for as long as it lasts - the files put no number on that` : 'nothing'],
+    ['Sets off', g.trigger === 'timer' ? tx('a {seconds} s fuse', { seconds: g.fuseSeconds }) : g.trigger === 'impact' ? tx('on impact') : null],
+    ['Blast', g.blast ? tx('{hit}, full to {inner} m, none past {outer} m', { hit: armouryHit(g.blast.damage), inner: g.blast.radius, outer: g.blast.outerRadius }) : tx('none')],
+    ['Pressure', g.pressure > 0 ? tx('{pressure}, the game\'s own unit for what it throws', { pressure: fmtInt(g.pressure) }) : null],
+    ['Leaves', g.hazard
+      ? tx('{hit} every {seconds} s within {radius} m, for as long as it lasts - the files put no number on that',
+        { hit: armouryHit(g.hazard.perHit), seconds: g.hazard.periodSeconds, radius: g.hazard.radius })
+      : tx('nothing')],
     ['Mass', g.mass ? `${g.mass} kg` : null],
   ]);
 }
@@ -6748,8 +6766,8 @@ function armouryKnifeDetail(k) {
   return armouryKitDetail(k, 'knife', [
     ['Slash', armouryHit(k.slash)],
     ['Stab', armouryHit(k.stab)],
-    ['Impulse', k.impulse ? `${k.impulse}, the game\'s own unit for the push a hit gives` : null],
-    ['Read from', `${k.config}, the melee table the knife points at`],
+    ['Impulse', k.impulse ? tx('{impulse}, the game\'s own unit for the push a hit gives', { impulse: k.impulse }) : null],
+    ['Read from', tx('{table}, the melee table the knife points at', { table: k.config })],
     ['Mass', k.mass ? `${k.mass} kg` : null],
   ]);
 }
@@ -6804,8 +6822,8 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
   const count = $('#armoury-kit-count');
   if (count) {
     const c = armouryModel.counts || {};
-    count.textContent = `${shown.length} of ${all.length} attachments; the install describes ${c.attachments ?? '?'} counting every finish. `
-      + (armouryModel.itemPricesKnown ? `UEX prices ${all.filter((a) => a.market?.price).length} of them.` : 'Prices need UEX, in Settings.');
+    count.textContent = `${tx('{shown} of {total} attachments; the install describes {finishes} counting every finish.', { shown: shown.length, total: all.length, finishes: c.attachments ?? '?' })} `
+      + (armouryModel.itemPricesKnown ? tx('UEX prices {count} of them.', { count: all.filter((a) => a.market?.price).length }) : tx('Prices need UEX, in Settings.'));
   }
 
   // Sights: the zoom, the zeroing and the aim time are columns, and only
@@ -6816,14 +6834,14 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
     sBody.textContent = '';
     const sightCount = $('#armoury-sights-count');
     if (sightCount) sightCount.textContent = `· ${sights.length}`;
-    if (!sights.length) sBody.append(armouryEmptyRow(q ? 'No sight matches.' : 'The install describes no sight.', 9));
+    if (!sights.length) sBody.append(armouryEmptyRow(q ? tx('No sight matches.') : tx('The install describes no sight.'), 9));
     for (const a of sights) {
       const e = a.effect || {};
       const tr = el('tr');
       tr.append(named(a, [a.family, a.manufacturer].filter(Boolean).join(' · ')));
       tr.append(el('td', 'num', String(a.size)));
       tr.append(el('td', 'num', e.zoom > 0 ? `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''}` : '—'));
-      tr.append(el('td', 'num', e.zeroingMax > 0 ? `${fmtInt(e.zeroingMax)} m by ${fmtInt(e.zeroingStep)}` : '—'));
+      tr.append(el('td', 'num', e.zeroingMax > 0 ? tx('{max} m by {step}', { max: fmtInt(e.zeroingMax), step: fmtInt(e.zeroingStep) }) : '—'));
       const aim = el('td', 'num', e.zoomTime && e.zoomTime !== 1 ? `×${e.zoomTime}` : '—');
       if (e.zoomTime && e.zoomTime !== 1) aim.classList.add(e.zoomTime < 1 ? 'armoury-gain' : 'armoury-cost');
       tr.append(aim);
@@ -6844,13 +6862,17 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
     const rows = shown.filter((a) => a.kind === kind);
     const counter = $(`${id}-count`);
     if (counter) counter.textContent = `· ${rows.length}`;
-    if (!rows.length) body.append(armouryEmptyRow(q ? `No ${noun} matches.` : `The install describes no ${noun} for this slot.`, 7));
+    // One sentence per noun, not the noun slotted in: French agrees with it.
+    const empty = noun === 'barrel'
+      ? (q ? tx('No barrel matches.') : tx('The install describes no barrel for this slot.'))
+      : (q ? tx('No piece matches.') : tx('The install describes no piece for this slot.'));
+    if (!rows.length) body.append(armouryEmptyRow(empty, 7));
     for (const a of rows) {
       const tr = el('tr');
       tr.append(named(a, a.manufacturer));
       tr.append(el('td', null, a.family));
       tr.append(el('td', 'num', String(a.size)));
-      tr.append(chips(el('td'), armouryEffectWords(a.effect), 'nothing the files put a number on'));
+      tr.append(chips(el('td'), armouryEffectWords(a.effect), tx('nothing the files put a number on')));
       tr.append(el('td', 'num', a.finishes?.length ? String(a.finishes.length) : '—'));
       priceCells(tr, a.market);
       const expansion = open(tr, `a:${a.class}`, () => armouryAttachmentDetail(a), 7);
@@ -6875,17 +6897,17 @@ function renderArmouryGrenades(matches, priceCells, open, named) {
   body.textContent = '';
   const q = ($('#armoury-search')?.value || '').trim();
   const grenades = (armouryModel.throwables || []).filter((g) => matches(`${g.name} ${g.manufacturer}`));
-  if (!grenades.length) body.append(armouryEmptyRow(q ? 'No grenade matches.' : 'The install describes no grenade with a blast.', 9));
+  if (!grenades.length) body.append(armouryEmptyRow(q ? tx('No grenade matches.') : tx('The install describes no grenade with a blast.'), 9));
   for (const g of grenades) {
     const tr = el('tr');
     tr.append(named(g, g.manufacturer));
-    tr.append(el('td', null, g.trigger === 'timer' ? `${g.fuseSeconds} s fuse` : g.trigger === 'impact' ? 'impact' : '—'));
-    tr.append(el('td', null, g.blast ? armouryHit(g.blast.damage) : 'none'));
+    tr.append(el('td', null, g.trigger === 'timer' ? tx('{seconds} s fuse', { seconds: g.fuseSeconds }) : g.trigger === 'impact' ? tx('impact') : '—'));
+    tr.append(el('td', null, g.blast ? armouryHit(g.blast.damage) : tx('none')));
     tr.append(el('td', 'num', g.blast ? `${g.blast.radius}–${g.blast.outerRadius} m` : '—'));
     tr.append(el('td', 'num', g.pressure > 0 ? fmtInt(g.pressure) : '—'));
     tr.append(el('td', null, g.hazard
-      ? `${armouryHit(g.hazard.perHit)} every ${g.hazard.periodSeconds} s within ${g.hazard.radius} m`
-      : 'nothing'));
+      ? tx('{hit} every {seconds} s within {radius} m', { hit: armouryHit(g.hazard.perHit), seconds: g.hazard.periodSeconds, radius: g.hazard.radius })
+      : tx('nothing')));
     tr.append(el('td', 'num', g.mass ? String(g.mass) : '—'));
     priceCells(tr, g.market);
     const expansion = open(tr, `g:${g.class}`, () => armouryGrenadeDetail(g), 9);
@@ -6900,17 +6922,18 @@ function renderArmouryKnives(matches, priceCells, open, named) {
   const note = $('#armoury-knife-note');
   if (note) {
     const first = all[0];
-    note.textContent = !all.length ? 'The install describes no knife.'
+    note.textContent = !all.length ? tx('The install describes no knife.')
       : armouryModel.meleeConfigs === 1 && first
-        ? `Every knife the install sells reads from one melee table, ${first.config}: ${armouryHit(first.slash)} a slash, ${armouryHit(first.stab)} a stab. They differ in look, maker and price, and in nothing the files put a number on.`
-        : `The knives read from ${armouryModel.meleeConfigs} melee tables, so their figures differ; each row is its own.`;
+        ? tx('Every knife the install sells reads from one melee table, {table}: {slash} a slash, {stab} a stab. They differ in look, maker and price, and in nothing the files put a number on.',
+          { table: first.config, slash: armouryHit(first.slash), stab: armouryHit(first.stab) })
+        : tx('The knives read from {count} melee tables, so their figures differ; each row is its own.', { count: armouryModel.meleeConfigs });
   }
   const body = $('#armoury-knives tbody');
   if (!body) return;
   body.textContent = '';
   const q = ($('#armoury-search')?.value || '').trim();
   const knives = all.filter((k) => matches(`${k.name} ${k.manufacturer}`));
-  if (!knives.length && q) body.append(armouryEmptyRow('No knife matches.', 8));
+  if (!knives.length && q) body.append(armouryEmptyRow(tx('No knife matches.'), 8));
   for (const k of knives) {
     const tr = el('tr');
     tr.append(named(k, k.manufacturer));
@@ -6948,7 +6971,7 @@ function armouryPrice(market) {
 
 function armouryWhere(market) {
   const best = market?.shops?.[0];
-  if (!best) return armouryModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  if (!best) return armouryModel?.itemPricesKnown ? tx('no terminal recorded') : tx('prices need UEX (Settings)');
   // "Guns Checkmate, Checkmate" says the place twice; the terminal name
   // carries it, so the place is added only when it adds something.
   const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
@@ -6960,7 +6983,7 @@ function armouryHit(d) {
   if (!d) return '—';
   const parts = [
     ['physical', 'ballistic'], ['energy', 'energy'], ['distortion', 'distortion'], ['thermal', 'thermal'], ['biochemical', 'biochemical'], ['stun', 'stun'],
-  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${word}`);
+  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${tx(word)}`);
   return parts.length ? parts.join(' + ') : '—';
 }
 
@@ -6973,10 +6996,13 @@ function fmtDamage(n) {
 function armouryMode(m) {
   let text;
   if (m.kind === 'Beam') {
-    const reach = m.beamFullRange >= m.beamZeroRange ? `to ${fmtInt(m.beamZeroRange)} m` : `to ${fmtInt(m.beamFullRange)} m, none past ${fmtInt(m.beamZeroRange)} m`;
+    const reach = m.beamFullRange >= m.beamZeroRange
+      ? tx('to {range} m', { range: fmtInt(m.beamZeroRange) })
+      : tx('to {full} m, none past {zero} m', { full: fmtInt(m.beamFullRange), zero: fmtInt(m.beamZeroRange) });
     text = `${m.name} ${fmtDamage(m.beamDamagePerSecond?.total)}/s ${reach}`;
   } else if (m.kind === 'Charge') {
-    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` in ${m.chargePellets}` : ''} after ${m.chargeSeconds} s${m.chargeAmmoMultiplier > 1 ? `, ${m.chargeAmmoMultiplier} rounds` : ''}`;
+    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` ${tx('in {count}', { count: m.chargePellets })}` : ''} `
+      + `${tx('after {seconds} s', { seconds: m.chargeSeconds })}${m.chargeAmmoMultiplier > 1 ? `, ${tx('{count} rounds', { count: m.chargeAmmoMultiplier })}` : ''}`;
   } else if (m.kind === 'Burst') {
     text = `${m.name} ${m.burstShots} × ${fmtInt(m.roundsPerMinute)} rpm`;
   } else {
@@ -7002,12 +7028,12 @@ function armouryPicture(uuid, name, fromInstall) {
   const frame = el('div', 'armoury-picture');
   const note = el('span', 'muted small');
   if (!armouryModel?.picturesKnown && !fromInstall) {
-    note.textContent = 'Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).';
+    note.textContent = tx('Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).');
     frame.append(note);
     return frame;
   }
   if (!uuid) {
-    note.textContent = 'No id to ask the wiki with.';
+    note.textContent = tx('No id to ask the wiki with.');
     frame.append(note);
     return frame;
   }
@@ -7017,7 +7043,7 @@ function armouryPicture(uuid, name, fromInstall) {
   img.src = `/api/armoury/picture/${encodeURIComponent(uuid)}`;
   img.addEventListener('error', () => {
     img.remove();
-    note.textContent = 'The wiki has no picture of this one.';
+    note.textContent = tx('The wiki has no picture of this one.');
     frame.append(note);
   });
   frame.append(img);
@@ -7073,8 +7099,10 @@ function renderArmouryGuns() {
   const count = $('#armoury-gun-count');
   if (count) {
     const c = armouryModel.counts || {};
-    count.textContent = `${rows.length} of ${c.plain ?? armouryModel.weapons.length} guns; the install describes ${c.weapons ?? '?'} counting every finish. `
-      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.weapons.filter((w) => w.market?.price).length} of them.` : 'Prices need UEX, in Settings.'}`;
+    count.textContent = `${tx('{shown} of {total} guns; the install describes {finishes} counting every finish.', { shown: rows.length, total: c.plain ?? armouryModel.weapons.length, finishes: c.weapons ?? '?' })} `
+      + (armouryModel.itemPricesKnown
+        ? tx('UEX prices {count} of them.', { count: armouryModel.weapons.filter((w) => w.market?.price).length })
+        : tx('Prices need UEX, in Settings.'));
   }
   for (const w of rows) {
     const best = armouryBestMode(w);
@@ -7085,15 +7113,15 @@ function renderArmouryGuns() {
     if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
     tr.append(name);
     const kind = el('td', null, w.kind);
-    kind.append(el('div', 'armoury-kind', `${w.weight} holster`));
+    kind.append(el('div', 'armoury-kind', armouryHolster(w.weight)));
     tr.append(kind);
     tr.append(el('td', 'num', w.damage?.total > 0
-      ? armouryHit(w.damage) : (w.explosion ? `blast ${armouryHit(w.explosion.damage)}` : '—')));
+      ? armouryHit(w.damage) : (w.explosion ? tx('blast {hit}', { hit: armouryHit(w.explosion.damage) }) : '—')));
     const modes = el('td');
     const list = el('div', 'armoury-modes');
     for (const m of w.modes) {
       const line = el('span', null, armouryMode(m));
-      if (m.condition) line.append(el('span', 'armoury-when', ` when ${m.condition}`));
+      if (m.condition) line.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: m.condition })}`));
       list.append(line);
     }
     modes.append(list);
@@ -7101,7 +7129,7 @@ function renderArmouryGuns() {
     tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
     tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
     tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
-    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : 'none'));
+    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : tx('none')));
     tr.append(el('td', 'num', armouryPrice(w.market)));
     tr.append(el('td', 'muted', armouryWhere(w.market)));
     tr.addEventListener('click', () => {
@@ -7113,28 +7141,36 @@ function renderArmouryGuns() {
   }
 }
 
+/**
+ * The holster a gun takes, as one phrase per size: French puts the size
+ * word on either side of the noun and agrees it, so a "{weight} holster"
+ * template cannot carry it. An unknown size keeps the game's word.
+ */
+const ARMOURY_HOLSTERS = { Small: 'Small holster', Medium: 'Medium holster', Large: 'Large holster' };
+const armouryHolster = (weight) => (ARMOURY_HOLSTERS[weight] ? tx(ARMOURY_HOLSTERS[weight]) : tx('{weight} holster', { weight }));
+
 /** Every mode's figures for one gun, its drop curve, its blast, and every finish with a price. */
 function renderArmouryGunDetail(w) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', w.name));
-  inner.append(el('div', 'panel-sub', `${w.kind} · ${w.weight} holster · ${w.manufacturer || 'maker unnamed'} · ${w.class}`));
+  inner.append(el('div', 'panel-sub', `${w.kind} · ${armouryHolster(w.weight)} · ${w.manufacturer || tx('maker unnamed')} · ${w.class}`));
   let picture = armouryPicture(w.uuid, w.name);
   inner.append(picture);
 
-  inner.append(el('h4', null, 'Fire modes, trigger held'));
+  inner.append(el('h4', null, tx('Fire modes, trigger held')));
   const table = el('table');
   const head = el('thead');
   const hr = el('tr');
   for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Cyclic', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num'], ['Heat', 'num']])
-    hr.append(el('th', cls, label));
+    hr.append(el('th', cls, tx(label)));
   head.append(hr);
   table.append(head);
   const tb = el('tbody');
   for (const m of w.modes) {
     const tr = el('tr');
     const label = el('td', null, armouryMode(m));
-    if (m.condition) label.append(el('span', 'armoury-when', ` when ${m.condition}`));
-    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ' · the magazine’s second load'));
+    if (m.condition) label.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: m.condition })}`));
+    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ` · ${tx('the magazine’s second load')}`));
     tr.append(label);
     tr.append(el('td', 'num', m.kind === 'Beam' ? `${fmtDamage(m.damagePerSecond)}/s` : `${fmtDamage(m.damagePerShot)} (${armouryHit(m.hit)}${m.pellets > 1 || m.chargePellets > 0 ? ` × ${m.chargePellets > 0 && m.kind === 'Charge' ? m.chargePellets : m.pellets}` : ''}${m.kind === 'Charge' ? ` × ${m.chargeDamageMultiplier}` : ''})`));
     tr.append(el('td', 'num', m.roundsPerMinute > 0 ? `${fmtInt(m.roundsPerMinute)} rpm` : '—'));
@@ -7149,31 +7185,39 @@ function renderArmouryGunDetail(w) {
   inner.append(table);
 
   const notes = [];
-  notes.push(`Projectile ${fmtInt(w.projectileSpeed)} m/s for ${w.projectileLifetime} s (${fmtInt(w.projectileSpeed * w.projectileLifetime)} m before it is gone).`);
-  if (w.dropStart > 0) notes.push(`Damage holds to ${fmtInt(w.dropStart)} m, then loses ${w.dropPerMetre} a metre down to ${fmtDamage(w.dropFloor)} at ${fmtInt(w.floorAt)} m.`);
-  else notes.push('No damage drop with distance.');
-  if (w.explosion) notes.push(`On arrival: ${armouryHit(w.explosion.damage)} over ${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''} m.`);
-  if (w.magazine > 0) notes.push(`Magazine ${w.magazine} rounds (${w.magazineClass}).`);
-  else notes.push('The files give this magazine no round count.');
+  notes.push(tx('Projectile {speed} m/s for {seconds} s ({range} m before it is gone).',
+    { speed: fmtInt(w.projectileSpeed), seconds: w.projectileLifetime, range: fmtInt(w.projectileSpeed * w.projectileLifetime) }));
+  if (w.dropStart > 0) {
+    notes.push(tx('Damage holds to {start} m, then loses {loss} a metre down to {floor} at {at} m.',
+      { start: fmtInt(w.dropStart), loss: w.dropPerMetre, floor: fmtDamage(w.dropFloor), at: fmtInt(w.floorAt) }));
+  } else notes.push(tx('No damage drop with distance.'));
+  if (w.explosion) {
+    notes.push(tx('On arrival: {hit} over {radius} m.', {
+      hit: armouryHit(w.explosion.damage),
+      radius: `${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''}`,
+    }));
+  }
+  if (w.magazine > 0) notes.push(tx('Magazine {rounds} rounds ({magazine}).', { rounds: w.magazine, magazine: w.magazineClass }));
+  else notes.push(tx('The files give this magazine no round count.'));
   notes.push(`${Math.round(w.mass * 100) / 100} kg.`);
   inner.append(el('p', 'muted small', notes.join(' ')));
 
   inner.append(armouryShopTable(w.market));
 
-  inner.append(el('h4', null, `Finishes${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
-  if (!w.finishes?.length) inner.append(el('p', 'muted small', 'The plain gun only.'));
+  inner.append(el('h4', null, `${tx('Finishes')}${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
+  if (!w.finishes?.length) inner.append(el('p', 'muted small', tx('The plain gun only.')));
   else {
     const list = el('div', 'armoury-finishes');
     for (const f of w.finishes) {
       const chip = el('span', 'armoury-finish', f.name);
       chip.classList.add('clickable');
-      chip.title = 'Show this finish';
+      chip.title = tx('Show this finish');
       chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
-      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : tx('no terminal recorded')));
       list.append(chip);
     }
     inner.append(list);
-    inner.append(el('p', 'muted small', 'A finish is the same gun in another colour: same figures, its own price.'));
+    inner.append(el('p', 'muted small', tx('A finish is the same gun in another colour: same figures, its own price.')));
   }
   return inner;
 }
@@ -7211,7 +7255,7 @@ function armouryArmourFiltered() {
 /** "70%" - what a hit leaves after the class's multiplier; the same for every piece of the class. */
 function armouryTakes(r) {
   if (!r) return '—';
-  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% energy` : ''}`;
+  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% ${tx('energy')}` : ''}`;
 }
 
 function renderArmouryArmour() {
@@ -7222,8 +7266,10 @@ function renderArmouryArmour() {
   const count = $('#armoury-armour-count');
   if (count) {
     const c = armouryModel.counts || {};
-    count.textContent = `${rows.length} of ${c.sets ?? armouryModel.armour.length} sets, from ${c.armour ?? '?'} pieces in the install. `
-      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.armour.filter((a) => a.market?.price).length} of the sets.` : 'Prices need UEX, in Settings.'}`;
+    count.textContent = `${tx('{shown} of {total} sets, from {pieces} pieces in the install.', { shown: rows.length, total: c.sets ?? armouryModel.armour.length, pieces: c.armour ?? '?' })} `
+      + (armouryModel.itemPricesKnown
+        ? tx('UEX prices {count} of the sets.', { count: armouryModel.armour.filter((a) => a.market?.price).length })
+        : tx('Prices need UEX, in Settings.'));
   }
   const note = $('#armoury-armour-note');
   if (note) {
@@ -7233,8 +7279,11 @@ function renderArmouryArmour() {
     for (const a of armouryModel.armour) if (a.resistances) macros.set(a.resistances.macro, a.resistances);
     const light = macros.get('LightArmor'), medium = macros.get('MediumArmor'), heavy = macros.get('HeavyArmor');
     note.textContent = light && medium && heavy
-      ? `Resistance is by class, not by piece: every light piece lets ${Math.round(light.physical * 100)}% of a hit through, every medium ${Math.round(medium.physical * 100)}%, every heavy ${Math.round(heavy.physical * 100)}% (stun ${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}%). What differs between two pieces of a class is the rest of the row.`
-      : 'Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.';
+      ? tx('Resistance is by class, not by piece: every light piece lets {light}% of a hit through, every medium {medium}%, every heavy {heavy}% (stun {stun}%). What differs between two pieces of a class is the rest of the row.', {
+        light: Math.round(light.physical * 100), medium: Math.round(medium.physical * 100), heavy: Math.round(heavy.physical * 100),
+        stun: `${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}`,
+      })
+      : tx('Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.');
   }
   for (const a of rows) {
     const tr = el('tr');
@@ -7245,10 +7294,10 @@ function renderArmouryArmour() {
     if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
     tr.append(name);
     tr.append(el('td', null, a.slot));
-    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? 'Flight suit' : '—')));
+    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? tx('Flight suit') : '—')));
     tr.append(el('td', 'num', armouryTakes(a.resistances)));
     tr.append(el('td', 'num', a.resistances ? `${Math.round(a.resistances.stun * 100)}%` : '—'));
-    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? `${fmtInt(a.temperatureMin)} to ${fmtInt(a.temperatureMax)} °C` : '—'));
+    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? tx('{min} to {max} °C', { min: fmtInt(a.temperatureMin), max: fmtInt(a.temperatureMax) }) : '—'));
     tr.append(el('td', 'num', a.radiationCapacity > 0 ? `${fmtInt(a.radiationCapacity)} · ${a.radiationDissipation}/s` : '—'));
     tr.append(el('td', 'num', a.capacityMicroScu > 0 ? `${fmtInt(a.capacityMicroScu / 1000)} mSCU` : '—'));
     tr.append(el('td', 'num', a.emSignature > 0 || a.irSignature > 0 ? `${a.emSignature}${a.irSignature > 0 ? ` · IR ${a.irSignature}` : ''}` : '0'));
@@ -7269,28 +7318,35 @@ function renderArmouryArmour() {
 function renderArmouryArmourDetail(a) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', `${a.family} · ${a.slot}`));
-  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || 'maker unnamed'}`));
+  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || tx('maker unnamed')}`));
   let picture = armouryPicture(a.pieces?.[0]?.uuid, a.pieces?.[0]?.name || a.name);
   inner.append(picture);
 
   const facts = [];
+  const pct = (v) => Math.round(v * 100);
   if (a.resistances) {
     const r = a.resistances;
-    facts.push(`Takes ${Math.round(r.physical * 100)}% of ballistic, ${Math.round(r.energy * 100)}% of energy, ${Math.round(r.distortion * 100)}% of distortion, ${Math.round(r.thermal * 100)}% of thermal, ${Math.round(r.biochemical * 100)}% of biochemical and ${Math.round(r.stun * 100)}% of stun damage, ${Math.round(r.impact * 100)}% of an impact's force - the ${r.macro} table, shared by every piece that reads it.`);
-  } else facts.push('No resistance block: it stops nothing.');
-  if (a.protects?.length) facts.push(`Covers ${a.protects.join(', ')}.`);
-  if (a.gForceResistance) facts.push(`G tolerance ${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}.`);
-  if (a.motionPenalty > 0 || a.viewPenalty > 0) facts.push(`Restriction penalty ${Math.round(a.motionPenalty * 100)}% movement, ${Math.round(a.viewPenalty * 100)}% view - the game's own figure; what puts the piece into that state is not read.`);
+    facts.push(tx('Takes {physical}% of ballistic, {energy}% of energy, {distortion}% of distortion, {thermal}% of thermal, {biochemical}% of biochemical and {stun}% of stun damage, {impact}% of an impact\'s force - the {table} table, shared by every piece that reads it.', {
+      physical: pct(r.physical), energy: pct(r.energy), distortion: pct(r.distortion), thermal: pct(r.thermal),
+      biochemical: pct(r.biochemical), stun: pct(r.stun), impact: pct(r.impact), table: r.macro,
+    }));
+  } else facts.push(tx('No resistance block: it stops nothing.'));
+  if (a.protects?.length) facts.push(tx('Covers {parts}.', { parts: a.protects.join(', ') }));
+  if (a.gForceResistance) facts.push(tx('G tolerance {value}.', { value: `${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}` }));
+  if (a.motionPenalty > 0 || a.viewPenalty > 0) {
+    facts.push(tx('Restriction penalty {movement}% movement, {view}% view - the game\'s own figure; what puts the piece into that state is not read.',
+      { movement: pct(a.motionPenalty), view: pct(a.viewPenalty) }));
+  }
   inner.append(el('p', 'muted small', facts.join(' ')));
 
-  inner.append(el('h4', null, `Colours and editions (${a.pieces?.length || 0})`));
+  inner.append(el('h4', null, tx('Colours and editions ({count})', { count: a.pieces?.length || 0 })));
   const list = el('div', 'armoury-finishes');
   for (const p of a.pieces || []) {
     const chip = el('span', 'armoury-finish', p.name);
     chip.classList.add('clickable');
-    chip.title = 'Show this colour';
+    chip.title = tx('Show this colour');
     chip.addEventListener('click', () => { picture = armouryShowPicture(picture, p.uuid, p.name); });
-    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : 'no terminal recorded'));
+    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : tx('no terminal recorded')));
     list.append(chip);
   }
   inner.append(list);
@@ -8423,7 +8479,7 @@ async function loadHangar() {
     got = await getJson('/api/fleet/hangar');
   } catch {
     canvas.textContent = '';
-    canvas.append(el('p', 'muted', 'Could not load the fleet — is the app still running?'));
+    canvas.append(el('p', 'muted', tx('Could not load the fleet — is the app still running?')));
     return;
   }
 
@@ -8470,8 +8526,7 @@ function renderHangar() {
   if (!hangarShips?.available) {
     if (count) count.textContent = '';
     canvas.append(el('p', 'muted',
-      'The sizes and silhouettes come from the game files, and this install has not been read yet — '
-      + 'Settings says when the game data is ready.'));
+      tx('The sizes and silhouettes come from the game files, and this install has not been read yet — Settings says when the game data is ready.')));
     return;
   }
 
@@ -8490,8 +8545,8 @@ function renderHangar() {
 
   const unticked = (hangarShips?.ships || []).length - ships.length;
   if (count) {
-    count.textContent = `${ships.length} ship${ships.length === 1 ? '' : 's'}`
-      + (unticked ? ` · ${unticked} unticked on Fleet` : '');
+    count.textContent = txn(ships.length, '{count} ship', '{count} ships')
+      + (unticked ? ` · ${txn(unticked, '{count} unticked on Fleet', '{count} unticked on Fleet')}` : '');
   }
 
   const mode = $('#hangar-mode')?.value || 'gallery';
@@ -8516,9 +8571,9 @@ function renderHangar() {
   if (!pictured.length) {
     canvas.append(el('p', 'muted', ships.length
       ? comparing
-        ? 'Neither selected ship has a top-down game icon or gallery render, so there is nothing to draw to scale.'
-        : 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
-      : 'No ship has been flown in the logs yet, so there is nothing to draw.'));
+        ? tx('Neither selected ship has a top-down game icon or gallery render, so there is nothing to draw to scale.')
+        : tx('None of the ships flown has a top-down game icon, so there is nothing to draw to scale.')
+      : tx('No ship has been flown in the logs yet, so there is nothing to draw.')));
     showScaleOmissions(unsized, iconless, missing);
     return;
   }
@@ -8560,7 +8615,7 @@ function renderHangar() {
   // turn its full bounding box into an empty slab on the deck.
   for (const [title, group] of groups) {
     if (!group.length) continue;
-    canvas.append(el('h3', 'hangar-group', `${title} · ${group.length}`));
+    canvas.append(el('h3', 'hangar-group', `${tx(title)} · ${group.length}`));
     canvas.append(drawToScale(group, width, scale));
   }
 
@@ -8573,7 +8628,7 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; in a comparison, a hull without one may use its Gallery render inside that same box and is labelled below its name.`));
+    scaleBox.append(el('span', 'muted', ` ${tx('{metres} m — sizes are the game\'s bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; in a comparison, a hull without one may use its Gallery render inside that same box and is labelled below its name.', { metres })}`));
   }
 
   showScaleOmissions(unsized, iconless, missing);
@@ -8598,7 +8653,7 @@ function renderHangarCompareBar() {
 
   for (const [select, index] of [[a, 0], [b, 1]]) {
     select.textContent = '';
-    select.append(new Option(index === 0 ? 'a ship…' : 'another…', ''));
+    select.append(new Option(index === 0 ? tx('a ship…') : tx('another…'), ''));
     for (const name of names) select.append(new Option(name, name));
     select.value = chosen[index] && names.includes(chosen[index]) ? chosen[index] : '';
   }
@@ -8709,7 +8764,7 @@ async function renderHangarComparison() {
 
   box.hidden = false;
   $('#hangar-compare-title').textContent = `${ships[0].name} vs ${ships[1].name}`;
-  $('#hangar-compare-note').textContent = 'Fetching the sheets…';
+  $('#hangar-compare-note').textContent = tx('Fetching the sheets…');
 
   const [sheets, catalogue] = await Promise.all([
     Promise.all(ships.map((s) => compareSheetFor(s.className))),
@@ -8729,7 +8784,7 @@ async function renderHangarComparison() {
   const hr = el('tr');
   hr.append(el('th', null, ''));
   for (const side of sides) hr.append(el('th', 'num', side.ship.name));
-  hr.append(el('th', 'num', 'Difference'));
+  hr.append(el('th', 'num', tx('Difference')));
   head.append(hr);
 
   const body = $('#hangar-compare-table tbody');
@@ -8739,13 +8794,13 @@ async function renderHangarComparison() {
     if (r.group !== group) {
       group = r.group;
       const gr = el('tr', 'compare-group');
-      const td = el('td', null, group);
+      const td = el('td', null, tx(group));
       td.colSpan = 4;
       gr.append(td);
       body.append(gr);
     }
     const tr = el('tr');
-    tr.append(el('td', null, r.label));
+    tr.append(el('td', null, tx(r.label)));
     const [a, b] = r.values;
     const numeric = typeof a === 'number' && typeof b === 'number';
     const winner = r.better && numeric && a !== b ? ((r.better === 'more') === (a > b) ? 0 : 1) : null;
@@ -8768,8 +8823,13 @@ async function renderHangarComparison() {
   }
 
   const missing = sides.filter((s) => !s.sheet).map((s) => s.ship.name);
-  const parts = ['Size from the game files; sorties and hours from the logs; the rest recomputed from each hull\'s stock parts by the Garage, with UEX prices where it has them. The better figure for its row is lit - less mass, less signature, more of everything else.'];
-  if (missing.length) parts.push(`${missing.join(' and ')}: the community dataset cannot draw ${missing.length === 1 ? 'its' : 'their'} sheet, so only size and use are shown (Settings › community data).`);
+  const parts = [tx('Size from the game files; sorties and hours from the logs; the rest recomputed from each hull\'s stock parts by the Garage, with UEX prices where it has them. The better figure for its row is lit - less mass, less signature, more of everything else.')];
+  if (missing.length) {
+    parts.push(txn(missing.length,
+      '{ships}: the community dataset cannot draw its sheet, so only size and use are shown (Settings › community data).',
+      '{ships}: the community dataset cannot draw their sheet, so only size and use are shown (Settings › community data).',
+      { ships: missing.join(` ${tx('and')} `) }));
+  }
   $('#hangar-compare-note').textContent = parts.join(' ');
 }
 
@@ -8844,7 +8904,7 @@ async function hangarPictureSvg() {
   const note = $('#hangar-unsized')?.hidden ? '' : ($('#hangar-unsized')?.textContent || '');
   const groups = decks.map((deck) => ({
     deck,
-    title: deck.previousElementSibling?.textContent || 'Vehicles',
+    title: deck.previousElementSibling?.textContent || tx('Vehicles'),
     height: Number(deck.getAttribute('height')) || 0,
   }));
   const noteLines = wrapHangarExportText(note, Math.max(50, Math.floor((width - 40) / 7)));
@@ -8854,7 +8914,7 @@ async function hangarPictureSvg() {
     xmlns: SVG_NS, width, height, viewBox: `0 0 ${width} ${height}`, role: 'img',
   });
   exported.append(svgEl('title', {}));
-  exported.lastChild.textContent = 'Quantum Wake Hangar — fleet to scale';
+  exported.lastChild.textContent = tx('Quantum Wake Hangar — fleet to scale');
   exported.append(svgEl('style', {}));
   exported.lastChild.textContent = '.hangar-name{fill:#dcebf7;font-size:11px;font-family:ui-monospace,Consolas,monospace}.hangar-dims{fill:#7691a8;font-size:10px}.hangar-export-heading{fill:#8be7ff;font-size:12px;font-family:ui-monospace,Consolas,monospace;letter-spacing:2px}.hangar-export-note{fill:#7691a8;font-size:11px;font-family:ui-monospace,Consolas,monospace}';
   exported.append(svgEl('rect', { x: 0, y: 0, width, height, fill: '#070c14' }));
@@ -8911,7 +8971,7 @@ function saveHangarBlob(blob, extension) {
 async function exportHangarPicture(kind, button) {
   const label = button.textContent;
   button.disabled = true;
-  button.textContent = 'Exporting…';
+  button.textContent = tx('Exporting…');
 
   try {
     const svg = await hangarPictureSvg();
@@ -8942,9 +9002,9 @@ async function exportHangarPicture(kind, button) {
         URL.revokeObjectURL(url);
       }
     }
-    button.textContent = 'Saved';
+    button.textContent = tx('Saved');
   } catch (error) {
-    button.textContent = 'Could not export';
+    button.textContent = tx('Could not export');
     console.error(error);
   } finally {
     setTimeout(() => { button.textContent = label; button.disabled = false; }, 1800);
@@ -8958,10 +9018,10 @@ function showScaleOmissions(note, iconless, missing) {
   const parts = [];
   if (iconless.length) {
     const names = iconless.map((s) => `${s.name} (${s.length} × ${s.beam} × ${s.height} m)`);
-    parts.push(`No top-down game icon, so not drawn to scale: ${names.join(', ')}.`);
+    parts.push(tx('No top-down game icon, so not drawn to scale: {ships}.', { ships: names.join(', ') }));
   }
   if (missing.length)
-    parts.push(`Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`);
+    parts.push(tx('Not in the install\'s vehicle table, so not drawn: {ships}.', { ships: missing.map((s) => s.name).join(', ') }));
 
   note.hidden = false;
   note.textContent = parts.join(' ');
@@ -8975,7 +9035,7 @@ function showScaleOmissions(note, iconless, missing) {
  */
 function renderHangarGallery(canvas, ships) {
   if (!ships.length) {
-    canvas.append(el('p', 'muted', 'No ship has been flown in the logs yet, so there is nothing to show.'));
+    canvas.append(el('p', 'muted', tx('No ship has been flown in the logs yet, so there is nothing to show.')));
     return;
   }
 
@@ -8993,18 +9053,18 @@ function renderHangarGallery(canvas, ships) {
 
     const facts = [];
     if (ship.length > 0) facts.push(`${ship.length} × ${ship.beam} × ${ship.height} m`);
-    facts.push(`${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`);
-    if (ship.hours > 0) facts.push(`~${ship.hours} h aboard`);
+    facts.push(txn(ship.sorties, '{count} sortie', '{count} sorties'));
+    if (ship.hours > 0) facts.push(tx('~{hours} h aboard', { hours: ship.hours }));
     body.append(el('div', 'muted', facts.join(' · ')));
 
-    if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
+    if (!(ship.length > 0)) body.append(el('div', 'muted', tx('not in the install\'s vehicle table — no size')));
 
     // The same offer as the Fleet card, under the same rule: ground vehicles
     // have no ports anyone sells parts for, so the Garage is not offered.
     if (ship.kind === 'Spaceship' || !ship.kind) {
-      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      const garage = el('button', 'ghost ship-upgrade', tx('Garage'));
       garage.type = 'button';
-      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: ship.name });
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
       body.append(garage);
     }
@@ -9051,14 +9111,14 @@ function drawToScale(ships, width, scale) {
 
   const height = y + rowHeight + label + 20;
   const svg = svgEl('svg', { class: 'hangar-svg', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img' });
-  svg.setAttribute('aria-label', 'The fleet drawn to scale');
+  svg.setAttribute('aria-label', tx('The fleet drawn to scale'));
 
   for (const { ship, x: sx, y: sy, w, h, cell } of placed) {
     const group = svgEl('g', { class: 'hangar-ship', transform: `translate(${sx} ${sy})` });
     const title = svgEl('title', {});
     group.append(title);
-    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
-      + (!ship.icon ? ' · Gallery render fitted to this scale box; no top-down icon is installed' : '');
+    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${txn(ship.sorties, '{count} sortie', '{count} sorties')}`
+      + (!ship.icon ? ` · ${tx('Gallery render fitted to this scale box; no top-down icon is installed')}` : '');
 
     // Centred in the cell so a small ship's name does not hang off its left edge.
     const offset = (cell - w) / 2;
@@ -9097,8 +9157,8 @@ function drawToScale(ships, width, scale) {
     group.append(name);
 
     const dims = svgEl('text', { class: 'hangar-dims', x: cell / 2, y: baseline + 13, 'text-anchor': 'middle' });
-    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
-      + (!ship.icon ? ' · gallery render' : '');
+    dims.textContent = `${ship.length} m · ${txn(ship.sorties, '{count} sortie', '{count} sorties')}`
+      + (!ship.icon ? ` · ${tx('gallery render')}` : '');
     group.append(dims);
 
     // What the picture is, said on the picture: a top-down icon is the
@@ -9106,7 +9166,7 @@ function drawToScale(ships, width, scale) {
     // into that footprint's box. In a comparison the two can sit side by
     // side, and a caption under the name is not where the eye is.
     if (hangarComparison.size === 2) {
-      const kind = paint ? 'gallery render' : 'top-down icon';
+      const kind = paint ? tx('gallery render') : tx('top-down icon');
       const badge = svgEl('g', { class: `hangar-source ${paint ? 'render' : 'icon'}`, transform: `translate(${offset + 4} ${top + 4})` });
       badge.append(svgEl('rect', { x: 0, y: 0, width: kind.length * 6.2 + 16, height: 16, rx: 3 }));
       const label = svgEl('text', { x: 8, y: 11.5 });
@@ -9114,8 +9174,8 @@ function drawToScale(ships, width, scale) {
       badge.append(label);
       const why = svgEl('title', {});
       why.textContent = paint
-        ? 'The game\'s gallery render of this hull, fitted into its installed bounding box - a three-quarter view, not the footprint.'
-        : 'The game\'s own top-down vehicle icon, at the installed bounding box: the real footprint.';
+        ? tx('The game\'s gallery render of this hull, fitted into its installed bounding box - a three-quarter view, not the footprint.')
+        : tx('The game\'s own top-down vehicle icon, at the installed bounding box: the real footprint.');
       badge.append(why);
       group.append(badge);
     }
@@ -10397,17 +10457,17 @@ function sharedPointCard(row) {
 /** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
 function fleetRow(row) {
   const li = el('li');
-  li.append(el('span', 'what', row.ship || `read as “${row.read}”`));
+  li.append(el('span', 'what', row.ship || tx('read as “{read}”', { read: row.read })));
 
   const facts = [];
-  if (row.location) facts.push(`at ${row.location}`);
+  if (row.location) facts.push(tx('at {place}', { place: row.location }));
   if (row.state) facts.push(row.state.toLowerCase());
   if (row.focus) facts.push(row.focus);
   if (row.cargo != null) facts.push(`${row.cargo} SCU`);
   if (facts.length) li.append(el('span', 'd', ` · ${facts.join(' · ')}`));
 
   if (!row.ship && row.looksLike?.length)
-    li.append(el('span', 'd', ` · looks like ${row.looksLike.join(' or ')}`));
+    li.append(el('span', 'd', ` · ${tx('looks like {ships}', { ships: row.looksLike.join(` ${tx('or')} `) })}`));
 
   return li;
 }
@@ -10505,7 +10565,7 @@ async function renderFleetFittings() {
   for (const s of ships) {
     const card = el('article', 'ship-card');
     card.append(el('div', 'strong', s.ship));
-    card.append(el('div', 'muted', `as photographed ${new Date(s.shotAt).toLocaleString()}`));
+    card.append(el('div', 'muted', tx('as photographed {when}', { when: new Date(s.shotAt).toLocaleString(QW_DATE_LOCALES) })));
     if (s.scope) card.append(el('div', 'muted', s.scope));
 
     const list = el('ul', 'feed screen-fittings');
@@ -10514,12 +10574,12 @@ async function renderFleetFittings() {
       const li = el('li');
       li.append(el('span', 'what', f.slot));
 
-      if (f.nothingRead) li.append(el('span', 'd', ' · nothing read under it'));
+      if (f.nothingRead) li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
       else if (f.name) {
         li.append(el('span', 'd', ` · ${f.name}`));
-        if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
-        if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
-      } else li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+        if (f.stock === false) li.append(el('span', 'k differs', tx('not stock')));
+        if (f.stock === true) li.append(el('span', 'k agrees', tx('stock')));
+      } else li.append(el('span', 'd', ` · ${tx('read “{read}”, matched nothing', { read: f.read })}`));
 
       list.append(li);
     }
@@ -10553,7 +10613,7 @@ async function renderFleetBerths() {
   if (title) title.hidden = rows.length === 0;
   if (!rows.length) return;
 
-  list.append(el('p', 'muted', `As photographed ${new Date(got.shotAt).toLocaleString()} · ${got.shot}`));
+  list.append(el('p', 'muted', `${tx('As photographed {when}', { when: new Date(got.shotAt).toLocaleString(QW_DATE_LOCALES) })} · ${got.shot}`));
 
   const feed = el('ul', 'feed screen-fittings');
   for (const row of rows) feed.append(fleetRow(row));
@@ -10566,8 +10626,8 @@ async function renderFleetBerths() {
   const unflown = rows.filter((row) => row.ship && !row.flown);
   if (!unflown.length) return;
 
-  list.append(el('h3', 'spaced', `Owned, never flown in the logs · ${unflown.length}`));
-  list.append(el('p', 'muted caption', 'Listed at the Fleet Manager and never seen aboard in a session: no sorties, no hours, no photographed fit. The numbers a card would carry are all zero, so it carries the terminal\'s instead.'));
+  list.append(el('h3', 'spaced', `${tx('Owned, never flown in the logs')} · ${unflown.length}`));
+  list.append(el('p', 'muted caption', tx('Listed at the Fleet Manager and never seen aboard in a session: no sorties, no hours, no photographed fit. The numbers a card would carry are all zero, so it carries the terminal\'s instead.')));
   const grid = el('div', 'ship-grid');
   for (const row of unflown) {
     const card = el('article', 'ship-card unflown');
@@ -10575,13 +10635,13 @@ async function renderFleetBerths() {
     if (row.className) card.append(shipPicture({ name: row.ship, className: row.className }, maker));
     const body = el('div', 'ship-body');
     body.append(el('div', 'ship-name', row.ship));
-    const facts = [row.location ? `at ${row.location}` : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
-    body.append(el('div', 'ship-ref muted', facts.join(' · ') || 'no berth read'));
-    body.append(el('div', 'ship-ref muted', 'never flown in the logs'));
+    const facts = [row.location ? tx('at {place}', { place: row.location }) : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
+    body.append(el('div', 'ship-ref muted', facts.join(' · ') || tx('no berth read')));
+    body.append(el('div', 'ship-ref muted', tx('never flown in the logs')));
     if (row.className) {
-      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      const garage = el('button', 'ghost ship-upgrade', tx('Garage'));
       garage.type = 'button';
-      garage.title = `${row.ship}'s numbers, what fits it, and what a part would change`;
+      garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: row.ship });
       garage.addEventListener('click', () => openGarageFor(row.className));
       body.append(garage);
     }
@@ -14743,7 +14803,7 @@ const GARAGE_GROUP_WORDS = {
   Misc: 'Utility',
 };
 
-const garageWord = (group) => GARAGE_GROUP_WORDS[group] || String(group || '').replace(/([a-z])([A-Z])/g, '$1 $2');
+const garageWord = (group) => (GARAGE_GROUP_WORDS[group] ? tx(GARAGE_GROUP_WORDS[group]) : String(group || '').replace(/([a-z])([A-Z])/g, '$1 $2'));
 
 /** A hardpoint name as a pilot reads it: hardpoint_shield_generator_left → shield generator left. */
 function garagePortName(hardpoint) {
@@ -14781,14 +14841,13 @@ async function loadGarage() {
   const unavailable = $('#garage-unavailable');
   if (!data.known) {
     unavailable.hidden = false;
-    unavailable.textContent = 'The reference data predates the garage. Refresh the community dataset in Settings '
-      + 'and this page fills in - it needs the part figures the older download did not keep.';
+    unavailable.textContent = tx('The reference data predates the garage. Refresh the community dataset in Settings and this page fills in - it needs the part figures the older download did not keep.');
     return;
   }
   unavailable.hidden = true;
 
-  fillGaragePicker(mine, 'Your fleet…', data.mine.map((s) => [s.class, `${s.name} · ${s.sorties} sortie${s.sorties === 1 ? '' : 's'}`]));
-  fillGaragePicker($('#garage-all'), 'Any ship…', data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
+  fillGaragePicker(mine, tx('Your fleet…'), data.mine.map((s) => [s.class, `${s.name} · ${txn(s.sorties, '{count} sortie', '{count} sorties')}`]));
+  fillGaragePicker($('#garage-all'), tx('Any ship…'), data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
 
   // Open the ship already on the bench, else the one flown most, else nothing.
   const first = garageClass || data.mine[0]?.class || null;
@@ -14843,7 +14902,7 @@ async function openGarage(cls) {
     if (request !== garageRequest) return;
     const unavailable = $('#garage-unavailable');
     unavailable.hidden = false;
-    unavailable.textContent = `The reference does not know a ship called ${cls}.`;
+    unavailable.textContent = tx('The reference does not know a ship called {ship}.', { ship: cls });
     return;
   }
   if (request !== garageRequest) return;
@@ -14890,15 +14949,17 @@ async function loadGarageCargo(cls) {
   const sub = $('#garage-cargo-sub');
   const grids = garageCargo.grids || [];
   if (!garageCargo.gridsKnown) {
-    sub.textContent = 'The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.';
+    sub.textContent = tx('The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.');
   } else if (grids.length === 0) {
-    sub.textContent = `The dataset places no cargo grid on the ${garageCargo.name}${garageCargo.cargoScu ? ` though it credits it with ${fmt1(garageCargo.cargoScu)} SCU` : ''} — nothing to pack into.`;
+    sub.textContent = garageCargo.cargoScu
+      ? tx('The dataset places no cargo grid on the {ship} though it credits it with {scu} SCU — nothing to pack into.', { ship: garageCargo.name, scu: fmt1(garageCargo.cargoScu) })
+      : tx('The dataset places no cargo grid on the {ship} — nothing to pack into.', { ship: garageCargo.name });
   } else {
     const kinds = new Map();
     for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
-    sub.textContent = `${grids.length} grid${grids.length === 1 ? '' : 's'}, ${fmt1(grids.reduce((a, g) => a + g.scu, 0))} SCU by the dataset’s own placement: `
-      + [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ')
-      + '. Type a load and see where each crate would go.';
+    const sizes = [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ');
+    sub.textContent = `${txn(grids.length, '{count} grid, {scu} SCU by the dataset’s own placement: {sizes}.', '{count} grids, {scu} SCU by the dataset’s own placement: {sizes}.',
+      { scu: fmt1(grids.reduce((a, g) => a + g.scu, 0)), sizes })} ${tx('Type a load and see where each crate would go.')}`;
   }
 
   renderCargoLoadInputs();
@@ -14907,8 +14968,8 @@ async function loadGarageCargo(cls) {
   if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
   $('#garage-cargo-verdict').textContent = '';
   $('#garage-cargo-note').textContent = garageCargo.cratesFromInstall
-    ? 'Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.'
-    : 'The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.';
+    ? tx('Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.')
+    : tx('The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.');
 
   // A load already typed - or brought from another hull's answer - is tried
   // straight away, so the fleet list is a link and not a form.
@@ -14942,7 +15003,7 @@ function renderCargoLoadInputs() {
     input.dataset.size = String(size);
     input.value = garageCargoLoad[size] ? String(garageCargoLoad[size]) : '';
     input.placeholder = '0';
-    input.setAttribute('aria-label', `${size} SCU crates`);
+    input.setAttribute('aria-label', tx('{size} SCU crates', { size }));
     input.addEventListener('input', () => {
       garageCargoLoad[size] = Math.max(0, parseInt(input.value, 10) || 0);
       try { localStorage.setItem('qw-cargo-load', JSON.stringify(garageCargoLoad)); } catch { /* as above */ }
@@ -14967,14 +15028,14 @@ function renderCargoTotal() {
   const crates = cargoLoadNow();
   const scu = Object.entries(crates).reduce((a, [s, n]) => a + Number(s) * n, 0);
   const count = Object.values(crates).reduce((a, n) => a + n, 0);
-  total.textContent = count ? `${count} crate${count === 1 ? '' : 's'}, ${fmtInt(scu)} SCU` : '';
+  total.textContent = count ? `${txn(count, '{count} crate', '{count} crates')}, ${fmtInt(scu)} SCU` : '';
 }
 
 /** The load as the panel has it, into this hull and every other. */
 async function fitCargo() {
   const crates = cargoLoadNow();
   const verdict = $('#garage-cargo-verdict');
-  if (!Object.keys(crates).length) { verdict.textContent = 'Type how many crates of each size.'; verdict.className = 'garage-cargo-verdict'; return; }
+  if (!Object.keys(crates).length) { verdict.textContent = tx('Type how many crates of each size.'); verdict.className = 'garage-cargo-verdict'; return; }
   if (!garageCargo) return;
 
   let data;
@@ -14984,9 +15045,9 @@ async function fitCargo() {
       body: JSON.stringify({ ship: garageCargo.class, crates }),
     });
     data = await response.json();
-    if (!response.ok) { verdict.textContent = data.message || 'The fit could not be worked out.'; verdict.className = 'garage-cargo-verdict'; return; }
+    if (!response.ok) { verdict.textContent = data.message || tx('The fit could not be worked out.'); verdict.className = 'garage-cargo-verdict'; return; }
   } catch {
-    verdict.textContent = 'The fit could not be worked out.';
+    verdict.textContent = tx('The fit could not be worked out.');
     verdict.className = 'garage-cargo-verdict';
     return;
   }
@@ -15003,16 +15064,21 @@ function renderCargoVerdict(data) {
   const load = data.load;
   if (s.fits) {
     verdict.className = 'garage-cargo-verdict fits';
-    verdict.textContent = `Fits: ${load.count} crate${load.count === 1 ? '' : 's'}, ${fmtInt(load.scu)} of ${fmtInt(s.capacityScu)} SCU, with ${fmtInt(s.capacityScu - s.placedScu)} SCU to spare.`;
+    verdict.textContent = txn(load.count,
+      'Fits: {count} crate, {scu} of {capacity} SCU, with {spare} SCU to spare.',
+      'Fits: {count} crates, {scu} of {capacity} SCU, with {spare} SCU to spare.',
+      { scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu), spare: fmtInt(s.capacityScu - s.placedScu) });
   } else {
     verdict.className = 'garage-cargo-verdict no';
     const left = Object.entries(s.left || {}).sort((a, b) => Number(b[0]) - Number(a[0])).map(([size, n]) => `${n} × ${size} SCU`).join(', ');
     const byRule = (s.reasons || []).length > 0;
+    // The reasons are the server's sentences, translated when they are fixed ones.
     verdict.textContent = load.scu > s.capacityScu
-      ? `Does not fit: ${fmtInt(load.scu)} SCU asked of a ${fmtInt(s.capacityScu)} SCU hold. Left out: ${left}.`
+      ? tx('Does not fit: {scu} SCU asked of a {capacity} SCU hold. Left out: {left}.', { scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu), left })
       : byRule
-        ? `Does not fit: ${left} left out. ${s.reasons.join(' ')}`
-        : `No packing found for ${left}: ${fmtInt(s.placedScu)} of ${fmtInt(load.scu)} SCU placed in ${fmtInt(s.capacityScu)}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.`;
+        ? `${tx('Does not fit: {left} left out.', { left })} ${s.reasons.map((r) => tx(r)).join(' ')}`
+        : tx('No packing found for {left}: {placed} of {scu} SCU placed in {capacity}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.',
+          { left, placed: fmtInt(s.placedScu), scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu) });
   }
 }
 
@@ -15030,17 +15096,17 @@ function renderCargoGrids(grids, fit) {
     const card = el('div', 'garage-cargo-grid');
     const cells = g.cells;
     const title = el('div', 'garage-cargo-grid-title',
-      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${cells.w} × ${cells.l} × ${cells.h} cells, ${fmtInt(cells.w * cells.l * cells.h)} SCU${g.grid.external ? ', outside the hull' : ''}`);
+      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${tx('{w} × {l} × {h} cells, {scu} SCU', { w: cells.w, l: cells.l, h: cells.h, scu: fmtInt(cells.w * cells.l * cells.h) })}${g.grid.external ? tx(', outside the hull') : ''}`);
     card.append(title);
     const rule = g.grid.maxBox;
     const ruleText = g.ruleIgnored
-      ? 'The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.'
-      : rule && rule.x > 0 ? `Takes a crate up to ${fmt1(rule.x)} × ${fmt1(rule.y)} × ${fmt1(rule.z)} m.` : '';
+      ? tx('The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.')
+      : rule && rule.x > 0 ? tx('Takes a crate up to {x} × {y} × {z} m.', { x: fmt1(rule.x), y: fmt1(rule.y), z: fmt1(rule.z) }) : '';
     if (ruleText) card.append(el('div', 'muted small', ruleText));
     const layers = el('div', 'garage-cargo-layers');
     for (let z = 0; z < cells.h; z++) {
       const layer = el('div', 'garage-cargo-layer');
-      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? 'Floor' : `Layer ${z + 1}`) : ''));
+      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? tx('Floor') : tx('Layer {n}', { n: z + 1 })) : ''));
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       const width = cells.w * cell, height = cells.l * cell;
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -15062,7 +15128,7 @@ function renderCargoGrids(grids, fit) {
         r.setAttribute('fill', CARGO_CRATE_COLOURS[p.scu] || '#888');
         r.setAttribute('class', `cargo-crate${z > p.z ? ' cargo-crate-upper' : ''}`);
         const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-        t.textContent = `${p.scu} SCU at ${p.x + 1}, ${p.y + 1}, layer ${p.z + 1}`;
+        t.textContent = tx('{scu} SCU at {x}, {y}, layer {z}', { scu: p.scu, x: p.x + 1, y: p.y + 1, z: p.z + 1 });
         r.append(t);
         svg.append(r);
         if (z === p.z) {
@@ -15079,7 +15145,7 @@ function renderCargoGrids(grids, fit) {
       layers.append(layer);
     }
     card.append(layers);
-    if (fit) card.append(el('div', 'muted small', `${fmtInt(g.usedScu)} of ${fmtInt(cells.w * cells.l * cells.h)} SCU used`));
+    if (fit) card.append(el('div', 'muted small', tx('{used} of {total} SCU used', { used: fmtInt(g.usedScu), total: fmtInt(cells.w * cells.l * cells.h) })));
     box.append(card);
   }
 }
@@ -15096,29 +15162,30 @@ function renderCargoFleet(data) {
     const link = el('a', null, s.name);
     link.href = `#garage`;
     link.addEventListener('click', (e) => { e.preventDefault(); openGarageShipForCargo(s.class); });
-    li.append(link, el('span', 'muted', ` — ${s.fits ? 'fits' : `${fmtInt(s.placedScu)} of ${fmtInt(data.load.scu)} SCU`}, ${fmtInt(s.cargoScu)} SCU hold${s.flown && s.hours ? `, flown ${s.hours} h` : ''}`));
+    const fit = s.fits ? tx('fits') : tx('{placed} of {scu} SCU', { placed: fmtInt(s.placedScu), scu: fmtInt(data.load.scu) });
+    li.append(link, el('span', 'muted', ` — ${fit}, ${tx('{scu} SCU hold', { scu: fmtInt(s.cargoScu) })}${s.flown && s.hours ? `, ${tx('flown {hours} h', { hours: s.hours })}` : ''}`));
     return li;
   };
   const fitting = mine.filter((s) => s.fits);
   const not = mine.filter((s) => !s.fits);
   if (mine.length) {
-    box.append(el('h4', null, 'Your ships'));
+    box.append(el('h4', null, tx('Your ships')));
     if (fitting.length) {
       const ul = el('ul', 'garage-cargo-ships');
       for (const s of fitting) ul.append(line(s));
       box.append(ul);
     } else {
-      box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly takes this load.'));
+      box.append(el('p', 'muted small', tx('None of the ships the logs have seen you fly takes this load.')));
     }
     // The rest in one line, hold sizes attached, so the list is what fits
     // and not a roll-call of fighters with a 2 SCU boot.
-    if (not.length) box.append(el('p', 'muted small', `Not in: ${not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ')}.`));
+    if (not.length) box.append(el('p', 'muted small', tx('Not in: {ships}.', { ships: not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ') })));
   } else {
-    box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly has a cargo grid in the dataset.'));
+    box.append(el('p', 'muted small', tx('None of the ships the logs have seen you fly has a cargo grid in the dataset.')));
   }
   const smallest = data.smallest || [];
   if (smallest.length) {
-    box.append(el('h4', null, 'Smallest hulls in the reference that take it'));
+    box.append(el('h4', null, tx('Smallest hulls in the reference that take it')));
     const ul = el('ul', 'garage-cargo-ships');
     for (const s of smallest) ul.append(line(s));
     box.append(ul);
@@ -15204,28 +15271,27 @@ function renderGaragePhoto() {
   box.hidden = false;
 
   if (!fit) {
-    const name = garageStock?.ship?.name || 'this ship';
-    $('#garage-photo-title').textContent = `No photograph of the ${name} has been read`;
-    $('#garage-photo-sub').textContent = `Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, `
-      + `and take a screenshot; with Watch screenshots on (Log tab) it is read as it lands, `
-      + `the ones already in the folder included, and the bench can start from what the screen shows.`;
+    $('#garage-photo-title').textContent = garageStock?.ship?.name
+      ? tx('No photograph of the {ship} has been read', { ship: garageStock.ship.name })
+      : tx('No photograph of this ship has been read');
+    $('#garage-photo-sub').textContent = tx('Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, and take a screenshot; with Watch screenshots on (Log tab) it is read as it lands, the ones already in the folder included, and the bench can start from what the screen shows.');
     $('#garage-photo-unsettled').textContent = '';
     if (tools) tools.hidden = true;
     return;
   }
   if (tools) tools.hidden = false;
 
-  const when = new Date(fit.shotAt).toLocaleString();
-  $('#garage-photo-title').textContent = `${fit.ship}, as photographed ${when}`;
+  const when = new Date(fit.shotAt).toLocaleString(QW_DATE_LOCALES);
+  $('#garage-photo-title').textContent = tx('{ship}, as photographed {when}', { ship: fit.ship, when });
 
   const unsettled = (fit.ports || []).filter((p) => !p.applied);
   const sub = [];
-  sub.push(`${fit.applied} of ${fit.ports.length} port${fit.ports.length === 1 ? '' : 's'} read as one part`);
-  sub.push(fit.changed ? `${fit.changed} differ${fit.changed === 1 ? 's' : ''} from stock` : 'none differ from stock');
-  if (unsettled.length) sub.push(`${unsettled.length} not settled by the screenshot and left as stock`);
+  sub.push(txn(fit.ports.length, '{applied} of {count} port read as one part', '{applied} of {count} ports read as one part', { applied: fit.applied }));
+  sub.push(fit.changed ? txn(fit.changed, '{count} differs from stock', '{count} differ from stock') : tx('none differ from stock'));
+  if (unsettled.length) sub.push(txn(unsettled.length, '{count} not settled by the screenshot and left as stock', '{count} not settled by the screenshot and left as stock'));
   if (fit.scope) sub.push(fit.scope);
-  sub.push(`from ${fit.shot}`);
-  $('#garage-photo-sub').textContent = `${sub.join(' · ')}. Ports are matched to the screen's labels by kind and order; a screenshot is a moment, not a state.`;
+  sub.push(tx('from {shot}', { shot: fit.shot }));
+  $('#garage-photo-sub').textContent = `${sub.join(' · ')}. ${tx('Ports are matched to the screen\'s labels by kind and order; a screenshot is a moment, not a state.')}`;
 
   const list = $('#garage-photo-unsettled');
   list.textContent = '';
@@ -15244,8 +15310,10 @@ function renderGaragePhoto() {
   // stays only for the pilot who took the tick off.
   apply.hidden = garageFromPhoto && garagePhotoApplied;
   $('#garage-photo-state').textContent = garagePhotoApplied
-    ? `The bench started from this photograph; ${fit.changed} part${fit.changed === 1 ? '' : 's'} differ from stock. Reset to stock takes it back.`
-    : fit.applied ? '' : 'Nothing on the screenshot settled a port the bench can change.';
+    ? txn(fit.changed,
+      'The bench started from this photograph; {count} part differs from stock. Reset to stock takes it back.',
+      'The bench started from this photograph; {count} parts differ from stock. Reset to stock takes it back.')
+    : fit.applied ? '' : tx('Nothing on the screenshot settled a port the bench can change.');
 }
 
 /** The photographed parts become the bench's swaps, and the sheet moves to match. */
@@ -15280,12 +15348,12 @@ $('#garage-photo-auto')?.addEventListener('change', (e) => {
  */
 function listingLine(listing, more = 0) {
   const line = el('span', 'listing');
-  line.append(acquisitionChip('players', 'Player listing',
-    'A player\'s advertisement on UEX\'s marketplace: an asking price, not a market price. Buying is arranged with the seller on UEX.'));
+  line.append(acquisitionChip('players', tx('Player listing'),
+    tx('A player\'s advertisement on UEX\'s marketplace: an asking price, not a market price. Buying is arranged with the seller on UEX.')));
   line.append(el('b', null, `${fmtInt(listing.price)} aUEC`));
-  const where = [listing.seller ? `by ${listing.seller}` : '', listing.location ? `at ${listing.location}` : ''].filter(Boolean).join(' ');
-  line.append(document.createTextNode(` · ${where || 'place not given'}${listing.inStock > 1 ? ` · ${listing.inStock} in stock` : ''}${more > 0 ? ` +${more}` : ''} `));
-  const link = el('a', 'uex-link', 'UEX ↗');
+  const where = [listing.seller ? tx('by {seller}', { seller: listing.seller }) : '', listing.location ? tx('at {place}', { place: listing.location }) : ''].filter(Boolean).join(' ');
+  line.append(document.createTextNode(` · ${where || tx('place not given')}${listing.inStock > 1 ? ` · ${tx('{count} in stock', { count: listing.inStock })}` : ''}${more > 0 ? ` +${more}` : ''} `));
+  const link = el('a', 'uex-link', tx('UEX ↗'));
   link.href = listing.url;
   link.target = '_blank';
   link.rel = 'noopener';
@@ -15321,17 +15389,19 @@ async function loadGarageMarket(cls) {
   const shipName = garageStock?.ship?.name || cls;
 
   if (!data.enabled) {
-    note.textContent = 'Player listings are off. Fetch the Player marketplace feed under UEX in Settings to see who is offering parts for this ship on uexcorp.space.';
+    note.textContent = tx('Player listings are off. Fetch the Player marketplace feed under UEX in Settings to see who is offering parts for this ship on uexcorp.space.');
     return;
   }
 
-  const fetched = data.fetchedAt ? `fetched ${ago(data.fetchedAt)}` : 'never fetched';
+  const fetched = data.fetchedAt ? tx('fetched {ago}', { ago: ago(data.fetchedAt) }) : tx('never fetched');
   if (!data.listings.length) {
-    note.textContent = `Nobody has advertised a part that fits the ${shipName} in the newest ${fmtInt(data.total)} UEX marketplace listings (${data.components} of them are ship components at all) · ${fetched}. That is a week's advertisements, not a verdict on the market.`;
+    note.textContent = tx('Nobody has advertised a part that fits the {ship} in the newest {total} UEX marketplace listings ({components} of them are ship components at all) · {fetched}. That is a week\'s advertisements, not a verdict on the market.',
+      { ship: shipName, total: fmtInt(data.total), components: data.components, fetched });
     return;
   }
 
-  note.textContent = `${data.listings.length} of the newest ${fmtInt(data.total)} UEX marketplace listings are parts that fit the ${shipName} · asking prices, not market prices · ${fetched}.`;
+  note.textContent = tx('{count} of the newest {total} UEX marketplace listings are parts that fit the {ship} · asking prices, not market prices · {fetched}.',
+    { count: data.listings.length, total: fmtInt(data.total), ship: shipName, fetched });
 
   for (const row of data.listings) {
     const { listing, part } = row;
@@ -15342,18 +15412,18 @@ async function loadGarageMarket(cls) {
     const name = el('div', 'c-name', part.name);
     name.append(partChip(part));
     mid.append(name);
-    mid.append(el('div', 'c-maker', `${part.manufacturer || part.makerCode || ''}${listing.title && listing.title !== part.name ? ` · listed as “${listing.title}”` : ''}`));
+    mid.append(el('div', 'c-maker', `${part.manufacturer || part.makerCode || ''}${listing.title && listing.title !== part.name ? ` · ${tx('listed as “{title}”', { title: listing.title })}` : ''}`));
     const shop = el('div', 'c-shop');
     shop.append(listingLine(listing));
-    shop.append(document.createTextNode(` · posted ${ago(listing.added)}`));
+    shop.append(document.createTextNode(` · ${tx('posted {ago}', { ago: ago(listing.added) })}`));
     mid.append(shop);
     rowEl.append(mid);
 
     const act = el('div', 'c-act');
     if (row.ports && row.ports.length) {
-      const open = el('button', 'ghost tiny', 'Bench');
+      const open = el('button', 'ghost tiny', tx('Bench'));
       open.type = 'button';
-      open.title = 'Open the port this part fits, with what else fits it';
+      open.title = tx('Open the port this part fits, with what else fits it');
       open.addEventListener('click', () => selectBenchPort(row.ports[0], true).catch(() => {}));
       act.append(open);
     }
@@ -15375,10 +15445,10 @@ function renderGarage(data, stock) {
   sub.textContent = '';
   const badge = el('span', `garage-duty ${discipline.key}`, discipline.label);
   badge.dataset.discipline = discipline.key;
-  badge.title = `Inferred from the community career / role: ${discipline.basis}`;
+  badge.title = tx('Inferred from the community career / role: {basis}', { basis: discipline.basis });
   sub.append(badge, el('span', 'garage-subline', [data.ship.manufacturer, data.ship.role, data.ship.career,
-    `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ')));
-  $('#garage-source').textContent = `Community dataset${data.dump ? ` · dump ${data.dump}` : ''} · recomputed from the fitted parts`;
+    tx('size {size}', { size: data.ship.size }), tx('crew {crew}', { crew: data.ship.crew })].filter(Boolean).join(' · ')));
+  $('#garage-source').textContent = `${tx('Community dataset')}${data.dump ? ` · ${tx('dump {dump}', { dump: data.dump })}` : ''} · ${tx('recomputed from the fitted parts')}`;
   renderGarageRig(data);
 
   const s = data.sheet;
@@ -15412,24 +15482,24 @@ function renderGarage(data, stock) {
   sheet.append(sheetGroup('Weapons', 'parts', [
     // The caveat rides on both rows it moves guns between: the split is the
     // one figure read from a port name, and on seven hulls the dump disagrees.
-    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
+    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : tx('No guns the pilot fires.'), w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
     row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
     row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
     // One lead indicator per projectile speed: two speeds is two pips on the
     // HUD, and a lead that lands one gun misses the other. Said in the row,
     // not only in the notes, because it is the figure a gun swap changes.
     pipsRow(w, ow),
-    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, w.caveat ? 'See the pilot row: the split between the two is the uncertain part.' : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
-    row('Missiles', w.missiles ? `${w.missiles} · ${fmtInt(w.missileDamage)} dmg` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
+    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? tx('Crewed or remote turrets; somebody else fires these.') : null, w.caveat ? tx('See the pilot row: the split between the two is the uncertain part.') : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
+    row('Missiles', w.missiles ? `${w.missiles} · ${tx('{damage} dmg', { damage: fmtInt(w.missileDamage) })}` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
   ]));
 
   const sh = s.shield;
   const osh = o?.shield;
   sheet.append(sheetGroup('Defence', 'parts', [
     row('Shield HP', fmtInt(sh.hp), sh.poolLimit && sh.generators > sh.poolLimit
-      ? `${sh.generators} generators fitted, ${sh.poolLimit} online: the pool caps it.` : null, osh ? [osh.hp, sh.hp] : null),
+      ? tx('{fitted} generators fitted, {online} online: the pool caps it.', { fitted: sh.generators, online: sh.poolLimit }) : null, osh ? [osh.hp, sh.hp] : null),
     row('Shield regen', `${fmtInt(sh.regen)} /s`, null, osh ? [osh.regen, sh.regen] : null),
-    row('Generators', sh.poolLimit ? `${sh.generators} of ${sh.poolLimit}` : String(sh.generators)),
+    row('Generators', sh.poolLimit ? tx('{shown} of {total}', { shown: sh.generators, total: sh.poolLimit }) : String(sh.generators)),
     row('Armour', `EM ×${s.armorSignals.em} · IR ×${s.armorSignals.ir}`, 'The hull’s signal multipliers; every signature below carries them.'),
   ]));
 
@@ -15451,12 +15521,12 @@ function renderGarage(data, stock) {
   const oc = o?.cooling;
   sheet.append(sheetGroup('Systems', 'parts', [
     row('Power available', `${p.available} seg`, null, op ? [op.available, p.available] : null),
-    row('Drawn, shields up', `${fmt1(p.usedShields)} seg`, p.overShields ? 'Over budget: the game will brown something out.' : null,
+    row('Drawn, shields up', `${fmt1(p.usedShields)} seg`, p.overShields ? tx('Over budget: the game will brown something out.') : null,
       op ? [op.usedShields, p.usedShields, '', true] : null),
-    row('Drawn, in quantum', `${fmt1(p.usedQuantum)} seg`, p.overQuantum ? 'Over budget in quantum.' : null,
+    row('Drawn, in quantum', `${fmt1(p.usedQuantum)} seg`, p.overQuantum ? tx('Over budget in quantum.') : null,
       op ? [op.usedQuantum, p.usedQuantum, '', true] : null),
     row('Cooling generated', `${fmtInt(c.generated)} seg`, null, oc ? [oc.generated, c.generated] : null),
-    row('Cooling load', `${Math.round(c.loadShields * 100)}%`, c.loadShields > 1 ? 'Above 100%: the coolers cannot keep up at full draw.' : 'Used over generated, shields up. Lower is quieter.',
+    row('Cooling load', `${Math.round(c.loadShields * 100)}%`, c.loadShields > 1 ? tx('Above 100%: the coolers cannot keep up at full draw.') : tx('Used over generated, shields up. Lower is quieter.'),
       oc ? [oc.loadShields * 100, c.loadShields * 100, '%', true] : null),
   ]));
 
@@ -15468,15 +15538,15 @@ function renderGarage(data, stock) {
     row('Spool · cooldown', `${fmt1(q.spoolTime)} s · ${fmt1(q.cooldown)} s`, null, oq ? [oq.spoolTime, q.spoolTime, ' s', true] : null),
     row('Range', fmtDistance(q.range), 'Full tank over the drive’s fuel rate.', oq ? [oq.range, q.range, '', false, fmtDistance] : null),
     row('Fuel per Gm', fmt1(q.fuelPerGm), null, oq ? [oq.fuelPerGm, q.fuelPerGm, '', true] : null),
-  ] : [row('Drive', 'None fitted')]));
+  ] : [row('Drive', tx('None fitted'))]));
 
   const notes = $('#garage-notes');
   notes.textContent = '';
   notes.hidden = !(s.notes && s.notes.length);
-  for (const note of s.notes || []) notes.append(el('div', null, note));
+  for (const note of s.notes || []) notes.append(el('div', null, tx(note)));
   if (data.industrialPortsKnown === false && /mining|salvage/i.test(`${ship.role || ''} ${ship.career || ''}`)) {
     notes.hidden = false;
-    notes.append(el('div', null, 'Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.'));
+    notes.append(el('div', null, tx('Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.')));
   }
 
   renderBench(data);
@@ -15486,13 +15556,13 @@ function renderGarage(data, stock) {
 // compact reading aid for the Garage, so the tooltip keeps the source visible
 // instead of claiming that every expedition or freighter is officially civil.
 function garageShipDiscipline(career, role) {
-  const basis = [career, role].filter(Boolean).join(' · ') || 'no career / role recorded';
+  const basis = [career, role].filter(Boolean).join(' · ') || tx('no career / role recorded');
   const words = basis.toLowerCase();
   if (/combat|fighter|bomber|gunship|destroyer|frigate|interceptor|interdiction/.test(words))
-    return { key: 'military', label: 'Military', basis };
+    return { key: 'military', label: tx('Military'), basis };
   if (/industrial|mining|salvage|repair|recovery|refuel|science/.test(words))
-    return { key: 'industrial', label: 'Industrial', basis };
-  return { key: 'civilian', label: 'Civilian', basis };
+    return { key: 'industrial', label: tx('Industrial'), basis };
+  return { key: 'civilian', label: tx('Civilian'), basis };
 }
 
 /**
@@ -15523,10 +15593,10 @@ function renderGarageRig(data) {
   model.textContent = '';
   const code = makerAliases.get(String(data.ship.manufacturer || '').toLowerCase())
     || String(data.ship.class || '').split('_')[0];
-  const maker = { code, name: MANUFACTURERS[code] || data.ship.manufacturer || 'Unknown maker' };
+  const maker = { code, name: MANUFACTURERS[code] || data.ship.manufacturer || tx('Unknown maker') };
   model.append(shipPicture({ name: data.ship.name, className: data.ship.class }, maker));
 
-  $('#garage-rig-count').textContent = `${ports.length} fitted port${ports.length === 1 ? '' : 's'}`;
+  $('#garage-rig-count').textContent = txn(ports.length, '{count} fitted port', '{count} fitted ports');
   const summary = $('#garage-ship-summary');
   summary.textContent = '';
   const power = data.sheet.power;
@@ -15535,11 +15605,11 @@ function renderGarageRig(data) {
     ['Shield', `${fmtInt(data.sheet.shield.hp)} HP`],
     ['Pilot DPS', fmt1(data.sheet.weapons.fixedDps)],
     ['Quantum', data.sheet.quantumDrive?.drive || '—'],
-    ['Power', power.overShields ? `${fmt1(Math.abs(powerHeadroom))} short` : `${fmt1(powerHeadroom)} spare`],
+    ['Power', power.overShields ? tx('{amount} short', { amount: fmt1(Math.abs(powerHeadroom)) }) : tx('{amount} spare', { amount: fmt1(powerHeadroom) })],
   ]) {
     const unhealthy = label === 'Power' && power.overShields;
     const stat = el('div', `garage-ship-stat${unhealthy ? ' alert' : ''}`);
-    stat.append(el('span', null, label), el('b', null, value));
+    stat.append(el('span', null, tx(label)), el('b', null, value));
     summary.append(stat);
   }
 }
@@ -15551,7 +15621,7 @@ function garageRigSlot(port, ship) {
   button.dataset.port = port.portIds[0];
   button.setAttribute('aria-pressed', String(selected));
   const many = port.portIds.length > 1;
-  const name = port.name || port.class || 'Empty port';
+  const name = port.name || port.class || tx('Empty port');
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
   button.disabled = !!port.fixedReason;
   if (port.fixedReason) button.title = port.fixedReason;
@@ -15577,8 +15647,8 @@ function sheetGroup(title, source, rows) {
   group.dataset.group = groupKey;
   const h = el('h3');
   const label = el('span', 'sheet-title');
-  label.append(garageSheetIcon(groupKey), document.createTextNode(title));
-  h.append(el('span', 'src', source === 'model' ? 'signature model' : source));
+  label.append(garageSheetIcon(groupKey), document.createTextNode(tx(title)));
+  h.append(el('span', 'src', source === 'model' ? tx('signature model') : source === 'parts' ? tx('parts') : source));
   h.prepend(label);
   group.append(h);
   for (const r of rows) if (r) group.append(r);
@@ -15644,8 +15714,9 @@ function pipChip(part, fittedPart) {
   }
   if (!others.size || others.has(Math.round(speed))) return null;
 
-  const chip = el('span', 'chip pip', `+1 pip`);
-  chip.title = `${fmtInt(speed)} m/s against ${[...others].map(fmtInt).join(' and ')} m/s on the other pilot guns: the HUD would draw a second lead indicator, and a lead that lands one gun misses the other.`;
+  const chip = el('span', 'chip pip', tx('+1 pip'));
+  chip.title = tx('{speed} m/s against {others} m/s on the other pilot guns: the HUD would draw a second lead indicator, and a lead that lands one gun misses the other.',
+    { speed: fmtInt(speed), others: [...others].map(fmtInt).join(` ${tx('and')} `) });
   return chip;
 }
 
@@ -15665,10 +15736,10 @@ function pipsRow(w, ow) {
   const speeds = w.speeds || [];
   const pips = speeds.length;
   const was = ow ? (ow.speeds || []).length : null;
-  const value = pips === 0 ? '—' : pips === 1 ? `${fmtInt(speeds[0].speed)} m/s` : `${pips} speeds · ${pips} pips`;
+  const value = pips === 0 ? '—' : pips === 1 ? `${fmtInt(speeds[0].speed)} m/s` : tx('{count} speeds · {count} pips', { count: pips });
   const note = pips > 1
-    ? `${speeds.map((s) => `${gunsAtSpeed(s.guns)} at ${fmtInt(s.speed)} m/s`).join('; ')}. The HUD draws a pip per speed, and a lead that lands one gun misses the other.`
-    : pips === 1 ? 'Every pilot gun at one speed: one pip.' : null;
+    ? `${speeds.map((s) => tx('{guns} at {speed} m/s', { guns: gunsAtSpeed(s.guns), speed: fmtInt(s.speed) })).join('; ')}. ${tx('The HUD draws a pip per speed, and a lead that lands one gun misses the other.')}`
+    : pips === 1 ? tx('Every pilot gun at one speed: one pip.') : null;
   const r = row('Projectile speed', value, note, was !== null && was !== pips ? [was, pips, '', true] : null);
   if (pips > 1) r.classList.add('alert');
   return r;
@@ -15676,8 +15747,10 @@ function pipsRow(w, ow) {
 
 function row(label, value, note, delta, sub = false) {
   const r = el('div', `sheet-row${sub ? ' sub' : ''}`);
+  // The key stays the English label the callers pass; the reader gets the
+  // page's words. A note is a fixed sentence or one already built in tx().
   r.dataset.key = label;
-  r.append(el('span', 'k', label));
+  r.append(el('span', 'k', tx(label)));
 
   const v = el('span', 'v');
   if (delta && Number.isFinite(delta[0]) && Number.isFinite(delta[1]) && Math.abs(delta[0] - delta[1]) > 1e-9) {
@@ -15690,7 +15763,7 @@ function row(label, value, note, delta, sub = false) {
   v.append(document.createTextNode(value));
   r.append(v);
 
-  if (note) r.append(el('span', 'n', note));
+  if (note) r.append(el('span', 'n', tx(note)));
   return r;
 }
 
@@ -15776,7 +15849,7 @@ function componentClassChip(componentClass) {
   if (!componentClass) return null;
   const key = String(componentClass).toLowerCase();
   const chip = el('span', `component-class ${key}`, componentClass);
-  chip.title = 'Component class from the game\'s item description';
+  chip.title = tx('Component class from the game\'s item description');
   return chip;
 }
 
@@ -15796,8 +15869,8 @@ function stealthPickChip(part, choices) {
   const lowest = Math.min(...scores);
   if (here !== lowest || !scores.some((value) => value > lowest)) return null;
 
-  const chip = el('span', 'chip stealth', 'Stealth pick');
-  chip.title = 'Lowest combined EM + IR among the compatible parts shown; lower signatures are quieter.';
+  const chip = el('span', 'chip stealth', tx('Stealth pick'));
+  chip.title = tx('Lowest combined EM + IR among the compatible parts shown; lower signatures are quieter.');
   return chip;
 }
 
@@ -15816,34 +15889,34 @@ function partFigures(part, ship) {
   if (!part) return [];
   const t = part.type;
   if (part.weapon) {
-    return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], ['alpha', part.weapon.alpha, fmt1(part.weapon.alpha)],
-      ['range', part.weapon.range, `${fmtInt(part.weapon.range)} m`], ['sustained', part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)],
+    return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], [tx('alpha'), part.weapon.alpha, fmt1(part.weapon.alpha)],
+      [tx('range'), part.weapon.range, `${fmtInt(part.weapon.range)} m`], [tx('sustained'), part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)],
       ...(part.weapon.ammoSpeed > 0 ? [['m/s', part.weapon.ammoSpeed, fmtInt(part.weapon.ammoSpeed)]] : [])];
   }
   if (part.shield) {
-    return [['HP', part.shield.hp, fmtInt(part.shield.hp)], ['regen', part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
-      ['EM', part.em, fmtInt(part.em), true], ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+    return [['HP', part.shield.hp, fmtInt(part.shield.hp)], [tx('regen'), part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
+      ['EM', part.em, fmtInt(part.em), true], [tx('draw'), part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
   }
   if (part.quantum) {
     const range = ship?.quantumFuel && part.quantum.fuelRate ? ship.quantumFuel / part.quantum.fuelRate : null;
-    return [['speed', part.quantum.speed, fmtSpeed(part.quantum.speed)], ['spool', part.quantum.spoolTime, `${fmt1(part.quantum.spoolTime)} s`, true],
-      ...(range ? [['range', range, fmtDistance(range)]] : []), ['EM', part.em, fmtInt(part.em), true]];
+    return [[tx('speed'), part.quantum.speed, fmtSpeed(part.quantum.speed)], [tx('spool'), part.quantum.spoolTime, `${fmt1(part.quantum.spoolTime)} s`, true],
+      ...(range ? [[tx('range'), range, fmtDistance(range)]] : []), ['EM', part.em, fmtInt(part.em), true]];
   }
   if (part.missile) {
-    return [['dmg', part.missile.damage, fmtInt(part.missile.damage)], ['speed', part.missile.speed, `${fmtInt(part.missile.speed)} m/s`],
-      ['lock', part.missile.lockTime, `${fmt1(part.missile.lockTime)} s`, true], ['range', part.missile.range, fmtDistance(part.missile.range)]];
+    return [[tx('dmg'), part.missile.damage, fmtInt(part.missile.damage)], [tx('speed'), part.missile.speed, `${fmtInt(part.missile.speed)} m/s`],
+      [tx('lock'), part.missile.lockTime, `${fmt1(part.missile.lockTime)} s`, true], [tx('range'), part.missile.range, fmtDistance(part.missile.range)]];
   }
   if (t === 'Cooler') {
-    return [['coolant', part.coolantGen, fmtInt(part.coolantGen)], ['IR', part.ir, fmtInt(part.ir), true], ['EM', part.em, fmtInt(part.em), true],
-      ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+    return [[tx('coolant'), part.coolantGen, fmtInt(part.coolantGen)], ['IR', part.ir, fmtInt(part.ir), true], ['EM', part.em, fmtInt(part.em), true],
+      [tx('draw'), part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
   }
   if (t === 'PowerPlant') {
-    return [['power', part.powerGen, `${fmtInt(part.powerGen)} seg`], ['EM', part.em, fmtInt(part.em), true], ['HP', part.health, fmtInt(part.health)]];
+    return [[tx('power'), part.powerGen, `${fmtInt(part.powerGen)} seg`], ['EM', part.em, fmtInt(part.em), true], ['HP', part.health, fmtInt(part.health)]];
   }
   const bits = [];
   if (part.em) bits.push(['EM', part.em, fmtInt(part.em), true]);
   if (part.ir) bits.push(['IR', part.ir, fmtInt(part.ir), true]);
-  if (part.powerUseMax) bits.push(['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]);
+  if (part.powerUseMax) bits.push([tx('draw'), part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]);
   if (part.health) bits.push(['HP', part.health, fmtInt(part.health)]);
   return bits;
 }
@@ -15910,7 +15983,7 @@ function renderBench(data) {
   if (!ports.length) return;
 
   const changed = ports.filter((p) => p.changed).length;
-  $('#garage-changes').textContent = changed ? `${changed} part${changed === 1 ? '' : 's'} changed` : 'Stock fit';
+  $('#garage-changes').textContent = changed ? txn(changed, '{count} part changed', '{count} parts changed') : tx('Stock fit');
   $('#garage-changes').className = changed ? 'changed' : 'muted';
   $('#garage-reset').hidden = !changed;
   $('#garage-shop').hidden = !changed;
@@ -15929,12 +16002,14 @@ function renderBench(data) {
       rowEl.append(partMark(port.fitted));
 
       const mid = el('div');
-      const name = el('div', 'part-name', port.name || (port.class ? port.class : 'empty'));
+      const name = el('div', 'part-name', port.name || (port.class ? port.class : tx('empty')));
       if (port.fitted) name.append(partChip(port.fitted));
       if (many) name.append(el('span', 'chip count', `×${port.portIds.length}`));
       mid.append(name);
-      const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
-      if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
+      const sub = el('div', 'port-name', many
+        ? tx('{port} and {count} more', { port: garagePortName(port.hardpoint), count: port.portIds.length - 1 })
+        : garagePortName(port.hardpoint));
+      if (port.changed) sub.append(el('span', 'was', tx('was {part}', { part: port.stockName || port.stockClass || tx('empty') })));
       mid.append(sub);
       if (port.fixedReason) mid.append(el('span', 'muted small', port.fixedReason));
       rowEl.append(mid);
@@ -15964,7 +16039,7 @@ async function selectBenchPort(portId, revealChoices = false) {
 
   const panel = $('#garage-bench-panel');
   panel.textContent = '';
-  panel.append(el('p', 'muted', 'Looking up what fits…'));
+  panel.append(el('p', 'muted', tx('Looking up what fits…')));
 
   let options;
   try {
@@ -15972,7 +16047,7 @@ async function selectBenchPort(portId, revealChoices = false) {
   } catch {
     if (request !== benchRequest || cls !== garageClass) return;
     panel.textContent = '';
-    panel.append(el('p', 'muted', 'Could not read what fits this port.'));
+    panel.append(el('p', 'muted', tx('Could not read what fits this port.')));
     return;
   }
   // A later pick, or another ship, has taken the panel; this answer is for a port nobody is looking at.
@@ -16029,12 +16104,23 @@ function renderBenchPanel() {
   const head = sameport ? panel.querySelector('.panel-head') : el('div', 'panel-head');
   head.textContent = '';
   head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
-  const sizes = garageOptions.port.minSize === garageOptions.port.maxSize ? `size ${garageOptions.port.maxSize}` : `sizes ${garageOptions.port.minSize}–${garageOptions.port.maxSize}`;
+  const sizes = garageOptions.port.minSize === garageOptions.port.maxSize
+    ? tx('size {size}', { size: garageOptions.port.maxSize })
+    : tx('sizes {min}–{max}', { min: garageOptions.port.minSize, max: garageOptions.port.maxSize });
   const many = siblingsOf(garageOptions.port.portId).length;
-  head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}${garageOptions.marketKnown ? '' : ' · player listings need the Player marketplace feed (Settings)'}`));
+  const subParts = [sizes];
+  if (many > 1) subParts.push(tx('{count} ports alike, fitted together', { count: many }));
+  subParts.push(tx('now fitted: {part}', { part: fittedPart?.name || tx('nothing') }));
+  if (!garageOptions.pricesKnown) subParts.push(tx('prices need UEX (Settings)'));
+  if (!garageOptions.marketKnown) subParts.push(tx('player listings need the Player marketplace feed (Settings)'));
+  head.append(el('div', 'panel-sub', subParts.join(' · ')));
   if (!sameport) panel.append(head);
 
-  const countText = `${rows.length} of ${garageOptions.options.length} fit${terminalOnly ? ' · terminal aUEC only' : ''} · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`;
+  const countText = [
+    tx('{shown} of {total} fit', { shown: rows.length, total: garageOptions.options.length }),
+    ...(terminalOnly ? [tx('terminal aUEC only')] : []),
+    tx('sorted by {figure}', { figure: partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || tx('name') }),
+  ].join(' · ');
   let list;
   if (sameport) {
     panel.querySelector('.bench-count').textContent = countText;
@@ -16044,7 +16130,7 @@ function renderBenchPanel() {
     const tools = el('div', 'panel-tools');
     const search = el('input', 'search bench-search');
     search.type = 'search';
-    search.placeholder = 'Filter by name or maker…';
+    search.placeholder = tx('Filter by name or maker…');
     search.value = garageOptions.filter || '';
     search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
     tools.append(search);
@@ -16056,8 +16142,8 @@ function renderBenchPanel() {
 
   if (!rows.length) {
     list.append(el('p', 'muted', terminalOnly
-      ? 'No terminal aUEC seller is recorded for a compatible replacement.'
-      : 'Nothing in the reference fits this port.'));
+      ? tx('No terminal aUEC seller is recorded for a compatible replacement.')
+      : tx('Nothing in the reference fits this port.')));
     return;
   }
 
@@ -16102,15 +16188,15 @@ function renderBenchPanel() {
     const shop = el('div', 'c-shop');
     if (option.shops && option.shops.length) {
       const best = option.shops[0];
-      shop.append(acquisitionChip('terminal', 'Terminal aUEC', 'Known NPC terminal seller from the UEX market feed.'));
+      shop.append(acquisitionChip('terminal', tx('Terminal aUEC'), tx('Known NPC terminal seller from the UEX market feed.')));
       shop.append(el('b', null, `${fmtInt(best.price)} aUEC`));
       shop.append(document.createTextNode(` · ${best.terminal}${best.place ? `, ${best.place}` : ''}${option.shops.length > 1 ? ` +${option.shops.length - 1}` : ''}`));
     } else if (garageOptions.pricesKnown) {
       if (option.craftable) {
-        shop.append(acquisitionChip('craft', 'Blueprint recipe', 'The installed game data contains a recipe; see Crafting for its materials and whether you own the blueprint.'));
-        shop.append(document.createTextNode(' No terminal aUEC seller recorded.'));
+        shop.append(acquisitionChip('craft', tx('Blueprint recipe'), tx('The installed game data contains a recipe; see Crafting for its materials and whether you own the blueprint.')));
+        shop.append(document.createTextNode(` ${tx('No terminal aUEC seller recorded.')}`));
       } else {
-        shop.append(acquisitionChip('unlisted', 'No terminal seller', 'No NPC terminal seller is recorded in the UEX market feed.'));
+        shop.append(acquisitionChip('unlisted', tx('No terminal seller'), tx('No NPC terminal seller is recorded in the UEX market feed.')));
       }
     }
     // A player offering it is a third route, and a different kind of answer:
@@ -16124,9 +16210,9 @@ function renderBenchPanel() {
 
     const act = el('div', 'c-act');
     if (isCurrent) {
-      act.append(el('span', 'state', isStock ? 'Stock' : 'Fitted'));
+      act.append(el('span', 'state', isStock ? tx('Stock') : tx('Fitted')));
     } else {
-      const fit = el('button', 'ghost tiny', isStock ? 'Back to stock' : 'Fit');
+      const fit = el('button', 'ghost tiny', isStock ? tx('Back to stock') : tx('Fit'));
       fit.type = 'button';
       // Fitting from this list is an intentional purchase decision. A known
       // seller lets it become its own shopping line; unknown sellers stay a
@@ -16210,7 +16296,10 @@ async function optimiseGarage() {
   const rows = benchRows(garageBenchPorts.length ? garageBenchPorts : (garageStock.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
   const cls = garageClass;
   button.disabled = true;
-  status.textContent = `Finding the best ${GARAGE_OPTIMISE_GOALS[goal] || 'fit'}…`;
+  // The goal is a noun phrase French needs inside its own sentence, so the
+  // goal word is looked up on its own and slotted in.
+  const goalWord = tx(GARAGE_OPTIMISE_GOALS[goal] || 'fit');
+  status.textContent = tx('Finding the best {goal}…', { goal: goalWord });
 
   let changed = 0;
   let unavailable = 0;
@@ -16240,11 +16329,11 @@ async function optimiseGarage() {
     }
 
     if (changed) { await refitGarage(); await reconcileBenchShopping(); }
-    const scope = buyableOnly ? ' from known terminal aUEC sellers' : '';
+    const scope = buyableOnly ? ` ${tx('from known terminal aUEC sellers')}` : '';
     status.textContent = changed
-      ? `Optimised ${changed} port${changed === 1 ? '' : 's'} for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}. Review the sheet, then add the changed parts to Shopping when you are ready to buy.`
-      : `Nothing on this fit changed for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}.`;
-    if (unavailable) status.textContent += ` ${unavailable} port${unavailable === 1 ? '' : 's'} could not be read.`;
+      ? `${txn(changed, 'Optimised {count} port for {goal}', 'Optimised {count} ports for {goal}', { goal: goalWord })}${scope}. ${tx('Review the sheet, then add the changed parts to Shopping when you are ready to buy.')}`
+      : `${tx('Nothing on this fit changed for {goal}', { goal: goalWord })}${scope}.`;
+    if (unavailable) status.textContent += ` ${txn(unavailable, '{count} port could not be read.', '{count} ports could not be read.')}`;
   } finally {
     button.disabled = false;
   }
@@ -16288,12 +16377,12 @@ function renderBuilds() {
     chip.dataset.build = build.id;
     chip.append(el('span', null, build.name));
     const n = Object.keys(build.swaps || {}).length;
-    chip.append(el('span', 'meta', `${n} part${n === 1 ? '' : 's'} · ${relative(build.updatedAt)}`));
+    chip.append(el('span', 'meta', `${txn(n, '{count} part', '{count} parts')} · ${relative(build.updatedAt)}`));
     chip.addEventListener('click', () => openBuild(build.id).catch(() => {}));
 
     const drop = el('button', 'drop', '×');
     drop.type = 'button';
-    drop.title = `Delete "${build.name}"`;
+    drop.title = tx('Delete “{build}”', { build: build.name });
     drop.addEventListener('click', (e) => { e.stopPropagation(); deleteBuild(build.id).catch(() => {}); });
     chip.append(drop);
     box.append(chip);
@@ -16302,7 +16391,7 @@ function renderBuilds() {
   const compare = $('#garage-compare');
   const keep = garageCompare;
   compare.textContent = '';
-  const stock = el('option', null, 'Stock');
+  const stock = el('option', null, tx('Stock'));
   stock.value = '';
   compare.append(stock);
   for (const build of garageBuilds) {
@@ -16423,7 +16512,7 @@ $('#garage-save-form')?.addEventListener('submit', (e) => {
   const name = $('#garage-save-name').value.trim();
   $('#garage-save-form').hidden = true;
   $('#garage-save-name').value = '';
-  saveBuild(name || 'Untitled build').catch(() => {});
+  saveBuild(name || tx('Untitled build')).catch(() => {});
 });
 onInput('#garage-compare', () => { garageCompare = $('#garage-compare').value; refitGarage().catch(() => {}); });
 
@@ -16450,7 +16539,9 @@ async function shopForBench(onlyIfExists = false) {
   if (!onlyIfExists && !Object.keys(garageSwaps).length) return;
 
   const open = garageBuilds.find((b) => b.id === garageOpenBuild);
-  const title = open ? open.name : `${garageStock?.ship?.name || garageClass} fit`;
+  // A list's title is data once written, like a saved plan's: in the page's
+  // language when it is made.
+  const title = open ? open.name : tx('{ship} fit', { ship: garageStock?.ship?.name || garageClass });
 
   const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/shop`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -16461,7 +16552,7 @@ async function shopForBench(onlyIfExists = false) {
     const problem = await res.json().catch(() => null);
     result.textContent = '';
     result.hidden = false;
-    result.append(el('span', 'muted', problem?.message || 'The list could not be written.'));
+    result.append(el('span', 'muted', problem?.message || tx('The list could not be written.')));
     return;
   }
 
@@ -16472,7 +16563,7 @@ async function shopForBench(onlyIfExists = false) {
     if (!removed) return;
     result.textContent = '';
     result.hidden = false;
-    result.append(el('span', 'muted', `The bench is back to stock, so "${removedTitle}" was taken off Shopping.`));
+    result.append(el('span', 'muted', tx('The bench is back to stock, so “{list}” was taken off Shopping.', { list: removedTitle })));
     return;
   }
 
@@ -16481,31 +16572,36 @@ async function shopForBench(onlyIfExists = false) {
   const items = (job.items || []).reduce((n, i) => n + (i.needed || 1), 0);
 
   const line = el('span');
-  line.append(document.createTextNode(`${created === false ? 'Updated' : 'Added'} "${job.title}" - ${items} part${items === 1 ? '' : 's'} on ${job.items.length} line${job.items.length === 1 ? '' : 's'}. `));
-  const link = el('a', null, 'Open Shopping');
+  const parts = txn(items, '{count} part', '{count} parts');
+  const lines = txn(job.items.length, '{count} line', '{count} lines');
+  line.append(document.createTextNode(`${created === false
+    ? tx('Updated “{list}” - {parts} on {lines}.', { list: job.title, parts, lines })
+    : tx('Added “{list}” - {parts} on {lines}.', { list: job.title, parts, lines })} `));
+  const link = el('a', null, tx('Open Shopping'));
   link.href = '#jobs';
   link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
   line.append(link);
   result.append(line);
-  if (consolidated) result.append(el('span', 'muted', ` Consolidated ${consolidated} earlier Garage list${consolidated === 1 ? '' : 's'}.`));
+  if (consolidated) result.append(el('span', 'muted', ` ${txn(consolidated, 'Consolidated {count} earlier Garage list.', 'Consolidated {count} earlier Garage lists.')}`));
 
   // The stop, and what it lacks. "Nowhere" is said rather than left blank:
   // with UEX off there is no answer, and without a counter the list is still
   // a list.
   if (proposal.terminal) {
     const where = `${proposal.terminal}${proposal.place ? `, ${proposal.place}` : ''}`;
+    const covered = txn(proposal.of, '{covered} of {count} line', '{covered} of {count} lines', { covered: proposal.covered });
     // A destination the pilot chose on Shopping is theirs; the proposal is
     // offered beside it, not written over it.
     let note = destinationKept
-      ? `Destination kept as ${job.destination} (chosen on Shopping). UEX would propose ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`
-      : `Destination: ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`;
+      ? tx('Destination kept as {kept} (chosen on Shopping). UEX would propose {where} - {covered}', { kept: job.destination, where, covered })
+      : tx('Destination: {where} - {covered}', { where, covered });
     if (proposal.total > 0) note += `, ${fmtInt(proposal.total)} aUEC`;
-    if (proposal.missing?.length) note += `. Not sold there: ${proposal.missing.join(', ')}`;
+    if (proposal.missing?.length) note += `. ${tx('Not sold there: {items}', { items: proposal.missing.join(', ') })}`;
     result.append(el('span', 'muted', note + '.'));
   } else {
     result.append(el('span', 'muted', proposal.pricesKnown
-      ? 'No terminal UEX knows sells any of it; the list has no destination.'
-      : 'Destinations need UEX prices (Settings); the list was written without one.'));
+      ? tx('No terminal UEX knows sells any of it; the list has no destination.')
+      : tx('Destinations need UEX prices (Settings); the list was written without one.')));
   }
 }
 
@@ -16560,7 +16656,7 @@ async function drawDetailSpark(strip, commodity) {
 
   const svg = svgEl('svg', {
     class: 'spark', viewBox: '0 0 240 34', preserveAspectRatio: 'none',
-    role: 'img', 'aria-label': `${commodity} price over the last ${days} days`,
+    role: 'img', 'aria-label': tx('{commodity} price over the last {days} days', { commodity, days }),
   });
 
   svg.append(svgEl('path', {
@@ -16577,11 +16673,11 @@ async function drawDetailSpark(strip, commodity) {
   // asks for one counter per side, but a wider sample already cached by the
   // commodity page is reused, and then the line really is a best-of.
   const from = trend.sampled > 1
-    ? `best of ${trend.sampled} counters each day`
-    : 'the busiest counter';
+    ? tx('best of {count} counters each day', { count: trend.sampled })
+    : tx('the busiest counter');
 
   strip.append(el('span', 'muted',
-    `${money(low)} – ${money(high)} over ${days} days, ${from}`));
+    tx('{low} – {high} over {days} days, {from}', { low: money(low), high: money(high), days, from })));
 }
 
 /**
@@ -16979,9 +17075,9 @@ async function loadOutfitting() {
   }
 
   tiles('#outfitting-summary', [
-    ['Kit worn', `${data.priced} of ${data.kitSize} priced`],
-    ['Cheapest anywhere', money(data.cheapest)],
-    ['Best single shop', `${data.shops[0].covers} of ${data.kitSize} items`],
+    [tx('Kit worn'), tx('{priced} of {total} priced', { priced: data.priced, total: data.kitSize })],
+    [tx('Cheapest anywhere'), money(data.cheapest)],
+    [tx('Best single shop'), tx('{covers} of {total} items', { covers: data.shops[0].covers, total: data.kitSize })],
   ]);
 
   const body = $('#outfitting-table tbody');
@@ -16990,7 +17086,7 @@ async function loadOutfitting() {
   for (const shop of data.shops) {
     const tr = el('tr');
     tr.append(tdPlace(shop.terminal));
-    tr.append(el('td', 'num', `${shop.covers} of ${data.kitSize}`));
+    tr.append(el('td', 'num', tx('{shown} of {total}', { shown: shop.covers, total: data.kitSize })));
 
     const cost = el('td', 'num outward', money(shop.total));
     cost.title = shop.items.map((i) => `${i.item} — ${Math.round(i.price).toLocaleString()} aUEC`).join('\n');
@@ -16998,8 +17094,8 @@ async function loadOutfitting() {
 
     // The whole point of knowing: put the trip on a list.
     const action = el('td', 'num');
-    const add = el('button', 'ghost track', '+ list');
-    add.title = `Add everything ${shop.terminal} carries to your shopping list`;
+    const add = el('button', 'ghost track', tx('+ list'));
+    add.title = tx('Add everything {shop} carries to your shopping list', { shop: shop.terminal });
 
     add.addEventListener('click', async () => {
       add.disabled = true;
@@ -17010,7 +17106,7 @@ async function loadOutfitting() {
           body: JSON.stringify({ name: item.item, needed: 1, unit: '' }),
         }).catch(() => {});
 
-      add.textContent = '✓ added';
+      add.textContent = tx('✓ added');
     });
 
     action.append(add);
@@ -18765,12 +18861,12 @@ function renderAssets() {
 
   tiles('#assets-summary', assets.priced
     ? [
-        ['Estimated worth*', money(total)],
-        ['Kit worn', `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
-        ['Stashed', money(assets.stashValue)],
-        ['Claim exposure*', money(assets.claimExposure)],
+        [tx('Estimated worth*'), money(total)],
+        [tx('Kit worn'), `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
+        [tx('Stashed'), money(assets.stashValue)],
+        [tx('Claim exposure*'), money(assets.claimExposure)],
       ]
-    : [['Estimated worth', 'needs Settings → community dataset + UEX']]);
+    : [[tx('Estimated worth'), tx('needs Settings → community dataset + UEX')]]);
 
   const stashBody = $('#assets-stash tbody');
   stashBody.textContent = '';
@@ -20642,15 +20738,16 @@ function shipPicture(ship, maker, options = {}) {
       img.alt = '';
       img.loading = 'lazy';
       img.title = chosen
-        ? `${ship.name} in the paint you chose — the game's own picture`
+        ? tx('{ship} in the paint you chose — the game\'s own picture', { ship: ship.name })
         : standIn?.photographed
-          ? `${ship.name} in ${standIn.name}, the paint a loadout screenshot showed it wearing on ${new Date(standIn.photographed.shotAt).toLocaleDateString()} — the game's own picture; Paint… to choose another`
+          ? tx('{ship} in {paint}, the paint a loadout screenshot showed it wearing on {date} — the game\'s own picture; Paint… to choose another',
+            { ship: ship.name, paint: standIn.name, date: new Date(standIn.photographed.shotAt).toLocaleDateString(QW_DATE_LOCALES) })
           : standIn?.stock
-            ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
-            : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
+            ? tx('{ship} in its default livery — the game\'s own picture; Paint… to choose another', { ship: ship.name })
+            : tx('{ship} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose', { ship: ship.name });
       if (options.onPreview) {
         img.classList.add('ship-picture-clickable');
-        img.title += '; click for this ship\'s flight summary';
+        img.title = tx('{picture}; {action}', { picture: img.title, action: tx('click for this ship\'s flight summary') });
         img.addEventListener('click', options.onPreview);
       }
       // Shown as the silhouette for now, the pick kept: a render that fails once -
@@ -20662,7 +20759,11 @@ function shipPicture(ship, maker, options = {}) {
       const outline = el('div', 'ship-outline');
       outline.style.setProperty('--tint', makerTint(maker.code));
       outline.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(ship.className)}")`);
-      outline.title = `${ship.name} — the game's silhouette, tinted ${maker.name}'s colour; ${options.onPreview ? 'click for this ship\'s flight summary' : 'see the fleet to scale on Hangar'}`;
+      outline.title = tx('{ship} — the game\'s silhouette, tinted {maker}\'s colour; {action}', {
+        ship: ship.name,
+        maker: maker.name,
+        action: options.onPreview ? tx('click for this ship\'s flight summary') : tx('see the fleet to scale on Hangar'),
+      });
       outline.addEventListener('click', options.onPreview || (() => showView('hangar')));
 
       // The mask cannot say whether the file exists; an Image can.
@@ -20674,9 +20775,9 @@ function shipPicture(ship, maker, options = {}) {
       box.append(outline);
     }
 
-    const pick = el('button', 'ghost tiny ship-paint', chosen ? 'Paint' : 'Paint…');
+    const pick = el('button', 'ghost tiny ship-paint', chosen ? tx('Paint') : tx('Paint…'));
     pick.type = 'button';
-    pick.title = 'Choose the paint this ship wears, from the ones the game pictures';
+    pick.title = tx('Choose the paint this ship wears, from the ones the game pictures');
     pick.addEventListener('click', () => openPaintChooser(ship, box, pick));
     box.append(pick);
   };
@@ -20711,15 +20812,21 @@ async function openPaintChooser(ship, box, button) {
 
   const select = document.createElement('select');
   select.className = 'select ship-paint-select';
-  select.setAttribute('aria-label', `Paint for ${ship.name}`);
-  select.append(new Option('Silhouette, tinted by maker', SILHOUETTE));
+  select.setAttribute('aria-label', tx('Paint for {ship}', { ship: ship.name }));
+  select.append(new Option(tx('Silhouette, tinted by maker'), SILHOUETTE));
   const unpicked = !shipPaints[ship.className];
-  paints.forEach((paint, i) => select.append(new Option(
-    paint.photographed
-      ? `${paint.name} (photographed ${new Date(paint.photographed.shotAt).toLocaleDateString()}${i === 0 && unpicked ? ', shown until you pick' : ''})`
-      : i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name,
-    paint.item)));
-  if (!paints.length) select.append(new Option('The game pictures no paint for this hull', '', false, false));
+  paints.forEach((paint, i) => {
+    const date = paint.photographed ? new Date(paint.photographed.shotAt).toLocaleDateString(QW_DATE_LOCALES) : null;
+    const standing = i === 0 && unpicked;
+    select.append(new Option(
+      date
+        ? standing
+          ? tx('{paint} (photographed {date}, shown until you pick)', { paint: paint.name, date })
+          : tx('{paint} (photographed {date})', { paint: paint.name, date })
+        : standing ? tx('{paint} (shown until you pick)', { paint: paint.name }) : paint.name,
+      paint.item));
+  });
+  if (!paints.length) select.append(new Option(tx('The game pictures no paint for this hull'), '', false, false));
   // Unpicked shows the first paint, so that is where the list opens.
   select.value = shipPaints[ship.className] || paints[0]?.item || SILHOUETTE;
 
@@ -20817,15 +20924,15 @@ function renderFleet(stats) {
   // number and never names them, so it is labelled as its own thing rather
   // than pretending to agree with the ticked roster.
   const fleetTiles = [
-    ['Owned per game*', stats.fleetSize ?? '—'],
-    ['Roster ticked', `${owned.length} of ${roster.length}`],
-    ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
-    ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
+    [tx('Owned per game*'), stats.fleetSize ?? '—'],
+    [tx('Roster ticked'), tx('{shown} of {total}', { shown: owned.length, total: roster.length })],
+    [tx('Total flights'), owned.reduce((sum, s) => sum + s.sorties, 0)],
+    [tx('Time aboard'), `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
   ];
 
   if (assetsData?.priced) {
     const value = owned.reduce((sum, s) => sum + shipPriceOf(s.name), 0);
-    fleetTiles.push(['Fleet value*', money(value)]);
+    fleetTiles.push([tx('Fleet value*'), money(value)]);
   }
 
   tiles('#fleet-summary', fleetTiles);
@@ -20853,13 +20960,13 @@ function renderFleetComparison() {
 
   box.textContent = '';
   if (hangarComparison.size < 2) {
-    box.append(el('span', 'muted', `Compare ${hangarComparison.size}/2`));
+    box.append(el('span', 'muted', tx('Compare {count}/2', { count: hangarComparison.size })));
     return;
   }
 
-  const open = el('button', 'ghost fleet-compare-open', 'Compare in Hangar');
+  const open = el('button', 'ghost fleet-compare-open', tx('Compare in Hangar'));
   open.type = 'button';
-  open.title = `Draw ${[...hangarComparison].join(' and ')} to one scale`;
+  open.title = tx('Draw {ships} to one scale', { ships: [...hangarComparison].join(` ${tx('and')} `) });
   open.addEventListener('click', () => {
     const mode = $('#hangar-mode');
     if (mode) mode.value = 'scale';
@@ -20888,17 +20995,17 @@ function toggleShipPreview(ship, card) {
   if (!body) return;
 
   const preview = el('div', 'ship-preview', ship.photographedAt
-    ? `fit photographed ${relative(ship.photographedAt)} · no flights logged.`
-    : `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
+    ? `${tx('fit photographed {when} · no flights logged', { when: relative(ship.photographedAt) })}.`
+    : `${txn(ship.sorties, '{count} sortie', '{count} sorties')} · ${tx('~{time} aboard', { time: duration(toSeconds(ship.estimatedTime)) })} · ${tx('last flown {when}', { when: relative(ship.lastFlown) })}.`);
   body.append(preview);
 
   hangarPreviewFor(ship).then((sized) => {
     // The card may have been redrawn by a filter while the game-data request
     // was in flight; never put a late answer into a discarded preview.
     if (preview.parentElement !== body) return;
-    preview.textContent += sized?.length > 0
-      ? ` ${sized.length} × ${sized.beam} × ${sized.height} m from the installed vehicle table.`
-      : ' This install has no measured size for it.';
+    preview.textContent += ` ${sized?.length > 0
+      ? tx('{length} × {beam} × {height} m from the installed vehicle table.', { length: sized.length, beam: sized.beam, height: sized.height })
+      : tx('This install has no measured size for it.')}`;
   });
 }
 
@@ -20944,15 +21051,16 @@ function renderFleetShips() {
   const rosterStatus = $('#fleet-roster-status');
   if (rosterStatus) {
     const shown = filter === 'ground'
-      ? `${vehicles.length} ground vehicle${vehicles.length === 1 ? '' : 's'} shown`
-      : `${shipCount} ship${shipCount === 1 ? '' : 's'} shown`;
-    rosterStatus.textContent = shown
-      + (recentCount ? ` · ${recentCount} active this week` : ' · no flights this week');
+      ? txn(vehicles.length, '{count} ground vehicle shown', '{count} ground vehicles shown')
+      : txn(shipCount, '{count} ship shown', '{count} ships shown');
+    rosterStatus.textContent = `${shown} · ${recentCount
+      ? txn(recentCount, '{count} active this week', '{count} active this week')
+      : tx('no flights this week')}`;
   }
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
-      roster.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
+      roster.length ? tx('No ships match that filter.') : tx('No ships recorded yet.')));
     return;
   }
 
@@ -20972,7 +21080,7 @@ function renderFleetShips() {
     const box = document.createElement('input');
     box.type = 'checkbox';
     box.checked = !off;
-    box.title = off ? 'Not owned - tick to count it again' : 'Owned - untick if rented or sold';
+    box.title = off ? tx('Not owned - tick to count it again') : tx('Owned - untick if rented or sold');
 
     box.addEventListener('change', () => {
       if (box.checked) excludedShips.delete(ship.name);
@@ -20994,7 +21102,7 @@ function renderFleetShips() {
 
     const favourite = el('button', favouriteShips.has(ship.name) ? 'ghost ship-favourite active' : 'ghost ship-favourite', favouriteShips.has(ship.name) ? '★' : '☆');
     favourite.type = 'button';
-    favourite.title = favouriteShips.has(ship.name) ? 'Favourite — click to remove' : 'Favourite this ship';
+    favourite.title = favouriteShips.has(ship.name) ? tx('Favourite — click to remove') : tx('Favourite this ship');
     favourite.addEventListener('click', () => {
       if (favouriteShips.has(ship.name)) favouriteShips.delete(ship.name);
       else favouriteShips.add(ship.name);
@@ -21026,20 +21134,20 @@ function renderFleetShips() {
 
     const stat = el('div', 'ship-stats');
     stat.append(el('b', null, String(ship.sorties)));
-    stat.append(el('span', null, ` flight${ship.sorties === 1 ? '' : 's'}`));
+    stat.append(el('span', null, ` ${txn(ship.sorties, 'flight', 'flights')}`));
 
     const seconds = toSeconds(ship.estimatedTime);
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
     body.append(el('div', isRecentlyFlown(ship) ? 'ship-seen ship-readiness active' : 'ship-seen ship-readiness', ship.photographedAt
-      ? `fit photographed ${relative(ship.photographedAt)} · no flights logged`
-      : `last flown ${relative(ship.lastFlown)}`));
+      ? tx('fit photographed {when} · no flights logged', { when: relative(ship.photographedAt) })
+      : tx('last flown {when}', { when: relative(ship.lastFlown) })));
 
     const statuses = el('div', 'ship-status');
-    if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', '★ favourite'));
-    if (isRecentlyFlown(ship)) statuses.append(el('span', 'ship-status-mark recent', '● flown this week'));
-    if (off) statuses.append(el('span', 'ship-status-mark excluded', '⊘ out of Hangar'));
+    if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', tx('★ favourite')));
+    if (isRecentlyFlown(ship)) statuses.append(el('span', 'ship-status-mark recent', tx('● flown this week')));
+    if (off) statuses.append(el('span', 'ship-status-mark excluded', tx('⊘ out of Hangar')));
     if (statuses.children.length) body.append(statuses);
 
     // Community reference, when enabled and matched: what the ship is for and
@@ -21050,15 +21158,15 @@ function renderFleetShips() {
 
       if (r.role && r.career && r.role !== r.career) bits.push(`${r.career} · ${r.role}`);
       else if (r.role || r.career) bits.push(r.role || r.career);
-      if (r.crew > 0) bits.push(`crew ${r.crew}`);
+      if (r.crew > 0) bits.push(tx('crew {crew}', { crew: r.crew }));
 
       if (bits.length)
         body.append(el('div', 'ship-ref', bits.join(' · ')));
 
       if (r.expeditedCost > 0) {
         body.append(el('div', 'ship-ref muted',
-          `claim: expedite ${money(r.expeditedCost)}`
-          + (r.standardClaimTime ? ` · ~${Math.round(r.standardClaimTime)}m wait` : '')));
+          tx('claim: expedite {cost}', { cost: money(r.expeditedCost) })
+          + (r.standardClaimTime ? ` · ${tx('~{minutes}m wait', { minutes: Math.round(r.standardClaimTime) })}` : '')));
       }
     }
 
@@ -21069,15 +21177,15 @@ function renderFleetShips() {
     if (assetsData?.priced) {
       body.append(assetRow?.price
         ? el('div', 'ship-price', `${money(assetRow.price.price)} · ${assetRow.price.terminal}`)
-        : el('div', 'ship-price muted', 'not sold in game'));
+        : el('div', 'ship-price muted', tx('not sold in game')));
     }
 
     // A rentable model might be a rental rather than yours; the card says so
     // and leaves the tick to the only person who knows.
     if (assetRow?.rental) {
       const hint = el('div', 'ship-rental muted',
-        `rentable ${money(assetRow.rental.price)} at ${assetRow.rental.terminal}`);
-      hint.title = 'If this one was rented, untick it above';
+        tx('rentable {price} at {place}', { price: money(assetRow.rental.price), place: assetRow.rental.terminal }));
+      hint.title = tx('If this one was rented, untick it above');
       body.append(hint);
     }
 
@@ -21085,20 +21193,20 @@ function renderFleetShips() {
     // made only where it can be kept.
     const actions = el('div', 'ship-actions');
     if (!grounded) {
-      const garage = el('button', 'ghost ship-upgrade', 'Garage');
-      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      const garage = el('button', 'ghost ship-upgrade', tx('Garage'));
+      garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: ship.name });
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
       actions.append(garage);
     }
 
-    const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
+    const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? tx('Selected to compare') : tx('Compare'));
     compare.type = 'button';
     compare.disabled = off || !!ship.photographedAt;
     compare.title = off
-      ? 'Tick this ship as owned before comparing it in Hangar'
+      ? tx('Tick this ship as owned before comparing it in Hangar')
       : ship.photographedAt
-        ? 'A photographed fit has no flight or size record to compare in Hangar'
-      : 'Select this ship and one other, then compare them in Hangar';
+        ? tx('A photographed fit has no flight or size record to compare in Hangar')
+      : tx('Select this ship and one other, then compare them in Hangar');
     compare.addEventListener('click', () => {
       if (hangarComparison.has(ship.name)) hangarComparison.delete(ship.name);
       else {
@@ -21137,7 +21245,7 @@ function drawFleetChart(history) {
 
   if (history.length < 2) {
     const text = svgEl('text', { x: 500, y: 110, 'text-anchor': 'middle', class: 'map-label' });
-    text.textContent = 'NOT ENOUGH DATA YET';
+    text.textContent = tx('NOT ENOUGH DATA YET');
     svg.append(text);
     return;
   }
@@ -21369,9 +21477,11 @@ function loadoutFigure(equipped) {
     .map((part) => `loadout-has-${part}`)
     .join(' ');
   const figure = el('div', `loadout-figure loadout-profile-${profile.id} ${observedParts}`);
+  // The profile word and the zone words are page text; the markup is built
+  // here, so they are looked up here rather than by the document walk.
   figure.innerHTML = `
-    <div class="loadout-figure-tag">${profile.label.toUpperCase()} ARMOUR PROFILE</div>
-    <div class="loadout-figure-status"><b>${observedZones.length}/6</b> BODY ZONES OBSERVED</div>
+    <div class="loadout-figure-tag">${tx('{profile} ARMOUR PROFILE', { profile: tx(profile.label).toUpperCase() })}</div>
+    <div class="loadout-figure-status"><b>${observedZones.length}/6</b> ${tx('BODY ZONES OBSERVED')}</div>
     <div class="loadout-pilot-frame">
       <img class="loadout-pilot-art" src="${profile.art}" alt="" />
       <span class="loadout-pilot-zone loadout-pilot-zone-head"></span>
@@ -21381,7 +21491,7 @@ function loadoutFigure(equipped) {
       <span class="loadout-pilot-zone loadout-pilot-zone-arms"></span>
       <span class="loadout-pilot-zone loadout-pilot-zone-legs"></span>
     </div>
-    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>OBSERVED ZONES LIT</span></div>`;
+    <div class="loadout-figure-key"><span>${tx('HEAD')}</span><span>${tx('CORE')}</span><span>${tx('BASE')}</span><span>${tx('PACK')}</span><span>${tx('OBSERVED ZONES LIT')}</span></div>`;
   return figure;
 }
 
@@ -21393,23 +21503,24 @@ function loadoutItemName(item) {
 function loadoutItemFacts(item) {
   const ref = item.reference;
   if (!ref)
-    return { text: 'Game-log item class only', known: false };
+    return { text: tx('Game-log item class only'), known: false };
 
   const facts = [];
   if (ref.manufacturer) facts.push(ref.manufacturer);
   const kind = [ref.type, ref.subType].filter(Boolean).join(' / ');
   if (kind) facts.push(kind);
   if (ref.size > 0) facts.push(`S${ref.size}`);
-  if (ref.grade > 0) facts.push(`Grade ${gradeLetter(ref.grade)}`);
-  return { text: facts.join(' · ') || 'Catalogue entry has no extra specification', known: true };
+  if (ref.grade > 0) facts.push(tx('Grade {grade}', { grade: gradeLetter(ref.grade) }));
+  return { text: facts.join(' · ') || tx('Catalogue entry has no extra specification'), known: true };
 }
 
 function loadoutSlotContents(slot, compact = false) {
   const body = el('div', 'slot-body');
-  body.append(el('div', 'slot-category', slot.category || 'Other'));
+  // The category is the server's word for a fixed set; the reader gets the page's.
+  body.append(el('div', 'slot-category', tx(slot.category || 'Other')));
 
   const label = slot.slotCount > 1
-    ? `${slot.label || slot.port} · ${slot.slotCount} slots`
+    ? `${slot.label || slot.port} · ${tx('{count} slots', { count: slot.slotCount })}`
     : slot.label || slot.port;
   body.append(el('div', 'card-label', label));
 
@@ -21424,14 +21535,14 @@ function loadoutSlotContents(slot, compact = false) {
   }
 
   if (!compact && slot.currentSeen)
-    body.append(el('div', 'slot-when', `last observed ${relative(slot.currentSeen)}`));
+    body.append(el('div', 'slot-when', tx('last observed {when}', { when: relative(slot.currentSeen) })));
   return body;
 }
 
 function loadoutItemInspect(slot) {
   const inspect = el('div', 'loadout-item-inspect');
   inspect.setAttribute('role', 'tooltip');
-  inspect.append(el('div', 'loadout-inspect-eyebrow', `Inspect · ${slot.label || slot.port}`));
+  inspect.append(el('div', 'loadout-inspect-eyebrow', `${tx('Inspect')} · ${slot.label || slot.port}`));
 
   for (const item of slot.items) {
     const entry = el('div', 'loadout-inspect-entry');
@@ -21443,7 +21554,7 @@ function loadoutItemInspect(slot) {
   }
 
   if (slot.currentSeen)
-    inspect.append(el('div', 'loadout-inspect-seen', `Last observed ${relative(slot.currentSeen)}`));
+    inspect.append(el('div', 'loadout-inspect-seen', tx('Last observed {when}', { when: relative(slot.currentSeen) })));
   return inspect;
 }
 
@@ -21451,7 +21562,7 @@ function loadoutEquipSlot(slot, placement) {
   const card = el('article', `loadout-slot loadout-equip-slot loadout-equip-${placement}`);
   card.dataset.category = slot.category || 'Other';
   card.tabIndex = 0;
-  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+  card.setAttribute('aria-label', tx('Inspect {slot}', { slot: slot.label || slot.port }));
 
   const icon = el('div', 'slot-icon');
   icon.innerHTML = slotIconSvg(slot);
@@ -21465,7 +21576,7 @@ function loadoutInventorySlot(slot) {
   const card = el('article', 'loadout-slot loadout-inventory-slot');
   card.dataset.category = slot.category || 'Other';
   card.tabIndex = 0;
-  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+  card.setAttribute('aria-label', tx('Inspect {slot}', { slot: slot.label || slot.port }));
   const icon = el('div', 'slot-icon');
   icon.innerHTML = slotIconSvg(slot);
   card.append(icon);
@@ -21479,14 +21590,14 @@ function loadoutInventorySlot(slot) {
    one attachment does not make the rest of the recorded kit disappear. */
 function loadoutReadiness(slots, completeSighting) {
   const strip = el('section', 'loadout-readiness');
-  strip.setAttribute('aria-label', 'Observed kit readiness');
+  strip.setAttribute('aria-label', tx('Observed kit readiness'));
   const zones = [
     ['head', 'Head'], ['core', 'Core'], ['base', 'Base'],
     ['back', 'Pack'], ['arms', 'Arms'], ['legs', 'Legs'],
   ];
   const observed = new Set(slots.map(loadoutPlacement));
   const observedZones = zones.filter(([id]) => observed.has(id));
-  const unseenZones = zones.filter(([id]) => !observed.has(id)).map(([, label]) => label);
+  const unseenZones = zones.filter(([id]) => !observed.has(id)).map(([, label]) => tx(label));
   const weaponItems = slots
     .filter((slot) => /weapon/i.test(slot.category || ''))
     .flatMap((slot) => slot.items || []);
@@ -21500,27 +21611,27 @@ function loadoutReadiness(slots, completeSighting) {
 
   const add = (label, value, note, state = '') => {
     const card = el('div', `loadout-readiness-card ${state}`.trim());
-    card.append(el('div', 'loadout-readiness-label', label));
+    card.append(el('div', 'loadout-readiness-label', tx(label)));
     card.append(el('strong', null, value));
     card.append(el('span', null, note));
     strip.append(card);
   };
 
-  add('Coverage', `${observedZones.length}/6 zones observed`,
-    unseenZones.length ? `Not observed: ${unseenZones.join(' · ')}` : 'Every body zone was observed',
+  add('Coverage', tx('{count}/6 zones observed', { count: observedZones.length }),
+    unseenZones.length ? tx('Not observed: {zones}', { zones: unseenZones.join(' · ') }) : tx('Every body zone was observed'),
     unseenZones.length ? 'partial' : 'complete');
   add('Weapons', weaponItems.length
-    ? `${weaponItems.length} weapon${weaponItems.length === 1 ? '' : 's'} observed`
-    : 'No weapon observed', weaponItems.length
+    ? txn(weaponItems.length, '{count} weapon observed', '{count} weapons observed')
+    : tx('No weapon observed'), weaponItems.length
     ? weaponItems.slice(0, 2).map(loadoutItemName).join(' · ')
-    : 'The log has no weapon attachment for this kit');
+    : tx('The log has no weapon attachment for this kit'));
   add('Consumables', consumables.length
-    ? `${itemCount(consumableSlots.flatMap((slot) => slot.items || []))} carried`
-    : 'No consumables observed', consumables.length
+    ? txn(itemCount(consumableSlots.flatMap((slot) => slot.items || [])), '{count} carried', '{count} carried')
+    : tx('No consumables observed'), consumables.length
     ? consumables.join(' · ')
-    : 'The log has no medical or throwable attachment for this kit');
-  add('Sighting', sighting ? `Observed ${relative(sighting)}` : 'No sighting time recorded',
-    sighting ? 'Latest complete kit when available' : 'Individual cards may still carry a time');
+    : tx('The log has no medical or throwable attachment for this kit'));
+  add('Sighting', sighting ? tx('Observed {when}', { when: relative(sighting) }) : tx('No sighting time recorded'),
+    sighting ? tx('Latest complete kit when available') : tx('Individual cards may still carry a time'));
   return strip;
 }
 
@@ -21528,16 +21639,16 @@ function loadoutReadiness(slots, completeSighting) {
  * at widget width, a readable inventory order answers faster than body-zone art. */
 function overlayLoadoutStrip(slots, asOf) {
   const strip = el('section', 'overlay-loadout-strip');
-  strip.setAttribute('aria-label', 'Current loadout summary');
+  strip.setAttribute('aria-label', tx('Current loadout summary'));
   const equipped = slots.filter((slot) => loadoutPlacement(slot));
   const stowed = slots.length - equipped.length;
   const facts = [
-    `${equipped.length} worn`,
-    `${stowed} carried`,
-    asOf ? `seen ${relative(asOf)}` : 'latest observed kit',
+    txn(equipped.length, '{count} worn', '{count} worn'),
+    txn(stowed, '{count} carried', '{count} carried'),
+    asOf ? tx('seen {ago}', { ago: relative(asOf) }) : tx('latest observed kit'),
   ];
-  strip.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
-  strip.append(el('strong', null, `${slots.length} observed slots`));
+  strip.append(el('span', 'overlay-loadout-kicker', tx('Current kit')));
+  strip.append(el('strong', null, tx('{count} observed slots', { count: slots.length })));
   strip.append(el('span', 'overlay-loadout-facts', facts.join(' · ')));
   return strip;
 }
@@ -21552,12 +21663,12 @@ function renderLoadout(stats) {
     const compactOverlay = isOverlay || document.body.classList.contains('overlay');
     if (compactOverlay) {
       const empty = el('section', 'overlay-loadout-empty');
-      empty.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
-      empty.append(el('strong', null, 'No equipment observed yet'));
-      empty.append(el('span', null, 'Quantum Wake will list attachments after the game writes an equipment event.'));
+      empty.append(el('span', 'overlay-loadout-kicker', tx('Current kit')));
+      empty.append(el('strong', null, tx('No equipment observed yet')));
+      empty.append(el('span', null, tx('Quantum Wake will list attachments after the game writes an equipment event.')));
       host.append(empty);
     } else {
-      host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+      host.append(el('p', 'muted', tx('No attachment events recorded yet.')));
     }
     return;
   }
@@ -21572,23 +21683,25 @@ function renderLoadout(stats) {
     || slot.items.some((item) => item.name.toLowerCase().includes(term)));
 
   if (!slots.length) {
-    host.append(el('p', 'muted', 'Nothing matches that search.'));
+    host.append(el('p', 'muted', tx('Nothing matches that search.')));
     return;
   }
 
   const compactOverlay = isOverlay || document.body.classList.contains('overlay');
   const screen = el('section', 'loadout-character');
+  screen.dataset.mark = tx('PERSONAL ARMOURY');
   if (compactOverlay) screen.append(overlayLoadoutStrip(slots, stats.loadoutAsOf));
   const head = el('div', 'loadout-character-head');
   const meta = stats.loadoutAsOf
-    ? `Last complete sighting ${relative(stats.loadoutAsOf)}`
-    : 'Each card says when the log last saw it.';
-  head.append(el('div', 'loadout-eyebrow', term ? `${slots.length} matching slots` : `${slots.length} observed slots`));
+    ? tx('Last complete sighting {when}', { when: relative(stats.loadoutAsOf) })
+    : tx('Each card says when the log last saw it.');
+  head.append(el('div', 'loadout-eyebrow', term
+    ? tx('{count} matching slots', { count: slots.length })
+    : tx('{count} observed slots', { count: slots.length })));
   head.append(el('p', 'muted', meta));
   screen.append(head);
   screen.append(el('p', 'loadout-overview',
-    'Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. '
-    + 'Everything here is the latest equipment the log observed, not a live game inventory.'));
+    tx('Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. Everything here is the latest equipment the log observed, not a live game inventory.')));
   screen.append(loadoutReadiness(stats.loadout, stats.loadoutAsOf));
 
   const sheet = el('div', 'loadout-sheet');
@@ -21597,9 +21710,9 @@ function renderLoadout(stats) {
   const right = el('div', 'loadout-equipment loadout-equipment-right');
   const field = el('aside', 'loadout-field-kit');
   const fieldHead = el('div', 'loadout-field-head');
-  fieldHead.append(el('div', 'loadout-eyebrow', 'Field kit'));
+  fieldHead.append(el('div', 'loadout-eyebrow', tx('Field kit')));
   const stowedCount = slots.filter((slot) => !loadoutPlacement(slot)).length;
-  fieldHead.append(el('span', 'group-meta', `${stowedCount} stowed slot${stowedCount === 1 ? '' : 's'}`));
+  fieldHead.append(el('span', 'group-meta', txn(stowedCount, '{count} stowed slot', '{count} stowed slots')));
   field.append(fieldHead);
   const inventory = el('div', 'loadout-inventory-grid');
 
@@ -21616,9 +21729,9 @@ function renderLoadout(stats) {
 
   // A sparse log is normal. Keep both sides balanced rather than making a
   // character frame lean just because one attachment type was never logged.
-  if (!left.childElementCount) left.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
-  if (!right.childElementCount) right.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
-  if (!inventory.childElementCount) inventory.append(el('p', 'muted', 'No stowed kit observed.'));
+  if (!left.childElementCount) left.append(el('div', 'loadout-empty-slot', tx('No observed body slots')));
+  if (!right.childElementCount) right.append(el('div', 'loadout-empty-slot', tx('No observed body slots')));
+  if (!inventory.childElementCount) inventory.append(el('p', 'muted', tx('No stowed kit observed.')));
 
   avatarRig.append(left, loadoutFigure(equipped), right);
   field.append(inventory);
@@ -21647,11 +21760,12 @@ function expandableList(card, items, limit, renderItem, expanded) {
     return;
 
   const hidden = items.length - limit;
-  const toggle = el('button', 'more-toggle', `show ${hidden} more`);
+  const more = tx('show {count} more', { count: hidden });
+  const toggle = el('button', 'more-toggle', more);
 
   toggle.addEventListener('click', () => {
     const showing = list.classList.toggle('show-all');
-    toggle.textContent = showing ? 'show less' : `show ${hidden} more`;
+    toggle.textContent = showing ? tx('show less') : more;
   });
 
   card.append(toggle);
@@ -21690,7 +21804,7 @@ async function renderStash(stats) {
 
   if (!stats.stash || !stats.stash.length) {
     grid.append(el('p', 'muted',
-      'Nothing recorded yet. Open a local inventory in game and it will appear here.'));
+      tx('Nothing recorded yet. Open a local inventory in game and it will appear here.')));
     return;
   }
 
@@ -21750,7 +21864,7 @@ async function renderStash(stats) {
     .filter(Boolean);
 
   if (!places.length) {
-    grid.append(el('p', 'muted', 'Nothing matches that search.'));
+    grid.append(el('p', 'muted', tx('Nothing matches that search.')));
     return;
   }
 
@@ -21763,11 +21877,11 @@ async function renderStash(stats) {
     const measured = place.microScu > 0 ? ` · ${volume(place.microScu)}` : '';
 
     card.append(el('div', 'sub',
-      `${place.itemCount} item types${measured} · last seen ${dateOf(place.lastSeen)}`));
+      `${tx('{count} item types', { count: place.itemCount })}${measured} · ${tx('last seen {date}', { date: dateOf(place.lastSeen) })}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
-      head.append(el('span', 'stash-group-name', group.category));
+      head.append(el('span', 'stash-group-name', tx(group.category)));
       head.append(el('span', 'slot-count', String(group.items.length)));
       card.append(head);
 
@@ -24540,7 +24654,7 @@ function renderKits() {
   list.textContent = '';
 
   if (!kits.length) {
-    list.append(el('p', 'muted', 'No kits yet. Save what you are wearing to make one.'));
+    list.append(el('p', 'muted', tx('No kits yet. Save what you are wearing to make one.')));
     return;
   }
 
@@ -24550,16 +24664,16 @@ function renderKits() {
     const main = el('div', 'kit-row-main');
     main.append(el('div', 'name', kit.name));
     main.append(el('div', 'sub muted',
-      `${kit.items.length} item${kit.items.length === 1 ? '' : 's'}`));
+      txn(kit.items.length, '{count} item', '{count} items')));
     row.append(main);
 
-    const prepare = el('button', 'ghost tiny', 'Prepare');
-    prepare.title = 'Compare this kit with what you have';
+    const prepare = el('button', 'ghost tiny', tx('Prepare'));
+    prepare.title = tx('Compare this kit with what you have');
     prepare.addEventListener('click', () => prepareKit(kit.id).catch(() => {}));
     row.append(prepare);
 
     const drop = el('button', 'ghost tiny danger', '×');
-    drop.title = 'Delete this kit';
+    drop.title = tx('Delete this kit');
     drop.addEventListener('click', async () => {
       await fetch(`/api/kits/${encodeURIComponent(kit.id)}`, { method: 'DELETE' });
       if (preparing?.kitId === kit.id) closeKitPrepare();
@@ -24587,7 +24701,7 @@ async function saveWornAsKit() {
     .map((item) => ({ name: item.name, quantity: item.count || 1, optional: false }));
 
   if (!items.length) {
-    status.textContent = 'Nothing is showing in your loadout yet, so there is nothing to save.';
+    status.textContent = tx('Nothing is showing in your loadout yet, so there is nothing to save.');
     return;
   }
 
@@ -24598,7 +24712,7 @@ async function saveWornAsKit() {
   });
 
   $('#kit-name').value = '';
-  status.textContent = `Saved ${items.length} item${items.length === 1 ? '' : 's'}.`;
+  status.textContent = txn(items.length, 'Saved {count} item.', 'Saved {count} items.');
   await loadKits();
 }
 
@@ -24612,21 +24726,22 @@ function renderKitPrepare() {
   panel.hidden = !preparing;
   if (!preparing) return;
 
-  $('#kit-prepare-title').textContent = `Preparing ${preparing.name}`;
+  $('#kit-prepare-title').textContent = tx('Preparing {kit}', { kit: preparing.name });
   $('#kit-prepare-rule').textContent = preparing.rule;
 
   const body = $('#kit-prepare-table').querySelector('tbody');
   body.textContent = '';
 
   for (const line of preparing.lines) {
-    const [words, asks] = KIT_HOLDING[line.holding] || [line.holding, false];
+    const [english, asks] = KIT_HOLDING[line.holding] || [line.holding, false];
+    const words = tx(english);
 
     const row = el('tr');
 
     const name = el('td');
     name.append(el('span', null, line.name));
     if (line.quantity > 1) name.append(el('span', 'note-inline muted', ` ×${line.quantity}`));
-    if (line.optional) name.append(el('span', 'note-inline muted', ' optional'));
+    if (line.optional) name.append(el('span', 'note-inline muted', ` ${tx('optional')}`));
     row.append(name);
 
     // Where it was only matters for the lines that need answering. Equipped
@@ -24637,7 +24752,7 @@ function renderKitPrepare() {
     // that one is on the character, then leaves the pilot unable to tell why
     // the shopping list has three rather than four.
     const holding = line.short > 0
-      ? `${line.held} on you · ${line.short} still needed`
+      ? txn(line.short, '{held} on you · {count} still needed', '{held} on you · {count} still needed', { held: line.held })
       : asks && line.where ? `${words} — ${line.where}` : words;
     row.append(el('td', line.holding === 'Missing' ? 'muted want' : 'muted', holding));
 
@@ -24650,20 +24765,20 @@ function renderKitPrepare() {
     // take, and offering one against "never seen" asks about nothing.
     if (asks) {
       const gone = el('button', 'ghost tiny');
-      gone.textContent = 'I have it';
+      gone.textContent = tx('I have it');
       gone.dataset.name = line.name;
       gone.dataset.gone = 'false';
 
       gone.addEventListener('click', () => {
         const isGone = gone.dataset.gone !== 'true';
         gone.dataset.gone = String(isGone);
-        gone.textContent = isGone ? 'It is gone' : 'I have it';
+        gone.textContent = isGone ? tx('It is gone') : tx('I have it');
         gone.classList.toggle('want', isGone);
       });
 
       answer.append(gone);
     } else {
-      answer.append(el('span', 'muted', line.holding === 'Missing' ? 'on the list' : 'settled'));
+      answer.append(el('span', 'muted', line.holding === 'Missing' ? tx('on the list') : tx('settled')));
     }
 
     row.append(answer);
@@ -24688,8 +24803,8 @@ async function makeKitShopping() {
   const answer = await response.json();
 
   status.textContent = answer.items === 0
-    ? 'Nothing to buy — everything in this kit is either on you or accounted for.'
-    : `Made a list of ${answer.items} item${answer.items === 1 ? '' : 's'}. It is on the Jobs page.`;
+    ? tx('Nothing to buy — everything in this kit is either on you or accounted for.')
+    : txn(answer.items, 'Made a list of {count} item. It is on the Jobs page.', 'Made a list of {count} items. It is on the Jobs page.');
 
   closeKitPrepare();
   await loadJobs().catch(() => {});

@@ -12,7 +12,7 @@ namespace Quantumwake.WebTests;
 /// </remarks>
 public class KitPanelTests
 {
-    private const string Prepared = """
+    internal const string Prepared = """
         {"kitId":"k1","name":"Bounty kit",
          "rule":"The game logs an item being seen in a container, never one being taken out or used up.",
          "lines":[

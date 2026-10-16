@@ -450,3 +450,49 @@ shop and mineral names and the server's recipe materials ("any 2 of: …").
 - `ReferenceFrenchTests` covers the ship catalogue (careers and roles kept),
   a blueprint, a mining run's stage and next step, the crack verdict with the
   mineral's name kept, and an item card's price age.
+
+### 0.18.12
+
+The Hangar group: Fleet, Hangar, Loadout, Stash, Loot, Garage and Armoury,
+with the saved kits and the ship picture every one of them draws. Rendered
+against this install in French, the visible-text probe finds nothing English
+on the seven pages but item, ship, maker and shop names, the slot names the
+server makes from port names, gun kinds and fire modes, text read off a
+screenshot, and three server sentences (the Garage's notes, the cargo fit's
+reasons, a fire mode's condition). 824 entries added, 3,326 in all.
+
+- **The logo was translated by accident and is pinned now.** "Quantum" went in
+  as the Garage's sheet heading, and the brand is `Quantum <b>Wake</b>` - a
+  mixed node whose whole key was missing, so the walk fell through to the bare
+  text node and the header read "QUANTIQUE WAKE". An identity entry for the
+  whole key keeps it the name. Any new one-word key that matches the first word
+  of a mixed node will do the same; the screenshot is what catches it.
+- **Two English column labels were renamed rather than shared.** "Length" was
+  already "Durée" for how long a session ran on the Log's file list; that
+  header is now "Duration", and "Length" is a ship's. The Armoury's "Drop" was
+  "Retirer", the UEX feed button; the column is now "Drop-off".
+- **The Loadout watermark was CSS.** `content: "PERSONAL ARMOURY"` cannot be
+  looked up, so the rule reads `attr(data-mark)` and `renderLoadout` sets it.
+- **Counts that agree were moved to `txn()`** even where English needs no
+  plural: "1 décoché" and "3 décochés" are different words, "1 unticked" and
+  "3 unticked" are not. Same for worn, carried, active this week and still
+  needed.
+- **Holster sizes are one phrase each.** "{weight} holster" cannot carry
+  "Petit étui" and "Étui moyen" - French puts the size word on either side and
+  agrees it - so `armouryHolster` looks up "Small holster", "Medium holster"
+  and "Large holster".
+- **No article in front of a game name.** "du {ship}" reads "du Anvil" and "de
+  {maker}" reads "de Origin"; those templates now put the name behind a colon
+  or in brackets after a noun ("ce vaisseau ({ship})").
+- **Server words the page keys on**: an item's category on Stash and Loot, a
+  kit line's holding, a loadout slot's category - translated where drawn,
+  compared in English. The Loot kind filter keeps the English value and shows
+  the French text.
+- **French headers that pushed a column off the table were shortened**:
+  "Charg." and "Par charg." on the Armoury's guns.
+- **Two Garage messages now use curly quotes in English** ("Added “Starlancer
+  fit”"), as every other quoted name in the app does; one WebTest followed.
+- `HangarFrenchTests` covers a prepared kit (the sighting still asks), the
+  loadout's readiness strip and armour profile with slot labels kept, the Loot
+  kind filter's French text over English values, and a gun's holster and
+  damage.
