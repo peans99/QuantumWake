@@ -2210,7 +2210,7 @@ function closeEntity() {
 }
 
 function renderEntity(card) {
-  $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] || card.kind;
+  $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] ? tx(ENTITY_KICKER[card.kind]) : card.kind;
   $('#entity-name').textContent = card.name;
   $('#entity-sub').textContent = card.subtitle || '';
 
@@ -2289,7 +2289,7 @@ function renderEntityPrice(card) {
     `${money(price.amount)}${price.unit === 'aUEC/SCU' ? '/SCU' : ''}`));
 
   const detail = [
-    price.where ? `at ${price.where}` : null,
+    price.where ? tx('at {place}', { place: price.where }) : null,
     price.asOf ? `${price.source}, ${ageWord(price.asOf)}` : price.source,
   ].filter(Boolean).join(' · ');
 
@@ -2299,10 +2299,10 @@ function renderEntityPrice(card) {
 /** "collected 3 days ago", so a stale table reads as stale rather than as fact. */
 function ageWord(at) {
   const days = Math.floor((Date.now() - new Date(at).getTime()) / 86400000);
-  if (!Number.isFinite(days) || days < 0) return 'age unknown';
-  if (days === 0) return 'collected today';
-  if (days === 1) return 'collected yesterday';
-  return `collected ${days} days ago`;
+  if (!Number.isFinite(days) || days < 0) return tx('age unknown');
+  if (days === 0) return tx('collected today');
+  if (days === 1) return tx('collected yesterday');
+  return tx('collected {count} days ago', { count: days });
 }
 
 /**
@@ -2358,7 +2358,7 @@ function renderEntityWhere(card) {
   node.hidden = places.length === 0;
   if (node.hidden) return;
 
-  node.append(el('div', 'entity-label', 'Where'));
+  node.append(el('div', 'entity-label', tx('Where')));
 
   for (const place of places) {
     const row = el('div', 'entity-where-row');
@@ -2368,7 +2368,7 @@ function renderEntityWhere(card) {
     if (place.placeId) {
       const link = el('button', 'entity-link', place.name);
       link.type = 'button';
-      link.title = 'Show this on the map';
+      link.title = tx('Show this on the map');
       link.addEventListener('click', () => entityMap(place.placeId, place.name));
       row.append(link);
     } else {
@@ -2435,7 +2435,7 @@ function renderEntityActions(card) {
     // The overlay is already the pinned window; it has nothing to pin into.
     if (action === 'overlay' && isOverlay) continue;
 
-    const button = el('button', 'ghost tiny', ENTITY_ACTION_LABEL[action] || action);
+    const button = el('button', 'ghost tiny', ENTITY_ACTION_LABEL[action] ? tx(ENTITY_ACTION_LABEL[action]) : action);
     button.type = 'button';
     button.addEventListener('click', () => runEntityAction(action, card, button));
     bar.append(button);
@@ -2455,7 +2455,7 @@ async function runEntityAction(action, card, button) {
         body: JSON.stringify({ placeId: card.id, place: card.name, note: null }),
       });
       await loadTrips();
-      button.textContent = '✓ added';
+      button.textContent = tx('✓ added');
       return;
     }
 
@@ -2466,8 +2466,8 @@ async function runEntityAction(action, card, button) {
         body: JSON.stringify({ name: card.name, needed: 1, unit: '' }),
       }).then((r) => r.json());
 
-      button.textContent = '✓ added';
-      button.title = `On "${result.title}"`;
+      button.textContent = tx('✓ added');
+      button.title = tx('On “{list}”', { list: result.title });
       return;
     }
 
@@ -2478,10 +2478,10 @@ async function runEntityAction(action, card, button) {
       const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
       if (!response.ok) throw new Error('overlay refused');
 
-      button.textContent = '✓ pinned';
+      button.textContent = tx('✓ pinned');
     }
   } catch {
-    button.textContent = 'failed';
+    button.textContent = tx('failed');
     button.disabled = false;
   }
 }
@@ -4561,7 +4561,7 @@ async function loadShipsRef() {
   const previous = select.value;
 
   select.textContent = '';
-  select.append(new Option('All careers', ''));
+  select.append(new Option(tx('All careers'), ''));
   for (const career of careers) select.append(new Option(career, career));
   if (careers.includes(previous)) select.value = previous;
 
@@ -4582,15 +4582,15 @@ function renderShipsRef() {
   const counter = $('#ships-count');
   if (counter) {
     counter.textContent = rows.length
-      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'hull' : 'hulls'}`
-      : shipCatalogue.length ? 'No matches' : 'Waiting for catalogue';
+      ? txn(rows.length, '{count} hull', '{count} hulls', { count: rows.length.toLocaleString() })
+      : shipCatalogue.length ? tx('No matches') : tx('Waiting for catalogue');
   }
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', shipCatalogue.length
-      ? 'No ships match that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      ? tx('No ships match that filter.')
+      : tx('Enable the community dataset on the Settings page to fill this in.'));
     td.colSpan = 14;
     tr.append(td);
     body.append(tr);
@@ -4600,7 +4600,7 @@ function renderShipsRef() {
   for (const ship of rows) {
     const tr = el('tr');
     const name = el('td', null, ship.name);
-    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ' · ground'));
+    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ` · ${tx('ground')}`));
     tr.append(name);
 
     tr.append(el('td', 'muted', ship.career ?? '—'));
@@ -4621,10 +4621,10 @@ function renderShipsRef() {
     // Every shop and every rental desk sit on the hover, cheapest first: the
     // cheapest is the number, but the nearest is usually the one wanted.
     const shops = ship.shops || [];
-    const buy = el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold');
+    const buy = el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : tx('not sold'));
     const where = el('td', 'muted', ship.price?.terminal ?? '—');
     if (shops.length > 1) where.append(el('span', 'note-inline', ` +${shops.length - 1}`));
-    if (shops.length) buy.title = where.title = placeList('Sold at', shops);
+    if (shops.length) buy.title = where.title = placeList(tx('Sold at'), shops);
     tr.append(buy, where);
 
     // Rentals only exist when that feed is on; otherwise the column is dashes.
@@ -4632,7 +4632,7 @@ function renderShipsRef() {
     const rent = el('td', ship.rental ? 'num' : 'num muted',
       ship.rental ? money(ship.rental.price) : '—');
     if (ship.rental) {
-      rent.title = placeList('Rents at', rentals.length ? rentals : [ship.rental]);
+      rent.title = placeList(tx('Rents at'), rentals.length ? rentals : [ship.rental]);
       if (rentals.length > 1) rent.append(el('span', 'note-inline', ` +${rentals.length - 1}`));
     }
     tr.append(rent);
@@ -4658,7 +4658,7 @@ async function loadPartsRef() {
   const previous = select.value;
 
   select.textContent = '';
-  select.append(new Option('All types', ''));
+  select.append(new Option(tx('All types'), ''));
   for (const type of types) select.append(new Option(prettyType(type), type));
   if (types.includes(previous)) select.value = previous;
 
@@ -4669,11 +4669,9 @@ async function loadPartsRef() {
   const caption = $('#parts-caption');
   if (caption && partCatalogue.length) {
     caption.textContent = partCatalogue[0].source === 'install'
-      ? `${partCatalogue.length.toLocaleString()} ship components and pieces of personal gear, `
-        + `read from your game install with type, size, grade and maker, and UEX in-game `
-        + `prices where a shop stocks one.`
-      : `Every ship component and piece of personal gear in the community digest, with type, `
-        + `size, grade and maker, and UEX in-game prices where a shop stocks one.`;
+      ? tx('{count} ship components and pieces of personal gear, read from your game install with type, size, grade and maker, and UEX in-game prices where a shop stocks one.',
+        { count: partCatalogue.length.toLocaleString() })
+      : tx('Every ship component and piece of personal gear in the community digest, with type, size, grade and maker, and UEX in-game prices where a shop stocks one.');
   }
 
   renderPartsRef();
@@ -4725,16 +4723,16 @@ function renderPartsRef() {
 
   const counter = $('#parts-count');
   counter.textContent = rows.length > PARTS_CAP
-    ? `${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} items shown — refine to see the rest.`
+    ? tx('{shown} of {total} items shown — refine to see the rest.', { shown: PARTS_CAP.toLocaleString(), total: rows.length.toLocaleString() })
     : rows.length
-      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'item' : 'items'}`
-      : partCatalogue.length ? 'No matches' : 'Waiting for catalogue';
+      ? txn(rows.length, '{count} item', '{count} items', { count: rows.length.toLocaleString() })
+      : partCatalogue.length ? tx('No matches') : tx('Waiting for catalogue');
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', partCatalogue.length
-      ? 'Nothing matches that filter.'
-      : gameDataExcuse() || 'No parts were found in your game files.');
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No parts were found in your game files.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -4754,7 +4752,7 @@ function renderPartsRef() {
     // it costs and where - so the name always opens one, where it used to open
     // only for the items the game happened to write a paragraph about.
     const open = el('button', 'place-link commodity-open', shown);
-    open.title = 'What Quantum Wake knows about this';
+    open.title = tx('What Quantum Wake knows about this');
     open.addEventListener('click', () => openEntity('part', part.className));
     label.append(open);
 
@@ -4900,7 +4898,7 @@ function renderMiningMethods() {
     tr.append(el('td', 'num', pips(m.speedRating)));
     body.append(tr);
   }
-  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the cheapest, the fastest - the refinery terminal calls a three for cost “LOW COST”. The percentages behind them are the server’s and no feed carries them; the yields a refinery actually quoted you are in the table above, read off your screenshots.';
+  $('#mining-methods-note').textContent = tx('UEX’s ratings, which are the game’s own pips: three is the most yield, the cheapest, the fastest - the refinery terminal calls a three for cost “LOW COST”. The percentages behind them are the server’s and no feed carries them; the yields a refinery actually quoted you are in the table above, read off your screenshots.');
 }
 
 async function loadMiningPending() {
@@ -4923,11 +4921,11 @@ async function loadMiningPending() {
   const processing = waiting.length - ready;
   panel.dataset.state = ready ? 'ready' : 'processing';
   $('#mining-pending-title').textContent = ready
-    ? 'Refinery jobs ready to collect'
-    : 'Refinery jobs in progress';
+    ? tx('Refinery jobs ready to collect')
+    : tx('Refinery jobs in progress');
   $('#mining-pending-summary').textContent = [
-    ready ? `${ready} ready to collect` : null,
-    processing ? `${processing} processing` : null,
+    ready ? tx('{count} ready to collect', { count: ready }) : null,
+    processing ? tx('{count} processing', { count: processing }) : null,
   ].filter(Boolean).join(' · ');
   $('#mining-pending-note').textContent = waiting[0].caveat;
 
@@ -4940,24 +4938,24 @@ async function loadMiningPending() {
 
     const identity = el('div', 'mining-waiting-main');
     identity.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
-    identity.append(el('span', 'mining-waiting-place', run.refinery.place || 'Refinery not named'));
+    identity.append(el('span', 'mining-waiting-place', run.refinery.place || tx('Refinery not named')));
     row.append(identity);
 
     row.append(el('span', `mining-waiting-state ${run.stage === 'Ready' ? 'ready' : 'processing'}`,
-      run.stage === 'Ready' ? 'Ready to collect' : 'Processing'));
+      run.stage === 'Ready' ? tx('Ready to collect') : tx('Processing')));
 
     // The two states read differently on purpose: one is waiting, the other is
     // the app pointing out that your own estimate has passed.
     row.append(el('span', `${run.stage === 'Ready' ? 'want' : 'muted'} mining-waiting-time`,
       run.refinery.expectedAt
         ? (run.stage === 'Ready'
-          ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
-          : `due ${dateOf(run.refinery.expectedAt)}`)
-        : 'no time given'));
+          ? tx('you expected it by {date}', { date: dateOf(run.refinery.expectedAt) })
+          : tx('due {date}', { date: dateOf(run.refinery.expectedAt) }))
+        : tx('no time given')));
 
     const detail = [
-      run.refinery.method ? `Method · ${run.refinery.method}` : null,
-      run.refinery.cost != null ? `Job cost · ${money(run.refinery.cost)}` : null,
+      run.refinery.method ? `${tx('Method')} · ${run.refinery.method}` : null,
+      run.refinery.cost != null ? `${tx('Job cost')} · ${money(run.refinery.cost)}` : null,
     ].filter(Boolean).join(' · ');
     if (detail) row.append(el('span', 'mining-waiting-detail', detail));
 
@@ -4968,13 +4966,16 @@ async function loadMiningPending() {
     const e = run.estimate;
     if (e) {
       const method = run.method
-        ? ` under ${run.method.name} (yield ${run.method.yieldRating}/3, cost ${run.method.costRating}/3, speed ${run.method.speedRating}/3)`
-        : (run.refinery.method ? ` under ${run.refinery.method}` : '');
+        ? ` ${tx('under {method} (yield {yield}/3, cost {cost}/3, speed {speed}/3)', {
+          method: run.method.name, yield: run.method.yieldRating, cost: run.method.costRating, speed: run.method.speedRating })}`
+        : (run.refinery.method ? ` ${tx('under {method}', { method: run.refinery.method })}` : '');
       const bonus = e.bonusPercent != null
-        ? `, ${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent} % station bonus at ${e.bonusAt} makes ${fmtInt(e.withBonus)}`
-        : e.bonusKnown ? ', no station bonus reported for this ore here' : '';
+        ? `, ${tx('{bonus} % station bonus at {place} makes {total}', {
+          bonus: `${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent}`, place: e.bonusAt, total: fmtInt(e.withBonus) })}`
+        : e.bonusKnown ? `, ${tx('no station bonus reported for this ore here')}` : '';
+      const gross = tx('≤ {gross} aUEC at {price}/SCU refined', { gross: fmtInt(e.gross), price: fmtInt(e.perScu) });
       row.append(el('span', 'muted small mining-estimate',
-        `≤ ${fmtInt(e.gross)} aUEC at ${fmtInt(e.perScu)}/SCU refined${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — before the method’s own yield and the fee, which nobody publishes`));
+        `${gross}${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — ${tx('before the method’s own yield and the fee, which nobody publishes')}`));
     }
 
     list.append(row);
@@ -5124,22 +5125,22 @@ function refineryRow(row, nowMs) {
 
   if (row.kind === 'order') {
     const order = row.order;
-    line.append(el('span', 'name', `${order.method || 'Method not read'} · ${order.station}`));
-    line.append(el('span', 'muted', `seen ${shortTimeOf(order.seenAt)}, ${dateOf(order.seenAt)}`));
+    line.append(el('span', 'name', `${order.method || tx('Method not read')} · ${order.station}`));
+    line.append(el('span', 'muted', tx('seen {time}, {date}', { time: shortTimeOf(order.seenAt), date: dateOf(order.seenAt) })));
   } else {
-    line.append(el('span', 'name', `An order at ${row.done.station}`));
-    line.append(el('span', 'muted', 'no screenshot of it'));
+    line.append(el('span', 'name', tx('An order at {station}', { station: row.done.station })));
+    line.append(el('span', 'muted', tx('no screenshot of it')));
   }
 
   line.append(el('span', `${state === 'running' || state === 'collected' ? 'muted' : 'want'} mining-waiting-time`,
-    collected ? `collected ${shortTimeOf(collected)}, ${dateOf(collected)}` : refineryReadyText(row, nowMs)));
+    collected ? tx('collected {time}, {date}', { time: shortTimeOf(collected), date: dateOf(collected) }) : refineryReadyText(row, nowMs)));
 
   if (row.kind === 'order') {
     const order = row.order;
     const detail = [
-      order.inCscu != null ? `${order.inCscu} cSCU in` : null,
-      order.outCscu != null ? `${order.outCscu} cSCU back` : null,
-      order.cost != null ? `cost ${money(order.cost)}` : null,
+      order.inCscu != null ? tx('{amount} cSCU in', { amount: order.inCscu }) : null,
+      order.outCscu != null ? tx('{amount} cSCU back', { amount: order.outCscu }) : null,
+      order.cost != null ? tx('cost {amount}', { amount: money(order.cost) }) : null,
     ].filter(Boolean).join(' · ');
     if (detail) line.append(el('span', 'mining-waiting-detail', detail));
 
@@ -5149,15 +5150,15 @@ function refineryRow(row, nowMs) {
       .join(' · ');
     if (lots) line.append(el('span', 'muted small', lots));
   } else {
-    line.append(el('span', 'muted small', 'Nothing is known of what was in it - only where and when the game said it finished.'));
+    line.append(el('span', 'muted small', tx('Nothing is known of what was in it - only where and when the game said it finished.')));
   }
 
   // Ready rows can be picked up; a collected one can be put back, because a
   // misclick should not lose the only pointer to ore still at a station.
   if (state !== 'running') {
-    const button = el('button', 'ghost tiny refinery-collect', collected ? 'Not collected' : 'Collected');
+    const button = el('button', 'ghost tiny refinery-collect', collected ? tx('Not collected') : tx('Collected'));
     button.type = 'button';
-    button.title = collected ? 'Put it back under waiting' : 'You picked it up - the game logs no collection, so say so here';
+    button.title = collected ? tx('Put it back under waiting') : tx('You picked it up - the game logs no collection, so say so here');
     button.addEventListener('click', () => setRefineryCollected(refineryRowId(row), !!collected));
     line.append(button);
   }
@@ -5187,11 +5188,7 @@ function renderRefineryOrders() {
   const select = $('#refinery-notify');
   if (select) select.value = refineryNotifyMode();
 
-  $('#refinery-orders-note').textContent =
-    'Read off your screenshots of a refinery terminal - the PROCESSING screen starts the clock for certain; '
-    + 'a quote starts it only if you confirmed it. The game’s log says when an order finishes, and nothing else, '
-    + 'so “ready” is either the game’s word or the terminal’s clock, and the line says which. It logs no collection '
-    + 'either: press Collected when you pick one up, and it moves to the history.';
+  $('#refinery-orders-note').textContent = tx('Read off your screenshots of a refinery terminal - the PROCESSING screen starts the clock for certain; a quote starts it only if you confirmed it. The game’s log says when an order finishes, and nothing else, so “ready” is either the game’s word or the terminal’s clock, and the line says which. It logs no collection either: press Collected when you pick one up, and it moves to the history.');
 
   list.textContent = '';
 
@@ -5202,14 +5199,14 @@ function renderRefineryOrders() {
   };
 
   const waitingLine = refineryWaitingLine(groups);
-  list.append(el('div', `refinery-waiting-line ${waitingLine ? 'want' : 'muted'}`, waitingLine || 'Nothing waiting at a refinery.'));
+  list.append(el('div', `refinery-waiting-line ${waitingLine ? 'want' : 'muted'}`, waitingLine || tx('Nothing waiting at a refinery.')));
 
-  section('Waiting for you', groups.waiting, 'waiting');
-  section('Refining', groups.refining, 'refining');
-  section('Collected', groups.collected.slice(0, REFINERY_HISTORY), 'collected');
+  section(tx('Waiting for you'), groups.waiting, 'waiting');
+  section(tx('Refining'), groups.refining, 'refining');
+  section(tx('Collected'), groups.collected.slice(0, REFINERY_HISTORY), 'collected');
 
   if (groups.collected.length > REFINERY_HISTORY)
-    list.append(el('div', 'muted small', `${groups.collected.length - REFINERY_HISTORY} older collected orders not shown.`));
+    list.append(el('div', 'muted small', tx('{count} older collected orders not shown.', { count: groups.collected.length - REFINERY_HISTORY })));
 
   renderRefineryMeasured(picture?.measured || []);
 
@@ -5285,9 +5282,7 @@ function renderRefineryMeasured(rows) {
     body.append(tr);
   }
 
-  $('#refinery-measured-note').textContent =
-    'In and out in cSCU, as the terminal quoted them before you confirmed - the station’s bonus and its load '
-    + 'are already in the figure. One row is one quote; a small lot rounds hard, so 6 in and 2 out is not a third.';
+  $('#refinery-measured-note').textContent = tx('In and out in cSCU, as the terminal quoted them before you confirmed - the station’s bonus and its load are already in the figure. One row is one quote; a small lot rounds hard, so 6 in and 2 out is not a third.');
 }
 
 /**
@@ -5338,11 +5333,10 @@ async function refineryTimerFired(key) {
   const mode = refineryNotifyMode();
   if (mode === 'off' || mode === 'log') return;
 
-  const quote = order.basis === 'quote' ? ', if you confirmed the quote' : '';
-  toast('refinery-due', 'Refinery order should be ready',
-    mode === 'mixed'
-      ? `${order.station} — by the terminal’s clock${quote}; the game has not said so`
-      : `${order.station} — by the terminal’s clock${quote}`);
+  const quote = order.basis === 'quote' ? `, ${tx('if you confirmed the quote')}` : '';
+  const clock = `${order.station} — ${tx('by the terminal’s clock')}${quote}`;
+  toast('refinery-due', tx('Refinery order should be ready'),
+    mode === 'mixed' ? `${clock}; ${tx('the game has not said so')}` : clock);
 }
 
 /**
@@ -5389,10 +5383,10 @@ function miningStageForm(run) {
 
   function field(key, label, placeholder, type = 'text') {
     const wrap = el('label', 'mining-stage-field');
-    wrap.append(el('span', null, label));
+    wrap.append(el('span', null, tx(label)));
     const input = el('input', 'search');
     input.type = type;
-    input.placeholder = placeholder;
+    input.placeholder = tx(placeholder);
     if (type === 'number') input.step = 'any';
     inputs[key] = input;
     wrap.append(input);
@@ -5411,7 +5405,7 @@ function miningStageForm(run) {
     field('revenue', 'Sold for', 'aUEC', 'number');
   }
 
-  const save = el('button', 'ghost', 'Save');
+  const save = el('button', 'ghost', tx('Save'));
 
   save.addEventListener('click', async () => {
     if (run.stage === 'Extracted') {
@@ -5463,7 +5457,7 @@ async function loadMiningLog() {
   body.textContent = '';
 
   if (!runs.length) {
-    note.textContent = 'Nothing recorded yet.';
+    note.textContent = tx('Nothing recorded yet.');
     return;
   }
 
@@ -5487,14 +5481,14 @@ async function loadMiningLog() {
 
     const [words, next] = MINING_STAGE[run.stage] || [run.stage, null];
 
-    const stage = el('td', run.stage === 'Ready' ? 'want' : 'muted', words);
+    const stage = el('td', run.stage === 'Ready' ? 'want' : 'muted', MINING_STAGE[run.stage] ? tx(words) : words);
     tr.append(stage);
 
     const step = el('td');
 
     if (next) {
       let form = null;
-      const advance = el('button', 'ghost small', next);
+      const advance = el('button', 'ghost small', tx(next));
 
       advance.addEventListener('click', () => {
         // Toggling rather than stacking: pressing it twice should close the
@@ -5517,7 +5511,7 @@ async function loadMiningLog() {
     tr.append(step);
 
     const drop = el('td', 'num');
-    const remove = el('button', 'ghost small', 'Remove');
+    const remove = el('button', 'ghost small', tx('Remove'));
     remove.addEventListener('click', async () => {
       await fetch(`/api/mining/log/${run.id}`, { method: 'DELETE' }).catch(() => {});
       await loadMiningLog().catch(() => {});
@@ -5533,11 +5527,11 @@ async function loadMiningLog() {
 
   const waiting = runs.filter((r) => r.stage === 'Submitted' || r.stage === 'Ready').length;
 
-  note.textContent = `${runs.length} run${runs.length === 1 ? '' : 's'}, `
+  note.textContent = `${txn(runs.length, '{count} run', '{count} runs')}, `
     + `${scu.toLocaleString()} SCU`
     + (earned > 0 ? `, ${money(earned)}` : '')
-    + (waiting > 0 ? `, ${waiting} still at a refinery` : '')
-    + ' — your own record, kept apart from the log-derived figures above.';
+    + (waiting > 0 ? `, ${tx('{count} still at a refinery', { count: waiting })}` : '')
+    + ` — ${tx('your own record, kept apart from the log-derived figures above.')}`;
 }
 
 $('#mining-log-form')?.addEventListener('submit', async (e) => {
@@ -5588,7 +5582,7 @@ async function loadSalvage() {
   if (!salvageModel?.ready) {
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     for (const t of tables) if (t) t.hidden = true;
     return;
@@ -5599,7 +5593,7 @@ async function loadSalvage() {
   const price = (market) => market?.price ? `${fmtInt(market.price)} aUEC` : '—';
   const where = (market) => {
     const best = market?.shops?.[0];
-    if (!best) return salvageModel.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+    if (!best) return salvageModel.itemPricesKnown ? tx('no terminal recorded') : tx('prices need UEX (Settings)');
     const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
     return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
   };
@@ -5609,24 +5603,30 @@ async function loadSalvage() {
   for (const s of salvageModel.ships || []) {
     const tr = el('tr');
     const name = el('td', null, s.name);
-    if (s.flown) name.append(el('span', 'chip count', ' flown'));
+    if (s.flown) name.append(el('span', 'chip count', ` ${tx('flown')}`));
     tr.append(name);
     tr.append(el('td', 'num', String(s.heads)));
     tr.append(el('td', null, s.scrapesTo || '—'));
-    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? `${s.scuPerCubicMetre} SCU/m³ of ${s.disintegratesTo}` : '—'));
-    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : 'needs the dataset')));
+    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? tx('{rate} SCU/m³ of {material}', { rate: s.scuPerCubicMetre, material: s.disintegratesTo }) : '—'));
+    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : tx('needs the dataset'))));
     tr.append(el('td', 'num', s.fullHoldOfScrape ? `${fmtInt(s.fullHoldOfScrape)} aUEC` : '—'));
     const cm = el('td', 'num', s.fullHoldOfPieces ? `${fmtInt(s.fullHoldOfPieces)} aUEC` : '—');
-    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo) cm.title = `UEX prices ${s.disintegratesTo} as ${s.pieces.commodity}`;
+    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo)
+      cm.title = tx('UEX prices {material} as {commodity}', { material: s.disintegratesTo, commodity: s.pieces.commodity });
     tr.append(cm);
     ships.append(tr);
   }
   const first = (salvageModel.ships || []).find((s) => s.scrape);
   const firstCm = (salvageModel.ships || []).find((s) => s.pieces);
   $('#salvage-ships-note').textContent = [
-    first ? `RMC at UEX's best sell: ${fmtInt(first.scrape.perScu)} aUEC a SCU at ${first.scrape.at}.` : (salvageModel.itemPricesKnown ? 'UEX has no price for RMC.' : 'Prices need UEX, in Settings.'),
-    firstCm ? `Construction material: ${fmtInt(firstCm.pieces.perScu)} a SCU at ${firstCm.pieces.at}; the game's Construction Salvage, Rubble and Pieces are sold as that one commodity.` : '',
-    'A full hold is a ceiling on a trip, before the fuel and before the finding.',
+    first
+      ? tx('RMC at UEX\'s best sell: {price} aUEC a SCU at {place}.', { price: fmtInt(first.scrape.perScu), place: first.scrape.at })
+      : (salvageModel.itemPricesKnown ? tx('UEX has no price for RMC.') : tx('Prices need UEX, in Settings.')),
+    firstCm
+      ? tx('Construction material: {price} a SCU at {place}; the game\'s Construction Salvage, Rubble and Pieces are sold as that one commodity.',
+        { price: fmtInt(firstCm.pieces.perScu), place: firstCm.pieces.at })
+      : '',
+    tx('A full hold is a ceiling on a trip, before the fuel and before the finding.'),
   ].filter(Boolean).join(' ');
 
   const modules = $('#salvage-modules tbody');
@@ -5656,7 +5656,10 @@ async function loadSalvage() {
   }
 
   const k = salvageModel.constants;
-  $('#salvage-note').textContent = `${k ? `The game's rule: a beam takes ${Math.round(k.hullThicknessMetres * 1000)} mm of hull, with a material factor of ${k.ammoToMaterialFactor}. ` : ''}${salvageModel.perHull}`;
+  // The rule is the page's sentence around the game's numbers; perHull is the
+  // server's, translated when it is one of the fixed ones.
+  $('#salvage-note').textContent = `${k ? `${tx('The game\'s rule: a beam takes {mm} mm of hull, with a material factor of {factor}.',
+    { mm: Math.round(k.hullThicknessMetres * 1000), factor: k.ammoToMaterialFactor })} ` : ''}${tx(salvageModel.perHull)}`;
   renderMiningWorkspaceHeader();
 }
 
@@ -5705,56 +5708,60 @@ function renderMiningWorkspaceHeader() {
   const bar = $('#view-mining .section-bar');
   if (!heading || !status || !bar) return;
 
+  // data-workspace is drawn by the stylesheet (content: attr(...)), so it is
+  // page text like the heading and is translated with it.
   if (miningPane === 'crack') {
-    heading.textContent = 'Mining fit';
-    bar.dataset.workspace = 'MINING FIT';
+    heading.textContent = tx('Mining fit');
+    bar.dataset.workspace = tx('MINING FIT');
     bar.dataset.workspaceIcon = 'fit';
-    status.textContent = miningFitStatus;
+    status.textContent = tx(miningFitStatus);
     return;
   }
 
   if (miningPane === 'runs') {
-    heading.textContent = 'Haul & refinery';
-    bar.dataset.workspace = 'HAUL // REFINERY';
+    heading.textContent = tx('Haul & refinery');
+    bar.dataset.workspace = tx('HAUL // REFINERY');
     bar.dataset.workspaceIcon = '';
     // Ore waiting at a station comes first: it is the one thing on this pane
     // the game will never remind you of once its toast has gone.
     const waiting = refineryWaitingLine(refineryGroups(refineryPicture, Date.now()));
-    const jobs = miningPendingJobs === null ? 'Refinery job status is unavailable.'
+    const jobs = miningPendingJobs === null ? tx('Refinery job status is unavailable.')
       : miningPendingJobs.length
-        ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
-        : 'No refinery jobs await your update.';
+        ? txn(miningPendingJobs.length, '{count} refinery job awaits your update.', '{count} refinery jobs await your update.')
+        : tx('No refinery jobs await your update.');
     status.textContent = waiting ? `${waiting}. ${jobs}` : jobs;
     return;
   }
-
-  const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
   // Both lines of work reached the header in the same release: the salvage
   // pane arrived on one and the workspace header on the other, and without
   // this the wrecks page calls itself Prospecting.
   if (miningPane === 'salvage') {
-    heading.textContent = 'Salvage';
-    bar.dataset.workspace = 'SALVAGE';
+    heading.textContent = tx('Salvage');
+    bar.dataset.workspace = tx('SALVAGE');
     bar.dataset.workspaceIcon = '';
     status.textContent = salvageModel?.ready
-      ? `${count(salvageModel.ships?.length ?? 0, 'salvage hull')}, ${count(salvageModel.modules?.length ?? 0, 'scraper module')}, from the install.`
-      : 'Hulls, scrapers and heads, as far as the game files go.';
+      ? tx('{hulls}, {modules}, from the install.', {
+        hulls: txn(salvageModel.ships?.length ?? 0, '{count} salvage hull', '{count} salvage hulls'),
+        modules: txn(salvageModel.modules?.length ?? 0, '{count} scraper module', '{count} scraper modules') })
+      : tx('Hulls, scrapers and heads, as far as the game files go.');
     return;
   }
 
-  heading.textContent = 'Prospecting';
-  bar.dataset.workspace = 'PROSPECTING';
+  heading.textContent = tx('Prospecting');
+  bar.dataset.workspace = tx('PROSPECTING');
   bar.dataset.workspaceIcon = '';
   if (miningReferenceMatches === null) {
-    status.textContent = 'Loading reference locations…';
+    status.textContent = tx('Loading reference locations…');
     return;
   }
   const locations = new Set(miningReferenceMatches.map((spawn) => spawn.location).filter(Boolean)).size;
   const salvage = $('#mining-kind')?.value === 'salvageable';
-  status.textContent = locations
-    ? `${locations} ${salvage ? 'salvage ' : ''}location${locations === 1 ? '' : 's'} ${locations === 1 ? 'matches' : 'match'} current filters.`
-    : 'No locations match current filters.';
+  status.textContent = !locations
+    ? tx('No locations match current filters.')
+    : salvage
+      ? txn(locations, '{count} salvage location matches current filters.', '{count} salvage locations match current filters.')
+      : txn(locations, '{count} location matches current filters.', '{count} locations match current filters.');
 }
 
 for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
@@ -5795,12 +5802,13 @@ function fillCrackFromScan(scan) {
 
   const say = $('#crack-scan-note');
   if (say) {
-    const missing = [scan.massKg == null ? 'mass' : null, scan.resistancePercent == null ? 'resistance' : null].filter(Boolean);
+    const missing = [scan.massKg == null ? tx('mass') : null, scan.resistancePercent == null ? tx('resistance') : null].filter(Boolean);
     say.hidden = false;
-    say.textContent = `From the scan read on the Log tab: ${scan.primary || scan.primaryRead || 'a rock'}`
-      + (scan.scu != null ? `, ${scan.scu} SCU by the game's own count` : '')
-      + `. ${missing.length ? `The panel's ${missing.join(' and ')} did not read and the field is as it was. ` : ''}`
-      + `Instability is left as typed: the panel prints ${scan.instability ?? 'a figure'} and the rule wants a percentage, and nothing measured says they are the same scale.`;
+    say.textContent = tx('From the scan read on the Log tab: {rock}', { rock: scan.primary || scan.primaryRead || tx('a rock') })
+      + (scan.scu != null ? `, ${tx('{scu} SCU by the game\'s own count', { scu: scan.scu })}` : '')
+      + `. ${missing.length ? `${tx('The panel\'s {fields} did not read and the field is as it was.', { fields: missing.join(` ${tx('and')} `) })} ` : ''}`
+      + tx('Instability is left as typed: the panel prints {figure} and the rule wants a percentage, and nothing measured says they are the same scale.',
+        { figure: scan.instability ?? tx('a figure') });
   }
 }
 
@@ -5821,7 +5829,7 @@ async function loadCrackModel() {
     box.hidden = true;
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     return;
   }
@@ -5829,7 +5837,12 @@ async function loadCrackModel() {
   box.hidden = false;
 
   const rule = $('#crack-rule');
-  if (rule && crackModel.rule) rule.textContent = `${crackModel.rule.requiredWattsPerKg} W per kilogram at zero resistance, breaking solo from ${Math.round(crackModel.rule.soloRatio * 100)}% and with a gadget from ${Math.round(crackModel.rule.gadgetRatio * 100)}% (${crackModel.rule.source})`;
+  if (rule && crackModel.rule) rule.textContent = tx('{watts} W per kilogram at zero resistance, breaking solo from {solo}% and with a gadget from {gadget}% ({source})', {
+    watts: crackModel.rule.requiredWattsPerKg,
+    solo: Math.round(crackModel.rule.soloRatio * 100),
+    gadget: Math.round(crackModel.rule.gadgetRatio * 100),
+    source: crackModel.rule.source,
+  });
 
   // Ships you have flown first, then the rest of the mining hulls.
   const ship = $('#crack-ship');
@@ -5838,25 +5851,26 @@ async function loadCrackModel() {
   const ships = [...crackModel.ships].sort((a, b) => (b.flown - a.flown) || a.name.localeCompare(b.name));
   for (const s of ships) {
     const heads = s.heads.length;
-    ship.append(new Option(`${s.name} · ${heads} S${s.heads[0]?.size ?? '?'} head${heads === 1 ? '' : 's'}${s.flown ? ' · flown' : ''}`, s.class));
+    const fitted = txn(heads, '{count} S{size} head', '{count} S{size} heads', { size: s.heads[0]?.size ?? '?' });
+    ship.append(new Option(`${s.name} · ${fitted}${s.flown ? ` · ${tx('flown')}` : ''}`, s.class));
   }
   ship.value = keep && ships.some((s) => s.class === keep) ? keep : (ships[0]?.class || '');
 
   const mineral = $('#crack-mineral');
   mineral.textContent = '';
-  mineral.append(new Option('Not said', ''));
+  mineral.append(new Option(tx('Not said'), ''));
   for (const m of crackModel.minerals) mineral.append(new Option(m.name, m.class));
 
   const gadget = $('#crack-gadget');
   gadget.textContent = '';
-  gadget.append(new Option('None', ''));
-  for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || 'no figures'}`, g.class));
+  gadget.append(new Option(tx('None'), ''));
+  for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || tx('no figures')}`, g.class));
 
   // The deposits: the HUD's name for the kind, and where several presets
   // share it, the mineral the class names - Asteroid (P-Type) · copper.
   const deposit = $('#crack-deposit');
   deposit.textContent = '';
-  deposit.append(new Option('Not said', ''));
+  deposit.append(new Option(tx('Not said'), ''));
   for (const c of crackModel.compositions || []) {
     const bits = c.class.split('_');
     const shared = (crackModel.compositions || []).filter((o) => o.name === c.name).length > 1;
@@ -5883,7 +5897,7 @@ async function useLastScan() {
   const scan = (got.readings || []).filter((s) => s.mining && !s.dismissed).sort((a, b) => new Date(b.shotAt) - new Date(a.shotAt))[0];
   const say = $('#crack-scan-note');
   if (!scan) {
-    if (say) { say.hidden = false; say.textContent = 'No rock scan has been read yet. Screenshot the scan-results panel with a rock selected; with Watch screenshots on (Log tab) it is read as it lands.'; }
+    if (say) { say.hidden = false; say.textContent = tx('No rock scan has been read yet. Screenshot the scan-results panel with a rock selected; with Watch screenshots on (Log tab) it is read as it lands.'); }
     return;
   }
   fillCrackFromScan(scan.mining);
@@ -5900,7 +5914,7 @@ function crackPrice(market) {
 
 function crackWhere(market) {
   const best = market?.shops?.[0];
-  if (!best) return crackModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  if (!best) return crackModel?.itemPricesKnown ? tx('no terminal recorded') : tx('prices need UEX (Settings)');
   return `${best.terminal}${best.place && best.place !== best.terminal ? `, ${best.place}` : ''}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
 }
 
@@ -5933,7 +5947,7 @@ function renderCrackFittings() {
   for (const m of crackModel.modules) {
     const tr = el('tr');
     tr.append(el('td', null, m.name));
-    tr.append(el('td', null, m.active ? 'active' : 'passive'));
+    tr.append(el('td', null, m.active ? tx('active') : tx('passive')));
     tr.append(el('td', 'num', `×${m.powerMultiplier}`));
     tr.append(el('td', 'num', `×${m.extractionMultiplier}`));
     tr.append(el('td', null, describeModifiers(m.modifiers) || '—'));
@@ -5981,9 +5995,9 @@ function renderCrackDeposit() {
     tr.append(el('td', 'num', pt.sellPerScu ? fmtInt(pt.sellPerScu) : '—'));
     tr.append(el('td', 'num', pt.rawPerScu ? fmtInt(pt.rawPerScu) : '—'));
     const yieldCell = el('td', 'num', pt.yield ? `${pt.yield > 0 ? '+' : ''}${Math.round(pt.yield)}%` : '—');
-    if (pt.yieldAt) yieldCell.title = `Best station bonus on the method's yield, at ${pt.yieldAt}`;
+    if (pt.yieldAt) yieldCell.title = tx('Best station bonus on the method\'s yield, at {place}', { place: pt.yieldAt });
     tr.append(yieldCell);
-    tr.append(el('td', 'num', mineral ? `res ${mineral.resistance} · inst ${fmtInt(mineral.instability)}` : '—'));
+    tr.append(el('td', 'num', mineral ? tx('res {resistance} · inst {instability}', { resistance: mineral.resistance, instability: fmtInt(mineral.instability) }) : '—'));
     body.append(tr);
   }
 
@@ -5999,13 +6013,15 @@ function renderCrackDeposit() {
   const rawParts = parts.filter((pt) => pt.rawPerScu);
   const raw = rawParts.reduce((sum, pt) => sum + weight(pt) * Number(pt.rawPerScu), 0);
   const worth = [];
-  if (refinedParts.length) worth.push(`Roughly ${fmtInt(refined)} aUEC a SCU of the mix at refined prices, before the refinery's yield`);
-  if (rawParts.length) worth.push(`${worth.length ? '' : 'Roughly '}${fmtInt(raw)} aUEC sold raw`);
-  $('#crack-mix-note').textContent = `${chosen.name}: at least ${chosen.minimumDistinctElements} mineral${chosen.minimumDistinctElements === 1 ? '' : 's'} a rock. `
+  if (refinedParts.length) worth.push(tx('Roughly {price} aUEC a SCU of the mix at refined prices, before the refinery\'s yield', { price: fmtInt(refined) }));
+  if (rawParts.length) worth.push(worth.length
+    ? tx('{price} aUEC sold raw', { price: fmtInt(raw) })
+    : tx('Roughly {price} aUEC sold raw', { price: fmtInt(raw) }));
+  $('#crack-mix-note').textContent = `${txn(chosen.minimumDistinctElements, '{deposit}: at least {count} mineral a rock.', '{deposit}: at least {count} minerals a rock.', { deposit: chosen.name })} `
     + (worth.length
-      ? `${worth.join(', ')} - middle share × chance × price, ${refinedParts.length} of ${parts.length} minerals priced. `
-      : 'No UEX prices for these minerals (Settings). ')
-    + 'Per rock is not given: the HUD’s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.';
+      ? `${worth.join(', ')} - ${tx('middle share × chance × price, {priced} of {total} minerals priced.', { priced: refinedParts.length, total: parts.length })} `
+      : `${tx('No UEX prices for these minerals (Settings).')} `)
+    + tx('Per rock is not given: the HUD’s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.');
 
   // The likeliest mineral is the one the notes speak to, unless the pilot picked one.
   const mineral = $('#crack-mineral');
@@ -6017,13 +6033,13 @@ function describeModifiers(m) {
   if (!m) return '';
   const signed = (v) => `${v > 0 ? '+' : '−'}${Math.abs(v)}%`;
   return [
-    m.resistance ? `${signed(m.resistance)} resistance` : null,
-    m.instability ? `${signed(m.instability)} instability` : null,
-    m.windowSize ? `${signed(m.windowSize)} window` : null,
-    m.windowRate ? `${signed(m.windowRate)} charge rate` : null,
-    m.catastrophicRate ? `${signed(m.catastrophicRate)} overcharge` : null,
-    m.shatterDamage ? `${signed(m.shatterDamage)} shatter` : null,
-    m.clusterFactor ? `${signed(m.clusterFactor)} cluster` : null,
+    m.resistance ? tx('{value} resistance', { value: signed(m.resistance) }) : null,
+    m.instability ? tx('{value} instability', { value: signed(m.instability) }) : null,
+    m.windowSize ? tx('{value} window', { value: signed(m.windowSize) }) : null,
+    m.windowRate ? tx('{value} charge rate', { value: signed(m.windowRate) }) : null,
+    m.catastrophicRate ? tx('{value} overcharge', { value: signed(m.catastrophicRate) }) : null,
+    m.shatterDamage ? tx('{value} shatter', { value: signed(m.shatterDamage) }) : null,
+    m.clusterFactor ? tx('{value} cluster', { value: signed(m.clusterFactor) }) : null,
   ].filter(Boolean).join(', ');
 }
 
@@ -6044,19 +6060,19 @@ function renderCrackHeads() {
 
   ship.heads.forEach((head, i) => {
     const row = el('div', 'crack-head');
-    row.append(el('span', 'crack-head-label', `Head ${i + 1} · S${head.size}`));
+    row.append(el('span', 'crack-head-label', tx('Head {n} · S{size}', { n: i + 1, size: head.size })));
 
     const laser = document.createElement('select');
     laser.className = 'select crack-laser';
     const locked = head.editable === false || head.editable === null;
     for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
       : l.size === head.size && !l.bespoke)) {
-      laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
+      laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || tx('no modifiers')}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
-    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · figures unavailable`, head.stock));
+    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · ${tx('figures unavailable')}`, head.stock));
     laser.disabled = locked;
-    laser.title = head.note || 'The head; the ship\'s own is picked first';
+    laser.title = head.note || tx('The head; the ship\'s own is picked first');
     laser.addEventListener('change', () => {
       renderCrackSlots(row);
       renderCrackFitSummary();
@@ -6084,8 +6100,8 @@ function renderCrackFitSummary() {
   const fitted = rows.reduce((total, row) => total
     + [...row.querySelectorAll('.crack-module')].filter((module) => module.value).length, 0);
   miningFitStatus = lasers.length
-    ? `Current fit · ${lasers.length} head${lasers.length === 1 ? '' : 's'} · ${fitted}/${capacity} module slot${capacity === 1 ? '' : 's'} fitted`
-    : crackModel?.ready ? 'Choose a mining head to inspect its fit.' : 'Fit data has not been read yet.';
+    ? `${tx('Current fit')} · ${txn(lasers.length, '{count} head', '{count} heads')} · ${txn(capacity, '{fitted}/{count} module slot fitted', '{fitted}/{count} module slots fitted', { fitted })}`
+    : crackModel?.ready ? tx('Choose a mining head to inspect its fit.') : tx('Fit data has not been read yet.');
   summary.textContent = miningFitStatus;
   renderMiningWorkspaceHeader();
 }
@@ -6099,18 +6115,20 @@ function renderCrackSlots(row) {
   for (const old of [...row.querySelectorAll('.crack-noslots')]) old.remove();
 
   if (slots === 0) {
-    row.append(el('span', 'muted crack-noslots', 'no module slots'));
+    row.append(el('span', 'muted crack-noslots', tx('no module slots')));
     return;
   }
   for (let slot = 0; slot < slots; slot++) {
     const module = document.createElement('select');
     module.className = 'select tiny crack-module';
-    module.append(new Option(slot === 0 ? 'No module' : '—', ''));
+    module.append(new Option(slot === 0 ? tx('No module') : '—', ''));
     for (const m of crackModel.modules) {
-      module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ×${m.powerMultiplier} power${m.modifiers ? (describeModifiers(m.modifiers) ? ', ' + describeModifiers(m.modifiers) : '') : ''}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
+      const power = tx('×{multiplier} power', { multiplier: m.powerMultiplier });
+      const modifiers = m.modifiers && describeModifiers(m.modifiers) ? `, ${describeModifiers(m.modifiers)}` : '';
+      module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ${power}${modifiers}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
     }
     if (kept[slot] && crackModel.modules.some((m) => m.class === kept[slot])) module.value = kept[slot];
-    module.title = 'A module in this head\'s slot; an active one counts as switched on';
+    module.title = tx('A module in this head\'s slot; an active one counts as switched on');
     module.addEventListener('change', () => {
       renderCrackFitSummary();
       assessCrack().catch(() => {});
@@ -6155,7 +6173,7 @@ async function assessCrack() {
     got = await response.json();
   } catch (err) {
     out.textContent = '';
-    out.append(el('p', 'muted', `Could not assess the rock: ${err.message}`));
+    out.append(el('p', 'muted', tx('Could not assess the rock: {error}', { error: err.message })));
     return;
   }
 
@@ -6164,24 +6182,32 @@ async function assessCrack() {
   out.textContent = '';
 
   const head = el('div', `crack-call ${tone}`);
-  head.append(el('b', null, label));
-  head.append(el('span', 'muted', ` · ${fmtInt(v.powerDelivered)} delivered against ${fmtInt(v.powerRequired)} needed · ${Math.round(v.ratio * 100)}% · estimate, community rule`));
+  head.append(el('b', null, CRACK_VERDICTS[v.verdict] ? tx(label) : label));
+  head.append(el('span', 'muted', ` · ${tx('{delivered} delivered against {required} needed · {ratio}% · estimate, community rule', {
+    delivered: fmtInt(v.powerDelivered), required: fmtInt(v.powerRequired), ratio: Math.round(v.ratio * 100) })}`));
   out.append(head);
 
   const facts = el('div', 'crack-facts');
-  const fact = (k, val, title) => { const f = el('span'); f.append(el('span', 'k', k), el('b', null, val)); if (title) f.title = title; facts.append(f); };
+  const fact = (k, val, title) => { const f = el('span'); f.append(el('span', 'k', tx(k)), el('b', null, val)); if (title) f.title = tx(title); facts.append(f); };
   fact('Resistance after fit', `${v.effectiveResistancePercent}%`, 'The HUD figure scaled by the heads\', modules\' and gadget\'s resistance points');
   fact('Instability after fit', `${v.effectiveInstabilityPercent}%`);
-  fact('Window', `${v.windowPercent}% of gauge`, 'The game\'s optimal window, widened or narrowed by the fit');
+  fact('Window', tx('{percent}% of gauge', { percent: v.windowPercent }), 'The game\'s optimal window, widened or narrowed by the fit');
   fact('Breaks up to', `${fmtInt(v.maxCrackableMassKg)} kg`, 'At this resistance, on this fit');
-  if (v.energyCapacity) fact('Rock holds', `${fmtInt(v.energyCapacity)} · sheds ${fmtInt(v.energyDecayPerSecond)}/s`, 'By the game\'s own constants: capacity per kilogram and decay per kilogram a second');
+  if (v.energyCapacity) {
+    fact('Rock holds', tx('{capacity} · sheds {decay}/s', { capacity: fmtInt(v.energyCapacity), decay: fmtInt(v.energyDecayPerSecond) }),
+      'By the game\'s own constants: capacity per kilogram and decay per kilogram a second');
+  }
   out.append(facts);
 
   // The mineral is for the notes: what the game says about it, in its own figures.
+  // The verdict's own notes are the server's and wait for phase 3.
   const mineral = crackModel.minerals.find((m) => m.class === $('#crack-mineral').value);
-  const notes = [...(v.notes || [])];
+  const notes = [...(v.notes || [])].map((n) => tx(n));
   if (mineral) {
-    notes.push(`${mineral.name}: element resistance ${mineral.resistance}, instability ${mineral.instability}, window at ${Math.round(mineral.windowMidpoint * 100)}%±${Math.round(mineral.windowRandomness * 100)} of the gauge, overcharge blast ×${mineral.explosionMultiplier}${mineral.instability >= 600 ? ' - an overcharge here is the rock gone' : ''}.`);
+    notes.push(tx('{mineral}: element resistance {resistance}, instability {instability}, window at {mid}%±{spread} of the gauge, overcharge blast ×{blast}', {
+      mineral: mineral.name, resistance: mineral.resistance, instability: mineral.instability,
+      mid: Math.round(mineral.windowMidpoint * 100), spread: Math.round(mineral.windowRandomness * 100), blast: mineral.explosionMultiplier,
+    }) + (mineral.instability >= 600 ? ` - ${tx('an overcharge here is the rock gone')}` : '') + '.');
   }
   if (notes.length) {
     const list = el('ul', 'crack-notes');
@@ -6200,7 +6226,7 @@ async function assessCrack() {
     tr.append(el('td', 'num', fmtInt(r.powerDelivered)));
     tr.append(el('td', 'num', `${Math.round(r.ratio * 100)}%`));
     tr.append(el('td', 'num', fmtInt(r.maxCrackableMassKg)));
-    const verdict = el('td', null, rl);
+    const verdict = el('td', null, CRACK_VERDICTS[r.verdict] ? tx(rl) : rl);
     verdict.classList.add(`crack-${rt}`);
     tr.append(verdict);
     tr.append(el('td', 'num muted', crackPrice(crackModel.lasers.find((l) => l.class === r.laser)?.market)));
@@ -6209,8 +6235,9 @@ async function assessCrack() {
   const heads = request.heads.length;
   const hull = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
   $('#crack-matrix-note').textContent = hull?.heads.some((h) => h.editable === false || h.editable === null)
-    ? 'Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.'
-    : `Compatible S${hull?.heads[0]?.size ?? '?'} heads on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
+    ? tx('Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.')
+    : tx('Compatible S{size} heads on this rock, {heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.',
+      { size: hull?.heads[0]?.size ?? '?', heads });
 }
 
 $('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
@@ -6228,7 +6255,7 @@ async function loadMiningPlaces() {
 
   if (!places.length) {
     note.textContent = gameDataExcuse()
-      ?? 'No deposit tables could be read from your install.';
+      ?? tx('No deposit tables could be read from your install.');
     return;
   }
 
@@ -6256,11 +6283,9 @@ async function loadMiningPlaces() {
     body.append(tr);
   }
 
-  note.textContent = `${places.length} places, read from your install. `
-    + 'The community dataset knows 234, so this is the part of the map your game '
-    + 'files describe rather than all of it.'
-    + (priced ? '' : ' Turn on UEX in Settings to price what a rock is worth; '
-      + 'how rich the rocks are needs nothing but your install.');
+  note.textContent = tx('{count} places, read from your install. The community dataset knows 234, so this is the part of the map your game files describe rather than all of it.',
+    { count: places.length })
+    + (priced ? '' : ` ${tx('Turn on UEX in Settings to price what a rock is worth; how rich the rocks are needs nothing but your install.')}`);
 }
 
 async function loadLikelyMined() {
@@ -6279,9 +6304,8 @@ async function loadLikelyMined() {
   tiles('#mining-mine', rows.slice(0, 4).map((r) => [r.name, `${r.scu} SCU`]));
 
   const total = rows.reduce((sum, r) => sum + r.revenue, 0);
-  note.textContent = `${money(total)} from ore you sold and never bought — `
-    + 'the closest thing to a mining record these logs allow, since nothing '
-    + 'writes down a rock being mined. Bought somewhere unread, it would look the same.';
+  note.textContent = tx('{total} from ore you sold and never bought — the closest thing to a mining record these logs allow, since nothing writes down a rock being mined. Bought somewhere unread, it would look the same.',
+    { total: money(total) });
   note.hidden = false;
 }
 
@@ -6296,14 +6320,14 @@ async function loadMiningRef() {
     const select = $(selector);
     const previous = select.value;
     select.textContent = '';
-    select.append(new Option(allLabel, ''));
+    select.append(new Option(tx(allLabel), ''));
     for (const value of values) select.append(new Option(labelOf(value), value));
     if (values.includes(previous)) select.value = previous;
   };
 
   fill('#mining-kind',
     [...new Set(miningCatalogue.map((s) => s.kind))].sort(),
-    'All kinds', (k) => KIND_LABELS[k] || k);
+    'All kinds', (k) => (KIND_LABELS[k] ? tx(KIND_LABELS[k]) : k));
 
   fill('#mining-system',
     [...new Set(miningCatalogue.map((s) => s.system).filter(Boolean))].sort(),
@@ -6336,8 +6360,8 @@ function renderMiningRef() {
   const note = $('#mining-source');
   if (note && miningCatalogue.length) {
     note.textContent = miningCatalogue[0].source === 'install'
-      ? 'Read from your game install; chance is the group’s share of what spawns there. '
-      : 'From the community dataset; chance is the spawn group’s own probability. ';
+      ? `${tx('Read from your game install; chance is the group’s share of what spawns there.')} `
+      : `${tx('From the community dataset; chance is the spawn group’s own probability.')} `;
   }
 
   const rows = miningCatalogue.filter((s) =>
@@ -6358,14 +6382,14 @@ function renderMiningRef() {
 
   const counter = $('#mining-count');
   counter.textContent = rows.length > MINING_CAP
-    ? `Showing ${MINING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    ? tx('Showing {shown} of {total} matches — refine the search or filters.', { shown: MINING_CAP.toLocaleString(), total: rows.length.toLocaleString() })
     : '';
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', miningCatalogue.length
-      ? 'Nothing matches that filter.'
-      : gameDataExcuse() || 'No deposits were found in your game files.');
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No deposits were found in your game files.'));
     td.colSpan = 13;
     tr.append(td);
     body.append(tr);
@@ -6411,8 +6435,8 @@ function renderMiningRef() {
     const quality = el('td', spawn.quality?.local ? 'num' : 'num muted', qualityFloor(spawn));
     if (spawn.quality) {
       quality.title = `${spawn.quality.min}–${spawn.quality.max}, `
-        + `average ${Math.round(spawn.quality.mean)}, spread ${Math.round(spawn.quality.spread)}`
-        + (spawn.quality.local ? ' — this place differs from the usual' : '');
+        + tx('average {mean}, spread {spread}', { mean: Math.round(spawn.quality.mean), spread: Math.round(spawn.quality.spread) })
+        + (spawn.quality.local ? ` — ${tx('this place differs from the usual')}` : '');
     }
     tr.append(quality);
 
@@ -6421,7 +6445,7 @@ function renderMiningRef() {
     tr.append(el('td', 'num muted',
       spawn.respawnSeconds ? craftTime(spawn.respawnSeconds) : '—'));
 
-    tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
+    tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] ? tx(KIND_LABELS[spawn.kind]) : spawn.kind));
     tr.append(tdPlace(spawn.location));
     tr.append(el('td', 'muted', spawn.system ?? '—'));
     tr.append(el('td', 'muted', spawn.group));
@@ -6429,28 +6453,25 @@ function renderMiningRef() {
     // Kept as one number with the parts on the tooltip, because a miner asks
     // "how much of this place is Tin", not "what is the group probability".
     const find = el('td', 'num muted', percent(spawn.groupChance * spawn.share));
-    find.title = `${percent(spawn.groupChance)} of what spawns here is `
-      + `${spawn.group}, and ${percent(spawn.share)} of that is this`;
+    find.title = tx('{chance} of what spawns here is {group}, and {share} of that is this',
+      { chance: percent(spawn.groupChance), group: spawn.group, share: percent(spawn.share) });
     tr.append(find);
 
     const worth = oreWorth(spawn);
     const worthCell = el('td', worth ? 'num inward' : 'num muted', worth ? money(worth) : '—');
-    if (worth) {
-      worthCell.title = 'A SCU of this rock, at the middle of its ore range, '
-        + 'sold at the best price UEX knows';
-    }
+    if (worth) worthCell.title = tx('A SCU of this rock, at the middle of its ore range, sold at the best price UEX knows');
     tr.append(worthCell);
 
     const sell = el('td', spawn.bestSell ? 'num inward' : 'num muted',
       spawn.bestSell ? money(spawn.bestSell) : '—');
-    if (spawn.bestSellTerminal) sell.title = `at ${spawn.bestSellTerminal}`;
+    if (spawn.bestSellTerminal) sell.title = tx('at {place}', { place: spawn.bestSellTerminal });
     tr.append(sell);
 
     // Raw ore price and refinery yield: both from optional feeds, so both are
     // dashes until those are switched on.
     const raw = el('td', spawn.rawSell ? 'num' : 'num muted',
       spawn.rawSell ? money(spawn.rawSell) : '—');
-    if (spawn.rawTerminal) raw.title = `at ${spawn.rawTerminal}`;
+    if (spawn.rawTerminal) raw.title = tx('at {place}', { place: spawn.rawTerminal });
     tr.append(raw);
 
     // A station's bonus on the method's yield, signed - not the yield itself,
@@ -6458,7 +6479,7 @@ function renderMiningRef() {
     // nine percent of the ore coming back.
     const yieldCell = el('td', spawn.refineryYield ? 'num' : 'num muted',
       spawn.refineryYield ? `${spawn.refineryYield > 0 ? '+' : ''}${spawn.refineryYield.toFixed(0)}%` : '—');
-    if (spawn.refineryTerminal) yieldCell.title = `best station bonus, at ${spawn.refineryTerminal}`;
+    if (spawn.refineryTerminal) yieldCell.title = tx('best station bonus, at {place}', { place: spawn.refineryTerminal });
     tr.append(yieldCell);
 
     body.append(tr);
@@ -6540,7 +6561,7 @@ async function loadArmoury() {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     return;
   }
@@ -7299,7 +7320,7 @@ async function loadCraftingRef() {
   const previous = select.value;
 
   select.textContent = '';
-  select.append(new Option('All types', ''));
+  select.append(new Option(tx('All types'), ''));
   for (const type of types) select.append(new Option(prettyType(type), type));
   if (types.includes(previous)) select.value = previous;
 
@@ -7328,8 +7349,8 @@ function renderCraftingRef() {
   const note = $('#crafting-source');
   if (note && craftingCatalogue.length) {
     note.textContent = craftingCatalogue[0].source === 'install'
-      ? 'Read from your game install. '
-      : 'From the community dataset. ';
+      ? `${tx('Read from your game install.')} `
+      : `${tx('From the community dataset.')} `;
   }
 
   const term = ($('#crafting-search').value || '').trim().toLowerCase();
@@ -7350,14 +7371,14 @@ function renderCraftingRef() {
 
   const counter = $('#crafting-count');
   counter.textContent = rows.length > CRAFTING_CAP
-    ? `Showing ${CRAFTING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    ? tx('Showing {shown} of {total} matches — refine the search or filters.', { shown: CRAFTING_CAP.toLocaleString(), total: rows.length.toLocaleString() })
     : '';
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', craftingCatalogue.length
-      ? 'Nothing matches that filter.'
-      : gameDataExcuse() || 'No recipes were found in your game files.');
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No recipes were found in your game files.'));
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -7374,8 +7395,8 @@ function renderCraftingRef() {
     makes.append(el('span', null, bp.output));
 
     if (bp.owned) {
-      const badge = el('span', 'job-kind owned', 'yours');
-      badge.title = `Received ${relative(bp.receivedAt)}`;
+      const badge = el('span', 'job-kind owned', tx('yours'));
+      badge.title = tx('Received {when}', { when: relative(bp.receivedAt) });
       makes.append(badge);
     }
     tr.append(makes);
@@ -7386,25 +7407,25 @@ function renderCraftingRef() {
 
     // How you get the blueprint; the pool names ride the tooltip.
     const how = el('td', 'muted', bp.default
-      ? 'Known by default'
+      ? tx('Known by default')
       : bp.rewardPools.length
-        ? `${bp.rewardPools.length} reward pool${bp.rewardPools.length === 1 ? '' : 's'}`
+        ? txn(bp.rewardPools.length, '{count} reward pool', '{count} reward pools')
         : '—');
     if (bp.rewardPools.length) how.title = bp.rewardPools.join('\n');
     tr.append(how);
 
     tr.append(el('td', bp.shopPrice ? 'num' : 'num muted',
-      bp.shopPrice ? money(bp.shopPrice) : 'not sold'));
+      bp.shopPrice ? money(bp.shopPrice) : tx('not sold')));
 
     // Turning a recipe into a job is the whole point of having both pages.
     const plan = el('td', 'num');
     if (bp.materials.length) {
-      const button = el('button', 'ghost', 'Plan');
-      button.title = 'Track this build on the Jobs page';
+      const button = el('button', 'ghost', tx('Plan'));
+      button.title = tx('Track this build on the Jobs page');
 
       button.addEventListener('click', async () => {
         button.disabled = true;
-        button.textContent = 'planned';
+        button.textContent = tx('planned');
 
         await fetch('/api/jobs', {
           method: 'POST',
@@ -7415,7 +7436,7 @@ function renderCraftingRef() {
             source: tx('{item} blueprint · {time} to craft', { item: bp.output, time: craftTime(bp.craftSeconds) }),
             items: parseJobItems(bp.materials.join('\n')),
           }),
-        }).catch(() => { button.textContent = 'failed'; });
+        }).catch(() => { button.textContent = tx('failed'); });
       });
 
       plan.append(button);
@@ -10644,7 +10665,7 @@ async function loadControls() {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     return;
   }

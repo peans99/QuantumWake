@@ -38,7 +38,7 @@ public sealed class LanguageStore
         new(English, "English", null),
         new("fr", "Français",
             "traduit pour l’instant : la navigation, la recherche, la palette de commandes, "
-            + "les bandeaux d’avertissement, la page Direct, la Carte, le Journal, tout Réglages → Général et toutes les pages Opérations, Vol et Économie ; le reste est encore en anglais"),
+            + "les bandeaux d’avertissement, la page Direct, la Carte, le Journal, tout Réglages → Général et toutes les pages Opérations, Vol, Économie et Référence ; le reste est encore en anglais"),
     ];
 
     private readonly string _path;

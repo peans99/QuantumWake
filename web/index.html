@@ -2235,7 +2235,7 @@
       <div class="crack-inputs">
         <section class="crack-fit-panel">
           <h4>Ship and equipment</h4>
-          <label>Ship
+          <label><span>Ship</span>
             <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
           </label>
           <div class="crack-heads" id="crack-heads"></div>
@@ -2243,25 +2243,25 @@
         </section>
         <section class="crack-rock">
           <h4>Scanned rock</h4>
-          <label>Mass
+          <label><span>Mass</span>
             <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
             <span class="unit">kg</span>
           </label>
-          <label>Resistance
+          <label><span>Resistance</span>
             <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
             <span class="unit">%</span>
           </label>
-          <label>Instability
+          <label><span>Instability</span>
             <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
             <span class="unit">%</span>
           </label>
-          <label>Deposit
+          <label><span>Deposit</span>
             <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
           </label>
-          <label>Mineral
+          <label><span>Mineral</span>
             <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
           </label>
-          <label>Gadget
+          <label><span>Gadget</span>
             <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
           </label>
           <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
@@ -2369,7 +2369,7 @@
     <div id="refinery-orders" hidden>
       <div class="refinery-orders-head">
         <h4 class="spaced">Refinery orders</h4>
-        <label class="refinery-notify">Tell me when one is ready
+        <label class="refinery-notify"><span>Tell me when one is ready</span>
           <select id="refinery-notify" class="select tiny">
             <option value="mixed">Game log, then the timer</option>
             <option value="log">Game log only</option>
@@ -2404,15 +2404,15 @@
     </p>
 
     <form class="mining-form" id="mining-log-form">
-      <label>Ore<input type="text" id="mining-log-resource" class="search" maxlength="30"
+      <label><span>Ore</span><input type="text" id="mining-log-resource" class="search" maxlength="30"
              placeholder="e.g. Quantanium" autocomplete="off" required></label>
-      <label>Where<input type="text" id="mining-log-place" class="search" maxlength="30"
+      <label><span>Where</span><input type="text" id="mining-log-place" class="search" maxlength="30"
              placeholder="Optional" autocomplete="off"></label>
-      <label>SCU<input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
+      <label><span>SCU</span><input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
              placeholder="0" required></label>
-      <label>Quality<input type="number" id="mining-log-quality" class="search" min="1" max="1000"
+      <label><span>Quality</span><input type="number" id="mining-log-quality" class="search" min="1" max="1000"
              placeholder="Optional"></label>
-      <label>Sold for<input type="number" id="mining-log-revenue" class="search" min="0" step="1"
+      <label><span>Sold for</span><input type="number" id="mining-log-revenue" class="search" min="0" step="1"
              placeholder="Optional"></label>
       <button type="submit" class="ghost">Record</button>
     </form>

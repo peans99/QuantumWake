@@ -417,3 +417,36 @@ the dataset's commodity groups. 587 entries added, 2,141 in all.
   the wallet card), the cargo and spending tiles, the Log's file list, a
   refinery reading with its station as written, the map's closest-facility
   answer with the game's facility name kept, and an empty flight-plan panel.
+
+### 0.18.11
+
+The Reference group: Ships, Parts, Mining (all four panes - where to go, the
+rock calculator, hauls and refinery orders, salvage) and Crafting, with the
+item card every page opens. Rendered against this install in French, the
+visible-text probe finds nothing English on the four pages but item, ship,
+shop and mineral names and the server's recipe materials ("any 2 of: …").
+361 entries added, 2,502 in all.
+
+- **Labels that wrap a control were split.** "Mass", "Ore", "Sold for" and the
+  others sat beside an `<input>` or `<select>` inside their `<label>`, so the
+  key held the control's markup - its value, step and title included. The text
+  is in a `<span>` now, as the status toggles were in 0.18.4.
+- **A paragraph whose span a script fills is keyed on the empty span.** The
+  deposit caption, the crafting caption and the calculator's rule line each
+  hold a `<span id>` the page writes into later; txDocument runs first, so the
+  key has the span empty (or with the markup's default), and the translation
+  carries the same span back so the script still finds it.
+- **The table headers' tooltips are not translated, because nobody sees
+  them.** `makeTablesSortable` replaces every header's title with "Sort", in
+  English as well; the explanations written into the markup never show. A
+  finding for later, not a translation gap.
+- **Server words the page keys on**: a mining run's stage, a crack verdict, a
+  resource kind - translated where drawn, compared in English.
+- **One English sentence was nearly reworded by accident**: the overcharge
+  clause on a mineral's notes. A rock test caught it, and the English is as it
+  was.
+- **One placeholder was shortened for width**: "Chercher une ressource ou un
+  lieu…" became "Ressource ou lieu…".
+- `ReferenceFrenchTests` covers the ship catalogue (careers and roles kept),
+  a blueprint, a mining run's stage and next step, the crack verdict with the
+  mineral's name kept, and an item card's price age.
