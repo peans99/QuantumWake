@@ -2,6 +2,15 @@
 
 Older release notes live here so the [main README](../README.md) stays useful to
 pilots installing and using Quantum Wake for the first time.
+
+### 0.18.8
+
+**The README is now a player guide.** It starts with what Quantum Wake does,
+three screenshots and a short first-run path. Optional features, privacy,
+limits and contributor commands now sit where they are useful instead of
+competing with setup. [Older release notes](docs/release-history.md) remain
+available in full.
+
 ### 0.18.7
 
 **Quantum Wake in French — the start of it.** Settings → General has a new **Language · Langue** card. Choose Français and the navigation, the search box, the command palette, the notices along the top (old prices, a new patch, a new version), the Now page, the whole of Settings → General and every Operations page — the command deck, Routes, Contracts, Checklists, Blueprints, Wikelo and Events — come up in French, in the browser and in the overlay alike — the live feed, status lines, price feeds, the table of what your logs still carry, every cargo run's evidence and every event tier included, with dates written the French way. Flight plans saved from Routes, and builds and shopping runs started from Operations, get French titles; the ones you saved before keep theirs. The rest of the app is still English for now, and the card says exactly what is covered so far; more pages follow through the 0.18 updates. Names from the game — ships, places, commodities, contract titles, Wikelo's trades — stay as the game writes them, so they still match your mobiGlas and the price sites.

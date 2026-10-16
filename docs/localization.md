@@ -334,3 +334,47 @@ titles. 328 entries added, 1,261 in all.
   an event's tiers and plurals, Wikelo's gate and counts, a shopping list
   and a checklist, and that the game's names and the pilot's titles stay as
   written.
+
+### 0.18.9
+
+The Flight group: Logbook, Sessions (each debrief included), Servers, Places,
+Points, Crew and Casualties. Rendered against this install in French, the
+visible-text probe finds nothing English on the seven pages but game and pilot
+text - ships, places, shard ids, regions, items, handles - and the numbers.
+274 entries added, 1,554 in all.
+
+- **The markup keys were collected from an English page.** The key probe run
+  over a French page reports a mixed paragraph after `txDocument` has already
+  translated the inline parts it could, so the Crew caption came back with
+  `<em>Abandonnés</em>` inside the "English". The same probe with the copied
+  data folder set to English returns the browser's own serialisation of the
+  untouched markup, which is the key.
+- **English is the key, so a word with two meanings has to change.**
+  "Dropped" was already the Contracts page's abandoned contract and showed on
+  Crew as "Abandonnés" for a member's connection dropping; Crew now says "Went
+  offline", beside "Came online". A shard stay ending "left" collided with the
+  party feed's "left" (somebody else went, "est parti"); it is "you left".
+  Neither was fixable in the catalogue.
+- **The Logbook's session lines are the server's English**, `Session aboard
+  {ship}` and `1h 20m · 3 jumps · 1 death`, and are translated on the page by
+  shape like the live feed's, keeping the ship. A shop's name in the same
+  column is not a sentence and is shown as sent. A debrief's highlights go
+  through the live feed's `feedText`.
+- **A single contract's outcome is not the filter's plural.** "Completed" is
+  keyed as the Contracts filter's "Terminés"; the debrief uses the Contracts
+  table's lower-case words instead and capitalises them, so one contract is
+  "Terminé".
+- **Stored values stay English.** A point's category is saved as `Meet point`
+  and only its label reads "Point de rendez-vous", so a point saved on a
+  French page lands under the same chip as the rest. A plan made with "Repeat
+  these stops" is titled in the page's language when it is made, like Routes'.
+- **The copied server report stays English**, like the clipboard diagnostic
+  summary: it is pasted where other pilots read it.
+- **Two placeholders were shortened for width**: the Servers and Sessions
+  search boxes clipped "Chercher un shard ou une note…"; they are "Shard ou
+  note…" and "Vaisseau ou lieu…".
+- `FlightFrenchTests` covers the logbook's server lines, a debrief with a feed
+  sentence and a contract outcome, the servers table and its English report,
+  Crew's plurals, the beds worded around their counts, and a point whose
+  category is stored in English. The Crew heading cannot be checked there -
+  the test page has no static markup - so it was checked in the render.

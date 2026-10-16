@@ -2891,28 +2891,32 @@ function renderSessionBrief(sessions) {
   const latest = latestSession(sessions);
 
   if (!latest) {
-    latestTitle.textContent = 'No sessions in this range';
-    latestDetail.textContent = 'Choose a wider record range to revisit earlier flights.';
-    durationTitle.textContent = 'No flight time recorded';
-    durationDetail.textContent = 'In-game time appears when a session enters the persistent universe.';
-    healthTitle.textContent = 'No session health data';
-    healthDetail.textContent = 'Deaths and incapacitations are shown when the game writes them.';
+    latestTitle.textContent = tx('No sessions in this range');
+    latestDetail.textContent = tx('Choose a wider record range to revisit earlier flights.');
+    durationTitle.textContent = tx('No flight time recorded');
+    durationDetail.textContent = tx('In-game time appears when a session enters the persistent universe.');
+    healthTitle.textContent = tx('No session health data');
+    healthDetail.textContent = tx('Deaths and incapacitations are shown when the game writes them.');
     open.disabled = true;
     return;
   }
 
-  latestTitle.textContent = latest.primaryShip || 'Session on foot';
-  latestDetail.textContent = `${dateOf(latest.startedAt)} · ${latest.lastLocation || 'No last location recorded'}`;
+  latestTitle.textContent = latest.primaryShip || tx('Session on foot');
+  latestDetail.textContent = `${dateOf(latest.startedAt)} · ${latest.lastLocation || tx('No last location recorded')}`;
   durationTitle.textContent = duration(latest.inGame);
-  durationDetail.textContent = `${duration(latest.menu)} in menus · ${latest.jumps || 0} jump${latest.jumps === 1 ? '' : 's'} · ${latest.contracts || 0} contract${latest.contracts === 1 ? '' : 's'}`;
+  durationDetail.textContent = [
+    tx('{time} in menus', { time: duration(latest.menu) }),
+    txn(latest.jumps || 0, '{count} jump', '{count} jumps'),
+    txn(latest.contracts || 0, '{count} contract', '{count} contracts'),
+  ].join(' · ');
 
   const deaths = Number(latest.deaths || 0);
   const incap = Number(latest.incapacitations || 0);
   const server = latest.shard
-    ? `${sessionShardLabel(latest)} · ${latest.shards || 1} server${latest.shards === 1 ? '' : 's'} recorded`
-    : 'No server recorded';
-  healthTitle.textContent = deaths ? `${deaths} death${deaths === 1 ? '' : 's'}` : 'No deaths recorded';
-  healthDetail.textContent = `${incap} incapacitation${incap === 1 ? '' : 's'} · ${server}`;
+    ? `${sessionShardLabel(latest)} · ${txn(latest.shards || 1, '{count} server recorded', '{count} servers recorded')}`
+    : tx('No server recorded');
+  healthTitle.textContent = deaths ? txn(deaths, '{count} death', '{count} deaths') : tx('No deaths recorded');
+  healthDetail.textContent = `${txn(incap, '{count} incapacitation', '{count} incapacitations')} · ${server}`;
   open.disabled = false;
 }
 
@@ -2985,10 +2989,14 @@ async function repeatSessionRoute(detail) {
   const route = sessionRoute(detail);
   if (!route.length) return;
 
-  await planTrip(`Repeat ${dateOf(detail.startedAt)} route`, route.map((place) => ({
+  // A saved plan is data, like Routes' plans: titled in the page's language
+  // when it is made, and kept in that language afterwards.
+  await planTrip(tx('Repeat {date} route', { date: dateOf(detail.startedAt) }), route.map((place) => ({
     placeId: place.rawId || '',
     place: place.displayName,
-    note: `${place.routeKind === 'quantum' ? 'Quantum target' : 'Arrival'} logged at ${shortTimeOf(place.at)}`,
+    note: place.routeKind === 'quantum'
+      ? tx('Quantum target logged at {time}', { time: shortTimeOf(place.at) })
+      : tx('Arrival logged at {time}', { time: shortTimeOf(place.at) }),
   })));
 }
 
@@ -3017,12 +3025,24 @@ function sessionShardLabel(session) {
 /** Every stay in a debrief, in order, each with how it ended. */
 function sessionShardText(detail) {
   const stays = detail.shards || [];
-  if (!stays.length) return 'None recorded';
+  if (!stays.length) return tx('None recorded');
 
   return stays.map((stay) => {
     const mins = Math.round((new Date(stay.leftAt) - new Date(stay.joinedAt)) / 60000);
     return `${stay.shard} · ${duration(mins * 60)} · ${endingLabel(stay.ending)}`;
   }).join('\n');
+}
+
+/*
+ * One contract's outcome, through the Contracts table's words. "Completed"
+ * as a key is the filter's plural ("Terminés"); a single contract is
+ * "terminé", capitalised here as the debrief has always shown it.
+ */
+function sessionOutcome(outcome) {
+  const words = { Completed: 'completed', Abandoned: 'abandoned', Failed: 'failed', InProgress: 'in progress' };
+  if (!words[outcome]) return outcome || tx('Unknown');
+  const said = tx(words[outcome]);
+  return said.charAt(0).toUpperCase() + said.slice(1);
 }
 
 function renderSessionDebrief(summary) {
@@ -3033,35 +3053,35 @@ function renderSessionDebrief(summary) {
 
   const detail = sessionDetails.get(summary.id);
   if (!detail) {
-    cell.append(el('div', 'session-debrief-loading muted', 'Building session debrief…'));
+    cell.append(el('div', 'session-debrief-loading muted', tx('Building session debrief…')));
     return row;
   }
 
   if (detail.error) {
-    cell.append(el('div', 'session-debrief-loading outward', 'This session detail could not be read.'));
+    cell.append(el('div', 'session-debrief-loading outward', tx('This session detail could not be read.')));
     return row;
   }
 
   const debrief = el('article', 'session-debrief');
   const head = el('div', 'session-debrief-head');
   const title = el('div');
-  title.append(el('div', 'session-debrief-title', `${dateOf(detail.startedAt)} debrief`));
-  title.append(el('div', 'muted', `${shortTimeOf(detail.startedAt)} → ${shortTimeOf(detail.endedAt)} · ${detail.gameVersion || 'version unknown'}`));
+  title.append(el('div', 'session-debrief-title', tx('{date} debrief', { date: dateOf(detail.startedAt) })));
+  title.append(el('div', 'muted', `${shortTimeOf(detail.startedAt)} → ${shortTimeOf(detail.endedAt)} · ${detail.gameVersion || tx('version unknown')}`));
   head.append(title);
 
   const route = sessionRoute(detail);
-  const repeat = el('button', 'ghost tiny', 'Repeat these stops');
+  const repeat = el('button', 'ghost tiny', tx('Repeat these stops'));
   repeat.type = 'button';
   repeat.disabled = route.length === 0;
   repeat.title = route.length
-    ? 'Create a new flight plan from the places reached in this session'
-    : 'No named locations were recorded in this session';
+    ? tx('Create a new flight plan from the places reached in this session')
+    : tx('No named locations were recorded in this session');
   repeat.addEventListener('click', () => repeatSessionRoute(detail));
   head.append(repeat);
   debrief.append(head);
 
   const ships = (detail.ships || []).map((ship) =>
-    `${ship.displayName || ship.model}${ship.sorties ? ` · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}` : ''}`);
+    `${ship.displayName || ship.model}${ship.sorties ? ` · ${txn(ship.sorties, '{count} sortie', '{count} sorties')}` : ''}`);
   const contracts = detail.contracts || [];
   const completed = contracts.filter((contract) => contract.outcome === 'Completed').length;
   const party = new Set((detail.partyNotes || []).map((note) => note.handle).filter(Boolean));
@@ -3075,39 +3095,39 @@ function renderSessionDebrief(summary) {
   // is indented under itself rather than reading as another ship.
   const metrics = el('div', 'session-debrief-metrics');
   metrics.append(
-    sessionMetric('In game', duration(summary.inGame)),
-    sessionMetric(ships.length > 1 ? 'Ships' : 'Ship', ships.length ? ships : 'On foot', 'session-metric-ships'),
-    sessionMetric('Recorded route', `${route.length} point${route.length === 1 ? '' : 's'} · ${(detail.jumps || []).length} jump${(detail.jumps || []).length === 1 ? '' : 's'}`),
-    sessionMetric('Contracts', contracts.length ? `${completed} / ${contracts.length} completed` : 'None recorded'),
-    sessionMetric(tradeCount ? 'Recorded net*' : 'Recorded net', movementCount
+    sessionMetric(tx('In game'), duration(summary.inGame)),
+    sessionMetric(ships.length > 1 ? tx('Ships') : tx('Ship'), ships.length ? ships : tx('On foot'), 'session-metric-ships'),
+    sessionMetric(tx('Recorded route'), `${txn(route.length, '{count} point', '{count} points')} · ${txn((detail.jumps || []).length, '{count} jump', '{count} jumps')}`),
+    sessionMetric(tx('Contracts'), contracts.length ? tx('{done} / {total} completed', { done: completed, total: contracts.length }) : tx('None recorded')),
+    sessionMetric(tradeCount ? tx('Recorded net*') : tx('Recorded net'), movementCount
       ? `${net < 0 ? '−' : '+'}${tradeCount ? '~' : ''}${money(Math.abs(net))}`
-      : 'No movements recorded', movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
-    sessionMetric('Crew observed*', party.size ? `${party.size} named` : 'None named'),
-    sessionMetric(detail.shards?.length > 1 ? 'Servers' : 'Server', sessionShardText(detail), 'session-metric-shards'),
+      : tx('No movements recorded'), movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
+    sessionMetric(tx('Crew observed*'), party.size ? txn(party.size, '{count} named', '{count} named') : tx('None named')),
+    sessionMetric(detail.shards?.length > 1 ? tx('Servers') : tx('Server'), sessionShardText(detail), 'session-metric-shards'),
   );
   debrief.append(metrics);
 
   const content = el('div', 'session-debrief-grid');
 
   const routeSection = el('section', 'session-debrief-section session-route-section');
-  routeSection.append(el('h3', null, 'Chronological route'));
+  routeSection.append(el('h3', null, tx('Chronological route')));
   const routeList = el('ol', 'session-route');
   route.forEach((place) => {
     const item = el('li');
     item.append(el('span', 'session-route-time', shortTimeOf(place.at)));
     item.append(placeLink(place.displayName));
     const context = place.routeKind === 'quantum'
-      ? 'quantum destination'
+      ? tx('quantum destination')
       : [place.body, place.system].filter(Boolean).join(' · ');
     if (context) item.append(el('span', 'muted', context));
     routeList.append(item);
   });
-  if (!route.length) routeList.append(el('li', 'muted', 'No named locations were written in this session.'));
+  if (!route.length) routeList.append(el('li', 'muted', tx('No named locations were written in this session.')));
   routeSection.append(routeList);
   content.append(routeSection);
 
   const commerceSection = el('section', 'session-debrief-section');
-  commerceSection.append(el('h3', null, 'Recorded economy'));
+  commerceSection.append(el('h3', null, tx('Recorded economy')));
   const commerce = [
     ...(detail.purchases || []).map((purchase) => ({
       at: purchase.at,
@@ -3117,7 +3137,7 @@ function renderSessionDebrief(summary) {
     })),
     ...(detail.trades || []).map((trade) => ({
       at: trade.at,
-      label: `${trade.isSell ? 'Cargo sold' : 'Cargo bought'} · ${trade.quantity} SCU`,
+      label: `${trade.isSell ? tx('Cargo sold') : tx('Cargo bought')} · ${trade.quantity} SCU`,
       amount: (trade.isSell ? 1 : -1) * Number(trade.amount || 0),
       approximate: true,
     })),
@@ -3131,26 +3151,26 @@ function renderSessionDebrief(summary) {
       `${entry.amount >= 0 ? '+' : '−'}${entry.approximate ? '~' : ''}${money(Math.abs(entry.amount))}`));
     commerceList.append(item);
   });
-  if (!commerce.length) commerceList.append(el('li', 'muted', 'No purchases or cargo trades recorded.'));
+  if (!commerce.length) commerceList.append(el('li', 'muted', tx('No purchases or cargo trades recorded.')));
   commerceSection.append(commerceList);
   content.append(commerceSection);
 
   const contractSection = el('section', 'session-debrief-section');
-  contractSection.append(el('h3', null, 'Contracts'));
+  contractSection.append(el('h3', null, tx('Contracts')));
   const contractList = el('ul', 'session-debrief-list');
   contracts.slice(0, 8).forEach((contract) => {
     const item = el('li');
-    item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', contract.outcome || 'Unknown'));
-    item.append(el('span', null, contract.displayName || contract.raw || 'Unnamed contract'));
-    if (contract.steps > 0) item.append(el('span', 'muted', `${contract.stepsDone} / ${contract.steps} steps`));
+    item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', sessionOutcome(contract.outcome)));
+    item.append(el('span', null, contract.displayName || contract.raw || tx('Unnamed contract')));
+    if (contract.steps > 0) item.append(el('span', 'muted', tx('{done} / {total} steps', { done: contract.stepsDone, total: contract.steps })));
     contractList.append(item);
   });
-  if (!contracts.length) contractList.append(el('li', 'muted', 'No contracts recorded.'));
+  if (!contracts.length) contractList.append(el('li', 'muted', tx('No contracts recorded.')));
   contractSection.append(contractList);
   content.append(contractSection);
 
   const highlightSection = el('section', 'session-debrief-section');
-  highlightSection.append(el('h3', null, 'Latest highlights'));
+  highlightSection.append(el('h3', null, tx('Latest highlights')));
   const highlights = (detail.timeline || [])
     .filter((entry) => !['party', 'location', 'quantum', 'login'].includes(entry.kind))
     .slice(-10);
@@ -3161,17 +3181,17 @@ function renderSessionDebrief(summary) {
   highlights.forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, withoutMarkup(entry.text)));
-    if (entry.detail) item.append(el('span', 'muted', withoutMarkup(entry.detail)));
+    item.append(el('span', null, feedText(withoutMarkup(entry.text))));
+    if (entry.detail) item.append(el('span', 'muted', feedText(withoutMarkup(entry.detail))));
     highlightList.append(item);
   });
-  if (!highlights.length) highlightList.append(el('li', 'muted', 'No additional highlights recorded.'));
+  if (!highlights.length) highlightList.append(el('li', 'muted', tx('No additional highlights recorded.')));
   highlightSection.append(highlightList);
   content.append(highlightSection);
 
   debrief.append(content);
   const limits = el('p', 'session-debrief-note muted',
-    '* Cargo amounts are kiosk requests, not confirmed settlements. Crew observed is a floor from party notifications, not a roster.');
+    tx('* Cargo amounts are kiosk requests, not confirmed settlements. Crew observed is a floor from party notifications, not a roster.'));
   debrief.append(limits);
   cell.append(debrief);
   return row;
@@ -3197,7 +3217,7 @@ function renderSessions() {
 
   if (page.length === 0) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No sessions in that range.');
+    const td = el('td', 'muted', tx('No sessions in that range.'));
     td.colSpan = 10;
     tr.append(td);
     body.append(tr);
@@ -3209,7 +3229,7 @@ function renderSessions() {
     tr.classList.toggle('open', open);
     tr.tabIndex = 0;
     tr.setAttribute('aria-expanded', String(open));
-    tr.title = open ? 'Close session debrief' : 'Open session debrief';
+    tr.title = open ? tx('Close session debrief') : tx('Open session debrief');
     tr.addEventListener('click', () => toggleSessionDebrief(session.id));
     tr.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -3242,7 +3262,12 @@ function summariseSessions(sessions) {
   const sum = (pick) => sessions.reduce((total, s) => total + (pick(s) || 0), 0);
 
   const host = $('#lib-summary');
-  host.textContent = `${sessions.length} session${sessions.length === 1 ? '' : 's'} · ${duration(sum((s) => s.inGame))} in game · ${sum((s) => s.jumps)} jump${sum((s) => s.jumps) === 1 ? '' : 's'} · ${sum((s) => s.contracts)} contract${sum((s) => s.contracts) === 1 ? '' : 's'}`;
+  host.textContent = [
+    txn(sessions.length, '{count} session', '{count} sessions'),
+    tx('{time} in game', { time: duration(sum((s) => s.inGame)) }),
+    txn(sum((s) => s.jumps), '{count} jump', '{count} jumps'),
+    txn(sum((s) => s.contracts), '{count} contract', '{count} contracts'),
+  ].join(' · ');
 }
 
 $('#sessions-open-latest')?.addEventListener('click', () => {
@@ -3256,7 +3281,7 @@ function renderPager(pages, start, shown, total) {
 
   if (total === 0) return;
 
-  pager.append(el('span', 'pager-info', `${start + 1}–${start + shown} of ${total}`));
+  pager.append(el('span', 'pager-info', tx('{from}–{to} of {total}', { from: start + 1, to: start + shown, total })));
 
   const nav = el('div', 'pager-nav');
 
@@ -3267,9 +3292,9 @@ function renderPager(pages, start, shown, total) {
     return button;
   };
 
-  nav.append(step('‹ Newer', -1, sessionPage === 0));
+  nav.append(step(tx('‹ Newer'), -1, sessionPage === 0));
   nav.append(el('span', 'pager-page', `${sessionPage + 1} / ${pages}`));
-  nav.append(step('Older ›', 1, sessionPage >= pages - 1));
+  nav.append(step(tx('Older ›'), 1, sessionPage >= pages - 1));
 
   pager.append(nav);
 }
@@ -9871,7 +9896,7 @@ async function loadOwnPoints() {
     pointsAll = await getJson('/api/screen/pins');
   } catch {
     list.textContent = '';
-    list.append(el('p', 'muted', 'Could not load your points — is the app still running?'));
+    list.append(el('p', 'muted', tx('Could not load your points — is the app still running?')));
     return;
   }
 
@@ -9893,7 +9918,7 @@ async function loadOwnPoints() {
 }
 
 function pointName(pin) {
-  return pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location';
+  return pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || tx('Copied location');
 }
 
 /** The session the copy fell inside, when the library has one that spans it. */
@@ -9930,9 +9955,11 @@ function renderPointCategories() {
     row.append(button);
   };
 
-  chip(`All · ${pointsAll.length}`, null);
+  // The category is stored in English and only its label is translated, so a
+  // point saved on a French page is filed under the same chip as the rest.
+  chip(`${tx('All')} · ${pointsAll.length}`, null);
   for (const [category, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0])))
-    chip(`${category} · ${count}`, category);
+    chip(`${tx(category)} · ${count}`, category);
 }
 
 /** A distance in the unit a pilot would say it in: metres up close, kilometres in the main, gigametres across a system. */
@@ -9955,8 +9982,9 @@ function nearPointLine(near) {
   if (near.sameSystem) {
     line.append(el('span', null, ` · ${distanceWord(near.metres)}`));
   } else {
-    line.append(el('span', 'muted',
-      ` · ${near.system ? `in ${near.system}` : 'system unknown'} — a different frame, so no distance can be given`));
+    line.append(el('span', 'muted', ` · ${near.system
+      ? tx('in {system} — a different frame, so no distance can be given', { system: near.system })
+      : tx('system unknown — a different frame, so no distance can be given')}`));
   }
   return line;
 }
@@ -9972,10 +10000,11 @@ function renderPointsFromHere() {
 
   const from = pointsFrom.from;
   const placed = [from.system, from.believed].filter(Boolean).join(' › ');
-  box.append(el('span', null,
-    `Distances are from where you last copied a location — ${dateOf(from.at)}, ${shortTimeOf(from.at)}`
-    + `${placed ? `, believed to be ${placed}` : ', which the logs could not place'}. `));
-  box.append(el('span', 'muted', 'Copy a new /showlocation in the game and they move with you.'));
+  const when = { date: dateOf(from.at), time: shortTimeOf(from.at), place: placed };
+  box.append(el('span', null, `${placed
+    ? tx('Distances are from where you last copied a location — {date}, {time}, believed to be {place}.', when)
+    : tx('Distances are from where you last copied a location — {date}, {time}, which the logs could not place.', when)} `));
+  box.append(el('span', 'muted', tx('Copy a new /showlocation in the game and they move with you.')));
 }
 
 function renderPoints() {
@@ -9987,11 +10016,11 @@ function renderPoints() {
   list.textContent = '';
 
   const count = $('#points-count');
-  if (count) count.textContent = pointsAll.length ? `${pointsAll.length} kept` : '';
+  if (count) count.textContent = pointsAll.length ? txn(pointsAll.length, '{count} kept', '{count} kept') : '';
 
   if (!pointsAll.length) {
     list.append(el('p', 'muted',
-      'No points yet. Copy a /showlocation in the game, then pin it from the Log — it lands here with room for a note.'));
+      tx('No points yet. Copy a /showlocation in the game, then pin it from the Log — it lands here with room for a note.')));
     return;
   }
 
@@ -10004,7 +10033,7 @@ function renderPoints() {
   });
 
   if (!shown.length) {
-    list.append(el('p', 'muted', 'No point matches that.'));
+    list.append(el('p', 'muted', tx('No point matches that.')));
     return;
   }
 
@@ -10022,28 +10051,28 @@ function pointBeliefLine(pin) {
   const line = el('span', 'point-belief');
 
   if (pin.systemByPilot) {
-    line.append(el('span', null, `in ${pin.system}, as you set it`));
-    if (pin.believed) line.append(el('span', 'muted', ` · the logs had said ${pin.believed}`));
+    line.append(el('span', null, tx('in {system}, as you set it', { system: pin.system })));
+    if (pin.believed) line.append(el('span', 'muted', ` · ${tx('the logs had said {place}', { place: pin.believed })}`));
     return line;
   }
 
   const believed = [pin.system, pin.believed].filter(Boolean).join(' › ');
   if (!believed) {
-    line.append(el('span', 'warn', 'the logs could not place this copy — set the system above'));
+    line.append(el('span', 'warn', tx('the logs could not place this copy — set the system above')));
     return line;
   }
 
-  line.append(el('span', null, `believed to be ${believed} when copied`));
+  line.append(el('span', null, tx('believed to be {place} when copied', { place: believed })));
 
   if (pin.believedBy && pin.believedAt) {
     const minutes = Math.max(0, Math.round((new Date(pin.sourceAt) - new Date(pin.believedAt)) / 60000));
-    const ago = minutes < 1 ? 'moments' : minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+    const ago = minutes < 1 ? tx('moments') : minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
     const basis = pin.believedBy === 'Jump'
-      ? `a quantum jump ${ago} earlier — where the ship was going, not that it arrived`
-      : `a location signal ${ago} earlier`;
-    line.append(el('span', 'muted', `, from ${basis}`));
+      ? tx(', from a quantum jump {ago} earlier — where the ship was going, not that it arrived', { ago })
+      : tx(', from a location signal {ago} earlier', { ago });
+    line.append(el('span', 'muted', basis));
   } else {
-    line.append(el('span', 'muted', ', on evidence this copy did not record'));
+    line.append(el('span', 'muted', tx(', on evidence this copy did not record')));
   }
 
   return line;
@@ -10062,11 +10091,11 @@ function renderPointCard(pin, into = null) {
   name.className = 'search point-name';
   name.value = pin.label || '';
   name.placeholder = pointName(pin);
-  name.setAttribute('aria-label', 'Point name');
+  name.setAttribute('aria-label', tx('Point name'));
   const category = document.createElement('select');
   category.className = 'select point-category';
-  category.setAttribute('aria-label', 'Point category');
-  for (const choice of POINT_CATEGORIES) category.append(new Option(choice, choice));
+  category.setAttribute('aria-label', tx('Point category'));
+  for (const choice of POINT_CATEGORIES) category.append(new Option(tx(choice), choice));
   category.value = POINT_CATEGORIES.includes(pin.category) ? pin.category : 'General';
 
   // The system is the pilot's to say. The coordinates are relative to it, so
@@ -10074,9 +10103,9 @@ function renderPointCard(pin, into = null) {
   // sometimes wrong and sometimes absent.
   const system = document.createElement('select');
   system.className = 'select point-system';
-  system.setAttribute('aria-label', 'Which system this point is in');
-  system.title = pin.systemByPilot ? 'The system, as you set it' : 'The system, as the logs believed it - change it if they were wrong';
-  system.append(new Option('System?', ''));
+  system.setAttribute('aria-label', tx('Which system this point is in'));
+  system.title = pin.systemByPilot ? tx('The system, as you set it') : tx('The system, as the logs believed it - change it if they were wrong');
+  system.append(new Option(tx('System?'), ''));
   const systems = Object.keys(SYSTEMS);
   if (pin.system && !systems.includes(pin.system)) systems.push(pin.system);
   for (const choice of systems) system.append(new Option(choice, choice));
@@ -10090,7 +10119,7 @@ function renderPointCard(pin, into = null) {
   const facts = el('div', 'point-facts muted');
   facts.append(el('span', 'mono',
     `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
-  facts.append(el('span', null, `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+  facts.append(el('span', null, tx('{distance} Gm from system centre', { distance: Number(pin.gigametres).toFixed(4) })));
   facts.append(pointBeliefLine(pin));
   card.append(facts);
 
@@ -10099,25 +10128,25 @@ function renderPointCard(pin, into = null) {
   if (near) {
     const here = el('div', 'point-here');
     here.append(near.sameSystem
-      ? el('span', null, `${distanceWord(near.metres)} from where you last copied`)
-      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+      ? el('span', null, tx('{distance} from where you last copied', { distance: distanceWord(near.metres) }))
+      : el('span', 'muted', tx('not measurable from where you last copied — a different system, so a different frame')));
     card.append(here);
   }
 
   const when = el('div', 'point-when muted');
-  when.append(el('span', null, `Copied ${dateOf(pin.sourceAt)}, ${shortTimeOf(pin.sourceAt)}`));
+  when.append(el('span', null, tx('Copied {date}, {time}', { date: dateOf(pin.sourceAt), time: shortTimeOf(pin.sourceAt) })));
   const session = sessionAround(pin.sourceAt);
   if (session) {
-    const open = el('button', 'link', `during the session of ${dateOf(session.startedAt)}${session.primaryShip ? ` · ${session.primaryShip}` : ''}`);
+    const open = el('button', 'link', `${tx('during the session of {date}', { date: dateOf(session.startedAt) })}${session.primaryShip ? ` · ${session.primaryShip}` : ''}`);
     open.type = 'button';
-    open.title = 'Open that session';
+    open.title = tx('Open that session');
     open.addEventListener('click', () => {
       showView('sessions');
       if (expandedSessionId !== session.id) toggleSessionDebrief(session.id).catch(() => {});
     });
     when.append(el('span', null, ' · '), open);
   } else {
-    when.append(el('span', null, ' · no session in the library spans that moment'));
+    when.append(el('span', null, ` · ${tx('no session in the library spans that moment')}`));
   }
   card.append(when);
 
@@ -10126,13 +10155,13 @@ function renderPointCard(pin, into = null) {
   note.rows = 3;
   note.maxLength = 2000;
   note.value = pin.note || '';
-  note.placeholder = 'Why were you there? What is here, who you met, what to bring next time…';
-  note.setAttribute('aria-label', 'Why you were there');
+  note.placeholder = tx('Why were you there? What is here, who you met, what to bring next time…');
+  note.setAttribute('aria-label', tx('Why you were there'));
   card.append(note);
 
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
-  const save = el('button', 'ghost point-save', 'Save');
+  const save = el('button', 'ghost point-save', tx('Save'));
   save.type = 'button';
   save.addEventListener('click', () => savePoint(pin, card, {
     label: name.value,
@@ -10143,21 +10172,21 @@ function renderPointCard(pin, into = null) {
     system: system.value !== (pin.system || '') ? system.value : null,
   }, save, said));
 
-  const copy = el('button', 'ghost point-copy', 'Copy coordinates');
+  const copy = el('button', 'ghost point-copy', tx('Copy coordinates'));
   copy.type = 'button';
-  copy.title = 'Copy x y z to the clipboard';
+  copy.title = tx('Copy x y z to the clipboard');
   copy.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(`${pin.x} ${pin.y} ${pin.z}`);
-      said.textContent = 'Coordinates copied.';
+      said.textContent = tx('Coordinates copied.');
     } catch {
-      said.textContent = 'The browser would not let the page write to the clipboard.';
+      said.textContent = tx('The browser would not let the page write to the clipboard.');
     }
   });
 
-  const remove = el('button', 'ghost danger point-remove', 'Remove');
+  const remove = el('button', 'ghost danger point-remove', tx('Remove'));
   remove.type = 'button';
-  remove.title = 'Forget this point; the copied reading it came from stays in the Log';
+  remove.title = tx('Forget this point; the copied reading it came from stays in the Log');
   remove.addEventListener('click', () => removePoint(pin, remove, said));
 
   actions.append(save, copy, remove, said);
@@ -10172,7 +10201,7 @@ function renderPointCard(pin, into = null) {
 
 async function savePoint(pin, card, fields, button, said) {
   button.disabled = true;
-  said.textContent = 'Saving…';
+  said.textContent = tx('Saving…');
 
   try {
     const response = await fetch('/api/screen/pins', {
@@ -10188,13 +10217,13 @@ async function savePoint(pin, card, fields, button, said) {
     // half-typed on the card beside it, and there is no undo for that. The
     // category chips do get redrawn, since a save can move a point between them.
     renderPointCard(saved, card);
-    card.querySelector('.point-said').textContent = 'Saved.';
+    card.querySelector('.point-said').textContent = tx('Saved.');
     renderPointCategories();
 
     // The Log aside shows the same points, and is cheap to keep honest.
     renderScreenLog().catch(() => {});
   } catch {
-    said.textContent = 'Could not save — is the app still running?';
+    said.textContent = tx('Could not save — is the app still running?');
     button.disabled = false;
   }
 }
@@ -10210,7 +10239,7 @@ async function removePoint(pin, button, said) {
     renderPoints();
     renderScreenLog().catch(() => {});
   } catch {
-    said.textContent = 'Could not remove that point.';
+    said.textContent = tx('Could not remove that point.');
     button.disabled = false;
   }
 }
@@ -10238,9 +10267,10 @@ async function renderSharedPoints() {
 
   if (showImported === 'none') {
     const line = el('p', 'muted');
-    line.append(el('span', null,
-      `${rows.length} point${rows.length === 1 ? '' : 's'} from files you were sent ${rows.length === 1 ? 'is' : 'are'} not shown. `));
-    const show = el('button', 'ghost tiny', 'Show them');
+    line.append(el('span', null, `${txn(rows.length,
+      '{count} point from files you were sent is not shown.',
+      '{count} points from files you were sent are not shown.')} `));
+    const show = el('button', 'ghost tiny', tx('Show them'));
     show.addEventListener('click', () => setShowImported('all'));
     line.append(show);
     host.append(line);
@@ -10248,10 +10278,8 @@ async function renderSharedPoints() {
   }
 
   const block = el('section', 'shared-block');
-  block.append(el('h3', null, 'Shared by others'));
-  block.append(el('p', 'muted', 'Points from the files you were sent. The coordinates are exact; '
-    + 'the system is what the sender\'s logs believed unless they set it themselves, and the '
-    + 'note is theirs. Keep one and it becomes your own point, backed up and edited like the rest.'));
+  block.append(el('h3', null, tx('Shared by others')));
+  block.append(el('p', 'muted', tx('Points from the files you were sent. The coordinates are exact; the system is what the sender\'s logs believed unless they set it themselves, and the note is theirs. Keep one and it becomes your own point, backed up and edited like the rest.')));
 
   const list = el('div', 'points-list');
   for (const row of rows) list.append(sharedPointCard(row));
@@ -10264,38 +10292,42 @@ function sharedPointCard(row) {
 
   const head = el('div', 'point-head shared');
   head.append(el('div', 'point-name-read', row.label));
-  head.append(el('div', 'muted', `${row.category || 'General'} · from ${row.imported?.handle || 'someone'}`));
+  head.append(el('div', 'muted', `${tx(row.category || 'General')} · ${row.imported?.handle
+    ? tx('from {handle}', { handle: row.imported.handle })
+    : tx('from someone')}`));
   card.append(head);
 
   const facts = el('div', 'point-facts muted');
   facts.append(el('span', 'mono',
     `x ${Math.round(row.x).toLocaleString()} · y ${Math.round(row.y).toLocaleString()} · z ${Math.round(row.z).toLocaleString()}`));
-  facts.append(el('span', null, `${Number(row.gigametres).toFixed(4)} Gm from system centre`));
+  facts.append(el('span', null, tx('{distance} Gm from system centre', { distance: Number(row.gigametres).toFixed(4) })));
   if (row.system) {
     facts.append(el('span', null, row.systemByPilot
-      ? `in ${row.system}, as they set it`
-      : `in ${row.system}, as their logs believed${row.believed ? ` (near ${row.believed})` : ''}`));
+      ? tx('in {system}, as they set it', { system: row.system })
+      : row.believed
+        ? tx('in {system}, as their logs believed (near {place})', { system: row.system, place: row.believed })
+        : tx('in {system}, as their logs believed', { system: row.system })));
   } else {
-    facts.append(el('span', 'warn', 'system unknown — their logs could not place it'));
+    facts.append(el('span', 'warn', tx('system unknown — their logs could not place it')));
   }
   card.append(facts);
 
   if (row.metres != null) {
     const here = el('div', 'point-here');
     here.append(row.sameSystem
-      ? el('span', null, `${distanceWord(row.metres)} from where you last copied`)
-      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+      ? el('span', null, tx('{distance} from where you last copied', { distance: distanceWord(row.metres) }))
+      : el('span', 'muted', tx('not measurable from where you last copied — a different system, so a different frame')));
     card.append(here);
   }
 
-  card.append(el('div', 'point-when muted', `They copied it ${dateOf(row.at)}, ${shortTimeOf(row.at)}`));
+  card.append(el('div', 'point-when muted', tx('They copied it {date}, {time}', { date: dateOf(row.at), time: shortTimeOf(row.at) })));
   if (row.note) card.append(el('div', 'pin-note', row.note));
 
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
-  const keep = el('button', 'ghost point-keep', 'Keep as mine');
+  const keep = el('button', 'ghost point-keep', tx('Keep as mine'));
   keep.type = 'button';
-  keep.title = 'Copy this point into your own, with a note saying who shared it';
+  keep.title = tx('Copy this point into your own, with a note saying who shared it');
   keep.addEventListener('click', async () => {
     keep.disabled = true;
     try {
@@ -10304,10 +10336,10 @@ function sharedPointCard(row) {
         { method: 'POST' });
       const answer = await response.json().catch(() => null);
       if (!response.ok) throw new Error(answer?.trouble || `keep -> ${response.status}`);
-      said.textContent = 'Kept — it is in your points above.';
+      said.textContent = tx('Kept — it is in your points above.');
       loadOwnPoints().catch(() => {});
     } catch (e) {
-      said.textContent = e.message || 'Could not keep that point.';
+      said.textContent = e.message || tx('Could not keep that point.');
       keep.disabled = false;
     }
   });
@@ -13886,10 +13918,10 @@ async function loadCasualties() {
   }
 
   tiles('#casualties-summary', [
-    ['Deaths', data.deaths],
-    ['Incapacitations', data.incapacitations],
-    ['Sessions with a death', data.sessionsWithDeaths],
-    ['Claim fees*', data.estimatedFees > 0 ? money(data.estimatedFees) : '—'],
+    [tx('Deaths'), data.deaths],
+    [tx('Incapacitations'), data.incapacitations],
+    [tx('Sessions with a death'), data.sessionsWithDeaths],
+    [tx('Claim fees*'), data.estimatedFees > 0 ? money(data.estimatedFees) : '—'],
   ]);
 
   bars('#casualties-places',
@@ -13910,7 +13942,7 @@ async function loadCasualties() {
 
   bars('#casualties-beds',
     (data.bedsUsed || []).map((b) => ({
-      label: b.afterDeath ? `${b.place} · ${b.afterDeath} after a death` : b.place,
+      label: b.afterDeath ? `${b.place} · ${tx('{count} after a death', { count: b.afterDeath })}` : b.place,
       value: b.times,
       onClick: () => jumpToPlace(b.place),
     })),
@@ -13923,26 +13955,24 @@ async function loadCasualties() {
 
   if (kinds) {
     const parts = [];
-    if (kinds.afterDeath) parts.push(`${kinds.afterDeath} after a death or incapacitation`);
-    if (kinds.heal) parts.push(`${kinds.heal} used mid-session, which could be either`);
-    if (kinds.hab) parts.push(`${kinds.hab} at places with no clinic, so hab beds - not counted above`);
-    if (kinds.wake) parts.push(`${kinds.wake} were waking up at login, not counted above`);
+    if (kinds.afterDeath) parts.push(tx('{count} after a death or incapacitation', { count: kinds.afterDeath }));
+    if (kinds.heal) parts.push(tx('{count} used mid-session, which could be either', { count: kinds.heal }));
+    if (kinds.hab) parts.push(tx('{count} at places with no clinic, so hab beds - not counted above', { count: kinds.hab }));
+    if (kinds.wake) parts.push(tx('{count} were waking up at login, not counted above', { count: kinds.wake }));
 
     // The directory can only rule a bed out, and only if it is on disk. Say so
     // rather than leaving the mid-session pile unexplained.
     if (!kinds.clinicsKnown) {
-      parts.push('enable the place directory in Settings to rule out beds at places with no clinic');
+      parts.push(tx('enable the place directory in Settings to rule out beds at places with no clinic'));
     }
 
     $('#beds-kinds').textContent = parts.join(' · ');
   }
 
   $('#casualties-woke-note').textContent = data.lastWokeAt
-    ? `Last woke at ${data.lastWokeAt}, ${relative(data.lastWokeWhen)}. Inferred, `
-      + 'not read: the game logs no respawn point, so this is the first place '
-      + 'named after each death.'
-    : 'Nothing to infer yet. This reads the first place named after a death, '
-      + 'because the game logs no respawn point of its own.';
+    ? tx('Last woke at {place}, {when}. Inferred, not read: the game logs no respawn point, so this is the first place named after each death.',
+      { place: data.lastWokeAt, when: relative(data.lastWokeWhen) })
+    : tx('Nothing to infer yet. This reads the first place named after a death, because the game logs no respawn point of its own.');
 
   const body = $('#casualties-fees tbody');
   body.textContent = '';
@@ -13989,16 +14019,14 @@ async function renderSharedShips(days) {
   if (!ships.length) return;
 
   const card = el('section', 'shared-block');
-  card.append(el('h3', null, 'Ships you have shared'));
-  card.append(el('p', 'muted', 'Who was aboard which ship, from its comms channel — the only '
-    + 'lines that put a person in a vehicle. Counted in boardings, not hours: nothing records '
-    + 'how long anyone stayed, and a parked ship looks the same as a crossing.'));
+  card.append(el('h3', null, tx('Ships you have shared')));
+  card.append(el('p', 'muted', tx('Who was aboard which ship, from its comms channel — the only lines that put a person in a vehicle. Counted in boardings, not hours: nothing records how long anyone stayed, and a parked ship looks the same as a crossing.')));
 
   const table = el('table', 'data');
   const head = el('thead');
   const headRow = el('tr');
   for (const label of ['Pilot', 'Ship', 'Whose', 'Boardings', 'First', 'Last']) {
-    headRow.append(el('th', label === 'Boardings' ? 'num' : null, label));
+    headRow.append(el('th', label === 'Boardings' ? 'num' : null, tx(label)));
   }
   head.append(headRow);
   table.append(head);
@@ -14013,7 +14041,7 @@ async function renderSharedShips(days) {
 
     // Whose ship it was is the interesting half: crewing for somebody is a
     // different evening from having them aboard yours.
-    tr.append(el('td', 'muted', ship.owner === ship.handle ? 'theirs' : 'yours'));
+    tr.append(el('td', 'muted', ship.owner === ship.handle ? tx('theirs') : tx('yours')));
 
     tr.append(el('td', 'num', String(ship.times)));
     tr.append(el('td', 'muted', dateOf(ship.first)));
@@ -14024,8 +14052,10 @@ async function renderSharedShips(days) {
   table.append(body);
   card.append(table);
 
-  card.append(el('p', 'muted', `${ships.length} pairing${ships.length === 1 ? '' : 's'}`
-    + `${mine ? `, ${mine} of them in a ship that was not yours` : ''}.`));
+  card.append(el('p', 'muted', mine
+    ? txn(ships.length, '{count} pairing, {mine} of them in a ship that was not yours.',
+      '{count} pairings, {mine} of them in a ship that was not yours.', { mine })
+    : txn(ships.length, '{count} pairing.', '{count} pairings.')));
 
   host.append(card);
 }
@@ -14059,22 +14089,22 @@ async function loadCrew() {
   const arrivals = rows.reduce((total, r) => total + r.connected, 0);
 
   tiles('#crew-summary', [
-    ['People named', rows.length],
+    [tx('People named'), rows.length],
 
     // Joins rather than arrivals: this is the one that counts somebody who was
     // not there a moment before, which is what "flew with" means.
-    ['Joined your party', joins],
-    ['Came online', arrivals],
-    ['Most flown with', rows.length ? rows[0].handle : '—'],
+    [tx('Joined your party'), joins],
+    [tx('Came online'), arrivals],
+    [tx('Most flown with'), rows.length ? rows[0].handle : '—'],
   ]);
 
   bars('#crew-chart',
     rows.slice(0, 12).map((r) => ({
       label: r.handle,
       value: r.sessions,
-      note: `${r.connected} arrival${r.connected === 1 ? '' : 's'}`,
+      note: txn(r.connected, '{count} arrival', '{count} arrivals'),
     })),
-    (v) => `${v} session${v === 1 ? '' : 's'}`);
+    (v) => txn(v, '{count} session', '{count} sessions'));
 
   const body = table.querySelector('tbody');
   body.textContent = '';
@@ -14082,8 +14112,7 @@ async function loadCrew() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted',
-      'Nobody named in that range — the game only says so when someone joins, '
-      + 'leaves, or connects while you are partied with them.');
+      tx('Nobody named in that range — the game only says so when someone joins, leaves, or connects while you are partied with them.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -14122,8 +14151,10 @@ let serverNewestDeployment = null;
 let serverCurrent = null;
 
 /** What each ending means to a pilot, and whether it counts against the server. */
+// "you left" rather than "left": the bare word is already the party feed's
+// "left" (somebody else went), and English as the key cannot tell them apart.
 const SHARD_ENDINGS = {
-  Left: ['left', false],
+  Left: ['you left', false],
   Idle: ['idle kick', false],
   Quit: ['quit to desktop', false],
   Backend: ['back-end gave up', true],
@@ -14133,7 +14164,7 @@ const SHARD_ENDINGS = {
 };
 
 function endingLabel(ending) {
-  return (SHARD_ENDINGS[ending] || [String(ending || '').toLowerCase(), false])[0];
+  return SHARD_ENDINGS[ending] ? tx(SHARD_ENDINGS[ending][0]) : String(ending || '').toLowerCase();
 }
 
 /**
@@ -14172,7 +14203,7 @@ function fillServerRegions(rows) {
   const regions = [...new Set(rows.map((r) => r.region))].sort();
 
   select.textContent = '';
-  const all = el('option', null, 'All regions');
+  const all = el('option', null, tx('All regions'));
   all.value = '';
   select.append(all);
 
@@ -14224,14 +14255,14 @@ function renderServers() {
   const backendEnds = all.reduce((total, r) => total + (r.endings?.Backend || 0), 0);
 
   tiles('#servers-summary', [
-    ['Shards visited', all.length],
-    ['Still running', current.length],
-    ['Placements', visits],
-    ['Back-end ends', backendEnds],
-    ['Favourites', all.filter((r) => r.favorite).length],
-    ['Marked avoid', all.filter((r) => r.disposition === 'avoid').length],
-    ['On now', serverCurrent || 'not on a shard'],
-    ['Newest deployment', serverNewestDeployment || '—'],
+    [tx('Shards visited'), all.length],
+    [tx('Still running'), current.length],
+    [tx('Placements'), visits],
+    [tx('Back-end ends'), backendEnds],
+    [tx('Favourites'), all.filter((r) => r.favorite).length],
+    [tx('Marked avoid'), all.filter((r) => r.disposition === 'avoid').length],
+    [tx('On now'), serverCurrent || tx('not on a shard')],
+    [tx('Newest deployment'), serverNewestDeployment || '—'],
   ]);
 
   const body = table.querySelector('tbody');
@@ -14240,9 +14271,8 @@ function renderServers() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', all.length
-      ? 'Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.'
-      : 'No shard joins yet. The game writes one <Join PU> line each time it places you; '
-        + 'sessions summarised before this build read it will show up after a rescan.');
+      ? tx('Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.')
+      : tx('No shard joins yet. The game writes one <Join PU> line each time it places you; sessions summarised before this build read it will show up after a rescan.'));
     td.colSpan = 10;
     tr.append(td);
     body.append(tr);
@@ -14260,7 +14290,7 @@ function serverRow(row) {
   const starCell = el('td');
   const star = el('button', `ghost tiny star${row.favorite ? ' on' : ''}`, row.favorite ? '★' : '☆');
   star.type = 'button';
-  star.title = row.favorite ? 'Remove from favourites' : 'Add to favourites';
+  star.title = row.favorite ? tx('Remove from favourites') : tx('Add to favourites');
   star.addEventListener('click', () => setServerFavorite(row.shard, !row.favorite).catch(() => {}));
   starCell.append(star);
   tr.append(starCell);
@@ -14269,22 +14299,22 @@ function serverRow(row) {
 
   const shard = el('td', 'shard');
   shard.append(document.createTextNode(row.shard));
-  if (row.shard === serverCurrent) shard.append(el('span', 'here-badge', 'on now'));
+  if (row.shard === serverCurrent) shard.append(el('span', 'here-badge', tx('on now')));
   shard.append(seenNameText(row));
   shard.append(serverActions(row));
   shard.append(el('small', null, row.current
-    ? `deployment ${row.deployment}`
-    : `deployment ${row.deployment} — retired`));
+    ? tx('deployment {deployment}', { deployment: row.deployment })
+    : tx('deployment {deployment} — retired', { deployment: row.deployment })));
   tr.append(shard);
 
   tr.append(el('td', null, row.region));
   tr.append(el('td', 'num', row.visits ? String(row.visits) : '—'));
   tr.append(el('td', 'num', row.time ? duration(row.time) : '—'));
 
-  const last = el('td', 'muted', row.visits ? relative(row.last) : 'never seen here');
+  const last = el('td', 'muted', row.visits ? relative(row.last) : tx('never seen here'));
   last.title = row.visits
     ? dateOf(row.last)
-    : 'This note arrived from a backup; the logs on this machine never joined it.';
+    : tx('This note arrived from a backup; the logs on this machine never joined it.');
   tr.append(last);
 
   tr.append(endingCell(row));
@@ -14302,12 +14332,12 @@ function dispositionCell(row) {
   const td = el('td', 'server-disposition');
   const select = el('select', `select tiny${row.disposition ? ` ${row.disposition}` : ''}`);
   for (const [value, label] of [['', '—'], ['good', 'Good'], ['avoid', 'Avoid']]) {
-    const option = el('option', null, label);
+    const option = el('option', null, tx(label));
     option.value = value;
     select.append(option);
   }
   select.value = row.disposition || '';
-  select.title = 'Your personal server marker';
+  select.title = tx('Your personal server marker');
   select.addEventListener('change', () => setServerDisposition(row.shard, select.value).catch(() => {
     select.value = row.disposition || '';
   }));
@@ -14317,8 +14347,8 @@ function dispositionCell(row) {
 
 function seenNameText(row) {
   const text = el('small', `seen-name${row.seenName ? '' : ' empty'}`,
-    row.seenName ? `Seen in game: ${row.seenName}` : 'Add game label…');
-  text.title = 'Click to record the name the game showed you';
+    row.seenName ? tx('Seen in game: {name}', { name: row.seenName }) : tx('Add game label…'));
+  text.title = tx('Click to record the name the game showed you');
   text.tabIndex = 0;
   text.addEventListener('click', () => editServerSeenName(row, text));
   text.addEventListener('keydown', (e) => {
@@ -14353,10 +14383,10 @@ function editServerSeenName(row, text) {
 
 function serverActions(row) {
   const actions = el('div', 'server-actions');
-  const copy = el('button', 'ghost tiny', 'Copy ID');
+  const copy = el('button', 'ghost tiny', tx('Copy ID'));
   copy.type = 'button';
   copy.addEventListener('click', () => copyServerText(row.shard, copy));
-  const report = el('button', 'ghost tiny', 'Copy report');
+  const report = el('button', 'ghost tiny', tx('Copy report'));
   report.type = 'button';
   report.addEventListener('click', () => copyServerText(serverReport(row), report));
   actions.append(copy, report);
@@ -14367,8 +14397,12 @@ function serverReport(row) {
   // A note-only row - a shard these logs never joined - has no visit to
   // report. The cells say "never seen here"; the pasted line must not invent
   // a date and an ending the table itself refuses to show.
+  // English on every page, like the diagnostic summary: it is pasted where
+  // other pilots read it, not shown here.
   if (!row.visits) return `Quantumwake server report: shard ${row.shard}; region ${row.region}; no visit recorded on this machine.`;
-  const ending = row.shard === serverCurrent ? 'still connected' : endingLabel(row.lastEnding);
+  const ending = row.shard === serverCurrent
+    ? 'still connected'
+    : (SHARD_ENDINGS[row.lastEnding]?.[0] ?? String(row.lastEnding || '').toLowerCase());
   const when = row.shard === serverCurrent ? 'now' : dateOf(row.last);
   const stay = row.lastDuration ? ` after ${duration(row.lastDuration)}` : '';
   return `Quantumwake server report: shard ${row.shard}; region ${row.region}; ${when}; ${ending}${stay}.`;
@@ -14405,9 +14439,9 @@ async function copyServerText(value, button) {
       box.remove();
       if (!ok) throw new Error('copy refused');
     }
-    say('Copied');
+    say(tx('Copied'));
   } catch {
-    say('Could not copy');
+    say(tx('Could not copy'));
   }
 }
 
@@ -14423,8 +14457,8 @@ function endingCell(row) {
     return td;
   }
 
-  const [label, bad] = SHARD_ENDINGS[row.lastEnding] || [String(row.lastEnding).toLowerCase(), false];
-  td.append(el('span', bad ? 'bad' : null, label));
+  const bad = SHARD_ENDINGS[row.lastEnding]?.[1] ?? false;
+  td.append(el('span', bad ? 'bad' : null, endingLabel(row.lastEnding)));
 
   if (row.visits > 1) {
     const rest = Object.entries(row.endings || {})
@@ -14449,9 +14483,9 @@ function placesCell(row) {
   const places = row.places || [];
 
   if (!places.length) {
-    td.append(el('span', 'muted', row.visits ? 'nowhere named' : '—'));
+    td.append(el('span', 'muted', row.visits ? tx('nowhere named') : '—'));
     td.title = row.visits
-      ? 'No arrival was logged while on this shard - a stay spent in a ship, or too short to land.'
+      ? tx('No arrival was logged while on this shard - a stay spent in a ship, or too short to land.')
       : '';
     return td;
   }
@@ -14470,11 +14504,12 @@ function placesCell(row) {
     list.append(li);
   }
 
-  const more = el('button', 'ghost tiny more', `+${rest.length} more`);
+  const moreLabel = tx('+{count} more', { count: rest.length });
+  const more = el('button', 'ghost tiny more', moreLabel);
   more.type = 'button';
   more.addEventListener('click', () => {
     list.hidden = !list.hidden;
-    more.textContent = list.hidden ? `+${rest.length} more` : 'fewer';
+    more.textContent = list.hidden ? moreLabel : tx('fewer');
   });
 
   td.append(more, list);
@@ -14482,8 +14517,8 @@ function placesCell(row) {
 }
 
 function noteText(row) {
-  const text = el('div', `note-text${row.note ? '' : ' empty'}`, row.note || 'Add a note…');
-  text.title = 'Click to edit';
+  const text = el('div', `note-text${row.note ? '' : ' empty'}`, row.note || tx('Add a note…'));
+  text.title = tx('Click to edit');
   text.tabIndex = 0;
   text.addEventListener('click', () => editServerNote(row, text));
   text.addEventListener('keydown', (e) => {
@@ -14497,7 +14532,7 @@ function editServerNote(row, text) {
   const box = el('textarea');
   box.value = row.note || '';
   box.maxLength = 1000;
-  box.placeholder = 'Laggy elevators, two 30ks, good for bunkers…';
+  box.placeholder = tx('Laggy elevators, two 30ks, good for bunkers…');
 
   let done = false;
   const finish = (save) => {
@@ -18500,46 +18535,78 @@ function renderLogbookBrief(rows) {
   const netDetail = $('#logbook-net-detail');
 
   if (!rows.length) {
-    latestTitle.textContent = 'No activity recorded';
-    latestDetail.textContent = 'Fly a session, make a trade or discover an item to begin this record.';
-    activityTitle.textContent = 'Nothing in this range';
-    activityDetail.textContent = 'Choose a wider record range to revisit earlier activity.';
-    netTitle.textContent = 'No recorded trade value';
-    netDetail.textContent = 'Receipts appear here when the log records a purchase or sale.';
+    latestTitle.textContent = tx('No activity recorded');
+    latestDetail.textContent = tx('Fly a session, make a trade or discover an item to begin this record.');
+    activityTitle.textContent = tx('Nothing in this range');
+    activityDetail.textContent = tx('Choose a wider record range to revisit earlier activity.');
+    netTitle.textContent = tx('No recorded trade value');
+    netDetail.textContent = tx('Receipts appear here when the log records a purchase or sale.');
     return;
   }
 
   const latest = rows[0];
-  const latestText = latest.kind === 'session' ? latest.what : prettyItem(latest.what);
-  latestTitle.textContent = latestText;
-  latestDetail.textContent = `${latest.kind} · ${dateOf(latest.at)}${latest.place ? ` · ${latest.place}` : ''}`;
+  latestTitle.textContent = logbookWhat(latest);
+  latestDetail.textContent = `${logbookKind(latest.kind)} · ${dateOf(latest.at)}${latest.place ? ` · ${latest.place}` : ''}`;
 
   const sessions = rows.filter(row => row.kind === 'session').length;
   const trades = rows.filter(row => row.kind === 'sold' || row.kind === 'bought').length;
   const discoveries = rows.filter(row => row.kind === 'loot').length;
   const activity = [];
-  if (sessions) activity.push(`${sessions} session${sessions === 1 ? '' : 's'}`);
-  if (trades) activity.push(`${trades} trade record${trades === 1 ? '' : 's'}`);
-  if (discoveries) activity.push(`${discoveries} discover${discoveries === 1 ? 'y' : 'ies'}`);
-  activityTitle.textContent = activity.length ? activity.join(' · ') : `${rows.length} recorded event${rows.length === 1 ? '' : 's'}`;
-  activityDetail.textContent = `${rows.length} event${rows.length === 1 ? '' : 's'} in the selected range.`;
+  if (sessions) activity.push(txn(sessions, '{count} session', '{count} sessions'));
+  if (trades) activity.push(txn(trades, '{count} trade record', '{count} trade records'));
+  if (discoveries) activity.push(txn(discoveries, '{count} discovery', '{count} discoveries'));
+  activityTitle.textContent = activity.length ? activity.join(' · ') : txn(rows.length, '{count} recorded event', '{count} recorded events');
+  activityDetail.textContent = txn(rows.length, '{count} event in the selected range.', '{count} events in the selected range.');
 
   const valued = rows.filter(row => row.amount != null && Number(row.amount) !== 0);
   if (!valued.length) {
-    netTitle.textContent = 'No recorded trade value';
-    netDetail.textContent = 'There are no purchases or sales with a recorded amount in this range.';
+    netTitle.textContent = tx('No recorded trade value');
+    netDetail.textContent = tx('There are no purchases or sales with a recorded amount in this range.');
     return;
   }
 
   const net = valued.reduce((total, row) => total + Number(row.amount), 0);
   netTitle.textContent = `${net < 0 ? '−' : '+'}${money(Math.abs(net))}`;
-  netDetail.textContent = `Net of ${valued.length} recorded trade ${valued.length === 1 ? 'entry' : 'entries'} in this range.`;
+  netDetail.textContent = txn(valued.length, 'Net of {count} recorded trade entry in this range.', 'Net of {count} recorded trade entries in this range.');
+}
+
+/* The kind column: the class keeps the server's word, the reader gets the page's. */
+const LOGBOOK_KINDS = { session: 'session', sold: 'sold', bought: 'bought', loot: 'loot' };
+
+const logbookKind = (kind) => (LOGBOOK_KINDS[kind] ? tx(LOGBOOK_KINDS[kind]) : kind);
+
+/*
+ * The server writes a session's line in English, like the live feed's, so it
+ * is translated here by its shape and keeps the ship's name. Item lines are
+ * game names and only lose their class-name dressing.
+ */
+function logbookWhat(row) {
+  if (row.kind !== 'session') return prettyItem(row.what);
+  if (row.what === 'Session on foot') return tx('Session on foot');
+  const aboard = /^Session aboard (.+)$/.exec(row.what || '');
+  return aboard ? tx('Session aboard {ship}', { ship: aboard[1] }) : row.what;
+}
+
+/*
+ * "1h 05m · 3 jumps · 1 death", as the server writes it, rebuilt from its
+ * numbers; anything that is not that shape - a shop's name - is shown as sent.
+ */
+function logbookDetail(row) {
+  if (row.detail === 'first seen') return tx('first seen');
+  if (row.kind !== 'session') return row.detail;
+
+  const shape = /^(\d+h \d+m) · (\d+) jumps?(?: · (\d+) deaths?)?$/.exec(row.detail || '');
+  if (!shape) return row.detail;
+
+  const parts = [shape[1], txn(Number(shape[2]), '{count} jump', '{count} jumps')];
+  if (shape[3]) parts.push(txn(Number(shape[3]), '{count} death', '{count} deaths'));
+  return parts.join(' · ');
 }
 
 async function loadLogbook() {
   const days = Number($('#logbook-period').value) || 0;
   const feed = $('#logbook-feed');
-  setWorkspaceState('#logbook-state', 'loading', 'Loading recorded activity…');
+  setWorkspaceState('#logbook-state', 'loading', tx('Loading recorded activity…'));
   feed.textContent = '';
 
   let rows;
@@ -18547,15 +18614,15 @@ async function loadLogbook() {
     rows = await getJson(`/api/logbook?days=${days}`);
   } catch {
     renderLogbookBrief([]);
-    setWorkspaceState('#logbook-state', 'offline', 'Recorded activity is unavailable. Refresh after the local server reconnects.');
-    feed.append(el('li', 'empty', 'Recorded activity is unavailable.'));
+    setWorkspaceState('#logbook-state', 'offline', tx('Recorded activity is unavailable. Refresh after the local server reconnects.'));
+    feed.append(el('li', 'empty', tx('Recorded activity is unavailable.')));
     return;
   }
   renderLogbookBrief(rows);
 
   if (!rows.length) {
-    setWorkspaceState('#logbook-state', 'empty', 'No recorded activity matches this range.');
-    feed.append(el('li', 'empty', 'Nothing in that range.'));
+    setWorkspaceState('#logbook-state', 'empty', tx('No recorded activity matches this range.'));
+    feed.append(el('li', 'empty', tx('Nothing in that range.')));
     return;
   }
 
@@ -18568,11 +18635,10 @@ async function loadLogbook() {
     const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' })}`;
     li.append(el('span', 't', stamp));
 
-    li.append(el('span', `k ${row.kind}`, row.kind));
+    li.append(el('span', `k ${row.kind}`, logbookKind(row.kind)));
 
     // Item-ish lines pretty their class names; a session line is prose.
-    const text = row.kind === 'session' ? row.what : prettyItem(row.what);
-    li.append(el('span', 'd what', text));
+    li.append(el('span', 'd what', logbookWhat(row)));
 
     if (row.place) {
       const place = el('span', 'd');
@@ -18580,7 +18646,7 @@ async function loadLogbook() {
       li.append(place);
     }
 
-    if (row.detail) li.append(el('span', 'd detail', row.detail));
+    if (row.detail) li.append(el('span', 'd detail', logbookDetail(row)));
 
     if (row.amount != null && row.amount !== 0) {
       const inward = Number(row.amount) > 0;

@@ -179,10 +179,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.18.8
+### 0.18.9
 
-**The README is now a player guide.** It starts with what Quantum Wake does,
-three screenshots and a short first-run path. Optional features, privacy,
-limits and contributor commands now sit where they are useful instead of
-competing with setup. [Older release notes](docs/release-history.md) remain
-available in full.
+**The Flight pages are now in French.** With Français chosen under Settings → General, the Logbook, Sessions, Servers, Places, Points, Crew and Casualties come up in French as well, in the browser and in the overlay. That covers every session debrief (route, economy, contracts and highlights), each server's endings and deployment, your points' distances and what the logs believed about them, and the beds and wake-ups on Casualties. Names stay as the game writes them: ships, places, shard IDs, items and the handles of the people you flew with. So do the names and notes you wrote yourself for points and servers. A copied server report stays in English, because it is meant to be pasted where other pilots will read it. The Map, the Log and the Economy, Reference and Hangar pages are still English for now.
+
+**Two English labels are worded more precisely.** On Servers, a stay you ended yourself now reads "you left". On Crew, the column counting a member's connection dropping is now "Went offline", next to "Came online". The old words also appear on other pages with a different meaning (somebody leaving your party, a contract you dropped), and a translation could only pick one of them.
