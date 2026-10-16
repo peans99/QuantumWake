@@ -75,4 +75,26 @@ public class SettingsPagesFrenchTests
         Assert.Equal("Chapeau 1 gauche", page.Text("controlsControlLabel('hat1_left')"));
         Assert.Equal("chapeau 2 haut", page.Text("controlsInputWords('js1_hat2_up')"));
     }
+
+    /// <summary>
+    /// A game set to French reads its own text file, so labels written into
+    /// the English one would say "installed" and never show. The page says so.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "english", "Nothing is written until you install.", "is set to")]
+    [InlineData(null, "french_(france)", "Star Citizen is set to french_(france), so it reads that language's text file", null)]
+    [InlineData("fr", "french_(france)", "Star Citizen est réglé sur french_(france), il lit donc le fichier de texte de cette langue", null)]
+    public void The_labels_say_when_the_game_reads_another_language(string? language, string game, string expected, string? absent)
+    {
+        var page = new Page(language);
+        page.Serve("/api/labels", $$"""
+            {"installed":false,"layered":false,"baseSource":"game","marked":0,"sold":0,"skipped":0,"changes":[],
+             "problem":null,"annotated":0,"options":null,"filled":0,"gameLanguage":"{{game}}"}
+            """);
+        page.Do("await loadTextOverlay();");
+
+        var status = page.NodeText("#textoverlay-status").Replace(' ', ' ').Replace(' ', ' ');
+        Assert.Contains(expected, status);
+        if (absent is not null) Assert.DoesNotContain(absent, status);
+    }
 }

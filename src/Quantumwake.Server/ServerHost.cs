@@ -540,6 +540,7 @@ public static class ServerHost
             {
                 repository = StarStrings.Repository,
                 gameRoot = install?.RootPath,
+                gameLanguage = GameLanguage.Read(install?.RootPath),
 
                 // "Installed" means the files are still there. A game patch can
                 // put the original localisation back without telling anyone.
@@ -606,7 +607,8 @@ public static class ServerHost
 
         // Asking what would change writes nothing. Installing is a separate
         // call because the file lands in the player's game folder.
-        app.MapGet("/api/labels", (TextOverlayService overlay) => overlay.Status(install));
+        app.MapGet("/api/labels", (TextOverlayService overlay) =>
+            overlay.Status(install) with { GameLanguage = GameLanguage.Read(install?.RootPath) });
 
         // Whether the loose text file the game reads has fallen behind the game's
         // own - after a patch, every new string is missing from it. Asked on every

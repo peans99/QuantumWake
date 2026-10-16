@@ -18629,6 +18629,11 @@ async function loadStarStrings(check = false) {
 
   if (!state.gameRoot) bits.push(tx('No game folder found, so there is nowhere to install it.'));
 
+  // StarStrings' user.cfg says g_language = english, so installing it moves a
+  // game in another language back to English. Said before the click, not after.
+  if (state.gameLanguage && state.gameLanguage !== 'english')
+    bits.push(tx('Star Citizen is set to {language}; installing StarStrings sets it back to English, because its user.cfg says g_language = english.', { language: state.gameLanguage }));
+
   status.textContent = bits.join(' · ');
   $('#starstrings-install').disabled = !state.gameRoot;
 }
@@ -18747,6 +18752,12 @@ async function loadTextOverlay() {
   } else {
     bits.push(tx('Nothing is written until you install.'));
   }
+
+  // The labels go into the English text file, and a game set to another
+  // language reads its own: "installed" would be true of the file and false
+  // of the game.
+  if (state.gameLanguage && state.gameLanguage !== 'english')
+    bits.push(tx('Star Citizen is set to {language}, so it reads that language\'s text file, not the English one these labels go into: they show only while the game is set to English.', { language: state.gameLanguage }));
 
   status.textContent = bits.join(' · ');
 }

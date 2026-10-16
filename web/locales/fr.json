@@ -5087,5 +5087,7 @@
   "Mining layout": "Disposition Minage",
   "Combat layout": "Disposition Combat",
   "Trading layout": "Disposition Commerce",
-  "Minimal layout": "Disposition minimale"
+  "Minimal layout": "Disposition minimale",
+  "Star Citizen is set to {language}; installing StarStrings sets it back to English, because its user.cfg says g_language = english.": "Star Citizen est réglé sur {language} ; installer StarStrings le remet en anglais, car son user.cfg indique g_language = english.",
+  "Star Citizen is set to {language}, so it reads that language's text file, not the English one these labels go into: they show only while the game is set to English.": "Star Citizen est réglé sur {language}, il lit donc le fichier de texte de cette langue, pas le fichier anglais où vont ces étiquettes : elles ne s’affichent que lorsque le jeu est en anglais."
 }

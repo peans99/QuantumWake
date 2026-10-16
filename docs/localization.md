@@ -656,3 +656,28 @@ server report, each on purpose.
 Phases 1 to 4 are done: every page, every server sentence, the MFD pages and
 the desktop app read in French. Phase 5 - playing the game in French - still
 waits on a tester's `Game.log` from a French game.
+
+### 0.18.18
+
+The first piece of phase 5 that needs no French log: the game's own language
+setting. `GameLanguage` reads `g_language` from the install's `user.cfg` (the
+last uncommented line; English when there is none, as the game does), and
+`/api/labels` and `/api/starstrings` report it.
+
+- **Item labels say when they will not show.** They are written into
+  `Data\Localization\english\global.ini`; a game set to French reads its own
+  folder, so "installed" was true of the file and false of the game. The
+  status line now says so whenever the game is not set to English.
+- **StarStrings is flagged before it is installed.** This install's
+  `user.cfg`, written by StarStrings (its install record lists it), reads
+  exactly `g_language = english`: installing it switches a game in another
+  language back to English. The page says that before the click.
+- `GameLanguageTests` holds that file byte for byte, plus a French and a German
+  setting, a commented line and the default; a WebTest shows the warning in
+  English and in French.
+
+What phase 5 still needs, unchanged: a `Game.log` from a game set to French.
+The parser's contract and party matching, the screenshot readers and the
+names read from the game's table all depend on what the game writes in
+French - in particular what it puts in a line whose key its French table
+lacks - and nothing on this machine has written one.
