@@ -160,10 +160,22 @@ rather than on English. Three neighbours follow the same thread:
 - The screenshot readers match English words. A French mobiGlas reads as
   nothing.
 
-**Needed before any of it: a `Game.log` from a game set to French** - by
-`g_language = french_(france)` or by a community translation, ideally with a
-contract accepted and a party joined. That is a tester's afternoon, and it is
-the first thing to ask for.
+**Answered (2026-10-16): the log is always English.** Nicolas, who plays the
+game, confirms that `Game.log` is written in English whatever `g_language`
+says - its notification lines are the engine's, not the text table's. So the
+parser's English matching holds in a French game and needs no change, and the
+open question above (what a line looks like when the French table lacks its
+key) does not arise. What remains is outside the log:
+
+- **Item labels and StarStrings** - done in 0.18.18: the page reads
+  `g_language` and says when labels in the English file will not show, and
+  that StarStrings sets the game back to English.
+- **Screenshot readers** still match English words, because the game's screens
+  follow `g_language`. A French mobiGlas reads as nothing, and says so as an
+  unknown screen; teaching the readers French needs French screenshots, and
+  is a reader change rather than a translation.
+- **Names** come from the English table, as they did; for the names checked
+  the French table agrees.
 
 ## Phases
 
@@ -180,8 +192,10 @@ the first thing to ask for.
    per language and one test guarding it.
 4. **MFD pages and the tray app.** The tray reads `language.json` directly; the
    MFD labels need a width check, since a Cougar's screen does not stretch.
-5. **Playing the game in French.** Everything under
-   [The game in French](#the-game-in-french), starting from a tester's log.
+5. **Playing the game in French.** Settled: `Game.log` stays English, so
+   the parser needs nothing; the labels page reads the game's language
+   (0.18.18). Screenshot readers in French are a reader feature for later,
+   from French screenshots.
 
 ## Adding a language
 
@@ -681,3 +695,13 @@ The parser's contract and party matching, the screenshot readers and the
 names read from the game's table all depend on what the game writes in
 French - in particular what it puts in a line whose key its French table
 lacks - and nothing on this machine has written one.
+
+### 0.18.19
+
+Phase 5 closed on the one fact it was waiting for. Nicolas confirms that
+`Game.log` is always written in English, whatever language the game is set
+to, so the contract, party and ship-channel matching needs no change in a
+French game - the parser change the plan held back for a tester's log is not
+needed. No code changed; the plan above is updated, and the screenshot
+readers in French are recorded as a reader feature for when French
+screenshots exist, rather than as unfinished translation.
