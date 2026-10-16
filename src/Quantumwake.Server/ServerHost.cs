@@ -5602,6 +5602,17 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         return GameInstallLocator.Preferred();
     }
 
+    /// <summary>
+    /// A language's catalogue as the page is served it, or null for English.
+    /// The desktop app reads its own words from the same file, so a language
+    /// stays one file however many places show it.
+    /// </summary>
+    public static string? CatalogueText(string? code)
+    {
+        var clean = LanguageStore.Clean(code);
+        return clean == LanguageStore.English ? null : ReadWebText($"locales/{clean}.json");
+    }
+
     /// <summary>A file of the web UI as text, from whichever copy the page itself is served from.</summary>
     static string? ReadWebText(string relative)
     {

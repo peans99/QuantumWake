@@ -86,7 +86,7 @@ public partial class App : System.Windows.Application
         // stands down, and the first is opened in its place.
         if (_server is null)
         {
-            _tray?.Notify("Quantum Wake is already running - opening the one that is. This copy is closing.", OpenDashboard);
+            _tray?.Notify(DesktopText.T("Quantum Wake is already running - opening the one that is. This copy is closing."), OpenDashboard);
             OpenDashboard();
             await Task.Delay(TimeSpan.FromSeconds(4));
             Quit();
@@ -207,7 +207,7 @@ public partial class App : System.Windows.Application
             // which case the dashboard still works and only this instance's
             // server is redundant. Anything else is worth saying out loud.
             _server = null;
-            _tray?.Notify($"The dashboard could not start: {ex.Message}");
+            _tray?.Notify(DesktopText.T("The dashboard could not start: {problem}", ("problem", ex.Message)));
             DiagnosticTrace.Failed("desktop server startup", ex);
         }
     }
@@ -221,8 +221,8 @@ public partial class App : System.Windows.Application
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Pick your Star Citizen folder - the one holding Game.log, "
-                + @"or its parent (usually ...\StarCitizen\LIVE).",
+            Description = DesktopText.T("Pick your Star Citizen folder - the one holding Game.log, "
+                + "or its parent (usually ...\\StarCitizen\\LIVE)."),
             UseDescriptionForTitle = true,
             SelectedPath = InstallPathStore.Load() ?? ""
         };
@@ -233,8 +233,8 @@ public partial class App : System.Windows.Application
         var install = InstallPathStore.Save(dialog.SelectedPath);
 
         _tray?.Notify(install is null
-            ? "No Star Citizen logs in that folder. Look for the one holding Game.log."
-            : $"Found {install.Channel}. Restarting Quantum Wake to read it…");
+            ? DesktopText.T("No Star Citizen logs in that folder. Look for the one holding Game.log.")
+            : DesktopText.T("Found {channel}. Restarting Quantum Wake to read it…", ("channel", install.Channel)));
 
         // The install is resolved once at startup and held by everything
         // downstream, so the honest way to apply it is to start again.
@@ -289,7 +289,7 @@ public partial class App : System.Windows.Application
     {
         if (_server is null)
         {
-            _tray?.Notify("The dashboard has not started yet, so there is nothing to ask with.");
+            _tray?.Notify(DesktopText.T("The dashboard has not started yet, so there is nothing to ask with."));
             return;
         }
 
@@ -310,19 +310,19 @@ public partial class App : System.Windows.Application
             if (result.Newer)
             {
                 _tray?.Notify(
-                    $"Quantum Wake {result.Latest} is out. You have {result.Current} - "
-                    + "click here to open the dashboard and read what changed.",
+                    DesktopText.T("Quantum Wake {latest} is out. You have {current} - click here to open the dashboard and read what changed.",
+                        ("latest", result.Latest), ("current", result.Current)),
                     OpenDashboard);
             }
             else
             {
-                _tray?.Notify($"Up to date - {result.Current} is the newest there is.");
+                _tray?.Notify(DesktopText.T("Up to date - {current} is the newest there is.", ("current", result.Current)));
             }
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
             // A machine that is offline is the ordinary case, not a fault.
-            _tray?.Notify("Could not reach GitHub just now. Nothing has changed.");
+            _tray?.Notify(DesktopText.T("Could not reach GitHub just now. Nothing has changed."));
         }
         finally
         {
@@ -338,7 +338,7 @@ public partial class App : System.Windows.Application
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            _tray?.Notify($"Could not open a browser. The dashboard is at {DashboardUrl}");
+            _tray?.Notify(DesktopText.T("Could not open a browser. The dashboard is at {url}", ("url", DashboardUrl)));
         }
     }
 

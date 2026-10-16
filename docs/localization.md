@@ -612,3 +612,47 @@ labels) and what the pilot typed.
 - **Messages from JavaScript errors stay as they are** - "Failed to fetch" is
   the browser's, not the app's; only what the server sends is wrapped.
 - `ServerTextFrenchTests` holds the server's wording one row per shape.
+
+### 0.18.17
+
+Phase 4: the Cougar MFD pages, their setup window, and the desktop app - the
+tray menu and its notices, the overlay's header and splash. 481 entries
+added, 4,552 in all. With this French is complete for everything the app
+writes, and the picker carries no "translated so far" note: what stays
+English is the game's own text, quoted screenshot lines and the copied
+server report, each on purpose.
+
+- **The MFD core reads the catalogue when it is there.** `mfd-core.js` runs
+  on its own in the MFD tests, with no `tx`, so it has a guarded `say()` /
+  `sayn()` that uses the page's lookup when i18n.js is loaded and fills the
+  English otherwise. The pages load `/api/i18n.js` and `i18n.js` as the
+  dashboard does and run `txDocument` first.
+- **Row labels stay English in the rows** and are translated as they are
+  drawn, because the glyph beside each is chosen from the English word.
+  Labels with a number in them ("TASK 2 OF 3") are matched by shape, and a
+  kind the server names (a feed entry, a ledger line) falls back to the
+  catalogue's word in capitals.
+- **The compact HUD's short forms** are looked up from both sides of the
+  table through the catalogue, since the long value now arrives translated.
+- **Bezel captions stay the cockpit's codes.** NAV, CRGO, CNTR, BRT: six
+  characters under a physical button, and the game's own HUD uses the same
+  English codes. Rendered at 480 px in French, nothing else on a frame wraps
+  or clips.
+- **The desktop app reads the same catalogue.** `DesktopText` looks words up
+  in `locales/{code}.json` through `ServerHost.CatalogueText`, and rereads
+  `language.json` when its timestamp moves - the picker is in the dashboard,
+  and the tray only learns of a change by looking, so the menu is reworded
+  each time it opens and the header each time it comes back.
+- **MfdLayout's warnings stay English at source** because the screen tests
+  compile that file on its own; the controller translates them where it shows
+  them, the one with figures by shape.
+- **The orphan test reads the MFD files** as well as `app.js`, and the MFD
+  setup page and script are copied into the WebTests output for it.
+- `MfdFrenchTests` loads the core with the French catalogue (rows, a plural)
+  and without it (English, unchanged).
+
+## The phases, as they ended
+
+Phases 1 to 4 are done: every page, every server sentence, the MFD pages and
+the desktop app read in French. Phase 5 - playing the game in French - still
+waits on a tester's `Game.log` from a French game.

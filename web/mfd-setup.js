@@ -1,4 +1,7 @@
 'use strict';
+// The markup first, before anything below holds a reference into it.
+if (typeof txDocument === 'function') txDocument(document.body);
+const say = QwMfd.say;
 const setupElement = id => document.getElementById(id);
 const host = window.chrome?.webview;
 let monitors = [{ id: 'example', x: 0, y: 0, width: 1920, height: 1080, primary: true }];
@@ -19,10 +22,10 @@ function syncDirty() {
   if (next === dirty) return;
   dirty = next;
   setupElement('save-state').hidden = !dirty;
-  setupElement('save').textContent = dirty ? 'Save layout · unsaved' : 'Save layout';
+  setupElement('save').textContent = dirty ? say('Save layout · unsaved') : say('Save layout');
   host?.postMessage({ type: 'dirty', dirty });
 }
-function changedStatus() { status('Changes are in preview only. Save layout to keep them.'); }
+function changedStatus() { status(say('Changes are in preview only. Save layout to keep them.')); }
 /* Coalesced to one send a frame. A drag raises pointermove far faster than a
    window can be moved, and each message crosses into the host, repositions two
    displays and recuts a full-screen backdrop; sending them all would queue up
@@ -36,14 +39,14 @@ function pushPreview() {
 function changed() { syncDirty(); changedStatus(); draw(); pushPreview(); }
 function fillEditor() {
   const panel = selectedPanel();
-  setupElement('selected-title').textContent = panel.id === 'left' ? 'Left MFD' : 'Right MFD';
+  setupElement('selected-title').textContent = panel.id === 'left' ? say('Left MFD') : say('Right MFD');
   const monitor = setupElement('monitor'); monitor.replaceChildren();
-  for (const [i, m] of monitors.entries()) monitor.add(new Option(`Monitor ${i + 1} · ${m.width} × ${m.height}`, m.id));
-  if (!monitors.some(m => m.id === panel.monitor)) monitor.add(new Option('Disconnected monitor', panel.monitor));
+  for (const [i, m] of monitors.entries()) monitor.add(new Option(say('Monitor {number} · {width} × {height}', { number: i + 1, width: m.width, height: m.height }), m.id));
+  if (!monitors.some(m => m.id === panel.monitor)) monitor.add(new Option(say('Disconnected monitor'), panel.monitor));
   monitor.value = panel.monitor;
   setupElement('placement-note').textContent = monitors.some(m => m.id === panel.monitor)
-    ? 'This rectangle represents the visible screen opening, including the edge labels.'
-    : 'This MFD stays hidden until its monitor returns or you choose another monitor.';
+    ? say('This rectangle represents the visible screen opening, including the edge labels.')
+    : say('This MFD stays hidden until its monitor returns or you choose another monitor.');
   for (const key of ['x', 'y', 'width', 'height', 'cougar']) setupElement(key).value = panel[key];
   // Blank is the default, and the placeholder says what the default comes to
   // on this panel, so a pilot nudging one side knows where they started.
@@ -78,15 +81,15 @@ function draw() {
     node.className = ['monitor', dark ? 'blacked' : '', host ? '' : 'example'].filter(Boolean).join(' ');
     const label = document.createElement('span');
     label.textContent = host
-      ? `${i + 1} · ${m.width} × ${m.height}${m.primary ? ' · primary' : ''}`
-      : `Example only · ${m.width} × ${m.height} · not one of your monitors`;
+      ? `${i + 1} · ${m.width} × ${m.height}${m.primary ? ` · ${say('primary')}` : ''}`
+      : say('Example only · {width} × {height} · not one of your monitors', { width: m.width, height: m.height });
     node.append(label); place(node, m.x, m.y, m.width, m.height); desktop.append(node);
   });
   layout.panels.forEach((p, i) => {
     const monitor = monitors.find(m => m.id === p.monitor); if (!monitor) return;
     const node = document.createElement('button'); node.className = `mfd-area ${p.id}${selected === i ? ' selected' : ''}`;
-    node.dataset.panel = i; node.textContent = `${p.id.toUpperCase()} · ${p.cougar}`;
-    node.setAttribute('aria-label', `${p.id} MFD. Drag to move; use the corner to resize.`);
+    node.dataset.panel = i; node.textContent = `${say(p.id === 'left' ? 'LEFT' : 'RIGHT')} · ${p.cougar}`;
+    node.setAttribute('aria-label', p.id === 'left' ? say('Left MFD. Drag to move; use the corner to resize.') : say('Right MFD. Drag to move; use the corner to resize.'));
     const resize = document.createElement('span'); resize.className = 'resize'; node.append(resize);
     place(node, monitor.x + p.x, monitor.y + p.y, p.width, p.height); desktop.append(node);
   });
@@ -166,8 +169,8 @@ setupElement('sleep-after').onchange = event => {
   syncDirty();
   if (previewing) send('preview');
   status(layout.sleepAfterMinutes
-    ? 'Frames dim after ' + layout.sleepAfterMinutes + ' idle minutes. Save to keep it.'
-    : 'Frames stay at full brightness. Save to keep it.');
+    ? say('Frames dim after {minutes} idle minutes. Save to keep it.', { minutes: layout.sleepAfterMinutes })
+    : say('Frames stay at full brightness. Save to keep it.'));
 };
 setupElement('text-scale').oninput = event => {
   layout.textScale = Number(event.target.value) / 100;
@@ -222,10 +225,10 @@ function optionGroups() {
   const rest = QwMfd.commands.map(c => c.id)
     .filter(id => !menus.includes(id) && !slots.includes(id) && !screens.includes(id));
   return [
-    ['Menu positions · what the screen offers', slots],
-    ['Open a screen directly', screens],
-    ['Open a menu', menus.concat(['home', 'back'])],
-    ['Controls', rest.filter(id => id !== 'home' && id !== 'back')]
+    [say('Menu positions · what the screen offers'), slots],
+    [say('Open a screen directly'), screens],
+    [say('Open a menu'), menus.concat(['home', 'back'])],
+    [say('Controls'), rest.filter(id => id !== 'home' && id !== 'back')]
   ];
 }
 
@@ -236,15 +239,25 @@ function assign(number, id) {
   syncDirty();
   drawButtons();
   if (previewing) send('preview');
-  status('Button ' + String(number).padStart(2, '0') + ': '
-    + (id ? labelOf(id) : 'unassigned') + '. Save to keep it.');
+  status(say('Button {number}: {action}. Save to keep it.', { number: String(number).padStart(2, '0'), action: id ? labelOf(id) : say('unassigned') }));
 }
 
 /* A saved file is allowed to name a command this build has never heard of —
    that is how a profile survives going back a version — so nothing here may
    assume the lookup succeeds. Showing the raw name is the honest answer: it
    is what the frame will act on, and it is not this page's to quietly drop. */
-const labelOf = id => QwMfd.commands.find(c => c.id === id)?.label || id;
+// The command's label in the page language; an unknown one keeps its raw name.
+const labelOf = id => { const label = QwMfd.commands.find(c => c.id === id)?.label; return label ? commandLabel(label) : id; };
+
+/* A command's label as the setup page reads it. Most are fixed; the menu
+   entries are "Menu · {title}" and the five slots "Menu position {n} · …". */
+function commandLabel(label) {
+  const menu = /^Menu · (.+)$/.exec(label);
+  if (menu) return say('Menu · {title}', { title: say(menu[1]) });
+  const slot = /^Menu position (\d) · follows the screen$/.exec(label);
+  if (slot) return say('Menu position {number} · follows the screen', { number: slot[1] });
+  return say(label);
+}
 
 function keycap(number, map) {
   const cell = document.createElement('button');
@@ -258,8 +271,9 @@ function keycap(number, map) {
   // must not read as blank - blank here means nothing is bound.
   what.textContent = QwMfd.caption(map[number], true) || (map[number] ? '?' : '—');
   cell.append(n, what);
-  cell.title = 'Cougar button ' + number
-    + (map[number] ? ': ' + labelOf(map[number]) : ': unassigned');
+  cell.title = map[number]
+    ? say('Cougar button {number}: {caption}', { number, caption: labelOf(map[number]) })
+    : say('Cougar button {number}: unassigned', { number });
   return cell;
 }
 
@@ -279,23 +293,22 @@ function drawButtons() {
   frame.append(face);
 
   const rockerTitle = document.createElement('div'); rockerTitle.className = 'group';
-  rockerTitle.textContent = 'ROCKERS ' + rockers[0] + '–' + rockers[rockers.length - 1];
+  rockerTitle.textContent = say('ROCKERS {first}–{last}', { first: rockers[0], last: rockers[rockers.length - 1] });
   const rockerHint = document.createElement('p'); rockerHint.className = 'hint muted';
-  rockerHint.textContent = 'Which rocker reports which number is not something a datasheet answers. '
-    + 'Press one and its number lights up here.';
+  rockerHint.textContent = say('Which rocker reports which number is not something a datasheet answers. Press one and its number lights up here.');
   const rockerRow = document.createElement('div'); rockerRow.className = 'rockers';
   for (const number of rockers) rockerRow.append(keycap(number, map));
 
   const editor = document.createElement('div'); editor.className = 'assign';
   const label = document.createElement('label');
-  label.append('Button ' + String(picked).padStart(2, '0') + ' does');
+  label.append(say('Button {number} does', { number: String(picked).padStart(2, '0') }));
   const select = document.createElement('select'); select.className = 'select';
-  select.add(new Option('Nothing', ''));
+  select.add(new Option(say('Nothing'), ''));
   for (const [title, ids] of optionGroups()) {
     const set = document.createElement('optgroup'); set.label = title;
     for (const id of ids) {
       const command = QwMfd.commands.find(c => c.id === id);
-      if (command) set.append(new Option(command.label, command.id));
+      if (command) set.append(new Option(commandLabel(command.label), command.id));
     }
     select.append(set);
   }
@@ -303,7 +316,7 @@ function drawButtons() {
   // impossible and the blank would read as 'unassigned' when it is not.
   const current = map[picked] || '';
   if (current && !Array.from(select.options).some(o => o.value === current)) {
-    select.append(new Option(current + ' (from a newer version)', current));
+    select.append(new Option(say('{command} (from a newer version)', { command: current }), current));
   }
   select.value = current;
   select.onchange = () => assign(picked, select.value);
@@ -317,30 +330,30 @@ setupElement('restore').onclick = () => {
   syncDirty();
   drawButtons();
   if (previewing) send('preview');
-  status('Shipped button profile restored. Save to keep it.');
+  status(say('Shipped button profile restored. Save to keep it.'));
 };
 setupElement('preview').onclick = () => { previewing = true; send('preview'); };
-setupElement('stop-preview').onclick = () => { previewing = false; send('stopPreview'); status(dirty ? 'Preview stopped. Unsaved changes remain; save them or close and discard.' : 'Preview stopped. Saved placement restored.'); };
+setupElement('stop-preview').onclick = () => { previewing = false; send('stopPreview'); status(dirty ? say('Preview stopped. Unsaved changes remain; save them or close and discard.') : say('Preview stopped. Saved placement restored.')); };
 /* Saving keeps the preview running. Turning it off here was the bug that made
    the whole editor feel dead: after one save nothing else reached the displays,
    so every later change needed another save to be seen at all. Saving writes
    the file; it is not a reason to stop looking at the thing. */
 setupElement('save').onclick = () => send('save');
 function showDevices(devices) {
-  setupElement('devices').textContent = devices.length ? devices.map(n => 'F16 MFD ' + n).join(' · ') : 'No default Cougar devices detected. Check the driver and USB connection.';
-  if (new Set(devices).size !== devices.length) setupElement('devices').textContent += ' · Duplicate numbers: input is paused for those devices.';
+  setupElement('devices').textContent = devices.length ? devices.map(n => 'F16 MFD ' + n).join(' · ') : say('No default Cougar devices detected. Check the driver and USB connection.');
+  if (new Set(devices).size !== devices.length) setupElement('devices').textContent += ` · ${say('Duplicate numbers: input is paused for those devices.')}`;
 }
 host?.addEventListener('message', ({ data }) => {
   if (data.type === 'setup') {
     monitors = data.monitors; layout = data.layout; savedLayout = snapshot(layout); previewing = false; dirty = false;
     setupElement('save-state').hidden = true;
-    setupElement('save').textContent = 'Save layout';
+    setupElement('save').textContent = say('Save layout');
     showDevices(data.devices); drawButtons(); draw();
   }
   if (data.type === 'monitors') {
     monitors = data.monitors;
     layout.panels = layout.panels.map(p => QwMfd.fit(p, monitors.find(m => m.id === p.monitor)));
-    draw(); status('Monitor layout changed. Check placement before saving.');
+    draw(); status(say('Monitor layout changed. Check placement before saving.'));
   }
   if (data.type === 'devices') showDevices(data.devices);
   if (data.type === 'button') {
@@ -356,20 +369,20 @@ host?.addEventListener('message', ({ data }) => {
       savedLayout = snapshot(layout);
       dirty = false;
       setupElement('save-state').hidden = true;
-      setupElement('save').textContent = 'Save layout';
+      setupElement('save').textContent = say('Save layout');
     }
-    status(data.message, !data.ok);
+    status(say(data.message), !data.ok);
   }
 });
 if (!host) {
   setupElement('host-note').hidden = false;
   for (const id of ['save', 'preview', 'stop-preview', 'enabled', 'blackout', 'sleep-after']) setupElement(id).disabled = true;
-  setupElement('devices').textContent = 'USB input is available in the desktop app.';
+  setupElement('devices').textContent = say('USB input is available in the desktop app.');
   // "Your monitors" over a single invented rectangle reads as a detection that
   // found one monitor, which is the wrong thing to be told when you have three.
-  setupElement('monitors-title').replaceChildren('Example layout');
+  setupElement('monitors-title').replaceChildren(say('Example layout'));
   const aside = document.createElement('span');
-  aside.textContent = 'Your own monitors are only detected in the desktop app';
+  aside.textContent = say('Your own monitors are only detected in the desktop app');
   setupElement('monitors-title').append(aside);
 }
 new ResizeObserver(draw).observe(desktop);

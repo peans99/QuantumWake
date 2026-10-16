@@ -85,8 +85,10 @@ public class LocaleCatalogueTests
     [MemberData(nameof(Catalogues))]
     public void Every_entry_still_has_its_english(string language)
     {
-        var markup = Plain(File.ReadAllText(Web("index.html")));
-        var scripts = File.ReadAllText(Web("app.js")) + File.ReadAllText(Web("i18n.js"));
+        // The MFD pages read the same catalogue, so their words count as the page's.
+        var markup = Plain(File.ReadAllText(Web("index.html")) + File.ReadAllText(Web("mfd.html")) + File.ReadAllText(Web("mfd-setup.html")));
+        var scripts = File.ReadAllText(Web("app.js")) + File.ReadAllText(Web("i18n.js"))
+            + File.ReadAllText(Web("mfd-core.js")) + File.ReadAllText(Web("mfd.js")) + File.ReadAllText(Web("mfd-setup.js"));
         var server = ServerLiterals();
 
         // As a script literal, in either quote, with any apostrophe escaped.

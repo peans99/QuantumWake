@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quantum Wake · MFD setup</title>
-<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="mfd-setup.css"></head><body>
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="mfd-setup.css"><script src="api/i18n.js"></script><script src="i18n.js"></script></head><body>
 <main><header><div class="eyebrow">QUANTUM WAKE / COCKPIT</div><h1>Place your MFDs</h1>
 <p class="muted">Drag each display onto a monitor. Resize it from the corner to match the opening in your Cougar frame.</p></header>
 <p id="host-note" class="notice" hidden>Open <b>MFD setup…</b> from the Quantum Wake tray icon to detect your monitors, save placement and read USB buttons. This browser page shows an example layout only.</p>
@@ -9,13 +9,13 @@
 <p class="hint muted">Select an MFD, then drag it or use arrow keys. Shift + arrow moves it farther. Dimensions below are in screen pixels.</p>
 <div class="toolbar"><button id="together">Both on selected monitor</button><button id="separate">One per monitor</button><button id="swap">Swap Cougar assignments</button></div>
 </section><aside class="card"><h2 id="selected-title">Left MFD</h2>
-<label>Monitor<select id="monitor" class="select"></select></label>
-<div class="fields"><label>X<input id="x" class="search" type="number" step="1"></label><label>Y<input id="y" class="search" type="number" step="1"></label>
-<label>Width<input id="width" class="search" type="number" min="220" step="1"></label><label>Height<input id="height" class="search" type="number" min="220" step="1"></label></div>
+<label><span>Monitor</span><select id="monitor" class="select"></select></label>
+<div class="fields"><label><span>X</span><input id="x" class="search" type="number" step="1"></label><label><span>Y</span><input id="y" class="search" type="number" step="1"></label>
+<label><span>Width</span><input id="width" class="search" type="number" min="220" step="1"></label><label><span>Height</span><input id="height" class="search" type="number" min="220" step="1"></label></div>
 <p class="hint muted">Button captions, in pixels in from each edge of the opening. Blank keeps the default; lower a side when the frame's first button sits nearer the edge than its caption. Use the alignment preview to check.</p>
-<div class="fields"><label>From left<input id="inset-left" class="search" type="number" min="0" step="1"></label><label>From right<input id="inset-right" class="search" type="number" min="0" step="1"></label>
-<label>From top<input id="inset-top" class="search" type="number" min="0" step="1"></label><label>From bottom<input id="inset-bottom" class="search" type="number" min="0" step="1"></label></div>
-<label>Default Cougar device<select id="cougar" class="select"></select></label>
+<div class="fields"><label><span>From left</span><input id="inset-left" class="search" type="number" min="0" step="1"></label><label><span>From right</span><input id="inset-right" class="search" type="number" min="0" step="1"></label>
+<label><span>From top</span><input id="inset-top" class="search" type="number" min="0" step="1"></label><label><span>From bottom</span><input id="inset-bottom" class="search" type="number" min="0" step="1"></label></div>
+<label><span>Default Cougar device</span><select id="cougar" class="select"></select></label>
 <p id="placement-note" class="hint muted"></p>
 </aside></div>
 <section class="input-test card"><div><h2>Cougar button test</h2><p id="devices">Checking for F16 MFD devices…</p>
@@ -23,8 +23,8 @@
 <output id="button-test" aria-live="polite">Press a button on either frame</output></section>
 <section class="screen card"><h2>Screen <span>Both frames</span></h2>
 <p class="hint muted">Set once when the frames go on. These used to cost four buttons on the face; the commands are still there to bind if you want them under a thumb. Brightness has four levels so that a button on the frame can reach any of them.</p>
-<div class="sliders"><label>Brightness <output id="brightness-value">4 · 100%</output><input id="brightness" type="range" min="1" max="4" step="1"></label>
-<label>Text size <output id="text-scale-value">100%</output><input id="text-scale" type="range" min="80" max="150" step="5"></label><label>Dim when idle<select id="sleep-after" class="select"><option value="0">Never</option><option value="5">After 5 minutes</option><option value="10">After 10 minutes</option><option value="20">After 20 minutes</option><option value="30">After 30 minutes</option><option value="60">After an hour</option></select></label></div><p class="hint muted">Dims the frames to a third of the brightness above after a spell with no button pressed, and any press brings them straight back. It never blanks them — a frame you can still glance at beats one that has to be woken first. Off unless you pick a time.</p></section>
+<div class="sliders"><label><span>Brightness</span> <output id="brightness-value">4 · 100%</output><input id="brightness" type="range" min="1" max="4" step="1"></label>
+<label><span>Text size</span> <output id="text-scale-value">100%</output><input id="text-scale" type="range" min="80" max="150" step="5"></label><label><span>Dim when idle</span><select id="sleep-after" class="select"><option value="0">Never</option><option value="5">After 5 minutes</option><option value="10">After 10 minutes</option><option value="20">After 20 minutes</option><option value="30">After 30 minutes</option><option value="60">After an hour</option></select></label></div><p class="hint muted">Dims the frames to a third of the brightness above after a spell with no button pressed, and any press brings them straight back. It never blanks them — a frame you can still glance at beats one that has to be woken first. Off unless you pick a time.</p></section>
 <section class="assignments card"><h2>Button assignments <span>Shared by both frames</span></h2>
 <p class="hint muted">Press a button on the frame — its position lights up below and is selected. Then say what it should do. Both MFDs share one map; each remembers its own screen. <button id="restore" type="button">Restore defaults</button></p>
 <div id="buttons"></div></section>
@@ -33,7 +33,7 @@
 <p class="muted">Saved custom assignments are kept. Choose <b>Restore defaults</b> above and <b>Save layout</b> to adopt the menu profile. You can also bind direct page shortcuts, category menus, Home and Back yourself. Keep a Home or Back binding accessible when using a frame.</p>
 <p class="muted">The four rocker switches report as buttons 21–28, and which rocker is which number is not something a datasheet answers — so they ship unassigned. Press one, watch the tester name its number, and bind it above.</p>
 <p class="muted">USB detection uses Windows joystick slots 1–16 and the default F16 MFD names. If a device is missing, check the Thrustmaster driver and close any T.A.R.G.E.T. profile that replaces the devices with a virtual controller. Duplicate MFD numbers must be changed in the Thrustmaster control panel.</p></details>
-<footer><label class="toggle"><input id="enabled" type="checkbox"> Enable MFD displays</label>
-<label class="toggle" title="Fills those monitors with black around the openings, so the desktop stops glowing around the edge of the frame. The monitor this window is on is left alone while setup is open."><input id="blackout" type="checkbox"> Black out the rest of those monitors</label><div class="save-state" id="save-state" role="status" hidden><span aria-hidden="true"></span> Unsaved changes</div><div class="actions"><button id="preview">Show alignment preview</button><button id="stop-preview">Stop preview</button><button id="save" class="primary">Save layout</button></div>
+<footer><label class="toggle"><input id="enabled" type="checkbox"> <span>Enable MFD displays</span></label>
+<label class="toggle" title="Fills those monitors with black around the openings, so the desktop stops glowing around the edge of the frame. The monitor this window is on is left alone while setup is open."><input id="blackout" type="checkbox"> <span>Black out the rest of those monitors</span></label><div class="save-state" id="save-state" role="status" hidden><span aria-hidden="true"></span> Unsaved changes</div><div class="actions"><button id="preview">Show alignment preview</button><button id="stop-preview">Stop preview</button><button id="save" class="primary">Save layout</button></div>
 <p id="status" role="status" class="muted">MFD mode is optional. Your regular overlay has its own settings.</p></footer>
 </main><script src="mfd-core.js"></script><script src="mfd-setup.js"></script></body></html>

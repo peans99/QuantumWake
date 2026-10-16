@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -70,9 +71,59 @@ public partial class MainWindow : Window
     /// </summary>
     private const double GutterWidth = 8;
 
+    /// <summary>The layout last chosen from the header, so its name is reworded with the rest.</summary>
+    private string? _presetName;
+
+    /// <summary>
+    /// What each named layout is called on the header button and in the notice
+    /// that confirms it; one phrase each, so a translation can agree the noun.
+    /// </summary>
+    private static readonly Dictionary<string, (string Label, string Layout)> Presets = new()
+    {
+        ["flight"] = ("Flight", "Flight layout"),
+        ["mining"] = ("Mining", "Mining layout"),
+        ["combat"] = ("Combat", "Combat layout"),
+        ["trading"] = ("Trading", "Trading layout"),
+        ["minimal"] = ("Minimal", "Minimal layout"),
+        ["full"] = ("Full", "Full layout"),
+    };
+
+    /// <summary>
+    /// The window's fixed words in the dashboard's language. Run at start and
+    /// whenever the header comes back, because the language is picked in the
+    /// dashboard and the window only learns of it by asking.
+    /// </summary>
+    private void ApplyText()
+    {
+        InteractiveText.Text = DesktopText.T("INTERACTIVE");
+        DragHintText.Text = DesktopText.T("DRAG TO MOVE · PIN TO CLICK THROUGH IT");
+        ModeButton.Content = _presetName is { } preset && Presets.TryGetValue(preset, out var named)
+            ? $"{DesktopText.T(named.Label).ToUpper(CultureInfo.CurrentCulture)} ▾"
+            : $"{DesktopText.T("LAYOUT")} ▾";
+        ModeButton.ToolTip = DesktopText.T("Choose a focused overlay layout");
+        PresetFlight.Header = DesktopText.T("Flight");
+        PresetMining.Header = DesktopText.T("Mining");
+        PresetCombat.Header = DesktopText.T("Combat");
+        PresetTrading.Header = DesktopText.T("Trading");
+        PresetMinimal.Header = DesktopText.T("Minimal");
+        PresetFull.Header = DesktopText.T("Full layout");
+        PinButton.ToolTip = DesktopText.T("Pin it out of the way — clicks reach the game (Ctrl+Alt+O, or the tray icon, brings it back)");
+        CloseButton.ToolTip = DesktopText.T("Close the overlay");
+        ByText.Text = DesktopText.T("BY NEKRON");
+        KeyClickThroughText.Text = DesktopText.T("CTRL + ALT + O   TOGGLE CLICK-THROUGH");
+        KeyPageText.Text = DesktopText.T("CTRL + ALT + ← / →   CHANGE PAGE");
+        KeyFullscreenText.Text = DesktopText.T("CTRL + ALT + F   FULLSCREEN");
+        BorderlessText.Text = DesktopText.T("REQUIRES BORDERLESS WINDOWED");
+        FullscreenButton.ToolTip = _isFullscreen
+            ? DesktopText.T("Back to widget size (Ctrl+Alt+F)")
+            : DesktopText.T("Fullscreen (Ctrl+Alt+F)");
+        UpdateGlanceControl();
+    }
+
     public MainWindow()
     {
         InitializeComponent();
+        ApplyText();
 
         var saved = OverlayGeometry.Load();
 
@@ -120,8 +171,8 @@ public partial class MainWindow : Window
         if (!NativeWindowStyles.RegisterGlobalHotKey(
                 this, ToggleHotkeyId, ctrlAlt | NativeWindowStyles.Modifiers.NoRepeat, VkO))
         {
-            SplashText.Text = "Ctrl+Alt+O is already in use by another app; " +
-                              "pin and unpin from the header or the tray icon.";
+            SplashText.Text = DesktopText.T("Ctrl+Alt+O is already in use by another app; " +
+                              "pin and unpin from the header or the tray icon.");
         }
 
         // View switching works even while pinned, so the widget can be paged
@@ -141,11 +192,11 @@ public partial class MainWindow : Window
     {
         // The server runs inside this process now - App starts it before the
         // window appears - so this only waits for it to finish binding.
-        SplashText.Text = "AWAITING LINK…";
+        SplashText.Text = DesktopText.T("AWAITING LINK…");
 
         if (!await WaitForServerAsync(TimeSpan.FromSeconds(40)))
         {
-            SplashText.Text = "The server did not respond on 127.0.0.1:31337.";
+            SplashText.Text = DesktopText.T("The server did not respond on 127.0.0.1:31337.");
             return;
         }
 
@@ -370,9 +421,10 @@ public partial class MainWindow : Window
         {
             await Browser.ExecuteScriptAsync(
                 $"window.scOverlayPreset && window.scOverlayPreset({System.Text.Json.JsonSerializer.Serialize(name)})");
-            var label = name == "full" ? "Full" : char.ToUpperInvariant(name[0]) + name[1..];
-            ModeButton.Content = $"{label.ToUpperInvariant()} ▾";
-            ShowOverlayFeedback($"{label} layout", "Widget pages and readings updated");
+            _presetName = name;
+            ApplyText();
+            var layout = Presets.TryGetValue(name, out var named) ? DesktopText.T(named.Layout) : name;
+            ShowOverlayFeedback(layout, DesktopText.T("Widget pages and readings updated"));
         }
         catch (InvalidOperationException)
         {
@@ -410,8 +462,8 @@ public partial class MainWindow : Window
 
         UpdateGlanceControl();
         ShowOverlayFeedback(
-            _isGlance ? "Glance mode" : "Full widget",
-            _isGlance ? "Focus, campaign and current status stay visible" : "All chosen cards are back");
+            _isGlance ? DesktopText.T("Glance mode") : DesktopText.T("Full widget"),
+            _isGlance ? DesktopText.T("Focus, campaign and current status stay visible") : DesktopText.T("All chosen cards are back"));
 
         if (Browser.CoreWebView2 is null) return;
 
@@ -430,8 +482,8 @@ public partial class MainWindow : Window
     {
         CompactButton.Content = _isGlance ? "▴" : "▾";
         CompactButton.ToolTip = _isGlance
-            ? "Expand widget (Ctrl+Alt+C)"
-            : "Glance view — focus, campaign and current status (Ctrl+Alt+C)";
+            ? DesktopText.T("Expand widget (Ctrl+Alt+C)")
+            : DesktopText.T("Glance view — focus, campaign and current status (Ctrl+Alt+C)");
         CompactButton.IsEnabled = !_isFullscreen;
     }
 
@@ -473,12 +525,12 @@ public partial class MainWindow : Window
         }
 
         FullscreenButton.ToolTip = _isFullscreen
-            ? "Back to widget size (Ctrl+Alt+F)"
-            : "Fullscreen (Ctrl+Alt+F)";
+            ? DesktopText.T("Back to widget size (Ctrl+Alt+F)")
+            : DesktopText.T("Fullscreen (Ctrl+Alt+F)");
         UpdateGlanceControl();
         ShowOverlayFeedback(
-            _isFullscreen ? "Fullscreen" : "Widget size",
-            _isFullscreen ? "All overlay pages are available" : "Returned to your focused layout");
+            _isFullscreen ? DesktopText.T("Fullscreen") : DesktopText.T("Widget size"),
+            _isFullscreen ? DesktopText.T("All overlay pages are available") : DesktopText.T("Returned to your focused layout"));
 
         if (Browser.CoreWebView2 is not null)
         {
@@ -518,8 +570,8 @@ public partial class MainWindow : Window
         NativeWindowStyles.SetClickThrough(this, _clickThrough);
         ApplyInteractionMode();
         ShowOverlayFeedback(
-            pinned ? "Overlay pinned" : "Overlay unlocked",
-            pinned ? "Clicks reach the game · Ctrl+Alt+O or the tray unlocks it" : "Drag, resize and change the layout here");
+            pinned ? DesktopText.T("Overlay pinned") : DesktopText.T("Overlay unlocked"),
+            pinned ? DesktopText.T("Clicks reach the game · Ctrl+Alt+O or the tray unlocks it") : DesktopText.T("Drag, resize and change the layout here"));
         PinnedChanged?.Invoke(pinned);
     }
 
@@ -538,6 +590,7 @@ public partial class MainWindow : Window
     private void ApplyInteractionMode()
     {
         var interactive = !_clickThrough;
+        if (interactive) ApplyText();
 
         HeaderBar.Visibility = interactive ? Visibility.Visible : Visibility.Collapsed;
         Grip.Visibility = interactive ? Visibility.Visible : Visibility.Collapsed;

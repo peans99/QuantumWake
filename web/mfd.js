@@ -56,12 +56,47 @@ let compact = false;
 let lastRows = '';
 let stream;
 const byId = id => document.getElementById(id);
+// Before anything below holds a reference into the markup, as on the dashboard.
+if (typeof txDocument === 'function') txDocument(document.body);
+const say = QwMfd.say, sayn = QwMfd.sayn;
+
+/* A row label in the page language. The rows keep their English labels, because
+   the glyph beside each is chosen from the English word; the heading is
+   translated as it is drawn. Labels with a number in them are matched by
+   shape, and a kind the server names (a feed entry, a ledger line) falls back
+   to the catalogue's word for it, in capitals. */
+const MFD_LABEL_SHAPES = [
+  [/^TASK (\d+) OF (\d+)$/, (m) => say('TASK {number} OF {count}', { number: m[1], count: m[2] })],
+  [/^SCREEN OBJECTIVE (\d+)$/, (m) => say('SCREEN OBJECTIVE {number}', { number: m[1] })],
+  [/^(.+) · NEXT$/, (m) => say('{bar} · NEXT', { bar: mfdLabel(m[1]) })],
+  [/^(.+) · FLOOR$/, (m) => say('{bar} · FLOOR', { bar: mfdLabel(m[1]) })],
+  [/^POI · (.+)$/, (m) => say('POI · {category}', { category: mfdLabel(m[1]) })],
+  [/^SCREEN · (.+)$/, (m) => say('SCREEN · {kind}', { kind: mfdLabel(m[1]) })],
+];
+function mfdLabel(label) {
+  const text = String(label || '');
+  const fixed = say(text);
+  if (fixed !== text) return fixed;
+  for (const [shape, word] of MFD_LABEL_SHAPES) {
+    const match = shape.exec(text);
+    if (match) return word(match);
+  }
+  const plain = text.charAt(0) + text.slice(1).toLowerCase();
+  const kind = say(plain);
+  return kind !== plain ? kind.toUpperCase() : text;
+}
 /* Long explanations belong in the dashboard. The frame keeps the operational
    result; status rows retain their meaning through a labelled icon. */
+let hudShort = null;
 const hudText = value => {
   const terseLoad = /^(.+) across (\d+) stop(s?) · planned, not detected$/.exec(value || '');
   if (terseLoad) return `${terseLoad[1]} · ${terseLoad[2]} stop${terseLoad[3]}`;
-  return ({
+  // The rows arrive in the page language, so the short forms are looked up
+  // the same way: both sides of the table through the catalogue, built once.
+  if (!hudShort) hudShort = new Map(Object.entries(HUD_SHORT).map(([long, short]) => [say(long), say(short)]));
+  return hudShort.get(value) || value;
+};
+const HUD_SHORT = {
   'Cannot read the flight plan. Check the dashboard connection.': 'Plan offline',
   'Open the dashboard to check your route.': 'Route unavailable',
   'Loading your tracked plan…': 'Loading plan…',
@@ -85,7 +120,6 @@ const hudText = value => {
   'Nothing the installed data can identify here': 'No listed services',
   'Reading what the logs priced…': 'Reading ledger…',
   'No confirmed transaction in the last few days.': 'No recent transactions'
-  }[value] || value);
 };
 const iconOnlyLabels = new Set(['LOCATION SOURCE', 'NOT A MANIFEST', 'SESSION ONLY', 'HOW SURE', 'A FLOOR', 'NOT ALL NEARBY', 'FROM']);
 /* Which frame this is and which Cougar drives it, in one line at the top. The
@@ -93,11 +127,13 @@ const iconOnlyLabels = new Set(['LOCATION SOURCE', 'NOT A MANIFEST', 'SESSION ON
    press is under the pilot's own thumb, so the readout was a label for
    something they had just done, costing a strip of a 480 px panel to say it. */
 let cougar = null, usb = false, connection = 'CONNECTING';
+// The frame's name as words the catalogue holds, rather than its id in capitals.
+const PANEL_WORDS = { left: 'LEFT', right: 'RIGHT' };
 function drawIdentity() {
   byId('identity').textContent = cougar
-    ? `${panelId.toUpperCase()} · ${panelRole.label} · MFD ${cougar}`
-    : `${panelId.toUpperCase()} · ${panelRole.label} MFD`;
-  byId('connection').textContent = connection + (cougar && !usb ? ' · NO USB' : '');
+    ? `${say(PANEL_WORDS[panelId])} · ${say(panelRole.label)} · MFD ${cougar}`
+    : `${say(PANEL_WORDS[panelId])} · ${say(panelRole.label)} MFD`;
+  byId('connection').textContent = say(connection) + (cougar && !usb ? ` · ${say('NO USB')}` : '');
 }
 drawIdentity();
 // The frame's own numbering. The four rockers carry no printed button, so they
@@ -143,8 +179,8 @@ function drawLabels() {
     shape.setAttribute('d', path || '');
     glyph.style.visibility = path ? '' : 'hidden';
     button.disabled = !caption;
-    button.title = 'Cougar button ' + number + (caption ? ': ' + caption : ': unassigned');
-    button.setAttribute('aria-label', caption ? `${QwMfd.title(command) === 'Cockpit' ? caption : QwMfd.title(command)} · Cougar button ${number}` : 'Unused button ' + number);
+    button.title = caption ? say('Cougar button {number}: {caption}', { number, caption }) : say('Cougar button {number}: unassigned', { number });
+    button.setAttribute('aria-label', caption ? say('{name} · Cougar button {number}', { name: QwMfd.title(command) === 'Cockpit' ? caption : say(QwMfd.title(command)), number }) : say('Unused button {number}', { number }));
     button.classList.toggle('selected', command === screen);
     button.setAttribute('aria-pressed', String(command === screen));
   }
@@ -182,7 +218,7 @@ function drawBreadcrumb() {
       const divider = document.createElement('span'); divider.textContent = '/';
       divider.setAttribute('aria-hidden', 'true'); breadcrumb.append(divider);
     }
-    const crumb = document.createElement('button'); crumb.type = 'button'; crumb.textContent = QwMfd.title(id);
+    const crumb = document.createElement('button'); crumb.type = 'button'; crumb.textContent = say(QwMfd.title(id));
     crumb.disabled = id === screen; crumb.onclick = () => navigate(id);
     breadcrumb.append(crumb);
   });
@@ -195,7 +231,7 @@ function drawMenu(plan) {
     const preview = QwMfd.previewPage(id);
     const row = !preview ? null : QwMfd.rows(QwMfd.pageIds.indexOf(preview), state, briefing, briefingUnavailable,
       { selected: 0, extra, map: plan, now: Date.now() })[0];
-    return { id, title: QwMfd.title(id), hint: node?.hint || row?.[0] || '', summary: row?.[1] || 'Not recorded', branch: !!node };
+    return { id, title: say(QwMfd.title(id)), hint: node?.hint ? say(node.hint) : mfdLabel(row?.[0] || ''), summary: row?.[1] || say('Not recorded'), branch: !!node };
   });
   const key = JSON.stringify([screen, items, bindings]);
   if (key === lastMenu) return;
@@ -221,8 +257,8 @@ function render() {
   byId('mfd').style.filter = `brightness(${dozing ? brightness * QwMfd.DOZE : brightness})`;
   byId('mfd').style.setProperty('--text-scale', textScale);
   const where = QwMfd.pageLabel(screen, { extra, offset });
-  byId('title').textContent = QwMfd.title(screen)
-    + (details ? ' · details' : '') + (where ? ' · ' + where : '');
+  byId('title').textContent = say(QwMfd.title(screen))
+    + (details ? ` · ${say('details')}` : '') + (where ? ' · ' + where : '');
   const showing = screen;
   byId('mfd').dataset.screen = screen;
   byId('mfd').classList.toggle('menu-open', isMenu());
@@ -247,7 +283,7 @@ function render() {
   content.hidden = isMenu();
   readings.hidden = isMenu();
   byId('more').hidden = !hasDetails;
-  byId('more').textContent = details ? '← Overview' : 'More details →';
+  byId('more').textContent = details ? say('← Overview') : say('More details →');
   drawLabels();
   if (key !== lastRows) {
     lastRows = key;
@@ -263,12 +299,12 @@ function render() {
       const shape = document.createElementNS(svgns, 'path');
       shape.setAttribute('d', QwMfd.rowIcon(label));
       glyph.append(shape);
-      glyph.setAttribute('role', 'img'); glyph.setAttribute('aria-label', label);
-      const heading = document.createElement('h2'); heading.textContent = label;
+      glyph.setAttribute('role', 'img'); glyph.setAttribute('aria-label', mfdLabel(label));
+      const heading = document.createElement('h2'); heading.textContent = mfdLabel(label);
       const body = document.createElement('div'); body.className = 'value';
-      const text = document.createElement('p'); text.textContent = hudText(value || 'Not recorded');
+      const text = document.createElement('p'); text.textContent = hudText(value || say('Not recorded'));
       body.append(text);
-      if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(); body.append(time); }
+      if (at) { const time = document.createElement('time'); time.textContent = new Date(at).toLocaleString(typeof QW_DATE_LOCALES === 'undefined' ? undefined : QW_DATE_LOCALES); body.append(time); }
       row.append(glyph, heading, body);
       readings.append(row);
     }
@@ -290,7 +326,7 @@ function render() {
 function updateScrollHint() {
   const r = byId('content'), hint = byId('scroll-hint');
   hint.hidden = isMenu() || r.scrollHeight <= r.clientHeight + 1;
-  hint.textContent = r.scrollTop + r.clientHeight < r.scrollHeight - 2 ? '↓ More below' : '↑ More above';
+  hint.textContent = r.scrollTop + r.clientHeight < r.scrollHeight - 2 ? say('↓ More below') : say('↑ More above');
 }
 byId('content').addEventListener('scroll', updateScrollHint);
 /* Pinned under the readings rather than appended to them. The row that asked
@@ -520,7 +556,7 @@ function step(direction) {
   // rather than tested against a list of screen names here.
   const paged = QwMfd.pageStep(screen, { extra, offset }, direction);
   if (paged !== null) {
-    if (paged === offset) { note(direction > 0 ? 'End of the ledger' : 'Newest entries'); return; }
+    if (paged === offset) { note(direction > 0 ? say('End of the ledger') : say('Newest entries')); return; }
     offset = paged; lastRows = '';
     return;
   }
@@ -541,7 +577,7 @@ async function confirmSelected() {
   if (confirming || screen !== 'act' || briefingUnavailable) return;
   const list = QwMfd.tasks(briefing);
   const target = list[QwMfd.clamp(selected, 0, list.length - 1)];
-  if (!target?.tripId) { note('Nothing to confirm here'); render(); return; }
+  if (!target?.tripId) { note(say('Nothing to confirm here')); render(); return; }
 
   if (!armed) { armed = true; armedTask = target; saved = ''; lastRows = ''; render(); return; }
 
@@ -551,7 +587,7 @@ async function confirmSelected() {
      off whatever happens to be there now. */
   if (!QwMfd.sameTask(armedTask, target)) {
     standDown();
-    note('The plan changed. Nothing was marked.');
+    note(say('The plan changed. Nothing was marked.'));
     render();
     return;
   }
@@ -567,12 +603,12 @@ async function confirmSelected() {
     const response = await fetch(`/api/trips/${encodeURIComponent(target.tripId)}/${path}`,
       { method: 'POST', signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error('Not saved');
-    saved = 'Marked done: ' + marking;
+    saved = say('Marked done: {task}', { task: marking });
     selected = 0;
     await refreshBriefing();
   } catch {
-    note('Not saved. Check the dashboard.');
-    saved = 'Not saved: ' + marking;
+    note(say('Not saved. Check the dashboard.'));
+    saved = say('Not saved: {task}', { task: marking });
   } finally { confirming = false; lastRows = ''; render(); }
 }
 /* Where this frame's captions sit, from the host: the panel's own insets in
@@ -649,9 +685,11 @@ function nearestServices() {
     const candidates = (atlas.nodes || []).filter(p => same(p.system, state.locationSystem) && match(p))
       .map(p => ({ p, distance: same(p.body, state.locationBody) ? 0 : point(p.body) && origin ? Math.hypot(point(p.body).x - origin.x, point(p.body).y - origin.y) : null }))
       .filter(item => item.distance !== null).sort((a, b) => a.distance - b.distance || a.p.name.localeCompare(b.p.name));
-    if (!candidates.length) return { label, message: `No comparable ${label.toLowerCase()} is listed in ${state.locationSystem}.` };
+    // One sentence per service, so a translation can agree the noun.
+    const none = { Refuel: 'No comparable refuel is listed in {system}.', Clinic: 'No comparable clinic is listed in {system}.', Refinery: 'No comparable refinery is listed in {system}.' };
+    if (!candidates.length) return { label, message: say(none[label], { system: state.locationSystem }) };
     const target = candidates[0].p;
-    return { label, message: `${target.name} · ${target.body || 'body unknown'} · approximate from body positions` };
+    return { label, message: say('{place} · {body} · approximate from body positions', { place: target.name, body: target.body || say('body unknown') }) };
   });
 }
 /* Each one is allowed to fail on its own: a page whose figure is missing says

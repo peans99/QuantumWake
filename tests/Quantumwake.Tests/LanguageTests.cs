@@ -45,12 +45,16 @@ public class LanguageStoreTests : IDisposable
         Assert.Equal("fr", new LanguageStore(_directory).Save(" FR "));
     }
 
-    /// <summary>A partial language says so; English has nothing left to cover.</summary>
+    /// <summary>
+    /// A partial language says so. French was partial through 0.18.16 and is
+    /// complete from 0.18.17 - what stays English is game text, on purpose -
+    /// so neither carries a note now; a language added half-done must.
+    /// </summary>
     [Fact]
-    public void Only_a_partial_language_carries_a_coverage_note()
+    public void A_finished_language_carries_no_coverage_note()
     {
         Assert.Null(LanguageStore.Available.Single(l => l.Code == "en").Covers);
-        Assert.NotNull(LanguageStore.Available.Single(l => l.Code == "fr").Covers);
+        Assert.Null(LanguageStore.Available.Single(l => l.Code == "fr").Covers);
     }
 
     public void Dispose()

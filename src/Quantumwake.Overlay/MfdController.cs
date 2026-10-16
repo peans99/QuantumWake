@@ -37,7 +37,7 @@ internal sealed class MfdController : IDisposable
             {
                 // Explained before it is validated: validating is what moves a
                 // panel to its screen's new name, and the note is about that move.
-                if (MfdLayout.Explain(stored, _monitors) is { } note) _notify(note);
+                if (MfdLayout.Explain(stored, _monitors) is { } note) _notify(Worded(note));
                 _saved = stored.Validate(_monitors);
             }
         }
@@ -73,8 +73,8 @@ internal sealed class MfdController : IDisposable
             // at the moment the transient layout would actually be discarded.
             var discard = System.Windows.MessageBox.Show(
                 _setup,
-                "Discard the unsaved MFD changes? The frames will return to the last saved layout.",
-                "Discard MFD changes?",
+                DesktopText.T("Discard the unsaved MFD changes? The frames will return to the last saved layout."),
+                DesktopText.T("Discard MFD changes?"),
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Warning,
                 System.Windows.MessageBoxResult.No);
@@ -119,7 +119,21 @@ internal sealed class MfdController : IDisposable
         const uint keys = NativeWindowStyles.Modifiers.Control | NativeWindowStyles.Modifiers.Alt
             | NativeWindowStyles.Modifiers.NoRepeat;
         if (!NativeWindowStyles.RegisterGlobalHotKey(_hotkeys.Handle, SetupHotkeyId, keys, VkM))
-            _notify("Ctrl+Alt+M is already in use by another app; open MFD setup from the tray or the dashboard.");
+            _notify(DesktopText.T("Ctrl+Alt+M is already in use by another app; open MFD setup from the tray or the dashboard."));
+    }
+
+    /// <summary>
+    /// A layout warning in the dashboard's language. MfdLayout writes it in
+    /// English - the screen tests compile that file on its own - so the one
+    /// with figures in it is matched here and reworded with them.
+    /// </summary>
+    private static string Worded(string note)
+    {
+        var lost = System.Text.RegularExpressions.Regex.Match(note, @"^The MFD screen \((\d+)×(\d+)\) was not found");
+        return lost.Success
+            ? DesktopText.T("The MFD screen ({width}×{height}) was not found, so the MFDs are off. Reconnect it, or open MFD setup (Ctrl+Alt+M) to place them again.",
+                ("width", lost.Groups[1].Value), ("height", lost.Groups[2].Value))
+            : DesktopText.T(note);
     }
 
     private void SendState() => _setup?.Send(new {

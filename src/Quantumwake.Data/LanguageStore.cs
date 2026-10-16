@@ -36,9 +36,7 @@ public sealed class LanguageStore
     public static readonly IReadOnlyList<DashboardLanguage> Available =
     [
         new(English, "English", null),
-        new("fr", "Français",
-            "traduit pour l’instant : tout le tableau de bord et l’overlay, ce que l’application écrit elle-même compris ; "
-            + "les pages MFD et le menu de la zone de notification sont encore en anglais"),
+        new("fr", "Français", null),
     ];
 
     private readonly string _path;
