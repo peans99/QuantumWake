@@ -496,3 +496,37 @@ reasons, a fire mode's condition). 824 entries added, 3,326 in all.
   loadout's readiness strip and armour profile with slot labels kept, the Loot
   kind filter's French text over English values, and a gun's holster and
   damage.
+
+### 0.18.13
+
+The rest of Settings: Controls, Overlay, Item labels (with StarStrings), the
+shareable recap, shared files and About. Rendered against this install in
+French, the visible-text probe finds nothing English on those pages but the
+game's keybinding text (action names, action groups and their categories),
+stick product names, item names and the server's one sentence about why the
+sticks cannot be read live. 448 entries added, 3,774 in all.
+
+- **Two more English words had a second meaning.** "hold" was already
+  "soute", a cargo hold; the activation mode now reads "hold down" in English.
+  "left" was already "est parti"; hats are one phrase per direction
+  (`CONTROLS_HAT_LABELS`, "Hat {number} left"), so the direction is never
+  looked up alone. "Install" was the StarStrings button and the About line
+  naming the game install; the line is now "Game install".
+- **The recap is translated, not kept English like the server report.** Part
+  of it had been wrapped in an earlier phase, and it is the pilot's own
+  snapshot rather than a report for other pilots, so finishing it was the
+  coherent choice. The saved file carries `lang` from the page and a French
+  title. The copied server report stays English.
+- **Item categories on the label preview** are translated where drawn, as on
+  Stash and Loot.
+- **A pre-existing bug fixed on the way**: `saveOverlayLayout` is attached
+  straight to change events, so its "saved" message argument was the event
+  and the status line read "[object Event]". It now falls back to "saved"
+  when the argument is not a string.
+- **The action search placeholder was shortened** - "Chercher, parcourir…" -
+  because a longer one ran under the unbind button beside it.
+- **Overlay card names** gained the four the label table was missing
+  (briefing, trip, respawn, status), named as the Now page titles them.
+- `SettingsPagesFrenchTests` covers the button table with the game's action
+  names kept and the mode not read as a cargo hold, a shared-file card, the
+  label count with a category, and a hat as one phrase.

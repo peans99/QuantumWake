@@ -10,7 +10,7 @@ namespace Quantumwake.WebTests;
 /// </remarks>
 public class ImportPageTests
 {
-    private const string OneBatch = """
+    internal const string OneBatch = """
         {"batches":[{
           "id":"ee3ad3bf","importedAt":"2026-08-24T18:45:25+00:00",
           "exportedAt":"2026-03-02T09:00:00+00:00",

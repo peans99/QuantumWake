@@ -7516,6 +7516,8 @@ const OVERLAY_LABELS = {
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
   checklist: 'Checklist', refinery: 'Refinery', event: 'Event',
+  // Named as the Now page titles them, so the tick and the card read alike.
+  briefing: 'What to do next', trip: 'Flight plan', respawn: 'Respawn', status: 'Current status',
 };
 
 /**
@@ -10718,7 +10720,7 @@ async function loadControls() {
   const panes = [...CONTROLS_PANES.map((p) => $(`#controls-pane-${p}`)), $('#controls-tabs')];
   if (!controlsModel) {
     for (const p of panes) if (p) p.hidden = true;
-    if (unready) { unready.hidden = false; unready.textContent = 'The controls could not be read.'; }
+    if (unready) { unready.hidden = false; unready.textContent = tx('The controls could not be read.'); }
     return;
   }
   if (!controlsModel.ready) {
@@ -10735,11 +10737,23 @@ async function loadControls() {
   const status = $('#controls-status');
   if (status) {
     const m = controlsModel;
-    status.textContent = m.profileFound
-      ? `${m.profile.devices.filter((d) => d.type === 'joystick' && d.product).length} sticks and ${m.profile.bindings.filter((b) => b.input.device === 'js' && b.input.kind !== 'none').length} joystick bindings in the game's profile · ${m.catalogue.actions.length} actions the game can bind · ${m.backupCount} version${m.backupCount === 1 ? '' : 's'} kept${m.backups ? `, the latest written ${relative(m.backups.writtenAt)}` : ''}.`
-      : m.problem
-        ? `The game's profile could not be read: ${m.problem}`
-        : 'The game has not written a keybinding profile yet - it appears after the first time the keybinding screen is used.';
+    if (m.profileFound) {
+      const sticks = m.profile.devices.filter((d) => d.type === 'joystick' && d.product).length;
+      const bindings = m.profile.bindings.filter((b) => b.input.device === 'js' && b.input.kind !== 'none').length;
+      const kept = txn(m.backupCount, '{count} version kept', '{count} versions kept');
+      status.textContent = [
+        tx('{sticks} and {bindings} in the game\'s profile', {
+          sticks: txn(sticks, '{count} stick', '{count} sticks'),
+          bindings: txn(bindings, '{count} joystick binding', '{count} joystick bindings'),
+        }),
+        txn(m.catalogue.actions.length, '{count} action the game can bind', '{count} actions the game can bind'),
+        m.backups ? tx('{kept}, the latest written {when}', { kept, when: relative(m.backups.writtenAt) }) : kept,
+      ].join(' · ') + '.';
+    } else {
+      status.textContent = m.problem
+        ? tx('The game\'s profile could not be read: {problem}', { problem: m.problem })
+        : tx('The game has not written a keybinding profile yet - it appears after the first time the keybinding screen is used.');
+    }
   }
 
   renderControlsDevices();
@@ -10763,8 +10777,8 @@ function renderControlsDevices() {
   const sticks = controlsSticks();
   if (!sticks.length) {
     strip.append(el('p', 'muted', controlsModel?.profileFound
-      ? 'The profile names no joystick. Bind something to a stick in the game and it appears here.'
-      : 'No profile yet.'));
+      ? tx('The profile names no joystick. Bind something to a stick in the game and it appears here.')
+      : tx('No profile yet.')));
     $('#controls-device').hidden = true;
     return;
   }
@@ -10774,7 +10788,7 @@ function renderControlsDevices() {
     button.type = 'button';
     button.append(el('span', 'controls-stick-key', d.key));
     button.append(el('span', 'controls-stick-name', d.product));
-    button.append(el('span', 'controls-stick-count muted', `${d.bindings} bound`));
+    button.append(el('span', 'controls-stick-count muted', tx('{count} bound', { count: d.bindings })));
     button.addEventListener('click', () => {
       controlsDevice = d.key;
       try { localStorage.setItem('qw-controls-stick', d.key); } catch { /* fine */ }
@@ -10792,6 +10806,14 @@ function renderControlsDevices() {
  */
 const CONTROLS_AXIS_NAMES = { x: 'x', y: 'y', z: 'z', rx: 'rotx', ry: 'roty', rz: 'rotz', slider1: 'slider1', slider_1: 'slider1', slider2: 'slider2', slider_2: 'slider2' };
 const CONTROLS_HAT_DIRS = { u: 'up', d: 'down', l: 'left', r: 'right' };
+
+/*
+ * A hat and its direction as one phrase each. "left" on its own is already a
+ * word the catalogue holds for somebody leaving a party, so the direction is
+ * never looked up by itself.
+ */
+const CONTROLS_HAT_LABELS = { up: 'Hat {number} up', down: 'Hat {number} down', left: 'Hat {number} left', right: 'Hat {number} right' };
+const CONTROLS_HAT_WORDS = { up: 'hat {number} up', down: 'hat {number} down', left: 'hat {number} left', right: 'hat {number} right' };
 
 function controlsPlaceholderToControl(text) {
   const t = String(text || '').trim();
@@ -10825,12 +10847,14 @@ function controlsBindingWords(b) {
 /** "js2 button 5" for a modifier's raw input. */
 function controlsShortInput(raw) {
   const m = /^js(\d+)_button(\d+)$/i.exec(raw);
-  if (m) return `button ${m[2]}`;
+  if (m) return tx('button {number}', { number: m[2] });
   return raw.replace(/^[a-z]{2}\d+_/, '');
 }
 
 function controlsModeWord(mode) {
-  return { tap: 'tap', hold: 'hold', press: 'press', double_tap: 'double tap', double_tap_nonblocking: 'double tap', delayed_press: 'long press', delayed_press_long: 'long press', delayed_press_medium: 'long press', delayed_press_quicker: 'long press', tap_quicker: 'tap', press_quicker: 'press', hold_no_retrigger: 'hold', all: '' }[mode] ?? (mode || '');
+  // The page's words for the game's activation modes; an unknown one stays as the game wrote it.
+  const word = { tap: 'tap', hold: 'hold down', press: 'press', double_tap: 'double tap', double_tap_nonblocking: 'double tap', delayed_press: 'long press', delayed_press_long: 'long press', delayed_press_medium: 'long press', delayed_press_quicker: 'long press', tap_quicker: 'tap', press_quicker: 'press', hold_no_retrigger: 'hold down', all: '' }[mode];
+  return word === undefined ? (mode || '') : word && tx(word);
 }
 
 async function renderControlsDevice() {
@@ -10840,7 +10864,7 @@ async function renderControlsDevice() {
   box.hidden = false;
 
   $('#controls-device-title').textContent = `${device.product} · ${device.key}`;
-  const usb = device.usb ? `USB ${device.usb.vendor.toString(16).padStart(4, '0')}:${device.usb.product.toString(16).padStart(4, '0')}` : 'no USB id';
+  const usb = device.usb ? `USB ${device.usb.vendor.toString(16).padStart(4, '0')}:${device.usb.product.toString(16).padStart(4, '0')}` : tx('no USB id');
   $('#controls-device-note').textContent = `${usb} · ${device.guid || ''}`;
 
   // The layout the game ships for this stick, beside the pilot's, if any.
@@ -10848,7 +10872,7 @@ async function renderControlsDevice() {
   const keep = select?.value;
   if (select) {
     select.textContent = '';
-    select.append(new Option(device.layouts?.length ? 'Nothing' : 'The game ships no layout for this stick', ''));
+    select.append(new Option(device.layouts?.length ? tx('Nothing') : tx('The game ships no layout for this stick'), ''));
     for (const file of device.layouts || []) {
       const layout = controlsModel.layouts.find((l) => l.file === file);
       select.append(new Option(layout?.name || file, file));
@@ -10891,12 +10915,12 @@ async function renderControlsDevice() {
     tr.dataset.control = control;
     tr.append(el('td', 'controls-control', controlsControlLabel(control)));
     const to = el('td');
-    if (!here.length) to.append(el('span', 'muted', 'nothing'));
+    if (!here.length) to.append(el('span', 'muted', tx('nothing')));
     for (const b of here) {
       const line = el('div', 'controls-bound');
       line.append(el('span', null, controlsBindingWords(b)));
       line.append(el('span', 'armoury-kind', ` ${b.map}${b.category ? ` · ${b.category}` : ''}`));
-      if (!b.known) line.append(el('span', 'controls-unknown', ' not in this build\'s catalogue'));
+      if (!b.known) line.append(el('span', 'controls-unknown', ` ${tx('not in this build\'s catalogue')}`));
       to.append(line);
     }
     tr.append(to);
@@ -10924,7 +10948,7 @@ async function renderControlsDevice() {
     body.append(tr);
   }
   if (!shown) {
-    const td = el('td', 'muted', q ? 'Nothing on this stick matches.' : 'Nothing is bound to this stick and its picture names no controls.');
+    const td = el('td', 'muted', q ? tx('Nothing on this stick matches.') : tx('Nothing is bound to this stick and its picture names no controls.'));
     td.colSpan = 5;
     const tr = el('tr');
     tr.append(td);
@@ -10955,11 +10979,11 @@ function renderControlsAxes(device, bound) {
   }
   if (!rows.length) return;
 
-  box.append(el('h4', null, 'Axes'));
-  box.append(el('p', 'muted small', 'The curve is the game\'s exponent on the action\'s axis group: 1 is straight, above it the centre goes softer and the ends sharper. The dead zone is on the axis itself. What you set here is written the way a restore is.'));
+  box.append(el('h4', null, tx('Axes')));
+  box.append(el('p', 'muted small', tx('The curve is the game\'s exponent on the action\'s axis group: 1 is straight, above it the centre goes softer and the ends sharper. The dead zone is on the axis itself. What you set here is written the way a restore is.')));
   const table = el('table', 'controls-axes-table');
   const head = el('tr');
-  for (const [label, cls] of [['Axis', null], ['Drives', null], ['Curve', 'num'], ['Invert', null], ['Dead zone', 'num'], ['', null]]) head.append(el('th', cls, label));
+  for (const [label, cls] of [['Axis', null], ['Drives', null], ['Curve', 'num'], ['Invert', null], ['Dead zone', 'num'], ['', null]]) head.append(el('th', cls, label && tx(label)));
   const thead = el('thead');
   thead.append(head);
   table.append(thead);
@@ -10970,9 +10994,9 @@ function renderControlsAxes(device, bound) {
     const tr = el('tr');
     tr.dataset.axis = r.axis;
     tr.dataset.group = r.group;
-    tr.append(el('td', 'controls-control', `${r.axis} axis`));
+    tr.append(el('td', 'controls-control', tx('{axis} axis', { axis: r.axis })));
     const drives = el('td', null, r.binding.label);
-    drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : 'no curve group: the game keeps no curve for this action'));
+    drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : tx('no curve group: the game keeps no curve for this action')));
     tr.append(drives);
 
     // An exponent is not a thing anyone has an intuition for. The slider is
@@ -10995,11 +11019,11 @@ function renderControlsAxes(device, bound) {
     slider.step = '0.05';
     slider.value = String(Math.min(3, Math.max(0.4, Number(exponent.value) || 1)));
     slider.disabled = !r.group;
-    slider.title = 'Drag for a softer or sharper centre; the box beside it takes anything the game allows';
+    slider.title = tx('Drag for a softer or sharper centre; the box beside it takes anything the game allows');
 
     const presets = el('div', 'controls-curve-presets');
     for (const [name, value] of CONTROLS_CURVE_PRESETS) {
-      const chip = el('button', 'controls-curve-preset', name);
+      const chip = el('button', 'controls-curve-preset', tx(name));
       chip.type = 'button';
       chip.dataset.value = String(value);
       chip.disabled = !r.group;
@@ -11069,11 +11093,11 @@ function renderControlsAxes(device, bound) {
   box.append(table);
 
   const bar = el('div', 'controls armoury-filters');
-  const apply = el('button', 'ghost', controlsModel.gameRunning ? 'Apply as an import file' : 'Apply to the profile');
+  const apply = el('button', 'ghost', controlsModel.gameRunning ? tx('Apply as an import file') : tx('Apply to the profile'));
   apply.type = 'button';
   apply.title = controlsModel.gameRunning
-    ? 'Star Citizen is running: the change is written as a file the keybinding screen imports'
-    : 'Written into the game\'s profile, after keeping it as it is';
+    ? tx('Star Citizen is running: the change is written as a file the keybinding screen imports')
+    : tx('Written into the game\'s profile, after keeping it as it is');
   apply.addEventListener('click', () => controlsApplyAxes(device, apply));
   bar.append(apply);
   bar.append(el('span', 'muted small controls-axes-note'));
@@ -11108,8 +11132,8 @@ function controlsCurveWords(exponent, deadzone) {
   };
   const half = out(0.5);
   const most = out(0.8);
-  if (Math.abs(exponent - 1) < 0.026 && !deadzone) return 'Straight through: half a push is half the output.';
-  return `Half a push gives ${half}%, four fifths gives ${most}%.`;
+  if (Math.abs(exponent - 1) < 0.026 && !deadzone) return tx('Straight through: half a push is half the output.');
+  return tx('Half a push gives {half}%, four fifths gives {most}%.', { half, most });
 }
 
 function controlsCurvePreview(exponent, inverted, deadzone) {
@@ -11167,13 +11191,13 @@ async function controlsApplyAxes(device, button) {
       body: JSON.stringify({ instance: device.instance, curves, deadzones, how: controlsModel.gameRunning ? 'export' : 'live' }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    if (!response.ok) { note.textContent = result.message || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
     note.textContent = result.how === 'live'
-      ? 'Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.'
-      : `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+      ? tx('Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.')
+      : tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
     if (result.how === 'live') await loadControls();
   } catch (err) {
-    note.textContent = `Could not apply: ${err.message}`;
+    note.textContent = tx('Could not apply: {problem}', { problem: err.message });
   } finally {
     button.disabled = false;
   }
@@ -11187,10 +11211,10 @@ function controlsControlOrder(a, b) {
 
 function controlsControlLabel(control) {
   let m = /^button(\d+)$/.exec(control);
-  if (m) return `Button ${m[1]}`;
+  if (m) return tx('Button {number}', { number: m[1] });
   m = /^hat(\d+)_(\w+)$/.exec(control);
-  if (m) return `Hat ${m[1]} ${m[2]}`;
-  return `${control} axis`;
+  if (m) return CONTROLS_HAT_LABELS[m[2]] ? tx(CONTROLS_HAT_LABELS[m[2]], { number: m[1] }) : `${tx('Hat {number}', { number: m[1] })} ${m[2]}`;
+  return tx('{axis} axis', { axis: control });
 }
 
 /**
@@ -11209,20 +11233,20 @@ async function renderControlsPicture(device, bound) {
     note.textContent = '';
     const t = controlsModel.templates || {};
     if (!t.enabled && !(t.available || []).length) {
-      note.append(el('span', null, 'No picture yet: the library is off. '));
-      const fetchButton = el('button', 'ghost small', 'Fetch the pictures');
+      note.append(el('span', null, `${tx('No picture yet: the library is off.')} `));
+      const fetchButton = el('button', 'ghost small', tx('Fetch the pictures'));
       fetchButton.type = 'button';
-      fetchButton.title = 'Joystick Diagrams\' template library, 45 sticks, throttles and panels - fetched from GitHub and kept';
+      fetchButton.title = tx('Joystick Diagrams\' template library, 45 sticks, throttles and panels - fetched from GitHub and kept');
       fetchButton.addEventListener('click', () => controlsFetchLibrary(fetchButton));
       note.append(fetchButton);
     } else {
-      note.append(el('span', null, 'No picture matched to this stick. '));
+      note.append(el('span', null, `${tx('No picture matched to this stick.')} `));
       const pick = el('select', 'select');
-      pick.append(new Option('Pick one…', ''));
+      pick.append(new Option(tx('Pick one…'), ''));
       let maker = null;
       let group = null;
       for (const x of t.available || []) {
-        if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; pick.append(group); }
+        if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || tx('Library'); pick.append(group); }
         group.append(new Option(x.name, x.key));
       }
       pick.addEventListener('change', async () => {
@@ -11234,7 +11258,7 @@ async function renderControlsPicture(device, bound) {
     }
     return controlsDrawGrid(holder, device, bound);
   }
-  note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? 'your own picture' : 'Joystick Diagrams'}`;
+  note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? tx('your own picture') : 'Joystick Diagrams'}`;
 
   let text;
   try {
@@ -11243,7 +11267,7 @@ async function renderControlsPicture(device, bound) {
     if (!response.ok) throw new Error(String(response.status));
     text = await response.text();
   } catch {
-    note.textContent = `${device.template.name} · the picture could not be fetched`;
+    note.textContent = `${device.template.name} · ${tx('the picture could not be fetched')}`;
     return [];
   }
 
@@ -11252,9 +11276,9 @@ async function renderControlsPicture(device, bound) {
   if (misfit) {
     const warn = el('div', 'controls-picture-misfit');
     warn.append(el('span', null, misfit + ' '));
-    const drop = el('button', 'ghost small', 'take the picture off');
+    const drop = el('button', 'ghost small', tx('take the picture off'));
     drop.type = 'button';
-    drop.title = "Draw the numbered grid from this stick's own counts instead";
+    drop.title = tx('Draw the numbered grid from this stick\'s own counts instead');
     drop.addEventListener('click', async () => {
       await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: device.guid, key: '' }) });
       await loadControls();
@@ -11282,20 +11306,20 @@ async function loadControlsCheck() {
   if (!list) return;
   list.textContent = '';
   counts.textContent = '';
-  note.textContent = 'Reading the profile…';
+  note.textContent = tx('Reading the profile…');
 
   let result;
   try { result = await getJson('/api/controls/check'); }
-  catch { note.textContent = 'The check could not be run.'; return; }
+  catch { note.textContent = tx('The check could not be run.'); return; }
 
-  if (!result.ready) { note.textContent = result.reason || 'Not ready.'; return; }
+  if (!result.ready) { note.textContent = result.reason || tx('Not ready.'); return; }
 
   const c = result.counts || {};
   const names = result.names || {};
   const against = (result.sources || []).map((f) => names[f] || f);
   note.textContent = against.length
-    ? `Against ${against.join(' and ')}.`
-    : 'The game ships no reference layout for any stick in your profile, so there is nothing to check against.';
+    ? tx('Against {layouts}.', { layouts: against.join(` ${tx('and')} `) })
+    : tx('The game ships no reference layout for any stick in your profile, so there is nothing to check against.');
 
   const pins = controlsChecklistPins.map((pin) => {
     const action = controlsModel?.catalogue?.actions?.find((a) => a.actionMap === pin.actionMap && a.name === pin.action);
@@ -11318,8 +11342,8 @@ async function loadControlsCheck() {
     if (value === undefined) continue;
     const cell = el('div', `controls-check-count${hot ? ' hot' : ''}`);
     cell.append(el('b', null, String(value)));
-    cell.append(el('span', null, label));
-    cell.title = why;
+    cell.append(el('span', null, tx(label)));
+    cell.title = tx(why);
     counts.append(cell);
   }
 
@@ -11327,8 +11351,8 @@ async function loadControlsCheck() {
 
   const dashboard = el('div', 'controls-check-dashboard');
   const important = el('section', 'controls-check-section controls-check-important');
-  important.append(el('h4', null, 'Important to you'));
-  important.append(el('p', 'muted small', 'Choose the actions you want to find quickly. They stay here with their joystick status.'));
+  important.append(el('h4', null, tx('Important to you')));
+  important.append(el('p', 'muted small', tx('Choose the actions you want to find quickly. They stay here with their joystick status.')));
   const add = controlsActionPicker([], (action) => {
     if (!controlsChecklistPins.some((pin) => pin.actionMap === action.actionMap && pin.action === action.name)) {
       controlsChecklistPins.push({ actionMap: action.actionMap, action: action.name, label: action.label });
@@ -11340,7 +11364,7 @@ async function loadControlsCheck() {
   important.append(add);
   const importantList = el('div', 'controls-check-important-list');
   if (!pins.length) {
-    importantList.append(el('p', 'muted small', 'No important actions chosen yet. Search or browse above to add one.'));
+    importantList.append(el('p', 'muted small', tx('No important actions chosen yet. Search or browse above to add one.')));
   }
   for (const pin of pins) {
     const row = el('div', `controls-check-priority-row${pin.bindings.length ? '' : ' unassigned'}`);
@@ -11350,13 +11374,13 @@ async function loadControlsCheck() {
     row.append(head);
     const status = pin.bindings.length
       ? pin.bindings.map((b) => `${controlsSticks().find((d) => d.key === b.input.deviceKey)?.product || b.input.deviceKey} · ${controlsInputWords(b.input.raw)}`).join(', ')
-      : 'Not assigned to a joystick';
+      : tx('Not assigned to a joystick');
     row.append(el('div', `controls-check-where${pin.bindings.length ? '' : ' controls-check-unassigned'}`, status));
     const doing = el('div', 'controls-check-do');
     if (!pin.bindings.length) {
-      const assign = el('button', 'ghost small', 'find it');
+      const assign = el('button', 'ghost small', tx('find it'));
       assign.type = 'button';
-      assign.title = 'Open the Actions page filtered to this action';
+      assign.title = tx('Open the Actions page filtered to this action');
       assign.addEventListener('click', () => {
         const search = $('#controls-search');
         if (search) search.value = pin.label;
@@ -11365,9 +11389,9 @@ async function loadControlsCheck() {
       });
       doing.append(assign);
     }
-    const remove = el('button', 'ghost small', 'remove');
+    const remove = el('button', 'ghost small', tx('remove'));
     remove.type = 'button';
-    remove.title = 'Remove this action from your important-controls list';
+    remove.title = tx('Remove this action from your important-controls list');
     remove.addEventListener('click', () => {
       controlsChecklistPins = controlsChecklistPins.filter((p) => !(p.actionMap === pin.actionMap && p.action === pin.action));
       controlsSaveChecklistPins();
@@ -11381,13 +11405,13 @@ async function loadControlsCheck() {
   dashboard.append(important);
 
   const defaults = el('section', 'controls-check-section controls-check-defaults');
-  defaults.append(el('h4', null, 'Game-recommended defaults'));
+  defaults.append(el('h4', null, tx('Game-recommended defaults')));
   defaults.append(el('p', 'muted small', against.length
-    ? 'The game puts these on your hardware in its own layout. Stage only the ones you want.'
-    : 'The game ships no reference layout for your sticks, so there is nothing to compare.'));
+    ? tx('The game puts these on your hardware in its own layout. Stage only the ones you want.')
+    : tx('The game ships no reference layout for your sticks, so there is nothing to compare.')));
   const defaultsList = el('div', 'controls-check-defaults-list');
   if (!gaps.length && against.length) {
-    defaultsList.append(el('p', 'muted small', 'Nothing missing. Every default the game recommends is either assigned or one you removed on purpose.'));
+    defaultsList.append(el('p', 'muted small', tx('Nothing missing. Every default the game recommends is either assigned or one you removed on purpose.')));
   }
   for (const gap of gaps) {
     const row = el('div', 'controls-check-row');
@@ -11395,16 +11419,16 @@ async function loadControlsCheck() {
     head.append(el('b', null, gap.label));
     head.append(el('span', 'armoury-kind', ` ${gap.map}`));
     row.append(head);
-    row.append(el('div', 'controls-check-where', `${gap.product || gap.deviceKey} · the game puts it on ${controlsInputWords(gap.suggested)}`));
+    row.append(el('div', 'controls-check-where', `${gap.product || gap.deviceKey} · ${tx('the game puts it on {input}', { input: controlsInputWords(gap.suggested) })}`));
 
     const doing = el('div', 'controls-check-do');
-    const add = el('button', 'ghost small', 'stage it');
+    const add = el('button', 'ghost small', tx('stage it'));
     add.type = 'button';
-    add.title = 'Add it to the pending changes, to apply with everything else';
+    add.title = tx('Add it to the pending changes, to apply with everything else');
     add.addEventListener('click', () => {
       controlsStage({ actionMap: gap.actionMap, action: gap.action, input: gap.suggested, label: gap.label });
       add.disabled = true;
-      add.textContent = 'staged';
+      add.textContent = tx('staged');
     });
     doing.append(add);
 
@@ -11418,7 +11442,7 @@ async function loadControlsCheck() {
       });
       await loadControlsCheck();
     });
-    no.append(box, el('span', null, 'I do not want this'));
+    no.append(box, el('span', null, tx('I do not want this')));
     doing.append(no);
     row.append(doing);
     defaultsList.append(row);
@@ -11438,10 +11462,10 @@ function controlsInputWords(raw) {
   const m = /^(?:js|kb|mo|gp)\d*_(.*)$/.exec(String(raw || ''));
   const control = m ? m[1] : String(raw || '');
   const button = /^button(\d+)$/.exec(control);
-  if (button) return `button ${button[1]}`;
+  if (button) return tx('button {number}', { number: button[1] });
   const hat = /^hat(\d+)_(\w+)$/.exec(control);
-  if (hat) return `hat ${hat[1]} ${hat[2]}`;
-  return control || 'nothing';
+  if (hat) return CONTROLS_HAT_WORDS[hat[2]] ? tx(CONTROLS_HAT_WORDS[hat[2]], { number: hat[1] }) : `hat ${hat[1]} ${hat[2]}`;
+  return control || tx('nothing');
 }
 
 /**
@@ -11462,19 +11486,22 @@ function controlsInputWords(raw) {
 function controlsPictureMisfit(device, drawn, bound, live) {
   const named = (drawn || []).filter((c) => /^button\d+$/.test(c)).length;
   if (!named) return null;
-  const product = device.product || 'this stick';
+  const product = device.product || tx('this stick');
   if (live && Number.isFinite(live.buttonCount)) {
     if (live.buttonCount === 0)
-      return `This picture draws ${named} buttons and ${product} reports none, so it is a picture of a different device.`;
+      return tx('This picture draws {named} buttons and {product} reports none, so it is a picture of a different device.', { named, product });
     if (named > live.buttonCount)
-      return `This picture draws ${named} buttons and ${product} reports ${live.buttonCount}, so some of it belongs to a different device.`;
+      return tx('This picture draws {named} buttons and {product} reports {count}, so some of it belongs to a different device.', { named, product, count: live.buttonCount });
     return null;
   }
   const keys = [...(bound?.keys?.() || [])];
   const buttons = keys.filter((c) => /^button\d+$/.test(c)).length;
   const axes = keys.filter((c) => !/^(button|hat)/.test(c)).length;
   if (buttons || !axes) return null;
-  return `This picture draws ${named} buttons, and nothing on ${product} is bound to a button - only ${axes} ${axes === 1 ? 'axis' : 'axes'}. It may be a picture of a different device; the live read would say for certain.`;
+  return txn(axes,
+    'This picture draws {named} buttons, and nothing on {product} is bound to a button - only {count} axis. It may be a picture of a different device; the live read would say for certain.',
+    'This picture draws {named} buttons, and nothing on {product} is bound to a button - only {count} axes. It may be a picture of a different device; the live read would say for certain.',
+    { named, product });
 }
 
 /**
@@ -11504,8 +11531,10 @@ function controlsDrawGrid(holder, device, bound) {
 
   const grid = el('div', 'controls-grid');
   if (count > 0) grid.append(el('div', 'controls-grid-title', live
-    ? `Buttons · ${count}, as Windows reports the stick`
-    : `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
+    ? tx('Buttons · {count}, as Windows reports the stick', { count })
+    : highest
+      ? tx('Buttons · to {count}, the highest your profile mentions being {highest}', { count, highest })
+      : tx('Buttons · to {count}, the highest your profile mentions being none', { count })));
   const cells = el('div', 'controls-grid-buttons');
   for (let i = 1; i <= count; i++) {
     const control = `button${i}`;
@@ -11513,7 +11542,7 @@ function controlsDrawGrid(holder, device, bound) {
     const here = bound.get(control) || [];
     const cell = el('div', `controls-grid-button${here.length ? ' bound' : ''}`, String(i));
     cell.dataset.control = control;
-    cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+    cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : tx('nothing bound');
     if (here.length) cell.append(el('span', 'controls-grid-label', here.map((b) => b.label).join(' / ')));
     cells.append(cell);
   }
@@ -11523,7 +11552,7 @@ function controlsDrawGrid(holder, device, bound) {
   hats.sort((a, b) => a - b);
   for (const hat of hats) {
     const cross = el('div', 'controls-grid-hat');
-    cross.append(el('div', 'controls-grid-title', `Hat ${hat}`));
+    cross.append(el('div', 'controls-grid-title', tx('Hat {number}', { number: hat })));
     const pad = el('div', 'controls-grid-cross');
     for (const dir of ['up', 'left', 'right', 'down']) {
       const control = `hat${hat}_${dir}`;
@@ -11531,7 +11560,7 @@ function controlsDrawGrid(holder, device, bound) {
       const here = bound.get(control) || [];
       const cell = el('div', `controls-grid-button ${dir}${here.length ? ' bound' : ''}`, { up: '▲', down: '▼', left: '◀', right: '▶' }[dir]);
       cell.dataset.control = control;
-      cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+      cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : tx('nothing bound');
       pad.append(cell);
     }
     cross.append(pad);
@@ -11549,8 +11578,8 @@ function controlsDrawGrid(holder, device, bound) {
   if (shown.length) {
     const bars = el('div', 'controls-grid-axes');
     bars.append(el('div', 'controls-grid-title', live
-      ? `Axes · ${live.axisCount}, as Windows reports the device`
-      : `Axes · ${shown.length} your profile binds`));
+      ? tx('Axes · {count}, as Windows reports the device', { count: live.axisCount })
+      : tx('Axes · {count} your profile binds', { count: shown.length })));
     for (const axis of shown) {
       controls.push(axis);
       bars.append(controlsAxisGauge(device, axis, bound.get(axis) || []));
@@ -11571,15 +11600,15 @@ function controlsDrawGrid(holder, device, bound) {
 function controlsGridWords(buttons, axes, live) {
   if (!buttons && axes)
     return live
-      ? 'A stand-in until a picture is chosen. Windows reports no buttons on this device, so its axes are all there is to draw.'
-      : 'A stand-in until a picture is chosen. Nothing on this device is bound to a button - only axes - so only its axes are drawn. The live read would say whether it has buttons nobody has used.';
+      ? tx('A stand-in until a picture is chosen. Windows reports no buttons on this device, so its axes are all there is to draw.')
+      : tx('A stand-in until a picture is chosen. Nothing on this device is bound to a button - only axes - so only its axes are drawn. The live read would say whether it has buttons nobody has used.');
   if (!buttons && !axes)
     return live
-      ? 'Windows reports no buttons and no axes on this device.'
-      : 'Nothing in your profile binds anything on this device, and the sticks cannot be read here, so there is nothing to draw yet.';
+      ? tx('Windows reports no buttons and no axes on this device.')
+      : tx('Nothing in your profile binds anything on this device, and the sticks cannot be read here, so there is nothing to draw yet.');
   return live
-    ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
-    : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.';
+    ? tx('A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.')
+    : tx('A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.');
 }
 
 /** The order Windows reports axes in, which is how a live reading is indexed. */
@@ -11588,10 +11617,10 @@ const CONTROLS_AXIS_ORDER = ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', '
 /** An axis in words: the game's name is terse and the same for every device. */
 function controlsAxisWords(axis) {
   const rot = /^rot([xyz])$/.exec(axis);
-  if (rot) return `rotation ${rot[1].toUpperCase()}`;
+  if (rot) return tx('rotation {axis}', { axis: rot[1].toUpperCase() });
   const slider = /^slider(\d+)$/.exec(axis);
-  if (slider) return `slider ${slider[1]}`;
-  return /^[xyz]$/.test(axis) ? `${axis.toUpperCase()} axis` : axis;
+  if (slider) return tx('slider {number}', { number: slider[1] });
+  return /^[xyz]$/.test(axis) ? tx('{axis} axis', { axis: axis.toUpperCase() }) : axis;
 }
 
 /**
@@ -11617,7 +11646,7 @@ function controlsAxisGauge(device, axis, here) {
     const band = el('div', 'controls-axis-dead');
     band.style.left = `${Math.max(0, 50 - dead * 50)}%`;
     band.style.width = `${Math.min(100, dead * 100)}%`;
-    band.title = `dead zone ${Math.round(dead * 1000) / 10}%`;
+    band.title = tx('dead zone {percent}%', { percent: Math.round(dead * 1000) / 10 });
     track.append(band);
   }
   track.append(el('div', 'controls-axis-centre'));
@@ -11627,7 +11656,7 @@ function controlsAxisGauge(device, axis, here) {
   row.append(track);
 
   row.append(el('div', `controls-axis-gauge-what${here.length ? '' : ' muted'}`,
-    here.length ? here.map((b) => b.label).join(' / ') : 'nothing bound'));
+    here.length ? here.map((b) => b.label).join(' / ') : tx('nothing bound')));
   return row;
 }
 
@@ -11843,22 +11872,26 @@ function paintControlsLive() {
   if (!note) return;
   if (!controlsLive) { note.textContent = ''; return; }
   if (!controlsLive.available) {
-    note.textContent = controlsLive.reason || 'The sticks cannot be read here.';
+    note.textContent = controlsLive.reason || tx('The sticks cannot be read here.');
     return;
   }
   const live = controlsLiveDevice(device);
   const twins = device?.guid ? (controlsLive.devices || []).filter((d) => d.guid?.toLowerCase() === device.guid.toLowerCase()).length : 0;
   if (!live) {
     note.textContent = twins > 1
-      ? `Two of this product are plugged in; Windows cannot say which is ${device.key}, so nothing is lit.`
-      : device?.guid ? 'This stick is not plugged in right now.' : '';
+      ? tx('Two of this product are plugged in; Windows cannot say which is {stick}, so nothing is lit.', { stick: device.key })
+      : device?.guid ? tx('This stick is not plugged in right now.') : '';
     for (const control of controlsLiveLit) controlsHighlight(control, false);
     controlsLiveLit = new Set();
     return;
   }
   const active = new Set(controlsLiveControls(live));
   const words = [...active].map(controlsControlLabel);
-  note.textContent = `Live · ${live.buttonCount} buttons, ${live.axisCount} axes, ${live.hatCount} hat${live.hatCount === 1 ? '' : 's'} · ${words.length ? `pressed: ${words.join(', ')}` : 'press a button to see it'}`;
+  note.textContent = [
+    tx('Live'),
+    [txn(live.buttonCount, '{count} button', '{count} buttons'), txn(live.axisCount, '{count} axis', '{count} axes'), txn(live.hatCount, '{count} hat', '{count} hats')].join(', '),
+    words.length ? tx('pressed: {controls}', { controls: words.join(', ') }) : tx('press a button to see it'),
+  ].join(' · ');
   for (const control of controlsLiveLit) if (!active.has(control)) controlsHighlight(control, false);
   for (const control of active) if (!controlsLiveLit.has(control)) controlsHighlight(control, true);
   controlsLiveLit = active;
@@ -11955,7 +11988,7 @@ function renderControlsPending() {
   if (!box) return;
   box.hidden = !controlsPending.length;
   if (!controlsPending.length) return;
-  $('#controls-pending-title').textContent = `${controlsPending.length} change${controlsPending.length === 1 ? '' : 's'} to apply`;
+  $('#controls-pending-title').textContent = txn(controlsPending.length, '{count} change to apply', '{count} changes to apply');
   const list = $('#controls-pending-list');
   list.textContent = '';
   const sticks = new Map(controlsSticks().map((d) => [d.key, d]));
@@ -11963,24 +11996,24 @@ function renderControlsPending() {
     const li = el('li');
     const stick = sticks.get(ControlInput_deviceKey(c.input));
     const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
-    li.append(el('span', null, c.remove ? `${c.label}: unbind from ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
+    li.append(el('span', null, c.remove ? tx('{action}: unbind from {where}', { action: c.label, where }) : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
     if (!c.remove) {
       // A staged change replaces the exact input's current assignment. A
       // second action is never left sharing the same plain button to be
       // resolved differently by the game's context rules.
       const now = controlsBoundNow(c.input).filter((l) => l !== c.label);
-      if (now.length) li.append(el('span', 'muted', ` (was ${now.join(', ')})`));
+      if (now.length) li.append(el('span', 'muted', ` (${tx('was {part}', { part: now.join(', ') })})`));
     }
-    const undo = el('button', 'ghost small', 'undo');
+    const undo = el('button', 'ghost small', tx('undo'));
     undo.type = 'button';
     undo.addEventListener('click', () => controlsUnstage(i));
     li.append(undo);
     list.append(li);
   });
-  $('#controls-pending-apply').textContent = controlsModel?.gameRunning ? 'Apply as an import file' : 'Apply to the profile';
+  $('#controls-pending-apply').textContent = controlsModel?.gameRunning ? tx('Apply as an import file') : tx('Apply to the profile');
   $('#controls-pending-note').textContent = controlsModel?.gameRunning
-    ? 'Star Citizen is running: the changes are written as a file the keybinding screen imports.'
-    : 'Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.';
+    ? tx('Star Citizen is running: the changes are written as a file the keybinding screen imports.')
+    : tx('Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.');
 }
 
 async function controlsApplyBindings(button) {
@@ -11997,17 +12030,17 @@ async function controlsApplyBindings(button) {
       }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    if (!response.ok) { note.textContent = result.message || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
     controlsPending = [];
     if (result.how === 'live') {
       await loadControls();
-      $('#controls-status').textContent += ' Bindings written; the profile as it was is kept under Backups.';
+      $('#controls-status').textContent += ` ${tx('Bindings written; the profile as it was is kept under Backups.')}`;
     } else {
       renderControlsPending();
-      $('#controls-status').textContent = `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+      $('#controls-status').textContent = tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
     }
   } catch (err) {
-    note.textContent = `Could not apply: ${err.message}`;
+    note.textContent = tx('Could not apply: {problem}', { problem: err.message });
   } finally {
     button.disabled = false;
   }
@@ -12017,12 +12050,12 @@ $('#controls-pending-apply')?.addEventListener('click', (e) => controlsApplyBind
 $('#controls-pending-discard')?.addEventListener('click', () => { controlsPending = []; renderControlsPending(); });
 
 /** The modes a binding can be given; blank keeps the action's own. */
-const CONTROLS_MODES = [['', 'the action\'s own'], ['tap', 'tap'], ['press', 'press'], ['hold', 'hold'], ['double_tap', 'double tap'], ['delayed_press', 'long press'], ['delayed_press_long', 'longer press']];
+const CONTROLS_MODES = [['', 'the action\'s own'], ['tap', 'tap'], ['press', 'press'], ['hold', 'hold down'], ['double_tap', 'double tap'], ['delayed_press', 'long press'], ['delayed_press_long', 'longer press']];
 
 function controlsModePicker() {
   const select = el('select', 'select controls-mode-pick');
-  select.title = 'How the binding fires; the action\'s own unless you say';
-  for (const [value, label] of CONTROLS_MODES) select.append(new Option(label, value));
+  select.title = tx('How the binding fires; the action\'s own unless you say');
+  for (const [value, label] of CONTROLS_MODES) select.append(new Option(tx(label), value));
   return select;
 }
 
@@ -12040,10 +12073,10 @@ function controlsActionPicker(current, choose) {
   const wrap = el('div', 'controls-action-picker');
   const search = el('input', 'search controls-action-search');
   search.type = 'search';
-  search.placeholder = 'Find action, or browse…';
+  search.placeholder = tx('Find action, or browse…');
   search.autocomplete = 'off';
   search.spellcheck = false;
-  search.title = 'Type at least two letters to search, or open the box to browse by group';
+  search.title = tx('Type at least two letters to search, or open the box to browse by group');
   const results = el('div', 'controls-action-results');
   results.hidden = true;
   const maps = new Map((controlsModel?.catalogue?.maps || []).map((map) => [map.name, map]));
@@ -12083,7 +12116,7 @@ function controlsActionPicker(current, choose) {
       }).slice(0, 12);
       if (!matches.length) {
         results.className = 'controls-action-results muted small';
-        results.textContent = 'No action matches that search.';
+        results.textContent = tx('No action matches that search.');
         return;
       }
       for (const action of matches) results.append(actionRow(action));
@@ -12092,13 +12125,13 @@ function controlsActionPicker(current, choose) {
 
     // Nothing typed: browse. One map's actions if one is open, else the maps.
     if (group) {
-      const back = el('button', 'controls-action-back', `‹ all groups`);
+      const back = el('button', 'controls-action-back', `‹ ${tx('all groups')}`);
       back.type = 'button';
       back.addEventListener('click', () => { group = null; render(); search.focus(); });
       results.append(back);
       const map = maps.get(group);
       const mine = actions.filter((a) => a.actionMap === group);
-      if (!mine.length) results.append(el('div', 'muted small', `${mapLabel(map, group)} binds nothing.`));
+      if (!mine.length) results.append(el('div', 'muted small', tx('{group} binds nothing.', { group: mapLabel(map, group) })));
       for (const action of mine) results.append(actionRow(action));
       return;
     }
@@ -12110,7 +12143,7 @@ function controlsActionPicker(current, choose) {
       const button = el('button', 'controls-action-group');
       button.type = 'button';
       button.append(el('span', 'controls-action-result-label', mapLabel(map, map.name)));
-      button.append(el('span', 'controls-action-result-map', `${count} action${count === 1 ? '' : 's'}`));
+      button.append(el('span', 'controls-action-result-map', txn(count, '{count} action', '{count} actions')));
       button.addEventListener('click', () => { group = map.name; render(); });
       results.append(button);
     }
@@ -12133,9 +12166,9 @@ function controlsActionPicker(current, choose) {
   }, 150));
   wrap.append(search, results);
   if (current?.length) {
-    const remove = el('button', 'ghost small controls-action-remove', 'unbind');
+    const remove = el('button', 'ghost small controls-action-remove', tx('unbind'));
     remove.type = 'button';
-    remove.title = 'Unbind everything now on this control';
+    remove.title = tx('Unbind everything now on this control');
     remove.addEventListener('click', () => choose('__remove__'));
     wrap.append(remove);
   }
@@ -12148,9 +12181,9 @@ function controlsInputPicker() {
   const stick = el('select', 'select');
   for (const d of controlsSticks()) stick.append(new Option(d.product, d.key));
   const control = el('select', 'select');
-  for (let i = 1; i <= 32; i++) control.append(new Option(`button ${i}`, `button${i}`));
-  for (const h of [1, 2]) for (const dir of ['up', 'down', 'left', 'right']) control.append(new Option(`hat ${h} ${dir}`, `hat${h}_${dir}`));
-  for (const a of ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2']) control.append(new Option(`${a} axis`, a));
+  for (let i = 1; i <= 32; i++) control.append(new Option(tx('button {number}', { number: i }), `button${i}`));
+  for (const h of [1, 2]) for (const dir of ['up', 'down', 'left', 'right']) control.append(new Option(tx(CONTROLS_HAT_WORDS[dir], { number: h }), `hat${h}_${dir}`));
+  for (const a of ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2']) control.append(new Option(tx('{axis} axis', { axis: a }), a));
   wrap.append(stick, control);
   wrap.value = () => `${stick.value}_${control.value}`;
   wrap.stick = stick;
@@ -12171,7 +12204,7 @@ function renderControlsActions() {
   if (select && select.options.length !== categories.length + 1) {
     const keep = select.value;
     select.textContent = '';
-    select.append(new Option('Every category', ''));
+    select.append(new Option(tx('Every category'), ''));
     for (const c of categories) select.append(new Option(c, c));
     select.value = categories.includes(keep) ? keep : '';
   }
@@ -12211,7 +12244,7 @@ function renderControlsActions() {
       tr.append(name);
       tr.append(el('td', 'muted', `${map.label}${map.category ? ` · ${map.category}` : ''}`));
       const on = el('td');
-      if (!onSticks.length) on.append(el('span', 'muted', cleared ? 'cleared - the default was taken off' : a.joystick ? `default: ${a.joystick}` : 'nothing'));
+      if (!onSticks.length) on.append(el('span', 'muted', cleared ? tx('cleared - the default was taken off') : a.joystick ? tx('default: {input}', { input: a.joystick }) : tx('nothing')));
       for (const b of onSticks) {
         const line = el('div', 'controls-bound');
         const stick = sticks.get(b.input.deviceKey);
@@ -12220,25 +12253,25 @@ function renderControlsActions() {
         on.append(line);
       }
       tr.append(on);
-      tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? `default: ${a.keyboard}` : '—'));
+      tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? tx('default: {input}', { input: a.keyboard }) : '—'));
       tr.append(el('td', 'num muted', controlsModeWord((onSticks[0] || mine[0])?.activationMode || a.activationMode)));
       // Bind: a stick and a control for this action; × on a binding takes it off.
       const bind = el('td', 'controls-bind-cell');
       for (const b of onSticks) {
         const off = el('button', 'ghost small', `× ${b.input.label}`);
         off.type = 'button';
-        off.title = `Take this action off ${sticks.get(b.input.deviceKey)?.product || b.input.deviceKey}`;
+        off.title = tx('Take this action off {stick}', { stick: sticks.get(b.input.deviceKey)?.product || b.input.deviceKey });
         off.addEventListener('click', () => controlsStage({ actionMap: map.name, action: a.name, input: b.input.raw, remove: true, label: a.label }));
         bind.append(off);
       }
       if (controlsSticks().length) {
-        const add = el('button', 'ghost small', 'Bind to…');
+        const add = el('button', 'ghost small', tx('Bind to…'));
         add.type = 'button';
         add.addEventListener('click', () => {
           add.hidden = true;
           const picker = controlsInputPicker();
           const mode = controlsModePicker();
-          const ok = el('button', 'ghost small', 'Stage');
+          const ok = el('button', 'ghost small', tx('Stage'));
           ok.type = 'button';
           ok.addEventListener('click', () => {
             controlsStage({ actionMap: map.name, action: a.name, input: picker.value(), label: a.label, activationMode: mode.value || null });
@@ -12255,7 +12288,12 @@ function renderControlsActions() {
       body.append(tr);
     }
   }
-  $('#controls-actions-count').textContent = `${shown} of ${total} actions${category ? ` in ${category}` : ''}${unboundOnly ? ' on no stick' : ''}${reboundOnly ? ' you rebound' : ''}.`;
+  $('#controls-actions-count').textContent = [
+    tx('{shown} of {total} actions', { shown, total }),
+    category ? tx('in {category}', { category }) : null,
+    unboundOnly ? tx('on no stick') : null,
+    reboundOnly ? tx('you rebound') : null,
+  ].filter(Boolean).join(' ') + '.';
 }
 
 for (const id of ['#controls-category', '#controls-unbound', '#controls-rebound'])
@@ -12281,11 +12319,13 @@ function renderControlsBackups() {
   body.textContent = '';
   const note = $('#controls-backups-note');
   if (!controlsBackups.length) {
-    note.textContent = 'Nothing kept yet. The first copy is taken when the game has written a profile.';
+    note.textContent = tx('Nothing kept yet. The first copy is taken when the game has written a profile.');
     $('#controls-diff').hidden = true;
     return;
   }
-  note.textContent = `${controlsBackups.length} version${controlsBackups.length === 1 ? '' : 's'} kept. Tick two to see what changed between them; tick one to see what changed since.`;
+  note.textContent = txn(controlsBackups.length,
+    '{count} version kept. Tick two to see what changed between them; tick one to see what changed since.',
+    '{count} versions kept. Tick two to see what changed between them; tick one to see what changed since.');
 
   controlsBackups.forEach((b, i) => {
     const tr = el('tr');
@@ -12301,15 +12341,15 @@ function renderControlsBackups() {
     pick.append(box);
     tr.append(pick);
     const when = el('td', null, `${dateOf(b.writtenAt)} ${shortTimeOf(b.writtenAt)}`);
-    if (i === 0) when.append(el('span', 'controls-latest', ' latest'));
+    if (i === 0) when.append(el('span', 'controls-latest', ` ${tx('latest')}`));
     tr.append(when);
     tr.append(el('td', 'muted', relative(b.takenAt)));
     tr.append(el('td', 'num', `${Math.round(b.bytes / 1024)} KB`));
     const since = el('td', 'muted');
     const previous = controlsBackups[i + 1];
-    since.textContent = previous ? 'see the diff' : 'first kept';
+    since.textContent = previous ? tx('see the diff') : tx('first kept');
     if (previous) {
-      const link = el('button', 'ghost small', 'Since the one before');
+      const link = el('button', 'ghost small', tx('Since the one before'));
       link.type = 'button';
       link.addEventListener('click', () => { controlsDiffPick = [previous.id, b.id]; renderControlsBackups(); showControlsDiff().catch(() => {}); });
       since.textContent = '';
@@ -12317,20 +12357,20 @@ function renderControlsBackups() {
     }
     tr.append(since);
     const act = el('td', 'controls-backup-actions');
-    const restore = el('button', 'ghost small', 'Restore');
+    const restore = el('button', 'ghost small', tx('Restore'));
     restore.type = 'button';
-    restore.title = 'Write this version back over the game\'s profile - with the game closed';
+    restore.title = tx('Write this version back over the game\'s profile - with the game closed');
     restore.addEventListener('click', () => controlsRestore(b, restore));
     act.append(restore);
-    const export_ = el('button', 'ghost small', 'Export');
+    const export_ = el('button', 'ghost small', tx('Export'));
     export_.type = 'button';
-    export_.title = 'Write this version as a file the game imports, with the sticks retargeted if they moved';
+    export_.title = tx('Write this version as a file the game imports, with the sticks retargeted if they moved');
     export_.addEventListener('click', () => { controlsExportSource = b.id; renderControlsExport(); });
     act.append(export_);
-    const download = el('a', 'ghost small', 'Download');
+    const download = el('a', 'ghost small', tx('Download'));
     download.href = `/api/controls/backups/${encodeURIComponent(b.id)}/file`;
     download.setAttribute('download', `actionmaps-${b.id}.xml`);
-    download.title = 'This version as a file, to keep anywhere';
+    download.title = tx('This version as a file, to keep anywhere');
     act.append(download);
     tr.append(act);
     body.append(tr);
@@ -12346,20 +12386,22 @@ function renderControlsBackups() {
 async function controlsRestore(backup, button) {
   const note = $('#controls-backups-note');
   const when = `${dateOf(backup.writtenAt)} ${shortTimeOf(backup.writtenAt)}`;
-  if (typeof confirm === 'function' && !confirm(`Write the version of ${when} over the game's keybinding profile? The profile as it is now is kept first.`)) return;
+  if (typeof confirm === 'function' && !confirm(tx('Write the version of {when} over the game\'s keybinding profile? The profile as it is now is kept first.', { when }))) return;
   button.disabled = true;
   try {
     const response = await fetch('/api/controls/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: backup.id }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      note.textContent = result.message || result.title || `The restore failed (${response.status}).`;
+      note.textContent = result.message || result.title || tx('The restore failed ({status}).', { status: response.status });
       return;
     }
-    note.textContent = `Restored the version of ${when}. The game reads it at its next start.${result.keptBefore ? ' The profile as it was is kept above it.' : ''}`;
+    note.textContent = result.keptBefore
+      ? tx('Restored the version of {when}. The game reads it at its next start. The profile as it was is kept above it.', { when })
+      : tx('Restored the version of {when}. The game reads it at its next start.', { when });
     await loadControlsBackups();
     await loadControls();
   } catch (err) {
-    note.textContent = `The restore failed: ${err.message}`;
+    note.textContent = tx('The restore failed: {problem}', { problem: err.message });
   } finally {
     button.disabled = false;
   }
@@ -12371,7 +12413,7 @@ $('#controls-import-file')?.addEventListener('change', (event) => {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   controlsImportFile(file)
-    .catch((err) => { $('#controls-backups-note').textContent = `That file could not be added: ${err.message}`; })
+    .catch((err) => { $('#controls-backups-note').textContent = tx('That file could not be added: {problem}', { problem: err.message }); })
     // Cleared so that picking the same file twice still fires a change.
     .finally(() => { event.target.value = ''; });
 });
@@ -12386,8 +12428,11 @@ async function controlsImportFile(file) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.message || String(response.status));
   note.textContent = result.taken
-    ? `Added: ${result.bindings} bindings on ${result.devices} devices.`
-    : 'Already kept: that file is one of the versions here.';
+    ? tx('Added: {bindings} on {devices}.', {
+      bindings: txn(result.bindings, '{count} binding', '{count} bindings'),
+      devices: txn(result.devices, '{count} device', '{count} devices'),
+    })
+    : tx('Already kept: that file is one of the versions here.');
   await loadControlsBackups();
 }
 
@@ -12396,10 +12441,10 @@ $('#controls-keep')?.addEventListener('click', async (e) => {
   button.disabled = true;
   try {
     const kept = await getJson2('/api/controls/backups');
-    $('#controls-backups-note').textContent = kept.taken ? 'Kept.' : 'Already kept: the profile has not changed since the latest copy.';
+    $('#controls-backups-note').textContent = kept.taken ? tx('Kept.') : tx('Already kept: the profile has not changed since the latest copy.');
     await loadControlsBackups();
   } catch {
-    $('#controls-backups-note').textContent = 'Could not keep a copy.';
+    $('#controls-backups-note').textContent = tx('Could not keep a copy.');
   } finally {
     button.disabled = false;
   }
@@ -12419,9 +12464,9 @@ async function showControlsDiff() {
     return;
   }
   box.hidden = false;
-  const name = (id) => id === 'live' ? 'the profile as it is now' : `the copy of ${dateOf(controlsBackups.find((x) => x.id === id)?.writtenAt || Date.now())}`;
-  $('#controls-diff-title').textContent = `From ${name(a)} to ${name(b)}`;
-  $('#controls-diff-count').textContent = changes.length ? `${changes.length} action${changes.length === 1 ? '' : 's'} changed` : 'no binding changed';
+  const name = (id) => id === 'live' ? tx('the profile as it is now') : tx('the copy of {date}', { date: dateOf(controlsBackups.find((x) => x.id === id)?.writtenAt || Date.now()) });
+  $('#controls-diff-title').textContent = tx('From {from} to {to}', { from: name(a), to: name(b) });
+  $('#controls-diff-count').textContent = changes.length ? txn(changes.length, '{count} action changed', '{count} actions changed') : tx('no binding changed');
   const body = $('#controls-diff-table tbody');
   body.textContent = '';
   for (const c of changes) {
@@ -12429,8 +12474,8 @@ async function showControlsDiff() {
     const action = el('td', null, c.label);
     action.append(el('div', 'armoury-kind', c.map));
     tr.append(action);
-    tr.append(el('td', c.before.length ? 'controls-was' : 'muted', c.before.length ? c.before.join(', ') : 'nothing'));
-    tr.append(el('td', c.after.length ? 'controls-now' : 'muted', c.after.length ? c.after.join(', ') : 'nothing'));
+    tr.append(el('td', c.before.length ? 'controls-was' : 'muted', c.before.length ? c.before.join(', ') : tx('nothing')));
+    tr.append(el('td', c.after.length ? 'controls-now' : 'muted', c.after.length ? c.after.join(', ') : tx('nothing')));
     body.append(tr);
   }
 }
@@ -12440,7 +12485,7 @@ function renderControlsExport() {
   if (!box) return;
   box.hidden = false;
   const source = controlsExportSource || 'live';
-  $('#controls-export-source').textContent = source === 'live' ? 'from the profile as it is now' : `from the copy ${source}`;
+  $('#controls-export-source').textContent = source === 'live' ? tx('from the profile as it is now') : tx('from the copy {source}', { source });
   $('#controls-export-result').textContent = '';
   $('#controls-export-install').hidden = true;
 
@@ -12450,7 +12495,7 @@ function renderControlsExport() {
   const sticks = controlsSticks();
   for (const d of sticks) {
     const row = el('label', 'controls-retarget-row');
-    row.append(el('span', null, `${d.product} was ${d.key}, now`));
+    row.append(el('span', null, tx('{stick} was {key}, now', { stick: d.product, key: d.key })));
     const select = el('select', 'select');
     select.dataset.from = String(d.instance);
     for (let i = 1; i <= Math.max(8, sticks.length); i++) select.append(new Option(`js${i}`, String(i)));
@@ -12475,11 +12520,11 @@ async function controlsWriteExport(install) {
     if (!response.ok) throw new Error(String(response.status));
     const written = await response.json();
     result.textContent = written.installed
-      ? `In the game's folder as ${written.mappings}. In the game: Options → Keybindings → import "${written.name}", or at the console: ${written.command}.`
-      : `Written to ${written.path}. Not yet where the game reads: press the second button to copy it there, or copy it yourself.`;
+      ? tx('In the game\'s folder as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: written.mappings, name: written.name, command: written.command })
+      : tx('Written to {path}. Not yet where the game reads: press the second button to copy it there, or copy it yourself.', { path: written.path });
     $('#controls-export-install').hidden = written.installed;
   } catch (err) {
-    result.textContent = `The export failed: ${err.message}`;
+    result.textContent = tx('The export failed: {problem}', { problem: err.message });
   }
 }
 
@@ -12492,30 +12537,32 @@ function renderControlsPictures() {
   const t = controlsModel?.templates;
   if (!t) return;
   $('#controls-templates-status').textContent = t.enabled
-    ? `on · ${t.available.filter((x) => x.maker !== 'yours').length} in the library${t.fetchedAt ? `, listed ${relative(t.fetchedAt)}` : ''}`
-    : t.available.length ? 'off · what was fetched is kept' : 'off';
+    ? `${tx('on')} · ${t.fetchedAt
+      ? tx('{count} in the library, listed {when}', { count: t.available.filter((x) => x.maker !== 'yours').length, when: relative(t.fetchedAt) })
+      : tx('{count} in the library', { count: t.available.filter((x) => x.maker !== 'yours').length })}`
+    : t.available.length ? tx('off · what was fetched is kept') : tx('off');
   $('#controls-templates-enable').hidden = t.enabled;
   $('#controls-templates-disable').hidden = !t.enabled;
   const folder = $('#controls-folder');
   if (folder && document.activeElement !== folder) folder.value = t.folder || '';
   $('#controls-folder-note').textContent = t.folder
-    ? `${t.available.filter((x) => x.maker === 'yours').length} SVG${t.available.filter((x) => x.maker === 'yours').length === 1 ? '' : 's'} in ${t.folder}`
+    ? txn(t.available.filter((x) => x.maker === 'yours').length, '{count} SVG in {folder}', '{count} SVGs in {folder}', { folder: t.folder })
     : '';
 
   const box = $('#controls-assign');
   box.textContent = '';
   const sticks = controlsSticks();
-  if (!sticks.length) { box.append(el('p', 'muted', 'No stick in the profile to give a picture to.')); return; }
-  if (!t.available.length) { box.append(el('p', 'muted', 'No pictures to choose from yet.')); return; }
+  if (!sticks.length) { box.append(el('p', 'muted', tx('No stick in the profile to give a picture to.'))); return; }
+  if (!t.available.length) { box.append(el('p', 'muted', tx('No pictures to choose from yet.'))); return; }
   for (const d of sticks) {
     const row = el('label', 'controls-assign-row');
     row.append(el('span', 'controls-assign-name', `${d.product} (${d.key})`));
     const select = el('select', 'select');
-    select.append(new Option(d.template && !t.assignments[d.guid] ? `Matched: ${d.template.name}` : 'None', ''));
+    select.append(new Option(d.template && !t.assignments[d.guid] ? tx('Matched: {picture}', { picture: d.template.name }) : tx('None'), ''));
     let maker = null;
     let group = null;
     for (const x of t.available) {
-      if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; select.append(group); }
+      if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || tx('Library'); select.append(group); }
       group.append(new Option(x.name, x.key));
     }
     select.value = t.assignments[d.guid] || '';
@@ -12531,17 +12578,17 @@ function renderControlsPictures() {
 /** Turns the library on and reloads; the button that asked is disabled while it happens. */
 async function controlsFetchLibrary(button) {
   button.disabled = true;
-  button.textContent = 'Fetching…';
+  button.textContent = tx('Fetching…');
   try {
     await getJson2('/api/controls/templates/enable');
     await loadControls();
   } catch (err) {
-    button.textContent = 'Fetch the pictures';
+    button.textContent = tx('Fetch the pictures');
     button.disabled = false;
     const status = $('#controls-templates-status');
-    if (status) status.textContent = `could not fetch the library: ${err.message}`;
+    if (status) status.textContent = tx('could not fetch the library: {problem}', { problem: err.message });
     const note = $('#controls-picture-note');
-    if (note) note.append(el('span', 'muted', ` Could not fetch the library: ${err.message}`));
+    if (note) note.append(el('span', 'muted', ` ${tx('Could not fetch the library: {problem}', { problem: err.message })}`));
   }
 }
 
@@ -12554,7 +12601,7 @@ $('#controls-templates-disable')?.addEventListener('click', async () => {
 
 $('#controls-folder-save')?.addEventListener('click', async () => {
   const response = await fetch('/api/controls/templates/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: $('#controls-folder').value }) });
-  if (!response.ok) { $('#controls-folder-note').textContent = 'No such folder.'; return; }
+  if (!response.ok) { $('#controls-folder-note').textContent = tx('No such folder.'); return; }
   await loadControls();
 });
 
@@ -12898,7 +12945,7 @@ async function renderOverlayLayout() {
       box.addEventListener('change', saveOverlayLayout);
 
       label.append(box);
-      label.append(el('span', null, OVERLAY_LABELS[name] || name));
+      label.append(el('span', null, tx(OVERLAY_LABELS[name] || name)));
       node.append(label);
     }
   };
@@ -12959,15 +13006,15 @@ $('#overlay-reload')?.addEventListener('click', async (e) => {
 
   try {
     await fetch('/api/overlay/reload', { method: 'POST' });
-    status.textContent = 'the widget will reload within a few seconds';
+    status.textContent = tx('the widget will reload within a few seconds');
   } catch {
-    status.textContent = 'could not reach the server';
+    status.textContent = tx('could not reach the server');
   } finally {
     e.currentTarget.disabled = false;
   }
 });
 
-async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
+async function saveOverlayLayout(savedMessage = tx('saved'), chosen = null) {
   const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
   const layout = chosen || {
     tabs: pick('#overlay-tabs'),
@@ -12977,7 +13024,7 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
   };
 
   const status = $('#overlay-layout-status');
-  status.textContent = 'saving…';
+  status.textContent = tx('saving…');
 
   try {
     await fetch('/api/overlay/layout', {
@@ -12985,9 +13032,10 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(layout),
     });
-    status.textContent = savedMessage;
+    // Wired straight to change events too, where the first argument is the event.
+    status.textContent = typeof savedMessage === 'string' ? savedMessage : tx('saved');
   } catch {
-    status.textContent = 'could not save';
+    status.textContent = tx('could not save');
   }
 }
 
@@ -13011,6 +13059,12 @@ const OVERLAY_PRESETS = {
   full: null,
 };
 
+/** What saving each named layout says; one sentence each, so a translation can agree the name. */
+const OVERLAY_PRESET_SAVED = {
+  flight: 'Flight layout saved', mining: 'Mining layout saved', combat: 'Combat layout saved',
+  trading: 'Trading layout saved', minimal: 'Minimal layout saved', full: 'Full layout saved',
+};
+
 /** Applies a named layout from either the dashboard or the overlay's header. */
 /**
  * Asks the Quantum Wake app to open MFD setup.
@@ -13024,13 +13078,13 @@ async function openMfdSetup() {
   try {
     const response = await fetch('/api/mfd/setup', { method: 'POST' });
     if (response.ok) {
-      if (status) status.textContent = 'MFD setup is open on the PC. Drag it to any screen; the black backdrop clears from the screen it is on.';
+      if (status) status.textContent = tx('MFD setup is open on the PC. Drag it to any screen; the black backdrop clears from the screen it is on.');
       return true;
     }
     const answer = await response.json().catch(() => ({}));
-    if (status) status.textContent = answer.message || 'MFD setup could not be opened from here.';
+    if (status) status.textContent = answer.message || tx('MFD setup could not be opened from here.');
   } catch {
-    if (status) status.textContent = 'The app did not answer. Use MFD setup… in the tray, or Ctrl+Alt+M.';
+    if (status) status.textContent = tx('The app did not answer. Use MFD setup… in the tray, or Ctrl+Alt+M.');
   }
   return false;
 }
@@ -13053,8 +13107,7 @@ async function applyOverlayPreset(name) {
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
   const contrast = $('#overlay-high-contrast');
   if (contrast) contrast.checked = Boolean(next.highContrast);
-  await saveOverlayLayout(
-    `${name === 'full' ? 'Full' : name[0].toUpperCase() + name.slice(1)} layout saved`, next);
+  await saveOverlayLayout(tx(OVERLAY_PRESET_SAVED[name]), next);
 }
 
 $('#overlay-presets')?.addEventListener('click', event => {
@@ -18367,31 +18420,33 @@ async function loadStarStrings(check = false) {
   const state = await getJson(`/api/starstrings${check ? '?check=true' : ''}`).catch(() => null);
 
   if (!state) {
-    status.textContent = 'Could not read the install state.';
+    status.textContent = tx('Could not read the install state.');
     return;
   }
 
   $('#starstrings-remove').hidden = !state.installed;
-  $('#starstrings-install').textContent = state.installed ? 'Reinstall' : 'Install';
+  $('#starstrings-install').textContent = state.installed ? tx('Reinstall') : tx('Install');
 
   const bits = [];
 
   if (state.installed) {
-    bits.push(`Installed: ${state.release || 'unknown build'}`);
-    if (state.installedAt) bits.push(`put in place ${relative(state.installedAt)}`);
+    bits.push(tx('Installed: {build}', { build: state.release || tx('unknown build') }));
+    if (state.installedAt) bits.push(tx('put in place {when}', { when: relative(state.installedAt) }));
   } else if (state.displaced) {
-    bits.push('Installed by this app, but the files are gone — a game patch will do that. Install again to put it back.');
+    bits.push(tx('Installed by this app, but the files are gone — a game patch will do that. Install again to put it back.'));
   } else {
-    bits.push('Not installed.');
+    bits.push(tx('Not installed.'));
   }
 
   if (state.latest) {
     bits.push(state.newer
-      ? `A newer build is out: ${state.latest.name}. Install to take it.`
-      : `Newest build: ${state.latest.name}${state.installed ? ' — you have it' : ''}`);
+      ? tx('A newer build is out: {build}. Install to take it.', { build: state.latest.name })
+      : state.installed
+        ? tx('Newest build: {build} — you have it', { build: state.latest.name })
+        : tx('Newest build: {build}', { build: state.latest.name }));
   }
 
-  if (!state.gameRoot) bits.push('No game folder found, so there is nowhere to install it.');
+  if (!state.gameRoot) bits.push(tx('No game folder found, so there is nowhere to install it.'));
 
   status.textContent = bits.join(' · ');
   $('#starstrings-install').disabled = !state.gameRoot;
@@ -18446,7 +18501,7 @@ async function saveLabelOptions() {
   // between a preference and a surprise.
   const note = $('#label-options-note');
   if (note) {
-    note.textContent = 'Saved. Install again to write it into the game, then restart the game.';
+    note.textContent = tx('Saved. Install again to write it into the game, then restart the game.');
     note.hidden = false;
   }
 
@@ -18464,14 +18519,14 @@ async function loadTextOverlay() {
   const state = await getJson('/api/labels').catch(() => null);
 
   if (!state) {
-    status.textContent = 'Could not read the game text.';
+    status.textContent = tx('Could not read the game text.');
     return;
   }
 
   applyLabelOptions(state.options);
 
   $('#textoverlay-remove').hidden = !state.installed;
-  $('#textoverlay-install').textContent = state.installed ? 'Rebuild and install' : 'Install';
+  $('#textoverlay-install').textContent = state.installed ? tx('Rebuild and install') : tx('Install');
   $('#textoverlay-install').disabled = !!state.problem;
 
   if (state.problem) {
@@ -18482,10 +18537,10 @@ async function loadTextOverlay() {
   }
 
   tiles('#textoverlay-summary', [
-    ['Would be marked', state.marked],
-    ['Something sells', state.sold],
-    ['Size or class marked', state.annotated],
-    ['Not gear you shop for', state.skipped],
+    [tx('Would be marked'), state.marked],
+    [tx('Something sells'), state.sold],
+    [tx('Size or class marked'), state.annotated],
+    [tx('Not gear you shop for'), state.skipped],
   ]);
 
   // Which file it builds on decides whether another mod survives, so it is
@@ -18493,23 +18548,23 @@ async function loadTextOverlay() {
   // A base written before the last patch lacks its new strings; installing adds
   // them in the game's own words, and the page says so beside the button.
   const filledNote = state.filled
-    ? ` Installing also adds ${state.filled.toLocaleString()} strings the game has added since that text was written, which would otherwise show in game as raw keys.`
+    ? ` ${tx('Installing also adds {count} strings the game has added since that text was written, which would otherwise show in game as raw keys.', { count: state.filled.toLocaleString() })}`
     : '';
 
   $('#textoverlay-source').textContent = (state.baseSource === 'StarStrings'
-    ? 'Built on top of the StarStrings text, so both survive.'
-    : "Built on the game's own text.") + filledNote;
+    ? tx('Built on top of the StarStrings text, so both survive.')
+    : tx('Built on the game\'s own text.')) + filledNote;
 
   labelChanges = state.changes || [];
   renderLabelChanges();
 
   const bits = [];
   if (state.installed) {
-    bits.push(`Installed${state.installedAt ? ` ${relative(state.installedAt)}` : ''}`);
-    if (state.layered) bits.push('layered over StarStrings');
-    bits.push('restart Star Citizen to see it');
+    bits.push(state.installedAt ? tx('Installed {when}', { when: relative(state.installedAt) }) : tx('Installed'));
+    if (state.layered) bits.push(tx('layered over StarStrings'));
+    bits.push(tx('restart Star Citizen to see it'));
   } else {
-    bits.push('Nothing is written until you install.');
+    bits.push(tx('Nothing is written until you install.'));
   }
 
   status.textContent = bits.join(' · ');
@@ -18552,7 +18607,7 @@ function renderLabelChanges() {
   for (const line of rows.slice(0, LABELS_CAP)) {
     const tr = el('tr');
     tr.append(el('td', null, line.was));
-    tr.append(el('td', 'muted', line.category));
+    tr.append(el('td', 'muted', tx(line.category)));
     tr.append(el('td', null, line.becomes));
     body.append(tr);
   }
@@ -18568,16 +18623,14 @@ function renderLabelChanges() {
   // The total is what the page is answering for, so it is always said - a bare
   // "400 rows" would read as the whole plan when it is a tenth of it.
   if (rows.length === 0) {
-    counter.textContent = `Nothing matches "${term.trim()}" among ${labelChanges.length.toLocaleString()} renames.`;
+    counter.textContent = tx('Nothing matches "{term}" among {total} renames.', { term: term.trim(), total: labelChanges.length.toLocaleString() });
   } else if (rows.length > LABELS_CAP) {
-    counter.textContent =
-      `Showing ${LABELS_CAP} of ${rows.length.toLocaleString()} matches, `
-      + `out of ${labelChanges.length.toLocaleString()} renames — narrow the search to see the rest.`;
+    counter.textContent = tx('Showing {shown} of {count} matches, out of {total} renames — narrow the search to see the rest.',
+      { shown: LABELS_CAP, count: rows.length.toLocaleString(), total: labelChanges.length.toLocaleString() });
   } else if (term.trim()) {
-    counter.textContent =
-      `${rows.length.toLocaleString()} of ${labelChanges.length.toLocaleString()} renames match.`;
+    counter.textContent = tx('{count} of {total} renames match.', { count: rows.length.toLocaleString(), total: labelChanges.length.toLocaleString() });
   } else {
-    counter.textContent = `${labelChanges.length.toLocaleString()} renames.`;
+    counter.textContent = txn(labelChanges.length, '{count} rename.', '{count} renames.', { count: labelChanges.length.toLocaleString() });
   }
 }
 
@@ -18588,11 +18641,11 @@ function initTextOverlay() {
   onInput('#labels-search', renderLabelChanges);
 
   install.addEventListener('click', async () => {
-    $('#textoverlay-status').textContent = 'Writing…';
+    $('#textoverlay-status').textContent = tx('Writing…');
 
     const answer = await fetch('/api/labels/install', { method: 'POST' })
       .then((r) => r.json())
-      .catch(() => ({ problem: 'The write did not finish.' }));
+      .catch(() => ({ problem: tx('The write did not finish.') }));
 
     if (answer.problem) {
       $('#textoverlay-status').textContent = answer.problem;
@@ -18601,16 +18654,16 @@ function initTextOverlay() {
 
     await loadTextOverlay();
     checkTextFreshness().catch(() => {});
-    alertLine($('#textoverlay-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+    alertLine($('#textoverlay-status').parentElement, tx('Installed. Restart Star Citizen to see it.'));
   });
 
   $('#textoverlay-remove').addEventListener('click', async () => {
-    $('#textoverlay-status').textContent = 'Putting the old text back…';
+    $('#textoverlay-status').textContent = tx('Putting the old text back…');
     // A removal that could not put the old file back leaves the marks installed,
     // so saying "removed" would be a lie the page then contradicts on reload.
     const answer = await fetch('/api/labels/remove', { method: 'POST' })
       .then((r) => r.json())
-      .catch(() => ({ problem: 'The removal could not be started.' }));
+      .catch(() => ({ problem: tx('The removal could not be started.') }));
 
     if (answer.problem) $('#textoverlay-status').textContent = answer.problem;
 
@@ -18623,17 +18676,17 @@ function initStarStrings() {
   if (!install) return;
 
   $('#starstrings-check').addEventListener('click', async () => {
-    $('#starstrings-status').textContent = 'Asking GitHub…';
+    $('#starstrings-status').textContent = tx('Asking GitHub…');
     await loadStarStrings(true);
   });
 
   install.addEventListener('click', async () => {
     install.disabled = true;
-    $('#starstrings-status').textContent = 'Downloading and writing…';
+    $('#starstrings-status').textContent = tx('Downloading and writing…');
 
     const answer = await fetch('/api/starstrings/install', { method: 'POST' })
       .then((r) => r.json())
-      .catch(() => ({ problem: 'The install could not be started.' }));
+      .catch(() => ({ problem: tx('The install could not be started.') }));
 
     install.disabled = false;
 
@@ -18651,9 +18704,8 @@ function initStarStrings() {
     // exactly what somebody will want to re-read.
     const note = $('#starstrings-note');
     note.textContent = answer.relabelled
-      ? 'Installed, and your item labels were put back on top of it. '
-        + 'Restart Star Citizen to see them.'
-      : 'Installed. Restart Star Citizen to see it.';
+      ? tx('Installed, and your item labels were put back on top of it. Restart Star Citizen to see them.')
+      : tx('Installed. Restart Star Citizen to see it.');
     note.hidden = false;
   });
 
@@ -18899,7 +18951,7 @@ async function renderSettings() {
     $('#overlay-copy').hidden = !overlay.available;
 
     if (overlay.available) {
-      toggle.textContent = overlay.visible ? 'Overlay is on — hide it' : 'Show the overlay';
+      toggle.textContent = overlay.visible ? tx('Overlay is on — hide it') : tx('Show the overlay');
       toggle.classList.toggle('on', overlay.visible);
       toggle.dataset.visible = String(overlay.visible);
     }
@@ -19018,11 +19070,11 @@ function renderImportedFilter() {
   const usable = importBatches.filter((b) => b.readable && !b.hidden && b.classes.length);
   if (!usable.length) return;
 
-  host.append(el('label', 'muted', 'Show shared rows on my pages: '));
+  host.append(el('label', 'muted', `${tx('Show shared rows on my pages:')} `));
 
   const select = el('select', 'select');
-  const options = [['none', 'no'], ['all', 'from everyone']];
-  for (const batch of usable) options.push([batch.id, `only ${batch.handle || batch.sourceName}`]);
+  const options = [['none', tx('no')], ['all', tx('from everyone')]];
+  for (const batch of usable) options.push([batch.id, tx('only {who}', { who: batch.handle || batch.sourceName })]);
 
   for (const [value, label] of options) {
     const option = document.createElement('option');
@@ -19039,13 +19091,13 @@ function renderImportedFilter() {
 /** A tally, with the zeroes left out. */
 function countLine(counts) {
   const parts = [];
-  if (counts.receipts) parts.push(`${counts.receipts.toLocaleString()} trades`);
-  if (counts.blueprints) parts.push(`${counts.blueprints} blueprints`);
-  if (counts.jobs) parts.push(`${counts.jobs} jobs`);
-  if (counts.checklists) parts.push(`${counts.checklists} checklists`);
-  if (counts.trips) parts.push(`${counts.trips} flight plans`);
-  if (counts.runActions) parts.push(`${counts.runActions} run-sheet lines`);
-  if (counts.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
+  if (counts.receipts) parts.push(txn(counts.receipts, '{count} trade', '{count} trades', { count: counts.receipts.toLocaleString() }));
+  if (counts.blueprints) parts.push(txn(counts.blueprints, '{count} blueprint', '{count} blueprints'));
+  if (counts.jobs) parts.push(txn(counts.jobs, '{count} job', '{count} jobs'));
+  if (counts.checklists) parts.push(txn(counts.checklists, '{count} checklist', '{count} checklists'));
+  if (counts.trips) parts.push(txn(counts.trips, '{count} flight plan', '{count} flight plans'));
+  if (counts.runActions) parts.push(txn(counts.runActions, '{count} run-sheet line', '{count} run-sheet lines'));
+  if (counts.points) parts.push(txn(counts.points, '{count} point of interest', '{count} points of interest'));
   return parts.join(' · ');
 }
 
@@ -19060,50 +19112,50 @@ function importCard(batch) {
   const card = el('article', 'import-card');
 
   const head = el('div', 'job-head');
-  head.append(el('b', null, batch.handle || 'Someone'));
+  head.append(el('b', null, batch.handle || tx('Someone')));
   if (batch.note) head.append(el('span', 'job-kind', batch.note));
-  if (!batch.readable) head.append(el('span', 'job-kind danger', 'cannot be read'));
-  if (batch.hidden) head.append(el('span', 'job-kind', 'hidden'));
+  if (!batch.readable) head.append(el('span', 'job-kind danger', tx('cannot be read')));
+  if (batch.hidden) head.append(el('span', 'job-kind', tx('hidden')));
   head.append(el('span', 'spacer'));
 
-  const hide = el('button', 'ghost tiny', batch.hidden ? 'Show' : 'Hide');
-  hide.title = 'Hiding keeps the file. Removing does not.';
+  const hide = el('button', 'ghost tiny', batch.hidden ? tx('Show') : tx('Hide'));
+  hide.title = tx('Hiding keeps the file. Removing does not.');
   hide.addEventListener('click', () => importCall(`/api/imports/${batch.id}/hide`));
   head.append(hide);
 
-  const remove = el('button', 'ghost danger tiny', 'Remove');
-  remove.title = 'Takes this file away completely. Your own work is not touched.';
+  const remove = el('button', 'ghost danger tiny', tx('Remove'));
+  remove.title = tx('Takes this file away completely. Your own work is not touched.');
   remove.addEventListener('click', () => importCall(`/api/imports/${batch.id}`, 'DELETE'));
   head.append(remove);
   card.append(head);
 
-  card.append(el('div', 'muted', `${batch.sourceName} — imported ${dateOf(batch.importedAt)}, `
-    + `written ${dateOf(batch.exportedAt)} by Quantum Wake ${batch.producerVersion}`));
+  card.append(el('div', 'muted', `${batch.sourceName} — ${tx('imported {imported}, written {written} by Quantum Wake {version}', {
+    imported: dateOf(batch.importedAt), written: dateOf(batch.exportedAt), version: batch.producerVersion,
+  })}`));
 
   const held = countLine(batch.counts);
-  card.append(el('div', 'import-counts', held || 'Nothing left in this file.'));
+  card.append(el('div', 'import-counts', held || tx('Nothing left in this file.')));
 
   // Kept for ever and said plainly: "why does this show 41 when his file said
   // 43" has to be answerable a month later.
   const dropped = countLine(batch.rejected);
-  if (dropped) card.append(el('div', 'muted', `Could not be read: ${dropped}.`));
+  if (dropped) card.append(el('div', 'muted', tx('Could not be read: {what}.', { what: dropped })));
 
   const cut = countLine(batch.truncated);
-  if (cut) card.append(el('div', 'muted', `Too many to keep, so left out: ${cut}.`));
+  if (cut) card.append(el('div', 'muted', tx('Too many to keep, so left out: {what}.', { what: cut })));
 
   if (!batch.readable) {
-    card.append(el('div', 'muted', `This file is in format ${batch.formatVersion}, which this `
-      + 'build does not read. It is kept rather than dropped, since the copy you were sent may '
-      + 'be the only one. Update Quantum Wake, or remove it.'));
+    card.append(el('div', 'muted', tx('This file is in format {format}, which this build does not read. It is kept rather than dropped, since the copy you were sent may be the only one. Update Quantum Wake, or remove it.', { format: batch.formatVersion })));
   }
 
   if (batch.classes.length) {
     const row = el('div', 'import-classes');
-    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists'], ['points', 'points of interest']];
+    // One sentence per kind, so a translation can agree the article.
+    const named = [['receipts', 'Remove the trades'], ['blueprints', 'Remove the blueprints'], ['authored', 'Remove the jobs and lists'], ['points', 'Remove the points of interest']];
 
     for (const [key, label] of named) {
       if (!batch.classes.includes(key)) continue;
-      const drop = el('button', 'ghost tiny', `Remove the ${label}`);
+      const drop = el('button', 'ghost tiny', tx(label));
       drop.addEventListener('click', () => importCall(`/api/imports/${batch.id}/${key}`, 'DELETE'));
       row.append(drop);
     }
@@ -19122,14 +19174,11 @@ function renderImports(payload) {
   host.textContent = '';
 
   if (payload.quarantined) {
-    host.append(el('p', 'muted', 'An earlier imports file could not be read. It was kept as '
-      + `${payload.quarantined} rather than overwritten, because the files it held came from `
-      + 'other people.'));
+    host.append(el('p', 'muted', tx('An earlier imports file could not be read. It was kept as {file} rather than overwritten, because the files it held came from other people.', { file: payload.quarantined })));
   }
 
   if (!importBatches.length) {
-    host.append(el('p', 'muted', 'No shared files yet. Open one a friend sent you — it stays '
-      + 'separate from your own history, and you can remove it whenever you like.'));
+    host.append(el('p', 'muted', tx('No shared files yet. Open one a friend sent you — it stays separate from your own history, and you can remove it whenever you like.')));
     return;
   }
 
@@ -19157,7 +19206,7 @@ async function importCall(url, method = 'POST') {
  * check stays one question about how many bytes arrived.
  */
 async function importFile(file) {
-  $('#imports-status').textContent = `Reading ${file.name}…`;
+  $('#imports-status').textContent = tx('Reading {file}…', { file: file.name });
 
   const text = await new Promise((resolve) => {
     const reader = new FileReader();
@@ -19183,22 +19232,20 @@ async function sendImport(text, sourceName, force) {
   // and a deliberate re-import after a purge look identical from here.
   if (response.status === 409 && answer && answer.batch) {
     const already = answer.batch;
-    status.textContent = `You imported this on ${dateOf(already.importedAt)} — `
-      + `${countLine(already.counts) || 'nothing left in it'}. `;
+    status.textContent = `${tx('You imported this on {date} — {held}.', { date: dateOf(already.importedAt), held: countLine(already.counts) || tx('nothing left in it') })} `;
 
-    const again = el('button', 'ghost tiny', 'Import it again anyway');
+    const again = el('button', 'ghost tiny', tx('Import it again anyway'));
     again.addEventListener('click', () => sendImport(text, sourceName, true).catch(() => {}));
     status.append(again);
     return;
   }
 
   if (!response.ok) {
-    status.textContent = (answer && answer.message) || 'That file could not be read.';
+    status.textContent = (answer && answer.message) || tx('That file could not be read.');
     return;
   }
 
-  status.textContent = `Imported ${countLine(answer.batch.counts) || 'nothing'} from `
-    + `${answer.batch.handle || 'someone'}.`;
+  status.textContent = tx('Imported {what} from {who}.', { what: countLine(answer.batch.counts) || tx('nothing'), who: answer.batch.handle || tx('someone') });
 
   await loadImports();
 }
@@ -19210,7 +19257,7 @@ $('#imports-file')?.addEventListener('change', (event) => {
   if (!file) return;
 
   importFile(file)
-    .catch(() => { $('#imports-status').textContent = 'That file could not be read.'; })
+    .catch(() => { $('#imports-status').textContent = tx('That file could not be read.'); })
     // Cleared so that picking the same file twice still fires a change.
     .finally(() => { event.target.value = ''; });
 });
@@ -19241,15 +19288,14 @@ async function renderSharedReceipts() {
   if (!rows.length) return;
 
   const card = el('section', 'shared-block');
-  card.append(el('h3', null, 'Trades from shared files'));
-  card.append(el('p', 'muted', 'Other people’s receipts, kept out of your own totals '
-    + 'above. Prices are what they were quoted, where and when they say.'));
+  card.append(el('h3', null, tx('Trades from shared files')));
+  card.append(el('p', 'muted', tx('Other people’s receipts, kept out of your own totals above. Prices are what they were quoted, where and when they say.')));
 
   const table = el('table', 'data');
   const head = el('thead');
   const headRow = el('tr');
   for (const label of ['When', 'Who', 'Commodity', 'Place', 'SCU', 'Per SCU']) {
-    headRow.append(el('th', label === 'SCU' || label === 'Per SCU' ? 'num' : null, label));
+    headRow.append(el('th', label === 'SCU' || label === 'Per SCU' ? 'num' : null, tx(label)));
   }
   head.append(headRow);
   table.append(head);
@@ -19259,11 +19305,11 @@ async function renderSharedReceipts() {
   for (const row of rows.slice(0, 200)) {
     const tr = el('tr');
     tr.append(el('td', 'muted', dateOf(row.at)));
-    tr.append(el('td', null, row.imported.handle || 'someone'));
+    tr.append(el('td', null, row.imported.handle || tx('someone')));
 
     // A name this install cannot resolve is not an error: their dataset knew
     // something ours does not, or the other way round.
-    tr.append(el('td', row.commodity ? null : 'muted', row.commodity || 'unnamed'));
+    tr.append(el('td', row.commodity ? null : 'muted', row.commodity || tx('unnamed')));
     tr.append(el('td', 'muted', row.place));
     tr.append(el('td', 'num', row.scu.toLocaleString()));
     tr.append(el('td', 'num', money(row.unitPrice)));
@@ -19274,7 +19320,7 @@ async function renderSharedReceipts() {
   card.append(table);
 
   if (rows.length > 200) {
-    card.append(el('p', 'muted', `Showing the newest 200 of ${rows.length.toLocaleString()}.`));
+    card.append(el('p', 'muted', tx('Showing the newest 200 of {total}.', { total: rows.length.toLocaleString() })));
   }
 
   host.append(card);
@@ -19670,7 +19716,7 @@ $('#backup-file')?.addEventListener('change', async (event) => {
   try {
     await planRestore(await file.text());
   } catch {
-    $('#backup-status').textContent = 'That file could not be read.';
+    $('#backup-status').textContent = tx('That file could not be read.');
   }
 });
 
@@ -19690,23 +19736,23 @@ function shareChoice() {
 function shareMetric(label, value) {
   const metric = el('div', 'share-metric');
   metric.append(el('div', 'share-metric-value', value));
-  metric.append(el('div', 'share-metric-label', label));
+  metric.append(el('div', 'share-metric-label', tx(label)));
   return metric;
 }
 
 function shareSection(title, sources, detail = '') {
   const section = el('section', 'share-section');
   const head = el('div', 'share-section-head');
-  head.append(el('h3', null, title));
+  head.append(el('h3', null, tx(title)));
   head.append(sourceMarks(sources));
   section.append(head);
-  if (detail) section.append(el('p', 'share-section-detail', detail));
+  if (detail) section.append(el('p', 'share-section-detail', tx(detail)));
   return section;
 }
 
 function shareList(rows, empty) {
   const list = el('ul', 'share-list');
-  if (!rows.length) list.append(el('li', 'muted', empty));
+  if (!rows.length) list.append(el('li', 'muted', tx(empty)));
   for (const row of rows) {
     const item = el('li');
     item.append(el('span', null, row.label));
@@ -19754,9 +19800,9 @@ function renderShareReport(report) {
 
   const head = el('header', 'share-report-head');
   const title = el('div');
-  title.append(el('div', 'share-kicker', 'QUANTUM WAKE · PILOT RECAP'));
-  title.append(el('h2', null, report.handle ? `${report.handle}'s recent flight` : 'Recent flight recap'));
-  title.append(el('p', 'muted', `Snapshot made ${new Date(report.madeAt).toLocaleString()}. It does not update after it is shared.`));
+  title.append(el('div', 'share-kicker', tx('QUANTUM WAKE · PILOT RECAP')));
+  title.append(el('h2', null, report.handle ? tx('{handle}\'s recent flight', { handle: report.handle }) : tx('Recent flight recap')));
+  title.append(el('p', 'muted', tx('Snapshot made {when}. It does not update after it is shared.', { when: new Date(report.madeAt).toLocaleString(QW_DATE_LOCALES) })));
   head.append(title);
   head.append(sourceMarks(['logs']));
   host.append(head);
@@ -19766,7 +19812,7 @@ function renderShareReport(report) {
   if (report.trade) renderShareTrade(host, report.trade);
 
   host.append(el('p', 'share-limits',
-    'Source labels name the evidence behind each section. Trading is limited to commodity movements the game log records; it is not total income.'));
+    tx('Source labels name the evidence behind each section. Trading is limited to commodity movements the game log records; it is not total income.')));
 }
 
 function renderShareSession(host, session) {
@@ -19774,7 +19820,7 @@ function renderShareSession(host, session) {
   const section = shareSection('Latest session', ['logs'],
     'What the game log recorded during the most recent session.');
   if (!summary) {
-    section.append(el('p', 'muted', 'No completed session has been recorded yet.'));
+    section.append(el('p', 'muted', tx('No completed session has been recorded yet.')));
     host.append(section);
     return;
   }
@@ -19785,14 +19831,14 @@ function renderShareSession(host, session) {
   const metrics = el('div', 'share-metrics');
   metrics.append(
     shareMetric('In game', duration(summary.inGame)),
-    shareMetric('Ship', ships.join(' · ') || summary.primaryShip || 'On foot'),
+    shareMetric('Ship', ships.join(' · ') || summary.primaryShip || tx('On foot')),
     shareMetric('Route points', String(route.length || summary.locations || 0)),
     shareMetric('Contracts', String(summary.contracts || 0)),
     shareMetric('Deaths', String(summary.deaths || 0)),
   );
   section.append(metrics);
 
-  section.append(el('h4', null, 'Recorded route'));
+  section.append(el('h4', null, tx('Recorded route')));
   section.append(shareList(route.slice(0, 8).map((place) => ({
     label: place.displayName,
     detail: [place.body, place.system].filter(Boolean).join(' · ') || place.routeKind,
@@ -19805,7 +19851,7 @@ function renderShareFleet(host, fleet) {
   const section = shareSection('Fleet snapshot', ['logs'],
     'Ships flown by this account; it does not claim to be the game entitlement roster.');
   if (!fleet) {
-    section.append(el('p', 'muted', 'The fleet summary could not be read.'));
+    section.append(el('p', 'muted', tx('The fleet summary could not be read.')));
     host.append(section);
     return;
   }
@@ -19820,11 +19866,11 @@ function renderShareFleet(host, fleet) {
     shareMetric('Time aboard', `~${duration(seconds)}`),
   );
   section.append(metrics);
-  section.append(el('h4', null, 'Most flown'));
+  section.append(el('h4', null, tx('Most flown')));
   section.append(shareList(ships.slice(0, 6).map((ship) => ({
     label: ship.name,
-    detail: ship.lastFlown ? `last flown ${dateOf(ship.lastFlown)}` : '',
-    value: `${ship.sorties || 0} sortie${ship.sorties === 1 ? '' : 's'}`,
+    detail: ship.lastFlown ? tx('last flown {when}', { when: dateOf(ship.lastFlown) }) : '',
+    value: txn(ship.sorties || 0, '{count} sortie', '{count} sorties'),
   })), 'No ship flights have been recorded.'));
   host.append(section);
 }
@@ -19838,15 +19884,15 @@ function renderShareTrade(host, trade) {
   const metrics = el('div', 'share-metrics');
   metrics.append(
     shareMetric('Recorded profit', rate ? money(rate.earned) : '—'),
-    shareMetric('Trading rate', rate?.perHour > 0 ? `${money(rate.perHour)}/h` : 'No rate yet'),
+    shareMetric('Trading rate', rate?.perHour > 0 ? `${money(rate.perHour)}/h` : tx('No rate yet')),
     shareMetric('In-game hours', rate ? hoursOf(rate.inGame) : '—'),
     shareMetric('Commodities moved', String(rows.length)),
   );
   section.append(metrics);
-  section.append(el('h4', null, 'Largest recorded sales'));
+  section.append(el('h4', null, tx('Largest recorded sales')));
   section.append(shareList(rows.slice(0, 6).map((row) => ({
     label: row.name,
-    detail: `${row.myScuSold || 0} SCU sold · ${row.myTrades || 0} trip${row.myTrades === 1 ? '' : 's'}`,
+    detail: `${tx('{scu} SCU sold', { scu: row.myScuSold || 0 })} · ${txn(row.myTrades || 0, '{count} trip', '{count} trips')}`,
     value: money(row.myRevenue || 0),
     className: 'inward',
   })), 'No commodity movements were recorded in this window.'));
@@ -19857,9 +19903,10 @@ function shareReportDocument() {
   const report = $('#share-report');
   if (!shareReportData || !report) return null;
   const content = report.cloneNode(true);
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+  // The saved file is in the page's language, so it says so.
+  return `<!doctype html><html lang="${QW_LANGUAGE}"><head><meta charset="utf-8">`
     + '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    + '<title>Quantum Wake pilot recap</title><style>' + shareReportCss() + '</style></head><body>'
+    + `<title>${tx('Quantum Wake pilot recap')}</title><style>` + shareReportCss() + '</style></head><body>'
     + content.outerHTML + '</body></html>';
 }
 
@@ -20245,14 +20292,14 @@ $('#settings-rescan').addEventListener('click', async (e) => {
 
   try {
     const result = await getJson2('/api/scan?force=true');
-    status.textContent = `${result.sessions} sessions from a full re-read`;
+    status.textContent = txn(result.sessions, '{count} session from a full re-read', '{count} sessions from a full re-read');
 
     // The re-read is what the button promised, and it is already done. A reload
     // that fails afterwards leaves the views stale, which is a smaller problem
     // than telling somebody their rescan failed when it did not.
     await loadHistory().catch(() => {});
   } catch (err) {
-    status.textContent = `failed: ${err.message}`;
+    status.textContent = tx('failed: {problem}', { problem: err.message });
   } finally {
     clearInterval(poll);
     button.disabled = false;
@@ -20267,8 +20314,8 @@ $('#settings-rescan').addEventListener('click', async (e) => {
  */
 function rescanLine(scan) {
   return scan.running && scan.total > 0
-    ? `${scan.done} / ${scan.total} logs · ${scan.elapsedSeconds}s`
-    : 'rescanning…';
+    ? tx('{done} / {total} logs · {seconds}s', { done: scan.done, total: scan.total, seconds: scan.elapsedSeconds })
+    : tx('rescanning…');
 }
 
 /** POST that expects JSON back; getJson is GET-only. */
@@ -28350,7 +28397,7 @@ async function boot() {
     // Said in full on hover: on a window too narrow for the top bar the label
     // still gives way to an ellipsis, and a count cut to "60 LO…" says nothing.
     $('#install').title = txn(install.backups, '{channel} install · {count} log read', '{channel} install · {count} logs read', { channel: install.channel });
-    $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
+    $('#about-install').textContent = `${install.channel} · ${txn(install.backups, '{count} log', '{count} logs')}`;
   } catch {
     $('#install').textContent = tx('no install found');
     $('#about-install').textContent = 'none found';
