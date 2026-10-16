@@ -560,7 +560,7 @@ function filterHelp(query) {
   if (none) none.hidden = shown > 0;
 
   const count = $('#help-count');
-  if (count) count.textContent = words.length ? `${shown} of ${items.length}` : '';
+  if (count) count.textContent = words.length ? tx('{shown} of {total}', { shown, total: items.length }) : '';
 
   return shown;
 }

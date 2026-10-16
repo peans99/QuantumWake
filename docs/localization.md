@@ -530,3 +530,22 @@ sticks cannot be read live. 448 entries added, 3,774 in all.
 - `SettingsPagesFrenchTests` covers the button table with the game's action
   names kept and the mode not read as a cargo hold, a shared-file card, the
   label count with a category, and a hat as one phrase.
+
+### 0.18.14
+
+Help & FAQ: the three quick answers, the data-source guide and all 32
+questions. 84 entries added, 3,858 in all - the page is markup only, so the
+English key probe collected every key and the French was written as a list
+in the same order and zipped onto it, which keeps 30-odd long keys with
+`<b>`, `<code>` and links exact rather than retyped.
+
+- **Answers quote the French buttons.** Where an answer names a control in
+  bold - "Lire la position copiée", "Dernier wipe", "Conserver", the Ledger
+  as "Comptes" - the French uses the catalogue's own words for it, looked up
+  rather than translated afresh, so the help and the page agree. The tray's
+  "Pin overlay" is quoted as "Épingler l'overlay", ahead of the tray itself.
+- **Search works on the French text.** `filterHelp` matches what is on the
+  page, so a French reader searches in French; the result count is
+  "{shown} sur {total}".
+- No WebTest: the stub page has no static markup, so Help is checked by the
+  render, as captions and headings have been since 0.18.9.
