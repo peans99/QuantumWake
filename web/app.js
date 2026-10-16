@@ -43,6 +43,19 @@ const KIND_COLOURS = {
   Unknown: '#46617a',
 };
 
+/* A kind as a reader says it. Written out rather than split from the key, so
+   each English word is a literal the catalogue's orphan check can find. */
+const PLACE_KIND_WORDS = {
+  City: 'City', RestStop: 'Rest Stop', Outpost: 'Outpost', Research: 'Research',
+  DistributionCentre: 'Distribution Centre', JumpPoint: 'Jump Point', Mine: 'Mine',
+  Asteroid: 'Asteroid', Station: 'Station', Planet: 'Planet', Moon: 'Moon',
+  NavPoint: 'Nav Point', MissionBeacon: 'Mission Beacon', Unknown: 'Unknown',
+};
+
+const placeKindWord = (kind) => (PLACE_KIND_WORDS[kind]
+  ? tx(PLACE_KIND_WORDS[kind])
+  : String(kind || '').replace(/([a-z])([A-Z])/g, '$1 $2'));
+
 /* Body order defines the ring layout, innermost first. */
 const SYSTEMS = {
   Stanton: ['Hurston', 'Arial', 'Aberdeen', 'Magda', 'Ita', 'Crusader', 'Cellin', 'Daymar',
@@ -3331,10 +3344,12 @@ function renderLedgerKinds() {
 
   for (const kind of kinds) {
     const on = !ledgerHidden.has(kind);
-    const button = el('button', on ? 'ghost' : 'ghost off', kind);
+    // The kind is the server's English and stays the filter's key; only the
+    // words on the button are the page's.
+    const button = el('button', on ? 'ghost' : 'ghost off', tx(kind));
     button.type = 'button';
     button.dataset.kind = kind;
-    button.title = on ? `Hide ${kind}` : `Show ${kind}`;
+    button.title = on ? tx('Hide {kind}', { kind: tx(kind) }) : tx('Show {kind}', { kind: tx(kind) });
 
     button.addEventListener('click', () => {
       if (on) ledgerHidden.add(kind);
@@ -3404,30 +3419,34 @@ function renderLedgerWallet(read) {
   if (read?.shot) ledgerWalletShot = read.shot;
 
   if (!read) {
-    card.append(el('div', 'l', 'Cash on hand'));
+    card.append(el('div', 'l', tx('Cash on hand')));
     card.append(el('div', 'muted',
-      'No screenshot has shown your balance yet. A commodity kiosk prints it in full — photograph one and the figure lands here.'));
+      tx('No screenshot has shown your balance yet. A commodity kiosk prints it in full — photograph one and the figure lands here.')));
     return;
   }
 
   const figure = el('div', 'wallet-figure');
   figure.append(el('div', 'n', money(read.balance)));
-  figure.append(el('div', 'l', 'Cash on hand'));
+  figure.append(el('div', 'l', tx('Cash on hand')));
   card.append(figure);
 
   const body = el('div', 'wallet-body');
-  body.append(el('div', null, `Last updated ${new Date(read.shotAt).toLocaleString()}, from ${read.shot || 'a screenshot'}.`));
+  const when = new Date(read.shotAt).toLocaleString(QW_DATE_LOCALES);
+  body.append(el('div', null, read.shot
+    ? tx('Last updated {when}, from {shot}.', { when, shot: read.shot })
+    : tx('Last updated {when}, from a screenshot.', { when })));
 
   const moved = Number(read.movedSince) || 0;
   const lines = Number(read.movementsSince) || 0;
 
   if (lines === 0) {
-    body.append(el('div', 'muted', 'Nothing has moved in the logs since, so that is the latest word.'));
+    body.append(el('div', 'muted', tx('Nothing has moved in the logs since, so that is the latest word.')));
   } else {
     const sign = moved > 0 ? '+' : moved < 0 ? '−' : '';
-    body.append(el('div', 'muted',
-      `Since then the logs record ${lines} movement${lines === 1 ? '' : 's'} netting ${sign}${money(Math.abs(moved))}, `
-      + `so about ${money(read.estimate)} now — an estimate, because money that moved without a line in the log is not in it.`));
+    body.append(el('div', 'muted', txn(lines,
+      'Since then the logs record {count} movement netting {net}, so about {estimate} now — an estimate, because money that moved without a line in the log is not in it.',
+      'Since then the logs record {count} movements netting {net}, so about {estimate} now — an estimate, because money that moved without a line in the log is not in it.',
+      { net: `${sign}${money(Math.abs(moved))}`, estimate: money(read.estimate) })));
   }
 
   card.append(body);
@@ -3460,17 +3479,17 @@ function renderLedger() {
   const filtered = ledgerHidden.size > 0;
 
   tiles('#ledger-summary', [
-    ['Money in', money(sum(inbound)), filtered ? null : 'ledger.in', days],
-    ['Money out', money(Math.abs(sum(outbound))), filtered ? null : 'ledger.out', days],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net)), filtered ? null : 'ledger.net', days],
-    ['Movements', visible.length],
+    [tx('Money in'), money(sum(inbound)), filtered ? null : 'ledger.in', days],
+    [tx('Money out'), money(Math.abs(sum(outbound))), filtered ? null : 'ledger.out', days],
+    [net >= 0 ? tx('Net gain') : tx('Net loss'), money(Math.abs(net)), filtered ? null : 'ledger.net', days],
+    [tx('Movements'), visible.length],
   ]);
 
   const filterNote = $('#ledger-kinds');
 
   if (filtered && filterNote) {
     filterNote.append(el('span', 'muted',
-      'Totals cover only what is shown. Turn everything back on to ask where a figure came from.'));
+      tx('Totals cover only what is shown. Turn everything back on to ask where a figure came from.')));
   }
 
   const pages = Math.max(1, Math.ceil(visible.length / LEDGER_PER_PAGE));
@@ -3481,7 +3500,7 @@ function renderLedger() {
 
   if (!page.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No transactions in that range.');
+    const td = el('td', 'muted', tx('No transactions in that range.'));
     td.colSpan = 7;
     tr.append(td);
     body.append(tr);
@@ -3492,8 +3511,8 @@ function renderLedger() {
     const inward = Number(entry.amount) > 0;
 
     tr.append(el('td', null, dateOf(entry.at)));
-    tr.append(el('td', null, entry.kind));
-    tr.append(el('td', null, prettyItem(entry.what)));
+    tr.append(el('td', null, tx(entry.kind)));
+    tr.append(el('td', null, entry.what === 'Contract payout' ? tx('Contract payout') : prettyItem(entry.what)));
     tr.append(tdPlace(entry.where));
     tr.append(el('td', 'muted', entry.shop));
 
@@ -3516,7 +3535,7 @@ function renderLedgerPager(pages, start, shown, total) {
   if (!total) return;
 
   pager.append(el('span', 'pager-info',
-    `${start + 1}–${start + shown} of ${total}`));
+    tx('{from}–{to} of {total}', { from: start + 1, to: start + shown, total })));
 
   const nav = el('div', 'pager-nav');
   const step = (label, delta, disabled) => {
@@ -3526,9 +3545,9 @@ function renderLedgerPager(pages, start, shown, total) {
     return button;
   };
 
-  nav.append(step('‹ Newer', -1, ledgerPage === 0));
+  nav.append(step(tx('‹ Newer'), -1, ledgerPage === 0));
   nav.append(el('span', 'pager-page', `${ledgerPage + 1} / ${pages}`));
-  nav.append(step('Older ›', 1, ledgerPage >= pages - 1));
+  nav.append(step(tx('Older ›'), 1, ledgerPage >= pages - 1));
 
   pager.append(nav);
 }
@@ -3551,11 +3570,8 @@ async function refreshCommunityOffer() {
   $('#community-offer').hidden = community.enabled;
 
   if (community.enabled) {
-    $('#cargo-caption').textContent =
-      'Volume, price and place come straight from the kiosk. Commodity names come '
-      + 'from your own install, falling back to the community dataset '
-      + `(${community.commodities} commodities, StarCitizenWiki / scunpacked-data) `
-      + 'for anything it does not name.';
+    $('#cargo-caption').textContent = tx('Volume, price and place come straight from the kiosk. Commodity names come from your own install, falling back to the community dataset ({count} commodities, StarCitizenWiki / scunpacked-data) for anything it does not name.',
+      { count: community.commodities });
   }
 }
 
@@ -3898,7 +3914,7 @@ function ago(iso) {
 }
 
 async function loadMarket() {
-  setWorkspaceState('#market-state', 'loading', 'Loading commodity catalogue…');
+  setWorkspaceState('#market-state', 'loading', tx('Loading commodity catalogue…'));
   let marketUnavailable = false;
   try {
     marketEntries = await getJson('/api/market');
@@ -3938,7 +3954,7 @@ async function loadMarket() {
 
     const hidden = fuel.length - [...byFuel.values()].reduce((n, r) => n + Math.min(perFuel, r.length), 0);
     $('#fuel-count').textContent = hidden > 0
-      ? `Cheapest ${perFuel} per fuel shown; ${hidden.toLocaleString()} dearer terminals not listed.`
+      ? tx('Cheapest {count} per fuel shown; {hidden} dearer terminals not listed.', { count: perFuel, hidden: hidden.toLocaleString() })
       : '';
   } catch { $('#fuel-block').hidden = true; }
 
@@ -3948,7 +3964,7 @@ async function loadMarket() {
     const uex = await getJson('/api/uex');
     $('#market-refresh').hidden = !uex.enabled;
     $('#market-age').textContent = uex.enabled && uex.fetchedAt
-      ? `prices fetched ${ago(uex.fetchedAt)}`
+      ? tx('prices fetched {ago}', { ago: ago(uex.fetchedAt) })
       : '';
   } catch { /* leave the header as it is */ }
 
@@ -3959,15 +3975,15 @@ async function loadMarket() {
   const groups = [...new Set(marketEntries.flatMap((e) => e.groups))].sort();
 
   groupSelect.textContent = '';
-  groupSelect.append(new Option('All groups', ''));
+  groupSelect.append(new Option(tx('All groups'), ''));
   for (const group of groups) groupSelect.append(new Option(group, group));
   if (groups.includes(previous)) groupSelect.value = previous;
 
   renderMarket();
   setWorkspaceState('#market-state', marketUnavailable ? 'offline' : marketEntries.length ? 'ready' : 'empty',
     marketUnavailable
-      ? 'Commodity data is unavailable. Refresh after the local server reconnects.'
-      : 'No commodities are available in the current catalogue.');
+      ? tx('Commodity data is unavailable. Refresh after the local server reconnects.')
+      : tx('No commodities are available in the current catalogue.'));
 
   // The map's commodity search reads this catalogue, and the map usually draws
   // first. A search already standing (a ?q= link opened cold) would have found
@@ -4037,11 +4053,12 @@ async function renderMarketDetail(entry, cell) {
   cell.textContent = '';
 
   const head = el('div', 'detail-head');
-  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+  const title = tx('{commodity} — every counter UEX knows', { commodity: entry.name });
+  head.append(el('b', null, title));
 
   const side = el('div', 'seg');
   for (const [value, label] of [['sell', 'Where to sell'], ['buy', 'Where to buy']]) {
-    const button = el('button', (value === 'buy') === detailView.buying ? 'active' : null, label);
+    const button = el('button', (value === 'buy') === detailView.buying ? 'active' : null, tx(label));
     button.addEventListener('click', () => {
       detailView.buying = value === 'buy';
       renderMarketDetail(entry, cell);
@@ -4051,12 +4068,12 @@ async function renderMarketDetail(entry, cell) {
   }
 
   head.textContent = '';
-  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+  head.append(el('b', null, title));
 
   // Beside the title rather than at the far end: the detail table is wider than
   // the panel, so anything pushed right is pushed off the edge.
-  const more = el('button', 'ghost detail-more', 'Full picture ↗');
-  more.title = 'Price and demand over time, both counter lists, and your receipts';
+  const more = el('button', 'ghost detail-more', tx('Full picture ↗'));
+  more.title = tx('Price and demand over time, both counter lists, and your receipts');
   more.addEventListener('click', () => openCommodity(entry.name));
   head.append(more);
 
@@ -4072,7 +4089,7 @@ async function renderMarketDetail(entry, cell) {
   });
 
   safe.append(box);
-  safe.append(el('span', null, 'Monitored space only'));
+  safe.append(el('span', null, tx('Monitored space only')));
   head.append(safe);
   cell.append(head);
 
@@ -4093,8 +4110,8 @@ async function renderMarketDetail(entry, cell) {
 
   if (!rows.length) {
     cell.append(el('div', 'muted detail-empty', all.length
-      ? 'Nothing left after that filter — every counter for this is outside monitored space.'
-      : 'No prices for this commodity. UEX may be off, or nobody has reported one.'));
+      ? tx('Nothing left after that filter — every counter for this is outside monitored space.')
+      : tx('No prices for this commodity. UEX may be off, or nobody has reported one.')));
     return;
   }
 
@@ -4105,7 +4122,7 @@ async function renderMarketDetail(entry, cell) {
   for (const [label, cls] of [['Terminal', null], ['Where', null], ['Space', null],
     [detailView.buying ? 'Buy' : 'Sell', 'num'], ['vs best', 'num'],
     [detailView.buying ? 'In stock' : 'Wanted', 'num'], ['Seen', 'num']]) {
-    header.append(el('th', cls, label));
+    header.append(el('th', cls, tx(label)));
   }
   table.append(header);
 
@@ -4116,7 +4133,7 @@ async function renderMarketDetail(entry, cell) {
 
     const name = el('td');
     const jump = el('button', 'place-link', row.terminal);
-    jump.title = row.placeId ? 'Show it on the map' : 'The map cannot place this terminal';
+    jump.title = row.placeId ? tx('Show it on the map') : tx('The map cannot place this terminal');
     jump.disabled = !row.placeId;
     jump.addEventListener('click', () => {
       showView('map');
@@ -4127,8 +4144,9 @@ async function renderMarketDetail(entry, cell) {
 
     tr.append(el('td', 'muted', row.place || '—'));
 
+    // The class keeps the server's word; the reader gets the page's.
     const space = el('td');
-    space.append(el('span', `sec sec-${row.security}`, row.security));
+    space.append(el('span', `sec sec-${row.security}`, tx(row.security)));
     if (row.system) space.append(el('span', 'muted sec-system', ` ${row.system}`));
     tr.append(space);
 
@@ -4138,15 +4156,15 @@ async function renderMarketDetail(entry, cell) {
     // number the single "best price" column never showed.
     const gap = detailView.buying ? (price - best) / best : (best - price) / best;
     tr.append(el('td', gap > 0.001 ? 'num outward' : 'num muted',
-      gap > 0.001 ? `−${(gap * 100).toFixed(0)}%` : 'best'));
+      gap > 0.001 ? `−${(gap * 100).toFixed(0)}%` : tx('best')));
 
     const stock = el('td', 'num');
     if (scu > 0) {
       stock.append(el('span', scu < THIN_SCU ? 'outward' : null, `${scu.toLocaleString()} SCU`));
       if (scu < THIN_SCU) {
         stock.title = detailView.buying
-          ? 'Thin stock — a full hold will not be filled here'
-          : 'Small demand — this counter will not take a full hold';
+          ? tx('Thin stock — a full hold will not be filled here')
+          : tx('Small demand — this counter will not take a full hold');
       }
     } else {
       stock.append(el('span', 'muted', '—'));
@@ -4161,12 +4179,11 @@ async function renderMarketDetail(entry, cell) {
 
   const shown = Math.min(rows.length, 40);
   const note = detailView.monitoredOnly
-    ? `${shown} of ${all.length} counters — lawless space hidden.`
-    : `${shown} of ${all.length} counters.`;
+    ? tx('{shown} of {total} counters — lawless space hidden.', { shown, total: all.length })
+    : tx('{shown} of {total} counters.', { shown, total: all.length });
 
   cell.append(el('div', 'muted detail-note',
-    `${note} Security is by system: Stanton is policed, Pyro and Nyx are not. `
-    + 'Nothing in the game logs threat, so this is where a place is, not what happened there.'));
+    `${note} ${tx('Security is by system: Stanton is policed, Pyro and Nyx are not. Nothing in the game logs threat, so this is where a place is, not what happened there.')}`));
 }
 
 // What the two sources can each answer, said plainly. The install list is the
@@ -4175,14 +4192,8 @@ async function renderMarketDetail(entry, cell) {
 // shorter list under the longer list's wording would read as a shrinking
 // economy rather than a narrower source.
 const MARKET_CAPTIONS = {
-  install: 'Every commodity your game install names, with your own trading record '
-    + 'against each. "Sellable at" counts the counters UEX has seen a price at, so it '
-    + 'is a floor and it moves. Enable the community dataset in Settings to also see '
-    + 'facilities nobody has priced yet, and to group commodities.',
-  dataset: 'Every commodity the community dataset knows, with your own trading record '
-    + 'against each. Sellable at counts facilities in the economy simulation itself, '
-    + 'and show on map lights the ones the star map can place. Static availability, not '
-    + 'live prices.',
+  install: 'Every commodity your game install names, with your own trading record against each. "Sellable at" counts the counters UEX has seen a price at, so it is a floor and it moves. Enable the community dataset in Settings to also see facilities nobody has priced yet, and to group commodities.',
+  dataset: 'Every commodity the community dataset knows, with your own trading record against each. Sellable at counts facilities in the economy simulation itself, and show on map lights the ones the star map can place. Static availability, not live prices.',
 };
 
 function renderMarket() {
@@ -4190,7 +4201,7 @@ function renderMarket() {
 
   const caption = $('#market-caption');
   const source = marketEntries[0]?.source;
-  if (caption && MARKET_CAPTIONS[source]) caption.textContent = MARKET_CAPTIONS[source];
+  if (caption && MARKET_CAPTIONS[source]) caption.textContent = tx(MARKET_CAPTIONS[source]);
   // Market deliberately combines the reference catalogue with what the pilot
   // actually sold. The chips make that join visible before a price-like count
   // is mistaken for an event the log recorded.
@@ -4214,15 +4225,15 @@ function renderMarket() {
   const counter = $('#market-count');
   if (counter) {
     counter.textContent = marketEntries.length && (group || term)
-      ? `${rows.length} of ${marketEntries.length}`
+      ? tx('{shown} of {total}', { shown: rows.length, total: marketEntries.length })
       : '';
   }
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', marketEntries.length
-      ? 'No commodities match that search.'
-      : 'Enable UEX, or the community dataset, on the Settings page to fill this in.');
+      ? tx('No commodities match that search.')
+      : tx('Enable UEX, or the community dataset, on the Settings page to fill this in.'));
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -4240,15 +4251,15 @@ function renderMarket() {
     // it are the choice.
     const nameCell = el('td');
     const opener = el('button', 'place-link commodity-open', entry.name);
-    opener.title = 'Every counter that trades this, and what each one costs you';
+    opener.title = tx('Every counter that trades this, and what each one costs you');
     opener.addEventListener('click', () => toggleMarketDetail(entry, tr));
     nameCell.append(opener);
 
     // The row below answers "where"; the page answers "and what has it been
     // doing". Kept as a second control so the quick look stays one click.
     const drill = el('button', 'drill', '↗');
-    drill.title = 'Open the full picture: price and demand over time';
-    drill.setAttribute('aria-label', `Open ${entry.name} in full`);
+    drill.title = tx('Open the full picture: price and demand over time');
+    drill.setAttribute('aria-label', tx('Open {commodity} in full', { commodity: entry.name }));
     drill.addEventListener('click', () => openCommodity(entry.name));
     nameCell.append(drill);
 
@@ -4270,7 +4281,7 @@ function renderMarket() {
           if (Math.abs(trend) >= 1) {
             const arrow = el('span', trend > 0 ? 'inward' : 'outward',
               ` ${trend > 0 ? '▲' : '▼'}${Math.abs(trend).toFixed(0)}%`);
-            arrow.title = `15-day average: ${money(entry.uex.avgSell)}/SCU`;
+            arrow.title = tx('15-day average: {price}/SCU', { price: money(entry.uex.avgSell) });
             cell.append(arrow);
           }
         }
@@ -4285,7 +4296,7 @@ function renderMarket() {
           const cls = age > 14 * 86400000 ? 'price-age stale'
             : age > 3 * 86400000 ? 'price-age old'
             : 'price-age';
-          cell.append(el('div', cls, `seen ${ago(entry.uex.seenAt)}`));
+          cell.append(el('div', cls, tx('seen {ago}', { ago: ago(entry.uex.seenAt) })));
         }
       } else {
         cell.textContent = '—';
@@ -4298,8 +4309,8 @@ function renderMarket() {
     const actions = el('td', 'num map-links');
 
     const link = (label, query, title) => {
-      const show = el('button', 'ghost', label);
-      show.title = title;
+      const show = el('button', 'ghost', tx(label));
+      show.title = tx(title);
       show.addEventListener('click', () => {
         $('#map-search').value = query;
         showView('map');
@@ -7518,7 +7529,7 @@ function applyScreenMode() {
   const older = $('#screen-read-older');
   if (older) {
     older.hidden = !shots || !screenSettings.canReadScreenshots || watching || unread === 0;
-    older.textContent = `Read ${unread} older screenshot${unread === 1 ? '' : 's'}`;
+    older.textContent = txn(unread, 'Read {count} older screenshot', 'Read {count} older screenshots');
   }
 
   // The folder being followed, named. The pilot is agreeing to a directory
@@ -7529,20 +7540,20 @@ function applyScreenMode() {
     const named = watching && screenSettings.folder;
     folder.hidden = !named;
     folder.textContent = named
-      ? `Reading every screenshot in ${screenSettings.folder}, the ones already there and each new one as it lands.`
-        + (unread
-          ? ` ${unread} still to read, newest first.`
-          : ' Nothing is waiting.')
-        + ' Untick Watch screenshots to stop; invalidate a reading below to have nothing believed from it.'
+      ? [
+        tx('Reading every screenshot in {folder}, the ones already there and each new one as it lands.', { folder: screenSettings.folder }),
+        unread ? tx('{count} still to read, newest first.', { count: unread }) : tx('Nothing is waiting.'),
+        tx('Untick Watch screenshots to stop; invalidate a reading below to have nothing believed from it.'),
+      ].join(' ')
       : '';
   }
 
   const status = $('#screen-mode-status');
   if (status) {
     status.textContent =
-      shots ? (screenSettings.watchScreenshots ? 'clipboard and every screenshot' : 'clipboard and screenshots')
-      : screenSettings.mode === 'CopyOnly' ? 'clipboard only'
-      : 'off';
+      shots ? (screenSettings.watchScreenshots ? tx('clipboard and every screenshot') : tx('clipboard and screenshots'))
+      : screenSettings.mode === 'CopyOnly' ? tx('clipboard only')
+      : tx('off');
   }
 
   startScreenWatch();
@@ -7614,13 +7625,13 @@ function screenShow(build) {
 }
 
 async function parseClipboard(quiet = false) {
-  if (!quiet) screenSay('reading what you copied…');
+  if (!quiet) screenSay(tx('reading what you copied…'));
 
   const found = await getJson2(`/api/screen/clipboard${quiet ? '?watched=true' : ''}`);
 
   if (!found.found) {
     if (!quiet) {
-      screenSay(found.trouble || 'nothing to read');
+      screenSay(found.trouble || tx('nothing to read'));
       screenShow(() => {});
     }
     return;
@@ -7629,7 +7640,7 @@ async function parseClipboard(quiet = false) {
   screenSay('');
 
   screenShow((box) => {
-    box.append(el('div', 'strong', `${found.gigametresFromCentre.toFixed(4)} Gm from the system centre`));
+    box.append(el('div', 'strong', tx('{distance} Gm from the system centre', { distance: found.gigametresFromCentre.toFixed(4) })));
 
     // The raw numbers stay visible. They are the thing the game gave and the
     // only part of this that is exact.
@@ -7639,13 +7650,13 @@ async function parseClipboard(quiet = false) {
       + `z ${Math.round(found.z).toLocaleString()}`));
 
     box.append(el('div', 'muted',
-      'Which system this is in comes from your logs, not from the reading.'));
+      tx('Which system this is in comes from your logs, not from the reading.')));
 
     // The first thing a coordinate is good for: how far the things you marked
     // are. Three at most here; the Points page measures every one.
     if (found.nearest?.length) {
       const list = el('div', 'screen-nearest');
-      list.append(el('div', 'muted', 'Nearest of your points:'));
+      list.append(el('div', 'muted', tx('Nearest of your points:')));
       for (const near of found.nearest) list.append(nearPointLine(near));
       box.append(list);
     }
@@ -7696,6 +7707,14 @@ function screenCheckRow(check) {
   return li;
 }
 
+/** A Contracts app reading in one line: how many were accepted, or how many cards read. */
+function screenContractsLine(c) {
+  if (c.accepted == null) return txn((c.cards || []).length, '{count} contract read', '{count} contracts read');
+  return c.capacity != null
+    ? tx('{count} accepted of {capacity}', { count: c.accepted, capacity: c.capacity })
+    : tx('{count} accepted', { count: c.accepted });
+}
+
 /** Everything a reading says, into a box. Shared by the panel and the list. */
 function renderSighting(box, s, { full = true } = {}) {
   if (s.item) {
@@ -7710,10 +7729,10 @@ function renderSighting(box, s, { full = true } = {}) {
       const line = el('div', null, match.name);
 
       if (match.agrees?.length)
-        line.append(el('span', 'muted', ` · ${match.agrees.join(', ')} agree`));
+        line.append(el('span', 'muted', ` · ${tx('{fields} agree', { fields: match.agrees.join(', ') })}`));
 
       if (match.disagrees?.length)
-        line.append(el('span', 'outward', ` · ${match.disagrees.join(', ')} do not`));
+        line.append(el('span', 'outward', ` · ${tx('{fields} do not', { fields: match.disagrees.join(', ') })}`));
 
       box.append(line);
     }
@@ -7724,7 +7743,7 @@ function renderSighting(box, s, { full = true } = {}) {
     const named = (s.item.named || []).filter((n) => n.exact);
 
     if (!s.item.name && named.length) {
-      box.append(el('div', 'muted', `Also on this frame: ${named.length} named`));
+      box.append(el('div', 'muted', tx('Also on this frame: {count} named', { count: named.length })));
       for (const line of named.slice(0, 8))
         box.append(el('div', 'muted', line.candidates[0] || line.text));
     }
@@ -7733,8 +7752,8 @@ function renderSighting(box, s, { full = true } = {}) {
   if (s.loadout) {
     const ship = s.loadout.ship
       || (s.loadout.looksLike?.length
-        ? `read as “${s.loadout.shipRead}”, looks like ${s.loadout.looksLike.join(' or ')}`
-        : `read as “${s.loadout.shipRead || '?'}”`);
+        ? tx('read as “{read}”, looks like {ships}', { read: s.loadout.shipRead, ships: s.loadout.looksLike.join(` ${tx('or')} `) })
+        : tx('read as “{read}”', { read: s.loadout.shipRead || '?' }));
 
     box.append(el('div', 'strong', ship));
 
@@ -7750,16 +7769,16 @@ function renderSighting(box, s, { full = true } = {}) {
         li.append(el('span', 'what', f.slot));
 
         if (f.nothingRead) {
-          li.append(el('span', 'd', ' · nothing read under it'));
+          li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
         } else if (f.tier === 'Empty') {
-          li.append(el('span', 'd', ' · empty, so the game says'));
+          li.append(el('span', 'd', ` · ${tx('empty, so the game says')}`));
         } else if (f.name) {
           li.append(el('span', 'd', ` · ${f.name}`));
-          if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
-          if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
-          if (f.tier !== 'Exact') li.append(el('span', 'd', ` · read “${f.read}”`));
+          if (f.stock === false) li.append(el('span', 'k differs', tx('not stock')));
+          if (f.stock === true) li.append(el('span', 'k agrees', tx('stock')));
+          if (f.tier !== 'Exact') li.append(el('span', 'd', ` · ${tx('read “{read}”', { read: f.read })}`));
         } else {
-          li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+          li.append(el('span', 'd', ` · ${tx('read “{read}”, matched nothing', { read: f.read })}`));
         }
 
         list.append(li);
@@ -7772,12 +7791,13 @@ function renderSighting(box, s, { full = true } = {}) {
   if (s.kiosk) {
     const k = s.kiosk;
     const rows = k.rows || [];
-    box.append(el('div', 'strong',
-      `a kiosk ${k.buying === false ? 'selling' : 'buying'}, ${rows.length} commodit${rows.length === 1 ? 'y' : 'ies'}`));
+    box.append(el('div', 'strong', k.buying === false
+      ? txn(rows.length, 'a kiosk selling, {count} commodity', 'a kiosk selling, {count} commodities')
+      : txn(rows.length, 'a kiosk buying, {count} commodity', 'a kiosk buying, {count} commodities')));
 
     if (k.ship || k.cargoCapacity != null) {
       box.append(el('div', 'muted',
-        `${k.ship || k.shipRead || 'a ship'}${k.cargoCapacity != null ? ` · ${k.cargoUsed ?? 0} / ${k.cargoCapacity} SCU` : ''}`));
+        `${k.ship || k.shipRead || tx('a ship')}${k.cargoCapacity != null ? ` · ${k.cargoUsed ?? 0} / ${k.cargoCapacity} SCU` : ''}`));
     }
 
     if (full) {
@@ -7785,15 +7805,15 @@ function renderSighting(box, s, { full = true } = {}) {
 
       for (const row of rows) {
         const li = el('li');
-        li.append(el('span', 'what', row.commodity || `read as “${row.read}”`));
+        li.append(el('span', 'what', row.commodity || tx('read as “{read}”', { read: row.read })));
 
         // The unit stays welded to the price. They are not the same quantity
         // and nothing here converts one into the other.
         if (row.price != null)
-          li.append(el('span', 'd', ` · ${Number(row.price).toLocaleString()} per ${row.priceUnit}`));
+          li.append(el('span', 'd', ` · ${tx('{price} per {unit}', { price: Number(row.price).toLocaleString(), unit: row.priceUnit })}`));
 
         if (row.quantity != null)
-          li.append(el('span', 'd', ` · ${Number(row.quantity).toLocaleString()} ${row.quantityUnit || ''} in stock`));
+          li.append(el('span', 'd', ` · ${tx('{quantity} {unit} in stock', { quantity: Number(row.quantity).toLocaleString(), unit: row.quantityUnit || '' })}`));
 
         if (row.state) li.append(el('span', 'd', ` · ${row.state.toLowerCase()}`));
         list.append(li);
@@ -7806,20 +7826,20 @@ function renderSighting(box, s, { full = true } = {}) {
     // digit; only the second kind becomes a figure, and the wallet check
     // above says what was made of it.
     if (k.balance != null)
-      box.append(el('div', 'muted', `Balance on screen: ${Number(k.balance).toLocaleString()} aUEC, printed in full.`));
+      box.append(el('div', 'muted', tx('Balance on screen: {balance} aUEC, printed in full.', { balance: Number(k.balance).toLocaleString() })));
     else if (k.balanceRead)
-      box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
+      box.append(el('div', 'muted', tx('Balance on screen: {balance}, abbreviated — no figure is taken from it.', { balance: k.balanceRead })));
   }
 
   // A scanned rock: the panel's figures, each said only where it read, and a
   // way to the calculator with them already in the form.
   if (s.mining) {
     const m = s.mining;
-    box.append(el('div', 'strong', `a rock scanned: ${m.primary || m.primaryRead || 'mineral unread'}`));
+    box.append(el('div', 'strong', tx('a rock scanned: {mineral}', { mineral: m.primary || m.primaryRead || tx('mineral unread') })));
     const facts = [
-      m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : 'mass did not read',
-      m.resistancePercent != null ? `${m.resistancePercent}% resistance` : 'resistance did not read',
-      m.instability != null ? `instability ${m.instability}` : 'instability did not read',
+      m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : tx('mass did not read'),
+      m.resistancePercent != null ? tx('{percent}% resistance', { percent: m.resistancePercent }) : tx('resistance did not read'),
+      m.instability != null ? tx('instability {value}', { value: m.instability }) : tx('instability did not read'),
       m.scu != null ? scanScu(m.scu) : null,
       m.difficulty ? m.difficulty.toLowerCase() : null,
     ].filter(Boolean);
@@ -7829,9 +7849,9 @@ function renderSighting(box, s, { full = true } = {}) {
       const list = el('ul', 'feed screen-fittings');
       for (const part of m.parts) {
         const li = el('li');
-        li.append(el('span', 'what', part.mineral || `read as “${part.read}”`));
-        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : 'share did not read'}`
-          + ` · ${part.quality != null ? `quality ${part.quality}` : 'quality did not read'}`));
+        li.append(el('span', 'what', part.mineral || tx('read as “{read}”', { read: part.read })));
+        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : tx('share did not read')}`
+          + ` · ${part.quality != null ? tx('quality {value}', { value: part.quality }) : tx('quality did not read')}`));
         list.append(li);
       }
       box.append(list);
@@ -7839,12 +7859,12 @@ function renderSighting(box, s, { full = true } = {}) {
       // The panel's own checksum: shares printed to two places come to 100.
       // Two reads agreeing is not proof - both once took 23.74% for 3.74%.
       if (m.sharesAddUp === false)
-        box.append(el('div', 'want', `The shares add up to ${m.shareTotal}%, not 100 — at least one is misread, and the screenshot is the one to trust.`));
+        box.append(el('div', 'want', tx('The shares add up to {total}%, not 100 — at least one is misread, and the screenshot is the one to trust.', { total: m.shareTotal })));
     }
 
-    const go = el('button', 'ghost tiny', 'Mining fit');
+    const go = el('button', 'ghost tiny', tx('Mining fit'));
     go.type = 'button';
-    go.title = 'Open the Mining page with this rock in the calculator';
+    go.title = tx('Open the Mining page with this rock in the calculator');
     go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });
     box.append(go);
   }
@@ -7852,19 +7872,19 @@ function renderSighting(box, s, { full = true } = {}) {
   // A refinery terminal: the order on it, and what each lot would give back.
   if (s.refinery) {
     const r = s.refinery;
-    const title = {
-      processing: 'a refinery order running',
-      setup: 'a refinery quote',
-    }[r.stage] || 'a refinery terminal';
-    box.append(el('div', 'strong', `${title} at ${r.station || 'a station that did not read'}`));
+    const station = r.station || tx('a station that did not read');
+    box.append(el('div', 'strong', {
+      processing: tx('a refinery order running at {station}', { station }),
+      setup: tx('a refinery quote at {station}', { station }),
+    }[r.stage] || tx('a refinery terminal at {station}', { station })));
 
     const facts = [
-      r.method || (r.methodRead ? `“${r.methodRead}”` : (r.stage === 'setup' ? 'no method picked' : null)),
+      r.method || (r.methodRead ? `“${r.methodRead}”` : (r.stage === 'setup' ? tx('no method picked') : null)),
       r.ratings ? r.ratings.toLowerCase() : null,
-      r.toRefine != null ? `${r.toRefine} cSCU in` : null,
+      r.toRefine != null ? tx('{amount} cSCU in', { amount: r.toRefine }) : null,
       r.cost != null ? money(r.cost) : null,
-      r.seconds != null ? (r.stage === 'processing' ? `${refineryClock(r.seconds)} left` : refineryClock(r.seconds)) : null,
-      r.capacityPercent != null ? `station at ${fmtInt(r.capacityPercent)}% capacity` : null,
+      r.seconds != null ? (r.stage === 'processing' ? tx('{time} left', { time: refineryClock(r.seconds) }) : refineryClock(r.seconds)) : null,
+      r.capacityPercent != null ? tx('station at {percent}% capacity', { percent: fmtInt(r.capacityPercent) }) : null,
     ].filter(Boolean);
     if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
 
@@ -7872,13 +7892,13 @@ function renderSighting(box, s, { full = true } = {}) {
       const list = el('ul', 'feed screen-fittings');
       for (const lot of r.lots) {
         const li = el('li');
-        li.append(el('span', 'what', lot.mineral || `read as “${lot.read}”`));
+        li.append(el('span', 'what', lot.mineral || tx('read as “{read}”', { read: lot.read })));
         const bits = [
-          lot.quality != null ? `quality ${lot.quality}` : null,
+          lot.quality != null ? tx('quality {value}', { value: lot.quality }) : null,
           lot.quantity != null ? `${lot.quantity} cSCU` : null,
-          lot.yield != null ? `→ ${lot.yield} cSCU back` : null,
-          lot.toDo != null ? `${lot.toDo} to do` : null,
-          lot.done != null ? `${lot.done} done` : null,
+          lot.yield != null ? tx('→ {amount} cSCU back', { amount: lot.yield }) : null,
+          lot.toDo != null ? tx('{count} to do', { count: lot.toDo }) : null,
+          lot.done != null ? tx('{count} done', { count: lot.done }) : null,
         ].filter(Boolean);
         li.append(el('span', 'd', bits.length ? ` · ${bits.join(' · ')}` : ''));
         list.append(li);
@@ -7886,17 +7906,16 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(list);
     }
 
-    const go = el('button', 'ghost tiny', 'Refinery orders');
+    const go = el('button', 'ghost tiny', tx('Refinery orders'));
     go.type = 'button';
-    go.title = 'Open the Mining page on the orders read off the terminal';
+    go.title = tx('Open the Mining page on the orders read off the terminal');
     go.addEventListener('click', () => { miningPane = 'runs'; showView('mining'); });
     box.append(go);
   }
 
   if (s.contracts) {
     const c = s.contracts;
-    box.append(el('div', 'strong',
-      c.accepted != null ? `${c.accepted} accepted${c.capacity != null ? ` of ${c.capacity}` : ''}` : `${(c.cards || []).length} contracts read`));
+    box.append(el('div', 'strong', screenContractsLine(c)));
 
     if (full) {
       const list = el('ul', 'feed screen-fittings');
@@ -7915,7 +7934,7 @@ function renderSighting(box, s, { full = true } = {}) {
         box.append(el('div', null, c.selectedTitle));
         const facts = [];
         if (c.selectedReward != null) facts.push(`${Number(c.selectedReward).toLocaleString()} aUEC`);
-        if (c.selectedIssuer) facts.push(`by ${c.selectedIssuer}`);
+        if (c.selectedIssuer) facts.push(tx('by {issuer}', { issuer: c.selectedIssuer }));
         if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
         for (const o of c.objectives || []) box.append(el('div', 'muted', `◇ ${o}`));
       }
@@ -7924,7 +7943,7 @@ function renderSighting(box, s, { full = true } = {}) {
 
   if (s.fleet) {
     const rows = s.fleet.ships || [];
-    box.append(el('div', 'strong', `${rows.length} ship${rows.length === 1 ? '' : 's'} at the Fleet Manager`));
+    box.append(el('div', 'strong', txn(rows.length, '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager')));
 
     if (full) {
       const list = el('ul', 'feed screen-fittings');
@@ -7937,19 +7956,19 @@ function renderSighting(box, s, { full = true } = {}) {
     const r = s.reputation;
     box.append(el('div', 'strong', r.organisation
       ? `${r.organisation}${r.standing ? `: ${r.standing}` : ''}`
-      : 'the Rep app'));
+      : tx('the Rep app')));
 
     // Said in words: the rank is a highlighted card, and a highlight is not text.
-    box.append(el('div', 'muted', 'The rank is drawn as a highlight and does not read.'));
+    box.append(el('div', 'muted', tx('The rank is drawn as a highlight and does not read.')));
 
     if (full && r.organisations?.length)
-      box.append(el('div', 'muted', `Listed: ${r.organisations.join(', ')}`));
+      box.append(el('div', 'muted', tx('Listed: {names}', { names: r.organisations.join(', ') })));
   }
 
   if (s.map) {
     const place = s.map.placeRead
       ? (s.map.systemRead ? `${s.map.systemRead} > ${s.map.placeRead}` : s.map.placeRead)
-      : 'no place read off the footer';
+      : tx('no place read off the footer');
 
     box.append(el('div', 'strong', place));
 
@@ -7963,19 +7982,21 @@ function renderSighting(box, s, { full = true } = {}) {
   }
 
   if (s.wallet) {
-    box.append(el('div', 'muted', s.wallet.balance != null
-      ? `Wallet: ${Number(s.wallet.balance).toLocaleString()} aUEC`
-      : `Wallet: ${s.wallet.trouble}`));
+    box.append(el('div', 'muted', tx('Wallet: {balance}', {
+      balance: s.wallet.balance != null ? `${Number(s.wallet.balance).toLocaleString()} aUEC` : s.wallet.trouble,
+    })));
   }
 
   if (s.kind === 'MobiGlas' || s.kind === 'Unknown') {
-    box.append(el('div', 'muted', s.summary));
+    // The server's summary: the fixed ones translate, the counted ones wait
+    // for the server to speak the language, as on the Now card.
+    box.append(el('div', 'muted', tx(s.summary)));
 
     // The text is the whole point for a screen with no reader: it is what a
     // reader gets written from.
     if (full && s.lines?.length) {
       const text = el('details');
-      text.append(el('summary', 'muted', `${s.lines.length} lines read`));
+      text.append(el('summary', 'muted', txn(s.lines.length, '{count} line read', '{count} lines read')));
       for (const line of s.lines.slice(0, 60)) text.append(el('div', 'muted', line));
       box.append(text);
     }
@@ -7989,17 +8010,17 @@ function renderSighting(box, s, { full = true } = {}) {
 }
 
 async function scanScreenshot() {
-  screenSay('reading your last screenshot…');
+  screenSay(tx('reading your last screenshot…'));
   screenShow(() => {});
 
   const s = await getJson2('/api/screen/scan');
 
   if (!s.shot) {
-    screenSay(s.summary || 'nothing read');
+    screenSay(s.summary ? tx(s.summary) : tx('nothing read'));
     return;
   }
 
-  screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · read in ${s.tookMs} ms`);
+  screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · ${tx('read in {ms} ms', { ms: s.tookMs })}`);
   screenShow((box) => renderSighting(box, s));
   renderScreenLog().catch(() => {});
 }
@@ -8012,7 +8033,7 @@ async function scanScreenshot() {
  */
 async function readOlderScreenshots() {
   const unread = Number(screenSettings.unread) || 0;
-  screenSay(`reading ${Math.min(unread, 40)} of ${unread} older screenshot${unread === 1 ? '' : 's'}…`);
+  screenSay(txn(unread, 'reading {take} of {count} older screenshot…', 'reading {take} of {count} older screenshots…', { take: Math.min(unread, 40) }));
   screenShow(() => {});
 
   const got = await getJson2('/api/screen/readings/older?take=40');
@@ -8021,8 +8042,8 @@ async function readOlderScreenshots() {
   for (const s of read) kinds.set(s.kind, (kinds.get(s.kind) || 0) + 1);
   const told = [...kinds].map(([kind, n]) => `${n} ${SCREEN_KINDS[kind] || kind}`).join(', ');
 
-  screenSay(`${read.length} read${told ? ` (${told})` : ''}`
-    + (got.remaining ? ` · ${got.remaining} older still unread` : ' · nothing older left unread'));
+  screenSay(`${tx('{count} read', { count: read.length })}${told ? ` (${told})` : ''}`
+    + ` · ${got.remaining ? tx('{count} older still unread', { count: got.remaining }) : tx('nothing older left unread')}`);
 
   try {
     screenSettings = await getJson('/api/screen/settings');
@@ -8069,8 +8090,12 @@ async function renderScreenLog() {
   const counts = $('#screen-log-counts');
 
   if (counts) {
+    const parts = [
+      txn(got.total, '{count} screenshot read', '{count} screenshots read'),
+      txn(got.pastes, '{count} paste', '{count} pastes'),
+    ].join(', ');
     counts.textContent = entries.length
-      ? `${got.total} screenshot${got.total === 1 ? '' : 's'} read, ${got.pastes} paste${got.pastes === 1 ? '' : 's'}${pins.length ? ` · ${pins.length} pinned` : ''}`
+      ? `${parts}${pins.length ? ` · ${tx('{count} pinned', { count: pins.length })}` : ''}`
       : '';
   }
 
@@ -8078,11 +8103,12 @@ async function renderScreenLog() {
   renderScreenReviewInbox(got.readings || []);
 
   if (!entries.length) {
-    list.append(el('p', 'muted', 'Nothing read yet. Screenshots and pastes both land here.'));
+    list.append(el('p', 'muted', tx('Nothing read yet. Screenshots and pastes both land here.')));
     return;
   }
 
   let latest = true;
+  const stamp = (iso) => new Date(iso).toLocaleString(QW_DATE_LOCALES);
 
   for (const entry of entries) {
     const row = document.createElement(latest ? 'article' : 'details');
@@ -8092,20 +8118,20 @@ async function renderScreenLog() {
     if (!latest) {
       const summary = document.createElement('summary');
       summary.textContent = entry.paste
-        ? `${new Date(entry.paste.at).toLocaleString()} · copied location · ${entry.paste.gigametres.toFixed(4)} Gm from system centre`
+        ? `${stamp(entry.paste.at)} · ${tx('copied location')} · ${tx('{distance} Gm from system centre', { distance: entry.paste.gigametres.toFixed(4) })}`
         : screenReadingTimelineLabel(entry.shot);
       row.append(summary);
     } else {
-      body.append(el('div', 'screen-reading-kicker', 'Latest reading'));
+      body.append(el('div', 'screen-reading-kicker', tx('Latest reading')));
     }
 
     if (entry.paste) {
       const p = entry.paste;
       const repeats = Math.max(1, Number(p.timesSeen) || 1);
       const lastSeen = p.lastSeenAt && repeats > 1
-        ? ` · seen ${repeats} times, last ${new Date(p.lastSeenAt).toLocaleString()}` : '';
-      body.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
-      body.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
+        ? ` · ${tx('seen {count} times, last {when}', { count: repeats, when: stamp(p.lastSeenAt) })}` : '';
+      body.append(el('div', 'muted', `${stamp(p.at)} · ${tx('pasted')}${lastSeen}`));
+      body.append(el('div', 'strong', tx('{distance} Gm from the system centre', { distance: p.gigametres.toFixed(4) })));
 
       // The raw numbers are the exact part and the only part.
       body.append(el('div', 'muted',
@@ -8113,14 +8139,14 @@ async function renderScreenLog() {
 
       // Where the logs put you then. The reading itself names nowhere.
       body.append(el('div', 'muted', p.believed
-        ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
-        : 'Your logs had no session running, so there is nothing to place it against.'));
+        ? tx('Your logs had you at {place}.', { place: `${p.system ? `${p.system} > ` : ''}${p.believed}` })
+        : tx('Your logs had no session running, so there is nothing to place it against.')));
 
       const action = document.createElement('button');
       action.type = 'button';
       action.className = 'ghost pin-location';
       const saved = pinnedAt.has(p.at);
-      action.textContent = saved ? 'Pinned as POI' : 'Pin as POI';
+      action.textContent = saved ? tx('Pinned as POI') : tx('Pin as POI');
       action.disabled = saved;
       if (!saved) action.addEventListener('click', () => pinClipboardLocation(p, action));
       body.append(action);
@@ -8128,22 +8154,22 @@ async function renderScreenLog() {
       const s = entry.shot;
       if (s.dismissed) row.classList.add('dismissed');
       body.append(el('div', 'muted',
-        `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ' · invalidated' : ''}`));
+        `${stamp(s.shotAt)} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ` · ${tx('invalidated')}` : ''}`));
       renderSighting(body, s, { full: latest });
 
       // Kept in the log either way: the misreading is worth seeing, and the
       // file must not be read a second time. What changes is whether the
       // wallet, the fleet and the fittings believe it.
       if (s.dismissed)
-        body.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
+        body.append(el('div', 'muted', tx('Invalidated — kept here, believed by nothing.')));
 
       const action = document.createElement('button');
       action.type = 'button';
       action.className = 'ghost screen-dismiss';
-      action.textContent = s.dismissed ? 'Believe it again' : 'Invalidate';
+      action.textContent = s.dismissed ? tx('Believe it again') : tx('Invalidate');
       action.title = s.dismissed
-        ? 'Let the wallet, fleet and fittings use this reading again'
-        : 'Keep this reading in the log, but stop the wallet, fleet and fittings using it';
+        ? tx('Let the wallet, fleet and fittings use this reading again')
+        : tx('Keep this reading in the log, but stop the wallet, fleet and fittings using it');
       action.addEventListener('click', () => dismissReading(s, !s.dismissed, action));
 
       // Through the reader as it is now. The frame that taught a reader is
@@ -8152,8 +8178,8 @@ async function renderScreenLog() {
       const again = document.createElement('button');
       again.type = 'button';
       again.className = 'ghost screen-reread';
-      again.textContent = 'Read again';
-      again.title = 'Put this screenshot through the reader again and replace this reading';
+      again.textContent = tx('Read again');
+      again.title = tx('Put this screenshot through the reader again and replace this reading');
       again.addEventListener('click', () => rereadReading(s, again));
 
       const actions = el('div', 'screen-actions');
@@ -8170,17 +8196,14 @@ async function renderScreenLog() {
 /** A closed timeline entry still says what the reader found before it asks for attention. */
 function screenReadingTimelineLabel(reading) {
   const kind = SCREEN_KINDS[reading.kind] || reading.kind;
-  let finding = reading.summary || '';
-  if (!finding && reading.contracts)
-    finding = reading.contracts.accepted != null
-      ? `${reading.contracts.accepted} accepted${reading.contracts.capacity != null ? ` of ${reading.contracts.capacity}` : ''}`
-      : `${(reading.contracts.cards || []).length} contracts read`;
-  if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || 'loadout read';
-  if (!finding && reading.fleet) finding = `${(reading.fleet.ships || []).length} ships at the Fleet Manager`;
-  if (!finding && reading.map) finding = reading.map.placeRead || reading.map.systemRead || 'place read';
-  if (!finding && reading.wallet?.balance != null) finding = `wallet ${Number(reading.wallet.balance).toLocaleString()} aUEC`;
-  if (!finding) finding = 'nothing this app knows how to read';
-  return `${new Date(reading.shotAt).toLocaleString()} · ${kind} · ${finding}${reading.dismissed ? ' · invalidated' : ''}`;
+  let finding = reading.summary ? tx(reading.summary) : '';
+  if (!finding && reading.contracts) finding = screenContractsLine(reading.contracts);
+  if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || tx('loadout read');
+  if (!finding && reading.fleet) finding = txn((reading.fleet.ships || []).length, '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager');
+  if (!finding && reading.map) finding = reading.map.placeRead || reading.map.systemRead || tx('place read');
+  if (!finding && reading.wallet?.balance != null) finding = tx('wallet {balance} aUEC', { balance: Number(reading.wallet.balance).toLocaleString() });
+  if (!finding) finding = tx('nothing this app knows how to read');
+  return `${new Date(reading.shotAt).toLocaleString(QW_DATE_LOCALES)} · ${kind} · ${finding}${reading.dismissed ? ` · ${tx('invalidated')}` : ''}`;
 }
 
 /** The saved locations are separate from the disposable reading history. */
@@ -8190,41 +8213,42 @@ function renderPinnedLocations(pins) {
   if (!list) return;
 
   list.textContent = '';
-  if (count) count.textContent = pins.length ? `${pins.length} saved` : '';
+  if (count) count.textContent = pins.length ? txn(pins.length, '{count} saved', '{count} saved') : '';
 
   if (!pins.length) {
-    list.append(el('p', 'muted', 'Pin a copied location below to keep it here.'));
+    list.append(el('p', 'muted', tx('Pin a copied location below to keep it here.')));
     return;
   }
 
   for (const pin of pins) {
     const row = el('div', 'pinned-location');
-    row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location'));
-    row.append(el('div', 'muted', pin.category || 'General'));
+    row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || tx('Copied location')));
+    row.append(el('div', 'muted', tx(pin.category || 'General')));
     // The reason is edited on the Points page; here it is only read, so the
     // aside stays the glance it is.
     if (pin.note) row.append(el('div', 'pin-note', pin.note));
-    row.append(el('div', 'muted', `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+    row.append(el('div', 'muted', tx('{distance} Gm from system centre', { distance: Number(pin.gigametres).toFixed(4) })));
     row.append(el('div', 'muted',
       `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
     const fields = el('div', 'pin-fields');
     const label = document.createElement('input');
     label.type = 'text'; label.className = 'search'; label.value = pin.label || '';
-    label.setAttribute('aria-label', 'Point of interest name');
+    label.setAttribute('aria-label', tx('Point of interest name'));
     const category = document.createElement('select');
-    category.className = 'select'; category.setAttribute('aria-label', 'Point of interest category');
+    category.className = 'select'; category.setAttribute('aria-label', tx('Point of interest category'));
     for (const choice of POINT_CATEGORIES) {
-      const option = new Option(choice, choice);
+      // The value stays the stored English, as on the Points page.
+      const option = new Option(tx(choice), choice);
       option.selected = choice === (pin.category || 'General');
       category.append(option);
     }
     const save = document.createElement('button');
-    save.type = 'button'; save.className = 'ghost'; save.textContent = 'Save';
+    save.type = 'button'; save.className = 'ghost'; save.textContent = tx('Save');
     save.addEventListener('click', () => savePinnedLocation(pin, label.value, category.value, save));
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'ghost pin-remove';
-    remove.textContent = 'Remove';
+    remove.textContent = tx('Remove');
     remove.addEventListener('click', () => unpinLocation(pin, remove));
     fields.append(label, category, save, remove);
     row.append(fields);
@@ -8242,17 +8266,17 @@ function renderScreenReviewInbox(readings) {
   const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind));
   box.hidden = unknown.length === 0;
   list.textContent = '';
-  if (count) count.textContent = unknown.length ? `${unknown.length} queued` : '';
+  if (count) count.textContent = unknown.length ? tx('{count} queued', { count: unknown.length }) : '';
 
   for (const reading of unknown.slice(0, 12)) {
     const item = document.createElement('details');
     item.className = 'screen-review-item';
     const summary = document.createElement('summary');
-    summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString()}`;
-    item.append(summary, el('p', 'muted', reading.summary));
+    summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString(QW_DATE_LOCALES)}`;
+    item.append(summary, el('p', 'muted', tx(reading.summary)));
     const image = document.createElement('a');
     image.href = `/api/screen/shots/${encodeURIComponent(reading.shot)}`;
-    image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = 'Open screenshot';
+    image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = tx('Open screenshot');
     item.append(image);
     if ((reading.lines || []).length) item.append(el('pre', null, reading.lines.join('\n')));
     list.append(item);
@@ -8261,7 +8285,7 @@ function renderScreenReviewInbox(readings) {
 
 async function pinClipboardLocation(paste, button) {
   button.disabled = true;
-  button.textContent = 'Pinning…';
+  button.textContent = tx('Pinning…');
 
   try {
     const response = await fetch('/api/screen/clipboard/pin', {
@@ -8270,19 +8294,19 @@ async function pinClipboardLocation(paste, button) {
       body: JSON.stringify({ at: paste.at }),
     });
     if (!response.ok) throw new Error(`pin -> ${response.status}`);
-    screenSay('Pinned as a point of interest.');
+    screenSay(tx('Pinned as a point of interest.'));
     await renderScreenLog();
   } catch {
-    screenSay('could not pin that copied location');
+    screenSay(tx('could not pin that copied location'));
     button.disabled = false;
-    button.textContent = 'Pin as POI';
+    button.textContent = tx('Pin as POI');
   }
 }
 
 /** The same file through the reader it has now; the fresh reading replaces the old one. */
 async function rereadReading(reading, button) {
   button.disabled = true;
-  button.textContent = 'Reading…';
+  button.textContent = tx('Reading…');
 
   try {
     const response = await fetch('/api/screen/readings/reread', {
@@ -8295,16 +8319,16 @@ async function rereadReading(reading, button) {
     // the game has since deleted.
     if (!response.ok) {
       const why = await response.json().catch(() => null);
-      throw new Error(why?.trouble || 'could not read that screenshot again - is it still in the game\'s folder?');
+      throw new Error(why?.trouble || tx('could not read that screenshot again - is it still in the game\'s folder?'));
     }
     const got = await response.json();
-    screenSay(`Read again: ${got.summary}`);
+    screenSay(tx('Read again: {summary}', { summary: tx(got.summary) }));
     await renderScreenLog();
     loadLedgerWallet().catch(() => {});
   } catch (e) {
-    screenSay(e.message || 'could not read that screenshot again');
+    screenSay(e.message || tx('could not read that screenshot again'));
     button.disabled = false;
-    button.textContent = 'Read again';
+    button.textContent = tx('Read again');
   }
 }
 
@@ -8319,13 +8343,13 @@ async function dismissReading(reading, dismissed, button) {
       body: JSON.stringify({ shot: reading.shot, dismissed }),
     });
     if (!response.ok) throw new Error(`dismiss -> ${response.status}`);
-    screenSay(dismissed ? 'Invalidated. Nothing will use that reading.' : 'That reading counts again.');
+    screenSay(dismissed ? tx('Invalidated. Nothing will use that reading.') : tx('That reading counts again.'));
     await renderScreenLog();
 
     // The cash card may have been drawn from the very reading just set aside.
     loadLedgerWallet().catch(() => {});
   } catch {
-    screenSay(dismissed ? 'could not invalidate that reading' : 'could not restore that reading');
+    screenSay(dismissed ? tx('could not invalidate that reading') : tx('could not restore that reading'));
     button.disabled = false;
   }
 }
@@ -8338,10 +8362,10 @@ async function savePinnedLocation(pin, label, category, button) {
       body: JSON.stringify({ sourceAt: pin.sourceAt, label, category }),
     });
     if (!response.ok) throw new Error(`pin update -> ${response.status}`);
-    screenSay('Point of interest saved.');
+    screenSay(tx('Point of interest saved.'));
     await renderScreenLog();
   } catch {
-    screenSay('could not save that point of interest');
+    screenSay(tx('could not save that point of interest'));
     button.disabled = false;
   }
 }
@@ -8352,10 +8376,10 @@ async function unpinLocation(pin, button) {
   try {
     const response = await fetch(`/api/screen/pins?at=${encodeURIComponent(pin.sourceAt)}`, { method: 'DELETE' });
     if (!response.ok) throw new Error(`unpin -> ${response.status}`);
-    screenSay('Removed point of interest.');
+    screenSay(tx('Removed point of interest.'));
     await renderScreenLog();
   } catch {
-    screenSay('could not remove that point of interest');
+    screenSay(tx('could not remove that point of interest'));
     button.disabled = false;
   }
 }
@@ -12489,7 +12513,7 @@ function showLogPane(name) {
   const scan = $('#scan-now');
   if (scan) scan.hidden = name !== 'files';
   const caption = $('#log-caption');
-  if (caption) caption.textContent = LOG_CAPTIONS[name];
+  if (caption) caption.textContent = tx(LOG_CAPTIONS[name]);
 
   if (name === 'files') loadScanHistory().catch(() => {});
 }
@@ -12525,8 +12549,8 @@ let scanRunsSeen = [];
 function paintFileState(cell, state) {
   const [label, why] = FILE_STATES[state] || [state, ''];
   cell.className = `scan-state ${state}`;
-  cell.textContent = label;
-  cell.title = why;
+  cell.textContent = FILE_STATES[state] ? tx(label) : label;
+  cell.title = why ? tx(why) : '';
 }
 
 /**
@@ -12561,7 +12585,7 @@ async function loadScanHistory() {
   try {
     history = await getJson('/api/scan/history');
   } catch {
-    $('#scan-files-summary').textContent = 'could not read the scan history';
+    $('#scan-files-summary').textContent = tx('could not read the scan history');
     return;
   }
 
@@ -12576,14 +12600,18 @@ function renderScanFiles(history) {
 
   const read = files.filter((f) => f.state === 'current').length;
   const gone = files.filter((f) => f.state === 'gone').length;
-  const parts = [`${history.onDisk ?? 0} in the folder`, megabytes(history.bytes || 0), `${read} read as they stand`];
-  if (gone) parts.push(`${gone} gone`);
+  const parts = [
+    tx('{count} in the folder', { count: history.onDisk ?? 0 }),
+    megabytes(history.bytes || 0),
+    tx('{count} read as they stand', { count: read }),
+  ];
+  if (gone) parts.push(tx('{count} gone', { count: gone }));
   $('#scan-files-summary').textContent = parts.join(' · ');
 
   if (!files.length) {
     const td = el('td', 'muted', history.root
-      ? 'No Game.log in this install yet. The game writes one the first time it runs.'
-      : 'No install found, so there is nothing to read. Point the app at one from Settings.');
+      ? tx('No Game.log in this install yet. The game writes one the first time it runs.')
+      : tx('No install found, so there is nothing to read. Point the app at one from Settings.'));
     td.colSpan = 8;
     const tr = el('tr');
     tr.append(td);
@@ -12596,7 +12624,7 @@ function renderScanFiles(history) {
 
     const name = el('td');
     name.append(el('span', 'scan-file', file.name));
-    if (file.live) name.append(el('span', 'scan-live', 'live'));
+    if (file.live) name.append(el('span', 'scan-live', tx('live')));
     name.title = file.path;
     tr.append(name);
 
@@ -12619,9 +12647,9 @@ function renderScanFiles(history) {
       : '—'));
     tr.append(el('td', null, file.handle || '—'));
 
-    const when = el('td', 'muted', file.scannedAt ? relative(file.scannedAt) : file.sessionId ? 'before 0.14.10' : '—');
+    const when = el('td', 'muted', file.scannedAt ? relative(file.scannedAt) : file.sessionId ? tx('before 0.14.10') : '—');
     if (file.scannedAt) when.title = stampOf(file.scannedAt);
-    else if (file.sessionId) when.title = 'Read by a build that did not yet record when';
+    else if (file.sessionId) when.title = tx('Read by a build that did not yet record when');
     tr.append(when);
 
     body.append(tr);
@@ -12635,9 +12663,9 @@ function renderScanRuns(runs) {
 
   const latest = runs[0];
   $('#scan-runs-summary').textContent = scanNow
-    ? `running · ${scanNow.done} of ${scanNow.total} checked · ${scanNow.parsed} read so far`
+    ? tx('running · {done} of {total} checked · {parsed} read so far', { done: scanNow.done, total: scanNow.total, parsed: scanNow.parsed })
     : latest
-      ? `last ${relative(latest.finishedAt)} · ${latest.parsed} of ${latest.files} read`
+      ? tx('last {when} · {parsed} of {files} read', { when: relative(latest.finishedAt), parsed: latest.parsed, files: latest.files })
       : '';
 
   // The pass under way sits above the ones that finished, with the file it
@@ -12645,16 +12673,17 @@ function renderScanRuns(runs) {
   // they are about to join.
   if (scanNow) {
     const tr = el('tr', 'running');
-    tr.append(el('td', null, 'now'));
+    tr.append(el('td', null, tx('now')));
     tr.append(el('td', 'num', String(scanNow.total)));
     tr.append(el('td', 'num', String(scanNow.parsed)));
     tr.append(el('td', 'num', `${scanNow.elapsedSeconds}s`));
-    tr.append(el('td', 'scan-state parsing', `parsing ${scanNow.done} / ${scanNow.total}${scanNow.file ? ` · ${scanNow.file}` : ''}`));
+    tr.append(el('td', 'scan-state parsing',
+      `${tx('parsing {done} / {total}', { done: scanNow.done, total: scanNow.total })}${scanNow.file ? ` · ${scanNow.file}` : ''}`));
     body.append(tr);
   }
 
   if (!runs.length && !scanNow) {
-    const td = el('td', 'muted', 'No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.');
+    const td = el('td', 'muted', tx('No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.'));
     td.colSpan = 5;
     const tr = el('tr');
     tr.append(td);
@@ -12671,7 +12700,7 @@ function renderScanRuns(runs) {
     tr.append(el('td', 'num', String(run.parsed)));
     const seconds = Math.max(0, (new Date(run.finishedAt) - new Date(run.startedAt)) / 1000);
     tr.append(el('td', 'num', seconds < 1 ? '<1s' : `${Math.round(seconds)}s`));
-    tr.append(el('td', run.forced ? 'scan-forced' : 'muted', run.forced ? 'full re-read' : run.parsed ? 'new logs' : 'unchanged'));
+    tr.append(el('td', run.forced ? 'scan-forced' : 'muted', run.forced ? tx('full re-read') : run.parsed ? tx('new logs') : tx('unchanged')));
     body.append(tr);
   }
 }
@@ -12686,7 +12715,7 @@ $('#scan-now')?.addEventListener('click', async (e) => {
     await getJson2('/api/scan');
     await loadScanHistory();
   } catch {
-    $('#scan-files-summary').textContent = 'the scan could not be started';
+    $('#scan-files-summary').textContent = tx('the scan could not be started');
   } finally {
     button.disabled = false;
   }
@@ -12708,7 +12737,7 @@ $('#screen-log-clear')?.addEventListener('click', async (e) => {
     screenLatestShot = null;
     await renderScreenLog();
   } catch {
-    screenSay('could not clear the log');
+    screenSay(tx('could not clear the log'));
   } finally {
     button.disabled = false;
   }
@@ -12733,7 +12762,7 @@ $('#screen-parse')?.addEventListener('click', async (e) => {
   try {
     await parseClipboard();
   } catch (err) {
-    screenSay(`could not read the clipboard: ${err.message}`);
+    screenSay(tx('could not read the clipboard: {error}', { error: err.message }));
   } finally {
     button.disabled = false;
   }
@@ -12746,7 +12775,7 @@ $('#screen-scan')?.addEventListener('click', async (e) => {
   try {
     await scanScreenshot();
   } catch (err) {
-    screenSay(`could not read the screenshot: ${err.message}`);
+    screenSay(tx('could not read the screenshot: {error}', { error: err.message }));
   } finally {
     button.disabled = false;
   }
@@ -12759,7 +12788,7 @@ $('#screen-read-older')?.addEventListener('click', async (e) => {
   try {
     await readOlderScreenshots();
   } catch (err) {
-    screenSay(`could not read the older screenshots: ${err.message}`);
+    screenSay(tx('could not read the older screenshots: {error}', { error: err.message }));
   } finally {
     button.disabled = false;
   }
@@ -16566,8 +16595,8 @@ function drawCargoEarnings(trades) {
   };
 
   const series = [
-    { label: 'Earned selling cargo', points: running('sell') },
-    { label: 'Spent buying it', points: running('buy') },
+    { label: tx('Earned selling cargo'), points: running('sell') },
+    { label: tx('Spent buying it'), points: running('buy') },
   ];
 
   timeChart(svg, series, (v) => `${Math.round(v / 1000).toLocaleString()}k`);
@@ -16594,7 +16623,7 @@ function timeChart(svg, series, format) {
     const text = svgEl('text', {
       x: 500, y: 110, 'text-anchor': 'middle', class: 'empty-note',
     });
-    text.textContent = 'NOT ENOUGH HISTORY YET';
+    text.textContent = tx('NOT ENOUGH HISTORY YET');
     svg.append(text);
     return;
   }
@@ -16739,7 +16768,7 @@ async function openCommodity(name) {
   if (location.hash !== fragment) history.replaceState(null, '', fragment);
 
   $('#commodity-name').textContent = name;
-  $('#commodity-sub').textContent = 'Asking UEX what this has been doing…';
+  $('#commodity-sub').textContent = tx('Asking UEX what this has been doing…');
 
   // A link straight into this page arrives before Market has ever been opened,
   // so the catalogue its headline figures come from is not loaded yet.
@@ -16748,10 +16777,10 @@ async function openCommodity(name) {
   const entry = marketEntries.find((e) => e.name === name);
 
   tiles('#commodity-summary', [
-    ['Best sell now', entry?.uex?.bestSell > 0 ? money(entry.uex.bestSell) : '—'],
-    ['15-day average', entry?.uex?.avgSell > 0 ? money(entry.uex.avgSell) : '—'],
-    ['You have sold', entry?.myScuSold ? `${entry.myScuSold.toLocaleString()} SCU` : '—'],
-    ['It earned you', entry?.myRevenue ? money(entry.myRevenue) : '—'],
+    [tx('Best sell now'), entry?.uex?.bestSell > 0 ? money(entry.uex.bestSell) : '—'],
+    [tx('15-day average'), entry?.uex?.avgSell > 0 ? money(entry.uex.avgSell) : '—'],
+    [tx('You have sold'), entry?.myScuSold ? `${entry.myScuSold.toLocaleString()} SCU` : '—'],
+    [tx('It earned you'), entry?.myRevenue ? money(entry.myRevenue) : '—'],
   ]);
 
   renderCommodityCounters(await terminalsFor(name).catch(() => []), entry);
@@ -16763,7 +16792,7 @@ async function openCommodity(name) {
   try {
     trend = await getJson(`/api/uex/history?commodity=${encodeURIComponent(name)}`);
   } catch {
-    $('#commodity-sub').textContent = 'UEX could not be reached, so no history is drawn.';
+    $('#commodity-sub').textContent = tx('UEX could not be reached, so no history is drawn.');
     return;
   }
 
@@ -16774,16 +16803,16 @@ async function openCommodity(name) {
   const daily = dailyMarket(trend);
 
   $('#commodity-sub').textContent = trend.sampled
-    ? `${entry?.groups?.join(', ') || 'Commodity'} · history from the ${trend.sampled} busiest `
-      + `of ${trend.terminals} counters that trade it, by demand and by stock.`
+    ? `${entry?.groups?.join(', ') || tx('Commodity')} · ${tx('history from the {sampled} busiest of {total} counters that trade it, by demand and by stock.',
+      { sampled: trend.sampled, total: trend.terminals })}`
     : trend.terminals
-      ? `Live UEX quotes are available at ${trend.terminals} counters, but no price-history samples loaded. `
-        + 'The counter tables above are still the current report.'
-      : 'No UEX market counters are currently reported for this commodity.';
+      ? tx('Live UEX quotes are available at {count} counters, but no price-history samples loaded. The counter tables above are still the current report.',
+        { count: trend.terminals })
+      : tx('No UEX market counters are currently reported for this commodity.');
 
   const priceSeries = [
-    { label: 'Best price paid to you', points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
-    { label: 'Cheapest price charged to you', points: daily.filter((d) => d.bestBuy > 0).map((d) => ({ t: d.t, v: d.bestBuy })) },
+    { label: tx('Best price paid to you'), points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
+    { label: tx('Cheapest price charged to you'), points: daily.filter((d) => d.bestBuy > 0).map((d) => ({ t: d.t, v: d.bestBuy })) },
   ];
 
   timeChart($('#commodity-price-chart'), priceSeries, (v) => Math.round(v).toLocaleString());
@@ -16793,7 +16822,7 @@ async function openCommodity(name) {
   // a sell one, and subtracting from zero would draw the sale price again under
   // a name that means something else.
   const marginSeries = [{
-    label: 'Margin per SCU',
+    label: tx('Margin per SCU'),
     points: daily.filter((d) => d.bestSell > 0 && d.bestBuy > 0)
       .map((d) => ({ t: d.t, v: d.bestSell - d.bestBuy })),
   }];
@@ -16816,8 +16845,8 @@ async function openCommodity(name) {
   chartKey('#commodity-counter-key', counterSeries);
 
   const scuSeries = [
-    { label: 'Demand — SCU the average counter will take', points: daily.map((d) => ({ t: d.t, v: d.demand })) },
-    { label: 'Supply — SCU on the average shelf', points: daily.map((d) => ({ t: d.t, v: d.stock })) },
+    { label: tx('Demand — SCU the average counter will take'), points: daily.map((d) => ({ t: d.t, v: d.demand })) },
+    { label: tx('Supply — SCU on the average shelf'), points: daily.map((d) => ({ t: d.t, v: d.stock })) },
   ];
 
   timeChart($('#commodity-scu-chart'), scuSeries, (v) => Math.round(v).toLocaleString());
@@ -16835,13 +16864,13 @@ function renderCommodityCounters(rows, entry) {
   fillCounterTable('#commodity-sell-table', sells, (r) => [
     money(r.sell),
     r.sellScu ? `${Math.round(r.sellScu).toLocaleString()} SCU` : '—',
-    best && r.sell < best ? `−${money(best - r.sell)}` : 'best',
+    best && r.sell < best ? `−${money(best - r.sell)}` : tx('best'),
   ], (r) => best && r.sell < best);
 
   fillCounterTable('#commodity-buy-table', buys, (r) => [
     money(r.buy),
     r.buyScu ? `${Math.round(r.buyScu).toLocaleString()} SCU` : '—',
-    cheapest && r.buy > cheapest ? `+${money(r.buy - cheapest)}` : 'cheapest',
+    cheapest && r.buy > cheapest ? `+${money(r.buy - cheapest)}` : tx('cheapest'),
   ], (r) => cheapest && r.buy > cheapest);
 
   // Unused here, but keeps the signature honest about what it was given.
@@ -16854,7 +16883,7 @@ function fillCounterTable(selector, rows, cells, isWorse) {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No counter known to trade it this way.');
+    const td = el('td', 'muted', tx('No counter known to trade it this way.'));
     td.colSpan = 5;
     tr.append(td);
     body.append(tr);
@@ -16887,7 +16916,7 @@ async function renderCommodityReceipts(name) {
 
   if (!trades.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'You have not traded this one.');
+    const td = el('td', 'muted', tx('You have not traded this one.'));
     td.colSpan = 6;
     tr.append(td);
     body.append(tr);
@@ -16897,7 +16926,7 @@ async function renderCommodityReceipts(name) {
   for (const trade of trades.sort((a, b) => new Date(b.at) - new Date(a.at))) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
-    tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', null, trade.isSell ? tx('Sold') : tx('Bought')));
     tr.append(tdPlace(trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
@@ -20147,16 +20176,16 @@ function renderCommodities(trades) {
     .reduce((total, t) => total + (Number(t.uexBestSell) - Number(t.unitPrice)) * t.scu, 0);
 
   const cargoTiles = [
-    ['Revenue', money(revenue)],
-    ['SCU sold', scuSold.toLocaleString()],
-    ['Average per SCU', scuSold ? money(revenue / scuSold) : '—'],
-    ['Cargo bought', money(outlay)],
-    ['Sales', sells.length],
-    ['Best sale', sells.length ? money(Math.max(...sells.map((t) => Number(t.amount)))) : '—'],
+    [tx('Revenue'), money(revenue)],
+    [tx('SCU sold'), scuSold.toLocaleString()],
+    [tx('Average per SCU'), scuSold ? money(revenue / scuSold) : '—'],
+    [tx('Cargo bought'), money(outlay)],
+    [tx('Sales'), sells.length],
+    [tx('Best sale'), sells.length ? money(Math.max(...sells.map((t) => Number(t.amount)))) : '—'],
   ];
 
   if (sells.some((t) => t.uexBestSell > 0))
-    cargoTiles.push(['Left on the table*', money(leftOnTable)]);
+    cargoTiles.push([tx('Left on the table*'), money(leftOnTable)]);
 
   tiles('#cargo-summary', cargoTiles);
 
@@ -20182,7 +20211,7 @@ function renderCommodities(trades) {
 
   if (!trades.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No cargo trades in that range.');
+    const td = el('td', 'muted', tx('No cargo trades in that range.'));
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -20195,7 +20224,7 @@ function renderCommodities(trades) {
   for (const trade of trades) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
-    tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', null, trade.isSell ? tx('Sold') : tx('Bought')));
     tr.append(el('td', trade.commodity ? null : 'muted', trade.commodity ?? '—'));
     tr.append(tdPlace(trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
@@ -20209,7 +20238,7 @@ function renderCommodities(trades) {
         const delta = ((Number(trade.unitPrice) - Number(trade.uexBestSell)) / Number(trade.uexBestSell)) * 100;
         cell.className = `num ${delta >= -3 ? 'inward' : 'outward'}`;
         cell.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`;
-        cell.title = `UEX best sell today: ${money(trade.uexBestSell)}/SCU`;
+        cell.title = tx('UEX best sell today: {price}/SCU', { price: money(trade.uexBestSell) });
       } else {
         cell.className = 'num muted';
         cell.textContent = '—';
@@ -21144,12 +21173,12 @@ function renderSpending(stats) {
   const net = Number(stats.net) || 0;
 
   tiles('#spend-summary', [
-    ['Cargo income', money(stats.income)],
-    ['Item spend', money(stats.spend)],
-    ['Cargo spend', money(stats.commoditySpend)],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net))],
-    ['Purchases', stats.purchaseCount],
-    ['Cargo trades', stats.tradeCount],
+    [tx('Cargo income'), money(stats.income)],
+    [tx('Item spend'), money(stats.spend)],
+    [tx('Cargo spend'), money(stats.commoditySpend)],
+    [net >= 0 ? tx('Net gain') : tx('Net loss'), money(Math.abs(net))],
+    [tx('Purchases'), stats.purchaseCount],
+    [tx('Cargo trades'), stats.tradeCount],
   ]);
   const netTile = $('#spend-summary')?.children[3];
   if (netTile) netTile.classList.toggle('net-negative', net < 0);
@@ -21165,16 +21194,16 @@ function renderSpending(stats) {
       money);
   } else {
     $('#trade-chart').textContent = '';
-    $('#trade-chart').append(el('p', 'muted', 'No commodity sales recorded yet.'));
+    $('#trade-chart').append(el('p', 'muted', tx('No commodity sales recorded yet.')));
   }
 
   const shopRows = stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count }));
-  const shopFormat = (v) => `${v} buy${v === 1 ? '' : 's'}`;
+  const shopFormat = (v) => txn(v, '{count} buy', '{count} buys');
   bars('#shops-chart', shopRows.slice(0, 7), shopFormat);
   const moreShops = $('#shops-more');
   if (moreShops) {
     moreShops.hidden = shopRows.length <= 7;
-    $('#shops-more-count').textContent = shopRows.length > 7 ? `${shopRows.length - 7} more` : '';
+    $('#shops-more-count').textContent = shopRows.length > 7 ? tx('{count} more', { count: shopRows.length - 7 }) : '';
     bars('#shops-more-chart', shopRows.slice(7), shopFormat);
   }
 
@@ -21187,7 +21216,7 @@ function renderSpending(stats) {
   const moreItems = $('#items-more');
   if (moreItems) {
     moreItems.hidden = itemRows.length <= 9;
-    $('#items-more-count').textContent = itemRows.length > 9 ? `${itemRows.length - 9} more` : '';
+    $('#items-more-count').textContent = itemRows.length > 9 ? tx('{count} more', { count: itemRows.length - 9 }) : '';
     bars('#items-more-chart', itemRows.slice(9), money);
   }
 }
@@ -21796,12 +21825,12 @@ function updateHereControl() {
   const here = currentMapLocation();
   control.disabled = !here;
   control.classList.toggle('located', !!here);
-  label.textContent = here ? `You · ${here.name}` : 'Location unknown';
+  label.textContent = here ? tx('You · {place}', { place: here.name }) : tx('Location unknown');
 
-  if (!here) control.title = 'The live log has not named your location yet';
-  else if (mapMode() === 'network') control.title = `Show ${here.name} in ${here.system}`;
-  else if (mapSystem() !== here.system) control.title = `Show ${here.name} in ${here.system}`;
-  else control.title = `Centre on ${here.name}`;
+  if (!here) control.title = tx('The live log has not named your location yet');
+  else if (mapMode() === 'network' || mapSystem() !== here.system)
+    control.title = tx('Show {place} in {system}', { place: here.name, system: here.system });
+  else control.title = tx('Centre on {place}', { place: here.name });
 }
 
 /** Makes the player's system and place visible without changing filters. */
@@ -21843,8 +21872,9 @@ function syncMapModeControls() {
   system.hidden = mode.value !== 'system';
   const note = $('#map-mode-note');
   if (note) note.textContent = mode.value === 'system'
-    ? `${system.value || 'This system'}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.`
-    : 'Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.';
+    ? tx('{system}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.',
+      { system: system.value || tx('This system') })
+    : tx('Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.');
   updateHereControl();
 }
 
@@ -21858,6 +21888,9 @@ const SERVICE_META = {
   clinic: { icon: '✚', label: 'Clinic' },
   repair: { icon: '⚙', label: 'Repair' },
 };
+/** A service's name in the page's language; the key stays the server's. */
+const serviceLabel = (service) => (SERVICE_META[service] ? tx(SERVICE_META[service].label) : service);
+
 const mapServicesByPlace = new Map();
 let mapServiceFilter = '';
 let mapFocusFilter = '';
@@ -21970,10 +22003,10 @@ async function loadGameData() {
 /** What to say to a page that has nothing to show yet. */
 function gameDataExcuse() {
   if (gameDataState?.state === 'reading') {
-    return 'Still reading your game files — this takes about half a minute after a patch.';
+    return tx('Still reading your game files — this takes about half a minute after a patch.');
   }
 
-  if (gameDataState?.state === 'noinstall') return 'No game install was found.';
+  if (gameDataState?.state === 'noinstall') return tx('No game install was found.');
   if (gameDataState?.state === 'failed') return gameDataState.problem;
 
   return null;
@@ -21997,10 +22030,15 @@ async function loadMapAmenities() {
     select.append(new Option(`${mapFacilityLabel(amenity)} (${count})`, amenity));
 }
 
-const mapFacilityLabel = (amenity) => ({
-  'Commodity Trading - Freight Elevator': 'Cargo · Freight elevator',
-  'Commodity Trading - Loading Dock': 'Cargo · Loading dock',
-}[amenity] || amenity);
+// The other facility names are the game's and stay as it writes them; these
+// two are the app's own shortening, so they are page text.
+const mapFacilityLabel = (amenity) => {
+  const short = {
+    'Commodity Trading - Freight Elevator': 'Cargo · Freight elevator',
+    'Commodity Trading - Loading Dock': 'Cargo · Loading dock',
+  }[amenity];
+  return short ? tx(short) : amenity;
+};
 
 /** Whether the game lists a facility at a place, matched on the readable name. */
 const hasAmenity = (location, amenity) =>
@@ -22013,15 +22051,16 @@ function clearMapClosest() {
 
 function closestMapFacilities(amenity, service) {
   const here = currentMapLocation();
-  const label = mapFacilityLabel(amenity) || SERVICE_META[service]?.label;
-  if (!label) return { message: 'Choose a facility (such as Refinery or Cargo), or a service, then select closest.' };
-  if (!here?.system) return { message: 'Your last known location is unavailable. Wait for the log to name a place before finding the closest facility.' };
+  const label = mapFacilityLabel(amenity) || (SERVICE_META[service] ? serviceLabel(service) : null);
+  if (!label) return { message: tx('Choose a facility (such as Refinery or Cargo), or a service, then select closest.') };
+  if (!here?.system) return { message: tx('Your last known location is unavailable. Wait for the log to name a place before finding the closest facility.') };
   const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
   const matches = atlas.filter((location) => same(location.system, here.system)
     && (amenity ? hasAmenity(location, amenity) : servicesAt(location).includes(service)));
-  if (!matches.length) return { message: `No ${label} facilities are listed in ${here.system}. Other systems cannot be compared by distance.` };
+  const at = { facility: label, place: here.name, system: here.system };
+  if (!matches.length) return { message: tx('No {facility} facilities are listed in {system}. Other systems cannot be compared by distance.', at) };
   const atHere = matches.find((location) => location.rawId === here.rawId);
-  if (atHere) return { locations: [atHere], message: `${label} is listed at ${here.name}, your last known location.` };
+  if (atHere) return { locations: [atHere], message: tx('{facility} is listed at {place}, your last known location.', at) };
 
   // Display positions are compressed and spread out for labels. Only the
   // source body coordinates can rank proximity; sites on one body stay tied.
@@ -22036,13 +22075,13 @@ function closestMapFacilities(amenity, service) {
     return { location, distance };
   });
   const known = ranked.filter((entry) => entry.distance !== null);
-  if (!known.length) return { message: `Cannot determine the closest ${label} from ${here.name}: body coordinates are missing and no matching facility is on the same body.` };
+  if (!known.length) return { message: tx('Cannot determine the closest {facility} from {place}: body coordinates are missing and no matching facility is on the same body.', at) };
   const best = Math.min(...known.map((entry) => entry.distance));
   const locations = known.filter((entry) => entry.distance === best).map((entry) => entry.location)
     .sort((a, b) => a.name.localeCompare(b.name));
-  let message = `Approximate closest ${label} from ${here.name} (last known location), within ${here.system}. Based on body positions, not travel distance; exact facility coordinates are unavailable.`;
-  if (locations.length > 1) message += ' These places are tied; choose one below.';
-  if (known.length < matches.length) message += ' Some matching facilities lack body coordinates and could not be compared.';
+  let message = tx('Approximate closest {facility} from {place} (last known location), within {system}. Based on body positions, not travel distance; exact facility coordinates are unavailable.', at);
+  if (locations.length > 1) message += ` ${tx('These places are tied; choose one below.')}`;
+  if (known.length < matches.length) message += ` ${tx('Some matching facilities lack body coordinates and could not be compared.')}`;
   return { locations, message };
 }
 
@@ -22101,7 +22140,7 @@ function drawServiceBadges(group, x, y, radius, services) {
     }));
 
     const title = svgEl('title');
-    title.textContent = SERVICE_META[service]?.label || service;
+    title.textContent = serviceLabel(service);
     badge.append(title);
     badges.append(badge);
   });
@@ -22120,7 +22159,7 @@ function drawMapNoteBadge(group, x, y, radius) {
     d: `M ${bx} ${by - size} L ${bx + size} ${by} L ${bx} ${by + size} L ${bx - size} ${by} Z`,
   }));
   const title = svgEl('title');
-  title.textContent = 'Personal map note';
+  title.textContent = tx('Personal map note');
   badge.append(title);
   group.append(badge);
 }
@@ -22170,8 +22209,8 @@ function saveMapView() {
   try { localStorage.setItem(MAP_SAVED_VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ }
 
   const button = $('#map-save-preset');
-  button.textContent = 'Saved';
-  button.title = 'Saved view updated';
+  button.textContent = tx('Saved');
+  button.title = tx('Saved view updated');
 }
 
 function applyMapPreset(name) {
@@ -22374,7 +22413,7 @@ let view = { ...HOME_VIEW };
 const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
-  setWorkspaceState('#map-state', 'loading', 'Loading known places…');
+  setWorkspaceState('#map-state', 'loading', tx('Loading known places…'));
   let mapUnavailable = false;
   const [data, servicePlaces] = await Promise.all([
     getJson('/api/map').catch(() => {
@@ -22397,8 +22436,8 @@ async function loadAtlas() {
   if (mapInfoLocation) renderMapInfoServices(mapInfoLocation);
   setWorkspaceState('#map-state', mapUnavailable ? 'offline' : atlas.length ? 'ready' : 'empty',
     mapUnavailable
-      ? 'Map data is unavailable. Refresh after the local server reconnects.'
-      : 'No known places are available yet.');
+      ? tx('Map data is unavailable. Refresh after the local server reconnects.')
+      : tx('No known places are available yet.'));
 }
 
 /** Real body coordinates per system, when the community dataset supplies them. */
@@ -22839,7 +22878,7 @@ function drawNetworkHere(map) {
     x: point.x, y: point.y - point.radius - 26, 'text-anchor': 'middle',
     class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
   });
-  label.textContent = `YOU · ${here.name}`;
+  label.textContent = tx('YOU · {place}', { place: here.name });
   group.append(label);
   map.append(group);
 }
@@ -23201,7 +23240,7 @@ function renderSearchResults() {
     row.type = 'button';
     row.append(el('span', 'name good', good.name));
     row.append(el('span', 'where',
-      `commodity · ${good.sold.length} sellers`));
+      `${tx('commodity')} · ${txn(good.sold.length, '{count} seller', '{count} sellers')}`));
 
     row.addEventListener('click', () => {
       box.hidden = true;
@@ -23233,10 +23272,10 @@ function priceFreshness(seenAt) {
   if (!Number.isFinite(at)) return null;
   const hours = Math.max(0, (Date.now() - at) / 3600000);
   return hours > 14 * 24
-    ? { state: 'stale', label: `UEX report ${Math.floor(hours / 24)}d old` }
+    ? { state: 'stale', label: tx('UEX report {n}d old', { n: Math.floor(hours / 24) }) }
     : hours > 72
-      ? { state: 'aging', label: `UEX report ${Math.floor(hours / 24)}d old` }
-      : { state: 'fresh', label: `UEX report ${Math.max(1, Math.round(hours))}h old` };
+      ? { state: 'aging', label: tx('UEX report {n}d old', { n: Math.floor(hours / 24) }) }
+      : { state: 'fresh', label: tx('UEX report {n}h old', { n: Math.max(1, Math.round(hours)) }) };
 }
 
 const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
@@ -23363,8 +23402,8 @@ function prepareShading(term, sites) {
     invert,
     unit: byScu ? 'SCU' : 'aUEC/SCU',
     label: buying
-      ? (byScu ? 'stock on offer' : 'buy price, cheapest is gold')
-      : (byScu ? 'sell capacity' : 'sell price, best is gold'),
+      ? (byScu ? tx('stock on offer') : tx('buy price, cheapest is gold'))
+      : (byScu ? tx('sell capacity') : tx('sell price, best is gold')),
   };
 }
 
@@ -23506,13 +23545,13 @@ function cargoPanelHead(kicker, title) {
 }
 
 const windowWord = () =>
-  (PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
+  tx(PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
 
 function renderCommodityPanel(entry) {
-  const body = cargoPanelHead(cargo.buying ? 'Commodity · buying' : 'Commodity · selling', entry.name);
+  const body = cargoPanelHead(cargo.buying ? tx('Commodity · buying') : tx('Commodity · selling'), entry.name);
 
   // What the market says today, from the rows the shading already fetched.
-  body.append(el('div', 'cargo-h', cargo.buying ? 'Cheapest terminals' : 'Best terminals'));
+  body.append(el('div', 'cargo-h', cargo.buying ? tx('Cheapest terminals') : tx('Best terminals')));
 
   if (shadeRows.name === entry.name && shadeRows.rows?.length) {
     const priceOf = (row) => (cargo.buying ? row.buy : row.sell);
@@ -23533,24 +23572,27 @@ function renderCommodityPanel(entry) {
       body.append(cargoRow({
         colour: shadeColour(cargo.buying ? 1 - t : t),
         name: row.terminal,
-        sub: `${Math.round(scuOf(row)).toLocaleString()} SCU ${cargo.buying ? 'in stock' : 'of demand'}`,
+        sub: cargo.buying
+          ? tx('{scu} SCU in stock', { scu: Math.round(scuOf(row)).toLocaleString() })
+          : tx('{scu} SCU of demand', { scu: Math.round(scuOf(row)).toLocaleString() }),
         value: priceOf(row),
         onClick: () => centreOnTerminal(row.terminal, row.placeId),
       }));
     }
   } else {
     body.append(el('div', 'cargo-empty', shadeRows.name === entry.name
-      ? 'No live prices for this commodity. UEX may be off — see Settings.'
-      : 'Fetching live prices…'));
+      ? tx('No live prices for this commodity. UEX may be off — see Settings.')
+      : tx('Fetching live prices…')));
   }
 
   // What the player was actually paid, which the market cannot tell them.
   const mine = receiptsFor(entry.name, cargo.buying);
-  body.append(el('div', 'cargo-h', `Your receipts · ${windowWord()}`));
+  body.append(el('div', 'cargo-h', `${tx('Your receipts')} · ${windowWord()}`));
 
   if (!mine.length) {
-    body.append(el('div', 'cargo-empty',
-      `You have never ${cargo.buying ? 'bought' : 'sold'} this in that window.`));
+    body.append(el('div', 'cargo-empty', cargo.buying
+      ? tx('You have never bought this in that window.')
+      : tx('You have never sold this in that window.')));
   }
 
   const best = mine.length ? mine[0].best : 0;
@@ -23563,8 +23605,8 @@ function renderCommodityPanel(entry) {
     body.append(cargoRow({
       colour: shadeColour(cargo.buying ? 1 - t : t),
       name: row.name,
-      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
-        + ` · avg ${Math.round(row.average).toLocaleString()} · ${dayOf(row.latestAt)}`,
+      sub: `${txn(row.trades, '{count} receipt', '{count} receipts')} · ${row.scu.toLocaleString()} SCU`
+        + ` · ${tx('avg {price}', { price: Math.round(row.average).toLocaleString() })} · ${dayOf(row.latestAt)}`,
       value: row.best,
       onClick: () => {
         if (row.id) centreOn(row.id);
@@ -23574,7 +23616,7 @@ function renderCommodityPanel(entry) {
   }
 
   const history = receiptsInWindow().filter((t) => t.commodity === entry.name);
-  body.append(el('div', 'cargo-h', `Trade history · ${history.length}`));
+  body.append(el('div', 'cargo-h', `${tx('Trade history')} · ${history.length}`));
   cargoHistory(body, history, (t) => t.place);
 }
 
@@ -23588,31 +23630,31 @@ function renderCommodityPanel(entry) {
 function renderStationPanel() {
   const place = cargo.place;
   const key = place.id || place.name;
-  const body = cargoPanelHead('Station', place.name);
+  const body = cargoPanelHead(tx('Station'), place.name);
 
   const at = receiptsInWindow().filter((t) => (t.placeId || t.place) === key);
 
-  const add = el('button', 'ghost tiny wide', 'Add as a stop');
-  add.title = 'Put this place on the flight plan';
+  const add = el('button', 'ghost tiny wide', tx('Add as a stop'));
+  add.title = tx('Put this place on the flight plan');
   add.addEventListener('click', () => addStop(place.id, place.name, null));
   body.append(add);
 
-  cargoSection(body, 'Accepts · you sold here', at.filter((t) => t.isSell), false);
-  cargoSection(body, 'Offers · you bought here', at.filter((t) => !t.isSell), true);
+  cargoSection(body, tx('Accepts · you sold here'), at.filter((t) => t.isSell), false);
+  cargoSection(body, tx('Offers · you bought here'), at.filter((t) => !t.isSell), true);
 
   // The catalogue's own answer, which covers commodities never traded here.
   const catalogue = place.location ? commoditiesSoldAt(place.location) : [];
 
   if (catalogue.length) {
-    body.append(el('div', 'cargo-h', `Catalogue says it sells · ${catalogue.length}`));
+    body.append(el('div', 'cargo-h', `${tx('Catalogue says it sells')} · ${catalogue.length}`));
 
     const list = el('div', 'cargo-goods');
     list.textContent = catalogue.slice(0, 24).join(', ')
-      + (catalogue.length > 24 ? `, +${catalogue.length - 24} more` : '');
+      + (catalogue.length > 24 ? `, ${tx('+{count} more', { count: catalogue.length - 24 })}` : '');
     body.append(list);
   }
 
-  body.append(el('div', 'cargo-h', `Trade history · ${at.length}`));
+  body.append(el('div', 'cargo-h', `${tx('Trade history')} · ${at.length}`));
   cargoHistory(body, at, (t) => t.commodity);
 }
 
@@ -23621,7 +23663,7 @@ function cargoSection(body, title, trades, buying) {
   body.append(el('div', 'cargo-h', title));
 
   if (!trades.length) {
-    body.append(el('div', 'cargo-empty', 'Nothing on record in that window.'));
+    body.append(el('div', 'cargo-empty', tx('Nothing on record in that window.')));
     return;
   }
 
@@ -23643,7 +23685,7 @@ function cargoSection(body, title, trades, buying) {
     body.append(cargoRow({
       colour: buying ? '#ffab3d' : '#4fd48a',
       name: row.name,
-      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+      sub: `${txn(row.trades, '{count} receipt', '{count} receipts')} · ${row.scu.toLocaleString()} SCU`
         + ` · ${dayOf(row.latestAt)}`,
       value: row.amount / (row.scu || 1),
 
@@ -23687,7 +23729,7 @@ function cargoRow({ colour, name, sub, value, onClick }) {
 /** The receipt list: newest first, capped so a long history stays scrollable. */
 function cargoHistory(body, trades, describe) {
   if (!trades.length) {
-    body.append(el('div', 'cargo-empty', 'No trades in that window.'));
+    body.append(el('div', 'cargo-empty', tx('No trades in that window.')));
     return;
   }
 
@@ -23695,13 +23737,13 @@ function cargoHistory(body, trades, describe) {
     const line = el('div', `cargo-line ${trade.isSell ? 'sell' : 'buy'}`);
     line.append(el('span', 'when', dayOf(trade.at)));
     line.append(el('span', 'what',
-      `${trade.isSell ? 'Sold' : 'Bought'} ${trade.scu} SCU · ${describe(trade)}`));
+      `${trade.isSell ? tx('Sold {count} SCU', { count: trade.scu }) : tx('Bought {count} SCU', { count: trade.scu })} · ${describe(trade)}`));
     line.append(el('span', 'rate', Math.round(trade.unitPrice).toLocaleString()));
     body.append(line);
   }
 
   if (trades.length > 30) {
-    body.append(el('div', 'cargo-empty', `+ ${trades.length - 30} older, on the Cargo page.`));
+    body.append(el('div', 'cargo-empty', tx('+ {count} older, on the Cargo page.', { count: trades.length - 30 })));
   }
 }
 
@@ -23809,9 +23851,9 @@ function shadeFromReceipts(name, buying) {
     invert: buying,
     unit: 'aUEC/SCU',
     label: buying
-      ? `your buy price, ${windowWord()}, cheapest is gold`
-      : `your sell price, ${windowWord()}, best is gold`,
-    plain: 'no receipt of yours here',
+      ? tx('your buy price, {window}, cheapest is gold', { window: windowWord() })
+      : tx('your sell price, {window}, best is gold', { window: windowWord() }),
+    plain: tx('no receipt of yours here'),
   };
 }
 
@@ -24072,12 +24114,11 @@ function showTripPanel() {
 
 function renderTripPanel() {
   const trip = tracked();
-  const body = cargoPanelHead('Flight plan', trip ? trip.title : 'No plan yet');
+  const body = cargoPanelHead(tx('Flight plan'), trip ? trip.title : tx('No plan yet'));
 
   if (!trip || !trip.stops.length) {
     body.append(el('div', 'cargo-empty',
-      'Double-click a place, or use Add stop on its card, to start a plan. '
-      + 'A trade route or a shopping list can start one for you.'));
+      tx('Double-click a place, or use Add stop on its card, to start a plan. A trade route or a shopping list can start one for you.')));
 
     // Finishing your only run leaves nothing tracked, and the runs you have
     // flown are exactly what you want to see at that moment - so the filed
@@ -24087,7 +24128,7 @@ function renderTripPanel() {
   }
 
   const done = trip.stops.filter((s) => s.done).length;
-  body.append(jobProgress(done, trip.stops.length, `${done} of ${trip.stops.length} stops`));
+  body.append(jobProgress(done, trip.stops.length, tx('{done} of {total} stops', { done, total: trip.stops.length })));
 
   const next = nextStop(trip);
 
@@ -24098,24 +24139,24 @@ function renderTripPanel() {
     const tools = el('div', 'trip-tools');
 
     const up = el('button', 'ghost tiny', '↑');
-    up.title = 'Earlier in the run';
+    up.title = tx('Earlier in the run');
     up.disabled = index === 0;
     up.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=-1`));
 
     const down = el('button', 'ghost tiny', '↓');
-    down.title = 'Later in the run';
+    down.title = tx('Later in the run');
     down.disabled = index === trip.stops.length - 1;
     down.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=1`));
 
     const drop = el('button', 'ghost tiny', '×');
-    drop.title = 'Drop this stop';
+    drop.title = tx('Drop this stop');
     drop.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
 
     const addAction = el('button', 'ghost tiny', '+');
-    addAction.title = 'Add a run-sheet action at this stop';
+    addAction.title = tx('Add a run-sheet action at this stop');
     addAction.addEventListener('click', () => {
       const existing = row.querySelector('.run-action-form');
       if (existing) existing.remove();
@@ -24133,11 +24174,11 @@ function renderTripPanel() {
   // tell setting off from opening the page, so it asks once and then knows.
   if (trip.archived === 'No' || trip.archived === undefined) {
     const lifecycle = el('button', trip.flying ? 'primary' : 'ghost',
-      trip.flying ? 'Finish run' : 'Start run');
+      trip.flying ? tx('Finish run') : tx('Start run'));
 
     lifecycle.title = trip.flying
-      ? 'Stop the clock and file this run'
-      : 'Start the clock — elapsed time is measured from here, not from when you wrote the plan';
+      ? tx('Stop the clock and file this run')
+      : tx('Start the clock — elapsed time is measured from here, not from when you wrote the plan');
 
     lifecycle.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/${trip.flying ? 'finish' : 'start'}`));
@@ -24145,12 +24186,12 @@ function renderTripPanel() {
     actions.append(lifecycle);
   }
 
-  const track = el('button', 'ghost', trip.tracked ? 'Stop tracking' : 'Track');
-  track.title = 'Show this plan on the Now page';
+  const track = el('button', 'ghost', trip.tracked ? tx('Stop tracking') : tx('Track'));
+  track.title = tx('Show this plan on the Now page');
   track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
   actions.append(track);
 
-  const scrap = el('button', 'ghost danger', 'Delete plan');
+  const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
     await tripCall(`/api/trips/${trip.id}`, 'DELETE');
     cargo.trip = false;
@@ -24163,14 +24204,14 @@ function renderTripPanel() {
 
   if (trip.flying) {
     body.append(el('div', 'trip-elapsed muted',
-      `Running for ${spanOf(trip.elapsedSeconds)} — since you pressed Start, not since you wrote it.`));
+      tx('Running for {span} — since you pressed Start, not since you wrote it.', { span: spanOf(trip.elapsedSeconds) })));
   }
 
   // Other plans, so one can be picked up again without a management screen.
   const others = trips.filter((t) => t !== trip && !isFiled(t));
 
   if (others.length) {
-    body.append(el('div', 'cargo-h', 'Other plans'));
+    body.append(el('div', 'cargo-h', tx('Other plans')));
 
     for (const other of others) {
       const row = el('div', 'cargo-row');
@@ -24179,7 +24220,7 @@ function renderTripPanel() {
       const main = el('div', 'cargo-row-main');
       main.append(el('div', 'name', other.title));
       main.append(el('div', 'sub',
-        `${other.stops.filter((s) => s.done).length} of ${other.stops.length} stops`));
+        tx('{done} of {total} stops', { done: other.stops.filter((s) => s.done).length, total: other.stops.length })));
       row.append(main);
 
       row.tabIndex = 0;
@@ -24202,7 +24243,7 @@ function renderFiledRuns(body) {
   const filed = trips.filter(isFiled);
   if (!filed.length) return;
 
-  body.append(el('div', 'cargo-h', 'Finished and filed'));
+  body.append(el('div', 'cargo-h', tx('Finished and filed')));
 
   for (const run of filed) {
     const row = el('div', 'cargo-row');
@@ -24212,9 +24253,10 @@ function renderFiledRuns(body) {
     main.append(el('div', 'name', run.title));
 
     const done = run.stops.filter((s) => s.done).length;
+    const stops = tx('{done} of {total} stops', { done, total: run.stops.length });
     main.append(el('div', 'sub', run.archived === 'Quiet'
-      ? `${done} of ${run.stops.length} stops — filed itself after going quiet`
-      : `${done} of ${run.stops.length} stops — ${spanOf(run.elapsedSeconds)}`));
+      ? `${stops} — ${tx('filed itself after going quiet')}`
+      : `${stops} — ${spanOf(run.elapsedSeconds)}`));
 
     row.append(main);
 
@@ -24224,19 +24266,19 @@ function renderFiledRuns(body) {
     // finished, and a button undoing that would make the sweep and the pilot
     // look like the same decision.
     if (run.archived === 'Quiet') {
-      const resume = el('button', 'ghost tiny', 'Resume');
-      resume.title = 'Put this back — it keeps the time it started';
+      const resume = el('button', 'ghost tiny', tx('Resume'));
+      resume.title = tx('Put this back — it keeps the time it started');
       resume.addEventListener('click', () => tripCall(`/api/trips/${run.id}/resume`));
       tools.append(resume);
     }
 
-    const look = el('button', 'ghost tiny', 'Review');
-    look.title = 'What this run planned, against what your logs recorded';
+    const look = el('button', 'ghost tiny', tx('Review'));
+    look.title = tx('What this run planned, against what your logs recorded');
     look.addEventListener('click', () => showRunReview(run.id).catch(() => {}));
     tools.append(look);
 
-    const again = el('button', 'ghost tiny', 'Repeat');
-    again.title = 'Fly the same route again, with nothing ticked off';
+    const again = el('button', 'ghost tiny', tx('Repeat'));
+    again.title = tx('Fly the same route again, with nothing ticked off');
     again.addEventListener('click', () => tripCall(`/api/trips/${run.id}/repeat`));
     tools.append(again);
 
@@ -24252,7 +24294,7 @@ function isFiled(trip) {
 
 /** A duration in the shortest words that stay honest about it. */
 function spanOf(seconds) {
-  if (!seconds || seconds < 0) return 'no time at all';
+  if (!seconds || seconds < 0) return tx('no time at all');
 
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
@@ -24278,16 +24320,16 @@ async function showRunReview(id) {
   cargo.place = null;
   cargo.trip = false;
 
-  const body = cargoPanelHead('Run review', 'Reading the logs…');
+  const body = cargoPanelHead(tx('Run review'), tx('Reading the logs…'));
 
   let review;
 
   try {
     review = await getJson(`/api/trips/${encodeURIComponent(id)}/review`);
   } catch {
-    cargoPanelHead('Run review', 'Nothing to review')
+    cargoPanelHead(tx('Run review'), tx('Nothing to review'))
       .append(el('div', 'cargo-empty',
-        'This plan has never been started, so there is nothing to compare against yet.'));
+        tx('This plan has never been started, so there is nothing to compare against yet.')));
     return;
   }
 
@@ -24295,35 +24337,36 @@ async function showRunReview(id) {
 }
 
 function renderRunReview(review) {
-  const body = cargoPanelHead('Run review', review.title);
+  const body = cargoPanelHead(tx('Run review'), review.title);
 
   const when = [
-    review.startedAt ? `Started ${dateOf(review.startedAt)}` : null,
-    review.elapsedSeconds ? `took ${spanOf(review.elapsedSeconds)}` : null,
+    review.startedAt ? tx('Started {date}', { date: dateOf(review.startedAt) }) : null,
+    review.elapsedSeconds ? tx('took {span}', { span: spanOf(review.elapsedSeconds) }) : null,
   ].filter(Boolean).join(' · ');
 
   if (when) body.append(el('div', 'sub muted', when));
 
-  body.append(runFigure('Money in', review.earned));
-  body.append(runFigure('Money out', review.spent));
+  body.append(runFigure(tx('Money in'), review.earned));
+  body.append(runFigure(tx('Money out'), review.spent));
 
-  body.append(el('div', 'cargo-h', 'Stop by stop'));
+  body.append(el('div', 'cargo-h', tx('Stop by stop')));
 
   for (const stop of review.stops) {
     const block = el('div', 'run-stop');
 
     const head = el('div', 'run-stop-head');
     head.append(el('span', 'name', stop.place));
-    head.append(el('span', 'muted', stop.doneAt ? dateOf(stop.doneAt) : 'never reached'));
+    head.append(el('span', 'muted', stop.doneAt ? dateOf(stop.doneAt) : tx('never reached')));
     block.append(head);
 
     if (stop.note) block.append(el('div', 'sub muted', stop.note));
 
     for (const action of stop.planned) block.append(runPlannedRow(review, stop, action));
 
+    // The kind is the ledger's English; the reader gets the page's.
     for (const claim of stop.claimed) {
       const row = el('div', 'run-claim');
-      row.append(el('span', 'muted', claim.kind));
+      row.append(el('span', 'muted', tx(claim.kind)));
       row.append(el('span', null, claim.what));
       row.append(el('span', claim.amount >= 0 ? 'amount in' : 'amount out', money(claim.amount)));
       block.append(row);
@@ -24332,22 +24375,21 @@ function renderRunReview(review) {
     // Said rather than left blank: most stops move no money, and an empty space
     // reads as a gap in the data instead of an ordinary stop.
     if (!stop.planned.length && !stop.claimed.length) {
-      block.append(el('div', 'sub muted', 'Nothing planned, and no money moved here.'));
+      block.append(el('div', 'sub muted', tx('Nothing planned, and no money moved here.')));
     }
 
     body.append(block);
   }
 
   if (review.unclaimed.length) {
-    body.append(el('div', 'cargo-h', 'During the run, but not at a stop'));
+    body.append(el('div', 'cargo-h', tx('During the run, but not at a stop')));
     body.append(el('div', 'sub muted',
-      'Money that moved while this run was going that no stop can account for. '
-      + 'Listed rather than added in — attaching it to the nearest stop would be a guess.'));
+      tx('Money that moved while this run was going that no stop can account for. Listed rather than added in — attaching it to the nearest stop would be a guess.')));
 
     for (const claim of review.unclaimed) {
       const row = el('div', 'run-claim');
       row.append(el('span', 'muted', dateOf(claim.at)));
-      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+      row.append(el('span', null, tx('{what} at {where}', { what: claim.what, where: claim.where })));
 
       // Muted, not green: this money is real and is not in the figure above,
       // and colouring it like counted income would say otherwise.
@@ -24371,13 +24413,13 @@ function runFigure(label, figure) {
   head.append(el('span', 'muted', label));
   head.append(el('span', 'run-figure-value', money(figure.value)));
 
-  const why = el('button', 'ghost tiny', 'Why this number?');
+  const why = el('button', 'ghost tiny', tx('Why this number?'));
   const detail = el('div', 'run-why');
   detail.hidden = true;
 
   why.addEventListener('click', () => {
     detail.hidden = !detail.hidden;
-    why.textContent = detail.hidden ? 'Why this number?' : 'Hide';
+    why.textContent = detail.hidden ? tx('Why this number?') : tx('Hide');
   });
 
   head.append(why);
@@ -24393,14 +24435,14 @@ function runFigure(label, figure) {
     for (const claim of figure.from) {
       const row = el('div', 'run-claim');
       row.append(el('span', 'muted', dateOf(claim.at)));
-      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+      row.append(el('span', null, tx('{what} at {where}', { what: claim.what, where: claim.where })));
       row.append(el('span', 'amount', money(claim.amount)));
       list.append(row);
     }
 
     detail.append(list);
   } else {
-    detail.append(el('div', 'sub muted', 'No records behind this one — nothing was matched to a stop.'));
+    detail.append(el('div', 'sub muted', tx('No records behind this one — nothing was matched to a stop.')));
   }
 
   block.append(detail);
@@ -24417,19 +24459,19 @@ function runFigure(label, figure) {
 function runPlannedRow(review, stop, action) {
   const row = el('div', 'run-planned');
 
-  row.append(el('span', 'muted', action.kind));
+  row.append(el('span', 'muted', runActionLabel(action.kind)));
   row.append(el('span', null, action.text));
 
   const planned = action.quantity === null || action.quantity === undefined
     ? '—'
     : `${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`;
 
-  row.append(el('span', 'muted planned-was', `planned ${planned}`));
+  row.append(el('span', 'muted planned-was', tx('planned {amount}', { amount: planned })));
 
   const actual = el('input', 'run-actual');
   actual.type = 'number';
-  actual.placeholder = 'actual';
-  actual.title = 'What it came to. Leave empty if you have not checked.';
+  actual.placeholder = tx('actual');
+  actual.title = tx('What it came to. Leave empty if you have not checked.');
   if (action.actual !== null && action.actual !== undefined) actual.value = String(action.actual);
 
   actual.addEventListener('change', async () => {
@@ -24702,7 +24744,7 @@ function drawTripPath() {
     badge.append(number);
 
     const title = svgEl('title');
-    title.textContent = `Stop ${point.index + 1}: ${point.stop.place}`
+    title.textContent = tx('Stop {n}: {place}', { n: point.index + 1, place: point.stop.place })
       + (point.stop.note ? ` — ${point.stop.note}` : '');
     badge.append(title);
 
@@ -25231,12 +25273,12 @@ function appendTipGoods(tip, names) {
   if (!names.length) return;
 
   const shown = names.slice(0, 6).join(', ');
-  tip.append(el('span', 'goods', `Sells ${shown}${names.length > 6 ? '…' : ''}`));
+  tip.append(el('span', 'goods', tx('Sells {names}', { names: `${shown}${names.length > 6 ? '…' : ''}` })));
 
   // A tooltip cannot hold a hundred names, so it says where they are rather
   // than trailing off into "+109 more" with no way to see them.
   if (names.length > 6)
-    tip.append(el('span', 'goods hint', `click for all ${names.length}`));
+    tip.append(el('span', 'goods hint', tx('click for all {count}', { count: names.length })));
 }
 
 /** The hover tooltip: name, kind and history at the cursor, instantly. */
@@ -25247,17 +25289,18 @@ function showMapTip(location) {
 
   tip.textContent = '';
   tip.append(el('strong', null, location.name));
-  tip.append(el('span', 'muted', location.kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
+  tip.append(el('span', 'muted', placeKindWord(location.kind)));
   tip.append(el('span', null, location.visits > 0
-    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
-    : 'never visited'));
+    ? txn(location.visits, '{count} visit', '{count} visits')
+    : tx('never visited')));
 
   // In shaded commodity mode, the number behind this node's colour.
   const shade = nodeShade.get(location.rawId);
   if (shade && shadeScale) {
-    tip.append(el('span', 'price',
-      `${shadeScale.invert ? 'buy at' : shadeScale.unit === 'SCU' ? 'capacity' : 'sells at'} ` +
-      `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`));
+    const figure = `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`;
+    tip.append(el('span', 'price', shadeScale.invert ? tx('buy at {figure}', { figure })
+      : shadeScale.unit === 'SCU' ? tx('capacity {figure}', { figure })
+      : tx('sells at {figure}', { figure })));
   }
 
   if (highlightIds?.has(location.rawId) && mapPriceFreshness)
@@ -25268,7 +25311,7 @@ function showMapTip(location) {
   const services = servicesAt(location);
   if (services.length)
     tip.append(el('span', 'service-tip', services
-      .map((service) => `${SERVICE_META[service]?.label || service}`)
+      .map((service) => serviceLabel(service))
       .join(' · ')));
 
   tip.hidden = false;
@@ -25295,18 +25338,18 @@ function showBodyTip(bodyName, system, sites) {
   tip.textContent = '';
   tip.append(el('strong', null, bodyName));
   tip.append(el('span', 'muted', system));
-  tip.append(el('span', null, `${sites.length} place${sites.length === 1 ? '' : 's'} · ${visited.length} visited`));
+  tip.append(el('span', null, `${txn(sites.length, '{count} place', '{count} places')} · ${tx('{count} visited', { count: visited.length })}`));
 
   if (visits > 0)
-    tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
+    tip.append(el('span', null, `${txn(visits, '{count} visit', '{count} visits')} · ${tx('last {when}', { when: relative(last) })}`));
 
   const plan = sites.filter((site) => planPlaceIds().has(site.rawId)).length;
   const shopping = sites.filter((site) => mapShoppingIds.has(site.rawId)).length;
   const stash = sites.filter((site) => mapStashIds.has(site.rawId)).length;
   const work = [
-    plan && `${plan} plan stop${plan === 1 ? '' : 's'}`,
-    shopping && `${shopping} shopping place${shopping === 1 ? '' : 's'}`,
-    stash && `${stash} stash place${stash === 1 ? '' : 's'}`,
+    plan && txn(plan, '{count} plan stop', '{count} plan stops'),
+    shopping && txn(shopping, '{count} shopping place', '{count} shopping places'),
+    stash && txn(stash, '{count} stash place', '{count} stash places'),
   ].filter(Boolean);
   if (work.length) tip.append(el('span', 'service-tip', work.join(' · ')));
 
@@ -25316,7 +25359,7 @@ function showBodyTip(bodyName, system, sites) {
       serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
   if (serviceCounts.size) {
     const summary = [...serviceCounts.entries()]
-      .map(([service, count]) => `${count} ${SERVICE_META[service]?.label || service}`)
+      .map(([service, count]) => `${count} ${serviceLabel(service)}`)
       .join(' · ');
     tip.append(el('span', 'service-tip', summary));
   }
@@ -25390,7 +25433,7 @@ async function saveMapNote(body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error('Could not save note');
+  if (!response.ok) throw new Error(tx('Could not save note'));
   await loadMapNotes();
 }
 
@@ -25405,20 +25448,20 @@ function renderMapInfoNotes(location) {
   host.textContent = '';
 
   const notes = mapNotes.filter((note) => note.placeId === location.rawId);
-  host.append(el('div', 'map-note-heading', notes.length ? `Your notes · ${notes.length}` : 'Personal map note'));
+  host.append(el('div', 'map-note-heading', notes.length ? `${tx('Your notes')} · ${notes.length}` : tx('Personal map note')));
 
   for (const note of notes) {
     const card = el('div', 'map-note');
     const top = el('div', 'map-note-top');
     top.append(el('b', null, note.title));
     const remove = el('button', 'ghost tiny', '×');
-    remove.title = 'Remove this map note';
+    remove.title = tx('Remove this map note');
     remove.addEventListener('click', () => removeMapNote(note.id));
     top.append(remove);
     card.append(top);
     if (note.note) card.append(el('div', 'map-note-text', note.note));
     if (note.tags?.length) card.append(el('div', 'map-note-tags', note.tags.join(' · ')));
-    card.append(el('div', 'map-note-age', `written ${relative(note.updatedAt)}`));
+    card.append(el('div', 'map-note-age', tx('written {when}', { when: relative(note.updatedAt) })));
     host.append(card);
   }
 
@@ -25426,16 +25469,16 @@ function renderMapInfoNotes(location) {
   const title = document.createElement('input');
   title.type = 'text';
   title.className = 'search';
-  title.placeholder = 'Title, e.g. cargo entrance';
+  title.placeholder = tx('Title, e.g. cargo entrance');
   const detail = document.createElement('input');
   detail.type = 'text';
   detail.className = 'search';
-  detail.placeholder = 'Optional note';
+  detail.placeholder = tx('Optional note');
   const tags = document.createElement('input');
   tags.type = 'text';
   tags.className = 'search';
-  tags.placeholder = 'Tags, comma separated';
-  const save = el('button', 'ghost tiny', 'Save note');
+  tags.placeholder = tx('Tags, comma separated');
+  const save = el('button', 'ghost tiny', tx('Save note'));
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
@@ -25470,21 +25513,21 @@ function renderMapInfoSold() {
   list.textContent = '';
 
   if (!marketEntries.length) {
-    list.append(el('span', 'muted', 'Needs the community dataset (Settings).'));
+    list.append(el('span', 'muted', tx('Needs the community dataset (Settings).')));
   } else {
     const names = commoditiesSoldAt(mapInfoLocation);
 
     if (!names.length) {
-      list.append(el('span', 'muted', 'Nothing known to sell here.'));
+      list.append(el('span', 'muted', tx('Nothing known to sell here.')));
     } else {
       // The count matters when there are a hundred: the tooltip promised them
       // all, and this is where they are.
-      list.append(el('div', 'sold-count muted', `${names.length} sold here · click one to light its sellers`));
+      list.append(el('div', 'sold-count muted', tx('{count} sold here · click one to light its sellers', { count: names.length })));
 
       for (const name of names) {
         const chip = el('button', 'sold-chip', name);
         chip.type = 'button';
-        chip.title = 'Light every place that sells this';
+        chip.title = tx('Light every place that sells this');
         chip.addEventListener('click', () => {
           $('#map-search').value = name;
           drawMap();
@@ -25530,7 +25573,7 @@ async function showMapInfo(location) {
   const trade = $('#map-info-trade');
   if (highlightIds && commoditySites(($('#map-search')?.value || '').trim().toLowerCase())) {
     const sells = highlightIds.has(location.rawId);
-    trade.textContent = sells ? 'sells the searched commodity' : 'does not sell it';
+    trade.textContent = sells ? tx('sells the searched commodity') : tx('does not sell it');
     trade.className = sells ? 'inward' : 'muted';
     trade.hidden = false;
   } else {
@@ -25576,7 +25619,7 @@ function renderMapInfoPlace(location) {
     if (found.amenities?.length) {
       amenityNode.textContent = '';
       amenityNode.append(
-        el('span', 'muted', found.parent ? `In ${found.parent} · has ` : 'Has '));
+        el('span', 'muted', `${found.parent ? tx('In {place} · has', { place: found.parent }) : tx('Has')} `));
 
       for (const amenity of found.amenities) amenityNode.append(el('span', 'amenity', amenity));
 
@@ -25596,9 +25639,9 @@ function renderMapInfoServices(location) {
     if (!meta) continue;
     const chip = el('button', 'map-service-chip');
     chip.type = 'button';
-    chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
+    chip.title = tx('Filter the map to {service}', { service: serviceLabel(service).toLowerCase() });
     chip.append(mapServiceIcon(service));
-    chip.append(el('span', 'service-text', meta.label));
+    chip.append(el('span', 'service-text', serviceLabel(service)));
     chip.addEventListener('click', () => selectMapService(service));
     host.append(chip);
   }
@@ -25624,13 +25667,13 @@ function renderMapInfoSupport(location, services) {
     return;
   }
 
-  host.append(el('div', 'map-support-copy', 'Need a service that is not listed here?'));
+  host.append(el('div', 'map-support-copy', tx('Need a service that is not listed here?')));
   const choices = el('div', 'map-support-actions');
   for (const service of missing) {
-    const meta = SERVICE_META[service];
-    const button = el('button', 'ghost tiny', `Find ${meta.label.toLowerCase()}`);
+    const word = serviceLabel(service).toLowerCase();
+    const button = el('button', 'ghost tiny', tx('Find {service}', { service: word }));
     button.type = 'button';
-    button.title = `Find the closest ${meta.label.toLowerCase()} from your last known location`;
+    button.title = tx('Find the closest {service} from your last known location', { service: word });
     button.addEventListener('click', () => findMapSupport(service));
     choices.append(button);
   }
@@ -25661,20 +25704,21 @@ function renderMapInfoPlan(location) {
   if (stop) {
     const next = nextStop(trip);
     const complete = trip.stops.filter((item) => item.done).length;
-    state.textContent = stop.done ? 'Complete' : stop === next ? 'Next stop' : `Stop ${stopIndex + 1}`;
+    state.textContent = stop.done ? tx('Complete') : stop === next ? tx('Next stop') : tx('Stop {n}', { n: stopIndex + 1 });
     state.hidden = false;
     copy.append(el('b', null, trip.title));
-    copy.append(el('span', null, stop.done
-      ? ` · completed stop ${stopIndex + 1} of ${trip.stops.length}`
-      : ` · stop ${stopIndex + 1} of ${trip.stops.length}, ${complete} complete`));
+    const at = { n: stopIndex + 1, total: trip.stops.length, complete };
+    copy.append(el('span', null, ` · ${stop.done
+      ? tx('completed stop {n} of {total}', at)
+      : tx('stop {n} of {total}, {complete} complete', at)}`));
   } else if (trip) {
-    copy.append(el('span', null, `${trip.title} · this place is not on the flight plan.`));
+    copy.append(el('span', null, `${trip.title} · ${tx('this place is not on the flight plan.')}`));
   } else {
-    copy.append(el('span', null, 'No active flight plan. Add this place when you are ready to route it.'));
+    copy.append(el('span', null, tx('No active flight plan. Add this place when you are ready to route it.')));
   }
   host.append(copy);
 
-  const button = el('button', 'map-plan-primary', stop ? 'Open flight plan' : 'Add to flight plan');
+  const button = el('button', 'map-plan-primary', stop ? tx('Open flight plan') : tx('Add to flight plan'));
   button.type = 'button';
   button.addEventListener('click', async () => {
     if (stop) {
@@ -25692,7 +25736,7 @@ function renderMapInfoPlan(location) {
       await loadTrips();
       if (mapInfoLocation === location) renderMapInfoPlan(location);
     } catch {
-      button.textContent = 'Could not add stop';
+      button.textContent = tx('Could not add stop');
       button.disabled = false;
     }
   });
@@ -25710,11 +25754,11 @@ function renderMapInfoData() {
   host.textContent = '';
 
   if (price.hidden) {
-    host.append(el('span', 'muted', 'No reported price for this place. Service counters are listed by UEX; facilities below come from the game data.'));
+    host.append(el('span', 'muted', tx('No reported price for this place. Service counters are listed by UEX; facilities below come from the game data.')));
     return;
   }
 
-  host.append(el('span', 'map-data-label', 'Reported price'));
+  host.append(el('span', 'map-data-label', tx('Reported price')));
   host.append(el('span', null, price.textContent));
 }
 
@@ -25785,10 +25829,10 @@ function drawJumpNetwork(map, locations) {
     x: home.w / 2, y: 92, 'text-anchor': 'middle', class: 'map-label',
     style: `font-size:${labelSize(1.35)}px;fill:#7796b0;letter-spacing:.18em`,
   });
-  title.textContent = 'JUMP NETWORK · SCHEMATIC · NOT TO SCALE';
+  title.textContent = tx('JUMP NETWORK · SCHEMATIC · NOT TO SCALE');
   map.append(title);
 
-  $('#map-count').textContent = `${systems.length} systems · jump network`;
+  $('#map-count').textContent = txn(systems.length, '{count} system · jump network', '{count} systems · jump network');
   drawNetworkHere(map);
   updateHereControl();
   drawLegend([]);
@@ -25866,9 +25910,14 @@ function drawMap() {
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
+    // The filter words are the toolbar's own labels, so the count and the
+    // button say the same thing in either language.
+    const focusWord = tx({ plan: 'Plan', shopping: 'Shopping', stash: 'Stash', notes: 'Notes' }[mapFocusFilter] || mapFocusFilter).toLowerCase();
+    const serviceWord = mapServiceFilter ? serviceLabel(mapServiceFilter).toLowerCase() : tx('service');
+
     if (mapServiceFilter && serviceIds?.size === 0)
-      count.textContent = `no ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} locations known`;
-    else if (term && !highlightIds) count.textContent = 'no match';
+      count.textContent = tx('no {filter} locations known', { filter: serviceWord });
+    else if (term && !highlightIds) count.textContent = tx('no match');
     else if (sites) {
       // Name what was matched: the term may have been a fragment, and the
       // user should see which commodity the map decided they meant.
@@ -25876,19 +25925,19 @@ function drawMap() {
       const what = matched ? matched.name : term;
 
       count.textContent = term.startsWith('buy:')
-        ? `${what} — stocked at ${highlightIds.size} places the map can name`
-        : `${what} — sells at ${highlightIds.size} places the map can name`;
+        ? tx('{what} — stocked at {count} places the map can name', { what, count: highlightIds.size })
+        : tx('{what} — sells at {count} places the map can name', { what, count: highlightIds.size });
     }
-    else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else if (term) count.textContent = txn(highlightIds.size, '{count} place lit', '{count} places lit');
     else if (mapFocusFilter && focusIds?.size === 0)
-      count.textContent = `no ${mapFocusFilter} locations can be placed yet`;
+      count.textContent = tx('no {filter} locations can be placed yet', { filter: focusWord });
     else if (mapFocusFilter)
-      count.textContent = `${locations.length} ${mapFocusFilter} location${locations.length === 1 ? '' : 's'} shown`;
+      count.textContent = txn(locations.length, '{count} {filter} location shown', '{count} {filter} locations shown', { filter: focusWord });
     else if (mapServiceFilter)
-      count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
+      count.textContent = txn(locations.length, '{count} {filter} location shown', '{count} {filter} locations shown', { filter: serviceWord });
     else if (mapMode() === 'system')
-      count.textContent = `${locations.length} shown in ${selectedSystem} · ${seen} of ${atlas.length} visited`;
-    else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
+      count.textContent = tx('{count} shown in {system} · {seen} of {total} visited', { count: locations.length, system: selectedSystem, seen, total: atlas.length });
+    else count.textContent = tx('{count} shown · {seen} of {total} visited', { count: locations.length, seen, total: atlas.length });
   }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.
@@ -26096,7 +26145,7 @@ function drawMap() {
         style: `fill:${!place.positioned && mapMode() === 'system' ? '#ffab3d' : '#7796b0'};font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
       });
       bodyLabel.textContent = bodyName === '—' ? ''
-        : `${bodyName}${!place.positioned && mapMode() === 'system' ? ' · position unavailable' : ''}`;
+        : `${bodyName}${!place.positioned && mapMode() === 'system' ? ` · ${tx('position unavailable')}` : ''}`;
       map.append(bodyLabel);
 
       if (bodyLabel.textContent) {
@@ -26629,7 +26678,7 @@ function drawLegend(locations) {
     for (const service of shown) {
       const item = el('div', 'item');
       item.append(mapServiceIcon(service));
-      item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
+      item.append(el('span', null, tx('{service} badge', { service: serviceLabel(service) })));
       legend.append(item);
     }
   };
@@ -26654,7 +26703,7 @@ function drawLegend(locations) {
     const swatch = el('span', 'swatch');
     swatch.style.background = NO_TRADE;
     plain.append(swatch);
-    plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
+    plain.append(el('span', null, shadeScale.plain ?? tx('no UEX price for it here')));
     legend.append(plain);
     appendPriceFreshness();
     appendServiceLegend();
@@ -26673,12 +26722,12 @@ function drawLegend(locations) {
     swatch.setAttribute('class', 'swatch-mark');
     swatch.append(kindMark(kind, 0, 0, 1, MAP_KIND_COLOURS[kind] || MAP_KIND_COLOURS.Unknown, true));
     item.append(swatch);
-    item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
+    item.append(el('span', null, placeKindWord(kind)));
     legend.append(item);
   }
 
   const historyKey = el('div', 'item map-history-key');
-  historyKey.append(el('span', null, 'Filled: visited · Outline: unvisited'));
+  historyKey.append(el('span', null, tx('Filled: visited · Outline: unvisited')));
   legend.append(historyKey);
   appendPriceFreshness();
   appendServiceLegend();

@@ -378,3 +378,42 @@ text - ships, places, shard ids, regions, items, handles - and the numbers.
   Crew's plurals, the beds worded around their counts, and a point whose
   category is stored in English. The Crew heading cannot be checked there -
   the test page has no static markup - so it was checked in the render.
+
+### 0.18.10
+
+The Economy group - Spending, Ledger, Cargo, Market and the one-commodity
+page - with the two top-level tabs no phase had named, Map and Log. Rendered
+against this install in French, the visible-text probe finds nothing English on
+Map, Spending, Ledger or Market but commodities, terminals, shops, places and
+the dataset's commodity groups. 587 entries added, 2,141 in all.
+
+- **What the Log still shows in English is evidence or a server sentence.**
+  The lines read off a screenshot are quoted as the game printed them, like log
+  excerpts. A reading's checks ("1,912,941 aUEC from the ledger", "Contracts:
+  0 accepted of 10", "Where you were: …") and the summaries built around a
+  count are the server's, and wait for phase 3; the fixed summaries already
+  translate.
+- **The source has to be read as well as the page.** The key probe walks the
+  DOM after the scripts ran, so markup a script replaces on load - the
+  location chip's "Your location", the Cargo caption, the loading lines - never
+  reached it. A second pass lists text nodes and attributes from the
+  `index.html` source of the chosen sections; it is how those were found.
+- **Stored values stay English, again.** Ledger kinds (`Item bought`, `Cargo
+  sold`) are the filter's keys and the run review's claim kinds; a place's kind
+  (`RestStop`) colours the map; a service (`shop`, `refuel`) filters it. Each is
+  translated where it is drawn, through `PLACE_KIND_WORDS` and `serviceLabel`,
+  and compared in English everywhere else. The kinds are written out as spaced
+  literals rather than split from the key, so the orphan test can see them.
+- **The game's facility names stay**: Refinery, Commodity Trading - Freight
+  Elevator. The app's own shortening of the two cargo facilities is page text.
+- **`tx()` trims its key**, so a word joined with spaces (`' or '`) loses them
+  in French; it is `` ` ${tx('or')} ` ``.
+- **Three keys were already taken.** "live", "stock" and "Optional note" had
+  translations from earlier pages that suit these ones too, and the merge
+  refuses a second meaning rather than overwrite one.
+- **One placeholder was shortened for width**: Market's search box clipped
+  "Chercher une marchandise…"; it is "Marchandise…".
+- `EconomyFrenchTests` covers the ledger (kinds French, filter keys English,
+  the wallet card), the cargo and spending tiles, the Log's file list, a
+  refinery reading with its station as written, the map's closest-facility
+  answer with the game's facility name kept, and an empty flight-plan panel.
