@@ -14,7 +14,7 @@ namespace Quantumwake.WebTests;
 /// </remarks>
 public class ControlsPageTests
 {
-    private const string Model = """
+    internal const string Model = """
         {"ready":true,"profilePath":"C:\\SC\\LIVE\\user\\client\\0\\Profiles\\default\\actionmaps.xml","profileFound":true,"problem":null,
          "profile":{"name":"default","label":null,
           "devices":[
@@ -413,7 +413,7 @@ public class ControlsPageTests
         page.Serve("/api/controls/bindings", """{"how":"live","changed":1}""");
         page.Do("controlsDevice = 'js4'; await renderControlsDevice(); controlsPending = []; { const r6 = __dom.node('#controls-buttons tbody').children.find(tr => tr.dataset.control === 'button6'); r6.querySelector('.controls-mode-pick').value = 'hold'; const search = r6.querySelector('.controls-action-search'); search.value = 'self destruct'; search.listeners.input[0](); r6.querySelectorAll('.controls-action-result').find(b => b.textContent.includes('Self destruct')).click(); }");
 
-        Assert.Contains("button6 → Self destruct (hold)", page.NodeText("#controls-pending-list"));
+        Assert.Contains("button6 → Self destruct (hold down)", page.NodeText("#controls-pending-list"));
         page.Do("await controlsApplyBindings(__dom.node('#controls-pending-apply'));");
         Assert.Contains("\"activationMode\":\"hold\"", page.BodyOf("/api/controls/bindings"));
     }

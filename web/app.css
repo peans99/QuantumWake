@@ -2685,7 +2685,8 @@ body.overlay .slot-icon svg { width: 19px; height: 19px; }
   overflow: hidden;
 }
 .loadout-character::before {
-  content: "PERSONAL ARMOURY";
+  /* Set by renderLoadout, so the watermark is in the page's language. */
+  content: attr(data-mark);
   position: absolute;
   right: 16px;
   top: 54px;

@@ -806,7 +806,7 @@
       Ranked by sessions rather than by toasts: a player with a poor connection
       would otherwise outrank the people who quietly flew whole nights with you.
       <em>Joined</em> and <em>Left</em> are the party actually changing;
-      <em>Came online</em> and <em>Dropped</em> are their client, which a member
+      <em>Came online</em> and <em>Went offline</em> are their client, which a member
       who logs out and back in does all evening without going anywhere.
       <em>Led</em> counts the times party lead passed to them.
     </p>
@@ -819,7 +819,7 @@
             <th>Handle</th>
             <th class="num">Sessions</th><th class="num">Joined</th>
             <th class="num">Left</th><th class="num">Came online</th>
-            <th class="num">Dropped</th><th class="num">Led</th>
+            <th class="num">Went offline</th><th class="num">Led</th>
             <th>First</th><th>Last</th>
           </tr>
         </thead>
@@ -836,9 +836,9 @@
         <select id="servers-region" class="select" title="Region">
           <option value="">All regions</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="servers-current" checked /> Current deployment only</label>
-        <label class="toggle"><input type="checkbox" id="servers-starred" /> Favourites only</label>
-        <label class="toggle"><input type="checkbox" id="servers-troubled" /> Back-end failures seen</label>
+        <label class="toggle"><input type="checkbox" id="servers-current" checked /> <span>Current deployment only</span></label>
+        <label class="toggle"><input type="checkbox" id="servers-starred" /> <span>Favourites only</span></label>
+        <label class="toggle"><input type="checkbox" id="servers-troubled" /> <span>Back-end failures seen</span></label>
       </div>
     </div>
     <p class="muted caption">
@@ -1093,11 +1093,11 @@
             <button class="ghost" id="screen-read-older" hidden
                     title="Read the screenshots already in the folder without switching the watch on - newest first, forty at a time"></button>
             <label class="muted" title="Check the clipboard on its own every few seconds">
-              <input type="checkbox" id="screen-watch"> Watch clipboard
+              <input type="checkbox" id="screen-watch"> <span>Watch clipboard</span>
             </label>
             <label class="muted" id="screen-watch-folder-label" hidden
                    title="Read every screenshot in the folder - the ones already there, newest first, and each new one as the game saves it. Untick to stop.">
-              <input type="checkbox" id="screen-watch-folder"> Watch screenshots
+              <input type="checkbox" id="screen-watch-folder"> <span>Watch screenshots</span>
             </label>
           </div>
           <p class="muted" id="screen-folder" hidden></p>
@@ -1181,7 +1181,7 @@
               <th class="num">Size</th>
               <th>Written</th>
               <th>Session</th>
-              <th class="num">Length</th>
+              <th class="num">Duration</th>
               <th>Handle</th>
               <th>Read</th>
             </tr>
@@ -2235,7 +2235,7 @@
       <div class="crack-inputs">
         <section class="crack-fit-panel">
           <h4>Ship and equipment</h4>
-          <label>Ship
+          <label><span>Ship</span>
             <select id="crack-ship" class="select" title="The heads come from the ship's own loadout"></select>
           </label>
           <div class="crack-heads" id="crack-heads"></div>
@@ -2243,25 +2243,25 @@
         </section>
         <section class="crack-rock">
           <h4>Scanned rock</h4>
-          <label>Mass
+          <label><span>Mass</span>
             <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
             <span class="unit">kg</span>
           </label>
-          <label>Resistance
+          <label><span>Resistance</span>
             <input type="number" id="crack-resistance" class="search" min="0" max="100" step="1" value="0" title="The HUD's resistance, in percent">
             <span class="unit">%</span>
           </label>
-          <label>Instability
+          <label><span>Instability</span>
             <input type="number" id="crack-instability" class="search" min="0" max="100" step="1" value="15" title="The HUD's instability, in percent">
             <span class="unit">%</span>
           </label>
-          <label>Deposit
+          <label><span>Deposit</span>
             <select id="crack-deposit" class="select" title="The kind of rock, as the game defines its mix; picks the likeliest mineral below"></select>
           </label>
-          <label>Mineral
+          <label><span>Mineral</span>
             <select id="crack-mineral" class="select" title="What most of the rock is - for the notes; the HUD's figures above are what count"></select>
           </label>
-          <label>Gadget
+          <label><span>Gadget</span>
             <select id="crack-gadget" class="select" title="A gadget placed on the rock"></select>
           </label>
           <button type="button" class="ghost tiny" id="crack-use-scan" title="Fill the rock from the newest scan-results screenshot the Log tab has read">Use the last scanned rock</button>
@@ -2369,7 +2369,7 @@
     <div id="refinery-orders" hidden>
       <div class="refinery-orders-head">
         <h4 class="spaced">Refinery orders</h4>
-        <label class="refinery-notify">Tell me when one is ready
+        <label class="refinery-notify"><span>Tell me when one is ready</span>
           <select id="refinery-notify" class="select tiny">
             <option value="mixed">Game log, then the timer</option>
             <option value="log">Game log only</option>
@@ -2404,15 +2404,15 @@
     </p>
 
     <form class="mining-form" id="mining-log-form">
-      <label>Ore<input type="text" id="mining-log-resource" class="search" maxlength="30"
+      <label><span>Ore</span><input type="text" id="mining-log-resource" class="search" maxlength="30"
              placeholder="e.g. Quantanium" autocomplete="off" required></label>
-      <label>Where<input type="text" id="mining-log-place" class="search" maxlength="30"
+      <label><span>Where</span><input type="text" id="mining-log-place" class="search" maxlength="30"
              placeholder="Optional" autocomplete="off"></label>
-      <label>SCU<input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
+      <label><span>SCU</span><input type="number" id="mining-log-scu" class="search" min="0" step="0.01"
              placeholder="0" required></label>
-      <label>Quality<input type="number" id="mining-log-quality" class="search" min="1" max="1000"
+      <label><span>Quality</span><input type="number" id="mining-log-quality" class="search" min="1" max="1000"
              placeholder="Optional"></label>
-      <label>Sold for<input type="number" id="mining-log-revenue" class="search" min="0" step="1"
+      <label><span>Sold for</span><input type="number" id="mining-log-revenue" class="search" min="0" step="1"
              placeholder="Optional"></label>
       <button type="submit" class="ghost">Record</button>
     </form>
@@ -2690,7 +2690,7 @@
           <option value="power">Most power headroom</option>
         </select>
         <label class="toggle" title="Only consider parts with a known NPC-terminal aUEC seller; crafting and player listings are not included">
-          <input type="checkbox" id="garage-optimise-buyable" /> Terminal aUEC only
+          <input type="checkbox" id="garage-optimise-buyable" /> <span>Terminal aUEC only</span>
         </label>
         <button type="button" class="ghost tiny" id="garage-optimise">Optimise fit</button>
       </div>
@@ -2729,7 +2729,7 @@
       </div>
       <div class="garage-photo-tools" id="garage-photo-tools">
         <label class="muted" title="Open a ship on the bench already fitted as its newest screenshot showed it. Untick to open every ship at stock and start from a photograph only when you press the button.">
-          <input type="checkbox" id="garage-photo-auto" checked> Start from the newest photograph
+          <input type="checkbox" id="garage-photo-auto" checked> <span>Start from the newest photograph</span>
         </label>
         <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
         <span class="muted" id="garage-photo-state"></span>
@@ -2740,7 +2740,7 @@
       <h2 class="spaced">Bench</h2>
       <div class="bench-state">
         <span id="garage-changes" class="muted">Stock fit</span>
-        <label class="toggle compare-against">Compare against
+        <label class="toggle compare-against"><span>Compare against</span>
           <select id="garage-compare" class="select tiny" title="What the struck figures are measured from">
             <option value="">Stock</option>
           </select>
@@ -2853,7 +2853,7 @@
           <option value="price">Cheapest first</option>
           <option value="name">By name</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> Only guns UEX prices</label>
+        <label class="toggle"><input type="checkbox" id="armoury-gun-priced"> <span>Only guns UEX prices</span></label>
       </div>
       <p class="muted small" id="armoury-gun-count"></p>
       <div class="table-wrap">
@@ -2865,7 +2865,7 @@
             <th class="num" title="The best mode's damage a second with the trigger held - derived, not the game's">DPS</th>
             <th class="num" title="Rounds in the magazine it ships with">Mag</th>
             <th class="num" title="What a whole magazine does in the best mode - derived">Per mag</th>
-            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop</th>
+            <th class="num" title="Where the damage starts to fall, and the floor it falls to">Drop-off</th>
             <th class="num" title="UEX's cheapest terminal for the plain gun, or a finish the game names the same">Price</th>
             <th>Cheapest at</th>
           </tr></thead>
@@ -2899,7 +2899,7 @@
           <option value="2">Size 2</option>
           <option value="3">Size 3</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="armoury-kit-priced"> Only ones UEX prices</label>
+        <label class="toggle"><input type="checkbox" id="armoury-kit-priced"> <span>Only ones UEX prices</span></label>
       </div>
       <p class="muted small" id="armoury-kit-count"></p>
 
@@ -3002,7 +3002,7 @@
           <option value="light">Lightest</option>
           <option value="price">Cheapest first</option>
         </select>
-        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> Only sets UEX prices</label>
+        <label class="toggle"><input type="checkbox" id="armoury-armour-priced"> <span>Only sets UEX prices</span></label>
       </div>
       <p class="muted small" id="armoury-armour-count"></p>
       <p class="muted small" id="armoury-armour-note"></p>
@@ -3110,8 +3110,8 @@
     <div class="controls-pane" id="controls-pane-actions">
       <div class="controls armoury-filters">
         <select id="controls-category" class="select" title="The keybinding screen's tab"></select>
-        <label class="toggle"><input type="checkbox" id="controls-unbound"> Only actions on no stick</label>
-        <label class="toggle"><input type="checkbox" id="controls-rebound"> Only actions you rebound</label>
+        <label class="toggle"><input type="checkbox" id="controls-unbound"> <span>Only actions on no stick</span></label>
+        <label class="toggle"><input type="checkbox" id="controls-rebound"> <span>Only actions you rebound</span></label>
       </div>
       <p class="muted small" id="controls-actions-count"></p>
       <div class="table-wrap">
@@ -3995,7 +3995,7 @@
 
         <dl class="about-facts">
           <div><dt>Version</dt><dd id="about-version">—</dd></div>
-          <div><dt>Install</dt><dd id="about-install">—</dd></div>
+          <div><dt>Game install</dt><dd id="about-install">—</dd></div>
           <div><dt>Dashboard</dt><dd>127.0.0.1:31337</dd></div>
           <div><dt>Licence</dt><dd>Apache 2.0</dd></div>
           <div><dt>Built by</dt><dd>nekron</dd></div>

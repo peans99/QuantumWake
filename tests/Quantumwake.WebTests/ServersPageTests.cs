@@ -71,7 +71,7 @@ public class ServersPageTests
         var text = page.NodeText("#servers-table");
 
         Assert.Contains("log ended", text);
-        Assert.Contains("2× left", text);
+        Assert.Contains("2× you left", text);
         Assert.Contains("1× log ended", text);
     }
 
@@ -367,7 +367,7 @@ public class ServersPageTests
         Assert.StartsWith("on it now", ending);
         Assert.DoesNotContain("log ended", ending);
         Assert.DoesNotContain("on it now,", ending);
-        Assert.Contains("1× left", ending);
+        Assert.Contains("1× you left", ending);
     }
 
     /// <summary>A note-only row has no visit; the pasted line must not invent one the way the table refuses to.</summary>

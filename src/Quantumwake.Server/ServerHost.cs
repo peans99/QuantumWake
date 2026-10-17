@@ -323,7 +323,7 @@ public static class ServerHost
                 ? Results.BadRequest(new
                 {
                     message = "No Star Citizen logs there. Pick the folder holding Game.log "
-                        + @"or its parent - usually ...\StarCitizen\LIVE."
+                        + "or its parent - usually ...\\StarCitizen\\LIVE."
                 })
                 : Results.Ok(new { resolved.Channel, resolved.RootPath, restartNeeded = true });
         });
@@ -540,6 +540,7 @@ public static class ServerHost
             {
                 repository = StarStrings.Repository,
                 gameRoot = install?.RootPath,
+                gameLanguage = GameLanguage.Read(install?.RootPath),
 
                 // "Installed" means the files are still there. A game patch can
                 // put the original localisation back without telling anyone.
@@ -606,7 +607,8 @@ public static class ServerHost
 
         // Asking what would change writes nothing. Installing is a separate
         // call because the file lands in the player's game folder.
-        app.MapGet("/api/labels", (TextOverlayService overlay) => overlay.Status(install));
+        app.MapGet("/api/labels", (TextOverlayService overlay) =>
+            overlay.Status(install) with { GameLanguage = GameLanguage.Read(install?.RootPath) });
 
         // Whether the loose text file the game reads has fallen behind the game's
         // own - after a patch, every new string is missing from it. Asked on every
@@ -5600,6 +5602,17 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             return saved;
 
         return GameInstallLocator.Preferred();
+    }
+
+    /// <summary>
+    /// A language's catalogue as the page is served it, or null for English.
+    /// The desktop app reads its own words from the same file, so a language
+    /// stays one file however many places show it.
+    /// </summary>
+    public static string? CatalogueText(string? code)
+    {
+        var clean = LanguageStore.Clean(code);
+        return clean == LanguageStore.English ? null : ReadWebText($"locales/{clean}.json");
     }
 
     /// <summary>A file of the web UI as text, from whichever copy the page itself is served from.</summary>

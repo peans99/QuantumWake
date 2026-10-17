@@ -673,7 +673,7 @@ public class GaragePageTests
         var body = page.BodyOf("/api/garage/AEGS_Gladius/shop");
         Assert.Contains("\"p1\":\"COOL_JUST_S01_Glacier_SCItem\"", body);
         Assert.Contains("\"title\":\"Aegis Gladius fit\"", body);
-        Assert.Contains("Added \"Aegis Gladius fit\"", page.NodeText("#garage-shop-result"));
+        Assert.Contains("Added “Aegis Gladius fit”", page.NodeText("#garage-shop-result"));
         Assert.DoesNotContain(page.Fetched(), url => url.StartsWith("POST /api/jobs"));
     }
 

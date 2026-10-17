@@ -129,13 +129,13 @@
                                 <RotateTransform Angle="45" />
                             </Rectangle.RenderTransform>
                         </Rectangle>
-                        <TextBlock Text="INTERACTIVE"
+                        <TextBlock x:Name="InteractiveText" Text="INTERACTIVE"
                                    Foreground="#7FE4FF"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
                                    VerticalAlignment="Center"
                                    Margin="9,0,0,0" />
-                        <TextBlock Text="DRAG TO MOVE · PIN TO CLICK THROUGH IT"
+                        <TextBlock x:Name="DragHintText" Text="DRAG TO MOVE · PIN TO CLICK THROUGH IT"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
@@ -154,13 +154,13 @@
                                 ToolTip="Choose a focused overlay layout">
                             <Button.ContextMenu>
                                 <ContextMenu Style="{StaticResource OverlayPresetMenu}">
-                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Flight" Tag="flight" Click="PresetMenuItem_Click" />
-                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Mining" Tag="mining" Click="PresetMenuItem_Click" />
-                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Combat" Tag="combat" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" x:Name="PresetFlight" Header="Flight" Tag="flight" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" x:Name="PresetMining" Header="Mining" Tag="mining" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" x:Name="PresetCombat" Header="Combat" Tag="combat" Click="PresetMenuItem_Click" />
                                     <Separator Style="{StaticResource OverlayPresetSeparator}" />
-                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Trading" Tag="trading" Click="PresetMenuItem_Click" />
-                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Minimal" Tag="minimal" Click="PresetMenuItem_Click" />
-                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" Header="Full layout" Tag="full" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" x:Name="PresetTrading" Header="Trading" Tag="trading" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" x:Name="PresetMinimal" Header="Minimal" Tag="minimal" Click="PresetMenuItem_Click" />
+                                    <MenuItem Style="{StaticResource OverlayPresetMenuItem}" x:Name="PresetFull" Header="Full layout" Tag="full" Click="PresetMenuItem_Click" />
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>
@@ -250,7 +250,7 @@
                                    TextWrapping="Wrap"
                                    MaxWidth="300" />
 
-                        <TextBlock Text="BY NEKRON"
+                        <TextBlock x:Name="ByText" Text="BY NEKRON"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
@@ -259,24 +259,24 @@
 
                         <Rectangle Height="1" Fill="#17293C" Margin="0,20,0,14" />
 
-                        <TextBlock Text="CTRL + ALT + O   TOGGLE CLICK-THROUGH"
+                        <TextBlock x:Name="KeyClickThroughText" Text="CTRL + ALT + O   TOGGLE CLICK-THROUGH"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
                                    HorizontalAlignment="Center" />
-                        <TextBlock Text="CTRL + ALT + ← / →   CHANGE PAGE"
-                                   Foreground="#46617A"
-                                   FontFamily="Bahnschrift, Segoe UI"
-                                   FontSize="10"
-                                   Margin="0,5,0,0"
-                                   HorizontalAlignment="Center" />
-                        <TextBlock Text="CTRL + ALT + F   FULLSCREEN"
+                        <TextBlock x:Name="KeyPageText" Text="CTRL + ALT + ← / →   CHANGE PAGE"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"
                                    Margin="0,5,0,0"
                                    HorizontalAlignment="Center" />
-                        <TextBlock Text="REQUIRES BORDERLESS WINDOWED"
+                        <TextBlock x:Name="KeyFullscreenText" Text="CTRL + ALT + F   FULLSCREEN"
+                                   Foreground="#46617A"
+                                   FontFamily="Bahnschrift, Segoe UI"
+                                   FontSize="10"
+                                   Margin="0,5,0,0"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock x:Name="BorderlessText" Text="REQUIRES BORDERLESS WINDOWED"
                                    Foreground="#46617A"
                                    FontFamily="Bahnschrift, Segoe UI"
                                    FontSize="10"

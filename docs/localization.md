@@ -160,10 +160,22 @@ rather than on English. Three neighbours follow the same thread:
 - The screenshot readers match English words. A French mobiGlas reads as
   nothing.
 
-**Needed before any of it: a `Game.log` from a game set to French** - by
-`g_language = french_(france)` or by a community translation, ideally with a
-contract accepted and a party joined. That is a tester's afternoon, and it is
-the first thing to ask for.
+**Answered (2026-10-16): the log is always English.** Nicolas, who plays the
+game, confirms that `Game.log` is written in English whatever `g_language`
+says - its notification lines are the engine's, not the text table's. So the
+parser's English matching holds in a French game and needs no change, and the
+open question above (what a line looks like when the French table lacks its
+key) does not arise. What remains is outside the log:
+
+- **Item labels and StarStrings** - done in 0.18.18: the page reads
+  `g_language` and says when labels in the English file will not show, and
+  that StarStrings sets the game back to English.
+- **Screenshot readers** still match English words, because the game's screens
+  follow `g_language`. A French mobiGlas reads as nothing, and says so as an
+  unknown screen; teaching the readers French needs French screenshots, and
+  is a reader change rather than a translation.
+- **Names** come from the English table, as they did; for the names checked
+  the French table agrees.
 
 ## Phases
 
@@ -180,8 +192,10 @@ the first thing to ask for.
    per language and one test guarding it.
 4. **MFD pages and the tray app.** The tray reads `language.json` directly; the
    MFD labels need a width check, since a Cougar's screen does not stretch.
-5. **Playing the game in French.** Everything under
-   [The game in French](#the-game-in-french), starting from a tester's log.
+5. **Playing the game in French.** Settled: `Game.log` stays English, so
+   the parser needs nothing; the labels page reads the game's language
+   (0.18.18). Screenshot readers in French are a reader feature for later,
+   from French screenshots.
 
 ## Adding a language
 
@@ -334,3 +348,360 @@ titles. 328 entries added, 1,261 in all.
   an event's tiers and plurals, Wikelo's gate and counts, a shopping list
   and a checklist, and that the game's names and the pilot's titles stay as
   written.
+
+### 0.18.9
+
+The Flight group: Logbook, Sessions (each debrief included), Servers, Places,
+Points, Crew and Casualties. Rendered against this install in French, the
+visible-text probe finds nothing English on the seven pages but game and pilot
+text - ships, places, shard ids, regions, items, handles - and the numbers.
+274 entries added, 1,554 in all.
+
+- **The markup keys were collected from an English page.** The key probe run
+  over a French page reports a mixed paragraph after `txDocument` has already
+  translated the inline parts it could, so the Crew caption came back with
+  `<em>Abandonnés</em>` inside the "English". The same probe with the copied
+  data folder set to English returns the browser's own serialisation of the
+  untouched markup, which is the key.
+- **English is the key, so a word with two meanings has to change.**
+  "Dropped" was already the Contracts page's abandoned contract and showed on
+  Crew as "Abandonnés" for a member's connection dropping; Crew now says "Went
+  offline", beside "Came online". A shard stay ending "left" collided with the
+  party feed's "left" (somebody else went, "est parti"); it is "you left".
+  Neither was fixable in the catalogue.
+- **The Logbook's session lines are the server's English**, `Session aboard
+  {ship}` and `1h 20m · 3 jumps · 1 death`, and are translated on the page by
+  shape like the live feed's, keeping the ship. A shop's name in the same
+  column is not a sentence and is shown as sent. A debrief's highlights go
+  through the live feed's `feedText`.
+- **A single contract's outcome is not the filter's plural.** "Completed" is
+  keyed as the Contracts filter's "Terminés"; the debrief uses the Contracts
+  table's lower-case words instead and capitalises them, so one contract is
+  "Terminé".
+- **Stored values stay English.** A point's category is saved as `Meet point`
+  and only its label reads "Point de rendez-vous", so a point saved on a
+  French page lands under the same chip as the rest. A plan made with "Repeat
+  these stops" is titled in the page's language when it is made, like Routes'.
+- **The copied server report stays English**, like the clipboard diagnostic
+  summary: it is pasted where other pilots read it.
+- **Two placeholders were shortened for width**: the Servers and Sessions
+  search boxes clipped "Chercher un shard ou une note…"; they are "Shard ou
+  note…" and "Vaisseau ou lieu…".
+- `FlightFrenchTests` covers the logbook's server lines, a debrief with a feed
+  sentence and a contract outcome, the servers table and its English report,
+  Crew's plurals, the beds worded around their counts, and a point whose
+  category is stored in English. The Crew heading cannot be checked there -
+  the test page has no static markup - so it was checked in the render.
+
+### 0.18.10
+
+The Economy group - Spending, Ledger, Cargo, Market and the one-commodity
+page - with the two top-level tabs no phase had named, Map and Log. Rendered
+against this install in French, the visible-text probe finds nothing English on
+Map, Spending, Ledger or Market but commodities, terminals, shops, places and
+the dataset's commodity groups. 587 entries added, 2,141 in all.
+
+- **What the Log still shows in English is evidence or a server sentence.**
+  The lines read off a screenshot are quoted as the game printed them, like log
+  excerpts. A reading's checks ("1,912,941 aUEC from the ledger", "Contracts:
+  0 accepted of 10", "Where you were: …") and the summaries built around a
+  count are the server's, and wait for phase 3; the fixed summaries already
+  translate.
+- **The source has to be read as well as the page.** The key probe walks the
+  DOM after the scripts ran, so markup a script replaces on load - the
+  location chip's "Your location", the Cargo caption, the loading lines - never
+  reached it. A second pass lists text nodes and attributes from the
+  `index.html` source of the chosen sections; it is how those were found.
+- **Stored values stay English, again.** Ledger kinds (`Item bought`, `Cargo
+  sold`) are the filter's keys and the run review's claim kinds; a place's kind
+  (`RestStop`) colours the map; a service (`shop`, `refuel`) filters it. Each is
+  translated where it is drawn, through `PLACE_KIND_WORDS` and `serviceLabel`,
+  and compared in English everywhere else. The kinds are written out as spaced
+  literals rather than split from the key, so the orphan test can see them.
+- **The game's facility names stay**: Refinery, Commodity Trading - Freight
+  Elevator. The app's own shortening of the two cargo facilities is page text.
+- **`tx()` trims its key**, so a word joined with spaces (`' or '`) loses them
+  in French; it is `` ` ${tx('or')} ` ``.
+- **Three keys were already taken.** "live", "stock" and "Optional note" had
+  translations from earlier pages that suit these ones too, and the merge
+  refuses a second meaning rather than overwrite one.
+- **One placeholder was shortened for width**: Market's search box clipped
+  "Chercher une marchandise…"; it is "Marchandise…".
+- `EconomyFrenchTests` covers the ledger (kinds French, filter keys English,
+  the wallet card), the cargo and spending tiles, the Log's file list, a
+  refinery reading with its station as written, the map's closest-facility
+  answer with the game's facility name kept, and an empty flight-plan panel.
+
+### 0.18.11
+
+The Reference group: Ships, Parts, Mining (all four panes - where to go, the
+rock calculator, hauls and refinery orders, salvage) and Crafting, with the
+item card every page opens. Rendered against this install in French, the
+visible-text probe finds nothing English on the four pages but item, ship,
+shop and mineral names and the server's recipe materials ("any 2 of: …").
+361 entries added, 2,502 in all.
+
+- **Labels that wrap a control were split.** "Mass", "Ore", "Sold for" and the
+  others sat beside an `<input>` or `<select>` inside their `<label>`, so the
+  key held the control's markup - its value, step and title included. The text
+  is in a `<span>` now, as the status toggles were in 0.18.4.
+- **A paragraph whose span a script fills is keyed on the empty span.** The
+  deposit caption, the crafting caption and the calculator's rule line each
+  hold a `<span id>` the page writes into later; txDocument runs first, so the
+  key has the span empty (or with the markup's default), and the translation
+  carries the same span back so the script still finds it.
+- **The table headers' tooltips are not translated, because nobody sees
+  them.** `makeTablesSortable` replaces every header's title with "Sort", in
+  English as well; the explanations written into the markup never show. A
+  finding for later, not a translation gap.
+- **Server words the page keys on**: a mining run's stage, a crack verdict, a
+  resource kind - translated where drawn, compared in English.
+- **One English sentence was nearly reworded by accident**: the overcharge
+  clause on a mineral's notes. A rock test caught it, and the English is as it
+  was.
+- **One placeholder was shortened for width**: "Chercher une ressource ou un
+  lieu…" became "Ressource ou lieu…".
+- `ReferenceFrenchTests` covers the ship catalogue (careers and roles kept),
+  a blueprint, a mining run's stage and next step, the crack verdict with the
+  mineral's name kept, and an item card's price age.
+
+### 0.18.12
+
+The Hangar group: Fleet, Hangar, Loadout, Stash, Loot, Garage and Armoury,
+with the saved kits and the ship picture every one of them draws. Rendered
+against this install in French, the visible-text probe finds nothing English
+on the seven pages but item, ship, maker and shop names, the slot names the
+server makes from port names, gun kinds and fire modes, text read off a
+screenshot, and three server sentences (the Garage's notes, the cargo fit's
+reasons, a fire mode's condition). 824 entries added, 3,326 in all.
+
+- **The logo was translated by accident and is pinned now.** "Quantum" went in
+  as the Garage's sheet heading, and the brand is `Quantum <b>Wake</b>` - a
+  mixed node whose whole key was missing, so the walk fell through to the bare
+  text node and the header read "QUANTIQUE WAKE". An identity entry for the
+  whole key keeps it the name. Any new one-word key that matches the first word
+  of a mixed node will do the same; the screenshot is what catches it.
+- **Two English column labels were renamed rather than shared.** "Length" was
+  already "Durée" for how long a session ran on the Log's file list; that
+  header is now "Duration", and "Length" is a ship's. The Armoury's "Drop" was
+  "Retirer", the UEX feed button; the column is now "Drop-off".
+- **The Loadout watermark was CSS.** `content: "PERSONAL ARMOURY"` cannot be
+  looked up, so the rule reads `attr(data-mark)` and `renderLoadout` sets it.
+- **Counts that agree were moved to `txn()`** even where English needs no
+  plural: "1 décoché" and "3 décochés" are different words, "1 unticked" and
+  "3 unticked" are not. Same for worn, carried, active this week and still
+  needed.
+- **Holster sizes are one phrase each.** "{weight} holster" cannot carry
+  "Petit étui" and "Étui moyen" - French puts the size word on either side and
+  agrees it - so `armouryHolster` looks up "Small holster", "Medium holster"
+  and "Large holster".
+- **No article in front of a game name.** "du {ship}" reads "du Anvil" and "de
+  {maker}" reads "de Origin"; those templates now put the name behind a colon
+  or in brackets after a noun ("ce vaisseau ({ship})").
+- **Server words the page keys on**: an item's category on Stash and Loot, a
+  kit line's holding, a loadout slot's category - translated where drawn,
+  compared in English. The Loot kind filter keeps the English value and shows
+  the French text.
+- **French headers that pushed a column off the table were shortened**:
+  "Charg." and "Par charg." on the Armoury's guns.
+- **Two Garage messages now use curly quotes in English** ("Added “Starlancer
+  fit”"), as every other quoted name in the app does; one WebTest followed.
+- `HangarFrenchTests` covers a prepared kit (the sighting still asks), the
+  loadout's readiness strip and armour profile with slot labels kept, the Loot
+  kind filter's French text over English values, and a gun's holster and
+  damage.
+
+### 0.18.13
+
+The rest of Settings: Controls, Overlay, Item labels (with StarStrings), the
+shareable recap, shared files and About. Rendered against this install in
+French, the visible-text probe finds nothing English on those pages but the
+game's keybinding text (action names, action groups and their categories),
+stick product names, item names and the server's one sentence about why the
+sticks cannot be read live. 448 entries added, 3,774 in all.
+
+- **Two more English words had a second meaning.** "hold" was already
+  "soute", a cargo hold; the activation mode now reads "hold down" in English.
+  "left" was already "est parti"; hats are one phrase per direction
+  (`CONTROLS_HAT_LABELS`, "Hat {number} left"), so the direction is never
+  looked up alone. "Install" was the StarStrings button and the About line
+  naming the game install; the line is now "Game install".
+- **The recap is translated, not kept English like the server report.** Part
+  of it had been wrapped in an earlier phase, and it is the pilot's own
+  snapshot rather than a report for other pilots, so finishing it was the
+  coherent choice. The saved file carries `lang` from the page and a French
+  title. The copied server report stays English.
+- **Item categories on the label preview** are translated where drawn, as on
+  Stash and Loot.
+- **A pre-existing bug fixed on the way**: `saveOverlayLayout` is attached
+  straight to change events, so its "saved" message argument was the event
+  and the status line read "[object Event]". It now falls back to "saved"
+  when the argument is not a string.
+- **The action search placeholder was shortened** - "Chercher, parcourir…" -
+  because a longer one ran under the unbind button beside it.
+- **Overlay card names** gained the four the label table was missing
+  (briefing, trip, respawn, status), named as the Now page titles them.
+- `SettingsPagesFrenchTests` covers the button table with the game's action
+  names kept and the mode not read as a cargo hold, a shared-file card, the
+  label count with a category, and a hat as one phrase.
+
+### 0.18.14
+
+Help & FAQ: the three quick answers, the data-source guide and all 32
+questions. 84 entries added, 3,858 in all - the page is markup only, so the
+English key probe collected every key and the French was written as a list
+in the same order and zipped onto it, which keeps 30-odd long keys with
+`<b>`, `<code>` and links exact rather than retyped.
+
+- **Answers quote the French buttons.** Where an answer names a control in
+  bold - "Lire la position copiée", "Dernier wipe", "Conserver", the Ledger
+  as "Comptes" - the French uses the catalogue's own words for it, looked up
+  rather than translated afresh, so the help and the page agree. The tray's
+  "Pin overlay" is quoted as "Épingler l'overlay", ahead of the tray itself.
+- **Search works on the French text.** `filterHelp` matches what is on the
+  page, so a French reader searches in French; the result count is
+  "{shown} sur {total}".
+- No WebTest: the stub page has no static markup, so Help is checked by the
+  render, as captions and headings have been since 0.18.9.
+
+### 0.18.15
+
+Phase 3, first half: what a screenshot reading says - its summary, the
+checks against the logs (subject, claim, belief, note), a wallet or tooltip
+trouble, the Fleet Manager's scope line. 90 entries added, 3,948 in all.
+
+- **Translated on the page, by shape, not in C#.** A reading's sentences are
+  written when the screenshot is read and stored in
+  `screen-readings.json`, so translating them at the source would leave every
+  reading already taken in English - and every new one in whatever language
+  was on when it was read. `screenText()` matches the shapes ScreenChecks and
+  the frame readers write ("{n} aUEC from the ledger", "the {ship} as it
+  ships", "3 parts named, 1 port empty, …") and translates those, keeping the
+  names and figures, as `feedText()` does for the Now feed. A sentence it does
+  not know is shown as written.
+- **Notes joined with "; " are split before the shapes**, or the first shape
+  swallows the second as its list.
+- **A list after a head takes the page's colon** through a `{label}: {value}`
+  key, so French gets its space.
+- `ScreenFrenchTests` holds the shapes as the server writes them, one row
+  each; a change to the server's wording shows up there as English rather
+  than on a reader's page.
+- Still English, for the second half: sentences the server computes on each
+  request rather than stores - Garage notes, cargo-fit reasons, a fire mode's
+  condition, crafting's "any 2 of:", the haul plan's pickups clause, why the
+  sticks cannot be read live. Those are what "the same catalogue, read in
+  C#" is for.
+
+### 0.18.16
+
+Phase 3, second half: every other sentence the server writes. The Garage's
+notes and the pilot-DPS caveat, the cargo fit's reasons, the rock
+calculator's notes, a fire mode's condition, a recipe's "any 2 of:", the
+item card's facts, holding line and subtitle, the haul plan's notes, the kit
+rule, and the server's error messages. 123 entries added, 4,071 in all.
+Probed against this install in French on every view, nothing English is
+left but game text (item, ship, place and contract names, OCR lines, port
+labels) and what the pilot typed.
+
+- **Not "the same catalogue, read in C#" after all.** The plan was a C#
+  reader for server sentences; most of them turned out not to be computed on
+  request. A fire mode's condition and a recipe's materials come out of the
+  game files once and are cached; screen readings are stored. Translating in
+  C# would freeze each in whatever language was on when it was made. So
+  `serverText()` - the same shape matcher as `screenText()` - translates them
+  on the page, and the per-request ones (Garage, cargo, rock, item card, haul
+  plan, messages) go the same way so there is one mechanism. It is still one
+  catalogue, and the orphan test still reads the C# literals, so a reworded
+  server sentence names the entry it orphans.
+- **The orphan test now escapes backslashes** in a key before looking for it
+  among the C# literals: a path in a message ("...\\StarCitizen\\LIVE") was
+  unfindable. The one verbatim `@"…"` piece of a message became an ordinary
+  literal so the `+` join reads it.
+- **Shapes before the "; " split.** Several server sentences carry a "; " of
+  their own; a list shape stops at ";" instead, so two joined notes still
+  split.
+- **English is untouched**: `screenText()` returns early in English, so a
+  shape's corrected plural ("1 of your things is here") only exists in the
+  catalogue's French.
+- **Messages from JavaScript errors stay as they are** - "Failed to fetch" is
+  the browser's, not the app's; only what the server sends is wrapped.
+- `ServerTextFrenchTests` holds the server's wording one row per shape.
+
+### 0.18.17
+
+Phase 4: the Cougar MFD pages, their setup window, and the desktop app - the
+tray menu and its notices, the overlay's header and splash. 481 entries
+added, 4,552 in all. With this French is complete for everything the app
+writes, and the picker carries no "translated so far" note: what stays
+English is the game's own text, quoted screenshot lines and the copied
+server report, each on purpose.
+
+- **The MFD core reads the catalogue when it is there.** `mfd-core.js` runs
+  on its own in the MFD tests, with no `tx`, so it has a guarded `say()` /
+  `sayn()` that uses the page's lookup when i18n.js is loaded and fills the
+  English otherwise. The pages load `/api/i18n.js` and `i18n.js` as the
+  dashboard does and run `txDocument` first.
+- **Row labels stay English in the rows** and are translated as they are
+  drawn, because the glyph beside each is chosen from the English word.
+  Labels with a number in them ("TASK 2 OF 3") are matched by shape, and a
+  kind the server names (a feed entry, a ledger line) falls back to the
+  catalogue's word in capitals.
+- **The compact HUD's short forms** are looked up from both sides of the
+  table through the catalogue, since the long value now arrives translated.
+- **Bezel captions stay the cockpit's codes.** NAV, CRGO, CNTR, BRT: six
+  characters under a physical button, and the game's own HUD uses the same
+  English codes. Rendered at 480 px in French, nothing else on a frame wraps
+  or clips.
+- **The desktop app reads the same catalogue.** `DesktopText` looks words up
+  in `locales/{code}.json` through `ServerHost.CatalogueText`, and rereads
+  `language.json` when its timestamp moves - the picker is in the dashboard,
+  and the tray only learns of a change by looking, so the menu is reworded
+  each time it opens and the header each time it comes back.
+- **MfdLayout's warnings stay English at source** because the screen tests
+  compile that file on its own; the controller translates them where it shows
+  them, the one with figures by shape.
+- **The orphan test reads the MFD files** as well as `app.js`, and the MFD
+  setup page and script are copied into the WebTests output for it.
+- `MfdFrenchTests` loads the core with the French catalogue (rows, a plural)
+  and without it (English, unchanged).
+
+## The phases, as they ended
+
+Phases 1 to 4 are done: every page, every server sentence, the MFD pages and
+the desktop app read in French. Phase 5 - playing the game in French - still
+waits on a tester's `Game.log` from a French game.
+
+### 0.18.18
+
+The first piece of phase 5 that needs no French log: the game's own language
+setting. `GameLanguage` reads `g_language` from the install's `user.cfg` (the
+last uncommented line; English when there is none, as the game does), and
+`/api/labels` and `/api/starstrings` report it.
+
+- **Item labels say when they will not show.** They are written into
+  `Data\Localization\english\global.ini`; a game set to French reads its own
+  folder, so "installed" was true of the file and false of the game. The
+  status line now says so whenever the game is not set to English.
+- **StarStrings is flagged before it is installed.** This install's
+  `user.cfg`, written by StarStrings (its install record lists it), reads
+  exactly `g_language = english`: installing it switches a game in another
+  language back to English. The page says that before the click.
+- `GameLanguageTests` holds that file byte for byte, plus a French and a German
+  setting, a commented line and the default; a WebTest shows the warning in
+  English and in French.
+
+What phase 5 still needs, unchanged: a `Game.log` from a game set to French.
+The parser's contract and party matching, the screenshot readers and the
+names read from the game's table all depend on what the game writes in
+French - in particular what it puts in a line whose key its French table
+lacks - and nothing on this machine has written one.
+
+### 0.18.19
+
+Phase 5 closed on the one fact it was waiting for. Nicolas confirms that
+`Game.log` is always written in English, whatever language the game is set
+to, so the contract, party and ship-channel matching needs no change in a
+French game - the parser change the plan held back for a tester's log is not
+needed. No code changed; the plan above is updated, and the screenshot
+readers in French are recorded as a reader feature for when French
+screenshots exist, rather than as unfinished translation.

@@ -34,6 +34,8 @@
     <None Include="..\..\web\mfd-core.js" Link="web\mfd-core.js" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\mfd.js" Link="web\mfd.js" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\web\mfd.html" Link="web\mfd.html" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\mfd-setup.js" Link="web\mfd-setup.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\web\mfd-setup.html" Link="web\mfd-setup.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

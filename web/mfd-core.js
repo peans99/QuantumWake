@@ -3,6 +3,14 @@
 window.QwMfd = (() => {
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
+  /* The page's words when i18n.js is loaded, English otherwise. The tests load
+     this file on its own, and a panel without a catalogue reads as it always
+     did; the keys are the English, as on the dashboard. */
+  const fill = (text, values) => String(text).replace(/\{(\w+)\}/g, (m, k) => (values && k in values ? values[k] : m));
+  const say = (text, values) => (typeof tx === 'function' ? tx(text, values) : fill(text, values));
+  const sayn = (count, one, other, values) => (typeof txn === 'function'
+    ? txn(count, one, other, values) : fill(count === 1 ? one : other, { count, ...values }));
+
   /* Dimming and its timing are one decision, not two: how readable a frame
      nobody has touched should stay. A third of the pilot's own brightness
      still reads at a glance, which is the point — a panel bolted into a
@@ -442,7 +450,7 @@ window.QwMfd = (() => {
   function describe(item) {
     const amount = item?.quantity != null
       ? `${item.quantity}${item.unit ? ' ' + item.unit : ''}` : '';
-    return [item?.kind, amount, item?.text].filter(Boolean).join(' · ');
+    return [item?.kind && say(item.kind), amount, item?.text].filter(Boolean).join(' · ');
   }
 
   /* The outstanding work at the next stop, as a list a cursor can walk. A stop
@@ -454,7 +462,7 @@ window.QwMfd = (() => {
     const open = (stop.actions || []).filter(a => !a.done);
     if (open.length === 0)
       return [{ kind: 'stop', tripId: briefing.tripId, stopId: stop.id, place: stop.place,
-        label: stop.note || 'Nothing written for this stop' }];
+        label: stop.note || say('Nothing written for this stop') }];
     return open.map(a => ({ kind: 'action', tripId: briefing.tripId, stopId: stop.id,
       actionId: a.id, place: stop.place, label: describe(a) }));
   }
@@ -487,12 +495,12 @@ window.QwMfd = (() => {
      so on the panel itself. */
   function mapView(atlas, state, briefing, requestedFocus = 0) {
     const s = state || {};
-    if (!atlas) return { note: 'Loading the star map…' };
+    if (!atlas) return { note: say('Loading the star map…') };
     const system = s.locationSystem || '';
     const positions = atlas.positions?.[system.toLowerCase()];
-    if (!system) return { note: 'No system identified in the logs yet' };
+    if (!system) return { note: say('No system identified in the logs yet') };
     if (!positions || !Object.keys(positions).length)
-      return { system, note: `No body positions for ${system}` };
+      return { system, note: say('No body positions for {system}', { system }) };
 
     const bodyOf = id => id ? (atlas.nodes || []).find(n => n.rawId === id)?.body || null : null;
     const here = s.locationBody || null;
@@ -539,12 +547,12 @@ window.QwMfd = (() => {
     // Moons sit within a rounding of their planet's orbit, so one ring each
     // would draw the same circle four times over a 150 px panel.
     const rings = [...new Set(bodies.map(b => Math.round(b.radius * 50) / 50))].filter(r => r > .04);
-    const note = [system.toUpperCase(), focus ? `radar lock · ${focus}` : null,
+    const note = [system.toUpperCase(), focus ? say('radar lock · {body}', { body: focus }) : null,
       // "Not a fix" reads as a caveat about the position, which is not what is
       // being disclaimed: the position is as good as the logs get. It is the
       // line and its distance that are direct rather than flown.
-      here ? 'direct line, not the route flown' : 'body not identified',
-      elsewhere ? `${elsewhere} stop${elsewhere > 1 ? 's' : ''} outside this system` : null]
+      here ? say('direct line, not the route flown') : say('body not identified'),
+      elsewhere ? sayn(elsewhere, '{count} stop outside this system', '{count} stops outside this system') : null]
       .filter(Boolean).join(' · ');
     return { system, here, next, target, bodies, rings, legs, gm, elsewhere, note,
       focus, focusIndex, focusNames };
@@ -564,8 +572,8 @@ window.QwMfd = (() => {
     if (!map?.legs?.length) return null;
     const total = map.gm >= 100 ? map.gm.toFixed(0) : map.gm.toFixed(1);
     return map.legs.length === 1
-      ? `${total} Gm to ${map.target}`
-      : `${total} Gm to ${map.target} over ${map.legs.length} legs`;
+      ? say('{distance} Gm to {body}', { distance: total, body: map.target })
+      : say('{distance} Gm to {body} over {count} legs', { distance: total, body: map.target, count: map.legs.length });
   }
 
   /* The two frames have jobs before a pilot touches either one. They remain
@@ -599,7 +607,7 @@ window.QwMfd = (() => {
     return {
       contract, stop, next,
       destination: stop?.place || null,
-      progress: contract?.steps > 0 ? `${contract.stepsDone} of ${contract.steps} objectives done` : null,
+      progress: contract?.steps > 0 ? say('{done} of {count} objectives done', { done: contract.stepsDone, count: contract.steps }) : null,
       reward: Number.isFinite(Number(reward)) ? Number(reward) : null,
       objectives: contractScreen?.objectives || [],
       activeFor: contract?.since ? elapsed(contract.since, view.now) : null,
@@ -608,11 +616,11 @@ window.QwMfd = (() => {
   }
 
   function loadLine(load) {
-    if (!load.stops) return 'No load or purchase planned';
+    if (!load.stops) return say('No load or purchase planned');
     const parts = [];
     if (load.scu) parts.push(`${load.scu} SCU`);
-    if (load.unmeasured) parts.push(`${load.unmeasured} with no SCU figure`);
-    return `${parts.join(' + ')} across ${load.stops} stop${load.stops > 1 ? 's' : ''} · planned, not detected`;
+    if (load.unmeasured) parts.push(say('{count} with no SCU figure', { count: load.unmeasured }));
+    return sayn(load.stops, '{load} across {count} stop · planned, not detected', '{load} across {count} stops · planned, not detected', { load: parts.join(' + ') });
   }
 
   /* The dashboard may pin an event before a pilot has flown a contract for it.
@@ -635,9 +643,9 @@ window.QwMfd = (() => {
   }
 
   function eventNext(track) {
-    if (!track?.nextTier) return 'Every listed tier reached';
+    if (!track?.nextTier) return say('Every listed tier reached');
     const index = (track.tiers || []).findIndex(tier => tier.minPoints === track.nextTier) + 1;
-    return `${Number(track.toNext || 0).toLocaleString()} pts to Tier ${index} (${Number(track.nextTier).toLocaleString()} pts)`;
+    return say('{points} pts to Tier {tier} ({total} pts)', { points: Number(track.toNext || 0).toLocaleString(), tier: index, total: Number(track.nextTier).toLocaleString() });
   }
 
   /* A row is [label, value, timestamp, mark]. The mark is how the display is
@@ -647,8 +655,8 @@ window.QwMfd = (() => {
     const s = state || {};
     const stop = briefing?.stops?.[0];
     const planMissing = briefingUnavailable
-      ? [['PLAN UNAVAILABLE', 'Cannot read the flight plan. Check the dashboard connection.']]
-      : !briefing ? [['FLIGHT PLAN', 'Loading your tracked plan…']] : null;
+      ? [['PLAN UNAVAILABLE', say('Cannot read the flight plan. Check the dashboard connection.')]]
+      : !briefing ? [['FLIGHT PLAN', say('Loading your tracked plan…')]] : null;
     switch (pageIds[page]) {
       /* Where you are going, then where you are. A nav page exists for the
          first of those and it had been sitting third - below the plan, under
@@ -658,26 +666,26 @@ window.QwMfd = (() => {
       case 'nav': {
         const legs = view.map?.legs?.length || 0, far = view.map?.gm;
         const reach = legs ? ` · ${far >= 100 ? far.toFixed(0) : far.toFixed(1)} Gm`
-          + (legs > 1 ? ` over ${legs} legs` : '') : '';
+          + (legs > 1 ? ` ${say('over {count} legs', { count: legs })}` : '') : '';
         return [
           [s.travelling ? 'QUANTUM DESTINATION' : (briefingUnavailable ? 'PLAN UNAVAILABLE' : 'NEXT STOP'),
-            s.travelling ? (s.travellingTo || 'Destination not identified') + reach
-              : briefingUnavailable ? 'Open the dashboard to check your route.'
-                : !briefing ? 'Loading your tracked plan…'
-                  : stop?.place ? stop.place + reach : 'No outstanding stop in the tracked plan'],
-          ['LOCATION', s.location || 'Location not yet identified'],
-          ['SERVER', !s.shard ? 'Server not yet identified'
+            s.travelling ? (s.travellingTo || say('Destination not identified')) + reach
+              : briefingUnavailable ? say('Open the dashboard to check your route.')
+                : !briefing ? say('Loading your tracked plan…')
+                  : stop?.place ? stop.place + reach : say('No outstanding stop in the tracked plan')],
+          ['LOCATION', s.location || say('Location not yet identified')],
+          ['SERVER', !s.shard ? say('Server not yet identified')
             : `${s.shardSeenName || s.shardShort || s.shard}${s.shardSeenName ? ` · ${s.shard}` : ''}`
-              + (s.shardDisposition === 'avoid' ? ' · marked avoid' : s.shardDisposition === 'good' ? ' · marked good' : '')],
-          ['SHIP', s.ship || 'No ship identified in the logs'],
-          ['LOCATION SOURCE', s.location ? `${s.confidence || 'Unknown'} confidence · game logs` : 'Waiting for a location signal']
+              + (s.shardDisposition === 'avoid' ? ` · ${say('marked avoid')}` : s.shardDisposition === 'good' ? ` · ${say('marked good')}` : '')],
+          ['SHIP', s.ship || say('No ship identified in the logs')],
+          ['LOCATION SOURCE', s.location ? say('{confidence} confidence · game logs', { confidence: say(s.confidence || 'Unknown') }) : say('Waiting for a location signal')]
         ];
       }
       case 'task': {
         if (planMissing) return planMissing;
         const mission = missionCard(s, briefing, view);
         if (!mission.contract && !mission.stop)
-          return [['NO OUTSTANDING STOP', 'Track a flight plan or accept a contract to show work here.']];
+          return [['NO OUTSTANDING STOP', say('Track a flight plan or accept a contract to show work here.')]];
         const status = [mission.progress,
           mission.reward !== null ? `${Math.round(mission.reward).toLocaleString()} aUEC` : null]
           .filter(Boolean).join(' · ');
@@ -688,7 +696,7 @@ window.QwMfd = (() => {
           ...mission.objectives.slice(0, 2).map((objective, index) => [`SCREEN OBJECTIVE ${index + 1}`, objective]),
           ...(mission.activeFor ? [['ACTIVE FOR', mission.activeFor]] : []),
           ...(mission.stop ? [['NEXT ACTION', mission.next ? describe(mission.next)
-            : mission.stop.note || 'Travel to this stop']] : []),
+            : mission.stop.note || say('Travel to this stop')]] : []),
           ...(mission.tripTitle ? [['PLAN', mission.tripTitle]] : [])
         ];
       }
@@ -696,7 +704,7 @@ window.QwMfd = (() => {
         if (planMissing) return planMissing;
         const list = tasks(briefing);
         if (!list.length) return [['NOTHING TO CONFIRM',
-          'Track a flight plan in the dashboard to tick its work off from here.']];
+          say('Track a flight plan in the dashboard to tick its work off from here.')]];
         const selected = clamp(integer(view.selected, 0), 0, list.length - 1);
         // The confirmation is no longer the last row: it used to scroll out of
         // sight behind the very list it was asking about. It has a fixed strip
@@ -712,28 +720,28 @@ window.QwMfd = (() => {
       case 'cargo': {
         const cargo = s.cargo, last = cargo?.last;
         return [
-          ['PLANNED LOAD', briefingUnavailable ? 'Cannot read the flight plan.'
-            : !briefing ? 'Loading your tracked plan…' : loadLine(plannedLoad(briefing))],
+          ['PLANNED LOAD', briefingUnavailable ? say('Cannot read the flight plan.')
+            : !briefing ? say('Loading your tracked plan…') : loadLine(plannedLoad(briefing))],
           ['LAST COUNTER', last
-            ? [`${last.sell ? 'Sold' : 'Bought'} ${last.scu} SCU`, last.commodity, last.shop,
+            ? [say(last.sell ? 'Sold {scu} SCU' : 'Bought {scu} SCU', { scu: last.scu }), last.commodity, last.shop,
               `${Math.round(last.amount).toLocaleString()} aUEC`].filter(Boolean).join(' · ')
-            : 'No commodity counter used in this session', last?.at],
+            : say('No commodity counter used in this session'), last?.at],
           ['THIS SESSION', cargo
-            ? `${cargo.boughtScu} SCU bought · ${cargo.soldScu} SCU sold`
-            : 'Nothing bought or sold at a commodity counter yet'],
+            ? say('{bought} SCU bought · {sold} SCU sold', { bought: cargo.boughtScu, sold: cargo.soldScu })
+            : say('Nothing bought or sold at a commodity counter yet')],
           // The dashboard's "Trade from here" card, folded in: it is a lead
           // about the counter you are standing at, which is this page's subject.
           ...(briefing?.trade?.length ? [['TRADE FROM HERE', briefing.trade.slice(0, 2)
-            .map(t => `${t.commodity} · +${Math.round(t.marginPerScu).toLocaleString()}/SCU at ${t.sellTerminal}`)
+            .map(t => say('{commodity} · +{margin}/SCU at {terminal}', { commodity: t.commodity, margin: Math.round(t.marginPerScu).toLocaleString(), terminal: t.sellTerminal }))
             .join('  |  ')]] : []),
-          ['NOT A MANIFEST', 'Counter receipts and your plan. Never the hold.']
+          ['NOT A MANIFEST', say('Counter receipts and your plan. Never the hold.')]
         ];
       }
       case 'contract': {
         const open = s.contracts || [];
         if (!open.length) return [
-          ['NO OPEN CONTRACT', 'Nothing accepted in this session that the logs have not since closed.'],
-          ['SESSION ONLY', 'Earlier ones are in the logbook.']];
+          ['NO OPEN CONTRACT', say('Nothing accepted in this session that the logs have not since closed.')],
+          ['SESSION ONLY', say('Earlier ones are in the logbook.')]];
         const c = open[0];
         // Without a text mod the game's own title is already "issuer · type ·
         // difficulty", so an issuer row would print the line above it twice.
@@ -742,42 +750,42 @@ window.QwMfd = (() => {
           .filter(part => part && !String(c.name).includes(part));
         return [
           ['CONTRACT', c.name],
-          ['OBJECTIVES', c.steps > 0 ? `${c.stepsDone} of ${c.steps} done`
-            : 'The journal reported no objective steps for this one'],
+          ['OBJECTIVES', c.steps > 0 ? say('{done} of {count} done', { done: c.stepsDone, count: c.steps })
+            : say('The journal reported no objective steps for this one')],
           ...(about.length ? [['ISSUER', about.join(' · ')]] : []),
-          ['TAKEN', 'This session', c.since],
-          ...(open.length > 1 ? [['ALSO OPEN', `${open.length - 1} more`]] : [])
+          ['TAKEN', say('This session'), c.since],
+          ...(open.length > 1 ? [['ALSO OPEN', say('{count} more', { count: open.length - 1 })]] : [])
         ];
       }
       case 'event': {
         const events = view.extra?.events;
-        if (!events) return [['EVENT PROGRESS', 'Reading your event journal…']];
+        if (!events) return [['EVENT PROGRESS', say('Reading your event journal…')]];
         if (!events.available) return [['EVENT DATA UNAVAILABLE',
-          'Read the installed game data in Settings to identify event tiers and contract points.']];
+          say('Read the installed game data in Settings to identify event tiers and contract points.')]];
         const event = currentEvent(events);
         if (!event) return [['NO EVENTS IN THIS PATCH',
-          'The installed game data lists no event campaigns.']];
+          say('The installed game data lists no event campaigns.')]];
         const track = eventTrack(event);
         if (!track) return [['NO EVENT BARS',
-          'This campaign has no progress bars in the installed game data.']];
+          say('This campaign has no progress bars in the installed game data.')]];
         const label = events.tracked === event.id ? 'TRACKED EVENT'
           : (events.open || []).some(open => open.event === event.title) ? 'ACTIVE EVENT' : 'RECENT EVENT';
         const points = Number(track.points || 0).toLocaleString();
         const otherTracks = (event.tracks || []).filter(candidate => candidate !== track && candidate.nextTier != null)
           .slice(0, 2).map(candidate => [
             `${String(candidate.name || 'EVENT BAR').toUpperCase()} · NEXT`,
-            `${Number(candidate.points || 0).toLocaleString()} pts · ${eventNext(candidate)}`]);
+            say('{points} pts · {next}', { points: Number(candidate.points || 0).toLocaleString(), next: eventNext(candidate) })]);
         const fastest = track.fastest?.[0];
         const open = (events.open || []).find(candidate => candidate.event === event.title);
         return [
           [label, event.title],
           [`${String(track.name || 'PROGRESS').toUpperCase()} · FLOOR`,
-            `${points} pts from completed contracts in this logbook`],
+            say('{points} pts from completed contracts in this logbook', { points })],
           ['NEXT TIER', eventNext(track)],
           ...otherTracks,
-          ...(fastest ? [['FEWEST RUNS', `${fastest.needed} × ${fastest.title} · ${Number(fastest.points || 0).toLocaleString()} pts each`]] : []),
-          ...(open ? [['IN YOUR JOURNAL', `+${Number(open.points || 0).toLocaleString()} pts · ${open.title}`]] : []),
-          ...(event.unrecognised ? [['NOT COUNTED', `${event.unrecognised} matching contract${event.unrecognised === 1 ? '' : 's'} lack a points entry.`]] : [])
+          ...(fastest ? [['FEWEST RUNS', say('{count} × {title} · {points} pts each', { count: fastest.needed, title: fastest.title, points: Number(fastest.points || 0).toLocaleString() })]] : []),
+          ...(open ? [['IN YOUR JOURNAL', say('+{points} pts · {title}', { points: Number(open.points || 0).toLocaleString(), title: open.title })]] : []),
+          ...(event.unrecognised ? [['NOT COUNTED', sayn(event.unrecognised, '{count} matching contract lacks a points entry.', '{count} matching contracts lack a points entry.')]] : [])
         ];
       }
       /* Session, Handle, "This session" and "Wake up at" all fold in here: two
@@ -786,14 +794,14 @@ window.QwMfd = (() => {
       case 'status': {
         const wake = wakeUpAt(view.extra?.respawn);
         return [
-          ['SESSION', s.inGame ? (s.gameRules || 'In game') : 'Menus / no active game session'],
-          ['ELAPSED', elapsed(s.sessionStarted, view.now) || 'No session start recorded'],
-          ['PILOT', s.handle || 'Waiting for pilot identity'],
-          ['THIS SESSION', `${s.deaths || 0} death${s.deaths === 1 ? '' : 's'} · `
-            + `${s.incapacitations || 0} incapacitation${s.incapacitations === 1 ? '' : 's'}`],
+          ['SESSION', s.inGame ? (s.gameRules || say('In game')) : say('Menus / no active game session')],
+          ['ELAPSED', elapsed(s.sessionStarted, view.now) || say('No session start recorded')],
+          ['PILOT', s.handle || say('Waiting for pilot identity')],
+          ['THIS SESSION', `${sayn(s.deaths || 0, '{count} death', '{count} deaths')} · `
+            + sayn(s.incapacitations || 0, '{count} incapacitation', '{count} incapacitations')],
           ...(wake ? [['WAKE UP AT', wake.place, wake.at], ['HOW SURE', wake.why]] : []),
           ...(s.screen ? [['SCREEN READING', s.screen.summary, s.screen.shotAt]]
-            : [['NO SCREENSHOT READING', 'Read a screenshot in the dashboard to add a cross-check.']]),
+            : [['NO SCREENSHOT READING', say('Read a screenshot in the dashboard to add a cross-check.')]]),
         ];
       }
       /* The live timeline, newest first. The one page that answers "what just
@@ -801,7 +809,7 @@ window.QwMfd = (() => {
       case 'feed': {
         const feed = s.recentEvents || [];
         if (!feed.length) return [['NOTHING YET',
-          'The log has said nothing this session. Entries appear here as the game writes them.']];
+          say('The log has said nothing this session. Entries appear here as the game writes them.')]];
         return feed.slice(0, 8).map(entry => [
           String(entry.kind || 'event').replace(/-/g, ' ').toUpperCase(),
           [entry.text, entry.detail].filter(Boolean).join(' · '), entry.at]);
@@ -812,7 +820,7 @@ window.QwMfd = (() => {
          name or confirmation. */
       case 'log': {
         const log = view.extra?.screenLog;
-        if (!log) return [['LOG', 'Reading screenshots and copied locations…']];
+        if (!log) return [['LOG', say('Reading screenshots and copied locations…')]];
         const pinned = new Set((log.pins || []).map(pin => String(pin.sourceAt || '')));
         const entries = [
           ...(log.readings || []).map(shot => ({ at: shot.shotAt, shot })),
@@ -820,9 +828,9 @@ window.QwMfd = (() => {
         ].sort((a, b) => new Date(b.at) - new Date(a.at));
         const pinRows = (log.pins || []).slice(0, 2).map(pin => [
           `POI · ${String(pin.category || 'General').toUpperCase()}`,
-          pin.label || [pin.system, pin.believed].filter(Boolean).join(' · ') || 'Copied location', pin.pinnedAt]);
+          pin.label || [pin.system, pin.believed].filter(Boolean).join(' · ') || say('Copied location'), pin.pinnedAt]);
         if (!entries.length && !pinRows.length)
-          return [['NO LOG ENTRIES', 'Screenshots and copied locations appear here after the dashboard reads them.']];
+          return [['NO LOG ENTRIES', say('Screenshots and copied locations appear here after the dashboard reads them.')]];
         const recentRows = entries.slice(0, Math.max(0, 8 - pinRows.length)).map(entry => {
           if (entry.paste) {
             const paste = entry.paste;
@@ -830,8 +838,8 @@ window.QwMfd = (() => {
             const gm = Number(paste.gigametres);
             const seen = Math.max(1, Number(paste.timesSeen) || 1);
             return [pinned.has(String(paste.at)) ? 'PINNED POI' : 'COPIED LOCATION',
-              [Number.isFinite(gm) ? `${gm.toFixed(4)} Gm` : null, where || 'No session location recorded',
-                seen > 1 ? `seen ${seen} times` : null]
+              [Number.isFinite(gm) ? `${gm.toFixed(4)} Gm` : null, where || say('No session location recorded'),
+                seen > 1 ? say('seen {count} times', { count: seen }) : null]
                 .filter(Boolean).join(' · '), paste.at];
           }
           const shot = entry.shot;
@@ -847,11 +855,11 @@ window.QwMfd = (() => {
         const party = s.party || [];
         // The one qualifier that survives on the frame: absence here means nothing,
         // and a pilot who reads this list as a roster is reading it wrong.
-        const floor = ['A FLOOR', 'Absence means nothing.'];
-        if (!party.length) return [['NOBODY NAMED', 'The party channel has not named anyone this session.'], floor];
+        const floor = ['A FLOOR', say('Absence means nothing.')];
+        if (!party.length) return [['NOBODY NAMED', say('The party channel has not named anyone this session.')], floor];
         return [
           ...party.slice(0, 6).map(p => [String(p.handle).toUpperCase(), p.moment, p.at]),
-          ...(s.partyDisbanded ? [['DISBANDED', 'The channel said the group broke up.']] : []),
+          ...(s.partyDisbanded ? [['DISBANDED', say('The channel said the group broke up.')]] : []),
           floor
         ];
       }
@@ -862,27 +870,27 @@ window.QwMfd = (() => {
          writes no friendlier one to the log. */
       case 'server': {
         if (!s.shard) return [
-          ['NO SHARD', s.inGame ? 'No placement has been logged yet this session.' : 'Not on a server - in the menus, or no game running.'],
-          ['HOW THIS IS READ', 'The game writes one <Join PU> line when the matchmaker places you.']];
+          ['NO SHARD', s.inGame ? say('No placement has been logged yet this session.') : say('Not on a server - in the menus, or no game running.')],
+          ['HOW THIS IS READ', say('The game writes one <Join PU> line when the matchmaker places you.')]];
         const before = s.shardVisitsBefore || 0;
         return [
           ['SHARD', s.shard],
           // The label the pilot saw in game and the good/avoid call are the two
           // things worth a glance at the loading screen - so they lead the note.
           ...(s.shardSeenName ? [['SEEN IN GAME', s.shardSeenName]] : []),
-          ...(s.shardDisposition === 'avoid' ? [['YOUR CALL', 'Avoid - you marked this one']]
-            : s.shardDisposition === 'good' ? [['YOUR CALL', 'Good - you marked this one']] : []),
-          ['REGION', s.shardShort || 'Unknown region'],
-          ['ON IT FOR', elapsed(s.shardSince, view.now) || 'Just placed'],
-          ['BEEN HERE', before === 0 ? 'First time on this shard'
-            : `${before} time${before === 1 ? '' : 's'} before${s.shardFavorite ? ' · favourite' : ''}`],
+          ...(s.shardDisposition === 'avoid' ? [['YOUR CALL', say('Avoid - you marked this one')]]
+            : s.shardDisposition === 'good' ? [['YOUR CALL', say('Good - you marked this one')]] : []),
+          ['REGION', s.shardShort || say('Unknown region')],
+          ['ON IT FOR', elapsed(s.shardSince, view.now) || say('Just placed')],
+          ['BEEN HERE', before === 0 ? say('First time on this shard')
+            : `${sayn(before, '{count} time before', '{count} times before')}${s.shardFavorite ? ` · ${say('favourite')}` : ''}`],
           ...(s.shardNote ? [['YOUR NOTE', s.shardNote]]
-            : [['NO NOTE', 'Write one on the dashboard\u2019s Servers page.']])
+            : [['NO NOTE', say('Write one on the dashboard’s Servers page.')]])
         ];
       }
       case 'money': {
         const money = view.extra?.earnings;
-        if (!money) return [['EARNINGS', 'Reading what the ledger recorded…']];
+        if (!money) return [['EARNINGS', say('Reading what the ledger recorded…')]];
         const rate = money.basis === 'recent' ? money.window : money.lifetime;
 
         /* Cash on hand leads, because it is the figure a pilot at a kiosk
@@ -893,35 +901,35 @@ window.QwMfd = (() => {
            yet, and says nothing rather than "no reading". */
         const wallet = view.extra?.wallet;
         const cash = wallet === undefined ? []
-          : !wallet?.read ? [['CASH ON HAND', 'No screenshot has shown your balance yet - a kiosk prints it in full.']]
+          : !wallet?.read ? [['CASH ON HAND', say('No screenshot has shown your balance yet - a kiosk prints it in full.')]]
           : wallet.read.movementsSince > 0
-            ? [['CASH ON HAND', `about ${aUEC(wallet.read.estimate)} · estimate`],
-               ['LAST READ', `${aUEC(wallet.read.balance)} on screen, ${wallet.read.movementsSince} movement${wallet.read.movementsSince === 1 ? '' : 's'} logged since`]]
-            : [['CASH ON HAND', `${aUEC(wallet.read.balance)} · from the last screenshot`]];
+            ? [['CASH ON HAND', say('about {amount} · estimate', { amount: aUEC(wallet.read.estimate) })],
+               ['LAST READ', sayn(wallet.read.movementsSince, '{amount} on screen, {count} movement logged since', '{amount} on screen, {count} movements logged since', { amount: aUEC(wallet.read.balance) })]]
+            : [['CASH ON HAND', say('{amount} · from the last screenshot', { amount: aUEC(wallet.read.balance) })]];
 
         return [
           ...cash,
-          ['TRADING RATE', rate?.perHour > 0 ? `${aUEC(rate.perHour)} per hour`
-            : 'Too little recorded flying time to state a rate'],
-          ['FROM', money.basis === 'recent' ? `the last ${money.window.days} days` : 'every session on record'],
-          ['EARNED', rate ? aUEC(rate.earned) : 'Nothing recorded'],
+          ['TRADING RATE', rate?.perHour > 0 ? say('{amount} per hour', { amount: aUEC(rate.perHour) })
+            : say('Too little recorded flying time to state a rate')],
+          ['FROM', money.basis === 'recent' ? say('the last {count} days', { count: money.window.days }) : say('every session on record')],
+          ['EARNED', rate ? aUEC(rate.earned) : say('Nothing recorded')],
           ...(money.goal
-            ? [['GOAL', `${money.goal.name || 'Saving up'} · ${aUEC(money.goal.target)}`],
+            ? [['GOAL', `${money.goal.name || say('Saving up')} · ${aUEC(money.goal.target)}`],
                ['AT THIS RATE', money.hoursToGoal != null
-                 ? hours(money.hoursToGoal) + ' of flying' : 'No rate to divide the goal by']]
-            : [['NO GOAL SET', 'Set one in the dashboard and the flying time to reach it shows here.']]),
+                 ? say('{time} of flying', { time: hours(money.hoursToGoal) }) : say('No rate to divide the goal by')]]
+            : [['NO GOAL SET', say('Set one in the dashboard and the flying time to reach it shows here.')]]),
         ];
       }
       case 'list': {
         const jobs = view.extra?.jobs;
-        if (!jobs) return [['SHOPPING LISTS', 'Reading your lists…']];
+        if (!jobs) return [['SHOPPING LISTS', say('Reading your lists…')]];
         const open = jobs.filter(job => !job.done);
         if (!open.length) return [['NO LIST IN HAND',
-          'Make a shopping list in the dashboard and its progress shows here.']];
+          say('Make a shopping list in the dashboard and its progress shows here.')]];
         return [
           ...open.slice(0, 4).map(job => [
             (job.pinned ? '★ ' : '') + String(job.title).toUpperCase(),
-            [`${job.haveCount} of ${job.totalCount} seen`, job.destination].filter(Boolean).join(' · ')]),
+            [say('{have} of {count} seen', { have: job.haveCount, count: job.totalCount }), job.destination].filter(Boolean).join(' · ')]),
         ];
       }
       /* What am I flying, what is it for, and what does losing it cost? All
@@ -930,17 +938,17 @@ window.QwMfd = (() => {
       case 'ship': {
         const focus = briefing?.focus, claim = briefing?.claim;
         return [
-          ['SHIP', s.ship || 'No ship identified in the logs'],
+          ['SHIP', s.ship || say('No ship identified in the logs')],
           ...(focus ? [['WHAT IT IS FOR',
             [focus.label, focus.career, focus.role].filter(Boolean).join(' · ')]] : []),
           ...(claim
             ? [['CLAIM, PER THE TABLES', [
-                claim.expeditedCost ? `${aUEC(claim.expeditedCost)} expedited` : null,
+                claim.expeditedCost ? say('{amount} expedited', { amount: aUEC(claim.expeditedCost) }) : null,
                 claim.expeditedMinutes ? `${Math.round(claim.expeditedMinutes)} min` : null
-              ].filter(Boolean).join(' · ') || 'The tables carry no figure for this hull'],
+              ].filter(Boolean).join(' · ') || say('The tables carry no figure for this hull')],
               ['OR WAIT', claim.standardMinutes
-                ? `${Math.round(claim.standardMinutes)} min and no fee` : 'Not stated']]
-            : [['CLAIM, PER THE TABLES', 'Nothing for this hull.']]),
+                ? say('{minutes} min and no fee', { minutes: Math.round(claim.standardMinutes) }) : say('Not stated')]]
+            : [['CLAIM, PER THE TABLES', say('Nothing for this hull.')]]),
         ];
       }
       /* The page for the moment after landing: what this place can do for you,
@@ -949,13 +957,13 @@ window.QwMfd = (() => {
         if (planMissing) return planMissing;
         const services = briefing.services || [], shopping = briefing.shopping || [], stash = briefing.stash || [];
         return [
-          ['PLACE', briefing.location || s.location || 'Not identified'],
+          ['PLACE', briefing.location || s.location || say('Not identified')],
           /* Only what is here. Naming all five with their statuses was five
              facts to say "none of them", and wrapped to four lines doing it. */
-          ['SERVICES', !services.length ? 'Nothing the installed data can identify'
+          ['SERVICES', !services.length ? say('Nothing the installed data can identify')
             : services.some(available)
               ? services.filter(available).map(v => v.name).join(' · ')
-              : `None of ${services.length} listed here`],
+              : say('None of {count} listed here', { count: services.length })],
           ...(shopping.length ? [['ON YOUR LIST, IN STOCK', shopping.slice(0, 3)
             .map(i => `${i.name} · ${i.needed} ${i.unit} · ${aUEC(i.price)}`).join('  |  ')]] : []),
           ...(stash.length ? [['SEEN HERE BEFORE',
@@ -964,14 +972,14 @@ window.QwMfd = (() => {
       }
       case 'services': {
         const services = view.extra?.nearestServices;
-        if (!services) return [['NEAREST SERVICES', 'Reading the place directory…']];
+        if (!services) return [['NEAREST SERVICES', say('Reading the place directory…')]];
         return services.map(service => [service.label.toUpperCase(), service.message]);
       }
       case 'ledger': {
         const ledger = view.extra?.ledger;
-        if (!ledger) return [['LEDGER', 'Reading what the logs priced…']];
+        if (!ledger) return [['LEDGER', say('Reading what the logs priced…')]];
         if (!ledger.length) return [['NOTHING PRICED',
-          'No confirmed transaction in the last 30 days.']];
+          say('No confirmed transaction in the last 30 days.')]];
         return [
           ...pageOf(ledger, view.offset, LEDGER_PAGE).items.map(entry => [
             String(entry.kind || 'entry').toUpperCase(),
@@ -984,21 +992,20 @@ window.QwMfd = (() => {
       case 'mine': {
         if (planMissing) return planMissing;
         const mining = briefing.mining || [];
-        if (!mining.length) return [['NOTHING RANKED', 'The deposit tables rank nothing here, or '
-          + 'the community dataset is switched off.']];
+        if (!mining.length) return [['NOTHING RANKED', say('The deposit tables rank nothing here, or the community dataset is switched off.')]];
         return [
           ...mining.slice(0, 4).map(place => [
             place.here ? String(place.place).toUpperCase()
-              : `${String(place.place).toUpperCase()} · ${place.system || 'another system'}`,
-            [`${aUEC(place.perRock)} a rock`, place.best].filter(Boolean).join(' · ')]),
-          ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY', 'Some are the best anywhere, not the best near you.']] : []),
+              : `${String(place.place).toUpperCase()} · ${place.system || say('another system')}`,
+            [say('{amount} a rock', { amount: aUEC(place.perRock) }), place.best].filter(Boolean).join(' · ')]),
+          ...(mining.some(place => !place.here) ? [['NOT ALL NEARBY', say('Some are the best anywhere, not the best near you.')]] : []),
         ];
       }
       case 'map': {
         const plan = view.map;
-        if (!plan?.bodies) return [['MAP', plan?.note || 'No system to draw yet']];
+        if (!plan?.bodies) return [['MAP', plan?.note || say('No system to draw yet')]];
         return [
-          ['LOCATION', s.location || plan.here || 'Not identified'],
+          ['LOCATION', s.location || plan.here || say('Not identified')],
           ...(plan.focus ? [['RADAR LOCK', plan.focus]] : []),
           ...(plan.next ? [['NEXT STOP', plan.next + (plan.gm
             ? ` · ${plan.gm >= 100 ? plan.gm.toFixed(0) : plan.gm.toFixed(1)} Gm` : '')]] : [])
@@ -1019,10 +1026,10 @@ window.QwMfd = (() => {
     if (!list.length) return null;
     const task = list[clamp(integer(view.selected, 0), 0, list.length - 1)];
     return view.armed
-      ? { state: 'armed', text: `Confirm: ${task.label}?`,
-          note: 'DONE again to mark it. Any other button cancels.' }
-      : { state: 'ready', text: `DONE marks: ${task.label}`,
-          note: 'Writes to your plan. Tells the game nothing.' };
+      ? { state: 'armed', text: say('Confirm: {task}?', { task: task.label }),
+          note: say('DONE again to mark it. Any other button cancels.') }
+      : { state: 'ready', text: say('DONE marks: {task}', { task: task.label }),
+          note: say('Writes to your plan. Tells the game nothing.') };
   }
 
   /* "not listed" and "not reported" both open with "not", which is the only
@@ -1047,7 +1054,7 @@ window.QwMfd = (() => {
 
   function hours(value) {
     const total = Number(value);
-    if (!Number.isFinite(total) || total < 0) return 'Not a figure this can divide';
+    if (!Number.isFinite(total) || total < 0) return say('Not a figure this can divide');
     return total < 1 ? `${Math.round(total * 60)} min` : `${total.toFixed(total < 10 ? 1 : 0)} h`;
   }
 
@@ -1063,10 +1070,10 @@ window.QwMfd = (() => {
     if (!place) return null;
     return { place, at: bedIsNewer ? bed.at : respawn.at,
       why: bedIsNewer
-        ? `A medical bed used ${bed.times} times · the game never states a regen point`
-        : `${respawn.agreeing} of ${respawn.of} deaths woke there · the game never states a regen point` };
+        ? sayn(bed.times, 'A medical bed used {count} time · the game never states a regen point', 'A medical bed used {count} times · the game never states a regen point')
+        : sayn(respawn.of, '{agreeing} of {count} death woke there · the game never states a regen point', '{agreeing} of {count} deaths woke there · the game never states a regen point', { agreeing: respawn.agreeing }) };
   }
-  return { fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
+  return { say, sayn, fit, inset, defaultInset, move, extent, action, effect, buttons, caption, icon, commands, defaults, mapView, radarFocus, radarHere, routeLine, panelRole, missionCard, makerOf, makers, dormant, actionLine, sameTask, taskId, rowIcon,
     groups, menuNodes, menuNode, parent, title, validScreen, menuItems, previewPage, trail, resolveCommand, restoreScreen, readingView,
     pages, pageIds, rows, tasks, describe, plannedLoad, elapsed, wakeUpAt, clamp, dozed, DOZE, prettyItem, pageOf, pageStep, pageLabel, LEDGER_PAGE, BRIGHTNESS, brightnessLevel, brightnessAt,
     cycleBrightness, stepBrightness, OSBS, BUTTONS };

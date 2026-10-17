@@ -27,6 +27,11 @@ internal sealed class TrayPresence : IDisposable
     private readonly ToolStripMenuItem _overlayItem;
     private readonly ToolStripMenuItem _pinItem;
     private readonly ToolStripMenuItem _updateItem;
+    private readonly ToolStripMenuItem _dashboardItem;
+    private readonly ToolStripMenuItem _mfdItem;
+    private readonly ToolStripMenuItem _folderItem;
+    private readonly ToolStripMenuItem _quitItem;
+    private bool _checking;
 
     /// <summary>What the current balloon should do if it is clicked, if anything.</summary>
     private Action? _balloonAction;
@@ -77,19 +82,26 @@ internal sealed class TrayPresence : IDisposable
         _updateItem = new ToolStripMenuItem("Check for updates", null,
             (_, _) => CheckForUpdatesRequested?.Invoke());
 
+        _dashboardItem = new ToolStripMenuItem("Open dashboard", null, (_, _) => OpenDashboardRequested?.Invoke());
+        _mfdItem = new ToolStripMenuItem("MFD setup…", null, (_, _) => MfdSetupRequested?.Invoke());
+        _folderItem = new ToolStripMenuItem("Set Star Citizen folder…", null, (_, _) => SetInstallFolderRequested?.Invoke());
+        _quitItem = new ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke());
+
         var menu = new ContextMenuStrip();
-        menu.Items.Add(new ToolStripMenuItem("Open dashboard", null,
-            (_, _) => OpenDashboardRequested?.Invoke()));
+        menu.Items.Add(_dashboardItem);
         menu.Items.Add(_overlayItem);
         menu.Items.Add(_pinItem);
-        menu.Items.Add(new ToolStripMenuItem("MFD setup…", null,
-            (_, _) => MfdSetupRequested?.Invoke()));
+        menu.Items.Add(_mfdItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Set Star Citizen folder…", null,
-            (_, _) => SetInstallFolderRequested?.Invoke()));
+        menu.Items.Add(_folderItem);
         menu.Items.Add(_updateItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke()));
+        menu.Items.Add(_quitItem);
+
+        // Worded as the menu opens rather than once: the language is picked in
+        // the dashboard, and the tray hears about it only by looking.
+        menu.Opening += (_, _) => ApplyText();
+        ApplyText();
 
         _icon = new NotifyIcon
         {
@@ -111,6 +123,18 @@ internal sealed class TrayPresence : IDisposable
             _balloonAction = null;
             act?.Invoke();
         };
+    }
+
+    /// <summary>Every item in the dashboard's language.</summary>
+    private void ApplyText()
+    {
+        _dashboardItem.Text = DesktopText.T("Open dashboard");
+        _overlayItem.Text = DesktopText.T("Show overlay");
+        _pinItem.Text = DesktopText.T("Pin overlay (clicks reach the game)");
+        _mfdItem.Text = DesktopText.T("MFD setup…");
+        _folderItem.Text = DesktopText.T("Set Star Citizen folder…");
+        _updateItem.Text = _checking ? DesktopText.T("Checking…") : DesktopText.T("Check for updates");
+        _quitItem.Text = DesktopText.T("Quit");
     }
 
     /// <summary>Reflects a change made elsewhere, such as the hotkey.</summary>
@@ -160,8 +184,9 @@ internal sealed class TrayPresence : IDisposable
     /// </summary>
     public void SetCheckingForUpdates(bool checking)
     {
+        _checking = checking;
         _updateItem.Enabled = !checking;
-        _updateItem.Text = checking ? "Checking…" : "Check for updates";
+        _updateItem.Text = checking ? DesktopText.T("Checking…") : DesktopText.T("Check for updates");
     }
 
     private static Icon LoadIcon()

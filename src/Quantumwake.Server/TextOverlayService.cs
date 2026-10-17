@@ -18,7 +18,8 @@ public sealed record TextOverlayStatus(
     string? Problem,
     int Annotated = 0,
     TextOverlayOptions? Options = null,
-    int Filled = 0);
+    int Filled = 0,
+    string GameLanguage = GameLanguage.English);
 
 /// <summary>Whether the loose text file the game reads has fallen behind the game's own.</summary>
 /// <param name="Present">Whether there is a loose file at all; with none the game uses its own and nothing is behind.</param>

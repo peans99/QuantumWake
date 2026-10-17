@@ -43,6 +43,19 @@ const KIND_COLOURS = {
   Unknown: '#46617a',
 };
 
+/* A kind as a reader says it. Written out rather than split from the key, so
+   each English word is a literal the catalogue's orphan check can find. */
+const PLACE_KIND_WORDS = {
+  City: 'City', RestStop: 'Rest Stop', Outpost: 'Outpost', Research: 'Research',
+  DistributionCentre: 'Distribution Centre', JumpPoint: 'Jump Point', Mine: 'Mine',
+  Asteroid: 'Asteroid', Station: 'Station', Planet: 'Planet', Moon: 'Moon',
+  NavPoint: 'Nav Point', MissionBeacon: 'Mission Beacon', Unknown: 'Unknown',
+};
+
+const placeKindWord = (kind) => (PLACE_KIND_WORDS[kind]
+  ? tx(PLACE_KIND_WORDS[kind])
+  : String(kind || '').replace(/([a-z])([A-Z])/g, '$1 $2'));
+
 /* Body order defines the ring layout, innermost first. */
 const SYSTEMS = {
   Stanton: ['Hurston', 'Arial', 'Aberdeen', 'Magda', 'Ita', 'Crusader', 'Cellin', 'Daymar',
@@ -547,7 +560,7 @@ function filterHelp(query) {
   if (none) none.hidden = shown > 0;
 
   const count = $('#help-count');
-  if (count) count.textContent = words.length ? `${shown} of ${items.length}` : '';
+  if (count) count.textContent = words.length ? tx('{shown} of {total}', { shown, total: items.length }) : '';
 
   return shown;
 }
@@ -2197,9 +2210,9 @@ function closeEntity() {
 }
 
 function renderEntity(card) {
-  $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] || card.kind;
+  $('#entity-kicker').textContent = ENTITY_KICKER[card.kind] ? tx(ENTITY_KICKER[card.kind]) : card.kind;
   $('#entity-name').textContent = card.name;
-  $('#entity-sub').textContent = card.subtitle || '';
+  $('#entity-sub').textContent = serverText(card.subtitle) || '';
 
   renderEntityHolding(card);
   renderEntityPrice(card);
@@ -2253,8 +2266,8 @@ function renderEntityHolding(card) {
   node.hidden = !card.holding;
   if (node.hidden) return;
 
-  node.append(el('b', null, card.holding.status));
-  if (card.holding.detail) node.append(el('div', 'entity-detail', card.holding.detail));
+  node.append(el('b', null, serverText(card.holding.status)));
+  if (card.holding.detail) node.append(el('div', 'entity-detail', serverText(card.holding.detail)));
 }
 
 /**
@@ -2276,8 +2289,8 @@ function renderEntityPrice(card) {
     `${money(price.amount)}${price.unit === 'aUEC/SCU' ? '/SCU' : ''}`));
 
   const detail = [
-    price.where ? `at ${price.where}` : null,
-    price.asOf ? `${price.source}, ${ageWord(price.asOf)}` : price.source,
+    price.where ? tx('at {place}', { place: price.where }) : null,
+    price.asOf ? `${tx(price.source)}, ${ageWord(price.asOf)}` : tx(price.source),
   ].filter(Boolean).join(' · ');
 
   node.append(el('div', 'entity-detail', detail));
@@ -2286,10 +2299,10 @@ function renderEntityPrice(card) {
 /** "collected 3 days ago", so a stale table reads as stale rather than as fact. */
 function ageWord(at) {
   const days = Math.floor((Date.now() - new Date(at).getTime()) / 86400000);
-  if (!Number.isFinite(days) || days < 0) return 'age unknown';
-  if (days === 0) return 'collected today';
-  if (days === 1) return 'collected yesterday';
-  return `collected ${days} days ago`;
+  if (!Number.isFinite(days) || days < 0) return tx('age unknown');
+  if (days === 0) return tx('collected today');
+  if (days === 1) return tx('collected yesterday');
+  return tx('collected {count} days ago', { count: days });
 }
 
 /**
@@ -2305,9 +2318,9 @@ function renderEntityFacts(card) {
 
   for (const fact of card.facts || []) {
     const row = el('div', 'entity-fact');
-    row.append(el('span', 'entity-fact-label', fact.label));
-    const value = el('span', 'entity-fact-value', fact.value);
-    value.append(el('span', 'entity-source', fact.source));
+    row.append(el('span', 'entity-fact-label', tx(fact.label)));
+    const value = el('span', 'entity-fact-value', serverText(fact.value));
+    value.append(el('span', 'entity-source', tx(fact.source)));
     row.append(value);
     list.append(row);
   }
@@ -2345,7 +2358,7 @@ function renderEntityWhere(card) {
   node.hidden = places.length === 0;
   if (node.hidden) return;
 
-  node.append(el('div', 'entity-label', 'Where'));
+  node.append(el('div', 'entity-label', tx('Where')));
 
   for (const place of places) {
     const row = el('div', 'entity-where-row');
@@ -2355,14 +2368,14 @@ function renderEntityWhere(card) {
     if (place.placeId) {
       const link = el('button', 'entity-link', place.name);
       link.type = 'button';
-      link.title = 'Show this on the map';
+      link.title = tx('Show this on the map');
       link.addEventListener('click', () => entityMap(place.placeId, place.name));
       row.append(link);
     } else {
       row.append(el('span', 'entity-where-name', place.name));
     }
 
-    if (place.note) row.append(el('span', 'entity-detail', place.note));
+    if (place.note) row.append(el('span', 'entity-detail', serverText(place.note)));
     node.append(row);
   }
 }
@@ -2422,7 +2435,7 @@ function renderEntityActions(card) {
     // The overlay is already the pinned window; it has nothing to pin into.
     if (action === 'overlay' && isOverlay) continue;
 
-    const button = el('button', 'ghost tiny', ENTITY_ACTION_LABEL[action] || action);
+    const button = el('button', 'ghost tiny', ENTITY_ACTION_LABEL[action] ? tx(ENTITY_ACTION_LABEL[action]) : action);
     button.type = 'button';
     button.addEventListener('click', () => runEntityAction(action, card, button));
     bar.append(button);
@@ -2442,7 +2455,7 @@ async function runEntityAction(action, card, button) {
         body: JSON.stringify({ placeId: card.id, place: card.name, note: null }),
       });
       await loadTrips();
-      button.textContent = '✓ added';
+      button.textContent = tx('✓ added');
       return;
     }
 
@@ -2453,8 +2466,8 @@ async function runEntityAction(action, card, button) {
         body: JSON.stringify({ name: card.name, needed: 1, unit: '' }),
       }).then((r) => r.json());
 
-      button.textContent = '✓ added';
-      button.title = `On "${result.title}"`;
+      button.textContent = tx('✓ added');
+      button.title = tx('On “{list}”', { list: result.title });
       return;
     }
 
@@ -2465,10 +2478,10 @@ async function runEntityAction(action, card, button) {
       const response = await fetch('/api/overlay?visible=true', { method: 'POST' });
       if (!response.ok) throw new Error('overlay refused');
 
-      button.textContent = '✓ pinned';
+      button.textContent = tx('✓ pinned');
     }
   } catch {
-    button.textContent = 'failed';
+    button.textContent = tx('failed');
     button.disabled = false;
   }
 }
@@ -2891,28 +2904,32 @@ function renderSessionBrief(sessions) {
   const latest = latestSession(sessions);
 
   if (!latest) {
-    latestTitle.textContent = 'No sessions in this range';
-    latestDetail.textContent = 'Choose a wider record range to revisit earlier flights.';
-    durationTitle.textContent = 'No flight time recorded';
-    durationDetail.textContent = 'In-game time appears when a session enters the persistent universe.';
-    healthTitle.textContent = 'No session health data';
-    healthDetail.textContent = 'Deaths and incapacitations are shown when the game writes them.';
+    latestTitle.textContent = tx('No sessions in this range');
+    latestDetail.textContent = tx('Choose a wider record range to revisit earlier flights.');
+    durationTitle.textContent = tx('No flight time recorded');
+    durationDetail.textContent = tx('In-game time appears when a session enters the persistent universe.');
+    healthTitle.textContent = tx('No session health data');
+    healthDetail.textContent = tx('Deaths and incapacitations are shown when the game writes them.');
     open.disabled = true;
     return;
   }
 
-  latestTitle.textContent = latest.primaryShip || 'Session on foot';
-  latestDetail.textContent = `${dateOf(latest.startedAt)} · ${latest.lastLocation || 'No last location recorded'}`;
+  latestTitle.textContent = latest.primaryShip || tx('Session on foot');
+  latestDetail.textContent = `${dateOf(latest.startedAt)} · ${latest.lastLocation || tx('No last location recorded')}`;
   durationTitle.textContent = duration(latest.inGame);
-  durationDetail.textContent = `${duration(latest.menu)} in menus · ${latest.jumps || 0} jump${latest.jumps === 1 ? '' : 's'} · ${latest.contracts || 0} contract${latest.contracts === 1 ? '' : 's'}`;
+  durationDetail.textContent = [
+    tx('{time} in menus', { time: duration(latest.menu) }),
+    txn(latest.jumps || 0, '{count} jump', '{count} jumps'),
+    txn(latest.contracts || 0, '{count} contract', '{count} contracts'),
+  ].join(' · ');
 
   const deaths = Number(latest.deaths || 0);
   const incap = Number(latest.incapacitations || 0);
   const server = latest.shard
-    ? `${sessionShardLabel(latest)} · ${latest.shards || 1} server${latest.shards === 1 ? '' : 's'} recorded`
-    : 'No server recorded';
-  healthTitle.textContent = deaths ? `${deaths} death${deaths === 1 ? '' : 's'}` : 'No deaths recorded';
-  healthDetail.textContent = `${incap} incapacitation${incap === 1 ? '' : 's'} · ${server}`;
+    ? `${sessionShardLabel(latest)} · ${txn(latest.shards || 1, '{count} server recorded', '{count} servers recorded')}`
+    : tx('No server recorded');
+  healthTitle.textContent = deaths ? txn(deaths, '{count} death', '{count} deaths') : tx('No deaths recorded');
+  healthDetail.textContent = `${txn(incap, '{count} incapacitation', '{count} incapacitations')} · ${server}`;
   open.disabled = false;
 }
 
@@ -2985,10 +3002,14 @@ async function repeatSessionRoute(detail) {
   const route = sessionRoute(detail);
   if (!route.length) return;
 
-  await planTrip(`Repeat ${dateOf(detail.startedAt)} route`, route.map((place) => ({
+  // A saved plan is data, like Routes' plans: titled in the page's language
+  // when it is made, and kept in that language afterwards.
+  await planTrip(tx('Repeat {date} route', { date: dateOf(detail.startedAt) }), route.map((place) => ({
     placeId: place.rawId || '',
     place: place.displayName,
-    note: `${place.routeKind === 'quantum' ? 'Quantum target' : 'Arrival'} logged at ${shortTimeOf(place.at)}`,
+    note: place.routeKind === 'quantum'
+      ? tx('Quantum target logged at {time}', { time: shortTimeOf(place.at) })
+      : tx('Arrival logged at {time}', { time: shortTimeOf(place.at) }),
   })));
 }
 
@@ -3017,12 +3038,24 @@ function sessionShardLabel(session) {
 /** Every stay in a debrief, in order, each with how it ended. */
 function sessionShardText(detail) {
   const stays = detail.shards || [];
-  if (!stays.length) return 'None recorded';
+  if (!stays.length) return tx('None recorded');
 
   return stays.map((stay) => {
     const mins = Math.round((new Date(stay.leftAt) - new Date(stay.joinedAt)) / 60000);
     return `${stay.shard} · ${duration(mins * 60)} · ${endingLabel(stay.ending)}`;
   }).join('\n');
+}
+
+/*
+ * One contract's outcome, through the Contracts table's words. "Completed"
+ * as a key is the filter's plural ("Terminés"); a single contract is
+ * "terminé", capitalised here as the debrief has always shown it.
+ */
+function sessionOutcome(outcome) {
+  const words = { Completed: 'completed', Abandoned: 'abandoned', Failed: 'failed', InProgress: 'in progress' };
+  if (!words[outcome]) return outcome || tx('Unknown');
+  const said = tx(words[outcome]);
+  return said.charAt(0).toUpperCase() + said.slice(1);
 }
 
 function renderSessionDebrief(summary) {
@@ -3033,35 +3066,35 @@ function renderSessionDebrief(summary) {
 
   const detail = sessionDetails.get(summary.id);
   if (!detail) {
-    cell.append(el('div', 'session-debrief-loading muted', 'Building session debrief…'));
+    cell.append(el('div', 'session-debrief-loading muted', tx('Building session debrief…')));
     return row;
   }
 
   if (detail.error) {
-    cell.append(el('div', 'session-debrief-loading outward', 'This session detail could not be read.'));
+    cell.append(el('div', 'session-debrief-loading outward', tx('This session detail could not be read.')));
     return row;
   }
 
   const debrief = el('article', 'session-debrief');
   const head = el('div', 'session-debrief-head');
   const title = el('div');
-  title.append(el('div', 'session-debrief-title', `${dateOf(detail.startedAt)} debrief`));
-  title.append(el('div', 'muted', `${shortTimeOf(detail.startedAt)} → ${shortTimeOf(detail.endedAt)} · ${detail.gameVersion || 'version unknown'}`));
+  title.append(el('div', 'session-debrief-title', tx('{date} debrief', { date: dateOf(detail.startedAt) })));
+  title.append(el('div', 'muted', `${shortTimeOf(detail.startedAt)} → ${shortTimeOf(detail.endedAt)} · ${detail.gameVersion || tx('version unknown')}`));
   head.append(title);
 
   const route = sessionRoute(detail);
-  const repeat = el('button', 'ghost tiny', 'Repeat these stops');
+  const repeat = el('button', 'ghost tiny', tx('Repeat these stops'));
   repeat.type = 'button';
   repeat.disabled = route.length === 0;
   repeat.title = route.length
-    ? 'Create a new flight plan from the places reached in this session'
-    : 'No named locations were recorded in this session';
+    ? tx('Create a new flight plan from the places reached in this session')
+    : tx('No named locations were recorded in this session');
   repeat.addEventListener('click', () => repeatSessionRoute(detail));
   head.append(repeat);
   debrief.append(head);
 
   const ships = (detail.ships || []).map((ship) =>
-    `${ship.displayName || ship.model}${ship.sorties ? ` · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}` : ''}`);
+    `${ship.displayName || ship.model}${ship.sorties ? ` · ${txn(ship.sorties, '{count} sortie', '{count} sorties')}` : ''}`);
   const contracts = detail.contracts || [];
   const completed = contracts.filter((contract) => contract.outcome === 'Completed').length;
   const party = new Set((detail.partyNotes || []).map((note) => note.handle).filter(Boolean));
@@ -3075,39 +3108,39 @@ function renderSessionDebrief(summary) {
   // is indented under itself rather than reading as another ship.
   const metrics = el('div', 'session-debrief-metrics');
   metrics.append(
-    sessionMetric('In game', duration(summary.inGame)),
-    sessionMetric(ships.length > 1 ? 'Ships' : 'Ship', ships.length ? ships : 'On foot', 'session-metric-ships'),
-    sessionMetric('Recorded route', `${route.length} point${route.length === 1 ? '' : 's'} · ${(detail.jumps || []).length} jump${(detail.jumps || []).length === 1 ? '' : 's'}`),
-    sessionMetric('Contracts', contracts.length ? `${completed} / ${contracts.length} completed` : 'None recorded'),
-    sessionMetric(tradeCount ? 'Recorded net*' : 'Recorded net', movementCount
+    sessionMetric(tx('In game'), duration(summary.inGame)),
+    sessionMetric(ships.length > 1 ? tx('Ships') : tx('Ship'), ships.length ? ships : tx('On foot'), 'session-metric-ships'),
+    sessionMetric(tx('Recorded route'), `${txn(route.length, '{count} point', '{count} points')} · ${txn((detail.jumps || []).length, '{count} jump', '{count} jumps')}`),
+    sessionMetric(tx('Contracts'), contracts.length ? tx('{done} / {total} completed', { done: completed, total: contracts.length }) : tx('None recorded')),
+    sessionMetric(tradeCount ? tx('Recorded net*') : tx('Recorded net'), movementCount
       ? `${net < 0 ? '−' : '+'}${tradeCount ? '~' : ''}${money(Math.abs(net))}`
-      : 'No movements recorded', movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
-    sessionMetric('Crew observed*', party.size ? `${party.size} named` : 'None named'),
-    sessionMetric(detail.shards?.length > 1 ? 'Servers' : 'Server', sessionShardText(detail), 'session-metric-shards'),
+      : tx('No movements recorded'), movementCount ? (net < 0 ? 'outward' : 'inward') : ''),
+    sessionMetric(tx('Crew observed*'), party.size ? txn(party.size, '{count} named', '{count} named') : tx('None named')),
+    sessionMetric(detail.shards?.length > 1 ? tx('Servers') : tx('Server'), sessionShardText(detail), 'session-metric-shards'),
   );
   debrief.append(metrics);
 
   const content = el('div', 'session-debrief-grid');
 
   const routeSection = el('section', 'session-debrief-section session-route-section');
-  routeSection.append(el('h3', null, 'Chronological route'));
+  routeSection.append(el('h3', null, tx('Chronological route')));
   const routeList = el('ol', 'session-route');
   route.forEach((place) => {
     const item = el('li');
     item.append(el('span', 'session-route-time', shortTimeOf(place.at)));
     item.append(placeLink(place.displayName));
     const context = place.routeKind === 'quantum'
-      ? 'quantum destination'
+      ? tx('quantum destination')
       : [place.body, place.system].filter(Boolean).join(' · ');
     if (context) item.append(el('span', 'muted', context));
     routeList.append(item);
   });
-  if (!route.length) routeList.append(el('li', 'muted', 'No named locations were written in this session.'));
+  if (!route.length) routeList.append(el('li', 'muted', tx('No named locations were written in this session.')));
   routeSection.append(routeList);
   content.append(routeSection);
 
   const commerceSection = el('section', 'session-debrief-section');
-  commerceSection.append(el('h3', null, 'Recorded economy'));
+  commerceSection.append(el('h3', null, tx('Recorded economy')));
   const commerce = [
     ...(detail.purchases || []).map((purchase) => ({
       at: purchase.at,
@@ -3117,7 +3150,7 @@ function renderSessionDebrief(summary) {
     })),
     ...(detail.trades || []).map((trade) => ({
       at: trade.at,
-      label: `${trade.isSell ? 'Cargo sold' : 'Cargo bought'} · ${trade.quantity} SCU`,
+      label: `${trade.isSell ? tx('Cargo sold') : tx('Cargo bought')} · ${trade.quantity} SCU`,
       amount: (trade.isSell ? 1 : -1) * Number(trade.amount || 0),
       approximate: true,
     })),
@@ -3131,26 +3164,26 @@ function renderSessionDebrief(summary) {
       `${entry.amount >= 0 ? '+' : '−'}${entry.approximate ? '~' : ''}${money(Math.abs(entry.amount))}`));
     commerceList.append(item);
   });
-  if (!commerce.length) commerceList.append(el('li', 'muted', 'No purchases or cargo trades recorded.'));
+  if (!commerce.length) commerceList.append(el('li', 'muted', tx('No purchases or cargo trades recorded.')));
   commerceSection.append(commerceList);
   content.append(commerceSection);
 
   const contractSection = el('section', 'session-debrief-section');
-  contractSection.append(el('h3', null, 'Contracts'));
+  contractSection.append(el('h3', null, tx('Contracts')));
   const contractList = el('ul', 'session-debrief-list');
   contracts.slice(0, 8).forEach((contract) => {
     const item = el('li');
-    item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', contract.outcome || 'Unknown'));
-    item.append(el('span', null, contract.displayName || contract.raw || 'Unnamed contract'));
-    if (contract.steps > 0) item.append(el('span', 'muted', `${contract.stepsDone} / ${contract.steps} steps`));
+    item.append(el('span', contract.outcome === 'Completed' ? 'inward' : 'muted', sessionOutcome(contract.outcome)));
+    item.append(el('span', null, contract.displayName || contract.raw || tx('Unnamed contract')));
+    if (contract.steps > 0) item.append(el('span', 'muted', tx('{done} / {total} steps', { done: contract.stepsDone, total: contract.steps })));
     contractList.append(item);
   });
-  if (!contracts.length) contractList.append(el('li', 'muted', 'No contracts recorded.'));
+  if (!contracts.length) contractList.append(el('li', 'muted', tx('No contracts recorded.')));
   contractSection.append(contractList);
   content.append(contractSection);
 
   const highlightSection = el('section', 'session-debrief-section');
-  highlightSection.append(el('h3', null, 'Latest highlights'));
+  highlightSection.append(el('h3', null, tx('Latest highlights')));
   const highlights = (detail.timeline || [])
     .filter((entry) => !['party', 'location', 'quantum', 'login'].includes(entry.kind))
     .slice(-10);
@@ -3161,17 +3194,17 @@ function renderSessionDebrief(summary) {
   highlights.forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, withoutMarkup(entry.text)));
-    if (entry.detail) item.append(el('span', 'muted', withoutMarkup(entry.detail)));
+    item.append(el('span', null, feedText(withoutMarkup(entry.text))));
+    if (entry.detail) item.append(el('span', 'muted', feedText(withoutMarkup(entry.detail))));
     highlightList.append(item);
   });
-  if (!highlights.length) highlightList.append(el('li', 'muted', 'No additional highlights recorded.'));
+  if (!highlights.length) highlightList.append(el('li', 'muted', tx('No additional highlights recorded.')));
   highlightSection.append(highlightList);
   content.append(highlightSection);
 
   debrief.append(content);
   const limits = el('p', 'session-debrief-note muted',
-    '* Cargo amounts are kiosk requests, not confirmed settlements. Crew observed is a floor from party notifications, not a roster.');
+    tx('* Cargo amounts are kiosk requests, not confirmed settlements. Crew observed is a floor from party notifications, not a roster.'));
   debrief.append(limits);
   cell.append(debrief);
   return row;
@@ -3197,7 +3230,7 @@ function renderSessions() {
 
   if (page.length === 0) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No sessions in that range.');
+    const td = el('td', 'muted', tx('No sessions in that range.'));
     td.colSpan = 10;
     tr.append(td);
     body.append(tr);
@@ -3209,7 +3242,7 @@ function renderSessions() {
     tr.classList.toggle('open', open);
     tr.tabIndex = 0;
     tr.setAttribute('aria-expanded', String(open));
-    tr.title = open ? 'Close session debrief' : 'Open session debrief';
+    tr.title = open ? tx('Close session debrief') : tx('Open session debrief');
     tr.addEventListener('click', () => toggleSessionDebrief(session.id));
     tr.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -3242,7 +3275,12 @@ function summariseSessions(sessions) {
   const sum = (pick) => sessions.reduce((total, s) => total + (pick(s) || 0), 0);
 
   const host = $('#lib-summary');
-  host.textContent = `${sessions.length} session${sessions.length === 1 ? '' : 's'} · ${duration(sum((s) => s.inGame))} in game · ${sum((s) => s.jumps)} jump${sum((s) => s.jumps) === 1 ? '' : 's'} · ${sum((s) => s.contracts)} contract${sum((s) => s.contracts) === 1 ? '' : 's'}`;
+  host.textContent = [
+    txn(sessions.length, '{count} session', '{count} sessions'),
+    tx('{time} in game', { time: duration(sum((s) => s.inGame)) }),
+    txn(sum((s) => s.jumps), '{count} jump', '{count} jumps'),
+    txn(sum((s) => s.contracts), '{count} contract', '{count} contracts'),
+  ].join(' · ');
 }
 
 $('#sessions-open-latest')?.addEventListener('click', () => {
@@ -3256,7 +3294,7 @@ function renderPager(pages, start, shown, total) {
 
   if (total === 0) return;
 
-  pager.append(el('span', 'pager-info', `${start + 1}–${start + shown} of ${total}`));
+  pager.append(el('span', 'pager-info', tx('{from}–{to} of {total}', { from: start + 1, to: start + shown, total })));
 
   const nav = el('div', 'pager-nav');
 
@@ -3267,9 +3305,9 @@ function renderPager(pages, start, shown, total) {
     return button;
   };
 
-  nav.append(step('‹ Newer', -1, sessionPage === 0));
+  nav.append(step(tx('‹ Newer'), -1, sessionPage === 0));
   nav.append(el('span', 'pager-page', `${sessionPage + 1} / ${pages}`));
-  nav.append(step('Older ›', 1, sessionPage >= pages - 1));
+  nav.append(step(tx('Older ›'), 1, sessionPage >= pages - 1));
 
   pager.append(nav);
 }
@@ -3306,10 +3344,12 @@ function renderLedgerKinds() {
 
   for (const kind of kinds) {
     const on = !ledgerHidden.has(kind);
-    const button = el('button', on ? 'ghost' : 'ghost off', kind);
+    // The kind is the server's English and stays the filter's key; only the
+    // words on the button are the page's.
+    const button = el('button', on ? 'ghost' : 'ghost off', tx(kind));
     button.type = 'button';
     button.dataset.kind = kind;
-    button.title = on ? `Hide ${kind}` : `Show ${kind}`;
+    button.title = on ? tx('Hide {kind}', { kind: tx(kind) }) : tx('Show {kind}', { kind: tx(kind) });
 
     button.addEventListener('click', () => {
       if (on) ledgerHidden.add(kind);
@@ -3379,30 +3419,34 @@ function renderLedgerWallet(read) {
   if (read?.shot) ledgerWalletShot = read.shot;
 
   if (!read) {
-    card.append(el('div', 'l', 'Cash on hand'));
+    card.append(el('div', 'l', tx('Cash on hand')));
     card.append(el('div', 'muted',
-      'No screenshot has shown your balance yet. A commodity kiosk prints it in full — photograph one and the figure lands here.'));
+      tx('No screenshot has shown your balance yet. A commodity kiosk prints it in full — photograph one and the figure lands here.')));
     return;
   }
 
   const figure = el('div', 'wallet-figure');
   figure.append(el('div', 'n', money(read.balance)));
-  figure.append(el('div', 'l', 'Cash on hand'));
+  figure.append(el('div', 'l', tx('Cash on hand')));
   card.append(figure);
 
   const body = el('div', 'wallet-body');
-  body.append(el('div', null, `Last updated ${new Date(read.shotAt).toLocaleString()}, from ${read.shot || 'a screenshot'}.`));
+  const when = new Date(read.shotAt).toLocaleString(QW_DATE_LOCALES);
+  body.append(el('div', null, read.shot
+    ? tx('Last updated {when}, from {shot}.', { when, shot: read.shot })
+    : tx('Last updated {when}, from a screenshot.', { when })));
 
   const moved = Number(read.movedSince) || 0;
   const lines = Number(read.movementsSince) || 0;
 
   if (lines === 0) {
-    body.append(el('div', 'muted', 'Nothing has moved in the logs since, so that is the latest word.'));
+    body.append(el('div', 'muted', tx('Nothing has moved in the logs since, so that is the latest word.')));
   } else {
     const sign = moved > 0 ? '+' : moved < 0 ? '−' : '';
-    body.append(el('div', 'muted',
-      `Since then the logs record ${lines} movement${lines === 1 ? '' : 's'} netting ${sign}${money(Math.abs(moved))}, `
-      + `so about ${money(read.estimate)} now — an estimate, because money that moved without a line in the log is not in it.`));
+    body.append(el('div', 'muted', txn(lines,
+      'Since then the logs record {count} movement netting {net}, so about {estimate} now — an estimate, because money that moved without a line in the log is not in it.',
+      'Since then the logs record {count} movements netting {net}, so about {estimate} now — an estimate, because money that moved without a line in the log is not in it.',
+      { net: `${sign}${money(Math.abs(moved))}`, estimate: money(read.estimate) })));
   }
 
   card.append(body);
@@ -3435,17 +3479,17 @@ function renderLedger() {
   const filtered = ledgerHidden.size > 0;
 
   tiles('#ledger-summary', [
-    ['Money in', money(sum(inbound)), filtered ? null : 'ledger.in', days],
-    ['Money out', money(Math.abs(sum(outbound))), filtered ? null : 'ledger.out', days],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net)), filtered ? null : 'ledger.net', days],
-    ['Movements', visible.length],
+    [tx('Money in'), money(sum(inbound)), filtered ? null : 'ledger.in', days],
+    [tx('Money out'), money(Math.abs(sum(outbound))), filtered ? null : 'ledger.out', days],
+    [net >= 0 ? tx('Net gain') : tx('Net loss'), money(Math.abs(net)), filtered ? null : 'ledger.net', days],
+    [tx('Movements'), visible.length],
   ]);
 
   const filterNote = $('#ledger-kinds');
 
   if (filtered && filterNote) {
     filterNote.append(el('span', 'muted',
-      'Totals cover only what is shown. Turn everything back on to ask where a figure came from.'));
+      tx('Totals cover only what is shown. Turn everything back on to ask where a figure came from.')));
   }
 
   const pages = Math.max(1, Math.ceil(visible.length / LEDGER_PER_PAGE));
@@ -3456,7 +3500,7 @@ function renderLedger() {
 
   if (!page.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No transactions in that range.');
+    const td = el('td', 'muted', tx('No transactions in that range.'));
     td.colSpan = 7;
     tr.append(td);
     body.append(tr);
@@ -3467,8 +3511,8 @@ function renderLedger() {
     const inward = Number(entry.amount) > 0;
 
     tr.append(el('td', null, dateOf(entry.at)));
-    tr.append(el('td', null, entry.kind));
-    tr.append(el('td', null, prettyItem(entry.what)));
+    tr.append(el('td', null, tx(entry.kind)));
+    tr.append(el('td', null, entry.what === 'Contract payout' ? tx('Contract payout') : prettyItem(entry.what)));
     tr.append(tdPlace(entry.where));
     tr.append(el('td', 'muted', entry.shop));
 
@@ -3491,7 +3535,7 @@ function renderLedgerPager(pages, start, shown, total) {
   if (!total) return;
 
   pager.append(el('span', 'pager-info',
-    `${start + 1}–${start + shown} of ${total}`));
+    tx('{from}–{to} of {total}', { from: start + 1, to: start + shown, total })));
 
   const nav = el('div', 'pager-nav');
   const step = (label, delta, disabled) => {
@@ -3501,9 +3545,9 @@ function renderLedgerPager(pages, start, shown, total) {
     return button;
   };
 
-  nav.append(step('‹ Newer', -1, ledgerPage === 0));
+  nav.append(step(tx('‹ Newer'), -1, ledgerPage === 0));
   nav.append(el('span', 'pager-page', `${ledgerPage + 1} / ${pages}`));
-  nav.append(step('Older ›', 1, ledgerPage >= pages - 1));
+  nav.append(step(tx('Older ›'), 1, ledgerPage >= pages - 1));
 
   pager.append(nav);
 }
@@ -3526,11 +3570,8 @@ async function refreshCommunityOffer() {
   $('#community-offer').hidden = community.enabled;
 
   if (community.enabled) {
-    $('#cargo-caption').textContent =
-      'Volume, price and place come straight from the kiosk. Commodity names come '
-      + 'from your own install, falling back to the community dataset '
-      + `(${community.commodities} commodities, StarCitizenWiki / scunpacked-data) `
-      + 'for anything it does not name.';
+    $('#cargo-caption').textContent = tx('Volume, price and place come straight from the kiosk. Commodity names come from your own install, falling back to the community dataset ({count} commodities, StarCitizenWiki / scunpacked-data) for anything it does not name.',
+      { count: community.commodities });
   }
 }
 
@@ -3873,7 +3914,7 @@ function ago(iso) {
 }
 
 async function loadMarket() {
-  setWorkspaceState('#market-state', 'loading', 'Loading commodity catalogue…');
+  setWorkspaceState('#market-state', 'loading', tx('Loading commodity catalogue…'));
   let marketUnavailable = false;
   try {
     marketEntries = await getJson('/api/market');
@@ -3913,7 +3954,7 @@ async function loadMarket() {
 
     const hidden = fuel.length - [...byFuel.values()].reduce((n, r) => n + Math.min(perFuel, r.length), 0);
     $('#fuel-count').textContent = hidden > 0
-      ? `Cheapest ${perFuel} per fuel shown; ${hidden.toLocaleString()} dearer terminals not listed.`
+      ? tx('Cheapest {count} per fuel shown; {hidden} dearer terminals not listed.', { count: perFuel, hidden: hidden.toLocaleString() })
       : '';
   } catch { $('#fuel-block').hidden = true; }
 
@@ -3923,7 +3964,7 @@ async function loadMarket() {
     const uex = await getJson('/api/uex');
     $('#market-refresh').hidden = !uex.enabled;
     $('#market-age').textContent = uex.enabled && uex.fetchedAt
-      ? `prices fetched ${ago(uex.fetchedAt)}`
+      ? tx('prices fetched {ago}', { ago: ago(uex.fetchedAt) })
       : '';
   } catch { /* leave the header as it is */ }
 
@@ -3934,15 +3975,15 @@ async function loadMarket() {
   const groups = [...new Set(marketEntries.flatMap((e) => e.groups))].sort();
 
   groupSelect.textContent = '';
-  groupSelect.append(new Option('All groups', ''));
+  groupSelect.append(new Option(tx('All groups'), ''));
   for (const group of groups) groupSelect.append(new Option(group, group));
   if (groups.includes(previous)) groupSelect.value = previous;
 
   renderMarket();
   setWorkspaceState('#market-state', marketUnavailable ? 'offline' : marketEntries.length ? 'ready' : 'empty',
     marketUnavailable
-      ? 'Commodity data is unavailable. Refresh after the local server reconnects.'
-      : 'No commodities are available in the current catalogue.');
+      ? tx('Commodity data is unavailable. Refresh after the local server reconnects.')
+      : tx('No commodities are available in the current catalogue.'));
 
   // The map's commodity search reads this catalogue, and the map usually draws
   // first. A search already standing (a ?q= link opened cold) would have found
@@ -4012,11 +4053,12 @@ async function renderMarketDetail(entry, cell) {
   cell.textContent = '';
 
   const head = el('div', 'detail-head');
-  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+  const title = tx('{commodity} — every counter UEX knows', { commodity: entry.name });
+  head.append(el('b', null, title));
 
   const side = el('div', 'seg');
   for (const [value, label] of [['sell', 'Where to sell'], ['buy', 'Where to buy']]) {
-    const button = el('button', (value === 'buy') === detailView.buying ? 'active' : null, label);
+    const button = el('button', (value === 'buy') === detailView.buying ? 'active' : null, tx(label));
     button.addEventListener('click', () => {
       detailView.buying = value === 'buy';
       renderMarketDetail(entry, cell);
@@ -4026,12 +4068,12 @@ async function renderMarketDetail(entry, cell) {
   }
 
   head.textContent = '';
-  head.append(el('b', null, `${entry.name} — every counter UEX knows`));
+  head.append(el('b', null, title));
 
   // Beside the title rather than at the far end: the detail table is wider than
   // the panel, so anything pushed right is pushed off the edge.
-  const more = el('button', 'ghost detail-more', 'Full picture ↗');
-  more.title = 'Price and demand over time, both counter lists, and your receipts';
+  const more = el('button', 'ghost detail-more', tx('Full picture ↗'));
+  more.title = tx('Price and demand over time, both counter lists, and your receipts');
   more.addEventListener('click', () => openCommodity(entry.name));
   head.append(more);
 
@@ -4047,7 +4089,7 @@ async function renderMarketDetail(entry, cell) {
   });
 
   safe.append(box);
-  safe.append(el('span', null, 'Monitored space only'));
+  safe.append(el('span', null, tx('Monitored space only')));
   head.append(safe);
   cell.append(head);
 
@@ -4068,8 +4110,8 @@ async function renderMarketDetail(entry, cell) {
 
   if (!rows.length) {
     cell.append(el('div', 'muted detail-empty', all.length
-      ? 'Nothing left after that filter — every counter for this is outside monitored space.'
-      : 'No prices for this commodity. UEX may be off, or nobody has reported one.'));
+      ? tx('Nothing left after that filter — every counter for this is outside monitored space.')
+      : tx('No prices for this commodity. UEX may be off, or nobody has reported one.')));
     return;
   }
 
@@ -4080,7 +4122,7 @@ async function renderMarketDetail(entry, cell) {
   for (const [label, cls] of [['Terminal', null], ['Where', null], ['Space', null],
     [detailView.buying ? 'Buy' : 'Sell', 'num'], ['vs best', 'num'],
     [detailView.buying ? 'In stock' : 'Wanted', 'num'], ['Seen', 'num']]) {
-    header.append(el('th', cls, label));
+    header.append(el('th', cls, tx(label)));
   }
   table.append(header);
 
@@ -4091,7 +4133,7 @@ async function renderMarketDetail(entry, cell) {
 
     const name = el('td');
     const jump = el('button', 'place-link', row.terminal);
-    jump.title = row.placeId ? 'Show it on the map' : 'The map cannot place this terminal';
+    jump.title = row.placeId ? tx('Show it on the map') : tx('The map cannot place this terminal');
     jump.disabled = !row.placeId;
     jump.addEventListener('click', () => {
       showView('map');
@@ -4102,8 +4144,9 @@ async function renderMarketDetail(entry, cell) {
 
     tr.append(el('td', 'muted', row.place || '—'));
 
+    // The class keeps the server's word; the reader gets the page's.
     const space = el('td');
-    space.append(el('span', `sec sec-${row.security}`, row.security));
+    space.append(el('span', `sec sec-${row.security}`, tx(row.security)));
     if (row.system) space.append(el('span', 'muted sec-system', ` ${row.system}`));
     tr.append(space);
 
@@ -4113,15 +4156,15 @@ async function renderMarketDetail(entry, cell) {
     // number the single "best price" column never showed.
     const gap = detailView.buying ? (price - best) / best : (best - price) / best;
     tr.append(el('td', gap > 0.001 ? 'num outward' : 'num muted',
-      gap > 0.001 ? `−${(gap * 100).toFixed(0)}%` : 'best'));
+      gap > 0.001 ? `−${(gap * 100).toFixed(0)}%` : tx('best')));
 
     const stock = el('td', 'num');
     if (scu > 0) {
       stock.append(el('span', scu < THIN_SCU ? 'outward' : null, `${scu.toLocaleString()} SCU`));
       if (scu < THIN_SCU) {
         stock.title = detailView.buying
-          ? 'Thin stock — a full hold will not be filled here'
-          : 'Small demand — this counter will not take a full hold';
+          ? tx('Thin stock — a full hold will not be filled here')
+          : tx('Small demand — this counter will not take a full hold');
       }
     } else {
       stock.append(el('span', 'muted', '—'));
@@ -4136,12 +4179,11 @@ async function renderMarketDetail(entry, cell) {
 
   const shown = Math.min(rows.length, 40);
   const note = detailView.monitoredOnly
-    ? `${shown} of ${all.length} counters — lawless space hidden.`
-    : `${shown} of ${all.length} counters.`;
+    ? tx('{shown} of {total} counters — lawless space hidden.', { shown, total: all.length })
+    : tx('{shown} of {total} counters.', { shown, total: all.length });
 
   cell.append(el('div', 'muted detail-note',
-    `${note} Security is by system: Stanton is policed, Pyro and Nyx are not. `
-    + 'Nothing in the game logs threat, so this is where a place is, not what happened there.'));
+    `${note} ${tx('Security is by system: Stanton is policed, Pyro and Nyx are not. Nothing in the game logs threat, so this is where a place is, not what happened there.')}`));
 }
 
 // What the two sources can each answer, said plainly. The install list is the
@@ -4150,14 +4192,8 @@ async function renderMarketDetail(entry, cell) {
 // shorter list under the longer list's wording would read as a shrinking
 // economy rather than a narrower source.
 const MARKET_CAPTIONS = {
-  install: 'Every commodity your game install names, with your own trading record '
-    + 'against each. "Sellable at" counts the counters UEX has seen a price at, so it '
-    + 'is a floor and it moves. Enable the community dataset in Settings to also see '
-    + 'facilities nobody has priced yet, and to group commodities.',
-  dataset: 'Every commodity the community dataset knows, with your own trading record '
-    + 'against each. Sellable at counts facilities in the economy simulation itself, '
-    + 'and show on map lights the ones the star map can place. Static availability, not '
-    + 'live prices.',
+  install: 'Every commodity your game install names, with your own trading record against each. "Sellable at" counts the counters UEX has seen a price at, so it is a floor and it moves. Enable the community dataset in Settings to also see facilities nobody has priced yet, and to group commodities.',
+  dataset: 'Every commodity the community dataset knows, with your own trading record against each. Sellable at counts facilities in the economy simulation itself, and show on map lights the ones the star map can place. Static availability, not live prices.',
 };
 
 function renderMarket() {
@@ -4165,7 +4201,7 @@ function renderMarket() {
 
   const caption = $('#market-caption');
   const source = marketEntries[0]?.source;
-  if (caption && MARKET_CAPTIONS[source]) caption.textContent = MARKET_CAPTIONS[source];
+  if (caption && MARKET_CAPTIONS[source]) caption.textContent = tx(MARKET_CAPTIONS[source]);
   // Market deliberately combines the reference catalogue with what the pilot
   // actually sold. The chips make that join visible before a price-like count
   // is mistaken for an event the log recorded.
@@ -4189,15 +4225,15 @@ function renderMarket() {
   const counter = $('#market-count');
   if (counter) {
     counter.textContent = marketEntries.length && (group || term)
-      ? `${rows.length} of ${marketEntries.length}`
+      ? tx('{shown} of {total}', { shown: rows.length, total: marketEntries.length })
       : '';
   }
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', marketEntries.length
-      ? 'No commodities match that search.'
-      : 'Enable UEX, or the community dataset, on the Settings page to fill this in.');
+      ? tx('No commodities match that search.')
+      : tx('Enable UEX, or the community dataset, on the Settings page to fill this in.'));
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -4215,15 +4251,15 @@ function renderMarket() {
     // it are the choice.
     const nameCell = el('td');
     const opener = el('button', 'place-link commodity-open', entry.name);
-    opener.title = 'Every counter that trades this, and what each one costs you';
+    opener.title = tx('Every counter that trades this, and what each one costs you');
     opener.addEventListener('click', () => toggleMarketDetail(entry, tr));
     nameCell.append(opener);
 
     // The row below answers "where"; the page answers "and what has it been
     // doing". Kept as a second control so the quick look stays one click.
     const drill = el('button', 'drill', '↗');
-    drill.title = 'Open the full picture: price and demand over time';
-    drill.setAttribute('aria-label', `Open ${entry.name} in full`);
+    drill.title = tx('Open the full picture: price and demand over time');
+    drill.setAttribute('aria-label', tx('Open {commodity} in full', { commodity: entry.name }));
     drill.addEventListener('click', () => openCommodity(entry.name));
     nameCell.append(drill);
 
@@ -4245,7 +4281,7 @@ function renderMarket() {
           if (Math.abs(trend) >= 1) {
             const arrow = el('span', trend > 0 ? 'inward' : 'outward',
               ` ${trend > 0 ? '▲' : '▼'}${Math.abs(trend).toFixed(0)}%`);
-            arrow.title = `15-day average: ${money(entry.uex.avgSell)}/SCU`;
+            arrow.title = tx('15-day average: {price}/SCU', { price: money(entry.uex.avgSell) });
             cell.append(arrow);
           }
         }
@@ -4260,7 +4296,7 @@ function renderMarket() {
           const cls = age > 14 * 86400000 ? 'price-age stale'
             : age > 3 * 86400000 ? 'price-age old'
             : 'price-age';
-          cell.append(el('div', cls, `seen ${ago(entry.uex.seenAt)}`));
+          cell.append(el('div', cls, tx('seen {ago}', { ago: ago(entry.uex.seenAt) })));
         }
       } else {
         cell.textContent = '—';
@@ -4273,8 +4309,8 @@ function renderMarket() {
     const actions = el('td', 'num map-links');
 
     const link = (label, query, title) => {
-      const show = el('button', 'ghost', label);
-      show.title = title;
+      const show = el('button', 'ghost', tx(label));
+      show.title = tx(title);
       show.addEventListener('click', () => {
         $('#map-search').value = query;
         showView('map');
@@ -4402,7 +4438,7 @@ async function loadLoot() {
  * which happens when the date window moves and takes the last of something
  * with it.
  */
-function fillLootFilter(select, all, label) {
+function fillLootFilter(select, all, label, show = (value) => value) {
   if (!select) return '';
 
   const chosen = select.value;
@@ -4418,7 +4454,7 @@ function fillLootFilter(select, all, label) {
   for (const value of values) {
     const option = document.createElement('option');
     option.value = value;
-    option.textContent = value;
+    option.textContent = show(value);
     select.append(option);
   }
 
@@ -4437,7 +4473,7 @@ function fillLootFilter(select, all, label) {
 function lootPriceCell(pickup) {
   if (!(pickup.price > 0)) {
     const td = el('td', 'num muted', '—');
-    td.title = 'No terminal UEX knows about stocks this, so it has no price to report.';
+    td.title = tx('No terminal UEX knows about stocks this, so it has no price to report.');
     return td;
   }
 
@@ -4449,8 +4485,8 @@ function renderLoot(pickups) {
 
   // Built from everything the window holds, not from what survives the other
   // filters - or choosing a kind would empty the place list and strand you.
-  const kind = fillLootFilter($('#loot-kind'), pickups.map((p) => p.category), 'Any kind');
-  const place = fillLootFilter($('#loot-place'), pickups.map((p) => p.place), 'Anywhere');
+  const kind = fillLootFilter($('#loot-kind'), pickups.map((p) => p.category), tx('Any kind'), (kind) => tx(kind));
+  const place = fillLootFilter($('#loot-place'), pickups.map((p) => p.place), tx('Anywhere'));
 
   const rows = pickups.filter((p) =>
     (!term || p.item.toLowerCase().includes(term) || p.place.toLowerCase().includes(term))
@@ -4458,13 +4494,13 @@ function renderLoot(pickups) {
     && (!place || p.place === place));
 
   tiles('#loot-summary', [
-    ['New items', rows.length],
-    ['Last 7 days', rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
-    ['Places', new Set(rows.map((p) => p.place)).size],
+    [tx('New items'), rows.length],
+    [tx('Last 7 days'), rows.filter((p) => Date.now() - new Date(p.at).getTime() < 7 * 86400000).length],
+    [tx('Places'), new Set(rows.map((p) => p.place)).size],
 
     // What share carries a price, rather than a total: these are first
     // sightings, so summing them would value a wardrobe nobody owns twice over.
-    ['Priced', `${rows.filter((p) => p.price > 0).length} of ${rows.length}`],
+    [tx('Priced'), tx('{shown} of {total}', { shown: rows.filter((p) => p.price > 0).length, total: rows.length })],
   ]);
 
   const body = $('#loot-table tbody');
@@ -4476,8 +4512,8 @@ function renderLoot(pickups) {
     // Name the filter that emptied it. "Nothing in that range" is the wrong
     // explanation for a table a dropdown hid every row from.
     const td = el('td', 'muted', kind || place
-      ? `Nothing matching ${[kind, place].filter(Boolean).join(' at ')} in that range.`
-      : 'Nothing in that range.');
+      ? tx('Nothing matching {filter} in that range.', { filter: [kind, place].filter(Boolean).join(` ${tx('at')} `) })
+      : tx('Nothing in that range.'));
 
     td.colSpan = 5;
     tr.append(td);
@@ -4490,7 +4526,7 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
     tr.append(el('td', null, prettyItem(pickup.item)));
-    tr.append(el('td', 'muted', pickup.category));
+    tr.append(el('td', 'muted', tx(pickup.category)));
     tr.append(lootPriceCell(pickup));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
@@ -4525,7 +4561,7 @@ async function loadShipsRef() {
   const previous = select.value;
 
   select.textContent = '';
-  select.append(new Option('All careers', ''));
+  select.append(new Option(tx('All careers'), ''));
   for (const career of careers) select.append(new Option(career, career));
   if (careers.includes(previous)) select.value = previous;
 
@@ -4546,15 +4582,15 @@ function renderShipsRef() {
   const counter = $('#ships-count');
   if (counter) {
     counter.textContent = rows.length
-      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'hull' : 'hulls'}`
-      : shipCatalogue.length ? 'No matches' : 'Waiting for catalogue';
+      ? txn(rows.length, '{count} hull', '{count} hulls', { count: rows.length.toLocaleString() })
+      : shipCatalogue.length ? tx('No matches') : tx('Waiting for catalogue');
   }
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', shipCatalogue.length
-      ? 'No ships match that filter.'
-      : 'Enable the community dataset on the Settings page to fill this in.');
+      ? tx('No ships match that filter.')
+      : tx('Enable the community dataset on the Settings page to fill this in.'));
     td.colSpan = 14;
     tr.append(td);
     body.append(tr);
@@ -4564,7 +4600,7 @@ function renderShipsRef() {
   for (const ship of rows) {
     const tr = el('tr');
     const name = el('td', null, ship.name);
-    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ' · ground'));
+    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ` · ${tx('ground')}`));
     tr.append(name);
 
     tr.append(el('td', 'muted', ship.career ?? '—'));
@@ -4585,10 +4621,10 @@ function renderShipsRef() {
     // Every shop and every rental desk sit on the hover, cheapest first: the
     // cheapest is the number, but the nearest is usually the one wanted.
     const shops = ship.shops || [];
-    const buy = el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : 'not sold');
+    const buy = el('td', ship.price ? 'num' : 'num muted', ship.price ? money(ship.price.price) : tx('not sold'));
     const where = el('td', 'muted', ship.price?.terminal ?? '—');
     if (shops.length > 1) where.append(el('span', 'note-inline', ` +${shops.length - 1}`));
-    if (shops.length) buy.title = where.title = placeList('Sold at', shops);
+    if (shops.length) buy.title = where.title = placeList(tx('Sold at'), shops);
     tr.append(buy, where);
 
     // Rentals only exist when that feed is on; otherwise the column is dashes.
@@ -4596,7 +4632,7 @@ function renderShipsRef() {
     const rent = el('td', ship.rental ? 'num' : 'num muted',
       ship.rental ? money(ship.rental.price) : '—');
     if (ship.rental) {
-      rent.title = placeList('Rents at', rentals.length ? rentals : [ship.rental]);
+      rent.title = placeList(tx('Rents at'), rentals.length ? rentals : [ship.rental]);
       if (rentals.length > 1) rent.append(el('span', 'note-inline', ` +${rentals.length - 1}`));
     }
     tr.append(rent);
@@ -4622,7 +4658,7 @@ async function loadPartsRef() {
   const previous = select.value;
 
   select.textContent = '';
-  select.append(new Option('All types', ''));
+  select.append(new Option(tx('All types'), ''));
   for (const type of types) select.append(new Option(prettyType(type), type));
   if (types.includes(previous)) select.value = previous;
 
@@ -4633,11 +4669,9 @@ async function loadPartsRef() {
   const caption = $('#parts-caption');
   if (caption && partCatalogue.length) {
     caption.textContent = partCatalogue[0].source === 'install'
-      ? `${partCatalogue.length.toLocaleString()} ship components and pieces of personal gear, `
-        + `read from your game install with type, size, grade and maker, and UEX in-game `
-        + `prices where a shop stocks one.`
-      : `Every ship component and piece of personal gear in the community digest, with type, `
-        + `size, grade and maker, and UEX in-game prices where a shop stocks one.`;
+      ? tx('{count} ship components and pieces of personal gear, read from your game install with type, size, grade and maker, and UEX in-game prices where a shop stocks one.',
+        { count: partCatalogue.length.toLocaleString() })
+      : tx('Every ship component and piece of personal gear in the community digest, with type, size, grade and maker, and UEX in-game prices where a shop stocks one.');
   }
 
   renderPartsRef();
@@ -4689,16 +4723,16 @@ function renderPartsRef() {
 
   const counter = $('#parts-count');
   counter.textContent = rows.length > PARTS_CAP
-    ? `${PARTS_CAP.toLocaleString()} of ${rows.length.toLocaleString()} items shown — refine to see the rest.`
+    ? tx('{shown} of {total} items shown — refine to see the rest.', { shown: PARTS_CAP.toLocaleString(), total: rows.length.toLocaleString() })
     : rows.length
-      ? `${rows.length.toLocaleString()} ${rows.length === 1 ? 'item' : 'items'}`
-      : partCatalogue.length ? 'No matches' : 'Waiting for catalogue';
+      ? txn(rows.length, '{count} item', '{count} items', { count: rows.length.toLocaleString() })
+      : partCatalogue.length ? tx('No matches') : tx('Waiting for catalogue');
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', partCatalogue.length
-      ? 'Nothing matches that filter.'
-      : gameDataExcuse() || 'No parts were found in your game files.');
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No parts were found in your game files.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -4718,7 +4752,7 @@ function renderPartsRef() {
     // it costs and where - so the name always opens one, where it used to open
     // only for the items the game happened to write a paragraph about.
     const open = el('button', 'place-link commodity-open', shown);
-    open.title = 'What Quantum Wake knows about this';
+    open.title = tx('What Quantum Wake knows about this');
     open.addEventListener('click', () => openEntity('part', part.className));
     label.append(open);
 
@@ -4864,7 +4898,7 @@ function renderMiningMethods() {
     tr.append(el('td', 'num', pips(m.speedRating)));
     body.append(tr);
   }
-  $('#mining-methods-note').textContent = 'UEX’s ratings, which are the game’s own pips: three is the most yield, the cheapest, the fastest - the refinery terminal calls a three for cost “LOW COST”. The percentages behind them are the server’s and no feed carries them; the yields a refinery actually quoted you are in the table above, read off your screenshots.';
+  $('#mining-methods-note').textContent = tx('UEX’s ratings, which are the game’s own pips: three is the most yield, the cheapest, the fastest - the refinery terminal calls a three for cost “LOW COST”. The percentages behind them are the server’s and no feed carries them; the yields a refinery actually quoted you are in the table above, read off your screenshots.');
 }
 
 async function loadMiningPending() {
@@ -4887,11 +4921,11 @@ async function loadMiningPending() {
   const processing = waiting.length - ready;
   panel.dataset.state = ready ? 'ready' : 'processing';
   $('#mining-pending-title').textContent = ready
-    ? 'Refinery jobs ready to collect'
-    : 'Refinery jobs in progress';
+    ? tx('Refinery jobs ready to collect')
+    : tx('Refinery jobs in progress');
   $('#mining-pending-summary').textContent = [
-    ready ? `${ready} ready to collect` : null,
-    processing ? `${processing} processing` : null,
+    ready ? tx('{count} ready to collect', { count: ready }) : null,
+    processing ? tx('{count} processing', { count: processing }) : null,
   ].filter(Boolean).join(' · ');
   $('#mining-pending-note').textContent = waiting[0].caveat;
 
@@ -4904,24 +4938,24 @@ async function loadMiningPending() {
 
     const identity = el('div', 'mining-waiting-main');
     identity.append(el('span', 'name', `${run.scu} SCU ${run.resource}`));
-    identity.append(el('span', 'mining-waiting-place', run.refinery.place || 'Refinery not named'));
+    identity.append(el('span', 'mining-waiting-place', run.refinery.place || tx('Refinery not named')));
     row.append(identity);
 
     row.append(el('span', `mining-waiting-state ${run.stage === 'Ready' ? 'ready' : 'processing'}`,
-      run.stage === 'Ready' ? 'Ready to collect' : 'Processing'));
+      run.stage === 'Ready' ? tx('Ready to collect') : tx('Processing')));
 
     // The two states read differently on purpose: one is waiting, the other is
     // the app pointing out that your own estimate has passed.
     row.append(el('span', `${run.stage === 'Ready' ? 'want' : 'muted'} mining-waiting-time`,
       run.refinery.expectedAt
         ? (run.stage === 'Ready'
-          ? `you expected it by ${dateOf(run.refinery.expectedAt)}`
-          : `due ${dateOf(run.refinery.expectedAt)}`)
-        : 'no time given'));
+          ? tx('you expected it by {date}', { date: dateOf(run.refinery.expectedAt) })
+          : tx('due {date}', { date: dateOf(run.refinery.expectedAt) }))
+        : tx('no time given')));
 
     const detail = [
-      run.refinery.method ? `Method · ${run.refinery.method}` : null,
-      run.refinery.cost != null ? `Job cost · ${money(run.refinery.cost)}` : null,
+      run.refinery.method ? `${tx('Method')} · ${run.refinery.method}` : null,
+      run.refinery.cost != null ? `${tx('Job cost')} · ${money(run.refinery.cost)}` : null,
     ].filter(Boolean).join(' · ');
     if (detail) row.append(el('span', 'mining-waiting-detail', detail));
 
@@ -4932,13 +4966,16 @@ async function loadMiningPending() {
     const e = run.estimate;
     if (e) {
       const method = run.method
-        ? ` under ${run.method.name} (yield ${run.method.yieldRating}/3, cost ${run.method.costRating}/3, speed ${run.method.speedRating}/3)`
-        : (run.refinery.method ? ` under ${run.refinery.method}` : '');
+        ? ` ${tx('under {method} (yield {yield}/3, cost {cost}/3, speed {speed}/3)', {
+          method: run.method.name, yield: run.method.yieldRating, cost: run.method.costRating, speed: run.method.speedRating })}`
+        : (run.refinery.method ? ` ${tx('under {method}', { method: run.refinery.method })}` : '');
       const bonus = e.bonusPercent != null
-        ? `, ${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent} % station bonus at ${e.bonusAt} makes ${fmtInt(e.withBonus)}`
-        : e.bonusKnown ? ', no station bonus reported for this ore here' : '';
+        ? `, ${tx('{bonus} % station bonus at {place} makes {total}', {
+          bonus: `${e.bonusPercent >= 0 ? '+' : ''}${e.bonusPercent}`, place: e.bonusAt, total: fmtInt(e.withBonus) })}`
+        : e.bonusKnown ? `, ${tx('no station bonus reported for this ore here')}` : '';
+      const gross = tx('≤ {gross} aUEC at {price}/SCU refined', { gross: fmtInt(e.gross), price: fmtInt(e.perScu) });
       row.append(el('span', 'muted small mining-estimate',
-        `≤ ${fmtInt(e.gross)} aUEC at ${fmtInt(e.perScu)}/SCU refined${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — before the method’s own yield and the fee, which nobody publishes`));
+        `${gross}${e.sellAt ? ` (${e.sellAt})` : ''}${bonus}${method} — ${tx('before the method’s own yield and the fee, which nobody publishes')}`));
     }
 
     list.append(row);
@@ -5088,22 +5125,22 @@ function refineryRow(row, nowMs) {
 
   if (row.kind === 'order') {
     const order = row.order;
-    line.append(el('span', 'name', `${order.method || 'Method not read'} · ${order.station}`));
-    line.append(el('span', 'muted', `seen ${shortTimeOf(order.seenAt)}, ${dateOf(order.seenAt)}`));
+    line.append(el('span', 'name', `${order.method || tx('Method not read')} · ${order.station}`));
+    line.append(el('span', 'muted', tx('seen {time}, {date}', { time: shortTimeOf(order.seenAt), date: dateOf(order.seenAt) })));
   } else {
-    line.append(el('span', 'name', `An order at ${row.done.station}`));
-    line.append(el('span', 'muted', 'no screenshot of it'));
+    line.append(el('span', 'name', tx('An order at {station}', { station: row.done.station })));
+    line.append(el('span', 'muted', tx('no screenshot of it')));
   }
 
   line.append(el('span', `${state === 'running' || state === 'collected' ? 'muted' : 'want'} mining-waiting-time`,
-    collected ? `collected ${shortTimeOf(collected)}, ${dateOf(collected)}` : refineryReadyText(row, nowMs)));
+    collected ? tx('collected {time}, {date}', { time: shortTimeOf(collected), date: dateOf(collected) }) : refineryReadyText(row, nowMs)));
 
   if (row.kind === 'order') {
     const order = row.order;
     const detail = [
-      order.inCscu != null ? `${order.inCscu} cSCU in` : null,
-      order.outCscu != null ? `${order.outCscu} cSCU back` : null,
-      order.cost != null ? `cost ${money(order.cost)}` : null,
+      order.inCscu != null ? tx('{amount} cSCU in', { amount: order.inCscu }) : null,
+      order.outCscu != null ? tx('{amount} cSCU back', { amount: order.outCscu }) : null,
+      order.cost != null ? tx('cost {amount}', { amount: money(order.cost) }) : null,
     ].filter(Boolean).join(' · ');
     if (detail) line.append(el('span', 'mining-waiting-detail', detail));
 
@@ -5113,15 +5150,15 @@ function refineryRow(row, nowMs) {
       .join(' · ');
     if (lots) line.append(el('span', 'muted small', lots));
   } else {
-    line.append(el('span', 'muted small', 'Nothing is known of what was in it - only where and when the game said it finished.'));
+    line.append(el('span', 'muted small', tx('Nothing is known of what was in it - only where and when the game said it finished.')));
   }
 
   // Ready rows can be picked up; a collected one can be put back, because a
   // misclick should not lose the only pointer to ore still at a station.
   if (state !== 'running') {
-    const button = el('button', 'ghost tiny refinery-collect', collected ? 'Not collected' : 'Collected');
+    const button = el('button', 'ghost tiny refinery-collect', collected ? tx('Not collected') : tx('Collected'));
     button.type = 'button';
-    button.title = collected ? 'Put it back under waiting' : 'You picked it up - the game logs no collection, so say so here';
+    button.title = collected ? tx('Put it back under waiting') : tx('You picked it up - the game logs no collection, so say so here');
     button.addEventListener('click', () => setRefineryCollected(refineryRowId(row), !!collected));
     line.append(button);
   }
@@ -5151,11 +5188,7 @@ function renderRefineryOrders() {
   const select = $('#refinery-notify');
   if (select) select.value = refineryNotifyMode();
 
-  $('#refinery-orders-note').textContent =
-    'Read off your screenshots of a refinery terminal - the PROCESSING screen starts the clock for certain; '
-    + 'a quote starts it only if you confirmed it. The game’s log says when an order finishes, and nothing else, '
-    + 'so “ready” is either the game’s word or the terminal’s clock, and the line says which. It logs no collection '
-    + 'either: press Collected when you pick one up, and it moves to the history.';
+  $('#refinery-orders-note').textContent = tx('Read off your screenshots of a refinery terminal - the PROCESSING screen starts the clock for certain; a quote starts it only if you confirmed it. The game’s log says when an order finishes, and nothing else, so “ready” is either the game’s word or the terminal’s clock, and the line says which. It logs no collection either: press Collected when you pick one up, and it moves to the history.');
 
   list.textContent = '';
 
@@ -5166,14 +5199,14 @@ function renderRefineryOrders() {
   };
 
   const waitingLine = refineryWaitingLine(groups);
-  list.append(el('div', `refinery-waiting-line ${waitingLine ? 'want' : 'muted'}`, waitingLine || 'Nothing waiting at a refinery.'));
+  list.append(el('div', `refinery-waiting-line ${waitingLine ? 'want' : 'muted'}`, waitingLine || tx('Nothing waiting at a refinery.')));
 
-  section('Waiting for you', groups.waiting, 'waiting');
-  section('Refining', groups.refining, 'refining');
-  section('Collected', groups.collected.slice(0, REFINERY_HISTORY), 'collected');
+  section(tx('Waiting for you'), groups.waiting, 'waiting');
+  section(tx('Refining'), groups.refining, 'refining');
+  section(tx('Collected'), groups.collected.slice(0, REFINERY_HISTORY), 'collected');
 
   if (groups.collected.length > REFINERY_HISTORY)
-    list.append(el('div', 'muted small', `${groups.collected.length - REFINERY_HISTORY} older collected orders not shown.`));
+    list.append(el('div', 'muted small', tx('{count} older collected orders not shown.', { count: groups.collected.length - REFINERY_HISTORY })));
 
   renderRefineryMeasured(picture?.measured || []);
 
@@ -5249,9 +5282,7 @@ function renderRefineryMeasured(rows) {
     body.append(tr);
   }
 
-  $('#refinery-measured-note').textContent =
-    'In and out in cSCU, as the terminal quoted them before you confirmed - the station’s bonus and its load '
-    + 'are already in the figure. One row is one quote; a small lot rounds hard, so 6 in and 2 out is not a third.';
+  $('#refinery-measured-note').textContent = tx('In and out in cSCU, as the terminal quoted them before you confirmed - the station’s bonus and its load are already in the figure. One row is one quote; a small lot rounds hard, so 6 in and 2 out is not a third.');
 }
 
 /**
@@ -5302,11 +5333,10 @@ async function refineryTimerFired(key) {
   const mode = refineryNotifyMode();
   if (mode === 'off' || mode === 'log') return;
 
-  const quote = order.basis === 'quote' ? ', if you confirmed the quote' : '';
-  toast('refinery-due', 'Refinery order should be ready',
-    mode === 'mixed'
-      ? `${order.station} — by the terminal’s clock${quote}; the game has not said so`
-      : `${order.station} — by the terminal’s clock${quote}`);
+  const quote = order.basis === 'quote' ? `, ${tx('if you confirmed the quote')}` : '';
+  const clock = `${order.station} — ${tx('by the terminal’s clock')}${quote}`;
+  toast('refinery-due', tx('Refinery order should be ready'),
+    mode === 'mixed' ? `${clock}; ${tx('the game has not said so')}` : clock);
 }
 
 /**
@@ -5353,10 +5383,10 @@ function miningStageForm(run) {
 
   function field(key, label, placeholder, type = 'text') {
     const wrap = el('label', 'mining-stage-field');
-    wrap.append(el('span', null, label));
+    wrap.append(el('span', null, tx(label)));
     const input = el('input', 'search');
     input.type = type;
-    input.placeholder = placeholder;
+    input.placeholder = tx(placeholder);
     if (type === 'number') input.step = 'any';
     inputs[key] = input;
     wrap.append(input);
@@ -5375,7 +5405,7 @@ function miningStageForm(run) {
     field('revenue', 'Sold for', 'aUEC', 'number');
   }
 
-  const save = el('button', 'ghost', 'Save');
+  const save = el('button', 'ghost', tx('Save'));
 
   save.addEventListener('click', async () => {
     if (run.stage === 'Extracted') {
@@ -5427,7 +5457,7 @@ async function loadMiningLog() {
   body.textContent = '';
 
   if (!runs.length) {
-    note.textContent = 'Nothing recorded yet.';
+    note.textContent = tx('Nothing recorded yet.');
     return;
   }
 
@@ -5451,14 +5481,14 @@ async function loadMiningLog() {
 
     const [words, next] = MINING_STAGE[run.stage] || [run.stage, null];
 
-    const stage = el('td', run.stage === 'Ready' ? 'want' : 'muted', words);
+    const stage = el('td', run.stage === 'Ready' ? 'want' : 'muted', MINING_STAGE[run.stage] ? tx(words) : words);
     tr.append(stage);
 
     const step = el('td');
 
     if (next) {
       let form = null;
-      const advance = el('button', 'ghost small', next);
+      const advance = el('button', 'ghost small', tx(next));
 
       advance.addEventListener('click', () => {
         // Toggling rather than stacking: pressing it twice should close the
@@ -5481,7 +5511,7 @@ async function loadMiningLog() {
     tr.append(step);
 
     const drop = el('td', 'num');
-    const remove = el('button', 'ghost small', 'Remove');
+    const remove = el('button', 'ghost small', tx('Remove'));
     remove.addEventListener('click', async () => {
       await fetch(`/api/mining/log/${run.id}`, { method: 'DELETE' }).catch(() => {});
       await loadMiningLog().catch(() => {});
@@ -5497,11 +5527,11 @@ async function loadMiningLog() {
 
   const waiting = runs.filter((r) => r.stage === 'Submitted' || r.stage === 'Ready').length;
 
-  note.textContent = `${runs.length} run${runs.length === 1 ? '' : 's'}, `
+  note.textContent = `${txn(runs.length, '{count} run', '{count} runs')}, `
     + `${scu.toLocaleString()} SCU`
     + (earned > 0 ? `, ${money(earned)}` : '')
-    + (waiting > 0 ? `, ${waiting} still at a refinery` : '')
-    + ' — your own record, kept apart from the log-derived figures above.';
+    + (waiting > 0 ? `, ${tx('{count} still at a refinery', { count: waiting })}` : '')
+    + ` — ${tx('your own record, kept apart from the log-derived figures above.')}`;
 }
 
 $('#mining-log-form')?.addEventListener('submit', async (e) => {
@@ -5552,7 +5582,7 @@ async function loadSalvage() {
   if (!salvageModel?.ready) {
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     for (const t of tables) if (t) t.hidden = true;
     return;
@@ -5563,7 +5593,7 @@ async function loadSalvage() {
   const price = (market) => market?.price ? `${fmtInt(market.price)} aUEC` : '—';
   const where = (market) => {
     const best = market?.shops?.[0];
-    if (!best) return salvageModel.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+    if (!best) return salvageModel.itemPricesKnown ? tx('no terminal recorded') : tx('prices need UEX (Settings)');
     const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
     return `${best.terminal}${place}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
   };
@@ -5573,24 +5603,30 @@ async function loadSalvage() {
   for (const s of salvageModel.ships || []) {
     const tr = el('tr');
     const name = el('td', null, s.name);
-    if (s.flown) name.append(el('span', 'chip count', ' flown'));
+    if (s.flown) name.append(el('span', 'chip count', ` ${tx('flown')}`));
     tr.append(name);
     tr.append(el('td', 'num', String(s.heads)));
     tr.append(el('td', null, s.scrapesTo || '—'));
-    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? `${s.scuPerCubicMetre} SCU/m³ of ${s.disintegratesTo}` : '—'));
-    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : 'needs the dataset')));
+    tr.append(el('td', 'num', s.scuPerCubicMetre > 0 ? tx('{rate} SCU/m³ of {material}', { rate: s.scuPerCubicMetre, material: s.disintegratesTo }) : '—'));
+    tr.append(el('td', 'num', s.hold > 0 ? `${fmt1(s.hold)} SCU` : (salvageModel.holdsKnown ? '—' : tx('needs the dataset'))));
     tr.append(el('td', 'num', s.fullHoldOfScrape ? `${fmtInt(s.fullHoldOfScrape)} aUEC` : '—'));
     const cm = el('td', 'num', s.fullHoldOfPieces ? `${fmtInt(s.fullHoldOfPieces)} aUEC` : '—');
-    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo) cm.title = `UEX prices ${s.disintegratesTo} as ${s.pieces.commodity}`;
+    if (s.pieces && s.disintegratesTo && s.pieces.commodity !== s.disintegratesTo)
+      cm.title = tx('UEX prices {material} as {commodity}', { material: s.disintegratesTo, commodity: s.pieces.commodity });
     tr.append(cm);
     ships.append(tr);
   }
   const first = (salvageModel.ships || []).find((s) => s.scrape);
   const firstCm = (salvageModel.ships || []).find((s) => s.pieces);
   $('#salvage-ships-note').textContent = [
-    first ? `RMC at UEX's best sell: ${fmtInt(first.scrape.perScu)} aUEC a SCU at ${first.scrape.at}.` : (salvageModel.itemPricesKnown ? 'UEX has no price for RMC.' : 'Prices need UEX, in Settings.'),
-    firstCm ? `Construction material: ${fmtInt(firstCm.pieces.perScu)} a SCU at ${firstCm.pieces.at}; the game's Construction Salvage, Rubble and Pieces are sold as that one commodity.` : '',
-    'A full hold is a ceiling on a trip, before the fuel and before the finding.',
+    first
+      ? tx('RMC at UEX\'s best sell: {price} aUEC a SCU at {place}.', { price: fmtInt(first.scrape.perScu), place: first.scrape.at })
+      : (salvageModel.itemPricesKnown ? tx('UEX has no price for RMC.') : tx('Prices need UEX, in Settings.')),
+    firstCm
+      ? tx('Construction material: {price} a SCU at {place}; the game\'s Construction Salvage, Rubble and Pieces are sold as that one commodity.',
+        { price: fmtInt(firstCm.pieces.perScu), place: firstCm.pieces.at })
+      : '',
+    tx('A full hold is a ceiling on a trip, before the fuel and before the finding.'),
   ].filter(Boolean).join(' ');
 
   const modules = $('#salvage-modules tbody');
@@ -5620,7 +5656,10 @@ async function loadSalvage() {
   }
 
   const k = salvageModel.constants;
-  $('#salvage-note').textContent = `${k ? `The game's rule: a beam takes ${Math.round(k.hullThicknessMetres * 1000)} mm of hull, with a material factor of ${k.ammoToMaterialFactor}. ` : ''}${salvageModel.perHull}`;
+  // The rule is the page's sentence around the game's numbers; perHull is the
+  // server's, translated when it is one of the fixed ones.
+  $('#salvage-note').textContent = `${k ? `${tx('The game\'s rule: a beam takes {mm} mm of hull, with a material factor of {factor}.',
+    { mm: Math.round(k.hullThicknessMetres * 1000), factor: k.ammoToMaterialFactor })} ` : ''}${tx(salvageModel.perHull)}`;
   renderMiningWorkspaceHeader();
 }
 
@@ -5669,56 +5708,60 @@ function renderMiningWorkspaceHeader() {
   const bar = $('#view-mining .section-bar');
   if (!heading || !status || !bar) return;
 
+  // data-workspace is drawn by the stylesheet (content: attr(...)), so it is
+  // page text like the heading and is translated with it.
   if (miningPane === 'crack') {
-    heading.textContent = 'Mining fit';
-    bar.dataset.workspace = 'MINING FIT';
+    heading.textContent = tx('Mining fit');
+    bar.dataset.workspace = tx('MINING FIT');
     bar.dataset.workspaceIcon = 'fit';
-    status.textContent = miningFitStatus;
+    status.textContent = tx(miningFitStatus);
     return;
   }
 
   if (miningPane === 'runs') {
-    heading.textContent = 'Haul & refinery';
-    bar.dataset.workspace = 'HAUL // REFINERY';
+    heading.textContent = tx('Haul & refinery');
+    bar.dataset.workspace = tx('HAUL // REFINERY');
     bar.dataset.workspaceIcon = '';
     // Ore waiting at a station comes first: it is the one thing on this pane
     // the game will never remind you of once its toast has gone.
     const waiting = refineryWaitingLine(refineryGroups(refineryPicture, Date.now()));
-    const jobs = miningPendingJobs === null ? 'Refinery job status is unavailable.'
+    const jobs = miningPendingJobs === null ? tx('Refinery job status is unavailable.')
       : miningPendingJobs.length
-        ? `${miningPendingJobs.length} refinery job${miningPendingJobs.length === 1 ? '' : 's'} await your update.`
-        : 'No refinery jobs await your update.';
+        ? txn(miningPendingJobs.length, '{count} refinery job awaits your update.', '{count} refinery jobs await your update.')
+        : tx('No refinery jobs await your update.');
     status.textContent = waiting ? `${waiting}. ${jobs}` : jobs;
     return;
   }
-
-  const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
   // Both lines of work reached the header in the same release: the salvage
   // pane arrived on one and the workspace header on the other, and without
   // this the wrecks page calls itself Prospecting.
   if (miningPane === 'salvage') {
-    heading.textContent = 'Salvage';
-    bar.dataset.workspace = 'SALVAGE';
+    heading.textContent = tx('Salvage');
+    bar.dataset.workspace = tx('SALVAGE');
     bar.dataset.workspaceIcon = '';
     status.textContent = salvageModel?.ready
-      ? `${count(salvageModel.ships?.length ?? 0, 'salvage hull')}, ${count(salvageModel.modules?.length ?? 0, 'scraper module')}, from the install.`
-      : 'Hulls, scrapers and heads, as far as the game files go.';
+      ? tx('{hulls}, {modules}, from the install.', {
+        hulls: txn(salvageModel.ships?.length ?? 0, '{count} salvage hull', '{count} salvage hulls'),
+        modules: txn(salvageModel.modules?.length ?? 0, '{count} scraper module', '{count} scraper modules') })
+      : tx('Hulls, scrapers and heads, as far as the game files go.');
     return;
   }
 
-  heading.textContent = 'Prospecting';
-  bar.dataset.workspace = 'PROSPECTING';
+  heading.textContent = tx('Prospecting');
+  bar.dataset.workspace = tx('PROSPECTING');
   bar.dataset.workspaceIcon = '';
   if (miningReferenceMatches === null) {
-    status.textContent = 'Loading reference locations…';
+    status.textContent = tx('Loading reference locations…');
     return;
   }
   const locations = new Set(miningReferenceMatches.map((spawn) => spawn.location).filter(Boolean)).size;
   const salvage = $('#mining-kind')?.value === 'salvageable';
-  status.textContent = locations
-    ? `${locations} ${salvage ? 'salvage ' : ''}location${locations === 1 ? '' : 's'} ${locations === 1 ? 'matches' : 'match'} current filters.`
-    : 'No locations match current filters.';
+  status.textContent = !locations
+    ? tx('No locations match current filters.')
+    : salvage
+      ? txn(locations, '{count} salvage location matches current filters.', '{count} salvage locations match current filters.')
+      : txn(locations, '{count} location matches current filters.', '{count} locations match current filters.');
 }
 
 for (const button of $('#mining-tabs')?.querySelectorAll('button') || [])
@@ -5759,12 +5802,13 @@ function fillCrackFromScan(scan) {
 
   const say = $('#crack-scan-note');
   if (say) {
-    const missing = [scan.massKg == null ? 'mass' : null, scan.resistancePercent == null ? 'resistance' : null].filter(Boolean);
+    const missing = [scan.massKg == null ? tx('mass') : null, scan.resistancePercent == null ? tx('resistance') : null].filter(Boolean);
     say.hidden = false;
-    say.textContent = `From the scan read on the Log tab: ${scan.primary || scan.primaryRead || 'a rock'}`
-      + (scan.scu != null ? `, ${scan.scu} SCU by the game's own count` : '')
-      + `. ${missing.length ? `The panel's ${missing.join(' and ')} did not read and the field is as it was. ` : ''}`
-      + `Instability is left as typed: the panel prints ${scan.instability ?? 'a figure'} and the rule wants a percentage, and nothing measured says they are the same scale.`;
+    say.textContent = tx('From the scan read on the Log tab: {rock}', { rock: scan.primary || scan.primaryRead || tx('a rock') })
+      + (scan.scu != null ? `, ${tx('{scu} SCU by the game\'s own count', { scu: scan.scu })}` : '')
+      + `. ${missing.length ? `${tx('The panel\'s {fields} did not read and the field is as it was.', { fields: missing.join(` ${tx('and')} `) })} ` : ''}`
+      + tx('Instability is left as typed: the panel prints {figure} and the rule wants a percentage, and nothing measured says they are the same scale.',
+        { figure: scan.instability ?? tx('a figure') });
   }
 }
 
@@ -5785,7 +5829,7 @@ async function loadCrackModel() {
     box.hidden = true;
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     return;
   }
@@ -5793,7 +5837,12 @@ async function loadCrackModel() {
   box.hidden = false;
 
   const rule = $('#crack-rule');
-  if (rule && crackModel.rule) rule.textContent = `${crackModel.rule.requiredWattsPerKg} W per kilogram at zero resistance, breaking solo from ${Math.round(crackModel.rule.soloRatio * 100)}% and with a gadget from ${Math.round(crackModel.rule.gadgetRatio * 100)}% (${crackModel.rule.source})`;
+  if (rule && crackModel.rule) rule.textContent = tx('{watts} W per kilogram at zero resistance, breaking solo from {solo}% and with a gadget from {gadget}% ({source})', {
+    watts: crackModel.rule.requiredWattsPerKg,
+    solo: Math.round(crackModel.rule.soloRatio * 100),
+    gadget: Math.round(crackModel.rule.gadgetRatio * 100),
+    source: crackModel.rule.source,
+  });
 
   // Ships you have flown first, then the rest of the mining hulls.
   const ship = $('#crack-ship');
@@ -5802,25 +5851,26 @@ async function loadCrackModel() {
   const ships = [...crackModel.ships].sort((a, b) => (b.flown - a.flown) || a.name.localeCompare(b.name));
   for (const s of ships) {
     const heads = s.heads.length;
-    ship.append(new Option(`${s.name} · ${heads} S${s.heads[0]?.size ?? '?'} head${heads === 1 ? '' : 's'}${s.flown ? ' · flown' : ''}`, s.class));
+    const fitted = txn(heads, '{count} S{size} head', '{count} S{size} heads', { size: s.heads[0]?.size ?? '?' });
+    ship.append(new Option(`${s.name} · ${fitted}${s.flown ? ` · ${tx('flown')}` : ''}`, s.class));
   }
   ship.value = keep && ships.some((s) => s.class === keep) ? keep : (ships[0]?.class || '');
 
   const mineral = $('#crack-mineral');
   mineral.textContent = '';
-  mineral.append(new Option('Not said', ''));
+  mineral.append(new Option(tx('Not said'), ''));
   for (const m of crackModel.minerals) mineral.append(new Option(m.name, m.class));
 
   const gadget = $('#crack-gadget');
   gadget.textContent = '';
-  gadget.append(new Option('None', ''));
-  for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || 'no figures'}`, g.class));
+  gadget.append(new Option(tx('None'), ''));
+  for (const g of crackModel.gadgets) gadget.append(new Option(`${g.name} · ${describeModifiers(g.modifiers) || tx('no figures')}`, g.class));
 
   // The deposits: the HUD's name for the kind, and where several presets
   // share it, the mineral the class names - Asteroid (P-Type) · copper.
   const deposit = $('#crack-deposit');
   deposit.textContent = '';
-  deposit.append(new Option('Not said', ''));
+  deposit.append(new Option(tx('Not said'), ''));
   for (const c of crackModel.compositions || []) {
     const bits = c.class.split('_');
     const shared = (crackModel.compositions || []).filter((o) => o.name === c.name).length > 1;
@@ -5847,7 +5897,7 @@ async function useLastScan() {
   const scan = (got.readings || []).filter((s) => s.mining && !s.dismissed).sort((a, b) => new Date(b.shotAt) - new Date(a.shotAt))[0];
   const say = $('#crack-scan-note');
   if (!scan) {
-    if (say) { say.hidden = false; say.textContent = 'No rock scan has been read yet. Screenshot the scan-results panel with a rock selected; with Watch screenshots on (Log tab) it is read as it lands.'; }
+    if (say) { say.hidden = false; say.textContent = tx('No rock scan has been read yet. Screenshot the scan-results panel with a rock selected; with Watch screenshots on (Log tab) it is read as it lands.'); }
     return;
   }
   fillCrackFromScan(scan.mining);
@@ -5864,7 +5914,7 @@ function crackPrice(market) {
 
 function crackWhere(market) {
   const best = market?.shops?.[0];
-  if (!best) return crackModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  if (!best) return crackModel?.itemPricesKnown ? tx('no terminal recorded') : tx('prices need UEX (Settings)');
   return `${best.terminal}${best.place && best.place !== best.terminal ? `, ${best.place}` : ''}${market.shops.length > 1 ? ` +${market.shops.length - 1}` : ''}`;
 }
 
@@ -5897,7 +5947,7 @@ function renderCrackFittings() {
   for (const m of crackModel.modules) {
     const tr = el('tr');
     tr.append(el('td', null, m.name));
-    tr.append(el('td', null, m.active ? 'active' : 'passive'));
+    tr.append(el('td', null, m.active ? tx('active') : tx('passive')));
     tr.append(el('td', 'num', `×${m.powerMultiplier}`));
     tr.append(el('td', 'num', `×${m.extractionMultiplier}`));
     tr.append(el('td', null, describeModifiers(m.modifiers) || '—'));
@@ -5945,9 +5995,9 @@ function renderCrackDeposit() {
     tr.append(el('td', 'num', pt.sellPerScu ? fmtInt(pt.sellPerScu) : '—'));
     tr.append(el('td', 'num', pt.rawPerScu ? fmtInt(pt.rawPerScu) : '—'));
     const yieldCell = el('td', 'num', pt.yield ? `${pt.yield > 0 ? '+' : ''}${Math.round(pt.yield)}%` : '—');
-    if (pt.yieldAt) yieldCell.title = `Best station bonus on the method's yield, at ${pt.yieldAt}`;
+    if (pt.yieldAt) yieldCell.title = tx('Best station bonus on the method\'s yield, at {place}', { place: pt.yieldAt });
     tr.append(yieldCell);
-    tr.append(el('td', 'num', mineral ? `res ${mineral.resistance} · inst ${fmtInt(mineral.instability)}` : '—'));
+    tr.append(el('td', 'num', mineral ? tx('res {resistance} · inst {instability}', { resistance: mineral.resistance, instability: fmtInt(mineral.instability) }) : '—'));
     body.append(tr);
   }
 
@@ -5963,13 +6013,15 @@ function renderCrackDeposit() {
   const rawParts = parts.filter((pt) => pt.rawPerScu);
   const raw = rawParts.reduce((sum, pt) => sum + weight(pt) * Number(pt.rawPerScu), 0);
   const worth = [];
-  if (refinedParts.length) worth.push(`Roughly ${fmtInt(refined)} aUEC a SCU of the mix at refined prices, before the refinery's yield`);
-  if (rawParts.length) worth.push(`${worth.length ? '' : 'Roughly '}${fmtInt(raw)} aUEC sold raw`);
-  $('#crack-mix-note').textContent = `${chosen.name}: at least ${chosen.minimumDistinctElements} mineral${chosen.minimumDistinctElements === 1 ? '' : 's'} a rock. `
+  if (refinedParts.length) worth.push(tx('Roughly {price} aUEC a SCU of the mix at refined prices, before the refinery\'s yield', { price: fmtInt(refined) }));
+  if (rawParts.length) worth.push(worth.length
+    ? tx('{price} aUEC sold raw', { price: fmtInt(raw) })
+    : tx('Roughly {price} aUEC sold raw', { price: fmtInt(raw) }));
+  $('#crack-mix-note').textContent = `${txn(chosen.minimumDistinctElements, '{deposit}: at least {count} mineral a rock.', '{deposit}: at least {count} minerals a rock.', { deposit: chosen.name })} `
     + (worth.length
-      ? `${worth.join(', ')} - middle share × chance × price, ${refinedParts.length} of ${parts.length} minerals priced. `
-      : 'No UEX prices for these minerals (Settings). ')
-    + 'Per rock is not given: the HUD’s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.';
+      ? `${worth.join(', ')} - ${tx('middle share × chance × price, {priced} of {total} minerals priced.', { priced: refinedParts.length, total: parts.length })} `
+      : `${tx('No UEX prices for these minerals (Settings).')} `)
+    + tx('Per rock is not given: the HUD’s mass is in kilograms and nothing read says what a kilogram of rock is in SCU.');
 
   // The likeliest mineral is the one the notes speak to, unless the pilot picked one.
   const mineral = $('#crack-mineral');
@@ -5981,13 +6033,13 @@ function describeModifiers(m) {
   if (!m) return '';
   const signed = (v) => `${v > 0 ? '+' : '−'}${Math.abs(v)}%`;
   return [
-    m.resistance ? `${signed(m.resistance)} resistance` : null,
-    m.instability ? `${signed(m.instability)} instability` : null,
-    m.windowSize ? `${signed(m.windowSize)} window` : null,
-    m.windowRate ? `${signed(m.windowRate)} charge rate` : null,
-    m.catastrophicRate ? `${signed(m.catastrophicRate)} overcharge` : null,
-    m.shatterDamage ? `${signed(m.shatterDamage)} shatter` : null,
-    m.clusterFactor ? `${signed(m.clusterFactor)} cluster` : null,
+    m.resistance ? tx('{value} resistance', { value: signed(m.resistance) }) : null,
+    m.instability ? tx('{value} instability', { value: signed(m.instability) }) : null,
+    m.windowSize ? tx('{value} window', { value: signed(m.windowSize) }) : null,
+    m.windowRate ? tx('{value} charge rate', { value: signed(m.windowRate) }) : null,
+    m.catastrophicRate ? tx('{value} overcharge', { value: signed(m.catastrophicRate) }) : null,
+    m.shatterDamage ? tx('{value} shatter', { value: signed(m.shatterDamage) }) : null,
+    m.clusterFactor ? tx('{value} cluster', { value: signed(m.clusterFactor) }) : null,
   ].filter(Boolean).join(', ');
 }
 
@@ -6008,19 +6060,19 @@ function renderCrackHeads() {
 
   ship.heads.forEach((head, i) => {
     const row = el('div', 'crack-head');
-    row.append(el('span', 'crack-head-label', `Head ${i + 1} · S${head.size}`));
+    row.append(el('span', 'crack-head-label', tx('Head {n} · S{size}', { n: i + 1, size: head.size })));
 
     const laser = document.createElement('select');
     laser.className = 'select crack-laser';
     const locked = head.editable === false || head.editable === null;
     for (const l of crackModel.lasers.filter((l) => locked ? l.class === head.stock
       : l.size === head.size && !l.bespoke)) {
-      laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || 'no modifiers'}`, l.class));
+      laser.append(new Option(`${l.name} · ${fmtInt(l.power)} · ${describeModifiers(l.modifiers) || tx('no modifiers')}`, l.class));
     }
     if (head.stock && [...laser.options].some((o) => o.value === head.stock)) laser.value = head.stock;
-    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · figures unavailable`, head.stock));
+    if (!laser.options.length && head.stock) laser.append(new Option(`${head.stock} · ${tx('figures unavailable')}`, head.stock));
     laser.disabled = locked;
-    laser.title = head.note || 'The head; the ship\'s own is picked first';
+    laser.title = head.note || tx('The head; the ship\'s own is picked first');
     laser.addEventListener('change', () => {
       renderCrackSlots(row);
       renderCrackFitSummary();
@@ -6048,8 +6100,8 @@ function renderCrackFitSummary() {
   const fitted = rows.reduce((total, row) => total
     + [...row.querySelectorAll('.crack-module')].filter((module) => module.value).length, 0);
   miningFitStatus = lasers.length
-    ? `Current fit · ${lasers.length} head${lasers.length === 1 ? '' : 's'} · ${fitted}/${capacity} module slot${capacity === 1 ? '' : 's'} fitted`
-    : crackModel?.ready ? 'Choose a mining head to inspect its fit.' : 'Fit data has not been read yet.';
+    ? `${tx('Current fit')} · ${txn(lasers.length, '{count} head', '{count} heads')} · ${txn(capacity, '{fitted}/{count} module slot fitted', '{fitted}/{count} module slots fitted', { fitted })}`
+    : crackModel?.ready ? tx('Choose a mining head to inspect its fit.') : tx('Fit data has not been read yet.');
   summary.textContent = miningFitStatus;
   renderMiningWorkspaceHeader();
 }
@@ -6063,18 +6115,20 @@ function renderCrackSlots(row) {
   for (const old of [...row.querySelectorAll('.crack-noslots')]) old.remove();
 
   if (slots === 0) {
-    row.append(el('span', 'muted crack-noslots', 'no module slots'));
+    row.append(el('span', 'muted crack-noslots', tx('no module slots')));
     return;
   }
   for (let slot = 0; slot < slots; slot++) {
     const module = document.createElement('select');
     module.className = 'select tiny crack-module';
-    module.append(new Option(slot === 0 ? 'No module' : '—', ''));
+    module.append(new Option(slot === 0 ? tx('No module') : '—', ''));
     for (const m of crackModel.modules) {
-      module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ×${m.powerMultiplier} power${m.modifiers ? (describeModifiers(m.modifiers) ? ', ' + describeModifiers(m.modifiers) : '') : ''}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
+      const power = tx('×{multiplier} power', { multiplier: m.powerMultiplier });
+      const modifiers = m.modifiers && describeModifiers(m.modifiers) ? `, ${describeModifiers(m.modifiers)}` : '';
+      module.append(new Option(`${m.active ? '⚡ ' : ''}${m.name} · ${power}${modifiers}${m.active ? ` · ${m.lifetime}s × ${m.charges}` : ''}`, m.class));
     }
     if (kept[slot] && crackModel.modules.some((m) => m.class === kept[slot])) module.value = kept[slot];
-    module.title = 'A module in this head\'s slot; an active one counts as switched on';
+    module.title = tx('A module in this head\'s slot; an active one counts as switched on');
     module.addEventListener('change', () => {
       renderCrackFitSummary();
       assessCrack().catch(() => {});
@@ -6119,7 +6173,7 @@ async function assessCrack() {
     got = await response.json();
   } catch (err) {
     out.textContent = '';
-    out.append(el('p', 'muted', `Could not assess the rock: ${err.message}`));
+    out.append(el('p', 'muted', tx('Could not assess the rock: {error}', { error: err.message })));
     return;
   }
 
@@ -6128,24 +6182,32 @@ async function assessCrack() {
   out.textContent = '';
 
   const head = el('div', `crack-call ${tone}`);
-  head.append(el('b', null, label));
-  head.append(el('span', 'muted', ` · ${fmtInt(v.powerDelivered)} delivered against ${fmtInt(v.powerRequired)} needed · ${Math.round(v.ratio * 100)}% · estimate, community rule`));
+  head.append(el('b', null, CRACK_VERDICTS[v.verdict] ? tx(label) : label));
+  head.append(el('span', 'muted', ` · ${tx('{delivered} delivered against {required} needed · {ratio}% · estimate, community rule', {
+    delivered: fmtInt(v.powerDelivered), required: fmtInt(v.powerRequired), ratio: Math.round(v.ratio * 100) })}`));
   out.append(head);
 
   const facts = el('div', 'crack-facts');
-  const fact = (k, val, title) => { const f = el('span'); f.append(el('span', 'k', k), el('b', null, val)); if (title) f.title = title; facts.append(f); };
+  const fact = (k, val, title) => { const f = el('span'); f.append(el('span', 'k', tx(k)), el('b', null, val)); if (title) f.title = tx(title); facts.append(f); };
   fact('Resistance after fit', `${v.effectiveResistancePercent}%`, 'The HUD figure scaled by the heads\', modules\' and gadget\'s resistance points');
   fact('Instability after fit', `${v.effectiveInstabilityPercent}%`);
-  fact('Window', `${v.windowPercent}% of gauge`, 'The game\'s optimal window, widened or narrowed by the fit');
+  fact('Window', tx('{percent}% of gauge', { percent: v.windowPercent }), 'The game\'s optimal window, widened or narrowed by the fit');
   fact('Breaks up to', `${fmtInt(v.maxCrackableMassKg)} kg`, 'At this resistance, on this fit');
-  if (v.energyCapacity) fact('Rock holds', `${fmtInt(v.energyCapacity)} · sheds ${fmtInt(v.energyDecayPerSecond)}/s`, 'By the game\'s own constants: capacity per kilogram and decay per kilogram a second');
+  if (v.energyCapacity) {
+    fact('Rock holds', tx('{capacity} · sheds {decay}/s', { capacity: fmtInt(v.energyCapacity), decay: fmtInt(v.energyDecayPerSecond) }),
+      'By the game\'s own constants: capacity per kilogram and decay per kilogram a second');
+  }
   out.append(facts);
 
   // The mineral is for the notes: what the game says about it, in its own figures.
+  // The verdict's own notes are the server's and wait for phase 3.
   const mineral = crackModel.minerals.find((m) => m.class === $('#crack-mineral').value);
-  const notes = [...(v.notes || [])];
+  const notes = [...(v.notes || [])].map(serverText);
   if (mineral) {
-    notes.push(`${mineral.name}: element resistance ${mineral.resistance}, instability ${mineral.instability}, window at ${Math.round(mineral.windowMidpoint * 100)}%±${Math.round(mineral.windowRandomness * 100)} of the gauge, overcharge blast ×${mineral.explosionMultiplier}${mineral.instability >= 600 ? ' - an overcharge here is the rock gone' : ''}.`);
+    notes.push(tx('{mineral}: element resistance {resistance}, instability {instability}, window at {mid}%±{spread} of the gauge, overcharge blast ×{blast}', {
+      mineral: mineral.name, resistance: mineral.resistance, instability: mineral.instability,
+      mid: Math.round(mineral.windowMidpoint * 100), spread: Math.round(mineral.windowRandomness * 100), blast: mineral.explosionMultiplier,
+    }) + (mineral.instability >= 600 ? ` - ${tx('an overcharge here is the rock gone')}` : '') + '.');
   }
   if (notes.length) {
     const list = el('ul', 'crack-notes');
@@ -6164,7 +6226,7 @@ async function assessCrack() {
     tr.append(el('td', 'num', fmtInt(r.powerDelivered)));
     tr.append(el('td', 'num', `${Math.round(r.ratio * 100)}%`));
     tr.append(el('td', 'num', fmtInt(r.maxCrackableMassKg)));
-    const verdict = el('td', null, rl);
+    const verdict = el('td', null, CRACK_VERDICTS[r.verdict] ? tx(rl) : rl);
     verdict.classList.add(`crack-${rt}`);
     tr.append(verdict);
     tr.append(el('td', 'num muted', crackPrice(crackModel.lasers.find((l) => l.class === r.laser)?.market)));
@@ -6173,8 +6235,9 @@ async function assessCrack() {
   const heads = request.heads.length;
   const hull = crackModel.ships.find((s) => s.class === $('#crack-ship').value);
   $('#crack-matrix-note').textContent = hull?.heads.some((h) => h.editable === false || h.editable === null)
-    ? 'Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.'
-    : `Compatible S${hull?.heads[0]?.size ?? '?'} heads on this rock, ${heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.`;
+    ? tx('Stock head only: this fit has a fixed head or its replacement compatibility is not yet known. Modules and gadgets still affect the estimate.')
+    : tx('Compatible S{size} heads on this rock, {heads} to a fit with the same modules; only the laser changes, and a module is carried over even where the other head has no slot for it.',
+      { size: hull?.heads[0]?.size ?? '?', heads });
 }
 
 $('#crack-ship')?.addEventListener('change', () => { renderCrackHeads(); assessCrack().catch(() => {}); });
@@ -6192,7 +6255,7 @@ async function loadMiningPlaces() {
 
   if (!places.length) {
     note.textContent = gameDataExcuse()
-      ?? 'No deposit tables could be read from your install.';
+      ?? tx('No deposit tables could be read from your install.');
     return;
   }
 
@@ -6220,11 +6283,9 @@ async function loadMiningPlaces() {
     body.append(tr);
   }
 
-  note.textContent = `${places.length} places, read from your install. `
-    + 'The community dataset knows 234, so this is the part of the map your game '
-    + 'files describe rather than all of it.'
-    + (priced ? '' : ' Turn on UEX in Settings to price what a rock is worth; '
-      + 'how rich the rocks are needs nothing but your install.');
+  note.textContent = tx('{count} places, read from your install. The community dataset knows 234, so this is the part of the map your game files describe rather than all of it.',
+    { count: places.length })
+    + (priced ? '' : ` ${tx('Turn on UEX in Settings to price what a rock is worth; how rich the rocks are needs nothing but your install.')}`);
 }
 
 async function loadLikelyMined() {
@@ -6243,9 +6304,8 @@ async function loadLikelyMined() {
   tiles('#mining-mine', rows.slice(0, 4).map((r) => [r.name, `${r.scu} SCU`]));
 
   const total = rows.reduce((sum, r) => sum + r.revenue, 0);
-  note.textContent = `${money(total)} from ore you sold and never bought — `
-    + 'the closest thing to a mining record these logs allow, since nothing '
-    + 'writes down a rock being mined. Bought somewhere unread, it would look the same.';
+  note.textContent = tx('{total} from ore you sold and never bought — the closest thing to a mining record these logs allow, since nothing writes down a rock being mined. Bought somewhere unread, it would look the same.',
+    { total: money(total) });
   note.hidden = false;
 }
 
@@ -6260,14 +6320,14 @@ async function loadMiningRef() {
     const select = $(selector);
     const previous = select.value;
     select.textContent = '';
-    select.append(new Option(allLabel, ''));
+    select.append(new Option(tx(allLabel), ''));
     for (const value of values) select.append(new Option(labelOf(value), value));
     if (values.includes(previous)) select.value = previous;
   };
 
   fill('#mining-kind',
     [...new Set(miningCatalogue.map((s) => s.kind))].sort(),
-    'All kinds', (k) => KIND_LABELS[k] || k);
+    'All kinds', (k) => (KIND_LABELS[k] ? tx(KIND_LABELS[k]) : k));
 
   fill('#mining-system',
     [...new Set(miningCatalogue.map((s) => s.system).filter(Boolean))].sort(),
@@ -6300,8 +6360,8 @@ function renderMiningRef() {
   const note = $('#mining-source');
   if (note && miningCatalogue.length) {
     note.textContent = miningCatalogue[0].source === 'install'
-      ? 'Read from your game install; chance is the group’s share of what spawns there. '
-      : 'From the community dataset; chance is the spawn group’s own probability. ';
+      ? `${tx('Read from your game install; chance is the group’s share of what spawns there.')} `
+      : `${tx('From the community dataset; chance is the spawn group’s own probability.')} `;
   }
 
   const rows = miningCatalogue.filter((s) =>
@@ -6322,14 +6382,14 @@ function renderMiningRef() {
 
   const counter = $('#mining-count');
   counter.textContent = rows.length > MINING_CAP
-    ? `Showing ${MINING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    ? tx('Showing {shown} of {total} matches — refine the search or filters.', { shown: MINING_CAP.toLocaleString(), total: rows.length.toLocaleString() })
     : '';
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', miningCatalogue.length
-      ? 'Nothing matches that filter.'
-      : gameDataExcuse() || 'No deposits were found in your game files.');
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No deposits were found in your game files.'));
     td.colSpan = 13;
     tr.append(td);
     body.append(tr);
@@ -6375,8 +6435,8 @@ function renderMiningRef() {
     const quality = el('td', spawn.quality?.local ? 'num' : 'num muted', qualityFloor(spawn));
     if (spawn.quality) {
       quality.title = `${spawn.quality.min}–${spawn.quality.max}, `
-        + `average ${Math.round(spawn.quality.mean)}, spread ${Math.round(spawn.quality.spread)}`
-        + (spawn.quality.local ? ' — this place differs from the usual' : '');
+        + tx('average {mean}, spread {spread}', { mean: Math.round(spawn.quality.mean), spread: Math.round(spawn.quality.spread) })
+        + (spawn.quality.local ? ` — ${tx('this place differs from the usual')}` : '');
     }
     tr.append(quality);
 
@@ -6385,7 +6445,7 @@ function renderMiningRef() {
     tr.append(el('td', 'num muted',
       spawn.respawnSeconds ? craftTime(spawn.respawnSeconds) : '—'));
 
-    tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] || spawn.kind));
+    tr.append(el('td', 'muted', KIND_LABELS[spawn.kind] ? tx(KIND_LABELS[spawn.kind]) : spawn.kind));
     tr.append(tdPlace(spawn.location));
     tr.append(el('td', 'muted', spawn.system ?? '—'));
     tr.append(el('td', 'muted', spawn.group));
@@ -6393,28 +6453,25 @@ function renderMiningRef() {
     // Kept as one number with the parts on the tooltip, because a miner asks
     // "how much of this place is Tin", not "what is the group probability".
     const find = el('td', 'num muted', percent(spawn.groupChance * spawn.share));
-    find.title = `${percent(spawn.groupChance)} of what spawns here is `
-      + `${spawn.group}, and ${percent(spawn.share)} of that is this`;
+    find.title = tx('{chance} of what spawns here is {group}, and {share} of that is this',
+      { chance: percent(spawn.groupChance), group: spawn.group, share: percent(spawn.share) });
     tr.append(find);
 
     const worth = oreWorth(spawn);
     const worthCell = el('td', worth ? 'num inward' : 'num muted', worth ? money(worth) : '—');
-    if (worth) {
-      worthCell.title = 'A SCU of this rock, at the middle of its ore range, '
-        + 'sold at the best price UEX knows';
-    }
+    if (worth) worthCell.title = tx('A SCU of this rock, at the middle of its ore range, sold at the best price UEX knows');
     tr.append(worthCell);
 
     const sell = el('td', spawn.bestSell ? 'num inward' : 'num muted',
       spawn.bestSell ? money(spawn.bestSell) : '—');
-    if (spawn.bestSellTerminal) sell.title = `at ${spawn.bestSellTerminal}`;
+    if (spawn.bestSellTerminal) sell.title = tx('at {place}', { place: spawn.bestSellTerminal });
     tr.append(sell);
 
     // Raw ore price and refinery yield: both from optional feeds, so both are
     // dashes until those are switched on.
     const raw = el('td', spawn.rawSell ? 'num' : 'num muted',
       spawn.rawSell ? money(spawn.rawSell) : '—');
-    if (spawn.rawTerminal) raw.title = `at ${spawn.rawTerminal}`;
+    if (spawn.rawTerminal) raw.title = tx('at {place}', { place: spawn.rawTerminal });
     tr.append(raw);
 
     // A station's bonus on the method's yield, signed - not the yield itself,
@@ -6422,7 +6479,7 @@ function renderMiningRef() {
     // nine percent of the ore coming back.
     const yieldCell = el('td', spawn.refineryYield ? 'num' : 'num muted',
       spawn.refineryYield ? `${spawn.refineryYield > 0 ? '+' : ''}${spawn.refineryYield.toFixed(0)}%` : '—');
-    if (spawn.refineryTerminal) yieldCell.title = `best station bonus, at ${spawn.refineryTerminal}`;
+    if (spawn.refineryTerminal) yieldCell.title = tx('best station bonus, at {place}', { place: spawn.refineryTerminal });
     tr.append(yieldCell);
 
     body.append(tr);
@@ -6483,12 +6540,14 @@ function renderArmouryBrief() {
   const pricedWeapons = weapons.filter((w) => w.market?.price).length;
 
   const write = (id, text) => { const node = $(id); if (node) node.textContent = text; };
-  write('#armoury-guns-brief-title', `${fmtInt(weaponFamilies)} weapon ${weaponFamilies === 1 ? 'family' : 'families'}`);
-  write('#armoury-guns-brief-detail', `${fmtInt(counts.weapons ?? weapons.length)} finishes read${armouryModel.itemPricesKnown ? ` · UEX prices ${fmtInt(pricedWeapons)}` : ' · UEX prices unavailable'}`);
-  write('#armoury-armour-brief-title', `${fmtInt(armourSets)} armour ${armourSets === 1 ? 'set' : 'sets'}`);
-  write('#armoury-armour-brief-detail', `${fmtInt(counts.armour ?? armour.length)} pieces read · compare protection and carry space`);
-  write('#armoury-kit-brief-title', `${fmtInt(attachments.length)} attachments`);
-  write('#armoury-kit-brief-detail', `${fmtInt(throwables.length)} grenades · ${fmtInt(knives.length)} knives`);
+  write('#armoury-guns-brief-title', txn(weaponFamilies, '{count} weapon family', '{count} weapon families', { count: fmtInt(weaponFamilies) }));
+  write('#armoury-guns-brief-detail', `${tx('{count} finishes read', { count: fmtInt(counts.weapons ?? weapons.length) })} · ${armouryModel.itemPricesKnown
+    ? tx('UEX prices {count}', { count: fmtInt(pricedWeapons) })
+    : tx('UEX prices unavailable')}`);
+  write('#armoury-armour-brief-title', txn(armourSets, '{count} armour set', '{count} armour sets', { count: fmtInt(armourSets) }));
+  write('#armoury-armour-brief-detail', tx('{count} pieces read · compare protection and carry space', { count: fmtInt(counts.armour ?? armour.length) }));
+  write('#armoury-kit-brief-title', tx('{count} attachments', { count: fmtInt(attachments.length) }));
+  write('#armoury-kit-brief-detail', tx('{grenades} grenades · {knives} knives', { grenades: fmtInt(throwables.length), knives: fmtInt(knives.length) }));
 }
 
 async function loadArmoury() {
@@ -6504,7 +6563,7 @@ async function loadArmoury() {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     return;
   }
@@ -6520,7 +6579,7 @@ async function loadArmoury() {
   if (kind) {
     const keep = kind.value;
     kind.textContent = '';
-    kind.append(new Option('Every kind', ''));
+    kind.append(new Option(tx('Every kind'), ''));
     for (const k of kinds) kind.append(new Option(k, k));
     kind.value = kinds.includes(keep) ? keep : '';
   }
@@ -6532,7 +6591,7 @@ async function loadArmoury() {
   if (slot) {
     const keep = slot.value;
     slot.textContent = '';
-    slot.append(new Option('Every slot', ''));
+    slot.append(new Option(tx('Every slot'), ''));
     for (const s of slots) slot.append(new Option(s, s));
     slot.value = slots.includes(keep) ? keep : '';
   }
@@ -6556,11 +6615,11 @@ function armouryEffectWords(e) {
   const words = [];
   const mul = (value, word, better) => {
     if (value == null || value === 1) return;
-    const span = el('span', `armoury-effect ${(better === 'low' ? value < 1 : better === 'high' ? value > 1 : true) ? 'gain' : 'cost'}`, `×${Math.round(value * 1000) / 1000} ${word}`);
+    const span = el('span', `armoury-effect ${(better === 'low' ? value < 1 : better === 'high' ? value > 1 : true) ? 'gain' : 'cost'}`, `×${Math.round(value * 1000) / 1000} ${tx(word)}`);
     words.push(span);
   };
-  if (e.zoom > 0) words.push(el('span', 'armoury-effect gain', `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''} zoom`));
-  if (e.zeroingMax > 0) words.push(el('span', 'armoury-effect', `zero to ${fmtInt(e.zeroingMax)} m by ${fmtInt(e.zeroingStep)}`));
+  if (e.zoom > 0) words.push(el('span', 'armoury-effect gain', `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''} ${tx('zoom')}`));
+  if (e.zeroingMax > 0) words.push(el('span', 'armoury-effect', tx('zero to {max} m by {step}', { max: fmtInt(e.zeroingMax), step: fmtInt(e.zeroingStep) })));
   mul(e.damage, 'damage', 'high');
   mul(e.fireRate, 'rate', 'high');
   mul(e.spread, 'spread', 'low');
@@ -6572,8 +6631,8 @@ function armouryEffectWords(e) {
   mul(e.chargeTime, 'charge time', 'low');
   mul(e.projectileSpeed, 'projectile speed', 'high');
   mul(e.zoomTime, 'aim-down time', 'low');
-  if (e.pellets) words.push(el('span', `armoury-effect ${e.pellets > 0 ? 'gain' : 'cost'}`, `${e.pellets > 0 ? '+' : ''}${e.pellets} pellets`));
-  if (e.burstShots) words.push(el('span', `armoury-effect ${e.burstShots > 0 ? 'gain' : 'cost'}`, `${e.burstShots > 0 ? '+' : ''}${e.burstShots} burst shots`));
+  if (e.pellets) words.push(el('span', `armoury-effect ${e.pellets > 0 ? 'gain' : 'cost'}`, tx('{count} pellets', { count: `${e.pellets > 0 ? '+' : ''}${e.pellets}` })));
+  if (e.burstShots) words.push(el('span', `armoury-effect ${e.burstShots > 0 ? 'gain' : 'cost'}`, tx('{count} burst shots', { count: `${e.burstShots > 0 ? '+' : ''}${e.burstShots}` })));
   return words;
 }
 
@@ -6585,7 +6644,7 @@ function armouryWhereCell(market) {
   const td = el('td', 'muted', armouryWhere(market));
   const others = (market?.shops || []).slice(1);
   if (others.length) {
-    td.title = `Also at ${others.map((s) => `${s.terminal}${s.place && !s.terminal.toLowerCase().includes(s.place.toLowerCase()) ? `, ${s.place}` : ''} · ${fmtInt(s.price)} aUEC`).join('\n')}`;
+    td.title = tx('Also at {places}', { places: others.map((s) => `${s.terminal}${s.place && !s.terminal.toLowerCase().includes(s.place.toLowerCase()) ? `, ${s.place}` : ''} · ${fmtInt(s.price)} aUEC`).join('\n') });
     td.classList.add('armoury-more');
   }
   return td;
@@ -6594,15 +6653,15 @@ function armouryWhereCell(market) {
 /** Every terminal UEX records for the item, cheapest first, or why there are none. */
 function armouryShopTable(market) {
   const wrap = el('div');
-  wrap.append(el('h4', null, `Sold at${market?.shops?.length ? ` (${market.shops.length})` : ''}`));
+  wrap.append(el('h4', null, `${tx('Sold at')}${market?.shops?.length ? ` (${market.shops.length})` : ''}`));
   if (!market?.shops?.length) {
-    wrap.append(el('p', 'muted small', armouryModel?.itemPricesKnown ? 'UEX records no terminal selling this.' : 'Prices and terminals need UEX, in Settings.'));
+    wrap.append(el('p', 'muted small', armouryModel?.itemPricesKnown ? tx('UEX records no terminal selling this.') : tx('Prices and terminals need UEX, in Settings.')));
     return wrap;
   }
   const table = el('table');
   const head = el('thead');
   const hr = el('tr');
-  for (const [label, cls] of [['Terminal', null], ['Place', null], ['System', null], ['Price', 'num']]) hr.append(el('th', cls, label));
+  for (const [label, cls] of [['Terminal', null], ['Place', null], ['System', null], ['Price', 'num']]) hr.append(el('th', cls, tx(label)));
   head.append(hr);
   table.append(head);
   const body = el('tbody');
@@ -6616,7 +6675,7 @@ function armouryShopTable(market) {
   }
   table.append(body);
   wrap.append(table);
-  wrap.append(el('p', 'muted small', 'UEX\'s price at each terminal, cheapest first; across the item\'s finishes where UEX files them under the same name.'));
+  wrap.append(el('p', 'muted small', tx('UEX\'s price at each terminal, cheapest first; across the item\'s finishes where UEX files them under the same name.')));
   return wrap;
 }
 
@@ -6625,19 +6684,32 @@ function armouryShopTable(market) {
  * picture, every figure the files give it, every terminal that sells it,
  * and its finishes - a click on a finish swaps the picture, as a gun's does.
  */
+/*
+ * The two sentences that name what a kit item is, one pair per noun: French
+ * agrees "seul" and "même" with the noun, so the noun cannot be slotted in.
+ */
+const KIT_NOUN_LINES = {
+  sight: ['The plain sight only.', 'A finish is the same sight in another colour: same figures, its own price.'],
+  barrel: ['The plain barrel only.', 'A finish is the same barrel in another colour: same figures, its own price.'],
+  piece: ['The plain piece only.', 'A finish is the same piece in another colour: same figures, its own price.'],
+  grenade: ['The plain grenade only.', 'A finish is the same grenade in another colour: same figures, its own price.'],
+  knife: ['The plain knife only.', 'A finish is the same knife in another colour: same figures, its own price.'],
+};
+
 function armouryKitDetail(item, noun, facts) {
+  const [plainOnly, sameFinish] = KIT_NOUN_LINES[noun] || KIT_NOUN_LINES.piece;
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', item.name));
-  inner.append(el('div', 'panel-sub', [item.family, item.kind, item.manufacturer || 'maker unnamed', item.class].filter(Boolean).join(' · ')));
+  inner.append(el('div', 'panel-sub', [item.family, item.kind, item.manufacturer || tx('maker unnamed'), item.class].filter(Boolean).join(' · ')));
   let picture = armouryPicture(item.uuid, item.name, item.pictured);
-  if (item.pictured) picture.append(el('span', 'muted small', "The game's own icon of it."));
+  if (item.pictured) picture.append(el('span', 'muted small', tx("The game's own icon of it.")));
   inner.append(picture);
 
-  inner.append(el('h4', null, 'From the files'));
+  inner.append(el('h4', null, tx('From the files')));
   const list = el('dl', 'armoury-facts');
   for (const [label, value] of facts) {
     if (value == null || value === '') continue;
-    list.append(el('dt', null, label));
+    list.append(el('dt', null, tx(label)));
     const dd = el('dd');
     if (Array.isArray(value)) for (const node of value) dd.append(node);
     else dd.textContent = String(value);
@@ -6647,19 +6719,19 @@ function armouryKitDetail(item, noun, facts) {
 
   inner.append(armouryShopTable(item.market));
 
-  inner.append(el('h4', null, `Finishes${item.finishes?.length ? ` (${item.finishes.length})` : ''}`));
-  if (!item.finishes?.length) inner.append(el('p', 'muted small', `The plain ${noun} only.`));
+  inner.append(el('h4', null, `${tx('Finishes')}${item.finishes?.length ? ` (${item.finishes.length})` : ''}`));
+  if (!item.finishes?.length) inner.append(el('p', 'muted small', tx(plainOnly)));
   else {
     const chips = el('div', 'armoury-finishes');
     for (const f of item.finishes) {
       const chip = el('span', 'armoury-finish clickable', f.name);
-      chip.title = 'Show this finish';
+      chip.title = tx('Show this finish');
       chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name, f.pictured); });
-      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : tx('no terminal recorded')));
       chips.append(chip);
     }
     inner.append(chips);
-    inner.append(el('p', 'muted small', `A finish is the same ${noun} in another colour: same figures, its own price.`));
+    inner.append(el('p', 'muted small', tx(sameFinish)));
   }
   return inner;
 }
@@ -6669,20 +6741,23 @@ function armouryAttachmentDetail(a) {
   // The zoom and the zeroing have lines of their own above the chips.
   const words = armouryEffectWords({ ...e, zoom: 0, secondZoom: 0, zeroingMax: 0 });
   return armouryKitDetail(a, a.kind === 'Sight' ? 'sight' : a.kind === 'Barrel' ? 'barrel' : 'piece', [
-    ['Slot', `${a.kind}, size ${a.size}`],
-    ['Zoom', e.zoom > 1 ? `×${e.zoom}${e.secondZoom > 0 ? `, second setting ×${e.secondZoom}` : ''}` : e.zoom === 1 ? 'none: a 1x sight' : null],
-    ['Zeroes to', e.zeroingMax > 0 ? `${fmtInt(e.zeroingMax)} m, in steps of ${fmtInt(e.zeroingStep)}` : null],
-    ['Does', words.length ? words : 'nothing the files put a number on'],
+    ['Slot', tx('{kind}, size {size}', { kind: a.kind, size: a.size })],
+    ['Zoom', e.zoom > 1 ? `×${e.zoom}${e.secondZoom > 0 ? `, ${tx('second setting ×{zoom}', { zoom: e.secondZoom })}` : ''}` : e.zoom === 1 ? tx('none: a 1x sight') : null],
+    ['Zeroes to', e.zeroingMax > 0 ? tx('{max} m, in steps of {step}', { max: fmtInt(e.zeroingMax), step: fmtInt(e.zeroingStep) }) : null],
+    ['Does', words.length ? words : tx('nothing the files put a number on')],
     ['Mass', a.mass ? `${a.mass} kg` : null],
   ]);
 }
 
 function armouryGrenadeDetail(g) {
   return armouryKitDetail(g, 'grenade', [
-    ['Sets off', g.trigger === 'timer' ? `a ${g.fuseSeconds} s fuse` : g.trigger === 'impact' ? 'on impact' : null],
-    ['Blast', g.blast ? `${armouryHit(g.blast.damage)}, full to ${g.blast.radius} m, none past ${g.blast.outerRadius} m` : 'none'],
-    ['Pressure', g.pressure > 0 ? `${fmtInt(g.pressure)}, the game\'s own unit for what it throws` : null],
-    ['Leaves', g.hazard ? `${armouryHit(g.hazard.perHit)} every ${g.hazard.periodSeconds} s within ${g.hazard.radius} m, for as long as it lasts - the files put no number on that` : 'nothing'],
+    ['Sets off', g.trigger === 'timer' ? tx('a {seconds} s fuse', { seconds: g.fuseSeconds }) : g.trigger === 'impact' ? tx('on impact') : null],
+    ['Blast', g.blast ? tx('{hit}, full to {inner} m, none past {outer} m', { hit: armouryHit(g.blast.damage), inner: g.blast.radius, outer: g.blast.outerRadius }) : tx('none')],
+    ['Pressure', g.pressure > 0 ? tx('{pressure}, the game\'s own unit for what it throws', { pressure: fmtInt(g.pressure) }) : null],
+    ['Leaves', g.hazard
+      ? tx('{hit} every {seconds} s within {radius} m, for as long as it lasts - the files put no number on that',
+        { hit: armouryHit(g.hazard.perHit), seconds: g.hazard.periodSeconds, radius: g.hazard.radius })
+      : tx('nothing')],
     ['Mass', g.mass ? `${g.mass} kg` : null],
   ]);
 }
@@ -6691,8 +6766,8 @@ function armouryKnifeDetail(k) {
   return armouryKitDetail(k, 'knife', [
     ['Slash', armouryHit(k.slash)],
     ['Stab', armouryHit(k.stab)],
-    ['Impulse', k.impulse ? `${k.impulse}, the game\'s own unit for the push a hit gives` : null],
-    ['Read from', `${k.config}, the melee table the knife points at`],
+    ['Impulse', k.impulse ? tx('{impulse}, the game\'s own unit for the push a hit gives', { impulse: k.impulse }) : null],
+    ['Read from', tx('{table}, the melee table the knife points at', { table: k.config })],
     ['Mass', k.mass ? `${k.mass} kg` : null],
   ]);
 }
@@ -6747,8 +6822,8 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
   const count = $('#armoury-kit-count');
   if (count) {
     const c = armouryModel.counts || {};
-    count.textContent = `${shown.length} of ${all.length} attachments; the install describes ${c.attachments ?? '?'} counting every finish. `
-      + (armouryModel.itemPricesKnown ? `UEX prices ${all.filter((a) => a.market?.price).length} of them.` : 'Prices need UEX, in Settings.');
+    count.textContent = `${tx('{shown} of {total} attachments; the install describes {finishes} counting every finish.', { shown: shown.length, total: all.length, finishes: c.attachments ?? '?' })} `
+      + (armouryModel.itemPricesKnown ? tx('UEX prices {count} of them.', { count: all.filter((a) => a.market?.price).length }) : tx('Prices need UEX, in Settings.'));
   }
 
   // Sights: the zoom, the zeroing and the aim time are columns, and only
@@ -6759,14 +6834,14 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
     sBody.textContent = '';
     const sightCount = $('#armoury-sights-count');
     if (sightCount) sightCount.textContent = `· ${sights.length}`;
-    if (!sights.length) sBody.append(armouryEmptyRow(q ? 'No sight matches.' : 'The install describes no sight.', 9));
+    if (!sights.length) sBody.append(armouryEmptyRow(q ? tx('No sight matches.') : tx('The install describes no sight.'), 9));
     for (const a of sights) {
       const e = a.effect || {};
       const tr = el('tr');
       tr.append(named(a, [a.family, a.manufacturer].filter(Boolean).join(' · ')));
       tr.append(el('td', 'num', String(a.size)));
       tr.append(el('td', 'num', e.zoom > 0 ? `×${e.zoom}${e.secondZoom > 0 ? ` / ×${e.secondZoom}` : ''}` : '—'));
-      tr.append(el('td', 'num', e.zeroingMax > 0 ? `${fmtInt(e.zeroingMax)} m by ${fmtInt(e.zeroingStep)}` : '—'));
+      tr.append(el('td', 'num', e.zeroingMax > 0 ? tx('{max} m by {step}', { max: fmtInt(e.zeroingMax), step: fmtInt(e.zeroingStep) }) : '—'));
       const aim = el('td', 'num', e.zoomTime && e.zoomTime !== 1 ? `×${e.zoomTime}` : '—');
       if (e.zoomTime && e.zoomTime !== 1) aim.classList.add(e.zoomTime < 1 ? 'armoury-gain' : 'armoury-cost');
       tr.append(aim);
@@ -6787,13 +6862,17 @@ function renderArmouryAttachments(q, matches, priceCells, open, named, chips) {
     const rows = shown.filter((a) => a.kind === kind);
     const counter = $(`${id}-count`);
     if (counter) counter.textContent = `· ${rows.length}`;
-    if (!rows.length) body.append(armouryEmptyRow(q ? `No ${noun} matches.` : `The install describes no ${noun} for this slot.`, 7));
+    // One sentence per noun, not the noun slotted in: French agrees with it.
+    const empty = noun === 'barrel'
+      ? (q ? tx('No barrel matches.') : tx('The install describes no barrel for this slot.'))
+      : (q ? tx('No piece matches.') : tx('The install describes no piece for this slot.'));
+    if (!rows.length) body.append(armouryEmptyRow(empty, 7));
     for (const a of rows) {
       const tr = el('tr');
       tr.append(named(a, a.manufacturer));
       tr.append(el('td', null, a.family));
       tr.append(el('td', 'num', String(a.size)));
-      tr.append(chips(el('td'), armouryEffectWords(a.effect), 'nothing the files put a number on'));
+      tr.append(chips(el('td'), armouryEffectWords(a.effect), tx('nothing the files put a number on')));
       tr.append(el('td', 'num', a.finishes?.length ? String(a.finishes.length) : '—'));
       priceCells(tr, a.market);
       const expansion = open(tr, `a:${a.class}`, () => armouryAttachmentDetail(a), 7);
@@ -6818,17 +6897,17 @@ function renderArmouryGrenades(matches, priceCells, open, named) {
   body.textContent = '';
   const q = ($('#armoury-search')?.value || '').trim();
   const grenades = (armouryModel.throwables || []).filter((g) => matches(`${g.name} ${g.manufacturer}`));
-  if (!grenades.length) body.append(armouryEmptyRow(q ? 'No grenade matches.' : 'The install describes no grenade with a blast.', 9));
+  if (!grenades.length) body.append(armouryEmptyRow(q ? tx('No grenade matches.') : tx('The install describes no grenade with a blast.'), 9));
   for (const g of grenades) {
     const tr = el('tr');
     tr.append(named(g, g.manufacturer));
-    tr.append(el('td', null, g.trigger === 'timer' ? `${g.fuseSeconds} s fuse` : g.trigger === 'impact' ? 'impact' : '—'));
-    tr.append(el('td', null, g.blast ? armouryHit(g.blast.damage) : 'none'));
+    tr.append(el('td', null, g.trigger === 'timer' ? tx('{seconds} s fuse', { seconds: g.fuseSeconds }) : g.trigger === 'impact' ? tx('impact') : '—'));
+    tr.append(el('td', null, g.blast ? armouryHit(g.blast.damage) : tx('none')));
     tr.append(el('td', 'num', g.blast ? `${g.blast.radius}–${g.blast.outerRadius} m` : '—'));
     tr.append(el('td', 'num', g.pressure > 0 ? fmtInt(g.pressure) : '—'));
     tr.append(el('td', null, g.hazard
-      ? `${armouryHit(g.hazard.perHit)} every ${g.hazard.periodSeconds} s within ${g.hazard.radius} m`
-      : 'nothing'));
+      ? tx('{hit} every {seconds} s within {radius} m', { hit: armouryHit(g.hazard.perHit), seconds: g.hazard.periodSeconds, radius: g.hazard.radius })
+      : tx('nothing')));
     tr.append(el('td', 'num', g.mass ? String(g.mass) : '—'));
     priceCells(tr, g.market);
     const expansion = open(tr, `g:${g.class}`, () => armouryGrenadeDetail(g), 9);
@@ -6843,17 +6922,18 @@ function renderArmouryKnives(matches, priceCells, open, named) {
   const note = $('#armoury-knife-note');
   if (note) {
     const first = all[0];
-    note.textContent = !all.length ? 'The install describes no knife.'
+    note.textContent = !all.length ? tx('The install describes no knife.')
       : armouryModel.meleeConfigs === 1 && first
-        ? `Every knife the install sells reads from one melee table, ${first.config}: ${armouryHit(first.slash)} a slash, ${armouryHit(first.stab)} a stab. They differ in look, maker and price, and in nothing the files put a number on.`
-        : `The knives read from ${armouryModel.meleeConfigs} melee tables, so their figures differ; each row is its own.`;
+        ? tx('Every knife the install sells reads from one melee table, {table}: {slash} a slash, {stab} a stab. They differ in look, maker and price, and in nothing the files put a number on.',
+          { table: first.config, slash: armouryHit(first.slash), stab: armouryHit(first.stab) })
+        : tx('The knives read from {count} melee tables, so their figures differ; each row is its own.', { count: armouryModel.meleeConfigs });
   }
   const body = $('#armoury-knives tbody');
   if (!body) return;
   body.textContent = '';
   const q = ($('#armoury-search')?.value || '').trim();
   const knives = all.filter((k) => matches(`${k.name} ${k.manufacturer}`));
-  if (!knives.length && q) body.append(armouryEmptyRow('No knife matches.', 8));
+  if (!knives.length && q) body.append(armouryEmptyRow(tx('No knife matches.'), 8));
   for (const k of knives) {
     const tr = el('tr');
     tr.append(named(k, k.manufacturer));
@@ -6891,7 +6971,7 @@ function armouryPrice(market) {
 
 function armouryWhere(market) {
   const best = market?.shops?.[0];
-  if (!best) return armouryModel?.itemPricesKnown ? 'no terminal recorded' : 'prices need UEX (Settings)';
+  if (!best) return armouryModel?.itemPricesKnown ? tx('no terminal recorded') : tx('prices need UEX (Settings)');
   // "Guns Checkmate, Checkmate" says the place twice; the terminal name
   // carries it, so the place is added only when it adds something.
   const place = best.place && !best.terminal.toLowerCase().includes(best.place.toLowerCase()) ? `, ${best.place}` : '';
@@ -6903,7 +6983,7 @@ function armouryHit(d) {
   if (!d) return '—';
   const parts = [
     ['physical', 'ballistic'], ['energy', 'energy'], ['distortion', 'distortion'], ['thermal', 'thermal'], ['biochemical', 'biochemical'], ['stun', 'stun'],
-  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${word}`);
+  ].filter(([k]) => d[k] > 0).map(([k, word]) => `${fmtDamage(d[k])} ${tx(word)}`);
   return parts.length ? parts.join(' + ') : '—';
 }
 
@@ -6916,10 +6996,13 @@ function fmtDamage(n) {
 function armouryMode(m) {
   let text;
   if (m.kind === 'Beam') {
-    const reach = m.beamFullRange >= m.beamZeroRange ? `to ${fmtInt(m.beamZeroRange)} m` : `to ${fmtInt(m.beamFullRange)} m, none past ${fmtInt(m.beamZeroRange)} m`;
+    const reach = m.beamFullRange >= m.beamZeroRange
+      ? tx('to {range} m', { range: fmtInt(m.beamZeroRange) })
+      : tx('to {full} m, none past {zero} m', { full: fmtInt(m.beamFullRange), zero: fmtInt(m.beamZeroRange) });
     text = `${m.name} ${fmtDamage(m.beamDamagePerSecond?.total)}/s ${reach}`;
   } else if (m.kind === 'Charge') {
-    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` in ${m.chargePellets}` : ''} after ${m.chargeSeconds} s${m.chargeAmmoMultiplier > 1 ? `, ${m.chargeAmmoMultiplier} rounds` : ''}`;
+    text = `${m.name} ×${m.chargeDamageMultiplier}${m.chargePellets > 0 ? ` ${tx('in {count}', { count: m.chargePellets })}` : ''} `
+      + `${tx('after {seconds} s', { seconds: m.chargeSeconds })}${m.chargeAmmoMultiplier > 1 ? `, ${tx('{count} rounds', { count: m.chargeAmmoMultiplier })}` : ''}`;
   } else if (m.kind === 'Burst') {
     text = `${m.name} ${m.burstShots} × ${fmtInt(m.roundsPerMinute)} rpm`;
   } else {
@@ -6945,12 +7028,12 @@ function armouryPicture(uuid, name, fromInstall) {
   const frame = el('div', 'armoury-picture');
   const note = el('span', 'muted small');
   if (!armouryModel?.picturesKnown && !fromInstall) {
-    note.textContent = 'Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).';
+    note.textContent = tx('Pictures come from the Star Citizen Wiki once the community dataset is on (Settings).');
     frame.append(note);
     return frame;
   }
   if (!uuid) {
-    note.textContent = 'No id to ask the wiki with.';
+    note.textContent = tx('No id to ask the wiki with.');
     frame.append(note);
     return frame;
   }
@@ -6960,7 +7043,7 @@ function armouryPicture(uuid, name, fromInstall) {
   img.src = `/api/armoury/picture/${encodeURIComponent(uuid)}`;
   img.addEventListener('error', () => {
     img.remove();
-    note.textContent = 'The wiki has no picture of this one.';
+    note.textContent = tx('The wiki has no picture of this one.');
     frame.append(note);
   });
   frame.append(img);
@@ -7016,8 +7099,10 @@ function renderArmouryGuns() {
   const count = $('#armoury-gun-count');
   if (count) {
     const c = armouryModel.counts || {};
-    count.textContent = `${rows.length} of ${c.plain ?? armouryModel.weapons.length} guns; the install describes ${c.weapons ?? '?'} counting every finish. `
-      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.weapons.filter((w) => w.market?.price).length} of them.` : 'Prices need UEX, in Settings.'}`;
+    count.textContent = `${tx('{shown} of {total} guns; the install describes {finishes} counting every finish.', { shown: rows.length, total: c.plain ?? armouryModel.weapons.length, finishes: c.weapons ?? '?' })} `
+      + (armouryModel.itemPricesKnown
+        ? tx('UEX prices {count} of them.', { count: armouryModel.weapons.filter((w) => w.market?.price).length })
+        : tx('Prices need UEX, in Settings.'));
   }
   for (const w of rows) {
     const best = armouryBestMode(w);
@@ -7028,15 +7113,15 @@ function renderArmouryGuns() {
     if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
     tr.append(name);
     const kind = el('td', null, w.kind);
-    kind.append(el('div', 'armoury-kind', `${w.weight} holster`));
+    kind.append(el('div', 'armoury-kind', armouryHolster(w.weight)));
     tr.append(kind);
     tr.append(el('td', 'num', w.damage?.total > 0
-      ? armouryHit(w.damage) : (w.explosion ? `blast ${armouryHit(w.explosion.damage)}` : '—')));
+      ? armouryHit(w.damage) : (w.explosion ? tx('blast {hit}', { hit: armouryHit(w.explosion.damage) }) : '—')));
     const modes = el('td');
     const list = el('div', 'armoury-modes');
     for (const m of w.modes) {
       const line = el('span', null, armouryMode(m));
-      if (m.condition) line.append(el('span', 'armoury-when', ` when ${m.condition}`));
+      if (m.condition) line.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: serverText(m.condition) })}`));
       list.append(line);
     }
     modes.append(list);
@@ -7044,7 +7129,7 @@ function renderArmouryGuns() {
     tr.append(el('td', 'num', best ? fmtInt(best.damagePerSecond) : '—'));
     tr.append(el('td', 'num', w.magazine > 0 ? String(w.magazine) : '—'));
     tr.append(el('td', 'num', best && w.magazine > 0 ? fmtInt(best.damagePerMagazine) : '—'));
-    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : 'none'));
+    tr.append(el('td', 'num', w.dropStart > 0 ? `${fmtInt(w.dropStart)} m → ${fmtDamage(w.dropFloor)}` : tx('none')));
     tr.append(el('td', 'num', armouryPrice(w.market)));
     tr.append(el('td', 'muted', armouryWhere(w.market)));
     tr.addEventListener('click', () => {
@@ -7056,28 +7141,36 @@ function renderArmouryGuns() {
   }
 }
 
+/**
+ * The holster a gun takes, as one phrase per size: French puts the size
+ * word on either side of the noun and agrees it, so a "{weight} holster"
+ * template cannot carry it. An unknown size keeps the game's word.
+ */
+const ARMOURY_HOLSTERS = { Small: 'Small holster', Medium: 'Medium holster', Large: 'Large holster' };
+const armouryHolster = (weight) => (ARMOURY_HOLSTERS[weight] ? tx(ARMOURY_HOLSTERS[weight]) : tx('{weight} holster', { weight }));
+
 /** Every mode's figures for one gun, its drop curve, its blast, and every finish with a price. */
 function renderArmouryGunDetail(w) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', w.name));
-  inner.append(el('div', 'panel-sub', `${w.kind} · ${w.weight} holster · ${w.manufacturer || 'maker unnamed'} · ${w.class}`));
+  inner.append(el('div', 'panel-sub', `${w.kind} · ${armouryHolster(w.weight)} · ${w.manufacturer || tx('maker unnamed')} · ${w.class}`));
   let picture = armouryPicture(w.uuid, w.name);
   inner.append(picture);
 
-  inner.append(el('h4', null, 'Fire modes, trigger held'));
+  inner.append(el('h4', null, tx('Fire modes, trigger held')));
   const table = el('table');
   const head = el('thead');
   const hr = el('tr');
   for (const [label, cls] of [['Mode', null], ['Per shot', 'num'], ['Cyclic', 'num'], ['Sustained', 'num'], ['DPS', 'num'], ['Per mag', 'num'], ['Empties in', 'num'], ['Heat', 'num']])
-    hr.append(el('th', cls, label));
+    hr.append(el('th', cls, tx(label)));
   head.append(hr);
   table.append(head);
   const tb = el('tbody');
   for (const m of w.modes) {
     const tr = el('tr');
     const label = el('td', null, armouryMode(m));
-    if (m.condition) label.append(el('span', 'armoury-when', ` when ${m.condition}`));
-    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ' · the magazine’s second load'));
+    if (m.condition) label.append(el('span', 'armoury-when', ` ${tx('when {condition}', { condition: serverText(m.condition) })}`));
+    if (m.secondaryAmmo) label.append(el('span', 'armoury-when', ` · ${tx('the magazine’s second load')}`));
     tr.append(label);
     tr.append(el('td', 'num', m.kind === 'Beam' ? `${fmtDamage(m.damagePerSecond)}/s` : `${fmtDamage(m.damagePerShot)} (${armouryHit(m.hit)}${m.pellets > 1 || m.chargePellets > 0 ? ` × ${m.chargePellets > 0 && m.kind === 'Charge' ? m.chargePellets : m.pellets}` : ''}${m.kind === 'Charge' ? ` × ${m.chargeDamageMultiplier}` : ''})`));
     tr.append(el('td', 'num', m.roundsPerMinute > 0 ? `${fmtInt(m.roundsPerMinute)} rpm` : '—'));
@@ -7092,31 +7185,39 @@ function renderArmouryGunDetail(w) {
   inner.append(table);
 
   const notes = [];
-  notes.push(`Projectile ${fmtInt(w.projectileSpeed)} m/s for ${w.projectileLifetime} s (${fmtInt(w.projectileSpeed * w.projectileLifetime)} m before it is gone).`);
-  if (w.dropStart > 0) notes.push(`Damage holds to ${fmtInt(w.dropStart)} m, then loses ${w.dropPerMetre} a metre down to ${fmtDamage(w.dropFloor)} at ${fmtInt(w.floorAt)} m.`);
-  else notes.push('No damage drop with distance.');
-  if (w.explosion) notes.push(`On arrival: ${armouryHit(w.explosion.damage)} over ${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''} m.`);
-  if (w.magazine > 0) notes.push(`Magazine ${w.magazine} rounds (${w.magazineClass}).`);
-  else notes.push('The files give this magazine no round count.');
+  notes.push(tx('Projectile {speed} m/s for {seconds} s ({range} m before it is gone).',
+    { speed: fmtInt(w.projectileSpeed), seconds: w.projectileLifetime, range: fmtInt(w.projectileSpeed * w.projectileLifetime) }));
+  if (w.dropStart > 0) {
+    notes.push(tx('Damage holds to {start} m, then loses {loss} a metre down to {floor} at {at} m.',
+      { start: fmtInt(w.dropStart), loss: w.dropPerMetre, floor: fmtDamage(w.dropFloor), at: fmtInt(w.floorAt) }));
+  } else notes.push(tx('No damage drop with distance.'));
+  if (w.explosion) {
+    notes.push(tx('On arrival: {hit} over {radius} m.', {
+      hit: armouryHit(w.explosion.damage),
+      radius: `${w.explosion.radius}${w.explosion.outerRadius > w.explosion.radius ? `–${w.explosion.outerRadius}` : ''}`,
+    }));
+  }
+  if (w.magazine > 0) notes.push(tx('Magazine {rounds} rounds ({magazine}).', { rounds: w.magazine, magazine: w.magazineClass }));
+  else notes.push(tx('The files give this magazine no round count.'));
   notes.push(`${Math.round(w.mass * 100) / 100} kg.`);
   inner.append(el('p', 'muted small', notes.join(' ')));
 
   inner.append(armouryShopTable(w.market));
 
-  inner.append(el('h4', null, `Finishes${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
-  if (!w.finishes?.length) inner.append(el('p', 'muted small', 'The plain gun only.'));
+  inner.append(el('h4', null, `${tx('Finishes')}${w.finishes?.length ? ` (${w.finishes.length})` : ''}`));
+  if (!w.finishes?.length) inner.append(el('p', 'muted small', tx('The plain gun only.')));
   else {
     const list = el('div', 'armoury-finishes');
     for (const f of w.finishes) {
       const chip = el('span', 'armoury-finish', f.name);
       chip.classList.add('clickable');
-      chip.title = 'Show this finish';
+      chip.title = tx('Show this finish');
       chip.addEventListener('click', () => { picture = armouryShowPicture(picture, f.uuid, f.name); });
-      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : 'no terminal recorded'));
+      chip.append(el('span', 'muted', f.market?.price ? `${fmtInt(f.market.price)} aUEC · ${armouryWhere(f.market)}` : tx('no terminal recorded')));
       list.append(chip);
     }
     inner.append(list);
-    inner.append(el('p', 'muted small', 'A finish is the same gun in another colour: same figures, its own price.'));
+    inner.append(el('p', 'muted small', tx('A finish is the same gun in another colour: same figures, its own price.')));
   }
   return inner;
 }
@@ -7154,7 +7255,7 @@ function armouryArmourFiltered() {
 /** "70%" - what a hit leaves after the class's multiplier; the same for every piece of the class. */
 function armouryTakes(r) {
   if (!r) return '—';
-  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% energy` : ''}`;
+  return `${Math.round(r.physical * 100)}%${Math.abs(r.energy - r.physical) > 0.001 ? ` / ${Math.round(r.energy * 100)}% ${tx('energy')}` : ''}`;
 }
 
 function renderArmouryArmour() {
@@ -7165,8 +7266,10 @@ function renderArmouryArmour() {
   const count = $('#armoury-armour-count');
   if (count) {
     const c = armouryModel.counts || {};
-    count.textContent = `${rows.length} of ${c.sets ?? armouryModel.armour.length} sets, from ${c.armour ?? '?'} pieces in the install. `
-      + `${armouryModel.itemPricesKnown ? `UEX prices ${armouryModel.armour.filter((a) => a.market?.price).length} of the sets.` : 'Prices need UEX, in Settings.'}`;
+    count.textContent = `${tx('{shown} of {total} sets, from {pieces} pieces in the install.', { shown: rows.length, total: c.sets ?? armouryModel.armour.length, pieces: c.armour ?? '?' })} `
+      + (armouryModel.itemPricesKnown
+        ? tx('UEX prices {count} of the sets.', { count: armouryModel.armour.filter((a) => a.market?.price).length })
+        : tx('Prices need UEX, in Settings.'));
   }
   const note = $('#armoury-armour-note');
   if (note) {
@@ -7176,8 +7279,11 @@ function renderArmouryArmour() {
     for (const a of armouryModel.armour) if (a.resistances) macros.set(a.resistances.macro, a.resistances);
     const light = macros.get('LightArmor'), medium = macros.get('MediumArmor'), heavy = macros.get('HeavyArmor');
     note.textContent = light && medium && heavy
-      ? `Resistance is by class, not by piece: every light piece lets ${Math.round(light.physical * 100)}% of a hit through, every medium ${Math.round(medium.physical * 100)}%, every heavy ${Math.round(heavy.physical * 100)}% (stun ${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}%). What differs between two pieces of a class is the rest of the row.`
-      : 'Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.';
+      ? tx('Resistance is by class, not by piece: every light piece lets {light}% of a hit through, every medium {medium}%, every heavy {heavy}% (stun {stun}%). What differs between two pieces of a class is the rest of the row.', {
+        light: Math.round(light.physical * 100), medium: Math.round(medium.physical * 100), heavy: Math.round(heavy.physical * 100),
+        stun: `${Math.round(light.stun * 100)} / ${Math.round(medium.stun * 100)} / ${Math.round(heavy.stun * 100)}`,
+      })
+      : tx('Resistance is by class, not by piece; what differs between two pieces of a class is the rest of the row.');
   }
   for (const a of rows) {
     const tr = el('tr');
@@ -7188,10 +7294,10 @@ function renderArmouryArmour() {
     if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
     tr.append(name);
     tr.append(el('td', null, a.slot));
-    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? 'Flight suit' : '—')));
+    tr.append(el('td', null, a.weight || (a.resistances?.macro === 'CombatFlightsuitArmor' ? tx('Flight suit') : '—')));
     tr.append(el('td', 'num', armouryTakes(a.resistances)));
     tr.append(el('td', 'num', a.resistances ? `${Math.round(a.resistances.stun * 100)}%` : '—'));
-    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? `${fmtInt(a.temperatureMin)} to ${fmtInt(a.temperatureMax)} °C` : '—'));
+    tr.append(el('td', 'num', a.temperatureMin || a.temperatureMax ? tx('{min} to {max} °C', { min: fmtInt(a.temperatureMin), max: fmtInt(a.temperatureMax) }) : '—'));
     tr.append(el('td', 'num', a.radiationCapacity > 0 ? `${fmtInt(a.radiationCapacity)} · ${a.radiationDissipation}/s` : '—'));
     tr.append(el('td', 'num', a.capacityMicroScu > 0 ? `${fmtInt(a.capacityMicroScu / 1000)} mSCU` : '—'));
     tr.append(el('td', 'num', a.emSignature > 0 || a.irSignature > 0 ? `${a.emSignature}${a.irSignature > 0 ? ` · IR ${a.irSignature}` : ''}` : '0'));
@@ -7212,28 +7318,35 @@ function renderArmouryArmour() {
 function renderArmouryArmourDetail(a) {
   const inner = el('div', 'armoury-detail');
   inner.append(el('div', 'panel-title', `${a.family} · ${a.slot}`));
-  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || 'maker unnamed'}`));
+  inner.append(el('div', 'panel-sub', `${a.kind || a.slot}${a.weight ? ` · ${a.weight}` : ''} · ${a.manufacturer || tx('maker unnamed')}`));
   let picture = armouryPicture(a.pieces?.[0]?.uuid, a.pieces?.[0]?.name || a.name);
   inner.append(picture);
 
   const facts = [];
+  const pct = (v) => Math.round(v * 100);
   if (a.resistances) {
     const r = a.resistances;
-    facts.push(`Takes ${Math.round(r.physical * 100)}% of ballistic, ${Math.round(r.energy * 100)}% of energy, ${Math.round(r.distortion * 100)}% of distortion, ${Math.round(r.thermal * 100)}% of thermal, ${Math.round(r.biochemical * 100)}% of biochemical and ${Math.round(r.stun * 100)}% of stun damage, ${Math.round(r.impact * 100)}% of an impact's force - the ${r.macro} table, shared by every piece that reads it.`);
-  } else facts.push('No resistance block: it stops nothing.');
-  if (a.protects?.length) facts.push(`Covers ${a.protects.join(', ')}.`);
-  if (a.gForceResistance) facts.push(`G tolerance ${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}.`);
-  if (a.motionPenalty > 0 || a.viewPenalty > 0) facts.push(`Restriction penalty ${Math.round(a.motionPenalty * 100)}% movement, ${Math.round(a.viewPenalty * 100)}% view - the game's own figure; what puts the piece into that state is not read.`);
+    facts.push(tx('Takes {physical}% of ballistic, {energy}% of energy, {distortion}% of distortion, {thermal}% of thermal, {biochemical}% of biochemical and {stun}% of stun damage, {impact}% of an impact\'s force - the {table} table, shared by every piece that reads it.', {
+      physical: pct(r.physical), energy: pct(r.energy), distortion: pct(r.distortion), thermal: pct(r.thermal),
+      biochemical: pct(r.biochemical), stun: pct(r.stun), impact: pct(r.impact), table: r.macro,
+    }));
+  } else facts.push(tx('No resistance block: it stops nothing.'));
+  if (a.protects?.length) facts.push(tx('Covers {parts}.', { parts: a.protects.join(', ') }));
+  if (a.gForceResistance) facts.push(tx('G tolerance {value}.', { value: `${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}` }));
+  if (a.motionPenalty > 0 || a.viewPenalty > 0) {
+    facts.push(tx('Restriction penalty {movement}% movement, {view}% view - the game\'s own figure; what puts the piece into that state is not read.',
+      { movement: pct(a.motionPenalty), view: pct(a.viewPenalty) }));
+  }
   inner.append(el('p', 'muted small', facts.join(' ')));
 
-  inner.append(el('h4', null, `Colours and editions (${a.pieces?.length || 0})`));
+  inner.append(el('h4', null, tx('Colours and editions ({count})', { count: a.pieces?.length || 0 })));
   const list = el('div', 'armoury-finishes');
   for (const p of a.pieces || []) {
     const chip = el('span', 'armoury-finish', p.name);
     chip.classList.add('clickable');
-    chip.title = 'Show this colour';
+    chip.title = tx('Show this colour');
     chip.addEventListener('click', () => { picture = armouryShowPicture(picture, p.uuid, p.name); });
-    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : 'no terminal recorded'));
+    chip.append(el('span', 'muted', p.market?.price ? `${fmtInt(p.market.price)} aUEC · ${armouryWhere(p.market)}` : tx('no terminal recorded')));
     list.append(chip);
   }
   inner.append(list);
@@ -7263,7 +7376,7 @@ async function loadCraftingRef() {
   const previous = select.value;
 
   select.textContent = '';
-  select.append(new Option('All types', ''));
+  select.append(new Option(tx('All types'), ''));
   for (const type of types) select.append(new Option(prettyType(type), type));
   if (types.includes(previous)) select.value = previous;
 
@@ -7292,8 +7405,8 @@ function renderCraftingRef() {
   const note = $('#crafting-source');
   if (note && craftingCatalogue.length) {
     note.textContent = craftingCatalogue[0].source === 'install'
-      ? 'Read from your game install. '
-      : 'From the community dataset. ';
+      ? `${tx('Read from your game install.')} `
+      : `${tx('From the community dataset.')} `;
   }
 
   const term = ($('#crafting-search').value || '').trim().toLowerCase();
@@ -7314,14 +7427,14 @@ function renderCraftingRef() {
 
   const counter = $('#crafting-count');
   counter.textContent = rows.length > CRAFTING_CAP
-    ? `Showing ${CRAFTING_CAP.toLocaleString()} of ${rows.length.toLocaleString()} matches — refine the search or filters.`
+    ? tx('Showing {shown} of {total} matches — refine the search or filters.', { shown: CRAFTING_CAP.toLocaleString(), total: rows.length.toLocaleString() })
     : '';
 
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', craftingCatalogue.length
-      ? 'Nothing matches that filter.'
-      : gameDataExcuse() || 'No recipes were found in your game files.');
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No recipes were found in your game files.'));
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -7338,37 +7451,37 @@ function renderCraftingRef() {
     makes.append(el('span', null, bp.output));
 
     if (bp.owned) {
-      const badge = el('span', 'job-kind owned', 'yours');
-      badge.title = `Received ${relative(bp.receivedAt)}`;
+      const badge = el('span', 'job-kind owned', tx('yours'));
+      badge.title = tx('Received {when}', { when: relative(bp.receivedAt) });
       makes.append(badge);
     }
     tr.append(makes);
     tr.append(el('td', 'muted', prettyType(bp.type)));
     tr.append(el('td', 'num', gradeLetter(bp.grade)));
     tr.append(el('td', 'num muted', craftTime(bp.craftSeconds)));
-    tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.join(', ') : '—'));
+    tr.append(el('td', 'muted materials', bp.materials.length ? bp.materials.map(serverText).join(', ') : '—'));
 
     // How you get the blueprint; the pool names ride the tooltip.
     const how = el('td', 'muted', bp.default
-      ? 'Known by default'
+      ? tx('Known by default')
       : bp.rewardPools.length
-        ? `${bp.rewardPools.length} reward pool${bp.rewardPools.length === 1 ? '' : 's'}`
+        ? txn(bp.rewardPools.length, '{count} reward pool', '{count} reward pools')
         : '—');
     if (bp.rewardPools.length) how.title = bp.rewardPools.join('\n');
     tr.append(how);
 
     tr.append(el('td', bp.shopPrice ? 'num' : 'num muted',
-      bp.shopPrice ? money(bp.shopPrice) : 'not sold'));
+      bp.shopPrice ? money(bp.shopPrice) : tx('not sold')));
 
     // Turning a recipe into a job is the whole point of having both pages.
     const plan = el('td', 'num');
     if (bp.materials.length) {
-      const button = el('button', 'ghost', 'Plan');
-      button.title = 'Track this build on the Jobs page';
+      const button = el('button', 'ghost', tx('Plan'));
+      button.title = tx('Track this build on the Jobs page');
 
       button.addEventListener('click', async () => {
         button.disabled = true;
-        button.textContent = 'planned';
+        button.textContent = tx('planned');
 
         await fetch('/api/jobs', {
           method: 'POST',
@@ -7379,7 +7492,7 @@ function renderCraftingRef() {
             source: tx('{item} blueprint · {time} to craft', { item: bp.output, time: craftTime(bp.craftSeconds) }),
             items: parseJobItems(bp.materials.join('\n')),
           }),
-        }).catch(() => { button.textContent = 'failed'; });
+        }).catch(() => { button.textContent = tx('failed'); });
       });
 
       plan.append(button);
@@ -7403,6 +7516,8 @@ const OVERLAY_LABELS = {
   location: 'Location', ship: 'Ship', session: 'Session', handle: 'Handle',
   feed: 'Live feed', stats: 'This session', job: 'Job in hand', trade: 'Trade from here',
   checklist: 'Checklist', refinery: 'Refinery', event: 'Event',
+  // Named as the Now page titles them, so the tick and the card read alike.
+  briefing: 'What to do next', trip: 'Flight plan', respawn: 'Respawn', status: 'Current status',
 };
 
 /**
@@ -7493,7 +7608,7 @@ function applyScreenMode() {
   const older = $('#screen-read-older');
   if (older) {
     older.hidden = !shots || !screenSettings.canReadScreenshots || watching || unread === 0;
-    older.textContent = `Read ${unread} older screenshot${unread === 1 ? '' : 's'}`;
+    older.textContent = txn(unread, 'Read {count} older screenshot', 'Read {count} older screenshots');
   }
 
   // The folder being followed, named. The pilot is agreeing to a directory
@@ -7504,20 +7619,20 @@ function applyScreenMode() {
     const named = watching && screenSettings.folder;
     folder.hidden = !named;
     folder.textContent = named
-      ? `Reading every screenshot in ${screenSettings.folder}, the ones already there and each new one as it lands.`
-        + (unread
-          ? ` ${unread} still to read, newest first.`
-          : ' Nothing is waiting.')
-        + ' Untick Watch screenshots to stop; invalidate a reading below to have nothing believed from it.'
+      ? [
+        tx('Reading every screenshot in {folder}, the ones already there and each new one as it lands.', { folder: screenSettings.folder }),
+        unread ? tx('{count} still to read, newest first.', { count: unread }) : tx('Nothing is waiting.'),
+        tx('Untick Watch screenshots to stop; invalidate a reading below to have nothing believed from it.'),
+      ].join(' ')
       : '';
   }
 
   const status = $('#screen-mode-status');
   if (status) {
     status.textContent =
-      shots ? (screenSettings.watchScreenshots ? 'clipboard and every screenshot' : 'clipboard and screenshots')
-      : screenSettings.mode === 'CopyOnly' ? 'clipboard only'
-      : 'off';
+      shots ? (screenSettings.watchScreenshots ? tx('clipboard and every screenshot') : tx('clipboard and screenshots'))
+      : screenSettings.mode === 'CopyOnly' ? tx('clipboard only')
+      : tx('off');
   }
 
   startScreenWatch();
@@ -7589,13 +7704,13 @@ function screenShow(build) {
 }
 
 async function parseClipboard(quiet = false) {
-  if (!quiet) screenSay('reading what you copied…');
+  if (!quiet) screenSay(tx('reading what you copied…'));
 
   const found = await getJson2(`/api/screen/clipboard${quiet ? '?watched=true' : ''}`);
 
   if (!found.found) {
     if (!quiet) {
-      screenSay(found.trouble || 'nothing to read');
+      screenSay(screenText(found.trouble) || tx('nothing to read'));
       screenShow(() => {});
     }
     return;
@@ -7604,7 +7719,7 @@ async function parseClipboard(quiet = false) {
   screenSay('');
 
   screenShow((box) => {
-    box.append(el('div', 'strong', `${found.gigametresFromCentre.toFixed(4)} Gm from the system centre`));
+    box.append(el('div', 'strong', tx('{distance} Gm from the system centre', { distance: found.gigametresFromCentre.toFixed(4) })));
 
     // The raw numbers stay visible. They are the thing the game gave and the
     // only part of this that is exact.
@@ -7614,13 +7729,13 @@ async function parseClipboard(quiet = false) {
       + `z ${Math.round(found.z).toLocaleString()}`));
 
     box.append(el('div', 'muted',
-      'Which system this is in comes from your logs, not from the reading.'));
+      tx('Which system this is in comes from your logs, not from the reading.')));
 
     // The first thing a coordinate is good for: how far the things you marked
     // are. Three at most here; the Points page measures every one.
     if (found.nearest?.length) {
       const list = el('div', 'screen-nearest');
-      list.append(el('div', 'muted', 'Nearest of your points:'));
+      list.append(el('div', 'muted', tx('Nearest of your points:')));
       for (const near of found.nearest) list.append(nearPointLine(near));
       box.append(list);
     }
@@ -7655,20 +7770,209 @@ const SCREEN_VERDICTS = {
   unchecked: tx('not checked'),
 };
 
+/*
+ * What a screen reading says, in the page language.
+ *
+ * The server writes a reading's summary and checks in English when the
+ * screenshot is read, and keeps them that way in screen-readings.json, so
+ * translating at the source would leave every reading already taken in the
+ * language it was read in. They come in a fixed set of shapes - "{n} aUEC
+ * from the ledger", "the {ship} as it ships" - so the page matches the shape
+ * and translates that, keeping the names and figures, as the Now feed does.
+ * A sentence that matches nothing is shown as written.
+ */
+const SCREEN_SENTENCES = [
+  [/^nothing in the atlas reads like "(.+)", so only the system was compared$/, (m) => tx('nothing in the atlas reads like "{place}", so only the system was compared', { place: m[1] })],
+  [/^nothing in the atlas reads like "(.+)"$/, (m) => tx('nothing in the atlas reads like "{place}"', { place: m[1] })],
+  [/^nothing in the catalogue reads like "(.+)"$/, (m) => tx('nothing in the catalogue reads like "{name}"', { name: m[1] })],
+  [/^(\d+) things in the catalogue read the same$/, (m) => tx('{count} things in the catalogue read the same', { count: m[1] })],
+  [/^the footer reads as (.+)$/, (m) => tx('the footer reads as {place}', { place: m[1] })],
+  [/^(\d+) open: (.+)$/, (m) => txn(Number(m[1]), '{count} open: {names}', '{count} open: {names}', { names: m[2] })],
+  [/^(\d+) accepted of (\d+)(?:: (.+))?$/, (m) => screenListed(tx('{count} accepted of {capacity}', { count: m[1], capacity: m[2] }), m[3])],
+  [/^(\d+) accepted(?:: (.+))?$/, (m) => screenListed(tx('{count} accepted', { count: m[1] }), m[2])],
+  [/^(\d+) cards read(?:: (.+))?$/, (m) => screenListed(txn(Number(m[1]), '{count} card read', '{count} cards read'), m[2])],
+  [/^on screen but not in the logs: ([^;]+)$/, (m) => tx('on screen but not in the logs: {names}', { names: m[1] })],
+  [/^the tab says (\d+), the logs say (\d+)$/, (m) => tx('the tab says {screen}, the logs say {logs}', { screen: m[1], logs: m[2] })],
+  [/^(\d+) ships? listed(?:: (.*?))?(?: \((\d+) names? did not read\))?$/, (m) => [
+    screenListed(txn(Number(m[1]), '{count} ship listed', '{count} ships listed'),
+      m[2] && m[2].split(', ').map((row) => row.replace(/^(.+) at (.+)$/, (all, ship, place) => tx('{ship} at {place}', { ship, place }))).join(', ')),
+    m[3] ? ` (${txn(Number(m[3]), '{count} name did not read', '{count} names did not read')})` : '',
+  ].join('')],
+  [/^(\d+) ships? flown$/, (m) => txn(Number(m[1]), '{count} ship flown', '{count} ships flown')],
+  [/^never flown in the logs: (.+)$/, (m) => tx('never flown in the logs: {ships}', { ships: m[1] })],
+  [/^(\d+) commodit(?:y|ies) listed(?:, (\d+) named)?(?:: (.+))?$/, (m) => [
+    txn(Number(m[1]), '{count} commodity listed', '{count} commodities listed'),
+    m[2] ? `, ${txn(Number(m[2]), '{count} named', '{count} named')}` : '',
+  ].join('') + (m[3] ? screenListed('', m[3].split(', ').map((row) => row.replace(/^(.+) at (.+) per (.+)$/, (all, commodity, price, unit) => tx('{commodity} at {price} per {unit}', { commodity, price, unit }))).join(', ')) : '')],
+  [/^this kiosk prices in (.+) on the same screen, so the two are kept apart and never converted$/, (m) => tx('this kiosk prices in {units} on the same screen, so the two are kept apart and never converted', { units: m[1].split(' and ').join(` ${tx('and')} `) })],
+  [/^(\d+) organisations listed$/, (m) => txn(Number(m[1]), '{count} organisation listed', '{count} organisations listed')],
+  [/^the dropdown read "(.*)" - looks like (.+), which is not the same as reading it$/, (m) => tx('the dropdown read "{read}" - looks like {ships}, which is not the same as reading it', { read: tx(m[1]), ships: m[2].split(' or ').join(` ${tx('or')} `) })],
+  [/^the dropdown read "(.*)"$/, (m) => tx('the dropdown read "{read}"', { read: tx(m[1]) })],
+  [/^nothing - no factory loadout on file for the (.+)$/, (m) => tx('nothing - no factory loadout on file for the {ship}', { ship: m[1] })],
+  [/^the (.+) as it ships$/, (m) => tx('the {ship} as it ships', { ship: m[1] })],
+  [/^not stock: (.+)$/, (m) => tx('not stock: {parts}', { parts: m[1].split(', ').map((row) => row.replace(/^(.+) in (.+)$/, (all, part, slot) => tx('{part} in {slot}', { part, slot }))).join(', ') })],
+  [/^([\d,]+) aUEC from the ledger$/, (m) => tx('{amount} aUEC from the ledger', { amount: m[1] })],
+  [/^([\d,]+) aUEC arrived without a line in the log since (.+)$/, (m) => tx('{amount} aUEC arrived without a line in the log since {when}', { amount: m[1], when: m[2] })],
+  [/^([\d,]+) aUEC left without a line in the log since (.+)$/, (m) => tx('{amount} aUEC left without a line in the log since {when}', { amount: m[1], when: m[2] })],
+  [/^The loadout estimate at the Fleet Manager: (\d+) items, replacement fee (.+) aUEC\.$/, (m) => txn(Number(m[1]), 'The loadout estimate at the Fleet Manager: {count} item, replacement fee {fee} aUEC.', 'The loadout estimate at the Fleet Manager: {count} items, replacement fee {fee} aUEC.', { fee: m[2] })],
+  [/^The loadout estimate at the Fleet Manager: (\d+) items\.$/, (m) => txn(Number(m[1]), 'The loadout estimate at the Fleet Manager: {count} item.', 'The loadout estimate at the Fleet Manager: {count} items.')],
+  [/^The loadout estimate at the Fleet Manager, replacement fee (.+) aUEC\.$/, (m) => tx('The loadout estimate at the Fleet Manager, replacement fee {fee} aUEC.', { fee: m[1] })],
+  // The fitted-parts claim: "3 parts named, 1 port empty, …", a piece at a time.
+  [/^(\d+ parts? named(?:, .+)?)$/, (m) => m[1].split(', ').map(screenPiece).join(', ')],
+  // The Garage's notes on a fit.
+  [/^The dataset's own total puts (.+) DPS in the pilot's hands for this hull and the rest on turrets; here the stock fit reads (.+), because its remote turrets are named as pilot mounts in the loadout and the file that says who fires them is not published\. The guns are on the sheet either way; only the row differs\.$/,
+    (m) => tx('The dataset\'s own total puts {published} DPS in the pilot\'s hands for this hull and the rest on turrets; here the stock fit reads {reads}, because its remote turrets are named as pilot mounts in the loadout and the file that says who fires them is not published. The guns are on the sheet either way; only the row differs.', { published: m[1], reads: m[2] })],
+  [/^(.+) is fitted with nothing counted on it: the reference says what the stock (.+) carried \((\d+)\), not what this one does\.$/,
+    (m) => tx('{part} is fitted with nothing counted on it: the reference says what the stock {type} carried ({count}), not what this one does.', { part: m[1], type: m[2] === 'part' ? tx('part') : garageWord(m[2]), count: m[3] })],
+  [/^Draws (.+) power segments with shields up; the plant provides (.+)\. The game will brown out something\.$/,
+    (m) => tx('Draws {drawn} power segments with shields up; the plant provides {available}. The game will brown out something.', { drawn: m[1], available: m[2] })],
+  [/^Cooling load (.+) with shields up: the coolers cannot keep up at full draw\.$/,
+    (m) => tx('Cooling load {load} with shields up: the coolers cannot keep up at full draw.', { load: m[1] })],
+  [/^(.+) is fitted but the reference has no figures for it; it counts for nothing here\.$/,
+    (m) => tx('{part} is fitted but the reference has no figures for it; it counts for nothing here.', { part: m[1] })],
+  [/^The pilot's guns fire at (\d+) speeds - (.+) - so the HUD shows \d+ pips, and a lead that lands one gun misses the other\.$/,
+    (m) => tx('The pilot\'s guns fire at {count} speeds - {guns} - so the HUD shows {count} pips, and a lead that lands one gun misses the other.', {
+      count: m[1],
+      guns: m[2].split(', ').map((row) => row.replace(/^(.+) at (.+) m\/s$/, (all, guns, speed) => tx('{guns} at {speed} m/s', { guns, speed }))).join(', '),
+    })],
+  // The cargo fit's reasons.
+  [/^No crate of (\d+) SCU is known; the install describes 1, 2, 4, 8, 16, 24 and 32\.$/,
+    (m) => tx('No crate of {size} SCU is known; the install describes 1, 2, 4, 8, 16, 24 and 32.', { size: m[1] })],
+  [/^A (\d+) SCU crate is bigger than any box this hull's grids accept - the largest they take is (.+)\.$/,
+    (m) => tx('A {size} SCU crate is bigger than any box this hull\'s grids accept - the largest they take is {box}.', { size: m[1], box: m[2] })],
+  // A fire mode's condition, read from the game files.
+  [/^heat at or above (\d+)%$/, (m) => tx('heat at or above {percent}%', { percent: m[1] })],
+  [/^heat above (\d+)%$/, (m) => tx('heat above {percent}%', { percent: m[1] })],
+  [/^heat at or below (\d+)%$/, (m) => tx('heat at or below {percent}%', { percent: m[1] })],
+  [/^heat below (\d+)%$/, (m) => tx('heat below {percent}%', { percent: m[1] })],
+  [/^heat at (\d+)%$/, (m) => tx('heat at {percent}%', { percent: m[1] })],
+  // A recipe's choice of materials.
+  [/^any (\d+) of: (.+)$/, (m) => tx('any {count} of: {materials}', { count: m[1], materials: m[2] })],
+  // The rock calculator's notes on a fit.
+  [/^Short by (\d+)%: a gadget that cuts resistance, or an active module that raises power, is expected to make it up\.$/, (m) => tx('Short by {percent}%: a gadget that cuts resistance, or an active module that raises power, is expected to make it up.', { percent: m[1] })],
+  [/^Delivers (.+) of (.+) needed: more heads on the rock, or a lighter rock\.$/, (m) => tx('Delivers {delivered} of {required} needed: more heads on the rock, or a lighter rock.', { delivered: m[1], required: m[2] })],
+  [/^Instability (\d+)% after the fit: the charge will wander; a module or gadget that damps it helps more than power here\.$/, (m) => tx('Instability {percent}% after the fit: the charge will wander; a module or gadget that damps it helps more than power here.', { percent: m[1] })],
+  [/^By the game's constants the rock holds (.+) energy and sheds (.+) a second; the window is (\d+)% of the gauge\.$/, (m) => tx('By the game\'s constants the rock holds {capacity} energy and sheds {decay} a second; the window is {window}% of the gauge.', { capacity: m[1], decay: m[2], window: m[3] })],
+  // An entity card's facts, holding and subtitle.
+  [/^(\d[\d,]*) recorded, last (.+)$/, (m) => tx('{count} recorded, last {date}', { count: m[1], date: m[2] })],
+  [/^(\d[\d,]*) recorded$/, (m) => tx('{count} recorded', { count: m[1] })],
+  [/^(.+) SCU sold over (\d+) runs?(?:, (.+) aUEC)?$/, (m) => `${txn(Number(m[2]), '{scu} SCU sold over {count} run', '{scu} SCU sold over {count} runs', { scu: m[1] })}${m[3] ? `, ${m[3]} aUEC` : ''}`],
+  [/^(\d+) buy it from you, (\d+) sell it$/, (m) => tx('{buy} buy it from you, {sell} sell it', { buy: m[1], sell: m[2] })],
+  [/^(.+) aUEC to expedite, ~(.+)m standard$/, (m) => tx('{fee} aUEC to expedite, ~{minutes}m standard', { fee: m[1], minutes: m[2] })],
+  [/^(.+) aUEC to expedite$/, (m) => tx('{fee} aUEC to expedite', { fee: m[1] })],
+  [/^(?:(S\d+) · )?grade ([A-Z])$/, (m) => [m[1], tx('grade {grade}', { grade: m[2] })].filter(Boolean).join(' · ')],
+  [/^(\d+) of your things are here$/, (m) => txn(Number(m[1]), '{count} of your things is here', '{count} of your things are here')],
+  [/^flown (\d+) times?$/, (m) => txn(Number(m[1]), 'flown {count} time', 'flown {count} times')],
+  [/^across (\d+) sessions?, last (.+)$/, (m) => txn(Number(m[1]), 'across {count} session, last {date}', 'across {count} sessions, last {date}', { date: m[2] })],
+  [/^best price at (.+)$/, (m) => tx('best price at {place}', { place: m[1] })],
+  [/^sell (.+) here$/, (m) => tx('sell {commodity} here', { commodity: m[1] })],
+  // The haul plan's notes.
+  [/^1 of (\d+) contracts? has no screenshot of its card: open it on the Contracts app's Accepted tab and take one, and its pickups and SCU will be read\.$/,
+    (m) => txn(Number(m[1]), '1 of {count} contract has no screenshot of its card: open it on the Contracts app\'s Accepted tab and take one, and its pickups and SCU will be read.', '1 of {count} contracts has no screenshot of its card: open it on the Contracts app\'s Accepted tab and take one, and its pickups and SCU will be read.')],
+  [/^(\d+) of (\d+) contracts have no screenshot of their card: open each on the Contracts app's Accepted tab and take one, and its pickups and SCU will be read\.$/,
+    (m) => tx('{unread} of {count} contracts have no screenshot of their card: open each on the Contracts app\'s Accepted tab and take one, and its pickups and SCU will be read.', { unread: m[1], count: m[2] })],
+  [/^Not on the map yet: (.+)\. A place is on the map once the logs have seen you there; the stop keeps its name either way\.$/,
+    (m) => tx('Not on the map yet: {places}. A place is on the map once the logs have seen you there; the stop keeps its name either way.', { places: m[1] })],
+  [/^(\d+) pickups, places unknown until this card is photographed$/, (m) => tx('{count} pickups, places unknown until this card is photographed', { count: m[1] })],
+  [/^(\d+) drop-offs, places unknown until this card is photographed$/, (m) => tx('{count} drop-offs, places unknown until this card is photographed', { count: m[1] })],
+  [/^(\d[\d,]*) SCU remaining for this contract; the amount at each pickup was not read$/, (m) => tx('{scu} SCU remaining for this contract; the amount at each pickup was not read', { scu: m[1] })],
+  // Summaries.
+  [/^(.+), (\d+) parts named$/, (m) => txn(Number(m[2]), '{ship}, {count} part named', '{ship}, {count} parts named', { ship: tx(m[1]) })],
+  [/^(\d+) things named$/, (m) => txn(Number(m[1]), '{count} thing named', '{count} things named')],
+  [/^(\d+) contracts accepted$/, (m) => txn(Number(m[1]), '{count} contract accepted', '{count} contracts accepted')],
+  [/^(\d+) contracts read$/, (m) => txn(Number(m[1]), '{count} contract read', '{count} contracts read')],
+  [/^(\d+) ships at the Fleet Manager$/, (m) => txn(Number(m[1]), '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager')],
+  [/^reputation with (.+?)(?:: (.+))?$/, (m) => `${tx('reputation with {organisation}', { organisation: m[1] })}${m[2] ? `: ${m[2]}` : ''}`],
+  [/^a kiosk selling, (\d+) commodities listed$/, (m) => txn(Number(m[1]), 'a kiosk selling, {count} commodity listed', 'a kiosk selling, {count} commodities listed')],
+  [/^a kiosk buying, (\d+) commodities listed$/, (m) => txn(Number(m[1]), 'a kiosk buying, {count} commodity listed', 'a kiosk buying, {count} commodities listed')],
+  [/^a rock scanned: (.+)$/, (m) => tx('a rock scanned: {details}', { details: m[1].split(', ').map(screenPiece).join(', ') })],
+  [/^a refinery order running at (.+?)((?:, .+)?)$/, (m) => `${tx('a refinery order running at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+  [/^a refinery quote at (.+?)((?:[:,] .+)?)$/, (m) => `${tx('a refinery quote at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+  [/^the refinery at (.+?)((?:, .+)?)$/, (m) => `${tx('the refinery at {place}', { place: tx(m[1]) })}${screenPieces(m[2])}`],
+];
+
+/* A head and the list after it, joined by the page language's colon. */
+function screenListed(head, list) {
+  if (!list) return head;
+  return head ? tx('{label}: {value}', { label: head, value: list }) : `${tx('{label}: {value}', { label: '', value: list })}`;
+}
+
+/* The clauses a summary strings together after its head, each on its own. */
+const SCREEN_PIECES = [
+  [/^mass unread$/, () => tx('mass unread')],
+  [/^(\d+) parts? named$/, (m) => txn(Number(m[1]), '{count} part named', '{count} parts named')],
+  [/^(\d+) ports? empty$/, (m) => txn(Number(m[1]), '{count} port empty', '{count} ports empty')],
+  [/^(\d+) ports? with nothing read under (?:it|them)$/, (m) => txn(Number(m[1]), '{count} port with nothing read under it', '{count} ports with nothing read under them')],
+  [/^(\d+) not matched$/, (m) => txn(Number(m[1]), '{count} not matched', '{count} not matched')],
+  [/^(\d+)% resistance$/, (m) => tx('{percent}% resistance', { percent: m[1] })],
+  [/^(\d[\d,.]*) cSCU coming back$/, (m) => tx('{amount} cSCU coming back', { amount: m[1] })],
+  [/^(\d[\d,.]*) cSCU in$/, (m) => tx('{amount} cSCU in', { amount: m[1] })],
+  [/^at (\d[\d,.]*)% capacity$/, (m) => tx('at {percent}% capacity', { percent: m[1] })],
+  [/^(.+) left$/, (m) => tx('{time} left', { time: m[1] })],
+];
+
+function screenPiece(text) {
+  for (const [shape, say] of SCREEN_PIECES) {
+    const match = shape.exec(text);
+    if (match) return say(match);
+  }
+  return tx(text);
+}
+
+/* ", a, b" or ": a, b" after a summary's head, each piece translated. */
+function screenPieces(rest) {
+  if (!rest) return '';
+  const lead = rest.slice(0, 2);
+  return lead + rest.slice(2).split(', ').map(screenPiece).join(', ');
+}
+
+function screenText(text) {
+  if (QW_LANGUAGE === 'en' || typeof text !== 'string' || !text) return text;
+  const fixed = tx(text);
+  if (fixed !== text) return fixed;
+  // Whole sentences first: several carry a "; " of their own. A list shape
+  // stops at ";" so it cannot swallow a second note joined after it.
+  for (const [shape, say] of SCREEN_SENTENCES) {
+    const match = shape.exec(text);
+    if (match) return say(match);
+  }
+  // Two notes joined into one: each is its own sentence.
+  if (text.includes('; ')) return text.split('; ').map(screenText).join('; ');
+  return text;
+}
+
+/*
+ * Every other sentence the server writes goes through the same shapes. Most
+ * of them are stored or cached - a fire mode's condition and a recipe's
+ * materials come out of the game files once - and the rest are computed on
+ * each request; one mechanism for both keeps one catalogue and one test.
+ */
+function serverText(text) {
+  return screenText(text);
+}
+
 /** One check as a feed row: the verdict, then what the screen said beside what the app thought. */
 function screenCheckRow(check) {
   const li = el('li');
   li.append(el('span', `k ${check.verdict}`, SCREEN_VERDICTS[check.verdict] || check.verdict));
 
-  const what = el('span', 'what', `${check.subject}: ${check.claim}`);
+  const what = el('span', 'what', `${tx(check.subject)}: ${screenText(check.claim)}`);
   li.append(what);
 
   // The belief is shown whatever the verdict: an agreement with nothing
   // beside it looks like a screen that was taken on trust.
-  li.append(el('span', 'd', ` · ${tx('logs: {belief}', { belief: check.belief })}`));
+  li.append(el('span', 'd', ` · ${tx('logs: {belief}', { belief: screenText(check.belief) })}`));
 
-  if (check.note) li.append(el('span', 'd', ` · ${check.note}`));
+  if (check.note) li.append(el('span', 'd', ` · ${screenText(check.note)}`));
   return li;
+}
+
+/** A Contracts app reading in one line: how many were accepted, or how many cards read. */
+function screenContractsLine(c) {
+  if (c.accepted == null) return txn((c.cards || []).length, '{count} contract read', '{count} contracts read');
+  return c.capacity != null
+    ? tx('{count} accepted of {capacity}', { count: c.accepted, capacity: c.capacity })
+    : tx('{count} accepted', { count: c.accepted });
 }
 
 /** Everything a reading says, into a box. Shared by the panel and the list. */
@@ -7685,21 +7989,21 @@ function renderSighting(box, s, { full = true } = {}) {
       const line = el('div', null, match.name);
 
       if (match.agrees?.length)
-        line.append(el('span', 'muted', ` · ${match.agrees.join(', ')} agree`));
+        line.append(el('span', 'muted', ` · ${tx('{fields} agree', { fields: match.agrees.join(', ') })}`));
 
       if (match.disagrees?.length)
-        line.append(el('span', 'outward', ` · ${match.disagrees.join(', ')} do not`));
+        line.append(el('span', 'outward', ` · ${tx('{fields} do not', { fields: match.disagrees.join(', ') })}`));
 
       box.append(line);
     }
 
     // Said out loud rather than left to be inferred from an empty space.
-    if (s.item.trouble) box.append(el('div', 'muted', s.item.trouble));
+    if (s.item.trouble) box.append(el('div', 'muted', screenText(s.item.trouble)));
 
     const named = (s.item.named || []).filter((n) => n.exact);
 
     if (!s.item.name && named.length) {
-      box.append(el('div', 'muted', `Also on this frame: ${named.length} named`));
+      box.append(el('div', 'muted', tx('Also on this frame: {count} named', { count: named.length })));
       for (const line of named.slice(0, 8))
         box.append(el('div', 'muted', line.candidates[0] || line.text));
     }
@@ -7708,33 +8012,33 @@ function renderSighting(box, s, { full = true } = {}) {
   if (s.loadout) {
     const ship = s.loadout.ship
       || (s.loadout.looksLike?.length
-        ? `read as “${s.loadout.shipRead}”, looks like ${s.loadout.looksLike.join(' or ')}`
-        : `read as “${s.loadout.shipRead || '?'}”`);
+        ? tx('read as “{read}”, looks like {ships}', { read: s.loadout.shipRead, ships: s.loadout.looksLike.join(` ${tx('or')} `) })
+        : tx('read as “{read}”', { read: s.loadout.shipRead || '?' }));
 
     box.append(el('div', 'strong', ship));
 
     // The game's own caveat, carried through as written: this is the ships
     // at one place, not the fleet.
-    if (s.loadout.scope) box.append(el('div', 'muted', s.loadout.scope));
+    if (s.loadout.scope) box.append(el('div', 'muted', screenText(s.loadout.scope)));
 
     if (full) {
       const list = el('ul', 'feed screen-fittings');
 
       for (const f of s.loadout.fittings || []) {
         const li = el('li');
-        li.append(el('span', 'what', f.slot));
+        li.append(el('span', 'what', screenText(f.slot)));
 
         if (f.nothingRead) {
-          li.append(el('span', 'd', ' · nothing read under it'));
+          li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
         } else if (f.tier === 'Empty') {
-          li.append(el('span', 'd', ' · empty, so the game says'));
+          li.append(el('span', 'd', ` · ${tx('empty, so the game says')}`));
         } else if (f.name) {
           li.append(el('span', 'd', ` · ${f.name}`));
-          if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
-          if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
-          if (f.tier !== 'Exact') li.append(el('span', 'd', ` · read “${f.read}”`));
+          if (f.stock === false) li.append(el('span', 'k differs', tx('not stock')));
+          if (f.stock === true) li.append(el('span', 'k agrees', tx('stock')));
+          if (f.tier !== 'Exact') li.append(el('span', 'd', ` · ${tx('read “{read}”', { read: f.read })}`));
         } else {
-          li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+          li.append(el('span', 'd', ` · ${tx('read “{read}”, matched nothing', { read: f.read })}`));
         }
 
         list.append(li);
@@ -7747,12 +8051,13 @@ function renderSighting(box, s, { full = true } = {}) {
   if (s.kiosk) {
     const k = s.kiosk;
     const rows = k.rows || [];
-    box.append(el('div', 'strong',
-      `a kiosk ${k.buying === false ? 'selling' : 'buying'}, ${rows.length} commodit${rows.length === 1 ? 'y' : 'ies'}`));
+    box.append(el('div', 'strong', k.buying === false
+      ? txn(rows.length, 'a kiosk selling, {count} commodity', 'a kiosk selling, {count} commodities')
+      : txn(rows.length, 'a kiosk buying, {count} commodity', 'a kiosk buying, {count} commodities')));
 
     if (k.ship || k.cargoCapacity != null) {
       box.append(el('div', 'muted',
-        `${k.ship || k.shipRead || 'a ship'}${k.cargoCapacity != null ? ` · ${k.cargoUsed ?? 0} / ${k.cargoCapacity} SCU` : ''}`));
+        `${k.ship || k.shipRead || tx('a ship')}${k.cargoCapacity != null ? ` · ${k.cargoUsed ?? 0} / ${k.cargoCapacity} SCU` : ''}`));
     }
 
     if (full) {
@@ -7760,15 +8065,15 @@ function renderSighting(box, s, { full = true } = {}) {
 
       for (const row of rows) {
         const li = el('li');
-        li.append(el('span', 'what', row.commodity || `read as “${row.read}”`));
+        li.append(el('span', 'what', row.commodity || tx('read as “{read}”', { read: row.read })));
 
         // The unit stays welded to the price. They are not the same quantity
         // and nothing here converts one into the other.
         if (row.price != null)
-          li.append(el('span', 'd', ` · ${Number(row.price).toLocaleString()} per ${row.priceUnit}`));
+          li.append(el('span', 'd', ` · ${tx('{price} per {unit}', { price: Number(row.price).toLocaleString(), unit: row.priceUnit })}`));
 
         if (row.quantity != null)
-          li.append(el('span', 'd', ` · ${Number(row.quantity).toLocaleString()} ${row.quantityUnit || ''} in stock`));
+          li.append(el('span', 'd', ` · ${tx('{quantity} {unit} in stock', { quantity: Number(row.quantity).toLocaleString(), unit: row.quantityUnit || '' })}`));
 
         if (row.state) li.append(el('span', 'd', ` · ${row.state.toLowerCase()}`));
         list.append(li);
@@ -7781,20 +8086,20 @@ function renderSighting(box, s, { full = true } = {}) {
     // digit; only the second kind becomes a figure, and the wallet check
     // above says what was made of it.
     if (k.balance != null)
-      box.append(el('div', 'muted', `Balance on screen: ${Number(k.balance).toLocaleString()} aUEC, printed in full.`));
+      box.append(el('div', 'muted', tx('Balance on screen: {balance} aUEC, printed in full.', { balance: Number(k.balance).toLocaleString() })));
     else if (k.balanceRead)
-      box.append(el('div', 'muted', `Balance on screen: ${k.balanceRead}, abbreviated — no figure is taken from it.`));
+      box.append(el('div', 'muted', tx('Balance on screen: {balance}, abbreviated — no figure is taken from it.', { balance: k.balanceRead })));
   }
 
   // A scanned rock: the panel's figures, each said only where it read, and a
   // way to the calculator with them already in the form.
   if (s.mining) {
     const m = s.mining;
-    box.append(el('div', 'strong', `a rock scanned: ${m.primary || m.primaryRead || 'mineral unread'}`));
+    box.append(el('div', 'strong', tx('a rock scanned: {mineral}', { mineral: m.primary || m.primaryRead || tx('mineral unread') })));
     const facts = [
-      m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : 'mass did not read',
-      m.resistancePercent != null ? `${m.resistancePercent}% resistance` : 'resistance did not read',
-      m.instability != null ? `instability ${m.instability}` : 'instability did not read',
+      m.massKg != null ? `${Number(m.massKg).toLocaleString()} kg` : tx('mass did not read'),
+      m.resistancePercent != null ? tx('{percent}% resistance', { percent: m.resistancePercent }) : tx('resistance did not read'),
+      m.instability != null ? tx('instability {value}', { value: m.instability }) : tx('instability did not read'),
       m.scu != null ? scanScu(m.scu) : null,
       m.difficulty ? m.difficulty.toLowerCase() : null,
     ].filter(Boolean);
@@ -7804,9 +8109,9 @@ function renderSighting(box, s, { full = true } = {}) {
       const list = el('ul', 'feed screen-fittings');
       for (const part of m.parts) {
         const li = el('li');
-        li.append(el('span', 'what', part.mineral || `read as “${part.read}”`));
-        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : 'share did not read'}`
-          + ` · ${part.quality != null ? `quality ${part.quality}` : 'quality did not read'}`));
+        li.append(el('span', 'what', part.mineral || tx('read as “{read}”', { read: part.read })));
+        li.append(el('span', 'd', ` · ${part.percent ? `${part.percent}%` : tx('share did not read')}`
+          + ` · ${part.quality != null ? tx('quality {value}', { value: part.quality }) : tx('quality did not read')}`));
         list.append(li);
       }
       box.append(list);
@@ -7814,12 +8119,12 @@ function renderSighting(box, s, { full = true } = {}) {
       // The panel's own checksum: shares printed to two places come to 100.
       // Two reads agreeing is not proof - both once took 23.74% for 3.74%.
       if (m.sharesAddUp === false)
-        box.append(el('div', 'want', `The shares add up to ${m.shareTotal}%, not 100 — at least one is misread, and the screenshot is the one to trust.`));
+        box.append(el('div', 'want', tx('The shares add up to {total}%, not 100 — at least one is misread, and the screenshot is the one to trust.', { total: m.shareTotal })));
     }
 
-    const go = el('button', 'ghost tiny', 'Mining fit');
+    const go = el('button', 'ghost tiny', tx('Mining fit'));
     go.type = 'button';
-    go.title = 'Open the Mining page with this rock in the calculator';
+    go.title = tx('Open the Mining page with this rock in the calculator');
     go.addEventListener('click', () => { crackFromScan = m; showView('mining'); });
     box.append(go);
   }
@@ -7827,19 +8132,19 @@ function renderSighting(box, s, { full = true } = {}) {
   // A refinery terminal: the order on it, and what each lot would give back.
   if (s.refinery) {
     const r = s.refinery;
-    const title = {
-      processing: 'a refinery order running',
-      setup: 'a refinery quote',
-    }[r.stage] || 'a refinery terminal';
-    box.append(el('div', 'strong', `${title} at ${r.station || 'a station that did not read'}`));
+    const station = r.station || tx('a station that did not read');
+    box.append(el('div', 'strong', {
+      processing: tx('a refinery order running at {station}', { station }),
+      setup: tx('a refinery quote at {station}', { station }),
+    }[r.stage] || tx('a refinery terminal at {station}', { station })));
 
     const facts = [
-      r.method || (r.methodRead ? `“${r.methodRead}”` : (r.stage === 'setup' ? 'no method picked' : null)),
+      r.method || (r.methodRead ? `“${r.methodRead}”` : (r.stage === 'setup' ? tx('no method picked') : null)),
       r.ratings ? r.ratings.toLowerCase() : null,
-      r.toRefine != null ? `${r.toRefine} cSCU in` : null,
+      r.toRefine != null ? tx('{amount} cSCU in', { amount: r.toRefine }) : null,
       r.cost != null ? money(r.cost) : null,
-      r.seconds != null ? (r.stage === 'processing' ? `${refineryClock(r.seconds)} left` : refineryClock(r.seconds)) : null,
-      r.capacityPercent != null ? `station at ${fmtInt(r.capacityPercent)}% capacity` : null,
+      r.seconds != null ? (r.stage === 'processing' ? tx('{time} left', { time: refineryClock(r.seconds) }) : refineryClock(r.seconds)) : null,
+      r.capacityPercent != null ? tx('station at {percent}% capacity', { percent: fmtInt(r.capacityPercent) }) : null,
     ].filter(Boolean);
     if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
 
@@ -7847,13 +8152,13 @@ function renderSighting(box, s, { full = true } = {}) {
       const list = el('ul', 'feed screen-fittings');
       for (const lot of r.lots) {
         const li = el('li');
-        li.append(el('span', 'what', lot.mineral || `read as “${lot.read}”`));
+        li.append(el('span', 'what', lot.mineral || tx('read as “{read}”', { read: lot.read })));
         const bits = [
-          lot.quality != null ? `quality ${lot.quality}` : null,
+          lot.quality != null ? tx('quality {value}', { value: lot.quality }) : null,
           lot.quantity != null ? `${lot.quantity} cSCU` : null,
-          lot.yield != null ? `→ ${lot.yield} cSCU back` : null,
-          lot.toDo != null ? `${lot.toDo} to do` : null,
-          lot.done != null ? `${lot.done} done` : null,
+          lot.yield != null ? tx('→ {amount} cSCU back', { amount: lot.yield }) : null,
+          lot.toDo != null ? tx('{count} to do', { count: lot.toDo }) : null,
+          lot.done != null ? tx('{count} done', { count: lot.done }) : null,
         ].filter(Boolean);
         li.append(el('span', 'd', bits.length ? ` · ${bits.join(' · ')}` : ''));
         list.append(li);
@@ -7861,17 +8166,16 @@ function renderSighting(box, s, { full = true } = {}) {
       box.append(list);
     }
 
-    const go = el('button', 'ghost tiny', 'Refinery orders');
+    const go = el('button', 'ghost tiny', tx('Refinery orders'));
     go.type = 'button';
-    go.title = 'Open the Mining page on the orders read off the terminal';
+    go.title = tx('Open the Mining page on the orders read off the terminal');
     go.addEventListener('click', () => { miningPane = 'runs'; showView('mining'); });
     box.append(go);
   }
 
   if (s.contracts) {
     const c = s.contracts;
-    box.append(el('div', 'strong',
-      c.accepted != null ? `${c.accepted} accepted${c.capacity != null ? ` of ${c.capacity}` : ''}` : `${(c.cards || []).length} contracts read`));
+    box.append(el('div', 'strong', screenContractsLine(c)));
 
     if (full) {
       const list = el('ul', 'feed screen-fittings');
@@ -7890,7 +8194,7 @@ function renderSighting(box, s, { full = true } = {}) {
         box.append(el('div', null, c.selectedTitle));
         const facts = [];
         if (c.selectedReward != null) facts.push(`${Number(c.selectedReward).toLocaleString()} aUEC`);
-        if (c.selectedIssuer) facts.push(`by ${c.selectedIssuer}`);
+        if (c.selectedIssuer) facts.push(tx('by {issuer}', { issuer: c.selectedIssuer }));
         if (facts.length) box.append(el('div', 'muted', facts.join(' · ')));
         for (const o of c.objectives || []) box.append(el('div', 'muted', `◇ ${o}`));
       }
@@ -7899,7 +8203,7 @@ function renderSighting(box, s, { full = true } = {}) {
 
   if (s.fleet) {
     const rows = s.fleet.ships || [];
-    box.append(el('div', 'strong', `${rows.length} ship${rows.length === 1 ? '' : 's'} at the Fleet Manager`));
+    box.append(el('div', 'strong', txn(rows.length, '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager')));
 
     if (full) {
       const list = el('ul', 'feed screen-fittings');
@@ -7912,19 +8216,19 @@ function renderSighting(box, s, { full = true } = {}) {
     const r = s.reputation;
     box.append(el('div', 'strong', r.organisation
       ? `${r.organisation}${r.standing ? `: ${r.standing}` : ''}`
-      : 'the Rep app'));
+      : tx('the Rep app')));
 
     // Said in words: the rank is a highlighted card, and a highlight is not text.
-    box.append(el('div', 'muted', 'The rank is drawn as a highlight and does not read.'));
+    box.append(el('div', 'muted', tx('The rank is drawn as a highlight and does not read.')));
 
     if (full && r.organisations?.length)
-      box.append(el('div', 'muted', `Listed: ${r.organisations.join(', ')}`));
+      box.append(el('div', 'muted', tx('Listed: {names}', { names: r.organisations.join(', ') })));
   }
 
   if (s.map) {
     const place = s.map.placeRead
       ? (s.map.systemRead ? `${s.map.systemRead} > ${s.map.placeRead}` : s.map.placeRead)
-      : 'no place read off the footer';
+      : tx('no place read off the footer');
 
     box.append(el('div', 'strong', place));
 
@@ -7938,19 +8242,21 @@ function renderSighting(box, s, { full = true } = {}) {
   }
 
   if (s.wallet) {
-    box.append(el('div', 'muted', s.wallet.balance != null
-      ? `Wallet: ${Number(s.wallet.balance).toLocaleString()} aUEC`
-      : `Wallet: ${s.wallet.trouble}`));
+    box.append(el('div', 'muted', tx('Wallet: {balance}', {
+      balance: s.wallet.balance != null ? `${Number(s.wallet.balance).toLocaleString()} aUEC` : screenText(s.wallet.trouble),
+    })));
   }
 
   if (s.kind === 'MobiGlas' || s.kind === 'Unknown') {
-    box.append(el('div', 'muted', s.summary));
+    // The server's summary: the fixed ones translate, the counted ones wait
+    // for the server to speak the language, as on the Now card.
+    box.append(el('div', 'muted', screenText(s.summary)));
 
     // The text is the whole point for a screen with no reader: it is what a
     // reader gets written from.
     if (full && s.lines?.length) {
       const text = el('details');
-      text.append(el('summary', 'muted', `${s.lines.length} lines read`));
+      text.append(el('summary', 'muted', txn(s.lines.length, '{count} line read', '{count} lines read')));
       for (const line of s.lines.slice(0, 60)) text.append(el('div', 'muted', line));
       box.append(text);
     }
@@ -7964,17 +8270,17 @@ function renderSighting(box, s, { full = true } = {}) {
 }
 
 async function scanScreenshot() {
-  screenSay('reading your last screenshot…');
+  screenSay(tx('reading your last screenshot…'));
   screenShow(() => {});
 
   const s = await getJson2('/api/screen/scan');
 
   if (!s.shot) {
-    screenSay(s.summary || 'nothing read');
+    screenSay(s.summary ? screenText(s.summary) : tx('nothing read'));
     return;
   }
 
-  screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · read in ${s.tookMs} ms`);
+  screenSay(`${s.shot} · ${SCREEN_KINDS[s.kind] || s.kind} · ${tx('read in {ms} ms', { ms: s.tookMs })}`);
   screenShow((box) => renderSighting(box, s));
   renderScreenLog().catch(() => {});
 }
@@ -7987,7 +8293,7 @@ async function scanScreenshot() {
  */
 async function readOlderScreenshots() {
   const unread = Number(screenSettings.unread) || 0;
-  screenSay(`reading ${Math.min(unread, 40)} of ${unread} older screenshot${unread === 1 ? '' : 's'}…`);
+  screenSay(txn(unread, 'reading {take} of {count} older screenshot…', 'reading {take} of {count} older screenshots…', { take: Math.min(unread, 40) }));
   screenShow(() => {});
 
   const got = await getJson2('/api/screen/readings/older?take=40');
@@ -7996,8 +8302,8 @@ async function readOlderScreenshots() {
   for (const s of read) kinds.set(s.kind, (kinds.get(s.kind) || 0) + 1);
   const told = [...kinds].map(([kind, n]) => `${n} ${SCREEN_KINDS[kind] || kind}`).join(', ');
 
-  screenSay(`${read.length} read${told ? ` (${told})` : ''}`
-    + (got.remaining ? ` · ${got.remaining} older still unread` : ' · nothing older left unread'));
+  screenSay(`${tx('{count} read', { count: read.length })}${told ? ` (${told})` : ''}`
+    + ` · ${got.remaining ? tx('{count} older still unread', { count: got.remaining }) : tx('nothing older left unread')}`);
 
   try {
     screenSettings = await getJson('/api/screen/settings');
@@ -8044,8 +8350,12 @@ async function renderScreenLog() {
   const counts = $('#screen-log-counts');
 
   if (counts) {
+    const parts = [
+      txn(got.total, '{count} screenshot read', '{count} screenshots read'),
+      txn(got.pastes, '{count} paste', '{count} pastes'),
+    ].join(', ');
     counts.textContent = entries.length
-      ? `${got.total} screenshot${got.total === 1 ? '' : 's'} read, ${got.pastes} paste${got.pastes === 1 ? '' : 's'}${pins.length ? ` · ${pins.length} pinned` : ''}`
+      ? `${parts}${pins.length ? ` · ${tx('{count} pinned', { count: pins.length })}` : ''}`
       : '';
   }
 
@@ -8053,11 +8363,12 @@ async function renderScreenLog() {
   renderScreenReviewInbox(got.readings || []);
 
   if (!entries.length) {
-    list.append(el('p', 'muted', 'Nothing read yet. Screenshots and pastes both land here.'));
+    list.append(el('p', 'muted', tx('Nothing read yet. Screenshots and pastes both land here.')));
     return;
   }
 
   let latest = true;
+  const stamp = (iso) => new Date(iso).toLocaleString(QW_DATE_LOCALES);
 
   for (const entry of entries) {
     const row = document.createElement(latest ? 'article' : 'details');
@@ -8067,20 +8378,20 @@ async function renderScreenLog() {
     if (!latest) {
       const summary = document.createElement('summary');
       summary.textContent = entry.paste
-        ? `${new Date(entry.paste.at).toLocaleString()} · copied location · ${entry.paste.gigametres.toFixed(4)} Gm from system centre`
+        ? `${stamp(entry.paste.at)} · ${tx('copied location')} · ${tx('{distance} Gm from system centre', { distance: entry.paste.gigametres.toFixed(4) })}`
         : screenReadingTimelineLabel(entry.shot);
       row.append(summary);
     } else {
-      body.append(el('div', 'screen-reading-kicker', 'Latest reading'));
+      body.append(el('div', 'screen-reading-kicker', tx('Latest reading')));
     }
 
     if (entry.paste) {
       const p = entry.paste;
       const repeats = Math.max(1, Number(p.timesSeen) || 1);
       const lastSeen = p.lastSeenAt && repeats > 1
-        ? ` · seen ${repeats} times, last ${new Date(p.lastSeenAt).toLocaleString()}` : '';
-      body.append(el('div', 'muted', `${new Date(p.at).toLocaleString()} · pasted${lastSeen}`));
-      body.append(el('div', 'strong', `${p.gigametres.toFixed(4)} Gm from the system centre`));
+        ? ` · ${tx('seen {count} times, last {when}', { count: repeats, when: stamp(p.lastSeenAt) })}` : '';
+      body.append(el('div', 'muted', `${stamp(p.at)} · ${tx('pasted')}${lastSeen}`));
+      body.append(el('div', 'strong', tx('{distance} Gm from the system centre', { distance: p.gigametres.toFixed(4) })));
 
       // The raw numbers are the exact part and the only part.
       body.append(el('div', 'muted',
@@ -8088,14 +8399,14 @@ async function renderScreenLog() {
 
       // Where the logs put you then. The reading itself names nowhere.
       body.append(el('div', 'muted', p.believed
-        ? `Your logs had you at ${p.system ? `${p.system} > ` : ''}${p.believed}.`
-        : 'Your logs had no session running, so there is nothing to place it against.'));
+        ? tx('Your logs had you at {place}.', { place: `${p.system ? `${p.system} > ` : ''}${p.believed}` })
+        : tx('Your logs had no session running, so there is nothing to place it against.')));
 
       const action = document.createElement('button');
       action.type = 'button';
       action.className = 'ghost pin-location';
       const saved = pinnedAt.has(p.at);
-      action.textContent = saved ? 'Pinned as POI' : 'Pin as POI';
+      action.textContent = saved ? tx('Pinned as POI') : tx('Pin as POI');
       action.disabled = saved;
       if (!saved) action.addEventListener('click', () => pinClipboardLocation(p, action));
       body.append(action);
@@ -8103,22 +8414,22 @@ async function renderScreenLog() {
       const s = entry.shot;
       if (s.dismissed) row.classList.add('dismissed');
       body.append(el('div', 'muted',
-        `${new Date(s.shotAt).toLocaleString()} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ' · invalidated' : ''}`));
+        `${stamp(s.shotAt)} · ${SCREEN_KINDS[s.kind] || s.kind} · ${s.shot}${s.dismissed ? ` · ${tx('invalidated')}` : ''}`));
       renderSighting(body, s, { full: latest });
 
       // Kept in the log either way: the misreading is worth seeing, and the
       // file must not be read a second time. What changes is whether the
       // wallet, the fleet and the fittings believe it.
       if (s.dismissed)
-        body.append(el('div', 'muted', 'Invalidated — kept here, believed by nothing.'));
+        body.append(el('div', 'muted', tx('Invalidated — kept here, believed by nothing.')));
 
       const action = document.createElement('button');
       action.type = 'button';
       action.className = 'ghost screen-dismiss';
-      action.textContent = s.dismissed ? 'Believe it again' : 'Invalidate';
+      action.textContent = s.dismissed ? tx('Believe it again') : tx('Invalidate');
       action.title = s.dismissed
-        ? 'Let the wallet, fleet and fittings use this reading again'
-        : 'Keep this reading in the log, but stop the wallet, fleet and fittings using it';
+        ? tx('Let the wallet, fleet and fittings use this reading again')
+        : tx('Keep this reading in the log, but stop the wallet, fleet and fittings using it');
       action.addEventListener('click', () => dismissReading(s, !s.dismissed, action));
 
       // Through the reader as it is now. The frame that taught a reader is
@@ -8127,8 +8438,8 @@ async function renderScreenLog() {
       const again = document.createElement('button');
       again.type = 'button';
       again.className = 'ghost screen-reread';
-      again.textContent = 'Read again';
-      again.title = 'Put this screenshot through the reader again and replace this reading';
+      again.textContent = tx('Read again');
+      again.title = tx('Put this screenshot through the reader again and replace this reading');
       again.addEventListener('click', () => rereadReading(s, again));
 
       const actions = el('div', 'screen-actions');
@@ -8145,17 +8456,14 @@ async function renderScreenLog() {
 /** A closed timeline entry still says what the reader found before it asks for attention. */
 function screenReadingTimelineLabel(reading) {
   const kind = SCREEN_KINDS[reading.kind] || reading.kind;
-  let finding = reading.summary || '';
-  if (!finding && reading.contracts)
-    finding = reading.contracts.accepted != null
-      ? `${reading.contracts.accepted} accepted${reading.contracts.capacity != null ? ` of ${reading.contracts.capacity}` : ''}`
-      : `${(reading.contracts.cards || []).length} contracts read`;
-  if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || 'loadout read';
-  if (!finding && reading.fleet) finding = `${(reading.fleet.ships || []).length} ships at the Fleet Manager`;
-  if (!finding && reading.map) finding = reading.map.placeRead || reading.map.systemRead || 'place read';
-  if (!finding && reading.wallet?.balance != null) finding = `wallet ${Number(reading.wallet.balance).toLocaleString()} aUEC`;
-  if (!finding) finding = 'nothing this app knows how to read';
-  return `${new Date(reading.shotAt).toLocaleString()} · ${kind} · ${finding}${reading.dismissed ? ' · invalidated' : ''}`;
+  let finding = reading.summary ? screenText(reading.summary) : '';
+  if (!finding && reading.contracts) finding = screenContractsLine(reading.contracts);
+  if (!finding && reading.loadout) finding = reading.loadout.ship || reading.loadout.shipRead || tx('loadout read');
+  if (!finding && reading.fleet) finding = txn((reading.fleet.ships || []).length, '{count} ship at the Fleet Manager', '{count} ships at the Fleet Manager');
+  if (!finding && reading.map) finding = reading.map.placeRead || reading.map.systemRead || tx('place read');
+  if (!finding && reading.wallet?.balance != null) finding = tx('wallet {balance} aUEC', { balance: Number(reading.wallet.balance).toLocaleString() });
+  if (!finding) finding = tx('nothing this app knows how to read');
+  return `${new Date(reading.shotAt).toLocaleString(QW_DATE_LOCALES)} · ${kind} · ${finding}${reading.dismissed ? ` · ${tx('invalidated')}` : ''}`;
 }
 
 /** The saved locations are separate from the disposable reading history. */
@@ -8165,41 +8473,42 @@ function renderPinnedLocations(pins) {
   if (!list) return;
 
   list.textContent = '';
-  if (count) count.textContent = pins.length ? `${pins.length} saved` : '';
+  if (count) count.textContent = pins.length ? txn(pins.length, '{count} saved', '{count} saved') : '';
 
   if (!pins.length) {
-    list.append(el('p', 'muted', 'Pin a copied location below to keep it here.'));
+    list.append(el('p', 'muted', tx('Pin a copied location below to keep it here.')));
     return;
   }
 
   for (const pin of pins) {
     const row = el('div', 'pinned-location');
-    row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location'));
-    row.append(el('div', 'muted', pin.category || 'General'));
+    row.append(el('div', 'strong', pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || tx('Copied location')));
+    row.append(el('div', 'muted', tx(pin.category || 'General')));
     // The reason is edited on the Points page; here it is only read, so the
     // aside stays the glance it is.
     if (pin.note) row.append(el('div', 'pin-note', pin.note));
-    row.append(el('div', 'muted', `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+    row.append(el('div', 'muted', tx('{distance} Gm from system centre', { distance: Number(pin.gigametres).toFixed(4) })));
     row.append(el('div', 'muted',
       `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
     const fields = el('div', 'pin-fields');
     const label = document.createElement('input');
     label.type = 'text'; label.className = 'search'; label.value = pin.label || '';
-    label.setAttribute('aria-label', 'Point of interest name');
+    label.setAttribute('aria-label', tx('Point of interest name'));
     const category = document.createElement('select');
-    category.className = 'select'; category.setAttribute('aria-label', 'Point of interest category');
+    category.className = 'select'; category.setAttribute('aria-label', tx('Point of interest category'));
     for (const choice of POINT_CATEGORIES) {
-      const option = new Option(choice, choice);
+      // The value stays the stored English, as on the Points page.
+      const option = new Option(tx(choice), choice);
       option.selected = choice === (pin.category || 'General');
       category.append(option);
     }
     const save = document.createElement('button');
-    save.type = 'button'; save.className = 'ghost'; save.textContent = 'Save';
+    save.type = 'button'; save.className = 'ghost'; save.textContent = tx('Save');
     save.addEventListener('click', () => savePinnedLocation(pin, label.value, category.value, save));
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'ghost pin-remove';
-    remove.textContent = 'Remove';
+    remove.textContent = tx('Remove');
     remove.addEventListener('click', () => unpinLocation(pin, remove));
     fields.append(label, category, save, remove);
     row.append(fields);
@@ -8217,17 +8526,17 @@ function renderScreenReviewInbox(readings) {
   const unknown = readings.filter(reading => ['MobiGlas', 'Unknown'].includes(reading.kind));
   box.hidden = unknown.length === 0;
   list.textContent = '';
-  if (count) count.textContent = unknown.length ? `${unknown.length} queued` : '';
+  if (count) count.textContent = unknown.length ? tx('{count} queued', { count: unknown.length }) : '';
 
   for (const reading of unknown.slice(0, 12)) {
     const item = document.createElement('details');
     item.className = 'screen-review-item';
     const summary = document.createElement('summary');
-    summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString()}`;
-    item.append(summary, el('p', 'muted', reading.summary));
+    summary.textContent = `${reading.shot} · ${new Date(reading.shotAt).toLocaleString(QW_DATE_LOCALES)}`;
+    item.append(summary, el('p', 'muted', screenText(reading.summary)));
     const image = document.createElement('a');
     image.href = `/api/screen/shots/${encodeURIComponent(reading.shot)}`;
-    image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = 'Open screenshot';
+    image.target = '_blank'; image.rel = 'noopener'; image.className = 'ghost'; image.textContent = tx('Open screenshot');
     item.append(image);
     if ((reading.lines || []).length) item.append(el('pre', null, reading.lines.join('\n')));
     list.append(item);
@@ -8236,7 +8545,7 @@ function renderScreenReviewInbox(readings) {
 
 async function pinClipboardLocation(paste, button) {
   button.disabled = true;
-  button.textContent = 'Pinning…';
+  button.textContent = tx('Pinning…');
 
   try {
     const response = await fetch('/api/screen/clipboard/pin', {
@@ -8245,19 +8554,19 @@ async function pinClipboardLocation(paste, button) {
       body: JSON.stringify({ at: paste.at }),
     });
     if (!response.ok) throw new Error(`pin -> ${response.status}`);
-    screenSay('Pinned as a point of interest.');
+    screenSay(tx('Pinned as a point of interest.'));
     await renderScreenLog();
   } catch {
-    screenSay('could not pin that copied location');
+    screenSay(tx('could not pin that copied location'));
     button.disabled = false;
-    button.textContent = 'Pin as POI';
+    button.textContent = tx('Pin as POI');
   }
 }
 
 /** The same file through the reader it has now; the fresh reading replaces the old one. */
 async function rereadReading(reading, button) {
   button.disabled = true;
-  button.textContent = 'Reading…';
+  button.textContent = tx('Reading…');
 
   try {
     const response = await fetch('/api/screen/readings/reread', {
@@ -8270,16 +8579,16 @@ async function rereadReading(reading, button) {
     // the game has since deleted.
     if (!response.ok) {
       const why = await response.json().catch(() => null);
-      throw new Error(why?.trouble || 'could not read that screenshot again - is it still in the game\'s folder?');
+      throw new Error(screenText(why?.trouble) || tx('could not read that screenshot again - is it still in the game\'s folder?'));
     }
     const got = await response.json();
-    screenSay(`Read again: ${got.summary}`);
+    screenSay(tx('Read again: {summary}', { summary: screenText(got.summary) }));
     await renderScreenLog();
     loadLedgerWallet().catch(() => {});
   } catch (e) {
-    screenSay(e.message || 'could not read that screenshot again');
+    screenSay(e.message || tx('could not read that screenshot again'));
     button.disabled = false;
-    button.textContent = 'Read again';
+    button.textContent = tx('Read again');
   }
 }
 
@@ -8294,13 +8603,13 @@ async function dismissReading(reading, dismissed, button) {
       body: JSON.stringify({ shot: reading.shot, dismissed }),
     });
     if (!response.ok) throw new Error(`dismiss -> ${response.status}`);
-    screenSay(dismissed ? 'Invalidated. Nothing will use that reading.' : 'That reading counts again.');
+    screenSay(dismissed ? tx('Invalidated. Nothing will use that reading.') : tx('That reading counts again.'));
     await renderScreenLog();
 
     // The cash card may have been drawn from the very reading just set aside.
     loadLedgerWallet().catch(() => {});
   } catch {
-    screenSay(dismissed ? 'could not invalidate that reading' : 'could not restore that reading');
+    screenSay(dismissed ? tx('could not invalidate that reading') : tx('could not restore that reading'));
     button.disabled = false;
   }
 }
@@ -8313,10 +8622,10 @@ async function savePinnedLocation(pin, label, category, button) {
       body: JSON.stringify({ sourceAt: pin.sourceAt, label, category }),
     });
     if (!response.ok) throw new Error(`pin update -> ${response.status}`);
-    screenSay('Point of interest saved.');
+    screenSay(tx('Point of interest saved.'));
     await renderScreenLog();
   } catch {
-    screenSay('could not save that point of interest');
+    screenSay(tx('could not save that point of interest'));
     button.disabled = false;
   }
 }
@@ -8327,10 +8636,10 @@ async function unpinLocation(pin, button) {
   try {
     const response = await fetch(`/api/screen/pins?at=${encodeURIComponent(pin.sourceAt)}`, { method: 'DELETE' });
     if (!response.ok) throw new Error(`unpin -> ${response.status}`);
-    screenSay('Removed point of interest.');
+    screenSay(tx('Removed point of interest.'));
     await renderScreenLog();
   } catch {
-    screenSay('could not remove that point of interest');
+    screenSay(tx('could not remove that point of interest'));
     button.disabled = false;
   }
 }
@@ -8353,7 +8662,7 @@ async function loadHangar() {
     got = await getJson('/api/fleet/hangar');
   } catch {
     canvas.textContent = '';
-    canvas.append(el('p', 'muted', 'Could not load the fleet — is the app still running?'));
+    canvas.append(el('p', 'muted', tx('Could not load the fleet — is the app still running?')));
     return;
   }
 
@@ -8400,8 +8709,7 @@ function renderHangar() {
   if (!hangarShips?.available) {
     if (count) count.textContent = '';
     canvas.append(el('p', 'muted',
-      'The sizes and silhouettes come from the game files, and this install has not been read yet — '
-      + 'Settings says when the game data is ready.'));
+      tx('The sizes and silhouettes come from the game files, and this install has not been read yet — Settings says when the game data is ready.')));
     return;
   }
 
@@ -8420,8 +8728,8 @@ function renderHangar() {
 
   const unticked = (hangarShips?.ships || []).length - ships.length;
   if (count) {
-    count.textContent = `${ships.length} ship${ships.length === 1 ? '' : 's'}`
-      + (unticked ? ` · ${unticked} unticked on Fleet` : '');
+    count.textContent = txn(ships.length, '{count} ship', '{count} ships')
+      + (unticked ? ` · ${txn(unticked, '{count} unticked on Fleet', '{count} unticked on Fleet')}` : '');
   }
 
   const mode = $('#hangar-mode')?.value || 'gallery';
@@ -8446,9 +8754,9 @@ function renderHangar() {
   if (!pictured.length) {
     canvas.append(el('p', 'muted', ships.length
       ? comparing
-        ? 'Neither selected ship has a top-down game icon or gallery render, so there is nothing to draw to scale.'
-        : 'None of the ships flown has a top-down game icon, so there is nothing to draw to scale.'
-      : 'No ship has been flown in the logs yet, so there is nothing to draw.'));
+        ? tx('Neither selected ship has a top-down game icon or gallery render, so there is nothing to draw to scale.')
+        : tx('None of the ships flown has a top-down game icon, so there is nothing to draw to scale.')
+      : tx('No ship has been flown in the logs yet, so there is nothing to draw.')));
     showScaleOmissions(unsized, iconless, missing);
     return;
   }
@@ -8490,7 +8798,7 @@ function renderHangar() {
   // turn its full bounding box into an empty slab on the deck.
   for (const [title, group] of groups) {
     if (!group.length) continue;
-    canvas.append(el('h3', 'hangar-group', `${title} · ${group.length}`));
+    canvas.append(el('h3', 'hangar-group', `${tx(title)} · ${group.length}`));
     canvas.append(drawToScale(group, width, scale));
   }
 
@@ -8503,7 +8811,7 @@ function renderHangar() {
     bar.append(svgEl('line', { x1: 2, y1: 2, x2: 2, y2: 12 }));
     bar.append(svgEl('line', { x1: metres * scale + 2, y1: 2, x2: metres * scale + 2, y2: 12 }));
     scaleBox.append(bar);
-    scaleBox.append(el('span', 'muted', ` ${metres} m — sizes are the game's bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; in a comparison, a hull without one may use its Gallery render inside that same box and is labelled below its name.`));
+    scaleBox.append(el('span', 'muted', ` ${tx('{metres} m — sizes are the game\'s bounding boxes. Silhouettes are its own vehicle icons, tinted by maker; in a comparison, a hull without one may use its Gallery render inside that same box and is labelled below its name.', { metres })}`));
   }
 
   showScaleOmissions(unsized, iconless, missing);
@@ -8528,7 +8836,7 @@ function renderHangarCompareBar() {
 
   for (const [select, index] of [[a, 0], [b, 1]]) {
     select.textContent = '';
-    select.append(new Option(index === 0 ? 'a ship…' : 'another…', ''));
+    select.append(new Option(index === 0 ? tx('a ship…') : tx('another…'), ''));
     for (const name of names) select.append(new Option(name, name));
     select.value = chosen[index] && names.includes(chosen[index]) ? chosen[index] : '';
   }
@@ -8639,7 +8947,7 @@ async function renderHangarComparison() {
 
   box.hidden = false;
   $('#hangar-compare-title').textContent = `${ships[0].name} vs ${ships[1].name}`;
-  $('#hangar-compare-note').textContent = 'Fetching the sheets…';
+  $('#hangar-compare-note').textContent = tx('Fetching the sheets…');
 
   const [sheets, catalogue] = await Promise.all([
     Promise.all(ships.map((s) => compareSheetFor(s.className))),
@@ -8659,7 +8967,7 @@ async function renderHangarComparison() {
   const hr = el('tr');
   hr.append(el('th', null, ''));
   for (const side of sides) hr.append(el('th', 'num', side.ship.name));
-  hr.append(el('th', 'num', 'Difference'));
+  hr.append(el('th', 'num', tx('Difference')));
   head.append(hr);
 
   const body = $('#hangar-compare-table tbody');
@@ -8669,13 +8977,13 @@ async function renderHangarComparison() {
     if (r.group !== group) {
       group = r.group;
       const gr = el('tr', 'compare-group');
-      const td = el('td', null, group);
+      const td = el('td', null, tx(group));
       td.colSpan = 4;
       gr.append(td);
       body.append(gr);
     }
     const tr = el('tr');
-    tr.append(el('td', null, r.label));
+    tr.append(el('td', null, tx(r.label)));
     const [a, b] = r.values;
     const numeric = typeof a === 'number' && typeof b === 'number';
     const winner = r.better && numeric && a !== b ? ((r.better === 'more') === (a > b) ? 0 : 1) : null;
@@ -8698,8 +9006,13 @@ async function renderHangarComparison() {
   }
 
   const missing = sides.filter((s) => !s.sheet).map((s) => s.ship.name);
-  const parts = ['Size from the game files; sorties and hours from the logs; the rest recomputed from each hull\'s stock parts by the Garage, with UEX prices where it has them. The better figure for its row is lit - less mass, less signature, more of everything else.'];
-  if (missing.length) parts.push(`${missing.join(' and ')}: the community dataset cannot draw ${missing.length === 1 ? 'its' : 'their'} sheet, so only size and use are shown (Settings › community data).`);
+  const parts = [tx('Size from the game files; sorties and hours from the logs; the rest recomputed from each hull\'s stock parts by the Garage, with UEX prices where it has them. The better figure for its row is lit - less mass, less signature, more of everything else.')];
+  if (missing.length) {
+    parts.push(txn(missing.length,
+      '{ships}: the community dataset cannot draw its sheet, so only size and use are shown (Settings › community data).',
+      '{ships}: the community dataset cannot draw their sheet, so only size and use are shown (Settings › community data).',
+      { ships: missing.join(` ${tx('and')} `) }));
+  }
   $('#hangar-compare-note').textContent = parts.join(' ');
 }
 
@@ -8774,7 +9087,7 @@ async function hangarPictureSvg() {
   const note = $('#hangar-unsized')?.hidden ? '' : ($('#hangar-unsized')?.textContent || '');
   const groups = decks.map((deck) => ({
     deck,
-    title: deck.previousElementSibling?.textContent || 'Vehicles',
+    title: deck.previousElementSibling?.textContent || tx('Vehicles'),
     height: Number(deck.getAttribute('height')) || 0,
   }));
   const noteLines = wrapHangarExportText(note, Math.max(50, Math.floor((width - 40) / 7)));
@@ -8784,7 +9097,7 @@ async function hangarPictureSvg() {
     xmlns: SVG_NS, width, height, viewBox: `0 0 ${width} ${height}`, role: 'img',
   });
   exported.append(svgEl('title', {}));
-  exported.lastChild.textContent = 'Quantum Wake Hangar — fleet to scale';
+  exported.lastChild.textContent = tx('Quantum Wake Hangar — fleet to scale');
   exported.append(svgEl('style', {}));
   exported.lastChild.textContent = '.hangar-name{fill:#dcebf7;font-size:11px;font-family:ui-monospace,Consolas,monospace}.hangar-dims{fill:#7691a8;font-size:10px}.hangar-export-heading{fill:#8be7ff;font-size:12px;font-family:ui-monospace,Consolas,monospace;letter-spacing:2px}.hangar-export-note{fill:#7691a8;font-size:11px;font-family:ui-monospace,Consolas,monospace}';
   exported.append(svgEl('rect', { x: 0, y: 0, width, height, fill: '#070c14' }));
@@ -8841,7 +9154,7 @@ function saveHangarBlob(blob, extension) {
 async function exportHangarPicture(kind, button) {
   const label = button.textContent;
   button.disabled = true;
-  button.textContent = 'Exporting…';
+  button.textContent = tx('Exporting…');
 
   try {
     const svg = await hangarPictureSvg();
@@ -8872,9 +9185,9 @@ async function exportHangarPicture(kind, button) {
         URL.revokeObjectURL(url);
       }
     }
-    button.textContent = 'Saved';
+    button.textContent = tx('Saved');
   } catch (error) {
-    button.textContent = 'Could not export';
+    button.textContent = tx('Could not export');
     console.error(error);
   } finally {
     setTimeout(() => { button.textContent = label; button.disabled = false; }, 1800);
@@ -8888,10 +9201,10 @@ function showScaleOmissions(note, iconless, missing) {
   const parts = [];
   if (iconless.length) {
     const names = iconless.map((s) => `${s.name} (${s.length} × ${s.beam} × ${s.height} m)`);
-    parts.push(`No top-down game icon, so not drawn to scale: ${names.join(', ')}.`);
+    parts.push(tx('No top-down game icon, so not drawn to scale: {ships}.', { ships: names.join(', ') }));
   }
   if (missing.length)
-    parts.push(`Not in the install's vehicle table, so not drawn: ${missing.map((s) => s.name).join(', ')}.`);
+    parts.push(tx('Not in the install\'s vehicle table, so not drawn: {ships}.', { ships: missing.map((s) => s.name).join(', ') }));
 
   note.hidden = false;
   note.textContent = parts.join(' ');
@@ -8905,7 +9218,7 @@ function showScaleOmissions(note, iconless, missing) {
  */
 function renderHangarGallery(canvas, ships) {
   if (!ships.length) {
-    canvas.append(el('p', 'muted', 'No ship has been flown in the logs yet, so there is nothing to show.'));
+    canvas.append(el('p', 'muted', tx('No ship has been flown in the logs yet, so there is nothing to show.')));
     return;
   }
 
@@ -8923,18 +9236,18 @@ function renderHangarGallery(canvas, ships) {
 
     const facts = [];
     if (ship.length > 0) facts.push(`${ship.length} × ${ship.beam} × ${ship.height} m`);
-    facts.push(`${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`);
-    if (ship.hours > 0) facts.push(`~${ship.hours} h aboard`);
+    facts.push(txn(ship.sorties, '{count} sortie', '{count} sorties'));
+    if (ship.hours > 0) facts.push(tx('~{hours} h aboard', { hours: ship.hours }));
     body.append(el('div', 'muted', facts.join(' · ')));
 
-    if (!(ship.length > 0)) body.append(el('div', 'muted', 'not in the install\'s vehicle table — no size'));
+    if (!(ship.length > 0)) body.append(el('div', 'muted', tx('not in the install\'s vehicle table — no size')));
 
     // The same offer as the Fleet card, under the same rule: ground vehicles
     // have no ports anyone sells parts for, so the Garage is not offered.
     if (ship.kind === 'Spaceship' || !ship.kind) {
-      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      const garage = el('button', 'ghost ship-upgrade', tx('Garage'));
       garage.type = 'button';
-      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: ship.name });
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
       body.append(garage);
     }
@@ -8981,14 +9294,14 @@ function drawToScale(ships, width, scale) {
 
   const height = y + rowHeight + label + 20;
   const svg = svgEl('svg', { class: 'hangar-svg', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img' });
-  svg.setAttribute('aria-label', 'The fleet drawn to scale');
+  svg.setAttribute('aria-label', tx('The fleet drawn to scale'));
 
   for (const { ship, x: sx, y: sy, w, h, cell } of placed) {
     const group = svgEl('g', { class: 'hangar-ship', transform: `translate(${sx} ${sy})` });
     const title = svgEl('title', {});
     group.append(title);
-    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
-      + (!ship.icon ? ' · Gallery render fitted to this scale box; no top-down icon is installed' : '');
+    title.textContent = `${ship.name} · ${ship.length} × ${ship.beam} × ${ship.height} m · ${txn(ship.sorties, '{count} sortie', '{count} sorties')}`
+      + (!ship.icon ? ` · ${tx('Gallery render fitted to this scale box; no top-down icon is installed')}` : '');
 
     // Centred in the cell so a small ship's name does not hang off its left edge.
     const offset = (cell - w) / 2;
@@ -9027,8 +9340,8 @@ function drawToScale(ships, width, scale) {
     group.append(name);
 
     const dims = svgEl('text', { class: 'hangar-dims', x: cell / 2, y: baseline + 13, 'text-anchor': 'middle' });
-    dims.textContent = `${ship.length} m · ${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'}`
-      + (!ship.icon ? ' · gallery render' : '');
+    dims.textContent = `${ship.length} m · ${txn(ship.sorties, '{count} sortie', '{count} sorties')}`
+      + (!ship.icon ? ` · ${tx('gallery render')}` : '');
     group.append(dims);
 
     // What the picture is, said on the picture: a top-down icon is the
@@ -9036,7 +9349,7 @@ function drawToScale(ships, width, scale) {
     // into that footprint's box. In a comparison the two can sit side by
     // side, and a caption under the name is not where the eye is.
     if (hangarComparison.size === 2) {
-      const kind = paint ? 'gallery render' : 'top-down icon';
+      const kind = paint ? tx('gallery render') : tx('top-down icon');
       const badge = svgEl('g', { class: `hangar-source ${paint ? 'render' : 'icon'}`, transform: `translate(${offset + 4} ${top + 4})` });
       badge.append(svgEl('rect', { x: 0, y: 0, width: kind.length * 6.2 + 16, height: 16, rx: 3 }));
       const label = svgEl('text', { x: 8, y: 11.5 });
@@ -9044,8 +9357,8 @@ function drawToScale(ships, width, scale) {
       badge.append(label);
       const why = svgEl('title', {});
       why.textContent = paint
-        ? 'The game\'s gallery render of this hull, fitted into its installed bounding box - a three-quarter view, not the footprint.'
-        : 'The game\'s own top-down vehicle icon, at the installed bounding box: the real footprint.';
+        ? tx('The game\'s gallery render of this hull, fitted into its installed bounding box - a three-quarter view, not the footprint.')
+        : tx('The game\'s own top-down vehicle icon, at the installed bounding box: the real footprint.');
       badge.append(why);
       group.append(badge);
     }
@@ -9292,7 +9605,7 @@ async function trackWikelo(trade, card, button, said) {
   try {
     const response = await fetch(`/api/wikelo/${encodeURIComponent(trade.id)}/track`, { method: 'POST' });
     const answer = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(answer?.trouble || `track -> ${response.status}`);
+    if (!response.ok) throw new Error(serverText(answer?.trouble) || `track -> ${response.status}`);
 
     // The card alone is redrawn as tracked; the rest of the page keeps its
     // scroll and its search, and the sentence below the button stays put.
@@ -9871,7 +10184,7 @@ async function loadOwnPoints() {
     pointsAll = await getJson('/api/screen/pins');
   } catch {
     list.textContent = '';
-    list.append(el('p', 'muted', 'Could not load your points — is the app still running?'));
+    list.append(el('p', 'muted', tx('Could not load your points — is the app still running?')));
     return;
   }
 
@@ -9893,7 +10206,7 @@ async function loadOwnPoints() {
 }
 
 function pointName(pin) {
-  return pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || 'Copied location';
+  return pin.label || [pin.system, pin.believed].filter(Boolean).join(' > ') || tx('Copied location');
 }
 
 /** The session the copy fell inside, when the library has one that spans it. */
@@ -9930,9 +10243,11 @@ function renderPointCategories() {
     row.append(button);
   };
 
-  chip(`All · ${pointsAll.length}`, null);
+  // The category is stored in English and only its label is translated, so a
+  // point saved on a French page is filed under the same chip as the rest.
+  chip(`${tx('All')} · ${pointsAll.length}`, null);
   for (const [category, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0])))
-    chip(`${category} · ${count}`, category);
+    chip(`${tx(category)} · ${count}`, category);
 }
 
 /** A distance in the unit a pilot would say it in: metres up close, kilometres in the main, gigametres across a system. */
@@ -9955,8 +10270,9 @@ function nearPointLine(near) {
   if (near.sameSystem) {
     line.append(el('span', null, ` · ${distanceWord(near.metres)}`));
   } else {
-    line.append(el('span', 'muted',
-      ` · ${near.system ? `in ${near.system}` : 'system unknown'} — a different frame, so no distance can be given`));
+    line.append(el('span', 'muted', ` · ${near.system
+      ? tx('in {system} — a different frame, so no distance can be given', { system: near.system })
+      : tx('system unknown — a different frame, so no distance can be given')}`));
   }
   return line;
 }
@@ -9972,10 +10288,11 @@ function renderPointsFromHere() {
 
   const from = pointsFrom.from;
   const placed = [from.system, from.believed].filter(Boolean).join(' › ');
-  box.append(el('span', null,
-    `Distances are from where you last copied a location — ${dateOf(from.at)}, ${shortTimeOf(from.at)}`
-    + `${placed ? `, believed to be ${placed}` : ', which the logs could not place'}. `));
-  box.append(el('span', 'muted', 'Copy a new /showlocation in the game and they move with you.'));
+  const when = { date: dateOf(from.at), time: shortTimeOf(from.at), place: placed };
+  box.append(el('span', null, `${placed
+    ? tx('Distances are from where you last copied a location — {date}, {time}, believed to be {place}.', when)
+    : tx('Distances are from where you last copied a location — {date}, {time}, which the logs could not place.', when)} `));
+  box.append(el('span', 'muted', tx('Copy a new /showlocation in the game and they move with you.')));
 }
 
 function renderPoints() {
@@ -9987,11 +10304,11 @@ function renderPoints() {
   list.textContent = '';
 
   const count = $('#points-count');
-  if (count) count.textContent = pointsAll.length ? `${pointsAll.length} kept` : '';
+  if (count) count.textContent = pointsAll.length ? txn(pointsAll.length, '{count} kept', '{count} kept') : '';
 
   if (!pointsAll.length) {
     list.append(el('p', 'muted',
-      'No points yet. Copy a /showlocation in the game, then pin it from the Log — it lands here with room for a note.'));
+      tx('No points yet. Copy a /showlocation in the game, then pin it from the Log — it lands here with room for a note.')));
     return;
   }
 
@@ -10004,7 +10321,7 @@ function renderPoints() {
   });
 
   if (!shown.length) {
-    list.append(el('p', 'muted', 'No point matches that.'));
+    list.append(el('p', 'muted', tx('No point matches that.')));
     return;
   }
 
@@ -10022,28 +10339,28 @@ function pointBeliefLine(pin) {
   const line = el('span', 'point-belief');
 
   if (pin.systemByPilot) {
-    line.append(el('span', null, `in ${pin.system}, as you set it`));
-    if (pin.believed) line.append(el('span', 'muted', ` · the logs had said ${pin.believed}`));
+    line.append(el('span', null, tx('in {system}, as you set it', { system: pin.system })));
+    if (pin.believed) line.append(el('span', 'muted', ` · ${tx('the logs had said {place}', { place: pin.believed })}`));
     return line;
   }
 
   const believed = [pin.system, pin.believed].filter(Boolean).join(' › ');
   if (!believed) {
-    line.append(el('span', 'warn', 'the logs could not place this copy — set the system above'));
+    line.append(el('span', 'warn', tx('the logs could not place this copy — set the system above')));
     return line;
   }
 
-  line.append(el('span', null, `believed to be ${believed} when copied`));
+  line.append(el('span', null, tx('believed to be {place} when copied', { place: believed })));
 
   if (pin.believedBy && pin.believedAt) {
     const minutes = Math.max(0, Math.round((new Date(pin.sourceAt) - new Date(pin.believedAt)) / 60000));
-    const ago = minutes < 1 ? 'moments' : minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+    const ago = minutes < 1 ? tx('moments') : minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
     const basis = pin.believedBy === 'Jump'
-      ? `a quantum jump ${ago} earlier — where the ship was going, not that it arrived`
-      : `a location signal ${ago} earlier`;
-    line.append(el('span', 'muted', `, from ${basis}`));
+      ? tx(', from a quantum jump {ago} earlier — where the ship was going, not that it arrived', { ago })
+      : tx(', from a location signal {ago} earlier', { ago });
+    line.append(el('span', 'muted', basis));
   } else {
-    line.append(el('span', 'muted', ', on evidence this copy did not record'));
+    line.append(el('span', 'muted', tx(', on evidence this copy did not record')));
   }
 
   return line;
@@ -10062,11 +10379,11 @@ function renderPointCard(pin, into = null) {
   name.className = 'search point-name';
   name.value = pin.label || '';
   name.placeholder = pointName(pin);
-  name.setAttribute('aria-label', 'Point name');
+  name.setAttribute('aria-label', tx('Point name'));
   const category = document.createElement('select');
   category.className = 'select point-category';
-  category.setAttribute('aria-label', 'Point category');
-  for (const choice of POINT_CATEGORIES) category.append(new Option(choice, choice));
+  category.setAttribute('aria-label', tx('Point category'));
+  for (const choice of POINT_CATEGORIES) category.append(new Option(tx(choice), choice));
   category.value = POINT_CATEGORIES.includes(pin.category) ? pin.category : 'General';
 
   // The system is the pilot's to say. The coordinates are relative to it, so
@@ -10074,9 +10391,9 @@ function renderPointCard(pin, into = null) {
   // sometimes wrong and sometimes absent.
   const system = document.createElement('select');
   system.className = 'select point-system';
-  system.setAttribute('aria-label', 'Which system this point is in');
-  system.title = pin.systemByPilot ? 'The system, as you set it' : 'The system, as the logs believed it - change it if they were wrong';
-  system.append(new Option('System?', ''));
+  system.setAttribute('aria-label', tx('Which system this point is in'));
+  system.title = pin.systemByPilot ? tx('The system, as you set it') : tx('The system, as the logs believed it - change it if they were wrong');
+  system.append(new Option(tx('System?'), ''));
   const systems = Object.keys(SYSTEMS);
   if (pin.system && !systems.includes(pin.system)) systems.push(pin.system);
   for (const choice of systems) system.append(new Option(choice, choice));
@@ -10090,7 +10407,7 @@ function renderPointCard(pin, into = null) {
   const facts = el('div', 'point-facts muted');
   facts.append(el('span', 'mono',
     `x ${Math.round(pin.x).toLocaleString()} · y ${Math.round(pin.y).toLocaleString()} · z ${Math.round(pin.z).toLocaleString()}`));
-  facts.append(el('span', null, `${Number(pin.gigametres).toFixed(4)} Gm from system centre`));
+  facts.append(el('span', null, tx('{distance} Gm from system centre', { distance: Number(pin.gigametres).toFixed(4) })));
   facts.append(pointBeliefLine(pin));
   card.append(facts);
 
@@ -10099,25 +10416,25 @@ function renderPointCard(pin, into = null) {
   if (near) {
     const here = el('div', 'point-here');
     here.append(near.sameSystem
-      ? el('span', null, `${distanceWord(near.metres)} from where you last copied`)
-      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+      ? el('span', null, tx('{distance} from where you last copied', { distance: distanceWord(near.metres) }))
+      : el('span', 'muted', tx('not measurable from where you last copied — a different system, so a different frame')));
     card.append(here);
   }
 
   const when = el('div', 'point-when muted');
-  when.append(el('span', null, `Copied ${dateOf(pin.sourceAt)}, ${shortTimeOf(pin.sourceAt)}`));
+  when.append(el('span', null, tx('Copied {date}, {time}', { date: dateOf(pin.sourceAt), time: shortTimeOf(pin.sourceAt) })));
   const session = sessionAround(pin.sourceAt);
   if (session) {
-    const open = el('button', 'link', `during the session of ${dateOf(session.startedAt)}${session.primaryShip ? ` · ${session.primaryShip}` : ''}`);
+    const open = el('button', 'link', `${tx('during the session of {date}', { date: dateOf(session.startedAt) })}${session.primaryShip ? ` · ${session.primaryShip}` : ''}`);
     open.type = 'button';
-    open.title = 'Open that session';
+    open.title = tx('Open that session');
     open.addEventListener('click', () => {
       showView('sessions');
       if (expandedSessionId !== session.id) toggleSessionDebrief(session.id).catch(() => {});
     });
     when.append(el('span', null, ' · '), open);
   } else {
-    when.append(el('span', null, ' · no session in the library spans that moment'));
+    when.append(el('span', null, ` · ${tx('no session in the library spans that moment')}`));
   }
   card.append(when);
 
@@ -10126,13 +10443,13 @@ function renderPointCard(pin, into = null) {
   note.rows = 3;
   note.maxLength = 2000;
   note.value = pin.note || '';
-  note.placeholder = 'Why were you there? What is here, who you met, what to bring next time…';
-  note.setAttribute('aria-label', 'Why you were there');
+  note.placeholder = tx('Why were you there? What is here, who you met, what to bring next time…');
+  note.setAttribute('aria-label', tx('Why you were there'));
   card.append(note);
 
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
-  const save = el('button', 'ghost point-save', 'Save');
+  const save = el('button', 'ghost point-save', tx('Save'));
   save.type = 'button';
   save.addEventListener('click', () => savePoint(pin, card, {
     label: name.value,
@@ -10143,21 +10460,21 @@ function renderPointCard(pin, into = null) {
     system: system.value !== (pin.system || '') ? system.value : null,
   }, save, said));
 
-  const copy = el('button', 'ghost point-copy', 'Copy coordinates');
+  const copy = el('button', 'ghost point-copy', tx('Copy coordinates'));
   copy.type = 'button';
-  copy.title = 'Copy x y z to the clipboard';
+  copy.title = tx('Copy x y z to the clipboard');
   copy.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(`${pin.x} ${pin.y} ${pin.z}`);
-      said.textContent = 'Coordinates copied.';
+      said.textContent = tx('Coordinates copied.');
     } catch {
-      said.textContent = 'The browser would not let the page write to the clipboard.';
+      said.textContent = tx('The browser would not let the page write to the clipboard.');
     }
   });
 
-  const remove = el('button', 'ghost danger point-remove', 'Remove');
+  const remove = el('button', 'ghost danger point-remove', tx('Remove'));
   remove.type = 'button';
-  remove.title = 'Forget this point; the copied reading it came from stays in the Log';
+  remove.title = tx('Forget this point; the copied reading it came from stays in the Log');
   remove.addEventListener('click', () => removePoint(pin, remove, said));
 
   actions.append(save, copy, remove, said);
@@ -10172,7 +10489,7 @@ function renderPointCard(pin, into = null) {
 
 async function savePoint(pin, card, fields, button, said) {
   button.disabled = true;
-  said.textContent = 'Saving…';
+  said.textContent = tx('Saving…');
 
   try {
     const response = await fetch('/api/screen/pins', {
@@ -10188,13 +10505,13 @@ async function savePoint(pin, card, fields, button, said) {
     // half-typed on the card beside it, and there is no undo for that. The
     // category chips do get redrawn, since a save can move a point between them.
     renderPointCard(saved, card);
-    card.querySelector('.point-said').textContent = 'Saved.';
+    card.querySelector('.point-said').textContent = tx('Saved.');
     renderPointCategories();
 
     // The Log aside shows the same points, and is cheap to keep honest.
     renderScreenLog().catch(() => {});
   } catch {
-    said.textContent = 'Could not save — is the app still running?';
+    said.textContent = tx('Could not save — is the app still running?');
     button.disabled = false;
   }
 }
@@ -10210,7 +10527,7 @@ async function removePoint(pin, button, said) {
     renderPoints();
     renderScreenLog().catch(() => {});
   } catch {
-    said.textContent = 'Could not remove that point.';
+    said.textContent = tx('Could not remove that point.');
     button.disabled = false;
   }
 }
@@ -10238,9 +10555,10 @@ async function renderSharedPoints() {
 
   if (showImported === 'none') {
     const line = el('p', 'muted');
-    line.append(el('span', null,
-      `${rows.length} point${rows.length === 1 ? '' : 's'} from files you were sent ${rows.length === 1 ? 'is' : 'are'} not shown. `));
-    const show = el('button', 'ghost tiny', 'Show them');
+    line.append(el('span', null, `${txn(rows.length,
+      '{count} point from files you were sent is not shown.',
+      '{count} points from files you were sent are not shown.')} `));
+    const show = el('button', 'ghost tiny', tx('Show them'));
     show.addEventListener('click', () => setShowImported('all'));
     line.append(show);
     host.append(line);
@@ -10248,10 +10566,8 @@ async function renderSharedPoints() {
   }
 
   const block = el('section', 'shared-block');
-  block.append(el('h3', null, 'Shared by others'));
-  block.append(el('p', 'muted', 'Points from the files you were sent. The coordinates are exact; '
-    + 'the system is what the sender\'s logs believed unless they set it themselves, and the '
-    + 'note is theirs. Keep one and it becomes your own point, backed up and edited like the rest.'));
+  block.append(el('h3', null, tx('Shared by others')));
+  block.append(el('p', 'muted', tx('Points from the files you were sent. The coordinates are exact; the system is what the sender\'s logs believed unless they set it themselves, and the note is theirs. Keep one and it becomes your own point, backed up and edited like the rest.')));
 
   const list = el('div', 'points-list');
   for (const row of rows) list.append(sharedPointCard(row));
@@ -10264,38 +10580,42 @@ function sharedPointCard(row) {
 
   const head = el('div', 'point-head shared');
   head.append(el('div', 'point-name-read', row.label));
-  head.append(el('div', 'muted', `${row.category || 'General'} · from ${row.imported?.handle || 'someone'}`));
+  head.append(el('div', 'muted', `${tx(row.category || 'General')} · ${row.imported?.handle
+    ? tx('from {handle}', { handle: row.imported.handle })
+    : tx('from someone')}`));
   card.append(head);
 
   const facts = el('div', 'point-facts muted');
   facts.append(el('span', 'mono',
     `x ${Math.round(row.x).toLocaleString()} · y ${Math.round(row.y).toLocaleString()} · z ${Math.round(row.z).toLocaleString()}`));
-  facts.append(el('span', null, `${Number(row.gigametres).toFixed(4)} Gm from system centre`));
+  facts.append(el('span', null, tx('{distance} Gm from system centre', { distance: Number(row.gigametres).toFixed(4) })));
   if (row.system) {
     facts.append(el('span', null, row.systemByPilot
-      ? `in ${row.system}, as they set it`
-      : `in ${row.system}, as their logs believed${row.believed ? ` (near ${row.believed})` : ''}`));
+      ? tx('in {system}, as they set it', { system: row.system })
+      : row.believed
+        ? tx('in {system}, as their logs believed (near {place})', { system: row.system, place: row.believed })
+        : tx('in {system}, as their logs believed', { system: row.system })));
   } else {
-    facts.append(el('span', 'warn', 'system unknown — their logs could not place it'));
+    facts.append(el('span', 'warn', tx('system unknown — their logs could not place it')));
   }
   card.append(facts);
 
   if (row.metres != null) {
     const here = el('div', 'point-here');
     here.append(row.sameSystem
-      ? el('span', null, `${distanceWord(row.metres)} from where you last copied`)
-      : el('span', 'muted', 'not measurable from where you last copied — a different system, so a different frame'));
+      ? el('span', null, tx('{distance} from where you last copied', { distance: distanceWord(row.metres) }))
+      : el('span', 'muted', tx('not measurable from where you last copied — a different system, so a different frame')));
     card.append(here);
   }
 
-  card.append(el('div', 'point-when muted', `They copied it ${dateOf(row.at)}, ${shortTimeOf(row.at)}`));
+  card.append(el('div', 'point-when muted', tx('They copied it {date}, {time}', { date: dateOf(row.at), time: shortTimeOf(row.at) })));
   if (row.note) card.append(el('div', 'pin-note', row.note));
 
   const actions = el('div', 'point-actions');
   const said = el('span', 'muted point-said');
-  const keep = el('button', 'ghost point-keep', 'Keep as mine');
+  const keep = el('button', 'ghost point-keep', tx('Keep as mine'));
   keep.type = 'button';
-  keep.title = 'Copy this point into your own, with a note saying who shared it';
+  keep.title = tx('Copy this point into your own, with a note saying who shared it');
   keep.addEventListener('click', async () => {
     keep.disabled = true;
     try {
@@ -10303,11 +10623,11 @@ function sharedPointCard(row) {
         `/api/imports/${encodeURIComponent(row.imported.id)}/points/keep?at=${encodeURIComponent(row.at)}`,
         { method: 'POST' });
       const answer = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(answer?.trouble || `keep -> ${response.status}`);
-      said.textContent = 'Kept — it is in your points above.';
+      if (!response.ok) throw new Error(serverText(answer?.trouble) || `keep -> ${response.status}`);
+      said.textContent = tx('Kept — it is in your points above.');
       loadOwnPoints().catch(() => {});
     } catch (e) {
-      said.textContent = e.message || 'Could not keep that point.';
+      said.textContent = e.message || tx('Could not keep that point.');
       keep.disabled = false;
     }
   });
@@ -10320,17 +10640,17 @@ function sharedPointCard(row) {
 /** One Fleet Manager row: the ship, or the reading when the terminal's face beat the engine. */
 function fleetRow(row) {
   const li = el('li');
-  li.append(el('span', 'what', row.ship || `read as “${row.read}”`));
+  li.append(el('span', 'what', row.ship || tx('read as “{read}”', { read: row.read })));
 
   const facts = [];
-  if (row.location) facts.push(`at ${row.location}`);
+  if (row.location) facts.push(tx('at {place}', { place: row.location }));
   if (row.state) facts.push(row.state.toLowerCase());
   if (row.focus) facts.push(row.focus);
   if (row.cargo != null) facts.push(`${row.cargo} SCU`);
   if (facts.length) li.append(el('span', 'd', ` · ${facts.join(' · ')}`));
 
   if (!row.ship && row.looksLike?.length)
-    li.append(el('span', 'd', ` · looks like ${row.looksLike.join(' or ')}`));
+    li.append(el('span', 'd', ` · ${tx('looks like {ships}', { ships: row.looksLike.join(` ${tx('or')} `) })}`));
 
   return li;
 }
@@ -10368,7 +10688,7 @@ function renderNowScreenCard(s) {
 
   // The server's summary: the fixed ones translate, the ones built around a
   // count or a name stay as written until the server speaks the language.
-  $('#now-screen-summary').textContent = tx(s.summary);
+  $('#now-screen-summary').textContent = screenText(s.summary);
   $('#now-screen-when').textContent =
     `${SCREEN_KINDS[s.kind] || s.kind} · ${new Date(s.shotAt).toLocaleTimeString(QW_DATE_LOCALES)} · ${s.shot}`;
 
@@ -10428,21 +10748,21 @@ async function renderFleetFittings() {
   for (const s of ships) {
     const card = el('article', 'ship-card');
     card.append(el('div', 'strong', s.ship));
-    card.append(el('div', 'muted', `as photographed ${new Date(s.shotAt).toLocaleString()}`));
-    if (s.scope) card.append(el('div', 'muted', s.scope));
+    card.append(el('div', 'muted', tx('as photographed {when}', { when: new Date(s.shotAt).toLocaleString(QW_DATE_LOCALES) })));
+    if (s.scope) card.append(el('div', 'muted', screenText(s.scope)));
 
     const list = el('ul', 'feed screen-fittings');
 
     for (const f of s.fittings || []) {
       const li = el('li');
-      li.append(el('span', 'what', f.slot));
+      li.append(el('span', 'what', screenText(f.slot)));
 
-      if (f.nothingRead) li.append(el('span', 'd', ' · nothing read under it'));
+      if (f.nothingRead) li.append(el('span', 'd', ` · ${tx('nothing read under it')}`));
       else if (f.name) {
         li.append(el('span', 'd', ` · ${f.name}`));
-        if (f.stock === false) li.append(el('span', 'k differs', 'not stock'));
-        if (f.stock === true) li.append(el('span', 'k agrees', 'stock'));
-      } else li.append(el('span', 'd', ` · read “${f.read}”, matched nothing`));
+        if (f.stock === false) li.append(el('span', 'k differs', tx('not stock')));
+        if (f.stock === true) li.append(el('span', 'k agrees', tx('stock')));
+      } else li.append(el('span', 'd', ` · ${tx('read “{read}”, matched nothing', { read: f.read })}`));
 
       list.append(li);
     }
@@ -10476,7 +10796,7 @@ async function renderFleetBerths() {
   if (title) title.hidden = rows.length === 0;
   if (!rows.length) return;
 
-  list.append(el('p', 'muted', `As photographed ${new Date(got.shotAt).toLocaleString()} · ${got.shot}`));
+  list.append(el('p', 'muted', `${tx('As photographed {when}', { when: new Date(got.shotAt).toLocaleString(QW_DATE_LOCALES) })} · ${got.shot}`));
 
   const feed = el('ul', 'feed screen-fittings');
   for (const row of rows) feed.append(fleetRow(row));
@@ -10489,8 +10809,8 @@ async function renderFleetBerths() {
   const unflown = rows.filter((row) => row.ship && !row.flown);
   if (!unflown.length) return;
 
-  list.append(el('h3', 'spaced', `Owned, never flown in the logs · ${unflown.length}`));
-  list.append(el('p', 'muted caption', 'Listed at the Fleet Manager and never seen aboard in a session: no sorties, no hours, no photographed fit. The numbers a card would carry are all zero, so it carries the terminal\'s instead.'));
+  list.append(el('h3', 'spaced', `${tx('Owned, never flown in the logs')} · ${unflown.length}`));
+  list.append(el('p', 'muted caption', tx('Listed at the Fleet Manager and never seen aboard in a session: no sorties, no hours, no photographed fit. The numbers a card would carry are all zero, so it carries the terminal\'s instead.')));
   const grid = el('div', 'ship-grid');
   for (const row of unflown) {
     const card = el('article', 'ship-card unflown');
@@ -10498,13 +10818,13 @@ async function renderFleetBerths() {
     if (row.className) card.append(shipPicture({ name: row.ship, className: row.className }, maker));
     const body = el('div', 'ship-body');
     body.append(el('div', 'ship-name', row.ship));
-    const facts = [row.location ? `at ${row.location}` : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
-    body.append(el('div', 'ship-ref muted', facts.join(' · ') || 'no berth read'));
-    body.append(el('div', 'ship-ref muted', 'never flown in the logs'));
+    const facts = [row.location ? tx('at {place}', { place: row.location }) : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
+    body.append(el('div', 'ship-ref muted', facts.join(' · ') || tx('no berth read')));
+    body.append(el('div', 'ship-ref muted', tx('never flown in the logs')));
     if (row.className) {
-      const garage = el('button', 'ghost ship-upgrade', 'Garage');
+      const garage = el('button', 'ghost ship-upgrade', tx('Garage'));
       garage.type = 'button';
-      garage.title = `${row.ship}'s numbers, what fits it, and what a part would change`;
+      garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: row.ship });
       garage.addEventListener('click', () => openGarageFor(row.className));
       body.append(garage);
     }
@@ -10581,14 +10901,14 @@ async function loadControls() {
   const panes = [...CONTROLS_PANES.map((p) => $(`#controls-pane-${p}`)), $('#controls-tabs')];
   if (!controlsModel) {
     for (const p of panes) if (p) p.hidden = true;
-    if (unready) { unready.hidden = false; unready.textContent = 'The controls could not be read.'; }
+    if (unready) { unready.hidden = false; unready.textContent = tx('The controls could not be read.'); }
     return;
   }
   if (!controlsModel.ready) {
     for (const p of panes) if (p) p.hidden = true;
     if (unready) {
       unready.hidden = false;
-      unready.textContent = gameDataExcuse() || 'The install has not been read yet - Settings says when the game data is ready.';
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
     }
     return;
   }
@@ -10598,11 +10918,23 @@ async function loadControls() {
   const status = $('#controls-status');
   if (status) {
     const m = controlsModel;
-    status.textContent = m.profileFound
-      ? `${m.profile.devices.filter((d) => d.type === 'joystick' && d.product).length} sticks and ${m.profile.bindings.filter((b) => b.input.device === 'js' && b.input.kind !== 'none').length} joystick bindings in the game's profile · ${m.catalogue.actions.length} actions the game can bind · ${m.backupCount} version${m.backupCount === 1 ? '' : 's'} kept${m.backups ? `, the latest written ${relative(m.backups.writtenAt)}` : ''}.`
-      : m.problem
-        ? `The game's profile could not be read: ${m.problem}`
-        : 'The game has not written a keybinding profile yet - it appears after the first time the keybinding screen is used.';
+    if (m.profileFound) {
+      const sticks = m.profile.devices.filter((d) => d.type === 'joystick' && d.product).length;
+      const bindings = m.profile.bindings.filter((b) => b.input.device === 'js' && b.input.kind !== 'none').length;
+      const kept = txn(m.backupCount, '{count} version kept', '{count} versions kept');
+      status.textContent = [
+        tx('{sticks} and {bindings} in the game\'s profile', {
+          sticks: txn(sticks, '{count} stick', '{count} sticks'),
+          bindings: txn(bindings, '{count} joystick binding', '{count} joystick bindings'),
+        }),
+        txn(m.catalogue.actions.length, '{count} action the game can bind', '{count} actions the game can bind'),
+        m.backups ? tx('{kept}, the latest written {when}', { kept, when: relative(m.backups.writtenAt) }) : kept,
+      ].join(' · ') + '.';
+    } else {
+      status.textContent = m.problem
+        ? tx('The game\'s profile could not be read: {problem}', { problem: m.problem })
+        : tx('The game has not written a keybinding profile yet - it appears after the first time the keybinding screen is used.');
+    }
   }
 
   renderControlsDevices();
@@ -10626,8 +10958,8 @@ function renderControlsDevices() {
   const sticks = controlsSticks();
   if (!sticks.length) {
     strip.append(el('p', 'muted', controlsModel?.profileFound
-      ? 'The profile names no joystick. Bind something to a stick in the game and it appears here.'
-      : 'No profile yet.'));
+      ? tx('The profile names no joystick. Bind something to a stick in the game and it appears here.')
+      : tx('No profile yet.')));
     $('#controls-device').hidden = true;
     return;
   }
@@ -10637,7 +10969,7 @@ function renderControlsDevices() {
     button.type = 'button';
     button.append(el('span', 'controls-stick-key', d.key));
     button.append(el('span', 'controls-stick-name', d.product));
-    button.append(el('span', 'controls-stick-count muted', `${d.bindings} bound`));
+    button.append(el('span', 'controls-stick-count muted', tx('{count} bound', { count: d.bindings })));
     button.addEventListener('click', () => {
       controlsDevice = d.key;
       try { localStorage.setItem('qw-controls-stick', d.key); } catch { /* fine */ }
@@ -10655,6 +10987,14 @@ function renderControlsDevices() {
  */
 const CONTROLS_AXIS_NAMES = { x: 'x', y: 'y', z: 'z', rx: 'rotx', ry: 'roty', rz: 'rotz', slider1: 'slider1', slider_1: 'slider1', slider2: 'slider2', slider_2: 'slider2' };
 const CONTROLS_HAT_DIRS = { u: 'up', d: 'down', l: 'left', r: 'right' };
+
+/*
+ * A hat and its direction as one phrase each. "left" on its own is already a
+ * word the catalogue holds for somebody leaving a party, so the direction is
+ * never looked up by itself.
+ */
+const CONTROLS_HAT_LABELS = { up: 'Hat {number} up', down: 'Hat {number} down', left: 'Hat {number} left', right: 'Hat {number} right' };
+const CONTROLS_HAT_WORDS = { up: 'hat {number} up', down: 'hat {number} down', left: 'hat {number} left', right: 'hat {number} right' };
 
 function controlsPlaceholderToControl(text) {
   const t = String(text || '').trim();
@@ -10688,12 +11028,14 @@ function controlsBindingWords(b) {
 /** "js2 button 5" for a modifier's raw input. */
 function controlsShortInput(raw) {
   const m = /^js(\d+)_button(\d+)$/i.exec(raw);
-  if (m) return `button ${m[2]}`;
+  if (m) return tx('button {number}', { number: m[2] });
   return raw.replace(/^[a-z]{2}\d+_/, '');
 }
 
 function controlsModeWord(mode) {
-  return { tap: 'tap', hold: 'hold', press: 'press', double_tap: 'double tap', double_tap_nonblocking: 'double tap', delayed_press: 'long press', delayed_press_long: 'long press', delayed_press_medium: 'long press', delayed_press_quicker: 'long press', tap_quicker: 'tap', press_quicker: 'press', hold_no_retrigger: 'hold', all: '' }[mode] ?? (mode || '');
+  // The page's words for the game's activation modes; an unknown one stays as the game wrote it.
+  const word = { tap: 'tap', hold: 'hold down', press: 'press', double_tap: 'double tap', double_tap_nonblocking: 'double tap', delayed_press: 'long press', delayed_press_long: 'long press', delayed_press_medium: 'long press', delayed_press_quicker: 'long press', tap_quicker: 'tap', press_quicker: 'press', hold_no_retrigger: 'hold down', all: '' }[mode];
+  return word === undefined ? (mode || '') : word && tx(word);
 }
 
 async function renderControlsDevice() {
@@ -10703,7 +11045,7 @@ async function renderControlsDevice() {
   box.hidden = false;
 
   $('#controls-device-title').textContent = `${device.product} · ${device.key}`;
-  const usb = device.usb ? `USB ${device.usb.vendor.toString(16).padStart(4, '0')}:${device.usb.product.toString(16).padStart(4, '0')}` : 'no USB id';
+  const usb = device.usb ? `USB ${device.usb.vendor.toString(16).padStart(4, '0')}:${device.usb.product.toString(16).padStart(4, '0')}` : tx('no USB id');
   $('#controls-device-note').textContent = `${usb} · ${device.guid || ''}`;
 
   // The layout the game ships for this stick, beside the pilot's, if any.
@@ -10711,7 +11053,7 @@ async function renderControlsDevice() {
   const keep = select?.value;
   if (select) {
     select.textContent = '';
-    select.append(new Option(device.layouts?.length ? 'Nothing' : 'The game ships no layout for this stick', ''));
+    select.append(new Option(device.layouts?.length ? tx('Nothing') : tx('The game ships no layout for this stick'), ''));
     for (const file of device.layouts || []) {
       const layout = controlsModel.layouts.find((l) => l.file === file);
       select.append(new Option(layout?.name || file, file));
@@ -10754,12 +11096,12 @@ async function renderControlsDevice() {
     tr.dataset.control = control;
     tr.append(el('td', 'controls-control', controlsControlLabel(control)));
     const to = el('td');
-    if (!here.length) to.append(el('span', 'muted', 'nothing'));
+    if (!here.length) to.append(el('span', 'muted', tx('nothing')));
     for (const b of here) {
       const line = el('div', 'controls-bound');
       line.append(el('span', null, controlsBindingWords(b)));
       line.append(el('span', 'armoury-kind', ` ${b.map}${b.category ? ` · ${b.category}` : ''}`));
-      if (!b.known) line.append(el('span', 'controls-unknown', ' not in this build\'s catalogue'));
+      if (!b.known) line.append(el('span', 'controls-unknown', ` ${tx('not in this build\'s catalogue')}`));
       to.append(line);
     }
     tr.append(to);
@@ -10787,7 +11129,7 @@ async function renderControlsDevice() {
     body.append(tr);
   }
   if (!shown) {
-    const td = el('td', 'muted', q ? 'Nothing on this stick matches.' : 'Nothing is bound to this stick and its picture names no controls.');
+    const td = el('td', 'muted', q ? tx('Nothing on this stick matches.') : tx('Nothing is bound to this stick and its picture names no controls.'));
     td.colSpan = 5;
     const tr = el('tr');
     tr.append(td);
@@ -10818,11 +11160,11 @@ function renderControlsAxes(device, bound) {
   }
   if (!rows.length) return;
 
-  box.append(el('h4', null, 'Axes'));
-  box.append(el('p', 'muted small', 'The curve is the game\'s exponent on the action\'s axis group: 1 is straight, above it the centre goes softer and the ends sharper. The dead zone is on the axis itself. What you set here is written the way a restore is.'));
+  box.append(el('h4', null, tx('Axes')));
+  box.append(el('p', 'muted small', tx('The curve is the game\'s exponent on the action\'s axis group: 1 is straight, above it the centre goes softer and the ends sharper. The dead zone is on the axis itself. What you set here is written the way a restore is.')));
   const table = el('table', 'controls-axes-table');
   const head = el('tr');
-  for (const [label, cls] of [['Axis', null], ['Drives', null], ['Curve', 'num'], ['Invert', null], ['Dead zone', 'num'], ['', null]]) head.append(el('th', cls, label));
+  for (const [label, cls] of [['Axis', null], ['Drives', null], ['Curve', 'num'], ['Invert', null], ['Dead zone', 'num'], ['', null]]) head.append(el('th', cls, label && tx(label)));
   const thead = el('thead');
   thead.append(head);
   table.append(thead);
@@ -10833,9 +11175,9 @@ function renderControlsAxes(device, bound) {
     const tr = el('tr');
     tr.dataset.axis = r.axis;
     tr.dataset.group = r.group;
-    tr.append(el('td', 'controls-control', `${r.axis} axis`));
+    tr.append(el('td', 'controls-control', tx('{axis} axis', { axis: r.axis })));
     const drives = el('td', null, r.binding.label);
-    drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : 'no curve group: the game keeps no curve for this action'));
+    drives.append(el('div', 'armoury-kind', r.group ? r.group.replace(/^flight_/, '').replace(/_/g, ' ') : tx('no curve group: the game keeps no curve for this action')));
     tr.append(drives);
 
     // An exponent is not a thing anyone has an intuition for. The slider is
@@ -10858,11 +11200,11 @@ function renderControlsAxes(device, bound) {
     slider.step = '0.05';
     slider.value = String(Math.min(3, Math.max(0.4, Number(exponent.value) || 1)));
     slider.disabled = !r.group;
-    slider.title = 'Drag for a softer or sharper centre; the box beside it takes anything the game allows';
+    slider.title = tx('Drag for a softer or sharper centre; the box beside it takes anything the game allows');
 
     const presets = el('div', 'controls-curve-presets');
     for (const [name, value] of CONTROLS_CURVE_PRESETS) {
-      const chip = el('button', 'controls-curve-preset', name);
+      const chip = el('button', 'controls-curve-preset', tx(name));
       chip.type = 'button';
       chip.dataset.value = String(value);
       chip.disabled = !r.group;
@@ -10932,11 +11274,11 @@ function renderControlsAxes(device, bound) {
   box.append(table);
 
   const bar = el('div', 'controls armoury-filters');
-  const apply = el('button', 'ghost', controlsModel.gameRunning ? 'Apply as an import file' : 'Apply to the profile');
+  const apply = el('button', 'ghost', controlsModel.gameRunning ? tx('Apply as an import file') : tx('Apply to the profile'));
   apply.type = 'button';
   apply.title = controlsModel.gameRunning
-    ? 'Star Citizen is running: the change is written as a file the keybinding screen imports'
-    : 'Written into the game\'s profile, after keeping it as it is';
+    ? tx('Star Citizen is running: the change is written as a file the keybinding screen imports')
+    : tx('Written into the game\'s profile, after keeping it as it is');
   apply.addEventListener('click', () => controlsApplyAxes(device, apply));
   bar.append(apply);
   bar.append(el('span', 'muted small controls-axes-note'));
@@ -10971,8 +11313,8 @@ function controlsCurveWords(exponent, deadzone) {
   };
   const half = out(0.5);
   const most = out(0.8);
-  if (Math.abs(exponent - 1) < 0.026 && !deadzone) return 'Straight through: half a push is half the output.';
-  return `Half a push gives ${half}%, four fifths gives ${most}%.`;
+  if (Math.abs(exponent - 1) < 0.026 && !deadzone) return tx('Straight through: half a push is half the output.');
+  return tx('Half a push gives {half}%, four fifths gives {most}%.', { half, most });
 }
 
 function controlsCurvePreview(exponent, inverted, deadzone) {
@@ -11030,13 +11372,13 @@ async function controlsApplyAxes(device, button) {
       body: JSON.stringify({ instance: device.instance, curves, deadzones, how: controlsModel.gameRunning ? 'export' : 'live' }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    if (!response.ok) { note.textContent = serverText(result.message) || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
     note.textContent = result.how === 'live'
-      ? 'Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.'
-      : `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+      ? tx('Written to the profile; the game reads it at its next start. The profile as it was is kept under Backups.')
+      : tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
     if (result.how === 'live') await loadControls();
   } catch (err) {
-    note.textContent = `Could not apply: ${err.message}`;
+    note.textContent = tx('Could not apply: {problem}', { problem: err.message });
   } finally {
     button.disabled = false;
   }
@@ -11050,10 +11392,10 @@ function controlsControlOrder(a, b) {
 
 function controlsControlLabel(control) {
   let m = /^button(\d+)$/.exec(control);
-  if (m) return `Button ${m[1]}`;
+  if (m) return tx('Button {number}', { number: m[1] });
   m = /^hat(\d+)_(\w+)$/.exec(control);
-  if (m) return `Hat ${m[1]} ${m[2]}`;
-  return `${control} axis`;
+  if (m) return CONTROLS_HAT_LABELS[m[2]] ? tx(CONTROLS_HAT_LABELS[m[2]], { number: m[1] }) : `${tx('Hat {number}', { number: m[1] })} ${m[2]}`;
+  return tx('{axis} axis', { axis: control });
 }
 
 /**
@@ -11072,20 +11414,20 @@ async function renderControlsPicture(device, bound) {
     note.textContent = '';
     const t = controlsModel.templates || {};
     if (!t.enabled && !(t.available || []).length) {
-      note.append(el('span', null, 'No picture yet: the library is off. '));
-      const fetchButton = el('button', 'ghost small', 'Fetch the pictures');
+      note.append(el('span', null, `${tx('No picture yet: the library is off.')} `));
+      const fetchButton = el('button', 'ghost small', tx('Fetch the pictures'));
       fetchButton.type = 'button';
-      fetchButton.title = 'Joystick Diagrams\' template library, 45 sticks, throttles and panels - fetched from GitHub and kept';
+      fetchButton.title = tx('Joystick Diagrams\' template library, 45 sticks, throttles and panels - fetched from GitHub and kept');
       fetchButton.addEventListener('click', () => controlsFetchLibrary(fetchButton));
       note.append(fetchButton);
     } else {
-      note.append(el('span', null, 'No picture matched to this stick. '));
+      note.append(el('span', null, `${tx('No picture matched to this stick.')} `));
       const pick = el('select', 'select');
-      pick.append(new Option('Pick one…', ''));
+      pick.append(new Option(tx('Pick one…'), ''));
       let maker = null;
       let group = null;
       for (const x of t.available || []) {
-        if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; pick.append(group); }
+        if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || tx('Library'); pick.append(group); }
         group.append(new Option(x.name, x.key));
       }
       pick.addEventListener('change', async () => {
@@ -11097,7 +11439,7 @@ async function renderControlsPicture(device, bound) {
     }
     return controlsDrawGrid(holder, device, bound);
   }
-  note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? 'your own picture' : 'Joystick Diagrams'}`;
+  note.textContent = `${device.template.name} · ${device.template.maker === 'yours' ? tx('your own picture') : 'Joystick Diagrams'}`;
 
   let text;
   try {
@@ -11106,7 +11448,7 @@ async function renderControlsPicture(device, bound) {
     if (!response.ok) throw new Error(String(response.status));
     text = await response.text();
   } catch {
-    note.textContent = `${device.template.name} · the picture could not be fetched`;
+    note.textContent = `${device.template.name} · ${tx('the picture could not be fetched')}`;
     return [];
   }
 
@@ -11115,9 +11457,9 @@ async function renderControlsPicture(device, bound) {
   if (misfit) {
     const warn = el('div', 'controls-picture-misfit');
     warn.append(el('span', null, misfit + ' '));
-    const drop = el('button', 'ghost small', 'take the picture off');
+    const drop = el('button', 'ghost small', tx('take the picture off'));
     drop.type = 'button';
-    drop.title = "Draw the numbered grid from this stick's own counts instead";
+    drop.title = tx('Draw the numbered grid from this stick\'s own counts instead');
     drop.addEventListener('click', async () => {
       await fetch('/api/controls/templates/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: device.guid, key: '' }) });
       await loadControls();
@@ -11145,20 +11487,20 @@ async function loadControlsCheck() {
   if (!list) return;
   list.textContent = '';
   counts.textContent = '';
-  note.textContent = 'Reading the profile…';
+  note.textContent = tx('Reading the profile…');
 
   let result;
   try { result = await getJson('/api/controls/check'); }
-  catch { note.textContent = 'The check could not be run.'; return; }
+  catch { note.textContent = tx('The check could not be run.'); return; }
 
-  if (!result.ready) { note.textContent = result.reason || 'Not ready.'; return; }
+  if (!result.ready) { note.textContent = serverText(result.reason) || tx('Not ready.'); return; }
 
   const c = result.counts || {};
   const names = result.names || {};
   const against = (result.sources || []).map((f) => names[f] || f);
   note.textContent = against.length
-    ? `Against ${against.join(' and ')}.`
-    : 'The game ships no reference layout for any stick in your profile, so there is nothing to check against.';
+    ? tx('Against {layouts}.', { layouts: against.join(` ${tx('and')} `) })
+    : tx('The game ships no reference layout for any stick in your profile, so there is nothing to check against.');
 
   const pins = controlsChecklistPins.map((pin) => {
     const action = controlsModel?.catalogue?.actions?.find((a) => a.actionMap === pin.actionMap && a.name === pin.action);
@@ -11181,8 +11523,8 @@ async function loadControlsCheck() {
     if (value === undefined) continue;
     const cell = el('div', `controls-check-count${hot ? ' hot' : ''}`);
     cell.append(el('b', null, String(value)));
-    cell.append(el('span', null, label));
-    cell.title = why;
+    cell.append(el('span', null, tx(label)));
+    cell.title = tx(why);
     counts.append(cell);
   }
 
@@ -11190,8 +11532,8 @@ async function loadControlsCheck() {
 
   const dashboard = el('div', 'controls-check-dashboard');
   const important = el('section', 'controls-check-section controls-check-important');
-  important.append(el('h4', null, 'Important to you'));
-  important.append(el('p', 'muted small', 'Choose the actions you want to find quickly. They stay here with their joystick status.'));
+  important.append(el('h4', null, tx('Important to you')));
+  important.append(el('p', 'muted small', tx('Choose the actions you want to find quickly. They stay here with their joystick status.')));
   const add = controlsActionPicker([], (action) => {
     if (!controlsChecklistPins.some((pin) => pin.actionMap === action.actionMap && pin.action === action.name)) {
       controlsChecklistPins.push({ actionMap: action.actionMap, action: action.name, label: action.label });
@@ -11203,7 +11545,7 @@ async function loadControlsCheck() {
   important.append(add);
   const importantList = el('div', 'controls-check-important-list');
   if (!pins.length) {
-    importantList.append(el('p', 'muted small', 'No important actions chosen yet. Search or browse above to add one.'));
+    importantList.append(el('p', 'muted small', tx('No important actions chosen yet. Search or browse above to add one.')));
   }
   for (const pin of pins) {
     const row = el('div', `controls-check-priority-row${pin.bindings.length ? '' : ' unassigned'}`);
@@ -11213,13 +11555,13 @@ async function loadControlsCheck() {
     row.append(head);
     const status = pin.bindings.length
       ? pin.bindings.map((b) => `${controlsSticks().find((d) => d.key === b.input.deviceKey)?.product || b.input.deviceKey} · ${controlsInputWords(b.input.raw)}`).join(', ')
-      : 'Not assigned to a joystick';
+      : tx('Not assigned to a joystick');
     row.append(el('div', `controls-check-where${pin.bindings.length ? '' : ' controls-check-unassigned'}`, status));
     const doing = el('div', 'controls-check-do');
     if (!pin.bindings.length) {
-      const assign = el('button', 'ghost small', 'find it');
+      const assign = el('button', 'ghost small', tx('find it'));
       assign.type = 'button';
-      assign.title = 'Open the Actions page filtered to this action';
+      assign.title = tx('Open the Actions page filtered to this action');
       assign.addEventListener('click', () => {
         const search = $('#controls-search');
         if (search) search.value = pin.label;
@@ -11228,9 +11570,9 @@ async function loadControlsCheck() {
       });
       doing.append(assign);
     }
-    const remove = el('button', 'ghost small', 'remove');
+    const remove = el('button', 'ghost small', tx('remove'));
     remove.type = 'button';
-    remove.title = 'Remove this action from your important-controls list';
+    remove.title = tx('Remove this action from your important-controls list');
     remove.addEventListener('click', () => {
       controlsChecklistPins = controlsChecklistPins.filter((p) => !(p.actionMap === pin.actionMap && p.action === pin.action));
       controlsSaveChecklistPins();
@@ -11244,13 +11586,13 @@ async function loadControlsCheck() {
   dashboard.append(important);
 
   const defaults = el('section', 'controls-check-section controls-check-defaults');
-  defaults.append(el('h4', null, 'Game-recommended defaults'));
+  defaults.append(el('h4', null, tx('Game-recommended defaults')));
   defaults.append(el('p', 'muted small', against.length
-    ? 'The game puts these on your hardware in its own layout. Stage only the ones you want.'
-    : 'The game ships no reference layout for your sticks, so there is nothing to compare.'));
+    ? tx('The game puts these on your hardware in its own layout. Stage only the ones you want.')
+    : tx('The game ships no reference layout for your sticks, so there is nothing to compare.')));
   const defaultsList = el('div', 'controls-check-defaults-list');
   if (!gaps.length && against.length) {
-    defaultsList.append(el('p', 'muted small', 'Nothing missing. Every default the game recommends is either assigned or one you removed on purpose.'));
+    defaultsList.append(el('p', 'muted small', tx('Nothing missing. Every default the game recommends is either assigned or one you removed on purpose.')));
   }
   for (const gap of gaps) {
     const row = el('div', 'controls-check-row');
@@ -11258,16 +11600,16 @@ async function loadControlsCheck() {
     head.append(el('b', null, gap.label));
     head.append(el('span', 'armoury-kind', ` ${gap.map}`));
     row.append(head);
-    row.append(el('div', 'controls-check-where', `${gap.product || gap.deviceKey} · the game puts it on ${controlsInputWords(gap.suggested)}`));
+    row.append(el('div', 'controls-check-where', `${gap.product || gap.deviceKey} · ${tx('the game puts it on {input}', { input: controlsInputWords(gap.suggested) })}`));
 
     const doing = el('div', 'controls-check-do');
-    const add = el('button', 'ghost small', 'stage it');
+    const add = el('button', 'ghost small', tx('stage it'));
     add.type = 'button';
-    add.title = 'Add it to the pending changes, to apply with everything else';
+    add.title = tx('Add it to the pending changes, to apply with everything else');
     add.addEventListener('click', () => {
       controlsStage({ actionMap: gap.actionMap, action: gap.action, input: gap.suggested, label: gap.label });
       add.disabled = true;
-      add.textContent = 'staged';
+      add.textContent = tx('staged');
     });
     doing.append(add);
 
@@ -11281,7 +11623,7 @@ async function loadControlsCheck() {
       });
       await loadControlsCheck();
     });
-    no.append(box, el('span', null, 'I do not want this'));
+    no.append(box, el('span', null, tx('I do not want this')));
     doing.append(no);
     row.append(doing);
     defaultsList.append(row);
@@ -11301,10 +11643,10 @@ function controlsInputWords(raw) {
   const m = /^(?:js|kb|mo|gp)\d*_(.*)$/.exec(String(raw || ''));
   const control = m ? m[1] : String(raw || '');
   const button = /^button(\d+)$/.exec(control);
-  if (button) return `button ${button[1]}`;
+  if (button) return tx('button {number}', { number: button[1] });
   const hat = /^hat(\d+)_(\w+)$/.exec(control);
-  if (hat) return `hat ${hat[1]} ${hat[2]}`;
-  return control || 'nothing';
+  if (hat) return CONTROLS_HAT_WORDS[hat[2]] ? tx(CONTROLS_HAT_WORDS[hat[2]], { number: hat[1] }) : `hat ${hat[1]} ${hat[2]}`;
+  return control || tx('nothing');
 }
 
 /**
@@ -11325,19 +11667,22 @@ function controlsInputWords(raw) {
 function controlsPictureMisfit(device, drawn, bound, live) {
   const named = (drawn || []).filter((c) => /^button\d+$/.test(c)).length;
   if (!named) return null;
-  const product = device.product || 'this stick';
+  const product = device.product || tx('this stick');
   if (live && Number.isFinite(live.buttonCount)) {
     if (live.buttonCount === 0)
-      return `This picture draws ${named} buttons and ${product} reports none, so it is a picture of a different device.`;
+      return tx('This picture draws {named} buttons and {product} reports none, so it is a picture of a different device.', { named, product });
     if (named > live.buttonCount)
-      return `This picture draws ${named} buttons and ${product} reports ${live.buttonCount}, so some of it belongs to a different device.`;
+      return tx('This picture draws {named} buttons and {product} reports {count}, so some of it belongs to a different device.', { named, product, count: live.buttonCount });
     return null;
   }
   const keys = [...(bound?.keys?.() || [])];
   const buttons = keys.filter((c) => /^button\d+$/.test(c)).length;
   const axes = keys.filter((c) => !/^(button|hat)/.test(c)).length;
   if (buttons || !axes) return null;
-  return `This picture draws ${named} buttons, and nothing on ${product} is bound to a button - only ${axes} ${axes === 1 ? 'axis' : 'axes'}. It may be a picture of a different device; the live read would say for certain.`;
+  return txn(axes,
+    'This picture draws {named} buttons, and nothing on {product} is bound to a button - only {count} axis. It may be a picture of a different device; the live read would say for certain.',
+    'This picture draws {named} buttons, and nothing on {product} is bound to a button - only {count} axes. It may be a picture of a different device; the live read would say for certain.',
+    { named, product });
 }
 
 /**
@@ -11367,8 +11712,10 @@ function controlsDrawGrid(holder, device, bound) {
 
   const grid = el('div', 'controls-grid');
   if (count > 0) grid.append(el('div', 'controls-grid-title', live
-    ? `Buttons · ${count}, as Windows reports the stick`
-    : `Buttons · to ${count}, the highest your profile mentions being ${highest || 'none'}`));
+    ? tx('Buttons · {count}, as Windows reports the stick', { count })
+    : highest
+      ? tx('Buttons · to {count}, the highest your profile mentions being {highest}', { count, highest })
+      : tx('Buttons · to {count}, the highest your profile mentions being none', { count })));
   const cells = el('div', 'controls-grid-buttons');
   for (let i = 1; i <= count; i++) {
     const control = `button${i}`;
@@ -11376,7 +11723,7 @@ function controlsDrawGrid(holder, device, bound) {
     const here = bound.get(control) || [];
     const cell = el('div', `controls-grid-button${here.length ? ' bound' : ''}`, String(i));
     cell.dataset.control = control;
-    cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+    cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : tx('nothing bound');
     if (here.length) cell.append(el('span', 'controls-grid-label', here.map((b) => b.label).join(' / ')));
     cells.append(cell);
   }
@@ -11386,7 +11733,7 @@ function controlsDrawGrid(holder, device, bound) {
   hats.sort((a, b) => a - b);
   for (const hat of hats) {
     const cross = el('div', 'controls-grid-hat');
-    cross.append(el('div', 'controls-grid-title', `Hat ${hat}`));
+    cross.append(el('div', 'controls-grid-title', tx('Hat {number}', { number: hat })));
     const pad = el('div', 'controls-grid-cross');
     for (const dir of ['up', 'left', 'right', 'down']) {
       const control = `hat${hat}_${dir}`;
@@ -11394,7 +11741,7 @@ function controlsDrawGrid(holder, device, bound) {
       const here = bound.get(control) || [];
       const cell = el('div', `controls-grid-button ${dir}${here.length ? ' bound' : ''}`, { up: '▲', down: '▼', left: '◀', right: '▶' }[dir]);
       cell.dataset.control = control;
-      cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : 'nothing bound';
+      cell.title = here.length ? here.map(controlsBindingWords).join(' / ') : tx('nothing bound');
       pad.append(cell);
     }
     cross.append(pad);
@@ -11412,8 +11759,8 @@ function controlsDrawGrid(holder, device, bound) {
   if (shown.length) {
     const bars = el('div', 'controls-grid-axes');
     bars.append(el('div', 'controls-grid-title', live
-      ? `Axes · ${live.axisCount}, as Windows reports the device`
-      : `Axes · ${shown.length} your profile binds`));
+      ? tx('Axes · {count}, as Windows reports the device', { count: live.axisCount })
+      : tx('Axes · {count} your profile binds', { count: shown.length })));
     for (const axis of shown) {
       controls.push(axis);
       bars.append(controlsAxisGauge(device, axis, bound.get(axis) || []));
@@ -11434,15 +11781,15 @@ function controlsDrawGrid(holder, device, bound) {
 function controlsGridWords(buttons, axes, live) {
   if (!buttons && axes)
     return live
-      ? 'A stand-in until a picture is chosen. Windows reports no buttons on this device, so its axes are all there is to draw.'
-      : 'A stand-in until a picture is chosen. Nothing on this device is bound to a button - only axes - so only its axes are drawn. The live read would say whether it has buttons nobody has used.';
+      ? tx('A stand-in until a picture is chosen. Windows reports no buttons on this device, so its axes are all there is to draw.')
+      : tx('A stand-in until a picture is chosen. Nothing on this device is bound to a button - only axes - so only its axes are drawn. The live read would say whether it has buttons nobody has used.');
   if (!buttons && !axes)
     return live
-      ? 'Windows reports no buttons and no axes on this device.'
-      : 'Nothing in your profile binds anything on this device, and the sticks cannot be read here, so there is nothing to draw yet.';
+      ? tx('Windows reports no buttons and no axes on this device.')
+      : tx('Nothing in your profile binds anything on this device, and the sticks cannot be read here, so there is nothing to draw yet.');
   return live
-    ? 'A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.'
-    : 'A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.';
+    ? tx('A stand-in until a picture is chosen: the buttons as Windows numbers them, red where your profile binds something, outlined while pressed.')
+    : tx('A stand-in until a picture is chosen: the buttons as Windows numbers them, lit where your profile binds something. Only the ones the profile mentions are certain; the stick may have more.');
 }
 
 /** The order Windows reports axes in, which is how a live reading is indexed. */
@@ -11451,10 +11798,10 @@ const CONTROLS_AXIS_ORDER = ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', '
 /** An axis in words: the game's name is terse and the same for every device. */
 function controlsAxisWords(axis) {
   const rot = /^rot([xyz])$/.exec(axis);
-  if (rot) return `rotation ${rot[1].toUpperCase()}`;
+  if (rot) return tx('rotation {axis}', { axis: rot[1].toUpperCase() });
   const slider = /^slider(\d+)$/.exec(axis);
-  if (slider) return `slider ${slider[1]}`;
-  return /^[xyz]$/.test(axis) ? `${axis.toUpperCase()} axis` : axis;
+  if (slider) return tx('slider {number}', { number: slider[1] });
+  return /^[xyz]$/.test(axis) ? tx('{axis} axis', { axis: axis.toUpperCase() }) : axis;
 }
 
 /**
@@ -11480,7 +11827,7 @@ function controlsAxisGauge(device, axis, here) {
     const band = el('div', 'controls-axis-dead');
     band.style.left = `${Math.max(0, 50 - dead * 50)}%`;
     band.style.width = `${Math.min(100, dead * 100)}%`;
-    band.title = `dead zone ${Math.round(dead * 1000) / 10}%`;
+    band.title = tx('dead zone {percent}%', { percent: Math.round(dead * 1000) / 10 });
     track.append(band);
   }
   track.append(el('div', 'controls-axis-centre'));
@@ -11490,7 +11837,7 @@ function controlsAxisGauge(device, axis, here) {
   row.append(track);
 
   row.append(el('div', `controls-axis-gauge-what${here.length ? '' : ' muted'}`,
-    here.length ? here.map((b) => b.label).join(' / ') : 'nothing bound'));
+    here.length ? here.map((b) => b.label).join(' / ') : tx('nothing bound')));
   return row;
 }
 
@@ -11706,22 +12053,26 @@ function paintControlsLive() {
   if (!note) return;
   if (!controlsLive) { note.textContent = ''; return; }
   if (!controlsLive.available) {
-    note.textContent = controlsLive.reason || 'The sticks cannot be read here.';
+    note.textContent = serverText(controlsLive.reason) || tx('The sticks cannot be read here.');
     return;
   }
   const live = controlsLiveDevice(device);
   const twins = device?.guid ? (controlsLive.devices || []).filter((d) => d.guid?.toLowerCase() === device.guid.toLowerCase()).length : 0;
   if (!live) {
     note.textContent = twins > 1
-      ? `Two of this product are plugged in; Windows cannot say which is ${device.key}, so nothing is lit.`
-      : device?.guid ? 'This stick is not plugged in right now.' : '';
+      ? tx('Two of this product are plugged in; Windows cannot say which is {stick}, so nothing is lit.', { stick: device.key })
+      : device?.guid ? tx('This stick is not plugged in right now.') : '';
     for (const control of controlsLiveLit) controlsHighlight(control, false);
     controlsLiveLit = new Set();
     return;
   }
   const active = new Set(controlsLiveControls(live));
   const words = [...active].map(controlsControlLabel);
-  note.textContent = `Live · ${live.buttonCount} buttons, ${live.axisCount} axes, ${live.hatCount} hat${live.hatCount === 1 ? '' : 's'} · ${words.length ? `pressed: ${words.join(', ')}` : 'press a button to see it'}`;
+  note.textContent = [
+    tx('Live'),
+    [txn(live.buttonCount, '{count} button', '{count} buttons'), txn(live.axisCount, '{count} axis', '{count} axes'), txn(live.hatCount, '{count} hat', '{count} hats')].join(', '),
+    words.length ? tx('pressed: {controls}', { controls: words.join(', ') }) : tx('press a button to see it'),
+  ].join(' · ');
   for (const control of controlsLiveLit) if (!active.has(control)) controlsHighlight(control, false);
   for (const control of active) if (!controlsLiveLit.has(control)) controlsHighlight(control, true);
   controlsLiveLit = active;
@@ -11818,7 +12169,7 @@ function renderControlsPending() {
   if (!box) return;
   box.hidden = !controlsPending.length;
   if (!controlsPending.length) return;
-  $('#controls-pending-title').textContent = `${controlsPending.length} change${controlsPending.length === 1 ? '' : 's'} to apply`;
+  $('#controls-pending-title').textContent = txn(controlsPending.length, '{count} change to apply', '{count} changes to apply');
   const list = $('#controls-pending-list');
   list.textContent = '';
   const sticks = new Map(controlsSticks().map((d) => [d.key, d]));
@@ -11826,24 +12177,24 @@ function renderControlsPending() {
     const li = el('li');
     const stick = sticks.get(ControlInput_deviceKey(c.input));
     const where = `${stick ? stick.product : ControlInput_deviceKey(c.input)} ${c.input.replace(/^[a-z]{2}\d+_/, '').replace('_', ' ')}`;
-    li.append(el('span', null, c.remove ? `${c.label}: unbind from ${where}` : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
+    li.append(el('span', null, c.remove ? tx('{action}: unbind from {where}', { action: c.label, where }) : `${where} → ${c.label}${c.activationMode ? ` (${controlsModeWord(c.activationMode)})` : ''}`));
     if (!c.remove) {
       // A staged change replaces the exact input's current assignment. A
       // second action is never left sharing the same plain button to be
       // resolved differently by the game's context rules.
       const now = controlsBoundNow(c.input).filter((l) => l !== c.label);
-      if (now.length) li.append(el('span', 'muted', ` (was ${now.join(', ')})`));
+      if (now.length) li.append(el('span', 'muted', ` (${tx('was {part}', { part: now.join(', ') })})`));
     }
-    const undo = el('button', 'ghost small', 'undo');
+    const undo = el('button', 'ghost small', tx('undo'));
     undo.type = 'button';
     undo.addEventListener('click', () => controlsUnstage(i));
     li.append(undo);
     list.append(li);
   });
-  $('#controls-pending-apply').textContent = controlsModel?.gameRunning ? 'Apply as an import file' : 'Apply to the profile';
+  $('#controls-pending-apply').textContent = controlsModel?.gameRunning ? tx('Apply as an import file') : tx('Apply to the profile');
   $('#controls-pending-note').textContent = controlsModel?.gameRunning
-    ? 'Star Citizen is running: the changes are written as a file the keybinding screen imports.'
-    : 'Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.';
+    ? tx('Star Citizen is running: the changes are written as a file the keybinding screen imports.')
+    : tx('Written into the game\'s profile, after keeping it as it is; the game reads it at its next start.');
 }
 
 async function controlsApplyBindings(button) {
@@ -11860,17 +12211,17 @@ async function controlsApplyBindings(button) {
       }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) { note.textContent = result.message || result.title || `Could not apply (${response.status}).`; return; }
+    if (!response.ok) { note.textContent = serverText(result.message) || result.title || tx('Could not apply ({status}).', { status: response.status }); return; }
     controlsPending = [];
     if (result.how === 'live') {
       await loadControls();
-      $('#controls-status').textContent += ' Bindings written; the profile as it was is kept under Backups.';
+      $('#controls-status').textContent += ` ${tx('Bindings written; the profile as it was is kept under Backups.')}`;
     } else {
       renderControlsPending();
-      $('#controls-status').textContent = `Written as ${result.mappings}. In the game: Options → Keybindings → import "${result.name}", or at the console: ${result.command}.`;
+      $('#controls-status').textContent = tx('Written as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: result.mappings, name: result.name, command: result.command });
     }
   } catch (err) {
-    note.textContent = `Could not apply: ${err.message}`;
+    note.textContent = tx('Could not apply: {problem}', { problem: err.message });
   } finally {
     button.disabled = false;
   }
@@ -11880,12 +12231,12 @@ $('#controls-pending-apply')?.addEventListener('click', (e) => controlsApplyBind
 $('#controls-pending-discard')?.addEventListener('click', () => { controlsPending = []; renderControlsPending(); });
 
 /** The modes a binding can be given; blank keeps the action's own. */
-const CONTROLS_MODES = [['', 'the action\'s own'], ['tap', 'tap'], ['press', 'press'], ['hold', 'hold'], ['double_tap', 'double tap'], ['delayed_press', 'long press'], ['delayed_press_long', 'longer press']];
+const CONTROLS_MODES = [['', 'the action\'s own'], ['tap', 'tap'], ['press', 'press'], ['hold', 'hold down'], ['double_tap', 'double tap'], ['delayed_press', 'long press'], ['delayed_press_long', 'longer press']];
 
 function controlsModePicker() {
   const select = el('select', 'select controls-mode-pick');
-  select.title = 'How the binding fires; the action\'s own unless you say';
-  for (const [value, label] of CONTROLS_MODES) select.append(new Option(label, value));
+  select.title = tx('How the binding fires; the action\'s own unless you say');
+  for (const [value, label] of CONTROLS_MODES) select.append(new Option(tx(label), value));
   return select;
 }
 
@@ -11903,10 +12254,10 @@ function controlsActionPicker(current, choose) {
   const wrap = el('div', 'controls-action-picker');
   const search = el('input', 'search controls-action-search');
   search.type = 'search';
-  search.placeholder = 'Find action, or browse…';
+  search.placeholder = tx('Find action, or browse…');
   search.autocomplete = 'off';
   search.spellcheck = false;
-  search.title = 'Type at least two letters to search, or open the box to browse by group';
+  search.title = tx('Type at least two letters to search, or open the box to browse by group');
   const results = el('div', 'controls-action-results');
   results.hidden = true;
   const maps = new Map((controlsModel?.catalogue?.maps || []).map((map) => [map.name, map]));
@@ -11946,7 +12297,7 @@ function controlsActionPicker(current, choose) {
       }).slice(0, 12);
       if (!matches.length) {
         results.className = 'controls-action-results muted small';
-        results.textContent = 'No action matches that search.';
+        results.textContent = tx('No action matches that search.');
         return;
       }
       for (const action of matches) results.append(actionRow(action));
@@ -11955,13 +12306,13 @@ function controlsActionPicker(current, choose) {
 
     // Nothing typed: browse. One map's actions if one is open, else the maps.
     if (group) {
-      const back = el('button', 'controls-action-back', `‹ all groups`);
+      const back = el('button', 'controls-action-back', `‹ ${tx('all groups')}`);
       back.type = 'button';
       back.addEventListener('click', () => { group = null; render(); search.focus(); });
       results.append(back);
       const map = maps.get(group);
       const mine = actions.filter((a) => a.actionMap === group);
-      if (!mine.length) results.append(el('div', 'muted small', `${mapLabel(map, group)} binds nothing.`));
+      if (!mine.length) results.append(el('div', 'muted small', tx('{group} binds nothing.', { group: mapLabel(map, group) })));
       for (const action of mine) results.append(actionRow(action));
       return;
     }
@@ -11973,7 +12324,7 @@ function controlsActionPicker(current, choose) {
       const button = el('button', 'controls-action-group');
       button.type = 'button';
       button.append(el('span', 'controls-action-result-label', mapLabel(map, map.name)));
-      button.append(el('span', 'controls-action-result-map', `${count} action${count === 1 ? '' : 's'}`));
+      button.append(el('span', 'controls-action-result-map', txn(count, '{count} action', '{count} actions')));
       button.addEventListener('click', () => { group = map.name; render(); });
       results.append(button);
     }
@@ -11996,9 +12347,9 @@ function controlsActionPicker(current, choose) {
   }, 150));
   wrap.append(search, results);
   if (current?.length) {
-    const remove = el('button', 'ghost small controls-action-remove', 'unbind');
+    const remove = el('button', 'ghost small controls-action-remove', tx('unbind'));
     remove.type = 'button';
-    remove.title = 'Unbind everything now on this control';
+    remove.title = tx('Unbind everything now on this control');
     remove.addEventListener('click', () => choose('__remove__'));
     wrap.append(remove);
   }
@@ -12011,9 +12362,9 @@ function controlsInputPicker() {
   const stick = el('select', 'select');
   for (const d of controlsSticks()) stick.append(new Option(d.product, d.key));
   const control = el('select', 'select');
-  for (let i = 1; i <= 32; i++) control.append(new Option(`button ${i}`, `button${i}`));
-  for (const h of [1, 2]) for (const dir of ['up', 'down', 'left', 'right']) control.append(new Option(`hat ${h} ${dir}`, `hat${h}_${dir}`));
-  for (const a of ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2']) control.append(new Option(`${a} axis`, a));
+  for (let i = 1; i <= 32; i++) control.append(new Option(tx('button {number}', { number: i }), `button${i}`));
+  for (const h of [1, 2]) for (const dir of ['up', 'down', 'left', 'right']) control.append(new Option(tx(CONTROLS_HAT_WORDS[dir], { number: h }), `hat${h}_${dir}`));
+  for (const a of ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2']) control.append(new Option(tx('{axis} axis', { axis: a }), a));
   wrap.append(stick, control);
   wrap.value = () => `${stick.value}_${control.value}`;
   wrap.stick = stick;
@@ -12034,7 +12385,7 @@ function renderControlsActions() {
   if (select && select.options.length !== categories.length + 1) {
     const keep = select.value;
     select.textContent = '';
-    select.append(new Option('Every category', ''));
+    select.append(new Option(tx('Every category'), ''));
     for (const c of categories) select.append(new Option(c, c));
     select.value = categories.includes(keep) ? keep : '';
   }
@@ -12074,7 +12425,7 @@ function renderControlsActions() {
       tr.append(name);
       tr.append(el('td', 'muted', `${map.label}${map.category ? ` · ${map.category}` : ''}`));
       const on = el('td');
-      if (!onSticks.length) on.append(el('span', 'muted', cleared ? 'cleared - the default was taken off' : a.joystick ? `default: ${a.joystick}` : 'nothing'));
+      if (!onSticks.length) on.append(el('span', 'muted', cleared ? tx('cleared - the default was taken off') : a.joystick ? tx('default: {input}', { input: a.joystick }) : tx('nothing')));
       for (const b of onSticks) {
         const line = el('div', 'controls-bound');
         const stick = sticks.get(b.input.deviceKey);
@@ -12083,25 +12434,25 @@ function renderControlsActions() {
         on.append(line);
       }
       tr.append(on);
-      tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? `default: ${a.keyboard}` : '—'));
+      tr.append(el('td', 'muted', keyboard.length ? keyboard.join(', ') : a.keyboard ? tx('default: {input}', { input: a.keyboard }) : '—'));
       tr.append(el('td', 'num muted', controlsModeWord((onSticks[0] || mine[0])?.activationMode || a.activationMode)));
       // Bind: a stick and a control for this action; × on a binding takes it off.
       const bind = el('td', 'controls-bind-cell');
       for (const b of onSticks) {
         const off = el('button', 'ghost small', `× ${b.input.label}`);
         off.type = 'button';
-        off.title = `Take this action off ${sticks.get(b.input.deviceKey)?.product || b.input.deviceKey}`;
+        off.title = tx('Take this action off {stick}', { stick: sticks.get(b.input.deviceKey)?.product || b.input.deviceKey });
         off.addEventListener('click', () => controlsStage({ actionMap: map.name, action: a.name, input: b.input.raw, remove: true, label: a.label }));
         bind.append(off);
       }
       if (controlsSticks().length) {
-        const add = el('button', 'ghost small', 'Bind to…');
+        const add = el('button', 'ghost small', tx('Bind to…'));
         add.type = 'button';
         add.addEventListener('click', () => {
           add.hidden = true;
           const picker = controlsInputPicker();
           const mode = controlsModePicker();
-          const ok = el('button', 'ghost small', 'Stage');
+          const ok = el('button', 'ghost small', tx('Stage'));
           ok.type = 'button';
           ok.addEventListener('click', () => {
             controlsStage({ actionMap: map.name, action: a.name, input: picker.value(), label: a.label, activationMode: mode.value || null });
@@ -12118,7 +12469,12 @@ function renderControlsActions() {
       body.append(tr);
     }
   }
-  $('#controls-actions-count').textContent = `${shown} of ${total} actions${category ? ` in ${category}` : ''}${unboundOnly ? ' on no stick' : ''}${reboundOnly ? ' you rebound' : ''}.`;
+  $('#controls-actions-count').textContent = [
+    tx('{shown} of {total} actions', { shown, total }),
+    category ? tx('in {category}', { category }) : null,
+    unboundOnly ? tx('on no stick') : null,
+    reboundOnly ? tx('you rebound') : null,
+  ].filter(Boolean).join(' ') + '.';
 }
 
 for (const id of ['#controls-category', '#controls-unbound', '#controls-rebound'])
@@ -12144,11 +12500,13 @@ function renderControlsBackups() {
   body.textContent = '';
   const note = $('#controls-backups-note');
   if (!controlsBackups.length) {
-    note.textContent = 'Nothing kept yet. The first copy is taken when the game has written a profile.';
+    note.textContent = tx('Nothing kept yet. The first copy is taken when the game has written a profile.');
     $('#controls-diff').hidden = true;
     return;
   }
-  note.textContent = `${controlsBackups.length} version${controlsBackups.length === 1 ? '' : 's'} kept. Tick two to see what changed between them; tick one to see what changed since.`;
+  note.textContent = txn(controlsBackups.length,
+    '{count} version kept. Tick two to see what changed between them; tick one to see what changed since.',
+    '{count} versions kept. Tick two to see what changed between them; tick one to see what changed since.');
 
   controlsBackups.forEach((b, i) => {
     const tr = el('tr');
@@ -12164,15 +12522,15 @@ function renderControlsBackups() {
     pick.append(box);
     tr.append(pick);
     const when = el('td', null, `${dateOf(b.writtenAt)} ${shortTimeOf(b.writtenAt)}`);
-    if (i === 0) when.append(el('span', 'controls-latest', ' latest'));
+    if (i === 0) when.append(el('span', 'controls-latest', ` ${tx('latest')}`));
     tr.append(when);
     tr.append(el('td', 'muted', relative(b.takenAt)));
     tr.append(el('td', 'num', `${Math.round(b.bytes / 1024)} KB`));
     const since = el('td', 'muted');
     const previous = controlsBackups[i + 1];
-    since.textContent = previous ? 'see the diff' : 'first kept';
+    since.textContent = previous ? tx('see the diff') : tx('first kept');
     if (previous) {
-      const link = el('button', 'ghost small', 'Since the one before');
+      const link = el('button', 'ghost small', tx('Since the one before'));
       link.type = 'button';
       link.addEventListener('click', () => { controlsDiffPick = [previous.id, b.id]; renderControlsBackups(); showControlsDiff().catch(() => {}); });
       since.textContent = '';
@@ -12180,20 +12538,20 @@ function renderControlsBackups() {
     }
     tr.append(since);
     const act = el('td', 'controls-backup-actions');
-    const restore = el('button', 'ghost small', 'Restore');
+    const restore = el('button', 'ghost small', tx('Restore'));
     restore.type = 'button';
-    restore.title = 'Write this version back over the game\'s profile - with the game closed';
+    restore.title = tx('Write this version back over the game\'s profile - with the game closed');
     restore.addEventListener('click', () => controlsRestore(b, restore));
     act.append(restore);
-    const export_ = el('button', 'ghost small', 'Export');
+    const export_ = el('button', 'ghost small', tx('Export'));
     export_.type = 'button';
-    export_.title = 'Write this version as a file the game imports, with the sticks retargeted if they moved';
+    export_.title = tx('Write this version as a file the game imports, with the sticks retargeted if they moved');
     export_.addEventListener('click', () => { controlsExportSource = b.id; renderControlsExport(); });
     act.append(export_);
-    const download = el('a', 'ghost small', 'Download');
+    const download = el('a', 'ghost small', tx('Download'));
     download.href = `/api/controls/backups/${encodeURIComponent(b.id)}/file`;
     download.setAttribute('download', `actionmaps-${b.id}.xml`);
-    download.title = 'This version as a file, to keep anywhere';
+    download.title = tx('This version as a file, to keep anywhere');
     act.append(download);
     tr.append(act);
     body.append(tr);
@@ -12209,20 +12567,22 @@ function renderControlsBackups() {
 async function controlsRestore(backup, button) {
   const note = $('#controls-backups-note');
   const when = `${dateOf(backup.writtenAt)} ${shortTimeOf(backup.writtenAt)}`;
-  if (typeof confirm === 'function' && !confirm(`Write the version of ${when} over the game's keybinding profile? The profile as it is now is kept first.`)) return;
+  if (typeof confirm === 'function' && !confirm(tx('Write the version of {when} over the game\'s keybinding profile? The profile as it is now is kept first.', { when }))) return;
   button.disabled = true;
   try {
     const response = await fetch('/api/controls/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: backup.id }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      note.textContent = result.message || result.title || `The restore failed (${response.status}).`;
+      note.textContent = serverText(result.message) || result.title || tx('The restore failed ({status}).', { status: response.status });
       return;
     }
-    note.textContent = `Restored the version of ${when}. The game reads it at its next start.${result.keptBefore ? ' The profile as it was is kept above it.' : ''}`;
+    note.textContent = result.keptBefore
+      ? tx('Restored the version of {when}. The game reads it at its next start. The profile as it was is kept above it.', { when })
+      : tx('Restored the version of {when}. The game reads it at its next start.', { when });
     await loadControlsBackups();
     await loadControls();
   } catch (err) {
-    note.textContent = `The restore failed: ${err.message}`;
+    note.textContent = tx('The restore failed: {problem}', { problem: err.message });
   } finally {
     button.disabled = false;
   }
@@ -12234,7 +12594,7 @@ $('#controls-import-file')?.addEventListener('change', (event) => {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   controlsImportFile(file)
-    .catch((err) => { $('#controls-backups-note').textContent = `That file could not be added: ${err.message}`; })
+    .catch((err) => { $('#controls-backups-note').textContent = tx('That file could not be added: {problem}', { problem: err.message }); })
     // Cleared so that picking the same file twice still fires a change.
     .finally(() => { event.target.value = ''; });
 });
@@ -12247,10 +12607,13 @@ async function controlsImportFile(file) {
     body: file,
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || String(response.status));
+  if (!response.ok) throw new Error(serverText(result.message) || String(response.status));
   note.textContent = result.taken
-    ? `Added: ${result.bindings} bindings on ${result.devices} devices.`
-    : 'Already kept: that file is one of the versions here.';
+    ? tx('Added: {bindings} on {devices}.', {
+      bindings: txn(result.bindings, '{count} binding', '{count} bindings'),
+      devices: txn(result.devices, '{count} device', '{count} devices'),
+    })
+    : tx('Already kept: that file is one of the versions here.');
   await loadControlsBackups();
 }
 
@@ -12259,10 +12622,10 @@ $('#controls-keep')?.addEventListener('click', async (e) => {
   button.disabled = true;
   try {
     const kept = await getJson2('/api/controls/backups');
-    $('#controls-backups-note').textContent = kept.taken ? 'Kept.' : 'Already kept: the profile has not changed since the latest copy.';
+    $('#controls-backups-note').textContent = kept.taken ? tx('Kept.') : tx('Already kept: the profile has not changed since the latest copy.');
     await loadControlsBackups();
   } catch {
-    $('#controls-backups-note').textContent = 'Could not keep a copy.';
+    $('#controls-backups-note').textContent = tx('Could not keep a copy.');
   } finally {
     button.disabled = false;
   }
@@ -12282,9 +12645,9 @@ async function showControlsDiff() {
     return;
   }
   box.hidden = false;
-  const name = (id) => id === 'live' ? 'the profile as it is now' : `the copy of ${dateOf(controlsBackups.find((x) => x.id === id)?.writtenAt || Date.now())}`;
-  $('#controls-diff-title').textContent = `From ${name(a)} to ${name(b)}`;
-  $('#controls-diff-count').textContent = changes.length ? `${changes.length} action${changes.length === 1 ? '' : 's'} changed` : 'no binding changed';
+  const name = (id) => id === 'live' ? tx('the profile as it is now') : tx('the copy of {date}', { date: dateOf(controlsBackups.find((x) => x.id === id)?.writtenAt || Date.now()) });
+  $('#controls-diff-title').textContent = tx('From {from} to {to}', { from: name(a), to: name(b) });
+  $('#controls-diff-count').textContent = changes.length ? txn(changes.length, '{count} action changed', '{count} actions changed') : tx('no binding changed');
   const body = $('#controls-diff-table tbody');
   body.textContent = '';
   for (const c of changes) {
@@ -12292,8 +12655,8 @@ async function showControlsDiff() {
     const action = el('td', null, c.label);
     action.append(el('div', 'armoury-kind', c.map));
     tr.append(action);
-    tr.append(el('td', c.before.length ? 'controls-was' : 'muted', c.before.length ? c.before.join(', ') : 'nothing'));
-    tr.append(el('td', c.after.length ? 'controls-now' : 'muted', c.after.length ? c.after.join(', ') : 'nothing'));
+    tr.append(el('td', c.before.length ? 'controls-was' : 'muted', c.before.length ? c.before.join(', ') : tx('nothing')));
+    tr.append(el('td', c.after.length ? 'controls-now' : 'muted', c.after.length ? c.after.join(', ') : tx('nothing')));
     body.append(tr);
   }
 }
@@ -12303,7 +12666,7 @@ function renderControlsExport() {
   if (!box) return;
   box.hidden = false;
   const source = controlsExportSource || 'live';
-  $('#controls-export-source').textContent = source === 'live' ? 'from the profile as it is now' : `from the copy ${source}`;
+  $('#controls-export-source').textContent = source === 'live' ? tx('from the profile as it is now') : tx('from the copy {source}', { source });
   $('#controls-export-result').textContent = '';
   $('#controls-export-install').hidden = true;
 
@@ -12313,7 +12676,7 @@ function renderControlsExport() {
   const sticks = controlsSticks();
   for (const d of sticks) {
     const row = el('label', 'controls-retarget-row');
-    row.append(el('span', null, `${d.product} was ${d.key}, now`));
+    row.append(el('span', null, tx('{stick} was {key}, now', { stick: d.product, key: d.key })));
     const select = el('select', 'select');
     select.dataset.from = String(d.instance);
     for (let i = 1; i <= Math.max(8, sticks.length); i++) select.append(new Option(`js${i}`, String(i)));
@@ -12338,11 +12701,11 @@ async function controlsWriteExport(install) {
     if (!response.ok) throw new Error(String(response.status));
     const written = await response.json();
     result.textContent = written.installed
-      ? `In the game's folder as ${written.mappings}. In the game: Options → Keybindings → import "${written.name}", or at the console: ${written.command}.`
-      : `Written to ${written.path}. Not yet where the game reads: press the second button to copy it there, or copy it yourself.`;
+      ? tx('In the game\'s folder as {file}. In the game: Options → Keybindings → import "{name}", or at the console: {command}.', { file: written.mappings, name: written.name, command: written.command })
+      : tx('Written to {path}. Not yet where the game reads: press the second button to copy it there, or copy it yourself.', { path: written.path });
     $('#controls-export-install').hidden = written.installed;
   } catch (err) {
-    result.textContent = `The export failed: ${err.message}`;
+    result.textContent = tx('The export failed: {problem}', { problem: err.message });
   }
 }
 
@@ -12355,30 +12718,32 @@ function renderControlsPictures() {
   const t = controlsModel?.templates;
   if (!t) return;
   $('#controls-templates-status').textContent = t.enabled
-    ? `on · ${t.available.filter((x) => x.maker !== 'yours').length} in the library${t.fetchedAt ? `, listed ${relative(t.fetchedAt)}` : ''}`
-    : t.available.length ? 'off · what was fetched is kept' : 'off';
+    ? `${tx('on')} · ${t.fetchedAt
+      ? tx('{count} in the library, listed {when}', { count: t.available.filter((x) => x.maker !== 'yours').length, when: relative(t.fetchedAt) })
+      : tx('{count} in the library', { count: t.available.filter((x) => x.maker !== 'yours').length })}`
+    : t.available.length ? tx('off · what was fetched is kept') : tx('off');
   $('#controls-templates-enable').hidden = t.enabled;
   $('#controls-templates-disable').hidden = !t.enabled;
   const folder = $('#controls-folder');
   if (folder && document.activeElement !== folder) folder.value = t.folder || '';
   $('#controls-folder-note').textContent = t.folder
-    ? `${t.available.filter((x) => x.maker === 'yours').length} SVG${t.available.filter((x) => x.maker === 'yours').length === 1 ? '' : 's'} in ${t.folder}`
+    ? txn(t.available.filter((x) => x.maker === 'yours').length, '{count} SVG in {folder}', '{count} SVGs in {folder}', { folder: t.folder })
     : '';
 
   const box = $('#controls-assign');
   box.textContent = '';
   const sticks = controlsSticks();
-  if (!sticks.length) { box.append(el('p', 'muted', 'No stick in the profile to give a picture to.')); return; }
-  if (!t.available.length) { box.append(el('p', 'muted', 'No pictures to choose from yet.')); return; }
+  if (!sticks.length) { box.append(el('p', 'muted', tx('No stick in the profile to give a picture to.'))); return; }
+  if (!t.available.length) { box.append(el('p', 'muted', tx('No pictures to choose from yet.'))); return; }
   for (const d of sticks) {
     const row = el('label', 'controls-assign-row');
     row.append(el('span', 'controls-assign-name', `${d.product} (${d.key})`));
     const select = el('select', 'select');
-    select.append(new Option(d.template && !t.assignments[d.guid] ? `Matched: ${d.template.name}` : 'None', ''));
+    select.append(new Option(d.template && !t.assignments[d.guid] ? tx('Matched: {picture}', { picture: d.template.name }) : tx('None'), ''));
     let maker = null;
     let group = null;
     for (const x of t.available) {
-      if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || 'Library'; select.append(group); }
+      if (x.maker !== maker) { maker = x.maker; group = el('optgroup'); group.label = maker || tx('Library'); select.append(group); }
       group.append(new Option(x.name, x.key));
     }
     select.value = t.assignments[d.guid] || '';
@@ -12394,17 +12759,17 @@ function renderControlsPictures() {
 /** Turns the library on and reloads; the button that asked is disabled while it happens. */
 async function controlsFetchLibrary(button) {
   button.disabled = true;
-  button.textContent = 'Fetching…';
+  button.textContent = tx('Fetching…');
   try {
     await getJson2('/api/controls/templates/enable');
     await loadControls();
   } catch (err) {
-    button.textContent = 'Fetch the pictures';
+    button.textContent = tx('Fetch the pictures');
     button.disabled = false;
     const status = $('#controls-templates-status');
-    if (status) status.textContent = `could not fetch the library: ${err.message}`;
+    if (status) status.textContent = tx('could not fetch the library: {problem}', { problem: err.message });
     const note = $('#controls-picture-note');
-    if (note) note.append(el('span', 'muted', ` Could not fetch the library: ${err.message}`));
+    if (note) note.append(el('span', 'muted', ` ${tx('Could not fetch the library: {problem}', { problem: err.message })}`));
   }
 }
 
@@ -12417,7 +12782,7 @@ $('#controls-templates-disable')?.addEventListener('click', async () => {
 
 $('#controls-folder-save')?.addEventListener('click', async () => {
   const response = await fetch('/api/controls/templates/folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: $('#controls-folder').value }) });
-  if (!response.ok) { $('#controls-folder-note').textContent = 'No such folder.'; return; }
+  if (!response.ok) { $('#controls-folder-note').textContent = tx('No such folder.'); return; }
   await loadControls();
 });
 
@@ -12457,7 +12822,7 @@ function showLogPane(name) {
   const scan = $('#scan-now');
   if (scan) scan.hidden = name !== 'files';
   const caption = $('#log-caption');
-  if (caption) caption.textContent = LOG_CAPTIONS[name];
+  if (caption) caption.textContent = tx(LOG_CAPTIONS[name]);
 
   if (name === 'files') loadScanHistory().catch(() => {});
 }
@@ -12493,8 +12858,8 @@ let scanRunsSeen = [];
 function paintFileState(cell, state) {
   const [label, why] = FILE_STATES[state] || [state, ''];
   cell.className = `scan-state ${state}`;
-  cell.textContent = label;
-  cell.title = why;
+  cell.textContent = FILE_STATES[state] ? tx(label) : label;
+  cell.title = why ? tx(why) : '';
 }
 
 /**
@@ -12529,7 +12894,7 @@ async function loadScanHistory() {
   try {
     history = await getJson('/api/scan/history');
   } catch {
-    $('#scan-files-summary').textContent = 'could not read the scan history';
+    $('#scan-files-summary').textContent = tx('could not read the scan history');
     return;
   }
 
@@ -12544,14 +12909,18 @@ function renderScanFiles(history) {
 
   const read = files.filter((f) => f.state === 'current').length;
   const gone = files.filter((f) => f.state === 'gone').length;
-  const parts = [`${history.onDisk ?? 0} in the folder`, megabytes(history.bytes || 0), `${read} read as they stand`];
-  if (gone) parts.push(`${gone} gone`);
+  const parts = [
+    tx('{count} in the folder', { count: history.onDisk ?? 0 }),
+    megabytes(history.bytes || 0),
+    tx('{count} read as they stand', { count: read }),
+  ];
+  if (gone) parts.push(tx('{count} gone', { count: gone }));
   $('#scan-files-summary').textContent = parts.join(' · ');
 
   if (!files.length) {
     const td = el('td', 'muted', history.root
-      ? 'No Game.log in this install yet. The game writes one the first time it runs.'
-      : 'No install found, so there is nothing to read. Point the app at one from Settings.');
+      ? tx('No Game.log in this install yet. The game writes one the first time it runs.')
+      : tx('No install found, so there is nothing to read. Point the app at one from Settings.'));
     td.colSpan = 8;
     const tr = el('tr');
     tr.append(td);
@@ -12564,7 +12933,7 @@ function renderScanFiles(history) {
 
     const name = el('td');
     name.append(el('span', 'scan-file', file.name));
-    if (file.live) name.append(el('span', 'scan-live', 'live'));
+    if (file.live) name.append(el('span', 'scan-live', tx('live')));
     name.title = file.path;
     tr.append(name);
 
@@ -12587,9 +12956,9 @@ function renderScanFiles(history) {
       : '—'));
     tr.append(el('td', null, file.handle || '—'));
 
-    const when = el('td', 'muted', file.scannedAt ? relative(file.scannedAt) : file.sessionId ? 'before 0.14.10' : '—');
+    const when = el('td', 'muted', file.scannedAt ? relative(file.scannedAt) : file.sessionId ? tx('before 0.14.10') : '—');
     if (file.scannedAt) when.title = stampOf(file.scannedAt);
-    else if (file.sessionId) when.title = 'Read by a build that did not yet record when';
+    else if (file.sessionId) when.title = tx('Read by a build that did not yet record when');
     tr.append(when);
 
     body.append(tr);
@@ -12603,9 +12972,9 @@ function renderScanRuns(runs) {
 
   const latest = runs[0];
   $('#scan-runs-summary').textContent = scanNow
-    ? `running · ${scanNow.done} of ${scanNow.total} checked · ${scanNow.parsed} read so far`
+    ? tx('running · {done} of {total} checked · {parsed} read so far', { done: scanNow.done, total: scanNow.total, parsed: scanNow.parsed })
     : latest
-      ? `last ${relative(latest.finishedAt)} · ${latest.parsed} of ${latest.files} read`
+      ? tx('last {when} · {parsed} of {files} read', { when: relative(latest.finishedAt), parsed: latest.parsed, files: latest.files })
       : '';
 
   // The pass under way sits above the ones that finished, with the file it
@@ -12613,16 +12982,17 @@ function renderScanRuns(runs) {
   // they are about to join.
   if (scanNow) {
     const tr = el('tr', 'running');
-    tr.append(el('td', null, 'now'));
+    tr.append(el('td', null, tx('now')));
     tr.append(el('td', 'num', String(scanNow.total)));
     tr.append(el('td', 'num', String(scanNow.parsed)));
     tr.append(el('td', 'num', `${scanNow.elapsedSeconds}s`));
-    tr.append(el('td', 'scan-state parsing', `parsing ${scanNow.done} / ${scanNow.total}${scanNow.file ? ` · ${scanNow.file}` : ''}`));
+    tr.append(el('td', 'scan-state parsing',
+      `${tx('parsing {done} / {total}', { done: scanNow.done, total: scanNow.total })}${scanNow.file ? ` · ${scanNow.file}` : ''}`));
     body.append(tr);
   }
 
   if (!runs.length && !scanNow) {
-    const td = el('td', 'muted', 'No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.');
+    const td = el('td', 'muted', tx('No scan recorded yet. Scans are kept from 0.14.10 on; the first one lands on the next start.'));
     td.colSpan = 5;
     const tr = el('tr');
     tr.append(td);
@@ -12639,7 +13009,7 @@ function renderScanRuns(runs) {
     tr.append(el('td', 'num', String(run.parsed)));
     const seconds = Math.max(0, (new Date(run.finishedAt) - new Date(run.startedAt)) / 1000);
     tr.append(el('td', 'num', seconds < 1 ? '<1s' : `${Math.round(seconds)}s`));
-    tr.append(el('td', run.forced ? 'scan-forced' : 'muted', run.forced ? 'full re-read' : run.parsed ? 'new logs' : 'unchanged'));
+    tr.append(el('td', run.forced ? 'scan-forced' : 'muted', run.forced ? tx('full re-read') : run.parsed ? tx('new logs') : tx('unchanged')));
     body.append(tr);
   }
 }
@@ -12654,7 +13024,7 @@ $('#scan-now')?.addEventListener('click', async (e) => {
     await getJson2('/api/scan');
     await loadScanHistory();
   } catch {
-    $('#scan-files-summary').textContent = 'the scan could not be started';
+    $('#scan-files-summary').textContent = tx('the scan could not be started');
   } finally {
     button.disabled = false;
   }
@@ -12676,7 +13046,7 @@ $('#screen-log-clear')?.addEventListener('click', async (e) => {
     screenLatestShot = null;
     await renderScreenLog();
   } catch {
-    screenSay('could not clear the log');
+    screenSay(tx('could not clear the log'));
   } finally {
     button.disabled = false;
   }
@@ -12701,7 +13071,7 @@ $('#screen-parse')?.addEventListener('click', async (e) => {
   try {
     await parseClipboard();
   } catch (err) {
-    screenSay(`could not read the clipboard: ${err.message}`);
+    screenSay(tx('could not read the clipboard: {error}', { error: err.message }));
   } finally {
     button.disabled = false;
   }
@@ -12714,7 +13084,7 @@ $('#screen-scan')?.addEventListener('click', async (e) => {
   try {
     await scanScreenshot();
   } catch (err) {
-    screenSay(`could not read the screenshot: ${err.message}`);
+    screenSay(tx('could not read the screenshot: {error}', { error: err.message }));
   } finally {
     button.disabled = false;
   }
@@ -12727,7 +13097,7 @@ $('#screen-read-older')?.addEventListener('click', async (e) => {
   try {
     await readOlderScreenshots();
   } catch (err) {
-    screenSay(`could not read the older screenshots: ${err.message}`);
+    screenSay(tx('could not read the older screenshots: {error}', { error: err.message }));
   } finally {
     button.disabled = false;
   }
@@ -12756,7 +13126,7 @@ async function renderOverlayLayout() {
       box.addEventListener('change', saveOverlayLayout);
 
       label.append(box);
-      label.append(el('span', null, OVERLAY_LABELS[name] || name));
+      label.append(el('span', null, tx(OVERLAY_LABELS[name] || name)));
       node.append(label);
     }
   };
@@ -12801,7 +13171,7 @@ $('#install-path-save')?.addEventListener('click', async (e) => {
 
     status.textContent = response.ok
       ? tx('Found {channel}. Restart Quantum Wake to read it.', { channel: result.channel })
-      : result.message || tx('That folder does not hold Star Citizen logs.');
+      : serverText(result.message) || tx('That folder does not hold Star Citizen logs.');
 
     if (response.ok) status.classList.add('inward');
   } catch {
@@ -12817,15 +13187,15 @@ $('#overlay-reload')?.addEventListener('click', async (e) => {
 
   try {
     await fetch('/api/overlay/reload', { method: 'POST' });
-    status.textContent = 'the widget will reload within a few seconds';
+    status.textContent = tx('the widget will reload within a few seconds');
   } catch {
-    status.textContent = 'could not reach the server';
+    status.textContent = tx('could not reach the server');
   } finally {
     e.currentTarget.disabled = false;
   }
 });
 
-async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
+async function saveOverlayLayout(savedMessage = tx('saved'), chosen = null) {
   const pick = (host) => $$(`${host} input:checked`).map((b) => b.value);
   const layout = chosen || {
     tabs: pick('#overlay-tabs'),
@@ -12835,7 +13205,7 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
   };
 
   const status = $('#overlay-layout-status');
-  status.textContent = 'saving…';
+  status.textContent = tx('saving…');
 
   try {
     await fetch('/api/overlay/layout', {
@@ -12843,9 +13213,10 @@ async function saveOverlayLayout(savedMessage = 'saved', chosen = null) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(layout),
     });
-    status.textContent = savedMessage;
+    // Wired straight to change events too, where the first argument is the event.
+    status.textContent = typeof savedMessage === 'string' ? savedMessage : tx('saved');
   } catch {
-    status.textContent = 'could not save';
+    status.textContent = tx('could not save');
   }
 }
 
@@ -12869,6 +13240,12 @@ const OVERLAY_PRESETS = {
   full: null,
 };
 
+/** What saving each named layout says; one sentence each, so a translation can agree the name. */
+const OVERLAY_PRESET_SAVED = {
+  flight: 'Flight layout saved', mining: 'Mining layout saved', combat: 'Combat layout saved',
+  trading: 'Trading layout saved', minimal: 'Minimal layout saved', full: 'Full layout saved',
+};
+
 /** Applies a named layout from either the dashboard or the overlay's header. */
 /**
  * Asks the Quantum Wake app to open MFD setup.
@@ -12882,13 +13259,13 @@ async function openMfdSetup() {
   try {
     const response = await fetch('/api/mfd/setup', { method: 'POST' });
     if (response.ok) {
-      if (status) status.textContent = 'MFD setup is open on the PC. Drag it to any screen; the black backdrop clears from the screen it is on.';
+      if (status) status.textContent = tx('MFD setup is open on the PC. Drag it to any screen; the black backdrop clears from the screen it is on.');
       return true;
     }
     const answer = await response.json().catch(() => ({}));
-    if (status) status.textContent = answer.message || 'MFD setup could not be opened from here.';
+    if (status) status.textContent = serverText(answer.message) || tx('MFD setup could not be opened from here.');
   } catch {
-    if (status) status.textContent = 'The app did not answer. Use MFD setup… in the tray, or Ctrl+Alt+M.';
+    if (status) status.textContent = tx('The app did not answer. Use MFD setup… in the tray, or Ctrl+Alt+M.');
   }
   return false;
 }
@@ -12911,8 +13288,7 @@ async function applyOverlayPreset(name) {
   $$('#overlay-density input').forEach(box => { box.checked = box.value === next.density; });
   const contrast = $('#overlay-high-contrast');
   if (contrast) contrast.checked = Boolean(next.highContrast);
-  await saveOverlayLayout(
-    `${name === 'full' ? 'Full' : name[0].toUpperCase() + name.slice(1)} layout saved`, next);
+  await saveOverlayLayout(tx(OVERLAY_PRESET_SAVED[name]), next);
 }
 
 $('#overlay-presets')?.addEventListener('click', event => {
@@ -13886,10 +14262,10 @@ async function loadCasualties() {
   }
 
   tiles('#casualties-summary', [
-    ['Deaths', data.deaths],
-    ['Incapacitations', data.incapacitations],
-    ['Sessions with a death', data.sessionsWithDeaths],
-    ['Claim fees*', data.estimatedFees > 0 ? money(data.estimatedFees) : '—'],
+    [tx('Deaths'), data.deaths],
+    [tx('Incapacitations'), data.incapacitations],
+    [tx('Sessions with a death'), data.sessionsWithDeaths],
+    [tx('Claim fees*'), data.estimatedFees > 0 ? money(data.estimatedFees) : '—'],
   ]);
 
   bars('#casualties-places',
@@ -13910,7 +14286,7 @@ async function loadCasualties() {
 
   bars('#casualties-beds',
     (data.bedsUsed || []).map((b) => ({
-      label: b.afterDeath ? `${b.place} · ${b.afterDeath} after a death` : b.place,
+      label: b.afterDeath ? `${b.place} · ${tx('{count} after a death', { count: b.afterDeath })}` : b.place,
       value: b.times,
       onClick: () => jumpToPlace(b.place),
     })),
@@ -13923,26 +14299,24 @@ async function loadCasualties() {
 
   if (kinds) {
     const parts = [];
-    if (kinds.afterDeath) parts.push(`${kinds.afterDeath} after a death or incapacitation`);
-    if (kinds.heal) parts.push(`${kinds.heal} used mid-session, which could be either`);
-    if (kinds.hab) parts.push(`${kinds.hab} at places with no clinic, so hab beds - not counted above`);
-    if (kinds.wake) parts.push(`${kinds.wake} were waking up at login, not counted above`);
+    if (kinds.afterDeath) parts.push(tx('{count} after a death or incapacitation', { count: kinds.afterDeath }));
+    if (kinds.heal) parts.push(tx('{count} used mid-session, which could be either', { count: kinds.heal }));
+    if (kinds.hab) parts.push(tx('{count} at places with no clinic, so hab beds - not counted above', { count: kinds.hab }));
+    if (kinds.wake) parts.push(tx('{count} were waking up at login, not counted above', { count: kinds.wake }));
 
     // The directory can only rule a bed out, and only if it is on disk. Say so
     // rather than leaving the mid-session pile unexplained.
     if (!kinds.clinicsKnown) {
-      parts.push('enable the place directory in Settings to rule out beds at places with no clinic');
+      parts.push(tx('enable the place directory in Settings to rule out beds at places with no clinic'));
     }
 
     $('#beds-kinds').textContent = parts.join(' · ');
   }
 
   $('#casualties-woke-note').textContent = data.lastWokeAt
-    ? `Last woke at ${data.lastWokeAt}, ${relative(data.lastWokeWhen)}. Inferred, `
-      + 'not read: the game logs no respawn point, so this is the first place '
-      + 'named after each death.'
-    : 'Nothing to infer yet. This reads the first place named after a death, '
-      + 'because the game logs no respawn point of its own.';
+    ? tx('Last woke at {place}, {when}. Inferred, not read: the game logs no respawn point, so this is the first place named after each death.',
+      { place: data.lastWokeAt, when: relative(data.lastWokeWhen) })
+    : tx('Nothing to infer yet. This reads the first place named after a death, because the game logs no respawn point of its own.');
 
   const body = $('#casualties-fees tbody');
   body.textContent = '';
@@ -13989,16 +14363,14 @@ async function renderSharedShips(days) {
   if (!ships.length) return;
 
   const card = el('section', 'shared-block');
-  card.append(el('h3', null, 'Ships you have shared'));
-  card.append(el('p', 'muted', 'Who was aboard which ship, from its comms channel — the only '
-    + 'lines that put a person in a vehicle. Counted in boardings, not hours: nothing records '
-    + 'how long anyone stayed, and a parked ship looks the same as a crossing.'));
+  card.append(el('h3', null, tx('Ships you have shared')));
+  card.append(el('p', 'muted', tx('Who was aboard which ship, from its comms channel — the only lines that put a person in a vehicle. Counted in boardings, not hours: nothing records how long anyone stayed, and a parked ship looks the same as a crossing.')));
 
   const table = el('table', 'data');
   const head = el('thead');
   const headRow = el('tr');
   for (const label of ['Pilot', 'Ship', 'Whose', 'Boardings', 'First', 'Last']) {
-    headRow.append(el('th', label === 'Boardings' ? 'num' : null, label));
+    headRow.append(el('th', label === 'Boardings' ? 'num' : null, tx(label)));
   }
   head.append(headRow);
   table.append(head);
@@ -14013,7 +14385,7 @@ async function renderSharedShips(days) {
 
     // Whose ship it was is the interesting half: crewing for somebody is a
     // different evening from having them aboard yours.
-    tr.append(el('td', 'muted', ship.owner === ship.handle ? 'theirs' : 'yours'));
+    tr.append(el('td', 'muted', ship.owner === ship.handle ? tx('theirs') : tx('yours')));
 
     tr.append(el('td', 'num', String(ship.times)));
     tr.append(el('td', 'muted', dateOf(ship.first)));
@@ -14024,8 +14396,10 @@ async function renderSharedShips(days) {
   table.append(body);
   card.append(table);
 
-  card.append(el('p', 'muted', `${ships.length} pairing${ships.length === 1 ? '' : 's'}`
-    + `${mine ? `, ${mine} of them in a ship that was not yours` : ''}.`));
+  card.append(el('p', 'muted', mine
+    ? txn(ships.length, '{count} pairing, {mine} of them in a ship that was not yours.',
+      '{count} pairings, {mine} of them in a ship that was not yours.', { mine })
+    : txn(ships.length, '{count} pairing.', '{count} pairings.')));
 
   host.append(card);
 }
@@ -14059,22 +14433,22 @@ async function loadCrew() {
   const arrivals = rows.reduce((total, r) => total + r.connected, 0);
 
   tiles('#crew-summary', [
-    ['People named', rows.length],
+    [tx('People named'), rows.length],
 
     // Joins rather than arrivals: this is the one that counts somebody who was
     // not there a moment before, which is what "flew with" means.
-    ['Joined your party', joins],
-    ['Came online', arrivals],
-    ['Most flown with', rows.length ? rows[0].handle : '—'],
+    [tx('Joined your party'), joins],
+    [tx('Came online'), arrivals],
+    [tx('Most flown with'), rows.length ? rows[0].handle : '—'],
   ]);
 
   bars('#crew-chart',
     rows.slice(0, 12).map((r) => ({
       label: r.handle,
       value: r.sessions,
-      note: `${r.connected} arrival${r.connected === 1 ? '' : 's'}`,
+      note: txn(r.connected, '{count} arrival', '{count} arrivals'),
     })),
-    (v) => `${v} session${v === 1 ? '' : 's'}`);
+    (v) => txn(v, '{count} session', '{count} sessions'));
 
   const body = table.querySelector('tbody');
   body.textContent = '';
@@ -14082,8 +14456,7 @@ async function loadCrew() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted',
-      'Nobody named in that range — the game only says so when someone joins, '
-      + 'leaves, or connects while you are partied with them.');
+      tx('Nobody named in that range — the game only says so when someone joins, leaves, or connects while you are partied with them.'));
     td.colSpan = 9;
     tr.append(td);
     body.append(tr);
@@ -14122,8 +14495,10 @@ let serverNewestDeployment = null;
 let serverCurrent = null;
 
 /** What each ending means to a pilot, and whether it counts against the server. */
+// "you left" rather than "left": the bare word is already the party feed's
+// "left" (somebody else went), and English as the key cannot tell them apart.
 const SHARD_ENDINGS = {
-  Left: ['left', false],
+  Left: ['you left', false],
   Idle: ['idle kick', false],
   Quit: ['quit to desktop', false],
   Backend: ['back-end gave up', true],
@@ -14133,7 +14508,7 @@ const SHARD_ENDINGS = {
 };
 
 function endingLabel(ending) {
-  return (SHARD_ENDINGS[ending] || [String(ending || '').toLowerCase(), false])[0];
+  return SHARD_ENDINGS[ending] ? tx(SHARD_ENDINGS[ending][0]) : String(ending || '').toLowerCase();
 }
 
 /**
@@ -14172,7 +14547,7 @@ function fillServerRegions(rows) {
   const regions = [...new Set(rows.map((r) => r.region))].sort();
 
   select.textContent = '';
-  const all = el('option', null, 'All regions');
+  const all = el('option', null, tx('All regions'));
   all.value = '';
   select.append(all);
 
@@ -14224,14 +14599,14 @@ function renderServers() {
   const backendEnds = all.reduce((total, r) => total + (r.endings?.Backend || 0), 0);
 
   tiles('#servers-summary', [
-    ['Shards visited', all.length],
-    ['Still running', current.length],
-    ['Placements', visits],
-    ['Back-end ends', backendEnds],
-    ['Favourites', all.filter((r) => r.favorite).length],
-    ['Marked avoid', all.filter((r) => r.disposition === 'avoid').length],
-    ['On now', serverCurrent || 'not on a shard'],
-    ['Newest deployment', serverNewestDeployment || '—'],
+    [tx('Shards visited'), all.length],
+    [tx('Still running'), current.length],
+    [tx('Placements'), visits],
+    [tx('Back-end ends'), backendEnds],
+    [tx('Favourites'), all.filter((r) => r.favorite).length],
+    [tx('Marked avoid'), all.filter((r) => r.disposition === 'avoid').length],
+    [tx('On now'), serverCurrent || tx('not on a shard')],
+    [tx('Newest deployment'), serverNewestDeployment || '—'],
   ]);
 
   const body = table.querySelector('tbody');
@@ -14240,9 +14615,8 @@ function renderServers() {
   if (!rows.length) {
     const tr = el('tr');
     const td = el('td', 'muted', all.length
-      ? 'Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.'
-      : 'No shard joins yet. The game writes one <Join PU> line each time it places you; '
-        + 'sessions summarised before this build read it will show up after a rescan.');
+      ? tx('Nothing matches those filters. Untick "Current deployment only" to see shards from earlier deployments.')
+      : tx('No shard joins yet. The game writes one <Join PU> line each time it places you; sessions summarised before this build read it will show up after a rescan.'));
     td.colSpan = 10;
     tr.append(td);
     body.append(tr);
@@ -14260,7 +14634,7 @@ function serverRow(row) {
   const starCell = el('td');
   const star = el('button', `ghost tiny star${row.favorite ? ' on' : ''}`, row.favorite ? '★' : '☆');
   star.type = 'button';
-  star.title = row.favorite ? 'Remove from favourites' : 'Add to favourites';
+  star.title = row.favorite ? tx('Remove from favourites') : tx('Add to favourites');
   star.addEventListener('click', () => setServerFavorite(row.shard, !row.favorite).catch(() => {}));
   starCell.append(star);
   tr.append(starCell);
@@ -14269,22 +14643,22 @@ function serverRow(row) {
 
   const shard = el('td', 'shard');
   shard.append(document.createTextNode(row.shard));
-  if (row.shard === serverCurrent) shard.append(el('span', 'here-badge', 'on now'));
+  if (row.shard === serverCurrent) shard.append(el('span', 'here-badge', tx('on now')));
   shard.append(seenNameText(row));
   shard.append(serverActions(row));
   shard.append(el('small', null, row.current
-    ? `deployment ${row.deployment}`
-    : `deployment ${row.deployment} — retired`));
+    ? tx('deployment {deployment}', { deployment: row.deployment })
+    : tx('deployment {deployment} — retired', { deployment: row.deployment })));
   tr.append(shard);
 
   tr.append(el('td', null, row.region));
   tr.append(el('td', 'num', row.visits ? String(row.visits) : '—'));
   tr.append(el('td', 'num', row.time ? duration(row.time) : '—'));
 
-  const last = el('td', 'muted', row.visits ? relative(row.last) : 'never seen here');
+  const last = el('td', 'muted', row.visits ? relative(row.last) : tx('never seen here'));
   last.title = row.visits
     ? dateOf(row.last)
-    : 'This note arrived from a backup; the logs on this machine never joined it.';
+    : tx('This note arrived from a backup; the logs on this machine never joined it.');
   tr.append(last);
 
   tr.append(endingCell(row));
@@ -14302,12 +14676,12 @@ function dispositionCell(row) {
   const td = el('td', 'server-disposition');
   const select = el('select', `select tiny${row.disposition ? ` ${row.disposition}` : ''}`);
   for (const [value, label] of [['', '—'], ['good', 'Good'], ['avoid', 'Avoid']]) {
-    const option = el('option', null, label);
+    const option = el('option', null, tx(label));
     option.value = value;
     select.append(option);
   }
   select.value = row.disposition || '';
-  select.title = 'Your personal server marker';
+  select.title = tx('Your personal server marker');
   select.addEventListener('change', () => setServerDisposition(row.shard, select.value).catch(() => {
     select.value = row.disposition || '';
   }));
@@ -14317,8 +14691,8 @@ function dispositionCell(row) {
 
 function seenNameText(row) {
   const text = el('small', `seen-name${row.seenName ? '' : ' empty'}`,
-    row.seenName ? `Seen in game: ${row.seenName}` : 'Add game label…');
-  text.title = 'Click to record the name the game showed you';
+    row.seenName ? tx('Seen in game: {name}', { name: row.seenName }) : tx('Add game label…'));
+  text.title = tx('Click to record the name the game showed you');
   text.tabIndex = 0;
   text.addEventListener('click', () => editServerSeenName(row, text));
   text.addEventListener('keydown', (e) => {
@@ -14353,10 +14727,10 @@ function editServerSeenName(row, text) {
 
 function serverActions(row) {
   const actions = el('div', 'server-actions');
-  const copy = el('button', 'ghost tiny', 'Copy ID');
+  const copy = el('button', 'ghost tiny', tx('Copy ID'));
   copy.type = 'button';
   copy.addEventListener('click', () => copyServerText(row.shard, copy));
-  const report = el('button', 'ghost tiny', 'Copy report');
+  const report = el('button', 'ghost tiny', tx('Copy report'));
   report.type = 'button';
   report.addEventListener('click', () => copyServerText(serverReport(row), report));
   actions.append(copy, report);
@@ -14367,8 +14741,12 @@ function serverReport(row) {
   // A note-only row - a shard these logs never joined - has no visit to
   // report. The cells say "never seen here"; the pasted line must not invent
   // a date and an ending the table itself refuses to show.
+  // English on every page, like the diagnostic summary: it is pasted where
+  // other pilots read it, not shown here.
   if (!row.visits) return `Quantumwake server report: shard ${row.shard}; region ${row.region}; no visit recorded on this machine.`;
-  const ending = row.shard === serverCurrent ? 'still connected' : endingLabel(row.lastEnding);
+  const ending = row.shard === serverCurrent
+    ? 'still connected'
+    : (SHARD_ENDINGS[row.lastEnding]?.[0] ?? String(row.lastEnding || '').toLowerCase());
   const when = row.shard === serverCurrent ? 'now' : dateOf(row.last);
   const stay = row.lastDuration ? ` after ${duration(row.lastDuration)}` : '';
   return `Quantumwake server report: shard ${row.shard}; region ${row.region}; ${when}; ${ending}${stay}.`;
@@ -14405,9 +14783,9 @@ async function copyServerText(value, button) {
       box.remove();
       if (!ok) throw new Error('copy refused');
     }
-    say('Copied');
+    say(tx('Copied'));
   } catch {
-    say('Could not copy');
+    say(tx('Could not copy'));
   }
 }
 
@@ -14423,8 +14801,8 @@ function endingCell(row) {
     return td;
   }
 
-  const [label, bad] = SHARD_ENDINGS[row.lastEnding] || [String(row.lastEnding).toLowerCase(), false];
-  td.append(el('span', bad ? 'bad' : null, label));
+  const bad = SHARD_ENDINGS[row.lastEnding]?.[1] ?? false;
+  td.append(el('span', bad ? 'bad' : null, endingLabel(row.lastEnding)));
 
   if (row.visits > 1) {
     const rest = Object.entries(row.endings || {})
@@ -14449,9 +14827,9 @@ function placesCell(row) {
   const places = row.places || [];
 
   if (!places.length) {
-    td.append(el('span', 'muted', row.visits ? 'nowhere named' : '—'));
+    td.append(el('span', 'muted', row.visits ? tx('nowhere named') : '—'));
     td.title = row.visits
-      ? 'No arrival was logged while on this shard - a stay spent in a ship, or too short to land.'
+      ? tx('No arrival was logged while on this shard - a stay spent in a ship, or too short to land.')
       : '';
     return td;
   }
@@ -14470,11 +14848,12 @@ function placesCell(row) {
     list.append(li);
   }
 
-  const more = el('button', 'ghost tiny more', `+${rest.length} more`);
+  const moreLabel = tx('+{count} more', { count: rest.length });
+  const more = el('button', 'ghost tiny more', moreLabel);
   more.type = 'button';
   more.addEventListener('click', () => {
     list.hidden = !list.hidden;
-    more.textContent = list.hidden ? `+${rest.length} more` : 'fewer';
+    more.textContent = list.hidden ? moreLabel : tx('fewer');
   });
 
   td.append(more, list);
@@ -14482,8 +14861,8 @@ function placesCell(row) {
 }
 
 function noteText(row) {
-  const text = el('div', `note-text${row.note ? '' : ' empty'}`, row.note || 'Add a note…');
-  text.title = 'Click to edit';
+  const text = el('div', `note-text${row.note ? '' : ' empty'}`, row.note || tx('Add a note…'));
+  text.title = tx('Click to edit');
   text.tabIndex = 0;
   text.addEventListener('click', () => editServerNote(row, text));
   text.addEventListener('keydown', (e) => {
@@ -14497,7 +14876,7 @@ function editServerNote(row, text) {
   const box = el('textarea');
   box.value = row.note || '';
   box.maxLength = 1000;
-  box.placeholder = 'Laggy elevators, two 30ks, good for bunkers…';
+  box.placeholder = tx('Laggy elevators, two 30ks, good for bunkers…');
 
   let done = false;
   const finish = (save) => {
@@ -14658,7 +15037,7 @@ const GARAGE_GROUP_WORDS = {
   Misc: 'Utility',
 };
 
-const garageWord = (group) => GARAGE_GROUP_WORDS[group] || String(group || '').replace(/([a-z])([A-Z])/g, '$1 $2');
+const garageWord = (group) => (GARAGE_GROUP_WORDS[group] ? tx(GARAGE_GROUP_WORDS[group]) : String(group || '').replace(/([a-z])([A-Z])/g, '$1 $2'));
 
 /** A hardpoint name as a pilot reads it: hardpoint_shield_generator_left → shield generator left. */
 function garagePortName(hardpoint) {
@@ -14696,14 +15075,13 @@ async function loadGarage() {
   const unavailable = $('#garage-unavailable');
   if (!data.known) {
     unavailable.hidden = false;
-    unavailable.textContent = 'The reference data predates the garage. Refresh the community dataset in Settings '
-      + 'and this page fills in - it needs the part figures the older download did not keep.';
+    unavailable.textContent = tx('The reference data predates the garage. Refresh the community dataset in Settings and this page fills in - it needs the part figures the older download did not keep.');
     return;
   }
   unavailable.hidden = true;
 
-  fillGaragePicker(mine, 'Your fleet…', data.mine.map((s) => [s.class, `${s.name} · ${s.sorties} sortie${s.sorties === 1 ? '' : 's'}`]));
-  fillGaragePicker($('#garage-all'), 'Any ship…', data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
+  fillGaragePicker(mine, tx('Your fleet…'), data.mine.map((s) => [s.class, `${s.name} · ${txn(s.sorties, '{count} sortie', '{count} sorties')}`]));
+  fillGaragePicker($('#garage-all'), tx('Any ship…'), data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
 
   // Open the ship already on the bench, else the one flown most, else nothing.
   const first = garageClass || data.mine[0]?.class || null;
@@ -14758,7 +15136,7 @@ async function openGarage(cls) {
     if (request !== garageRequest) return;
     const unavailable = $('#garage-unavailable');
     unavailable.hidden = false;
-    unavailable.textContent = `The reference does not know a ship called ${cls}.`;
+    unavailable.textContent = tx('The reference does not know a ship called {ship}.', { ship: cls });
     return;
   }
   if (request !== garageRequest) return;
@@ -14805,15 +15183,17 @@ async function loadGarageCargo(cls) {
   const sub = $('#garage-cargo-sub');
   const grids = garageCargo.grids || [];
   if (!garageCargo.gridsKnown) {
-    sub.textContent = 'The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.';
+    sub.textContent = tx('The reference data predates cargo grids. Refresh the community dataset in Settings and this hull’s holds will be drawn.');
   } else if (grids.length === 0) {
-    sub.textContent = `The dataset places no cargo grid on the ${garageCargo.name}${garageCargo.cargoScu ? ` though it credits it with ${fmt1(garageCargo.cargoScu)} SCU` : ''} — nothing to pack into.`;
+    sub.textContent = garageCargo.cargoScu
+      ? tx('The dataset places no cargo grid on the {ship} though it credits it with {scu} SCU — nothing to pack into.', { ship: garageCargo.name, scu: fmt1(garageCargo.cargoScu) })
+      : tx('The dataset places no cargo grid on the {ship} — nothing to pack into.', { ship: garageCargo.name });
   } else {
     const kinds = new Map();
     for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
-    sub.textContent = `${grids.length} grid${grids.length === 1 ? '' : 's'}, ${fmt1(grids.reduce((a, g) => a + g.scu, 0))} SCU by the dataset’s own placement: `
-      + [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ')
-      + '. Type a load and see where each crate would go.';
+    const sizes = [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ');
+    sub.textContent = `${txn(grids.length, '{count} grid, {scu} SCU by the dataset’s own placement: {sizes}.', '{count} grids, {scu} SCU by the dataset’s own placement: {sizes}.',
+      { scu: fmt1(grids.reduce((a, g) => a + g.scu, 0)), sizes })} ${tx('Type a load and see where each crate would go.')}`;
   }
 
   renderCargoLoadInputs();
@@ -14822,8 +15202,8 @@ async function loadGarageCargo(cls) {
   if (fleet) { fleet.hidden = true; fleet.textContent = ''; }
   $('#garage-cargo-verdict').textContent = '';
   $('#garage-cargo-note').textContent = garageCargo.cratesFromInstall
-    ? 'Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.'
-    : 'The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.';
+    ? tx('Crate sizes are read from your install: 1 SCU is 1.25 m cubed, and the 16, 24 and 32 are one lane wide and 5, 7.5 and 10 m long. A crate keeps its top up and may turn on the spot; anything stacks on anything; nothing hangs over an edge. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.')
+    : tx('The install has not been read yet, so the crate sizes are the table read from it on 16 Sep 2026. The packing is this app’s, largest crate first: a fit found is real, a fit not found is not proof.');
 
   // A load already typed - or brought from another hull's answer - is tried
   // straight away, so the fleet list is a link and not a form.
@@ -14857,7 +15237,7 @@ function renderCargoLoadInputs() {
     input.dataset.size = String(size);
     input.value = garageCargoLoad[size] ? String(garageCargoLoad[size]) : '';
     input.placeholder = '0';
-    input.setAttribute('aria-label', `${size} SCU crates`);
+    input.setAttribute('aria-label', tx('{size} SCU crates', { size }));
     input.addEventListener('input', () => {
       garageCargoLoad[size] = Math.max(0, parseInt(input.value, 10) || 0);
       try { localStorage.setItem('qw-cargo-load', JSON.stringify(garageCargoLoad)); } catch { /* as above */ }
@@ -14882,14 +15262,14 @@ function renderCargoTotal() {
   const crates = cargoLoadNow();
   const scu = Object.entries(crates).reduce((a, [s, n]) => a + Number(s) * n, 0);
   const count = Object.values(crates).reduce((a, n) => a + n, 0);
-  total.textContent = count ? `${count} crate${count === 1 ? '' : 's'}, ${fmtInt(scu)} SCU` : '';
+  total.textContent = count ? `${txn(count, '{count} crate', '{count} crates')}, ${fmtInt(scu)} SCU` : '';
 }
 
 /** The load as the panel has it, into this hull and every other. */
 async function fitCargo() {
   const crates = cargoLoadNow();
   const verdict = $('#garage-cargo-verdict');
-  if (!Object.keys(crates).length) { verdict.textContent = 'Type how many crates of each size.'; verdict.className = 'garage-cargo-verdict'; return; }
+  if (!Object.keys(crates).length) { verdict.textContent = tx('Type how many crates of each size.'); verdict.className = 'garage-cargo-verdict'; return; }
   if (!garageCargo) return;
 
   let data;
@@ -14899,9 +15279,9 @@ async function fitCargo() {
       body: JSON.stringify({ ship: garageCargo.class, crates }),
     });
     data = await response.json();
-    if (!response.ok) { verdict.textContent = data.message || 'The fit could not be worked out.'; verdict.className = 'garage-cargo-verdict'; return; }
+    if (!response.ok) { verdict.textContent = serverText(data.message) || tx('The fit could not be worked out.'); verdict.className = 'garage-cargo-verdict'; return; }
   } catch {
-    verdict.textContent = 'The fit could not be worked out.';
+    verdict.textContent = tx('The fit could not be worked out.');
     verdict.className = 'garage-cargo-verdict';
     return;
   }
@@ -14918,16 +15298,21 @@ function renderCargoVerdict(data) {
   const load = data.load;
   if (s.fits) {
     verdict.className = 'garage-cargo-verdict fits';
-    verdict.textContent = `Fits: ${load.count} crate${load.count === 1 ? '' : 's'}, ${fmtInt(load.scu)} of ${fmtInt(s.capacityScu)} SCU, with ${fmtInt(s.capacityScu - s.placedScu)} SCU to spare.`;
+    verdict.textContent = txn(load.count,
+      'Fits: {count} crate, {scu} of {capacity} SCU, with {spare} SCU to spare.',
+      'Fits: {count} crates, {scu} of {capacity} SCU, with {spare} SCU to spare.',
+      { scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu), spare: fmtInt(s.capacityScu - s.placedScu) });
   } else {
     verdict.className = 'garage-cargo-verdict no';
     const left = Object.entries(s.left || {}).sort((a, b) => Number(b[0]) - Number(a[0])).map(([size, n]) => `${n} × ${size} SCU`).join(', ');
     const byRule = (s.reasons || []).length > 0;
+    // The reasons are the server's sentences, translated when they are fixed ones.
     verdict.textContent = load.scu > s.capacityScu
-      ? `Does not fit: ${fmtInt(load.scu)} SCU asked of a ${fmtInt(s.capacityScu)} SCU hold. Left out: ${left}.`
+      ? tx('Does not fit: {scu} SCU asked of a {capacity} SCU hold. Left out: {left}.', { scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu), left })
       : byRule
-        ? `Does not fit: ${left} left out. ${s.reasons.join(' ')}`
-        : `No packing found for ${left}: ${fmtInt(s.placedScu)} of ${fmtInt(load.scu)} SCU placed in ${fmtInt(s.capacityScu)}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.`;
+        ? `${tx('Does not fit: {left} left out.', { left })} ${s.reasons.map(serverText).join(' ')}`
+        : tx('No packing found for {left}: {placed} of {scu} SCU placed in {capacity}. The volume is there; this packer, largest crate first, could not arrange the rest, which is not proof it cannot be done.',
+          { left, placed: fmtInt(s.placedScu), scu: fmtInt(load.scu), capacity: fmtInt(s.capacityScu) });
   }
 }
 
@@ -14945,17 +15330,17 @@ function renderCargoGrids(grids, fit) {
     const card = el('div', 'garage-cargo-grid');
     const cells = g.cells;
     const title = el('div', 'garage-cargo-grid-title',
-      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${cells.w} × ${cells.l} × ${cells.h} cells, ${fmtInt(cells.w * cells.l * cells.h)} SCU${g.grid.external ? ', outside the hull' : ''}`);
+      `${g.grid.class.replace(/^.*?_CargoGrid_?|^.*?_CargoInventory_?/i, '') || g.grid.class} — ${tx('{w} × {l} × {h} cells, {scu} SCU', { w: cells.w, l: cells.l, h: cells.h, scu: fmtInt(cells.w * cells.l * cells.h) })}${g.grid.external ? tx(', outside the hull') : ''}`);
     card.append(title);
     const rule = g.grid.maxBox;
     const ruleText = g.ruleIgnored
-      ? 'The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.'
-      : rule && rule.x > 0 ? `Takes a crate up to ${fmt1(rule.x)} × ${fmt1(rule.y)} × ${fmt1(rule.z)} m.` : '';
+      ? tx('The dataset gives this grid a largest box of one cell, a placeholder on a hold this size; packed by its geometry instead.')
+      : rule && rule.x > 0 ? tx('Takes a crate up to {x} × {y} × {z} m.', { x: fmt1(rule.x), y: fmt1(rule.y), z: fmt1(rule.z) }) : '';
     if (ruleText) card.append(el('div', 'muted small', ruleText));
     const layers = el('div', 'garage-cargo-layers');
     for (let z = 0; z < cells.h; z++) {
       const layer = el('div', 'garage-cargo-layer');
-      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? 'Floor' : `Layer ${z + 1}`) : ''));
+      layer.append(el('div', 'muted small', cells.h > 1 ? (z === 0 ? tx('Floor') : tx('Layer {n}', { n: z + 1 })) : ''));
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       const width = cells.w * cell, height = cells.l * cell;
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -14977,7 +15362,7 @@ function renderCargoGrids(grids, fit) {
         r.setAttribute('fill', CARGO_CRATE_COLOURS[p.scu] || '#888');
         r.setAttribute('class', `cargo-crate${z > p.z ? ' cargo-crate-upper' : ''}`);
         const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-        t.textContent = `${p.scu} SCU at ${p.x + 1}, ${p.y + 1}, layer ${p.z + 1}`;
+        t.textContent = tx('{scu} SCU at {x}, {y}, layer {z}', { scu: p.scu, x: p.x + 1, y: p.y + 1, z: p.z + 1 });
         r.append(t);
         svg.append(r);
         if (z === p.z) {
@@ -14994,7 +15379,7 @@ function renderCargoGrids(grids, fit) {
       layers.append(layer);
     }
     card.append(layers);
-    if (fit) card.append(el('div', 'muted small', `${fmtInt(g.usedScu)} of ${fmtInt(cells.w * cells.l * cells.h)} SCU used`));
+    if (fit) card.append(el('div', 'muted small', tx('{used} of {total} SCU used', { used: fmtInt(g.usedScu), total: fmtInt(cells.w * cells.l * cells.h) })));
     box.append(card);
   }
 }
@@ -15011,29 +15396,30 @@ function renderCargoFleet(data) {
     const link = el('a', null, s.name);
     link.href = `#garage`;
     link.addEventListener('click', (e) => { e.preventDefault(); openGarageShipForCargo(s.class); });
-    li.append(link, el('span', 'muted', ` — ${s.fits ? 'fits' : `${fmtInt(s.placedScu)} of ${fmtInt(data.load.scu)} SCU`}, ${fmtInt(s.cargoScu)} SCU hold${s.flown && s.hours ? `, flown ${s.hours} h` : ''}`));
+    const fit = s.fits ? tx('fits') : tx('{placed} of {scu} SCU', { placed: fmtInt(s.placedScu), scu: fmtInt(data.load.scu) });
+    li.append(link, el('span', 'muted', ` — ${fit}, ${tx('{scu} SCU hold', { scu: fmtInt(s.cargoScu) })}${s.flown && s.hours ? `, ${tx('flown {hours} h', { hours: s.hours })}` : ''}`));
     return li;
   };
   const fitting = mine.filter((s) => s.fits);
   const not = mine.filter((s) => !s.fits);
   if (mine.length) {
-    box.append(el('h4', null, 'Your ships'));
+    box.append(el('h4', null, tx('Your ships')));
     if (fitting.length) {
       const ul = el('ul', 'garage-cargo-ships');
       for (const s of fitting) ul.append(line(s));
       box.append(ul);
     } else {
-      box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly takes this load.'));
+      box.append(el('p', 'muted small', tx('None of the ships the logs have seen you fly takes this load.')));
     }
     // The rest in one line, hold sizes attached, so the list is what fits
     // and not a roll-call of fighters with a 2 SCU boot.
-    if (not.length) box.append(el('p', 'muted small', `Not in: ${not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ')}.`));
+    if (not.length) box.append(el('p', 'muted small', tx('Not in: {ships}.', { ships: not.map((s) => `${s.name} (${fmtInt(s.cargoScu)} SCU)`).join(', ') })));
   } else {
-    box.append(el('p', 'muted small', 'None of the ships the logs have seen you fly has a cargo grid in the dataset.'));
+    box.append(el('p', 'muted small', tx('None of the ships the logs have seen you fly has a cargo grid in the dataset.')));
   }
   const smallest = data.smallest || [];
   if (smallest.length) {
-    box.append(el('h4', null, 'Smallest hulls in the reference that take it'));
+    box.append(el('h4', null, tx('Smallest hulls in the reference that take it')));
     const ul = el('ul', 'garage-cargo-ships');
     for (const s of smallest) ul.append(line(s));
     box.append(ul);
@@ -15119,28 +15505,27 @@ function renderGaragePhoto() {
   box.hidden = false;
 
   if (!fit) {
-    const name = garageStock?.ship?.name || 'this ship';
-    $('#garage-photo-title').textContent = `No photograph of the ${name} has been read`;
-    $('#garage-photo-sub').textContent = `Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, `
-      + `and take a screenshot; with Watch screenshots on (Log tab) it is read as it lands, `
-      + `the ones already in the folder included, and the bench can start from what the screen shows.`;
+    $('#garage-photo-title').textContent = garageStock?.ship?.name
+      ? tx('No photograph of the {ship} has been read', { ship: garageStock.ship.name })
+      : tx('No photograph of this ship has been read');
+    $('#garage-photo-sub').textContent = tx('Open it at a Vehicle Loadout Manager, or its loadout estimate at a Fleet Manager, and take a screenshot; with Watch screenshots on (Log tab) it is read as it lands, the ones already in the folder included, and the bench can start from what the screen shows.');
     $('#garage-photo-unsettled').textContent = '';
     if (tools) tools.hidden = true;
     return;
   }
   if (tools) tools.hidden = false;
 
-  const when = new Date(fit.shotAt).toLocaleString();
-  $('#garage-photo-title').textContent = `${fit.ship}, as photographed ${when}`;
+  const when = new Date(fit.shotAt).toLocaleString(QW_DATE_LOCALES);
+  $('#garage-photo-title').textContent = tx('{ship}, as photographed {when}', { ship: fit.ship, when });
 
   const unsettled = (fit.ports || []).filter((p) => !p.applied);
   const sub = [];
-  sub.push(`${fit.applied} of ${fit.ports.length} port${fit.ports.length === 1 ? '' : 's'} read as one part`);
-  sub.push(fit.changed ? `${fit.changed} differ${fit.changed === 1 ? 's' : ''} from stock` : 'none differ from stock');
-  if (unsettled.length) sub.push(`${unsettled.length} not settled by the screenshot and left as stock`);
-  if (fit.scope) sub.push(fit.scope);
-  sub.push(`from ${fit.shot}`);
-  $('#garage-photo-sub').textContent = `${sub.join(' · ')}. Ports are matched to the screen's labels by kind and order; a screenshot is a moment, not a state.`;
+  sub.push(txn(fit.ports.length, '{applied} of {count} port read as one part', '{applied} of {count} ports read as one part', { applied: fit.applied }));
+  sub.push(fit.changed ? txn(fit.changed, '{count} differs from stock', '{count} differ from stock') : tx('none differ from stock'));
+  if (unsettled.length) sub.push(txn(unsettled.length, '{count} not settled by the screenshot and left as stock', '{count} not settled by the screenshot and left as stock'));
+  if (fit.scope) sub.push(screenText(fit.scope));
+  sub.push(tx('from {shot}', { shot: fit.shot }));
+  $('#garage-photo-sub').textContent = `${sub.join(' · ')}. ${tx('Ports are matched to the screen\'s labels by kind and order; a screenshot is a moment, not a state.')}`;
 
   const list = $('#garage-photo-unsettled');
   list.textContent = '';
@@ -15159,8 +15544,10 @@ function renderGaragePhoto() {
   // stays only for the pilot who took the tick off.
   apply.hidden = garageFromPhoto && garagePhotoApplied;
   $('#garage-photo-state').textContent = garagePhotoApplied
-    ? `The bench started from this photograph; ${fit.changed} part${fit.changed === 1 ? '' : 's'} differ from stock. Reset to stock takes it back.`
-    : fit.applied ? '' : 'Nothing on the screenshot settled a port the bench can change.';
+    ? txn(fit.changed,
+      'The bench started from this photograph; {count} part differs from stock. Reset to stock takes it back.',
+      'The bench started from this photograph; {count} parts differ from stock. Reset to stock takes it back.')
+    : fit.applied ? '' : tx('Nothing on the screenshot settled a port the bench can change.');
 }
 
 /** The photographed parts become the bench's swaps, and the sheet moves to match. */
@@ -15195,12 +15582,12 @@ $('#garage-photo-auto')?.addEventListener('change', (e) => {
  */
 function listingLine(listing, more = 0) {
   const line = el('span', 'listing');
-  line.append(acquisitionChip('players', 'Player listing',
-    'A player\'s advertisement on UEX\'s marketplace: an asking price, not a market price. Buying is arranged with the seller on UEX.'));
+  line.append(acquisitionChip('players', tx('Player listing'),
+    tx('A player\'s advertisement on UEX\'s marketplace: an asking price, not a market price. Buying is arranged with the seller on UEX.')));
   line.append(el('b', null, `${fmtInt(listing.price)} aUEC`));
-  const where = [listing.seller ? `by ${listing.seller}` : '', listing.location ? `at ${listing.location}` : ''].filter(Boolean).join(' ');
-  line.append(document.createTextNode(` · ${where || 'place not given'}${listing.inStock > 1 ? ` · ${listing.inStock} in stock` : ''}${more > 0 ? ` +${more}` : ''} `));
-  const link = el('a', 'uex-link', 'UEX ↗');
+  const where = [listing.seller ? tx('by {seller}', { seller: listing.seller }) : '', listing.location ? tx('at {place}', { place: listing.location }) : ''].filter(Boolean).join(' ');
+  line.append(document.createTextNode(` · ${where || tx('place not given')}${listing.inStock > 1 ? ` · ${tx('{count} in stock', { count: listing.inStock })}` : ''}${more > 0 ? ` +${more}` : ''} `));
+  const link = el('a', 'uex-link', tx('UEX ↗'));
   link.href = listing.url;
   link.target = '_blank';
   link.rel = 'noopener';
@@ -15236,17 +15623,19 @@ async function loadGarageMarket(cls) {
   const shipName = garageStock?.ship?.name || cls;
 
   if (!data.enabled) {
-    note.textContent = 'Player listings are off. Fetch the Player marketplace feed under UEX in Settings to see who is offering parts for this ship on uexcorp.space.';
+    note.textContent = tx('Player listings are off. Fetch the Player marketplace feed under UEX in Settings to see who is offering parts for this ship on uexcorp.space.');
     return;
   }
 
-  const fetched = data.fetchedAt ? `fetched ${ago(data.fetchedAt)}` : 'never fetched';
+  const fetched = data.fetchedAt ? tx('fetched {ago}', { ago: ago(data.fetchedAt) }) : tx('never fetched');
   if (!data.listings.length) {
-    note.textContent = `Nobody has advertised a part that fits the ${shipName} in the newest ${fmtInt(data.total)} UEX marketplace listings (${data.components} of them are ship components at all) · ${fetched}. That is a week's advertisements, not a verdict on the market.`;
+    note.textContent = tx('Nobody has advertised a part that fits the {ship} in the newest {total} UEX marketplace listings ({components} of them are ship components at all) · {fetched}. That is a week\'s advertisements, not a verdict on the market.',
+      { ship: shipName, total: fmtInt(data.total), components: data.components, fetched });
     return;
   }
 
-  note.textContent = `${data.listings.length} of the newest ${fmtInt(data.total)} UEX marketplace listings are parts that fit the ${shipName} · asking prices, not market prices · ${fetched}.`;
+  note.textContent = tx('{count} of the newest {total} UEX marketplace listings are parts that fit the {ship} · asking prices, not market prices · {fetched}.',
+    { count: data.listings.length, total: fmtInt(data.total), ship: shipName, fetched });
 
   for (const row of data.listings) {
     const { listing, part } = row;
@@ -15257,18 +15646,18 @@ async function loadGarageMarket(cls) {
     const name = el('div', 'c-name', part.name);
     name.append(partChip(part));
     mid.append(name);
-    mid.append(el('div', 'c-maker', `${part.manufacturer || part.makerCode || ''}${listing.title && listing.title !== part.name ? ` · listed as “${listing.title}”` : ''}`));
+    mid.append(el('div', 'c-maker', `${part.manufacturer || part.makerCode || ''}${listing.title && listing.title !== part.name ? ` · ${tx('listed as “{title}”', { title: listing.title })}` : ''}`));
     const shop = el('div', 'c-shop');
     shop.append(listingLine(listing));
-    shop.append(document.createTextNode(` · posted ${ago(listing.added)}`));
+    shop.append(document.createTextNode(` · ${tx('posted {ago}', { ago: ago(listing.added) })}`));
     mid.append(shop);
     rowEl.append(mid);
 
     const act = el('div', 'c-act');
     if (row.ports && row.ports.length) {
-      const open = el('button', 'ghost tiny', 'Bench');
+      const open = el('button', 'ghost tiny', tx('Bench'));
       open.type = 'button';
-      open.title = 'Open the port this part fits, with what else fits it';
+      open.title = tx('Open the port this part fits, with what else fits it');
       open.addEventListener('click', () => selectBenchPort(row.ports[0], true).catch(() => {}));
       act.append(open);
     }
@@ -15290,10 +15679,10 @@ function renderGarage(data, stock) {
   sub.textContent = '';
   const badge = el('span', `garage-duty ${discipline.key}`, discipline.label);
   badge.dataset.discipline = discipline.key;
-  badge.title = `Inferred from the community career / role: ${discipline.basis}`;
+  badge.title = tx('Inferred from the community career / role: {basis}', { basis: discipline.basis });
   sub.append(badge, el('span', 'garage-subline', [data.ship.manufacturer, data.ship.role, data.ship.career,
-    `size ${data.ship.size}`, `crew ${data.ship.crew}`].filter(Boolean).join(' · ')));
-  $('#garage-source').textContent = `Community dataset${data.dump ? ` · dump ${data.dump}` : ''} · recomputed from the fitted parts`;
+    tx('size {size}', { size: data.ship.size }), tx('crew {crew}', { crew: data.ship.crew })].filter(Boolean).join(' · ')));
+  $('#garage-source').textContent = `${tx('Community dataset')}${data.dump ? ` · ${tx('dump {dump}', { dump: data.dump })}` : ''} · ${tx('recomputed from the fitted parts')}`;
   renderGarageRig(data);
 
   const s = data.sheet;
@@ -15327,24 +15716,24 @@ function renderGarage(data, stock) {
   sheet.append(sheetGroup('Weapons', 'parts', [
     // The caveat rides on both rows it moves guns between: the split is the
     // one figure read from a port name, and on seven hulls the dump disagrees.
-    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : 'No guns the pilot fires.', w.caveat].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
+    row('Pilot DPS', fmt1(w.fixedDps), [w.guns.length ? w.guns.join(', ') : tx('No guns the pilot fires.'), serverText(w.caveat)].filter(Boolean).join(' · '), ow ? [ow.fixedDps, w.fixedDps] : null),
     row('Sustained', fmt1(w.fixedSustainedDps), null, ow ? [ow.fixedSustainedDps, w.fixedSustainedDps] : null, true),
     row('Alpha', fmt1(w.fixedAlpha), null, ow ? [ow.fixedAlpha, w.fixedAlpha] : null, true),
     // One lead indicator per projectile speed: two speeds is two pips on the
     // HUD, and a lead that lands one gun misses the other. Said in the row,
     // not only in the notes, because it is the figure a gun swap changes.
     pipsRow(w, ow),
-    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? 'Crewed or remote turrets; somebody else fires these.' : null, w.caveat ? 'See the pilot row: the split between the two is the uncertain part.' : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
-    row('Missiles', w.missiles ? `${w.missiles} · ${fmtInt(w.missileDamage)} dmg` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
+    row('Turret DPS', w.turretDps ? fmt1(w.turretDps) : '—', [w.turretDps ? tx('Crewed or remote turrets; somebody else fires these.') : null, w.caveat ? tx('See the pilot row: the split between the two is the uncertain part.') : null].filter(Boolean).join(' ') || null, ow ? [ow.turretDps, w.turretDps] : null),
+    row('Missiles', w.missiles ? `${w.missiles} · ${tx('{damage} dmg', { damage: fmtInt(w.missileDamage) })}` : '—', null, ow ? [ow.missileDamage, w.missileDamage] : null),
   ]));
 
   const sh = s.shield;
   const osh = o?.shield;
   sheet.append(sheetGroup('Defence', 'parts', [
     row('Shield HP', fmtInt(sh.hp), sh.poolLimit && sh.generators > sh.poolLimit
-      ? `${sh.generators} generators fitted, ${sh.poolLimit} online: the pool caps it.` : null, osh ? [osh.hp, sh.hp] : null),
+      ? tx('{fitted} generators fitted, {online} online: the pool caps it.', { fitted: sh.generators, online: sh.poolLimit }) : null, osh ? [osh.hp, sh.hp] : null),
     row('Shield regen', `${fmtInt(sh.regen)} /s`, null, osh ? [osh.regen, sh.regen] : null),
-    row('Generators', sh.poolLimit ? `${sh.generators} of ${sh.poolLimit}` : String(sh.generators)),
+    row('Generators', sh.poolLimit ? tx('{shown} of {total}', { shown: sh.generators, total: sh.poolLimit }) : String(sh.generators)),
     row('Armour', `EM ×${s.armorSignals.em} · IR ×${s.armorSignals.ir}`, 'The hull’s signal multipliers; every signature below carries them.'),
   ]));
 
@@ -15366,12 +15755,12 @@ function renderGarage(data, stock) {
   const oc = o?.cooling;
   sheet.append(sheetGroup('Systems', 'parts', [
     row('Power available', `${p.available} seg`, null, op ? [op.available, p.available] : null),
-    row('Drawn, shields up', `${fmt1(p.usedShields)} seg`, p.overShields ? 'Over budget: the game will brown something out.' : null,
+    row('Drawn, shields up', `${fmt1(p.usedShields)} seg`, p.overShields ? tx('Over budget: the game will brown something out.') : null,
       op ? [op.usedShields, p.usedShields, '', true] : null),
-    row('Drawn, in quantum', `${fmt1(p.usedQuantum)} seg`, p.overQuantum ? 'Over budget in quantum.' : null,
+    row('Drawn, in quantum', `${fmt1(p.usedQuantum)} seg`, p.overQuantum ? tx('Over budget in quantum.') : null,
       op ? [op.usedQuantum, p.usedQuantum, '', true] : null),
     row('Cooling generated', `${fmtInt(c.generated)} seg`, null, oc ? [oc.generated, c.generated] : null),
-    row('Cooling load', `${Math.round(c.loadShields * 100)}%`, c.loadShields > 1 ? 'Above 100%: the coolers cannot keep up at full draw.' : 'Used over generated, shields up. Lower is quieter.',
+    row('Cooling load', `${Math.round(c.loadShields * 100)}%`, c.loadShields > 1 ? tx('Above 100%: the coolers cannot keep up at full draw.') : tx('Used over generated, shields up. Lower is quieter.'),
       oc ? [oc.loadShields * 100, c.loadShields * 100, '%', true] : null),
   ]));
 
@@ -15383,15 +15772,15 @@ function renderGarage(data, stock) {
     row('Spool · cooldown', `${fmt1(q.spoolTime)} s · ${fmt1(q.cooldown)} s`, null, oq ? [oq.spoolTime, q.spoolTime, ' s', true] : null),
     row('Range', fmtDistance(q.range), 'Full tank over the drive’s fuel rate.', oq ? [oq.range, q.range, '', false, fmtDistance] : null),
     row('Fuel per Gm', fmt1(q.fuelPerGm), null, oq ? [oq.fuelPerGm, q.fuelPerGm, '', true] : null),
-  ] : [row('Drive', 'None fitted')]));
+  ] : [row('Drive', tx('None fitted'))]));
 
   const notes = $('#garage-notes');
   notes.textContent = '';
   notes.hidden = !(s.notes && s.notes.length);
-  for (const note of s.notes || []) notes.append(el('div', null, note));
+  for (const note of s.notes || []) notes.append(el('div', null, serverText(note)));
   if (data.industrialPortsKnown === false && /mining|salvage/i.test(`${ship.role || ''} ${ship.career || ''}`)) {
     notes.hidden = false;
-    notes.append(el('div', null, 'Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.'));
+    notes.append(el('div', null, tx('Replacement choices for mining and salvage heads are missing from this cached loadout. Refresh the community dataset in Settings to check their compatibility.')));
   }
 
   renderBench(data);
@@ -15401,13 +15790,13 @@ function renderGarage(data, stock) {
 // compact reading aid for the Garage, so the tooltip keeps the source visible
 // instead of claiming that every expedition or freighter is officially civil.
 function garageShipDiscipline(career, role) {
-  const basis = [career, role].filter(Boolean).join(' · ') || 'no career / role recorded';
+  const basis = [career, role].filter(Boolean).join(' · ') || tx('no career / role recorded');
   const words = basis.toLowerCase();
   if (/combat|fighter|bomber|gunship|destroyer|frigate|interceptor|interdiction/.test(words))
-    return { key: 'military', label: 'Military', basis };
+    return { key: 'military', label: tx('Military'), basis };
   if (/industrial|mining|salvage|repair|recovery|refuel|science/.test(words))
-    return { key: 'industrial', label: 'Industrial', basis };
-  return { key: 'civilian', label: 'Civilian', basis };
+    return { key: 'industrial', label: tx('Industrial'), basis };
+  return { key: 'civilian', label: tx('Civilian'), basis };
 }
 
 /**
@@ -15438,10 +15827,10 @@ function renderGarageRig(data) {
   model.textContent = '';
   const code = makerAliases.get(String(data.ship.manufacturer || '').toLowerCase())
     || String(data.ship.class || '').split('_')[0];
-  const maker = { code, name: MANUFACTURERS[code] || data.ship.manufacturer || 'Unknown maker' };
+  const maker = { code, name: MANUFACTURERS[code] || data.ship.manufacturer || tx('Unknown maker') };
   model.append(shipPicture({ name: data.ship.name, className: data.ship.class }, maker));
 
-  $('#garage-rig-count').textContent = `${ports.length} fitted port${ports.length === 1 ? '' : 's'}`;
+  $('#garage-rig-count').textContent = txn(ports.length, '{count} fitted port', '{count} fitted ports');
   const summary = $('#garage-ship-summary');
   summary.textContent = '';
   const power = data.sheet.power;
@@ -15450,11 +15839,11 @@ function renderGarageRig(data) {
     ['Shield', `${fmtInt(data.sheet.shield.hp)} HP`],
     ['Pilot DPS', fmt1(data.sheet.weapons.fixedDps)],
     ['Quantum', data.sheet.quantumDrive?.drive || '—'],
-    ['Power', power.overShields ? `${fmt1(Math.abs(powerHeadroom))} short` : `${fmt1(powerHeadroom)} spare`],
+    ['Power', power.overShields ? tx('{amount} short', { amount: fmt1(Math.abs(powerHeadroom)) }) : tx('{amount} spare', { amount: fmt1(powerHeadroom) })],
   ]) {
     const unhealthy = label === 'Power' && power.overShields;
     const stat = el('div', `garage-ship-stat${unhealthy ? ' alert' : ''}`);
-    stat.append(el('span', null, label), el('b', null, value));
+    stat.append(el('span', null, tx(label)), el('b', null, value));
     summary.append(stat);
   }
 }
@@ -15466,7 +15855,7 @@ function garageRigSlot(port, ship) {
   button.dataset.port = port.portIds[0];
   button.setAttribute('aria-pressed', String(selected));
   const many = port.portIds.length > 1;
-  const name = port.name || port.class || 'Empty port';
+  const name = port.name || port.class || tx('Empty port');
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
   button.disabled = !!port.fixedReason;
   if (port.fixedReason) button.title = port.fixedReason;
@@ -15492,8 +15881,8 @@ function sheetGroup(title, source, rows) {
   group.dataset.group = groupKey;
   const h = el('h3');
   const label = el('span', 'sheet-title');
-  label.append(garageSheetIcon(groupKey), document.createTextNode(title));
-  h.append(el('span', 'src', source === 'model' ? 'signature model' : source));
+  label.append(garageSheetIcon(groupKey), document.createTextNode(tx(title)));
+  h.append(el('span', 'src', source === 'model' ? tx('signature model') : source === 'parts' ? tx('parts') : source));
   h.prepend(label);
   group.append(h);
   for (const r of rows) if (r) group.append(r);
@@ -15559,8 +15948,9 @@ function pipChip(part, fittedPart) {
   }
   if (!others.size || others.has(Math.round(speed))) return null;
 
-  const chip = el('span', 'chip pip', `+1 pip`);
-  chip.title = `${fmtInt(speed)} m/s against ${[...others].map(fmtInt).join(' and ')} m/s on the other pilot guns: the HUD would draw a second lead indicator, and a lead that lands one gun misses the other.`;
+  const chip = el('span', 'chip pip', tx('+1 pip'));
+  chip.title = tx('{speed} m/s against {others} m/s on the other pilot guns: the HUD would draw a second lead indicator, and a lead that lands one gun misses the other.',
+    { speed: fmtInt(speed), others: [...others].map(fmtInt).join(` ${tx('and')} `) });
   return chip;
 }
 
@@ -15580,10 +15970,10 @@ function pipsRow(w, ow) {
   const speeds = w.speeds || [];
   const pips = speeds.length;
   const was = ow ? (ow.speeds || []).length : null;
-  const value = pips === 0 ? '—' : pips === 1 ? `${fmtInt(speeds[0].speed)} m/s` : `${pips} speeds · ${pips} pips`;
+  const value = pips === 0 ? '—' : pips === 1 ? `${fmtInt(speeds[0].speed)} m/s` : tx('{count} speeds · {count} pips', { count: pips });
   const note = pips > 1
-    ? `${speeds.map((s) => `${gunsAtSpeed(s.guns)} at ${fmtInt(s.speed)} m/s`).join('; ')}. The HUD draws a pip per speed, and a lead that lands one gun misses the other.`
-    : pips === 1 ? 'Every pilot gun at one speed: one pip.' : null;
+    ? `${speeds.map((s) => tx('{guns} at {speed} m/s', { guns: gunsAtSpeed(s.guns), speed: fmtInt(s.speed) })).join('; ')}. ${tx('The HUD draws a pip per speed, and a lead that lands one gun misses the other.')}`
+    : pips === 1 ? tx('Every pilot gun at one speed: one pip.') : null;
   const r = row('Projectile speed', value, note, was !== null && was !== pips ? [was, pips, '', true] : null);
   if (pips > 1) r.classList.add('alert');
   return r;
@@ -15591,8 +15981,10 @@ function pipsRow(w, ow) {
 
 function row(label, value, note, delta, sub = false) {
   const r = el('div', `sheet-row${sub ? ' sub' : ''}`);
+  // The key stays the English label the callers pass; the reader gets the
+  // page's words. A note is a fixed sentence or one already built in tx().
   r.dataset.key = label;
-  r.append(el('span', 'k', label));
+  r.append(el('span', 'k', tx(label)));
 
   const v = el('span', 'v');
   if (delta && Number.isFinite(delta[0]) && Number.isFinite(delta[1]) && Math.abs(delta[0] - delta[1]) > 1e-9) {
@@ -15605,7 +15997,7 @@ function row(label, value, note, delta, sub = false) {
   v.append(document.createTextNode(value));
   r.append(v);
 
-  if (note) r.append(el('span', 'n', note));
+  if (note) r.append(el('span', 'n', tx(note)));
   return r;
 }
 
@@ -15691,7 +16083,7 @@ function componentClassChip(componentClass) {
   if (!componentClass) return null;
   const key = String(componentClass).toLowerCase();
   const chip = el('span', `component-class ${key}`, componentClass);
-  chip.title = 'Component class from the game\'s item description';
+  chip.title = tx('Component class from the game\'s item description');
   return chip;
 }
 
@@ -15711,8 +16103,8 @@ function stealthPickChip(part, choices) {
   const lowest = Math.min(...scores);
   if (here !== lowest || !scores.some((value) => value > lowest)) return null;
 
-  const chip = el('span', 'chip stealth', 'Stealth pick');
-  chip.title = 'Lowest combined EM + IR among the compatible parts shown; lower signatures are quieter.';
+  const chip = el('span', 'chip stealth', tx('Stealth pick'));
+  chip.title = tx('Lowest combined EM + IR among the compatible parts shown; lower signatures are quieter.');
   return chip;
 }
 
@@ -15731,34 +16123,34 @@ function partFigures(part, ship) {
   if (!part) return [];
   const t = part.type;
   if (part.weapon) {
-    return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], ['alpha', part.weapon.alpha, fmt1(part.weapon.alpha)],
-      ['range', part.weapon.range, `${fmtInt(part.weapon.range)} m`], ['sustained', part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)],
+    return [['DPS', part.weapon.dps, fmt1(part.weapon.dps)], [tx('alpha'), part.weapon.alpha, fmt1(part.weapon.alpha)],
+      [tx('range'), part.weapon.range, `${fmtInt(part.weapon.range)} m`], [tx('sustained'), part.weapon.sustainedDps, fmt1(part.weapon.sustainedDps)],
       ...(part.weapon.ammoSpeed > 0 ? [['m/s', part.weapon.ammoSpeed, fmtInt(part.weapon.ammoSpeed)]] : [])];
   }
   if (part.shield) {
-    return [['HP', part.shield.hp, fmtInt(part.shield.hp)], ['regen', part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
-      ['EM', part.em, fmtInt(part.em), true], ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+    return [['HP', part.shield.hp, fmtInt(part.shield.hp)], [tx('regen'), part.shield.regen, `${fmtInt(part.shield.regen)}/s`],
+      ['EM', part.em, fmtInt(part.em), true], [tx('draw'), part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
   }
   if (part.quantum) {
     const range = ship?.quantumFuel && part.quantum.fuelRate ? ship.quantumFuel / part.quantum.fuelRate : null;
-    return [['speed', part.quantum.speed, fmtSpeed(part.quantum.speed)], ['spool', part.quantum.spoolTime, `${fmt1(part.quantum.spoolTime)} s`, true],
-      ...(range ? [['range', range, fmtDistance(range)]] : []), ['EM', part.em, fmtInt(part.em), true]];
+    return [[tx('speed'), part.quantum.speed, fmtSpeed(part.quantum.speed)], [tx('spool'), part.quantum.spoolTime, `${fmt1(part.quantum.spoolTime)} s`, true],
+      ...(range ? [[tx('range'), range, fmtDistance(range)]] : []), ['EM', part.em, fmtInt(part.em), true]];
   }
   if (part.missile) {
-    return [['dmg', part.missile.damage, fmtInt(part.missile.damage)], ['speed', part.missile.speed, `${fmtInt(part.missile.speed)} m/s`],
-      ['lock', part.missile.lockTime, `${fmt1(part.missile.lockTime)} s`, true], ['range', part.missile.range, fmtDistance(part.missile.range)]];
+    return [[tx('dmg'), part.missile.damage, fmtInt(part.missile.damage)], [tx('speed'), part.missile.speed, `${fmtInt(part.missile.speed)} m/s`],
+      [tx('lock'), part.missile.lockTime, `${fmt1(part.missile.lockTime)} s`, true], [tx('range'), part.missile.range, fmtDistance(part.missile.range)]];
   }
   if (t === 'Cooler') {
-    return [['coolant', part.coolantGen, fmtInt(part.coolantGen)], ['IR', part.ir, fmtInt(part.ir), true], ['EM', part.em, fmtInt(part.em), true],
-      ['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
+    return [[tx('coolant'), part.coolantGen, fmtInt(part.coolantGen)], ['IR', part.ir, fmtInt(part.ir), true], ['EM', part.em, fmtInt(part.em), true],
+      [tx('draw'), part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]];
   }
   if (t === 'PowerPlant') {
-    return [['power', part.powerGen, `${fmtInt(part.powerGen)} seg`], ['EM', part.em, fmtInt(part.em), true], ['HP', part.health, fmtInt(part.health)]];
+    return [[tx('power'), part.powerGen, `${fmtInt(part.powerGen)} seg`], ['EM', part.em, fmtInt(part.em), true], ['HP', part.health, fmtInt(part.health)]];
   }
   const bits = [];
   if (part.em) bits.push(['EM', part.em, fmtInt(part.em), true]);
   if (part.ir) bits.push(['IR', part.ir, fmtInt(part.ir), true]);
-  if (part.powerUseMax) bits.push(['draw', part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]);
+  if (part.powerUseMax) bits.push([tx('draw'), part.powerUseMax, `${fmt1(part.powerUseMax)} seg`, true]);
   if (part.health) bits.push(['HP', part.health, fmtInt(part.health)]);
   return bits;
 }
@@ -15825,7 +16217,7 @@ function renderBench(data) {
   if (!ports.length) return;
 
   const changed = ports.filter((p) => p.changed).length;
-  $('#garage-changes').textContent = changed ? `${changed} part${changed === 1 ? '' : 's'} changed` : 'Stock fit';
+  $('#garage-changes').textContent = changed ? txn(changed, '{count} part changed', '{count} parts changed') : tx('Stock fit');
   $('#garage-changes').className = changed ? 'changed' : 'muted';
   $('#garage-reset').hidden = !changed;
   $('#garage-shop').hidden = !changed;
@@ -15844,12 +16236,14 @@ function renderBench(data) {
       rowEl.append(partMark(port.fitted));
 
       const mid = el('div');
-      const name = el('div', 'part-name', port.name || (port.class ? port.class : 'empty'));
+      const name = el('div', 'part-name', port.name || (port.class ? port.class : tx('empty')));
       if (port.fitted) name.append(partChip(port.fitted));
       if (many) name.append(el('span', 'chip count', `×${port.portIds.length}`));
       mid.append(name);
-      const sub = el('div', 'port-name', many ? `${garagePortName(port.hardpoint)} and ${port.portIds.length - 1} more` : garagePortName(port.hardpoint));
-      if (port.changed) sub.append(el('span', 'was', `was ${port.stockName || port.stockClass || 'empty'}`));
+      const sub = el('div', 'port-name', many
+        ? tx('{port} and {count} more', { port: garagePortName(port.hardpoint), count: port.portIds.length - 1 })
+        : garagePortName(port.hardpoint));
+      if (port.changed) sub.append(el('span', 'was', tx('was {part}', { part: port.stockName || port.stockClass || tx('empty') })));
       mid.append(sub);
       if (port.fixedReason) mid.append(el('span', 'muted small', port.fixedReason));
       rowEl.append(mid);
@@ -15879,7 +16273,7 @@ async function selectBenchPort(portId, revealChoices = false) {
 
   const panel = $('#garage-bench-panel');
   panel.textContent = '';
-  panel.append(el('p', 'muted', 'Looking up what fits…'));
+  panel.append(el('p', 'muted', tx('Looking up what fits…')));
 
   let options;
   try {
@@ -15887,7 +16281,7 @@ async function selectBenchPort(portId, revealChoices = false) {
   } catch {
     if (request !== benchRequest || cls !== garageClass) return;
     panel.textContent = '';
-    panel.append(el('p', 'muted', 'Could not read what fits this port.'));
+    panel.append(el('p', 'muted', tx('Could not read what fits this port.')));
     return;
   }
   // A later pick, or another ship, has taken the panel; this answer is for a port nobody is looking at.
@@ -15944,12 +16338,23 @@ function renderBenchPanel() {
   const head = sameport ? panel.querySelector('.panel-head') : el('div', 'panel-head');
   head.textContent = '';
   head.append(el('div', 'panel-title', `${garageWord(port?.group || garageOptions.port.kinds[0])} · ${garagePortName(garageOptions.port.hardpoint)}`));
-  const sizes = garageOptions.port.minSize === garageOptions.port.maxSize ? `size ${garageOptions.port.maxSize}` : `sizes ${garageOptions.port.minSize}–${garageOptions.port.maxSize}`;
+  const sizes = garageOptions.port.minSize === garageOptions.port.maxSize
+    ? tx('size {size}', { size: garageOptions.port.maxSize })
+    : tx('sizes {min}–{max}', { min: garageOptions.port.minSize, max: garageOptions.port.maxSize });
   const many = siblingsOf(garageOptions.port.portId).length;
-  head.append(el('div', 'panel-sub', `${sizes}${many > 1 ? ` · ${many} ports alike, fitted together` : ''} · now fitted: ${fittedPart?.name || 'nothing'}${garageOptions.pricesKnown ? '' : ' · prices need UEX (Settings)'}${garageOptions.marketKnown ? '' : ' · player listings need the Player marketplace feed (Settings)'}`));
+  const subParts = [sizes];
+  if (many > 1) subParts.push(tx('{count} ports alike, fitted together', { count: many }));
+  subParts.push(tx('now fitted: {part}', { part: fittedPart?.name || tx('nothing') }));
+  if (!garageOptions.pricesKnown) subParts.push(tx('prices need UEX (Settings)'));
+  if (!garageOptions.marketKnown) subParts.push(tx('player listings need the Player marketplace feed (Settings)'));
+  head.append(el('div', 'panel-sub', subParts.join(' · ')));
   if (!sameport) panel.append(head);
 
-  const countText = `${rows.length} of ${garageOptions.options.length} fit${terminalOnly ? ' · terminal aUEC only' : ''} · sorted by ${partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || 'name'}`;
+  const countText = [
+    tx('{shown} of {total} fit', { shown: rows.length, total: garageOptions.options.length }),
+    ...(terminalOnly ? [tx('terminal aUEC only')] : []),
+    tx('sorted by {figure}', { figure: partFigures(fittedPart || garageOptions.options[0]?.part, ship)[0]?.[0] || tx('name') }),
+  ].join(' · ');
   let list;
   if (sameport) {
     panel.querySelector('.bench-count').textContent = countText;
@@ -15959,7 +16364,7 @@ function renderBenchPanel() {
     const tools = el('div', 'panel-tools');
     const search = el('input', 'search bench-search');
     search.type = 'search';
-    search.placeholder = 'Filter by name or maker…';
+    search.placeholder = tx('Filter by name or maker…');
     search.value = garageOptions.filter || '';
     search.addEventListener('input', () => { garageOptions.filter = search.value; renderBenchPanel(); });
     tools.append(search);
@@ -15971,8 +16376,8 @@ function renderBenchPanel() {
 
   if (!rows.length) {
     list.append(el('p', 'muted', terminalOnly
-      ? 'No terminal aUEC seller is recorded for a compatible replacement.'
-      : 'Nothing in the reference fits this port.'));
+      ? tx('No terminal aUEC seller is recorded for a compatible replacement.')
+      : tx('Nothing in the reference fits this port.')));
     return;
   }
 
@@ -16017,15 +16422,15 @@ function renderBenchPanel() {
     const shop = el('div', 'c-shop');
     if (option.shops && option.shops.length) {
       const best = option.shops[0];
-      shop.append(acquisitionChip('terminal', 'Terminal aUEC', 'Known NPC terminal seller from the UEX market feed.'));
+      shop.append(acquisitionChip('terminal', tx('Terminal aUEC'), tx('Known NPC terminal seller from the UEX market feed.')));
       shop.append(el('b', null, `${fmtInt(best.price)} aUEC`));
       shop.append(document.createTextNode(` · ${best.terminal}${best.place ? `, ${best.place}` : ''}${option.shops.length > 1 ? ` +${option.shops.length - 1}` : ''}`));
     } else if (garageOptions.pricesKnown) {
       if (option.craftable) {
-        shop.append(acquisitionChip('craft', 'Blueprint recipe', 'The installed game data contains a recipe; see Crafting for its materials and whether you own the blueprint.'));
-        shop.append(document.createTextNode(' No terminal aUEC seller recorded.'));
+        shop.append(acquisitionChip('craft', tx('Blueprint recipe'), tx('The installed game data contains a recipe; see Crafting for its materials and whether you own the blueprint.')));
+        shop.append(document.createTextNode(` ${tx('No terminal aUEC seller recorded.')}`));
       } else {
-        shop.append(acquisitionChip('unlisted', 'No terminal seller', 'No NPC terminal seller is recorded in the UEX market feed.'));
+        shop.append(acquisitionChip('unlisted', tx('No terminal seller'), tx('No NPC terminal seller is recorded in the UEX market feed.')));
       }
     }
     // A player offering it is a third route, and a different kind of answer:
@@ -16039,9 +16444,9 @@ function renderBenchPanel() {
 
     const act = el('div', 'c-act');
     if (isCurrent) {
-      act.append(el('span', 'state', isStock ? 'Stock' : 'Fitted'));
+      act.append(el('span', 'state', isStock ? tx('Stock') : tx('Fitted')));
     } else {
-      const fit = el('button', 'ghost tiny', isStock ? 'Back to stock' : 'Fit');
+      const fit = el('button', 'ghost tiny', isStock ? tx('Back to stock') : tx('Fit'));
       fit.type = 'button';
       // Fitting from this list is an intentional purchase decision. A known
       // seller lets it become its own shopping line; unknown sellers stay a
@@ -16125,7 +16530,10 @@ async function optimiseGarage() {
   const rows = benchRows(garageBenchPorts.length ? garageBenchPorts : (garageStock.ports || []).filter((p) => BENCH_KINDS.includes(p.group)));
   const cls = garageClass;
   button.disabled = true;
-  status.textContent = `Finding the best ${GARAGE_OPTIMISE_GOALS[goal] || 'fit'}…`;
+  // The goal is a noun phrase French needs inside its own sentence, so the
+  // goal word is looked up on its own and slotted in.
+  const goalWord = tx(GARAGE_OPTIMISE_GOALS[goal] || 'fit');
+  status.textContent = tx('Finding the best {goal}…', { goal: goalWord });
 
   let changed = 0;
   let unavailable = 0;
@@ -16155,11 +16563,11 @@ async function optimiseGarage() {
     }
 
     if (changed) { await refitGarage(); await reconcileBenchShopping(); }
-    const scope = buyableOnly ? ' from known terminal aUEC sellers' : '';
+    const scope = buyableOnly ? ` ${tx('from known terminal aUEC sellers')}` : '';
     status.textContent = changed
-      ? `Optimised ${changed} port${changed === 1 ? '' : 's'} for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}. Review the sheet, then add the changed parts to Shopping when you are ready to buy.`
-      : `Nothing on this fit changed for ${GARAGE_OPTIMISE_GOALS[goal]}${scope}.`;
-    if (unavailable) status.textContent += ` ${unavailable} port${unavailable === 1 ? '' : 's'} could not be read.`;
+      ? `${txn(changed, 'Optimised {count} port for {goal}', 'Optimised {count} ports for {goal}', { goal: goalWord })}${scope}. ${tx('Review the sheet, then add the changed parts to Shopping when you are ready to buy.')}`
+      : `${tx('Nothing on this fit changed for {goal}', { goal: goalWord })}${scope}.`;
+    if (unavailable) status.textContent += ` ${txn(unavailable, '{count} port could not be read.', '{count} ports could not be read.')}`;
   } finally {
     button.disabled = false;
   }
@@ -16203,12 +16611,12 @@ function renderBuilds() {
     chip.dataset.build = build.id;
     chip.append(el('span', null, build.name));
     const n = Object.keys(build.swaps || {}).length;
-    chip.append(el('span', 'meta', `${n} part${n === 1 ? '' : 's'} · ${relative(build.updatedAt)}`));
+    chip.append(el('span', 'meta', `${txn(n, '{count} part', '{count} parts')} · ${relative(build.updatedAt)}`));
     chip.addEventListener('click', () => openBuild(build.id).catch(() => {}));
 
     const drop = el('button', 'drop', '×');
     drop.type = 'button';
-    drop.title = `Delete "${build.name}"`;
+    drop.title = tx('Delete “{build}”', { build: build.name });
     drop.addEventListener('click', (e) => { e.stopPropagation(); deleteBuild(build.id).catch(() => {}); });
     chip.append(drop);
     box.append(chip);
@@ -16217,7 +16625,7 @@ function renderBuilds() {
   const compare = $('#garage-compare');
   const keep = garageCompare;
   compare.textContent = '';
-  const stock = el('option', null, 'Stock');
+  const stock = el('option', null, tx('Stock'));
   stock.value = '';
   compare.append(stock);
   for (const build of garageBuilds) {
@@ -16338,7 +16746,7 @@ $('#garage-save-form')?.addEventListener('submit', (e) => {
   const name = $('#garage-save-name').value.trim();
   $('#garage-save-form').hidden = true;
   $('#garage-save-name').value = '';
-  saveBuild(name || 'Untitled build').catch(() => {});
+  saveBuild(name || tx('Untitled build')).catch(() => {});
 });
 onInput('#garage-compare', () => { garageCompare = $('#garage-compare').value; refitGarage().catch(() => {}); });
 
@@ -16365,7 +16773,9 @@ async function shopForBench(onlyIfExists = false) {
   if (!onlyIfExists && !Object.keys(garageSwaps).length) return;
 
   const open = garageBuilds.find((b) => b.id === garageOpenBuild);
-  const title = open ? open.name : `${garageStock?.ship?.name || garageClass} fit`;
+  // A list's title is data once written, like a saved plan's: in the page's
+  // language when it is made.
+  const title = open ? open.name : tx('{ship} fit', { ship: garageStock?.ship?.name || garageClass });
 
   const res = await fetch(`/api/garage/${encodeURIComponent(garageClass)}/shop`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -16376,7 +16786,7 @@ async function shopForBench(onlyIfExists = false) {
     const problem = await res.json().catch(() => null);
     result.textContent = '';
     result.hidden = false;
-    result.append(el('span', 'muted', problem?.message || 'The list could not be written.'));
+    result.append(el('span', 'muted', serverText(problem?.message) || tx('The list could not be written.')));
     return;
   }
 
@@ -16387,7 +16797,7 @@ async function shopForBench(onlyIfExists = false) {
     if (!removed) return;
     result.textContent = '';
     result.hidden = false;
-    result.append(el('span', 'muted', `The bench is back to stock, so "${removedTitle}" was taken off Shopping.`));
+    result.append(el('span', 'muted', tx('The bench is back to stock, so “{list}” was taken off Shopping.', { list: removedTitle })));
     return;
   }
 
@@ -16396,31 +16806,36 @@ async function shopForBench(onlyIfExists = false) {
   const items = (job.items || []).reduce((n, i) => n + (i.needed || 1), 0);
 
   const line = el('span');
-  line.append(document.createTextNode(`${created === false ? 'Updated' : 'Added'} "${job.title}" - ${items} part${items === 1 ? '' : 's'} on ${job.items.length} line${job.items.length === 1 ? '' : 's'}. `));
-  const link = el('a', null, 'Open Shopping');
+  const parts = txn(items, '{count} part', '{count} parts');
+  const lines = txn(job.items.length, '{count} line', '{count} lines');
+  line.append(document.createTextNode(`${created === false
+    ? tx('Updated “{list}” - {parts} on {lines}.', { list: job.title, parts, lines })
+    : tx('Added “{list}” - {parts} on {lines}.', { list: job.title, parts, lines })} `));
+  const link = el('a', null, tx('Open Shopping'));
   link.href = '#jobs';
   link.addEventListener('click', (e) => { e.preventDefault(); showView('jobs'); });
   line.append(link);
   result.append(line);
-  if (consolidated) result.append(el('span', 'muted', ` Consolidated ${consolidated} earlier Garage list${consolidated === 1 ? '' : 's'}.`));
+  if (consolidated) result.append(el('span', 'muted', ` ${txn(consolidated, 'Consolidated {count} earlier Garage list.', 'Consolidated {count} earlier Garage lists.')}`));
 
   // The stop, and what it lacks. "Nowhere" is said rather than left blank:
   // with UEX off there is no answer, and without a counter the list is still
   // a list.
   if (proposal.terminal) {
     const where = `${proposal.terminal}${proposal.place ? `, ${proposal.place}` : ''}`;
+    const covered = txn(proposal.of, '{covered} of {count} line', '{covered} of {count} lines', { covered: proposal.covered });
     // A destination the pilot chose on Shopping is theirs; the proposal is
     // offered beside it, not written over it.
     let note = destinationKept
-      ? `Destination kept as ${job.destination} (chosen on Shopping). UEX would propose ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`
-      : `Destination: ${where} - ${proposal.covered} of ${proposal.of} line${proposal.of === 1 ? '' : 's'}`;
+      ? tx('Destination kept as {kept} (chosen on Shopping). UEX would propose {where} - {covered}', { kept: job.destination, where, covered })
+      : tx('Destination: {where} - {covered}', { where, covered });
     if (proposal.total > 0) note += `, ${fmtInt(proposal.total)} aUEC`;
-    if (proposal.missing?.length) note += `. Not sold there: ${proposal.missing.join(', ')}`;
+    if (proposal.missing?.length) note += `. ${tx('Not sold there: {items}', { items: proposal.missing.join(', ') })}`;
     result.append(el('span', 'muted', note + '.'));
   } else {
     result.append(el('span', 'muted', proposal.pricesKnown
-      ? 'No terminal UEX knows sells any of it; the list has no destination.'
-      : 'Destinations need UEX prices (Settings); the list was written without one.'));
+      ? tx('No terminal UEX knows sells any of it; the list has no destination.')
+      : tx('Destinations need UEX prices (Settings); the list was written without one.')));
   }
 }
 
@@ -16475,7 +16890,7 @@ async function drawDetailSpark(strip, commodity) {
 
   const svg = svgEl('svg', {
     class: 'spark', viewBox: '0 0 240 34', preserveAspectRatio: 'none',
-    role: 'img', 'aria-label': `${commodity} price over the last ${days} days`,
+    role: 'img', 'aria-label': tx('{commodity} price over the last {days} days', { commodity, days }),
   });
 
   svg.append(svgEl('path', {
@@ -16492,11 +16907,11 @@ async function drawDetailSpark(strip, commodity) {
   // asks for one counter per side, but a wider sample already cached by the
   // commodity page is reused, and then the line really is a best-of.
   const from = trend.sampled > 1
-    ? `best of ${trend.sampled} counters each day`
-    : 'the busiest counter';
+    ? tx('best of {count} counters each day', { count: trend.sampled })
+    : tx('the busiest counter');
 
   strip.append(el('span', 'muted',
-    `${money(low)} – ${money(high)} over ${days} days, ${from}`));
+    tx('{low} – {high} over {days} days, {from}', { low: money(low), high: money(high), days, from })));
 }
 
 /**
@@ -16531,8 +16946,8 @@ function drawCargoEarnings(trades) {
   };
 
   const series = [
-    { label: 'Earned selling cargo', points: running('sell') },
-    { label: 'Spent buying it', points: running('buy') },
+    { label: tx('Earned selling cargo'), points: running('sell') },
+    { label: tx('Spent buying it'), points: running('buy') },
   ];
 
   timeChart(svg, series, (v) => `${Math.round(v / 1000).toLocaleString()}k`);
@@ -16559,7 +16974,7 @@ function timeChart(svg, series, format) {
     const text = svgEl('text', {
       x: 500, y: 110, 'text-anchor': 'middle', class: 'empty-note',
     });
-    text.textContent = 'NOT ENOUGH HISTORY YET';
+    text.textContent = tx('NOT ENOUGH HISTORY YET');
     svg.append(text);
     return;
   }
@@ -16704,7 +17119,7 @@ async function openCommodity(name) {
   if (location.hash !== fragment) history.replaceState(null, '', fragment);
 
   $('#commodity-name').textContent = name;
-  $('#commodity-sub').textContent = 'Asking UEX what this has been doing…';
+  $('#commodity-sub').textContent = tx('Asking UEX what this has been doing…');
 
   // A link straight into this page arrives before Market has ever been opened,
   // so the catalogue its headline figures come from is not loaded yet.
@@ -16713,10 +17128,10 @@ async function openCommodity(name) {
   const entry = marketEntries.find((e) => e.name === name);
 
   tiles('#commodity-summary', [
-    ['Best sell now', entry?.uex?.bestSell > 0 ? money(entry.uex.bestSell) : '—'],
-    ['15-day average', entry?.uex?.avgSell > 0 ? money(entry.uex.avgSell) : '—'],
-    ['You have sold', entry?.myScuSold ? `${entry.myScuSold.toLocaleString()} SCU` : '—'],
-    ['It earned you', entry?.myRevenue ? money(entry.myRevenue) : '—'],
+    [tx('Best sell now'), entry?.uex?.bestSell > 0 ? money(entry.uex.bestSell) : '—'],
+    [tx('15-day average'), entry?.uex?.avgSell > 0 ? money(entry.uex.avgSell) : '—'],
+    [tx('You have sold'), entry?.myScuSold ? `${entry.myScuSold.toLocaleString()} SCU` : '—'],
+    [tx('It earned you'), entry?.myRevenue ? money(entry.myRevenue) : '—'],
   ]);
 
   renderCommodityCounters(await terminalsFor(name).catch(() => []), entry);
@@ -16728,7 +17143,7 @@ async function openCommodity(name) {
   try {
     trend = await getJson(`/api/uex/history?commodity=${encodeURIComponent(name)}`);
   } catch {
-    $('#commodity-sub').textContent = 'UEX could not be reached, so no history is drawn.';
+    $('#commodity-sub').textContent = tx('UEX could not be reached, so no history is drawn.');
     return;
   }
 
@@ -16739,16 +17154,16 @@ async function openCommodity(name) {
   const daily = dailyMarket(trend);
 
   $('#commodity-sub').textContent = trend.sampled
-    ? `${entry?.groups?.join(', ') || 'Commodity'} · history from the ${trend.sampled} busiest `
-      + `of ${trend.terminals} counters that trade it, by demand and by stock.`
+    ? `${entry?.groups?.join(', ') || tx('Commodity')} · ${tx('history from the {sampled} busiest of {total} counters that trade it, by demand and by stock.',
+      { sampled: trend.sampled, total: trend.terminals })}`
     : trend.terminals
-      ? `Live UEX quotes are available at ${trend.terminals} counters, but no price-history samples loaded. `
-        + 'The counter tables above are still the current report.'
-      : 'No UEX market counters are currently reported for this commodity.';
+      ? tx('Live UEX quotes are available at {count} counters, but no price-history samples loaded. The counter tables above are still the current report.',
+        { count: trend.terminals })
+      : tx('No UEX market counters are currently reported for this commodity.');
 
   const priceSeries = [
-    { label: 'Best price paid to you', points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
-    { label: 'Cheapest price charged to you', points: daily.filter((d) => d.bestBuy > 0).map((d) => ({ t: d.t, v: d.bestBuy })) },
+    { label: tx('Best price paid to you'), points: daily.filter((d) => d.bestSell > 0).map((d) => ({ t: d.t, v: d.bestSell })) },
+    { label: tx('Cheapest price charged to you'), points: daily.filter((d) => d.bestBuy > 0).map((d) => ({ t: d.t, v: d.bestBuy })) },
   ];
 
   timeChart($('#commodity-price-chart'), priceSeries, (v) => Math.round(v).toLocaleString());
@@ -16758,7 +17173,7 @@ async function openCommodity(name) {
   // a sell one, and subtracting from zero would draw the sale price again under
   // a name that means something else.
   const marginSeries = [{
-    label: 'Margin per SCU',
+    label: tx('Margin per SCU'),
     points: daily.filter((d) => d.bestSell > 0 && d.bestBuy > 0)
       .map((d) => ({ t: d.t, v: d.bestSell - d.bestBuy })),
   }];
@@ -16781,8 +17196,8 @@ async function openCommodity(name) {
   chartKey('#commodity-counter-key', counterSeries);
 
   const scuSeries = [
-    { label: 'Demand — SCU the average counter will take', points: daily.map((d) => ({ t: d.t, v: d.demand })) },
-    { label: 'Supply — SCU on the average shelf', points: daily.map((d) => ({ t: d.t, v: d.stock })) },
+    { label: tx('Demand — SCU the average counter will take'), points: daily.map((d) => ({ t: d.t, v: d.demand })) },
+    { label: tx('Supply — SCU on the average shelf'), points: daily.map((d) => ({ t: d.t, v: d.stock })) },
   ];
 
   timeChart($('#commodity-scu-chart'), scuSeries, (v) => Math.round(v).toLocaleString());
@@ -16800,13 +17215,13 @@ function renderCommodityCounters(rows, entry) {
   fillCounterTable('#commodity-sell-table', sells, (r) => [
     money(r.sell),
     r.sellScu ? `${Math.round(r.sellScu).toLocaleString()} SCU` : '—',
-    best && r.sell < best ? `−${money(best - r.sell)}` : 'best',
+    best && r.sell < best ? `−${money(best - r.sell)}` : tx('best'),
   ], (r) => best && r.sell < best);
 
   fillCounterTable('#commodity-buy-table', buys, (r) => [
     money(r.buy),
     r.buyScu ? `${Math.round(r.buyScu).toLocaleString()} SCU` : '—',
-    cheapest && r.buy > cheapest ? `+${money(r.buy - cheapest)}` : 'cheapest',
+    cheapest && r.buy > cheapest ? `+${money(r.buy - cheapest)}` : tx('cheapest'),
   ], (r) => cheapest && r.buy > cheapest);
 
   // Unused here, but keeps the signature honest about what it was given.
@@ -16819,7 +17234,7 @@ function fillCounterTable(selector, rows, cells, isWorse) {
 
   if (!rows.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No counter known to trade it this way.');
+    const td = el('td', 'muted', tx('No counter known to trade it this way.'));
     td.colSpan = 5;
     tr.append(td);
     body.append(tr);
@@ -16852,7 +17267,7 @@ async function renderCommodityReceipts(name) {
 
   if (!trades.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'You have not traded this one.');
+    const td = el('td', 'muted', tx('You have not traded this one.'));
     td.colSpan = 6;
     tr.append(td);
     body.append(tr);
@@ -16862,7 +17277,7 @@ async function renderCommodityReceipts(name) {
   for (const trade of trades.sort((a, b) => new Date(b.at) - new Date(a.at))) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
-    tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', null, trade.isSell ? tx('Sold') : tx('Bought')));
     tr.append(tdPlace(trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
     tr.append(el('td', `num ${trade.isSell ? 'inward' : 'outward'}`, money(trade.amount)));
@@ -16894,9 +17309,9 @@ async function loadOutfitting() {
   }
 
   tiles('#outfitting-summary', [
-    ['Kit worn', `${data.priced} of ${data.kitSize} priced`],
-    ['Cheapest anywhere', money(data.cheapest)],
-    ['Best single shop', `${data.shops[0].covers} of ${data.kitSize} items`],
+    [tx('Kit worn'), tx('{priced} of {total} priced', { priced: data.priced, total: data.kitSize })],
+    [tx('Cheapest anywhere'), money(data.cheapest)],
+    [tx('Best single shop'), tx('{covers} of {total} items', { covers: data.shops[0].covers, total: data.kitSize })],
   ]);
 
   const body = $('#outfitting-table tbody');
@@ -16905,7 +17320,7 @@ async function loadOutfitting() {
   for (const shop of data.shops) {
     const tr = el('tr');
     tr.append(tdPlace(shop.terminal));
-    tr.append(el('td', 'num', `${shop.covers} of ${data.kitSize}`));
+    tr.append(el('td', 'num', tx('{shown} of {total}', { shown: shop.covers, total: data.kitSize })));
 
     const cost = el('td', 'num outward', money(shop.total));
     cost.title = shop.items.map((i) => `${i.item} — ${Math.round(i.price).toLocaleString()} aUEC`).join('\n');
@@ -16913,8 +17328,8 @@ async function loadOutfitting() {
 
     // The whole point of knowing: put the trip on a list.
     const action = el('td', 'num');
-    const add = el('button', 'ghost track', '+ list');
-    add.title = `Add everything ${shop.terminal} carries to your shopping list`;
+    const add = el('button', 'ghost track', tx('+ list'));
+    add.title = tx('Add everything {shop} carries to your shopping list', { shop: shop.terminal });
 
     add.addEventListener('click', async () => {
       add.disabled = true;
@@ -16925,7 +17340,7 @@ async function loadOutfitting() {
           body: JSON.stringify({ name: item.item, needed: 1, unit: '' }),
         }).catch(() => {});
 
-      add.textContent = '✓ added';
+      add.textContent = tx('✓ added');
     });
 
     action.append(add);
@@ -17270,7 +17685,7 @@ function renderHaulPlan(host, plan) {
       card.append(el('div', 'muted haul-progress', bits.join(' · ')));
     }
 
-    if (c.note) card.append(el('div', 'muted haul-note', c.note));
+    if (c.note) card.append(el('div', 'muted haul-note', serverText(c.note)));
     if (c.shot) card.append(el('div', 'muted haul-note', tx('read from {file}', { file: c.shot })));
 
     section.append(card);
@@ -17296,7 +17711,7 @@ function renderHaulPlan(host, plan) {
         const delivered = a.scuDone ? ` (${tx('{count} delivered', { count: a.scuDone })})` : '';
         const verb = a.kind === 'load' ? tx('load') : a.kind === 'unload' ? tx('unload') : a.kind;
         what.append(el('div', a.kind === 'load' ? 'haul-load' : 'haul-unload',
-          `${verb} ${scu}${a.commodity || tx('cargo')}${delivered} — ${a.contractTitle}${a.note ? ` (${a.note})` : ''}`));
+          `${verb} ${scu}${a.commodity || tx('cargo')}${delivered} — ${a.contractTitle}${a.note ? ` (${serverText(a.note)})` : ''}`));
       }
       if (stop.aboard?.length) {
         const cargo = stop.aboard.map((item) => {
@@ -17307,7 +17722,7 @@ function renderHaulPlan(host, plan) {
         }).join(' · ');
         what.append(el('div', 'muted haul-aboard', tx('projected aboard after this stop: {cargo}', { cargo })));
         for (const item of stop.aboard.filter((item) => item.amountUnknown)) {
-          what.append(el('div', 'muted haul-cargo-note', item.note
+          what.append(el('div', 'muted haul-cargo-note', serverText(item.note)
             || tx('The amount of {commodity} at each pickup was not read. Check this contract\'s cargo details before loading.', { commodity: item.commodity })));
         }
       }
@@ -17338,7 +17753,7 @@ function renderHaulPlan(host, plan) {
           make.textContent = `✓ ${result.title} — ${txn(result.stops, '{count} stop, tracked', '{count} stops, tracked')}`;
           if (typeof loadTrips === 'function') loadTrips().catch(() => {});
         } else {
-          make.textContent = result?.message || tx('could not plan');
+          make.textContent = serverText(result?.message) || tx('could not plan');
           make.disabled = false;
 
           // The run moved under it: show the new one rather than leave the
@@ -17346,7 +17761,7 @@ function renderHaulPlan(host, plan) {
           // goes with it - re-rendering the panel takes this button, and its
           // text, with it.
           if (result?.planId) {
-            haulPlanNotice = result.message;
+            haulPlanNotice = serverText(result.message);
             loadJobContracts().catch(() => {});
           }
         }
@@ -17361,7 +17776,7 @@ function renderHaulPlan(host, plan) {
       tx('Arrival marks the stop reached. Load and unload actions stay manual: the log does not identify which named contract leg changed.')));
   }
 
-  for (const note of plan.notes || []) section.append(el('p', 'muted caption', note));
+  for (const note of plan.notes || []) section.append(el('p', 'muted caption', serverText(note)));
 
   host.append(section);
 }
@@ -18186,31 +18601,38 @@ async function loadStarStrings(check = false) {
   const state = await getJson(`/api/starstrings${check ? '?check=true' : ''}`).catch(() => null);
 
   if (!state) {
-    status.textContent = 'Could not read the install state.';
+    status.textContent = tx('Could not read the install state.');
     return;
   }
 
   $('#starstrings-remove').hidden = !state.installed;
-  $('#starstrings-install').textContent = state.installed ? 'Reinstall' : 'Install';
+  $('#starstrings-install').textContent = state.installed ? tx('Reinstall') : tx('Install');
 
   const bits = [];
 
   if (state.installed) {
-    bits.push(`Installed: ${state.release || 'unknown build'}`);
-    if (state.installedAt) bits.push(`put in place ${relative(state.installedAt)}`);
+    bits.push(tx('Installed: {build}', { build: state.release || tx('unknown build') }));
+    if (state.installedAt) bits.push(tx('put in place {when}', { when: relative(state.installedAt) }));
   } else if (state.displaced) {
-    bits.push('Installed by this app, but the files are gone — a game patch will do that. Install again to put it back.');
+    bits.push(tx('Installed by this app, but the files are gone — a game patch will do that. Install again to put it back.'));
   } else {
-    bits.push('Not installed.');
+    bits.push(tx('Not installed.'));
   }
 
   if (state.latest) {
     bits.push(state.newer
-      ? `A newer build is out: ${state.latest.name}. Install to take it.`
-      : `Newest build: ${state.latest.name}${state.installed ? ' — you have it' : ''}`);
+      ? tx('A newer build is out: {build}. Install to take it.', { build: state.latest.name })
+      : state.installed
+        ? tx('Newest build: {build} — you have it', { build: state.latest.name })
+        : tx('Newest build: {build}', { build: state.latest.name }));
   }
 
-  if (!state.gameRoot) bits.push('No game folder found, so there is nowhere to install it.');
+  if (!state.gameRoot) bits.push(tx('No game folder found, so there is nowhere to install it.'));
+
+  // StarStrings' user.cfg says g_language = english, so installing it moves a
+  // game in another language back to English. Said before the click, not after.
+  if (state.gameLanguage && state.gameLanguage !== 'english')
+    bits.push(tx('Star Citizen is set to {language}; installing StarStrings sets it back to English, because its user.cfg says g_language = english.', { language: state.gameLanguage }));
 
   status.textContent = bits.join(' · ');
   $('#starstrings-install').disabled = !state.gameRoot;
@@ -18265,7 +18687,7 @@ async function saveLabelOptions() {
   // between a preference and a surprise.
   const note = $('#label-options-note');
   if (note) {
-    note.textContent = 'Saved. Install again to write it into the game, then restart the game.';
+    note.textContent = tx('Saved. Install again to write it into the game, then restart the game.');
     note.hidden = false;
   }
 
@@ -18283,28 +18705,28 @@ async function loadTextOverlay() {
   const state = await getJson('/api/labels').catch(() => null);
 
   if (!state) {
-    status.textContent = 'Could not read the game text.';
+    status.textContent = tx('Could not read the game text.');
     return;
   }
 
   applyLabelOptions(state.options);
 
   $('#textoverlay-remove').hidden = !state.installed;
-  $('#textoverlay-install').textContent = state.installed ? 'Rebuild and install' : 'Install';
+  $('#textoverlay-install').textContent = state.installed ? tx('Rebuild and install') : tx('Install');
   $('#textoverlay-install').disabled = !!state.problem;
 
   if (state.problem) {
-    status.textContent = state.problem;
+    status.textContent = serverText(state.problem);
     tiles('#textoverlay-summary', []);
     $('#textoverlay-table tbody').textContent = '';
     return;
   }
 
   tiles('#textoverlay-summary', [
-    ['Would be marked', state.marked],
-    ['Something sells', state.sold],
-    ['Size or class marked', state.annotated],
-    ['Not gear you shop for', state.skipped],
+    [tx('Would be marked'), state.marked],
+    [tx('Something sells'), state.sold],
+    [tx('Size or class marked'), state.annotated],
+    [tx('Not gear you shop for'), state.skipped],
   ]);
 
   // Which file it builds on decides whether another mod survives, so it is
@@ -18312,24 +18734,30 @@ async function loadTextOverlay() {
   // A base written before the last patch lacks its new strings; installing adds
   // them in the game's own words, and the page says so beside the button.
   const filledNote = state.filled
-    ? ` Installing also adds ${state.filled.toLocaleString()} strings the game has added since that text was written, which would otherwise show in game as raw keys.`
+    ? ` ${tx('Installing also adds {count} strings the game has added since that text was written, which would otherwise show in game as raw keys.', { count: state.filled.toLocaleString() })}`
     : '';
 
   $('#textoverlay-source').textContent = (state.baseSource === 'StarStrings'
-    ? 'Built on top of the StarStrings text, so both survive.'
-    : "Built on the game's own text.") + filledNote;
+    ? tx('Built on top of the StarStrings text, so both survive.')
+    : tx('Built on the game\'s own text.')) + filledNote;
 
   labelChanges = state.changes || [];
   renderLabelChanges();
 
   const bits = [];
   if (state.installed) {
-    bits.push(`Installed${state.installedAt ? ` ${relative(state.installedAt)}` : ''}`);
-    if (state.layered) bits.push('layered over StarStrings');
-    bits.push('restart Star Citizen to see it');
+    bits.push(state.installedAt ? tx('Installed {when}', { when: relative(state.installedAt) }) : tx('Installed'));
+    if (state.layered) bits.push(tx('layered over StarStrings'));
+    bits.push(tx('restart Star Citizen to see it'));
   } else {
-    bits.push('Nothing is written until you install.');
+    bits.push(tx('Nothing is written until you install.'));
   }
+
+  // The labels go into the English text file, and a game set to another
+  // language reads its own: "installed" would be true of the file and false
+  // of the game.
+  if (state.gameLanguage && state.gameLanguage !== 'english')
+    bits.push(tx('Star Citizen is set to {language}, so it reads that language\'s text file, not the English one these labels go into: they show only while the game is set to English.', { language: state.gameLanguage }));
 
   status.textContent = bits.join(' · ');
 }
@@ -18371,7 +18799,7 @@ function renderLabelChanges() {
   for (const line of rows.slice(0, LABELS_CAP)) {
     const tr = el('tr');
     tr.append(el('td', null, line.was));
-    tr.append(el('td', 'muted', line.category));
+    tr.append(el('td', 'muted', tx(line.category)));
     tr.append(el('td', null, line.becomes));
     body.append(tr);
   }
@@ -18387,16 +18815,14 @@ function renderLabelChanges() {
   // The total is what the page is answering for, so it is always said - a bare
   // "400 rows" would read as the whole plan when it is a tenth of it.
   if (rows.length === 0) {
-    counter.textContent = `Nothing matches "${term.trim()}" among ${labelChanges.length.toLocaleString()} renames.`;
+    counter.textContent = tx('Nothing matches "{term}" among {total} renames.', { term: term.trim(), total: labelChanges.length.toLocaleString() });
   } else if (rows.length > LABELS_CAP) {
-    counter.textContent =
-      `Showing ${LABELS_CAP} of ${rows.length.toLocaleString()} matches, `
-      + `out of ${labelChanges.length.toLocaleString()} renames — narrow the search to see the rest.`;
+    counter.textContent = tx('Showing {shown} of {count} matches, out of {total} renames — narrow the search to see the rest.',
+      { shown: LABELS_CAP, count: rows.length.toLocaleString(), total: labelChanges.length.toLocaleString() });
   } else if (term.trim()) {
-    counter.textContent =
-      `${rows.length.toLocaleString()} of ${labelChanges.length.toLocaleString()} renames match.`;
+    counter.textContent = tx('{count} of {total} renames match.', { count: rows.length.toLocaleString(), total: labelChanges.length.toLocaleString() });
   } else {
-    counter.textContent = `${labelChanges.length.toLocaleString()} renames.`;
+    counter.textContent = txn(labelChanges.length, '{count} rename.', '{count} renames.', { count: labelChanges.length.toLocaleString() });
   }
 }
 
@@ -18407,31 +18833,31 @@ function initTextOverlay() {
   onInput('#labels-search', renderLabelChanges);
 
   install.addEventListener('click', async () => {
-    $('#textoverlay-status').textContent = 'Writing…';
+    $('#textoverlay-status').textContent = tx('Writing…');
 
     const answer = await fetch('/api/labels/install', { method: 'POST' })
       .then((r) => r.json())
-      .catch(() => ({ problem: 'The write did not finish.' }));
+      .catch(() => ({ problem: tx('The write did not finish.') }));
 
     if (answer.problem) {
-      $('#textoverlay-status').textContent = answer.problem;
+      $('#textoverlay-status').textContent = serverText(answer.problem);
       return;
     }
 
     await loadTextOverlay();
     checkTextFreshness().catch(() => {});
-    alertLine($('#textoverlay-status').parentElement, 'Installed. Restart Star Citizen to see it.');
+    alertLine($('#textoverlay-status').parentElement, tx('Installed. Restart Star Citizen to see it.'));
   });
 
   $('#textoverlay-remove').addEventListener('click', async () => {
-    $('#textoverlay-status').textContent = 'Putting the old text back…';
+    $('#textoverlay-status').textContent = tx('Putting the old text back…');
     // A removal that could not put the old file back leaves the marks installed,
     // so saying "removed" would be a lie the page then contradicts on reload.
     const answer = await fetch('/api/labels/remove', { method: 'POST' })
       .then((r) => r.json())
-      .catch(() => ({ problem: 'The removal could not be started.' }));
+      .catch(() => ({ problem: tx('The removal could not be started.') }));
 
-    if (answer.problem) $('#textoverlay-status').textContent = answer.problem;
+    if (answer.problem) $('#textoverlay-status').textContent = serverText(answer.problem);
 
     await loadTextOverlay();
   });
@@ -18442,22 +18868,22 @@ function initStarStrings() {
   if (!install) return;
 
   $('#starstrings-check').addEventListener('click', async () => {
-    $('#starstrings-status').textContent = 'Asking GitHub…';
+    $('#starstrings-status').textContent = tx('Asking GitHub…');
     await loadStarStrings(true);
   });
 
   install.addEventListener('click', async () => {
     install.disabled = true;
-    $('#starstrings-status').textContent = 'Downloading and writing…';
+    $('#starstrings-status').textContent = tx('Downloading and writing…');
 
     const answer = await fetch('/api/starstrings/install', { method: 'POST' })
       .then((r) => r.json())
-      .catch(() => ({ problem: 'The install could not be started.' }));
+      .catch(() => ({ problem: tx('The install could not be started.') }));
 
     install.disabled = false;
 
     if (answer.problem) {
-      $('#starstrings-status').textContent = answer.problem;
+      $('#starstrings-status').textContent = serverText(answer.problem);
       return;
     }
 
@@ -18470,9 +18896,8 @@ function initStarStrings() {
     // exactly what somebody will want to re-read.
     const note = $('#starstrings-note');
     note.textContent = answer.relabelled
-      ? 'Installed, and your item labels were put back on top of it. '
-        + 'Restart Star Citizen to see them.'
-      : 'Installed. Restart Star Citizen to see it.';
+      ? tx('Installed, and your item labels were put back on top of it. Restart Star Citizen to see them.')
+      : tx('Installed. Restart Star Citizen to see it.');
     note.hidden = false;
   });
 
@@ -18500,46 +18925,78 @@ function renderLogbookBrief(rows) {
   const netDetail = $('#logbook-net-detail');
 
   if (!rows.length) {
-    latestTitle.textContent = 'No activity recorded';
-    latestDetail.textContent = 'Fly a session, make a trade or discover an item to begin this record.';
-    activityTitle.textContent = 'Nothing in this range';
-    activityDetail.textContent = 'Choose a wider record range to revisit earlier activity.';
-    netTitle.textContent = 'No recorded trade value';
-    netDetail.textContent = 'Receipts appear here when the log records a purchase or sale.';
+    latestTitle.textContent = tx('No activity recorded');
+    latestDetail.textContent = tx('Fly a session, make a trade or discover an item to begin this record.');
+    activityTitle.textContent = tx('Nothing in this range');
+    activityDetail.textContent = tx('Choose a wider record range to revisit earlier activity.');
+    netTitle.textContent = tx('No recorded trade value');
+    netDetail.textContent = tx('Receipts appear here when the log records a purchase or sale.');
     return;
   }
 
   const latest = rows[0];
-  const latestText = latest.kind === 'session' ? latest.what : prettyItem(latest.what);
-  latestTitle.textContent = latestText;
-  latestDetail.textContent = `${latest.kind} · ${dateOf(latest.at)}${latest.place ? ` · ${latest.place}` : ''}`;
+  latestTitle.textContent = logbookWhat(latest);
+  latestDetail.textContent = `${logbookKind(latest.kind)} · ${dateOf(latest.at)}${latest.place ? ` · ${latest.place}` : ''}`;
 
   const sessions = rows.filter(row => row.kind === 'session').length;
   const trades = rows.filter(row => row.kind === 'sold' || row.kind === 'bought').length;
   const discoveries = rows.filter(row => row.kind === 'loot').length;
   const activity = [];
-  if (sessions) activity.push(`${sessions} session${sessions === 1 ? '' : 's'}`);
-  if (trades) activity.push(`${trades} trade record${trades === 1 ? '' : 's'}`);
-  if (discoveries) activity.push(`${discoveries} discover${discoveries === 1 ? 'y' : 'ies'}`);
-  activityTitle.textContent = activity.length ? activity.join(' · ') : `${rows.length} recorded event${rows.length === 1 ? '' : 's'}`;
-  activityDetail.textContent = `${rows.length} event${rows.length === 1 ? '' : 's'} in the selected range.`;
+  if (sessions) activity.push(txn(sessions, '{count} session', '{count} sessions'));
+  if (trades) activity.push(txn(trades, '{count} trade record', '{count} trade records'));
+  if (discoveries) activity.push(txn(discoveries, '{count} discovery', '{count} discoveries'));
+  activityTitle.textContent = activity.length ? activity.join(' · ') : txn(rows.length, '{count} recorded event', '{count} recorded events');
+  activityDetail.textContent = txn(rows.length, '{count} event in the selected range.', '{count} events in the selected range.');
 
   const valued = rows.filter(row => row.amount != null && Number(row.amount) !== 0);
   if (!valued.length) {
-    netTitle.textContent = 'No recorded trade value';
-    netDetail.textContent = 'There are no purchases or sales with a recorded amount in this range.';
+    netTitle.textContent = tx('No recorded trade value');
+    netDetail.textContent = tx('There are no purchases or sales with a recorded amount in this range.');
     return;
   }
 
   const net = valued.reduce((total, row) => total + Number(row.amount), 0);
   netTitle.textContent = `${net < 0 ? '−' : '+'}${money(Math.abs(net))}`;
-  netDetail.textContent = `Net of ${valued.length} recorded trade ${valued.length === 1 ? 'entry' : 'entries'} in this range.`;
+  netDetail.textContent = txn(valued.length, 'Net of {count} recorded trade entry in this range.', 'Net of {count} recorded trade entries in this range.');
+}
+
+/* The kind column: the class keeps the server's word, the reader gets the page's. */
+const LOGBOOK_KINDS = { session: 'session', sold: 'sold', bought: 'bought', loot: 'loot' };
+
+const logbookKind = (kind) => (LOGBOOK_KINDS[kind] ? tx(LOGBOOK_KINDS[kind]) : kind);
+
+/*
+ * The server writes a session's line in English, like the live feed's, so it
+ * is translated here by its shape and keeps the ship's name. Item lines are
+ * game names and only lose their class-name dressing.
+ */
+function logbookWhat(row) {
+  if (row.kind !== 'session') return prettyItem(row.what);
+  if (row.what === 'Session on foot') return tx('Session on foot');
+  const aboard = /^Session aboard (.+)$/.exec(row.what || '');
+  return aboard ? tx('Session aboard {ship}', { ship: aboard[1] }) : row.what;
+}
+
+/*
+ * "1h 05m · 3 jumps · 1 death", as the server writes it, rebuilt from its
+ * numbers; anything that is not that shape - a shop's name - is shown as sent.
+ */
+function logbookDetail(row) {
+  if (row.detail === 'first seen') return tx('first seen');
+  if (row.kind !== 'session') return row.detail;
+
+  const shape = /^(\d+h \d+m) · (\d+) jumps?(?: · (\d+) deaths?)?$/.exec(row.detail || '');
+  if (!shape) return row.detail;
+
+  const parts = [shape[1], txn(Number(shape[2]), '{count} jump', '{count} jumps')];
+  if (shape[3]) parts.push(txn(Number(shape[3]), '{count} death', '{count} deaths'));
+  return parts.join(' · ');
 }
 
 async function loadLogbook() {
   const days = Number($('#logbook-period').value) || 0;
   const feed = $('#logbook-feed');
-  setWorkspaceState('#logbook-state', 'loading', 'Loading recorded activity…');
+  setWorkspaceState('#logbook-state', 'loading', tx('Loading recorded activity…'));
   feed.textContent = '';
 
   let rows;
@@ -18547,15 +19004,15 @@ async function loadLogbook() {
     rows = await getJson(`/api/logbook?days=${days}`);
   } catch {
     renderLogbookBrief([]);
-    setWorkspaceState('#logbook-state', 'offline', 'Recorded activity is unavailable. Refresh after the local server reconnects.');
-    feed.append(el('li', 'empty', 'Recorded activity is unavailable.'));
+    setWorkspaceState('#logbook-state', 'offline', tx('Recorded activity is unavailable. Refresh after the local server reconnects.'));
+    feed.append(el('li', 'empty', tx('Recorded activity is unavailable.')));
     return;
   }
   renderLogbookBrief(rows);
 
   if (!rows.length) {
-    setWorkspaceState('#logbook-state', 'empty', 'No recorded activity matches this range.');
-    feed.append(el('li', 'empty', 'Nothing in that range.'));
+    setWorkspaceState('#logbook-state', 'empty', tx('No recorded activity matches this range.'));
+    feed.append(el('li', 'empty', tx('Nothing in that range.')));
     return;
   }
 
@@ -18568,11 +19025,10 @@ async function loadLogbook() {
     const stamp = `${dateOf(row.at)} · ${when.toLocaleTimeString(QW_DATE_LOCALES, { hour: '2-digit', minute: '2-digit' })}`;
     li.append(el('span', 't', stamp));
 
-    li.append(el('span', `k ${row.kind}`, row.kind));
+    li.append(el('span', `k ${row.kind}`, logbookKind(row.kind)));
 
     // Item-ish lines pretty their class names; a session line is prose.
-    const text = row.kind === 'session' ? row.what : prettyItem(row.what);
-    li.append(el('span', 'd what', text));
+    li.append(el('span', 'd what', logbookWhat(row)));
 
     if (row.place) {
       const place = el('span', 'd');
@@ -18580,7 +19036,7 @@ async function loadLogbook() {
       li.append(place);
     }
 
-    if (row.detail) li.append(el('span', 'd detail', row.detail));
+    if (row.detail) li.append(el('span', 'd detail', logbookDetail(row)));
 
     if (row.amount != null && row.amount !== 0) {
       const inward = Number(row.amount) > 0;
@@ -18649,12 +19105,12 @@ function renderAssets() {
 
   tiles('#assets-summary', assets.priced
     ? [
-        ['Estimated worth*', money(total)],
-        ['Kit worn', `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
-        ['Stashed', money(assets.stashValue)],
-        ['Claim exposure*', money(assets.claimExposure)],
+        [tx('Estimated worth*'), money(total)],
+        [tx('Kit worn'), `${money(assets.loadoutValue)} (${assets.loadoutPriced}/${assets.loadoutItems})`],
+        [tx('Stashed'), money(assets.stashValue)],
+        [tx('Claim exposure*'), money(assets.claimExposure)],
       ]
-    : [['Estimated worth', 'needs Settings → community dataset + UEX']]);
+    : [[tx('Estimated worth'), tx('needs Settings → community dataset + UEX')]]);
 
   const stashBody = $('#assets-stash tbody');
   stashBody.textContent = '';
@@ -18687,7 +19143,7 @@ async function renderSettings() {
     $('#overlay-copy').hidden = !overlay.available;
 
     if (overlay.available) {
-      toggle.textContent = overlay.visible ? 'Overlay is on — hide it' : 'Show the overlay';
+      toggle.textContent = overlay.visible ? tx('Overlay is on — hide it') : tx('Show the overlay');
       toggle.classList.toggle('on', overlay.visible);
       toggle.dataset.visible = String(overlay.visible);
     }
@@ -18806,11 +19262,11 @@ function renderImportedFilter() {
   const usable = importBatches.filter((b) => b.readable && !b.hidden && b.classes.length);
   if (!usable.length) return;
 
-  host.append(el('label', 'muted', 'Show shared rows on my pages: '));
+  host.append(el('label', 'muted', `${tx('Show shared rows on my pages:')} `));
 
   const select = el('select', 'select');
-  const options = [['none', 'no'], ['all', 'from everyone']];
-  for (const batch of usable) options.push([batch.id, `only ${batch.handle || batch.sourceName}`]);
+  const options = [['none', tx('no')], ['all', tx('from everyone')]];
+  for (const batch of usable) options.push([batch.id, tx('only {who}', { who: batch.handle || batch.sourceName })]);
 
   for (const [value, label] of options) {
     const option = document.createElement('option');
@@ -18827,13 +19283,13 @@ function renderImportedFilter() {
 /** A tally, with the zeroes left out. */
 function countLine(counts) {
   const parts = [];
-  if (counts.receipts) parts.push(`${counts.receipts.toLocaleString()} trades`);
-  if (counts.blueprints) parts.push(`${counts.blueprints} blueprints`);
-  if (counts.jobs) parts.push(`${counts.jobs} jobs`);
-  if (counts.checklists) parts.push(`${counts.checklists} checklists`);
-  if (counts.trips) parts.push(`${counts.trips} flight plans`);
-  if (counts.runActions) parts.push(`${counts.runActions} run-sheet lines`);
-  if (counts.points) parts.push(`${counts.points} point${counts.points === 1 ? '' : 's'} of interest`);
+  if (counts.receipts) parts.push(txn(counts.receipts, '{count} trade', '{count} trades', { count: counts.receipts.toLocaleString() }));
+  if (counts.blueprints) parts.push(txn(counts.blueprints, '{count} blueprint', '{count} blueprints'));
+  if (counts.jobs) parts.push(txn(counts.jobs, '{count} job', '{count} jobs'));
+  if (counts.checklists) parts.push(txn(counts.checklists, '{count} checklist', '{count} checklists'));
+  if (counts.trips) parts.push(txn(counts.trips, '{count} flight plan', '{count} flight plans'));
+  if (counts.runActions) parts.push(txn(counts.runActions, '{count} run-sheet line', '{count} run-sheet lines'));
+  if (counts.points) parts.push(txn(counts.points, '{count} point of interest', '{count} points of interest'));
   return parts.join(' · ');
 }
 
@@ -18848,50 +19304,50 @@ function importCard(batch) {
   const card = el('article', 'import-card');
 
   const head = el('div', 'job-head');
-  head.append(el('b', null, batch.handle || 'Someone'));
+  head.append(el('b', null, batch.handle || tx('Someone')));
   if (batch.note) head.append(el('span', 'job-kind', batch.note));
-  if (!batch.readable) head.append(el('span', 'job-kind danger', 'cannot be read'));
-  if (batch.hidden) head.append(el('span', 'job-kind', 'hidden'));
+  if (!batch.readable) head.append(el('span', 'job-kind danger', tx('cannot be read')));
+  if (batch.hidden) head.append(el('span', 'job-kind', tx('hidden')));
   head.append(el('span', 'spacer'));
 
-  const hide = el('button', 'ghost tiny', batch.hidden ? 'Show' : 'Hide');
-  hide.title = 'Hiding keeps the file. Removing does not.';
+  const hide = el('button', 'ghost tiny', batch.hidden ? tx('Show') : tx('Hide'));
+  hide.title = tx('Hiding keeps the file. Removing does not.');
   hide.addEventListener('click', () => importCall(`/api/imports/${batch.id}/hide`));
   head.append(hide);
 
-  const remove = el('button', 'ghost danger tiny', 'Remove');
-  remove.title = 'Takes this file away completely. Your own work is not touched.';
+  const remove = el('button', 'ghost danger tiny', tx('Remove'));
+  remove.title = tx('Takes this file away completely. Your own work is not touched.');
   remove.addEventListener('click', () => importCall(`/api/imports/${batch.id}`, 'DELETE'));
   head.append(remove);
   card.append(head);
 
-  card.append(el('div', 'muted', `${batch.sourceName} — imported ${dateOf(batch.importedAt)}, `
-    + `written ${dateOf(batch.exportedAt)} by Quantum Wake ${batch.producerVersion}`));
+  card.append(el('div', 'muted', `${batch.sourceName} — ${tx('imported {imported}, written {written} by Quantum Wake {version}', {
+    imported: dateOf(batch.importedAt), written: dateOf(batch.exportedAt), version: batch.producerVersion,
+  })}`));
 
   const held = countLine(batch.counts);
-  card.append(el('div', 'import-counts', held || 'Nothing left in this file.'));
+  card.append(el('div', 'import-counts', held || tx('Nothing left in this file.')));
 
   // Kept for ever and said plainly: "why does this show 41 when his file said
   // 43" has to be answerable a month later.
   const dropped = countLine(batch.rejected);
-  if (dropped) card.append(el('div', 'muted', `Could not be read: ${dropped}.`));
+  if (dropped) card.append(el('div', 'muted', tx('Could not be read: {what}.', { what: dropped })));
 
   const cut = countLine(batch.truncated);
-  if (cut) card.append(el('div', 'muted', `Too many to keep, so left out: ${cut}.`));
+  if (cut) card.append(el('div', 'muted', tx('Too many to keep, so left out: {what}.', { what: cut })));
 
   if (!batch.readable) {
-    card.append(el('div', 'muted', `This file is in format ${batch.formatVersion}, which this `
-      + 'build does not read. It is kept rather than dropped, since the copy you were sent may '
-      + 'be the only one. Update Quantum Wake, or remove it.'));
+    card.append(el('div', 'muted', tx('This file is in format {format}, which this build does not read. It is kept rather than dropped, since the copy you were sent may be the only one. Update Quantum Wake, or remove it.', { format: batch.formatVersion })));
   }
 
   if (batch.classes.length) {
     const row = el('div', 'import-classes');
-    const named = [['receipts', 'trades'], ['blueprints', 'blueprints'], ['authored', 'jobs and lists'], ['points', 'points of interest']];
+    // One sentence per kind, so a translation can agree the article.
+    const named = [['receipts', 'Remove the trades'], ['blueprints', 'Remove the blueprints'], ['authored', 'Remove the jobs and lists'], ['points', 'Remove the points of interest']];
 
     for (const [key, label] of named) {
       if (!batch.classes.includes(key)) continue;
-      const drop = el('button', 'ghost tiny', `Remove the ${label}`);
+      const drop = el('button', 'ghost tiny', tx(label));
       drop.addEventListener('click', () => importCall(`/api/imports/${batch.id}/${key}`, 'DELETE'));
       row.append(drop);
     }
@@ -18910,14 +19366,11 @@ function renderImports(payload) {
   host.textContent = '';
 
   if (payload.quarantined) {
-    host.append(el('p', 'muted', 'An earlier imports file could not be read. It was kept as '
-      + `${payload.quarantined} rather than overwritten, because the files it held came from `
-      + 'other people.'));
+    host.append(el('p', 'muted', tx('An earlier imports file could not be read. It was kept as {file} rather than overwritten, because the files it held came from other people.', { file: payload.quarantined })));
   }
 
   if (!importBatches.length) {
-    host.append(el('p', 'muted', 'No shared files yet. Open one a friend sent you — it stays '
-      + 'separate from your own history, and you can remove it whenever you like.'));
+    host.append(el('p', 'muted', tx('No shared files yet. Open one a friend sent you — it stays separate from your own history, and you can remove it whenever you like.')));
     return;
   }
 
@@ -18945,7 +19398,7 @@ async function importCall(url, method = 'POST') {
  * check stays one question about how many bytes arrived.
  */
 async function importFile(file) {
-  $('#imports-status').textContent = `Reading ${file.name}…`;
+  $('#imports-status').textContent = tx('Reading {file}…', { file: file.name });
 
   const text = await new Promise((resolve) => {
     const reader = new FileReader();
@@ -18971,22 +19424,20 @@ async function sendImport(text, sourceName, force) {
   // and a deliberate re-import after a purge look identical from here.
   if (response.status === 409 && answer && answer.batch) {
     const already = answer.batch;
-    status.textContent = `You imported this on ${dateOf(already.importedAt)} — `
-      + `${countLine(already.counts) || 'nothing left in it'}. `;
+    status.textContent = `${tx('You imported this on {date} — {held}.', { date: dateOf(already.importedAt), held: countLine(already.counts) || tx('nothing left in it') })} `;
 
-    const again = el('button', 'ghost tiny', 'Import it again anyway');
+    const again = el('button', 'ghost tiny', tx('Import it again anyway'));
     again.addEventListener('click', () => sendImport(text, sourceName, true).catch(() => {}));
     status.append(again);
     return;
   }
 
   if (!response.ok) {
-    status.textContent = (answer && answer.message) || 'That file could not be read.';
+    status.textContent = serverText((answer && answer.message)) || tx('That file could not be read.');
     return;
   }
 
-  status.textContent = `Imported ${countLine(answer.batch.counts) || 'nothing'} from `
-    + `${answer.batch.handle || 'someone'}.`;
+  status.textContent = tx('Imported {what} from {who}.', { what: countLine(answer.batch.counts) || tx('nothing'), who: answer.batch.handle || tx('someone') });
 
   await loadImports();
 }
@@ -18998,7 +19449,7 @@ $('#imports-file')?.addEventListener('change', (event) => {
   if (!file) return;
 
   importFile(file)
-    .catch(() => { $('#imports-status').textContent = 'That file could not be read.'; })
+    .catch(() => { $('#imports-status').textContent = tx('That file could not be read.'); })
     // Cleared so that picking the same file twice still fires a change.
     .finally(() => { event.target.value = ''; });
 });
@@ -19029,15 +19480,14 @@ async function renderSharedReceipts() {
   if (!rows.length) return;
 
   const card = el('section', 'shared-block');
-  card.append(el('h3', null, 'Trades from shared files'));
-  card.append(el('p', 'muted', 'Other people’s receipts, kept out of your own totals '
-    + 'above. Prices are what they were quoted, where and when they say.'));
+  card.append(el('h3', null, tx('Trades from shared files')));
+  card.append(el('p', 'muted', tx('Other people’s receipts, kept out of your own totals above. Prices are what they were quoted, where and when they say.')));
 
   const table = el('table', 'data');
   const head = el('thead');
   const headRow = el('tr');
   for (const label of ['When', 'Who', 'Commodity', 'Place', 'SCU', 'Per SCU']) {
-    headRow.append(el('th', label === 'SCU' || label === 'Per SCU' ? 'num' : null, label));
+    headRow.append(el('th', label === 'SCU' || label === 'Per SCU' ? 'num' : null, tx(label)));
   }
   head.append(headRow);
   table.append(head);
@@ -19047,11 +19497,11 @@ async function renderSharedReceipts() {
   for (const row of rows.slice(0, 200)) {
     const tr = el('tr');
     tr.append(el('td', 'muted', dateOf(row.at)));
-    tr.append(el('td', null, row.imported.handle || 'someone'));
+    tr.append(el('td', null, row.imported.handle || tx('someone')));
 
     // A name this install cannot resolve is not an error: their dataset knew
     // something ours does not, or the other way round.
-    tr.append(el('td', row.commodity ? null : 'muted', row.commodity || 'unnamed'));
+    tr.append(el('td', row.commodity ? null : 'muted', row.commodity || tx('unnamed')));
     tr.append(el('td', 'muted', row.place));
     tr.append(el('td', 'num', row.scu.toLocaleString()));
     tr.append(el('td', 'num', money(row.unitPrice)));
@@ -19062,7 +19512,7 @@ async function renderSharedReceipts() {
   card.append(table);
 
   if (rows.length > 200) {
-    card.append(el('p', 'muted', `Showing the newest 200 of ${rows.length.toLocaleString()}.`));
+    card.append(el('p', 'muted', tx('Showing the newest 200 of {total}.', { total: rows.length.toLocaleString() })));
   }
 
   host.append(card);
@@ -19300,7 +19750,7 @@ async function planRestore(text) {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    status.textContent = body?.problem || tx('That file could not be read.');
+    status.textContent = serverText(body?.problem) || tx('That file could not be read.');
     return;
   }
 
@@ -19411,7 +19861,7 @@ async function applyRestore() {
     const body = await response.json().catch(() => null);
 
     if (!response.ok) {
-      status.textContent = body?.problem || tx('Nothing was restored.');
+      status.textContent = serverText(body?.problem) || tx('Nothing was restored.');
       return;
     }
 
@@ -19458,7 +19908,7 @@ $('#backup-file')?.addEventListener('change', async (event) => {
   try {
     await planRestore(await file.text());
   } catch {
-    $('#backup-status').textContent = 'That file could not be read.';
+    $('#backup-status').textContent = tx('That file could not be read.');
   }
 });
 
@@ -19478,23 +19928,23 @@ function shareChoice() {
 function shareMetric(label, value) {
   const metric = el('div', 'share-metric');
   metric.append(el('div', 'share-metric-value', value));
-  metric.append(el('div', 'share-metric-label', label));
+  metric.append(el('div', 'share-metric-label', tx(label)));
   return metric;
 }
 
 function shareSection(title, sources, detail = '') {
   const section = el('section', 'share-section');
   const head = el('div', 'share-section-head');
-  head.append(el('h3', null, title));
+  head.append(el('h3', null, tx(title)));
   head.append(sourceMarks(sources));
   section.append(head);
-  if (detail) section.append(el('p', 'share-section-detail', detail));
+  if (detail) section.append(el('p', 'share-section-detail', tx(detail)));
   return section;
 }
 
 function shareList(rows, empty) {
   const list = el('ul', 'share-list');
-  if (!rows.length) list.append(el('li', 'muted', empty));
+  if (!rows.length) list.append(el('li', 'muted', tx(empty)));
   for (const row of rows) {
     const item = el('li');
     item.append(el('span', null, row.label));
@@ -19542,9 +19992,9 @@ function renderShareReport(report) {
 
   const head = el('header', 'share-report-head');
   const title = el('div');
-  title.append(el('div', 'share-kicker', 'QUANTUM WAKE · PILOT RECAP'));
-  title.append(el('h2', null, report.handle ? `${report.handle}'s recent flight` : 'Recent flight recap'));
-  title.append(el('p', 'muted', `Snapshot made ${new Date(report.madeAt).toLocaleString()}. It does not update after it is shared.`));
+  title.append(el('div', 'share-kicker', tx('QUANTUM WAKE · PILOT RECAP')));
+  title.append(el('h2', null, report.handle ? tx('{handle}\'s recent flight', { handle: report.handle }) : tx('Recent flight recap')));
+  title.append(el('p', 'muted', tx('Snapshot made {when}. It does not update after it is shared.', { when: new Date(report.madeAt).toLocaleString(QW_DATE_LOCALES) })));
   head.append(title);
   head.append(sourceMarks(['logs']));
   host.append(head);
@@ -19554,7 +20004,7 @@ function renderShareReport(report) {
   if (report.trade) renderShareTrade(host, report.trade);
 
   host.append(el('p', 'share-limits',
-    'Source labels name the evidence behind each section. Trading is limited to commodity movements the game log records; it is not total income.'));
+    tx('Source labels name the evidence behind each section. Trading is limited to commodity movements the game log records; it is not total income.')));
 }
 
 function renderShareSession(host, session) {
@@ -19562,7 +20012,7 @@ function renderShareSession(host, session) {
   const section = shareSection('Latest session', ['logs'],
     'What the game log recorded during the most recent session.');
   if (!summary) {
-    section.append(el('p', 'muted', 'No completed session has been recorded yet.'));
+    section.append(el('p', 'muted', tx('No completed session has been recorded yet.')));
     host.append(section);
     return;
   }
@@ -19573,14 +20023,14 @@ function renderShareSession(host, session) {
   const metrics = el('div', 'share-metrics');
   metrics.append(
     shareMetric('In game', duration(summary.inGame)),
-    shareMetric('Ship', ships.join(' · ') || summary.primaryShip || 'On foot'),
+    shareMetric('Ship', ships.join(' · ') || summary.primaryShip || tx('On foot')),
     shareMetric('Route points', String(route.length || summary.locations || 0)),
     shareMetric('Contracts', String(summary.contracts || 0)),
     shareMetric('Deaths', String(summary.deaths || 0)),
   );
   section.append(metrics);
 
-  section.append(el('h4', null, 'Recorded route'));
+  section.append(el('h4', null, tx('Recorded route')));
   section.append(shareList(route.slice(0, 8).map((place) => ({
     label: place.displayName,
     detail: [place.body, place.system].filter(Boolean).join(' · ') || place.routeKind,
@@ -19593,7 +20043,7 @@ function renderShareFleet(host, fleet) {
   const section = shareSection('Fleet snapshot', ['logs'],
     'Ships flown by this account; it does not claim to be the game entitlement roster.');
   if (!fleet) {
-    section.append(el('p', 'muted', 'The fleet summary could not be read.'));
+    section.append(el('p', 'muted', tx('The fleet summary could not be read.')));
     host.append(section);
     return;
   }
@@ -19608,11 +20058,11 @@ function renderShareFleet(host, fleet) {
     shareMetric('Time aboard', `~${duration(seconds)}`),
   );
   section.append(metrics);
-  section.append(el('h4', null, 'Most flown'));
+  section.append(el('h4', null, tx('Most flown')));
   section.append(shareList(ships.slice(0, 6).map((ship) => ({
     label: ship.name,
-    detail: ship.lastFlown ? `last flown ${dateOf(ship.lastFlown)}` : '',
-    value: `${ship.sorties || 0} sortie${ship.sorties === 1 ? '' : 's'}`,
+    detail: ship.lastFlown ? tx('last flown {when}', { when: dateOf(ship.lastFlown) }) : '',
+    value: txn(ship.sorties || 0, '{count} sortie', '{count} sorties'),
   })), 'No ship flights have been recorded.'));
   host.append(section);
 }
@@ -19626,15 +20076,15 @@ function renderShareTrade(host, trade) {
   const metrics = el('div', 'share-metrics');
   metrics.append(
     shareMetric('Recorded profit', rate ? money(rate.earned) : '—'),
-    shareMetric('Trading rate', rate?.perHour > 0 ? `${money(rate.perHour)}/h` : 'No rate yet'),
+    shareMetric('Trading rate', rate?.perHour > 0 ? `${money(rate.perHour)}/h` : tx('No rate yet')),
     shareMetric('In-game hours', rate ? hoursOf(rate.inGame) : '—'),
     shareMetric('Commodities moved', String(rows.length)),
   );
   section.append(metrics);
-  section.append(el('h4', null, 'Largest recorded sales'));
+  section.append(el('h4', null, tx('Largest recorded sales')));
   section.append(shareList(rows.slice(0, 6).map((row) => ({
     label: row.name,
-    detail: `${row.myScuSold || 0} SCU sold · ${row.myTrades || 0} trip${row.myTrades === 1 ? '' : 's'}`,
+    detail: `${tx('{scu} SCU sold', { scu: row.myScuSold || 0 })} · ${txn(row.myTrades || 0, '{count} trip', '{count} trips')}`,
     value: money(row.myRevenue || 0),
     className: 'inward',
   })), 'No commodity movements were recorded in this window.'));
@@ -19645,9 +20095,10 @@ function shareReportDocument() {
   const report = $('#share-report');
   if (!shareReportData || !report) return null;
   const content = report.cloneNode(true);
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+  // The saved file is in the page's language, so it says so.
+  return `<!doctype html><html lang="${QW_LANGUAGE}"><head><meta charset="utf-8">`
     + '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    + '<title>Quantum Wake pilot recap</title><style>' + shareReportCss() + '</style></head><body>'
+    + `<title>${tx('Quantum Wake pilot recap')}</title><style>` + shareReportCss() + '</style></head><body>'
     + content.outerHTML + '</body></html>';
 }
 
@@ -19719,7 +20170,7 @@ async function saveExport() {
 
     if (!response.ok) {
       const problem = await response.json().catch(() => null);
-      status.textContent = problem?.message || tx('The file could not be built.');
+      status.textContent = serverText(problem?.message) || tx('The file could not be built.');
       return;
     }
 
@@ -20033,14 +20484,14 @@ $('#settings-rescan').addEventListener('click', async (e) => {
 
   try {
     const result = await getJson2('/api/scan?force=true');
-    status.textContent = `${result.sessions} sessions from a full re-read`;
+    status.textContent = txn(result.sessions, '{count} session from a full re-read', '{count} sessions from a full re-read');
 
     // The re-read is what the button promised, and it is already done. A reload
     // that fails afterwards leaves the views stale, which is a smaller problem
     // than telling somebody their rescan failed when it did not.
     await loadHistory().catch(() => {});
   } catch (err) {
-    status.textContent = `failed: ${err.message}`;
+    status.textContent = tx('failed: {problem}', { problem: err.message });
   } finally {
     clearInterval(poll);
     button.disabled = false;
@@ -20055,8 +20506,8 @@ $('#settings-rescan').addEventListener('click', async (e) => {
  */
 function rescanLine(scan) {
   return scan.running && scan.total > 0
-    ? `${scan.done} / ${scan.total} logs · ${scan.elapsedSeconds}s`
-    : 'rescanning…';
+    ? tx('{done} / {total} logs · {seconds}s', { done: scan.done, total: scan.total, seconds: scan.elapsedSeconds })
+    : tx('rescanning…');
 }
 
 /** POST that expects JSON back; getJson is GET-only. */
@@ -20081,16 +20532,16 @@ function renderCommodities(trades) {
     .reduce((total, t) => total + (Number(t.uexBestSell) - Number(t.unitPrice)) * t.scu, 0);
 
   const cargoTiles = [
-    ['Revenue', money(revenue)],
-    ['SCU sold', scuSold.toLocaleString()],
-    ['Average per SCU', scuSold ? money(revenue / scuSold) : '—'],
-    ['Cargo bought', money(outlay)],
-    ['Sales', sells.length],
-    ['Best sale', sells.length ? money(Math.max(...sells.map((t) => Number(t.amount)))) : '—'],
+    [tx('Revenue'), money(revenue)],
+    [tx('SCU sold'), scuSold.toLocaleString()],
+    [tx('Average per SCU'), scuSold ? money(revenue / scuSold) : '—'],
+    [tx('Cargo bought'), money(outlay)],
+    [tx('Sales'), sells.length],
+    [tx('Best sale'), sells.length ? money(Math.max(...sells.map((t) => Number(t.amount)))) : '—'],
   ];
 
   if (sells.some((t) => t.uexBestSell > 0))
-    cargoTiles.push(['Left on the table*', money(leftOnTable)]);
+    cargoTiles.push([tx('Left on the table*'), money(leftOnTable)]);
 
   tiles('#cargo-summary', cargoTiles);
 
@@ -20116,7 +20567,7 @@ function renderCommodities(trades) {
 
   if (!trades.length) {
     const tr = el('tr');
-    const td = el('td', 'muted', 'No cargo trades in that range.');
+    const td = el('td', 'muted', tx('No cargo trades in that range.'));
     td.colSpan = 8;
     tr.append(td);
     body.append(tr);
@@ -20129,7 +20580,7 @@ function renderCommodities(trades) {
   for (const trade of trades) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(trade.at)));
-    tr.append(el('td', null, trade.isSell ? 'Sold' : 'Bought'));
+    tr.append(el('td', null, trade.isSell ? tx('Sold') : tx('Bought')));
     tr.append(el('td', trade.commodity ? null : 'muted', trade.commodity ?? '—'));
     tr.append(tdPlace(trade.place));
     tr.append(el('td', 'num', String(trade.scu)));
@@ -20143,7 +20594,7 @@ function renderCommodities(trades) {
         const delta = ((Number(trade.unitPrice) - Number(trade.uexBestSell)) / Number(trade.uexBestSell)) * 100;
         cell.className = `num ${delta >= -3 ? 'inward' : 'outward'}`;
         cell.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`;
-        cell.title = `UEX best sell today: ${money(trade.uexBestSell)}/SCU`;
+        cell.title = tx('UEX best sell today: {price}/SCU', { price: money(trade.uexBestSell) });
       } else {
         cell.className = 'num muted';
         cell.textContent = '—';
@@ -20526,15 +20977,16 @@ function shipPicture(ship, maker, options = {}) {
       img.alt = '';
       img.loading = 'lazy';
       img.title = chosen
-        ? `${ship.name} in the paint you chose — the game's own picture`
+        ? tx('{ship} in the paint you chose — the game\'s own picture', { ship: ship.name })
         : standIn?.photographed
-          ? `${ship.name} in ${standIn.name}, the paint a loadout screenshot showed it wearing on ${new Date(standIn.photographed.shotAt).toLocaleDateString()} — the game's own picture; Paint… to choose another`
+          ? tx('{ship} in {paint}, the paint a loadout screenshot showed it wearing on {date} — the game\'s own picture; Paint… to choose another',
+            { ship: ship.name, paint: standIn.name, date: new Date(standIn.photographed.shotAt).toLocaleDateString(QW_DATE_LOCALES) })
           : standIn?.stock
-            ? `${ship.name} in its default livery — the game's own picture; Paint… to choose another`
-            : `${ship.name} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose`;
+            ? tx('{ship} in its default livery — the game\'s own picture; Paint… to choose another', { ship: ship.name })
+            : tx('{ship} in the first paint the game pictures for it — the files hold no picture of its default livery; Paint… to choose', { ship: ship.name });
       if (options.onPreview) {
         img.classList.add('ship-picture-clickable');
-        img.title += '; click for this ship\'s flight summary';
+        img.title = tx('{picture}; {action}', { picture: img.title, action: tx('click for this ship\'s flight summary') });
         img.addEventListener('click', options.onPreview);
       }
       // Shown as the silhouette for now, the pick kept: a render that fails once -
@@ -20546,7 +20998,11 @@ function shipPicture(ship, maker, options = {}) {
       const outline = el('div', 'ship-outline');
       outline.style.setProperty('--tint', makerTint(maker.code));
       outline.style.setProperty('--outline', `url("/api/fleet/icons/${encodeURIComponent(ship.className)}")`);
-      outline.title = `${ship.name} — the game's silhouette, tinted ${maker.name}'s colour; ${options.onPreview ? 'click for this ship\'s flight summary' : 'see the fleet to scale on Hangar'}`;
+      outline.title = tx('{ship} — the game\'s silhouette, tinted {maker}\'s colour; {action}', {
+        ship: ship.name,
+        maker: maker.name,
+        action: options.onPreview ? tx('click for this ship\'s flight summary') : tx('see the fleet to scale on Hangar'),
+      });
       outline.addEventListener('click', options.onPreview || (() => showView('hangar')));
 
       // The mask cannot say whether the file exists; an Image can.
@@ -20558,9 +21014,9 @@ function shipPicture(ship, maker, options = {}) {
       box.append(outline);
     }
 
-    const pick = el('button', 'ghost tiny ship-paint', chosen ? 'Paint' : 'Paint…');
+    const pick = el('button', 'ghost tiny ship-paint', chosen ? tx('Paint') : tx('Paint…'));
     pick.type = 'button';
-    pick.title = 'Choose the paint this ship wears, from the ones the game pictures';
+    pick.title = tx('Choose the paint this ship wears, from the ones the game pictures');
     pick.addEventListener('click', () => openPaintChooser(ship, box, pick));
     box.append(pick);
   };
@@ -20595,15 +21051,21 @@ async function openPaintChooser(ship, box, button) {
 
   const select = document.createElement('select');
   select.className = 'select ship-paint-select';
-  select.setAttribute('aria-label', `Paint for ${ship.name}`);
-  select.append(new Option('Silhouette, tinted by maker', SILHOUETTE));
+  select.setAttribute('aria-label', tx('Paint for {ship}', { ship: ship.name }));
+  select.append(new Option(tx('Silhouette, tinted by maker'), SILHOUETTE));
   const unpicked = !shipPaints[ship.className];
-  paints.forEach((paint, i) => select.append(new Option(
-    paint.photographed
-      ? `${paint.name} (photographed ${new Date(paint.photographed.shotAt).toLocaleDateString()}${i === 0 && unpicked ? ', shown until you pick' : ''})`
-      : i === 0 && unpicked ? `${paint.name} (shown until you pick)` : paint.name,
-    paint.item)));
-  if (!paints.length) select.append(new Option('The game pictures no paint for this hull', '', false, false));
+  paints.forEach((paint, i) => {
+    const date = paint.photographed ? new Date(paint.photographed.shotAt).toLocaleDateString(QW_DATE_LOCALES) : null;
+    const standing = i === 0 && unpicked;
+    select.append(new Option(
+      date
+        ? standing
+          ? tx('{paint} (photographed {date}, shown until you pick)', { paint: paint.name, date })
+          : tx('{paint} (photographed {date})', { paint: paint.name, date })
+        : standing ? tx('{paint} (shown until you pick)', { paint: paint.name }) : paint.name,
+      paint.item));
+  });
+  if (!paints.length) select.append(new Option(tx('The game pictures no paint for this hull'), '', false, false));
   // Unpicked shows the first paint, so that is where the list opens.
   select.value = shipPaints[ship.className] || paints[0]?.item || SILHOUETTE;
 
@@ -20701,15 +21163,15 @@ function renderFleet(stats) {
   // number and never names them, so it is labelled as its own thing rather
   // than pretending to agree with the ticked roster.
   const fleetTiles = [
-    ['Owned per game*', stats.fleetSize ?? '—'],
-    ['Roster ticked', `${owned.length} of ${roster.length}`],
-    ['Total flights', owned.reduce((sum, s) => sum + s.sorties, 0)],
-    ['Time aboard', `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
+    [tx('Owned per game*'), stats.fleetSize ?? '—'],
+    [tx('Roster ticked'), tx('{shown} of {total}', { shown: owned.length, total: roster.length })],
+    [tx('Total flights'), owned.reduce((sum, s) => sum + s.sorties, 0)],
+    [tx('Time aboard'), `~${duration(owned.reduce((sum, s) => sum + toSeconds(s.estimatedTime), 0))}`],
   ];
 
   if (assetsData?.priced) {
     const value = owned.reduce((sum, s) => sum + shipPriceOf(s.name), 0);
-    fleetTiles.push(['Fleet value*', money(value)]);
+    fleetTiles.push([tx('Fleet value*'), money(value)]);
   }
 
   tiles('#fleet-summary', fleetTiles);
@@ -20737,13 +21199,13 @@ function renderFleetComparison() {
 
   box.textContent = '';
   if (hangarComparison.size < 2) {
-    box.append(el('span', 'muted', `Compare ${hangarComparison.size}/2`));
+    box.append(el('span', 'muted', tx('Compare {count}/2', { count: hangarComparison.size })));
     return;
   }
 
-  const open = el('button', 'ghost fleet-compare-open', 'Compare in Hangar');
+  const open = el('button', 'ghost fleet-compare-open', tx('Compare in Hangar'));
   open.type = 'button';
-  open.title = `Draw ${[...hangarComparison].join(' and ')} to one scale`;
+  open.title = tx('Draw {ships} to one scale', { ships: [...hangarComparison].join(` ${tx('and')} `) });
   open.addEventListener('click', () => {
     const mode = $('#hangar-mode');
     if (mode) mode.value = 'scale';
@@ -20772,17 +21234,17 @@ function toggleShipPreview(ship, card) {
   if (!body) return;
 
   const preview = el('div', 'ship-preview', ship.photographedAt
-    ? `fit photographed ${relative(ship.photographedAt)} · no flights logged.`
-    : `${ship.sorties} sortie${ship.sorties === 1 ? '' : 's'} · ~${duration(toSeconds(ship.estimatedTime))} aboard · last flown ${relative(ship.lastFlown)}.`);
+    ? `${tx('fit photographed {when} · no flights logged', { when: relative(ship.photographedAt) })}.`
+    : `${txn(ship.sorties, '{count} sortie', '{count} sorties')} · ${tx('~{time} aboard', { time: duration(toSeconds(ship.estimatedTime)) })} · ${tx('last flown {when}', { when: relative(ship.lastFlown) })}.`);
   body.append(preview);
 
   hangarPreviewFor(ship).then((sized) => {
     // The card may have been redrawn by a filter while the game-data request
     // was in flight; never put a late answer into a discarded preview.
     if (preview.parentElement !== body) return;
-    preview.textContent += sized?.length > 0
-      ? ` ${sized.length} × ${sized.beam} × ${sized.height} m from the installed vehicle table.`
-      : ' This install has no measured size for it.';
+    preview.textContent += ` ${sized?.length > 0
+      ? tx('{length} × {beam} × {height} m from the installed vehicle table.', { length: sized.length, beam: sized.beam, height: sized.height })
+      : tx('This install has no measured size for it.')}`;
   });
 }
 
@@ -20828,15 +21290,16 @@ function renderFleetShips() {
   const rosterStatus = $('#fleet-roster-status');
   if (rosterStatus) {
     const shown = filter === 'ground'
-      ? `${vehicles.length} ground vehicle${vehicles.length === 1 ? '' : 's'} shown`
-      : `${shipCount} ship${shipCount === 1 ? '' : 's'} shown`;
-    rosterStatus.textContent = shown
-      + (recentCount ? ` · ${recentCount} active this week` : ' · no flights this week');
+      ? txn(vehicles.length, '{count} ground vehicle shown', '{count} ground vehicles shown')
+      : txn(shipCount, '{count} ship shown', '{count} ships shown');
+    rosterStatus.textContent = `${shown} · ${recentCount
+      ? txn(recentCount, '{count} active this week', '{count} active this week')
+      : tx('no flights this week')}`;
   }
 
   if (!ships.length) {
     grid.append(el('p', 'muted',
-      roster.length ? 'No ships match that filter.' : 'No ships recorded yet.'));
+      roster.length ? tx('No ships match that filter.') : tx('No ships recorded yet.')));
     return;
   }
 
@@ -20856,7 +21319,7 @@ function renderFleetShips() {
     const box = document.createElement('input');
     box.type = 'checkbox';
     box.checked = !off;
-    box.title = off ? 'Not owned - tick to count it again' : 'Owned - untick if rented or sold';
+    box.title = off ? tx('Not owned - tick to count it again') : tx('Owned - untick if rented or sold');
 
     box.addEventListener('change', () => {
       if (box.checked) excludedShips.delete(ship.name);
@@ -20878,7 +21341,7 @@ function renderFleetShips() {
 
     const favourite = el('button', favouriteShips.has(ship.name) ? 'ghost ship-favourite active' : 'ghost ship-favourite', favouriteShips.has(ship.name) ? '★' : '☆');
     favourite.type = 'button';
-    favourite.title = favouriteShips.has(ship.name) ? 'Favourite — click to remove' : 'Favourite this ship';
+    favourite.title = favouriteShips.has(ship.name) ? tx('Favourite — click to remove') : tx('Favourite this ship');
     favourite.addEventListener('click', () => {
       if (favouriteShips.has(ship.name)) favouriteShips.delete(ship.name);
       else favouriteShips.add(ship.name);
@@ -20910,20 +21373,20 @@ function renderFleetShips() {
 
     const stat = el('div', 'ship-stats');
     stat.append(el('b', null, String(ship.sorties)));
-    stat.append(el('span', null, ` flight${ship.sorties === 1 ? '' : 's'}`));
+    stat.append(el('span', null, ` ${txn(ship.sorties, 'flight', 'flights')}`));
 
     const seconds = toSeconds(ship.estimatedTime);
     if (seconds > 0) stat.append(el('span', 'note-inline', ` · ~${duration(seconds)}`));
 
     body.append(stat);
     body.append(el('div', isRecentlyFlown(ship) ? 'ship-seen ship-readiness active' : 'ship-seen ship-readiness', ship.photographedAt
-      ? `fit photographed ${relative(ship.photographedAt)} · no flights logged`
-      : `last flown ${relative(ship.lastFlown)}`));
+      ? tx('fit photographed {when} · no flights logged', { when: relative(ship.photographedAt) })
+      : tx('last flown {when}', { when: relative(ship.lastFlown) })));
 
     const statuses = el('div', 'ship-status');
-    if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', '★ favourite'));
-    if (isRecentlyFlown(ship)) statuses.append(el('span', 'ship-status-mark recent', '● flown this week'));
-    if (off) statuses.append(el('span', 'ship-status-mark excluded', '⊘ out of Hangar'));
+    if (favouriteShips.has(ship.name)) statuses.append(el('span', 'ship-status-mark favourite', tx('★ favourite')));
+    if (isRecentlyFlown(ship)) statuses.append(el('span', 'ship-status-mark recent', tx('● flown this week')));
+    if (off) statuses.append(el('span', 'ship-status-mark excluded', tx('⊘ out of Hangar')));
     if (statuses.children.length) body.append(statuses);
 
     // Community reference, when enabled and matched: what the ship is for and
@@ -20934,15 +21397,15 @@ function renderFleetShips() {
 
       if (r.role && r.career && r.role !== r.career) bits.push(`${r.career} · ${r.role}`);
       else if (r.role || r.career) bits.push(r.role || r.career);
-      if (r.crew > 0) bits.push(`crew ${r.crew}`);
+      if (r.crew > 0) bits.push(tx('crew {crew}', { crew: r.crew }));
 
       if (bits.length)
         body.append(el('div', 'ship-ref', bits.join(' · ')));
 
       if (r.expeditedCost > 0) {
         body.append(el('div', 'ship-ref muted',
-          `claim: expedite ${money(r.expeditedCost)}`
-          + (r.standardClaimTime ? ` · ~${Math.round(r.standardClaimTime)}m wait` : '')));
+          tx('claim: expedite {cost}', { cost: money(r.expeditedCost) })
+          + (r.standardClaimTime ? ` · ${tx('~{minutes}m wait', { minutes: Math.round(r.standardClaimTime) })}` : '')));
       }
     }
 
@@ -20953,15 +21416,15 @@ function renderFleetShips() {
     if (assetsData?.priced) {
       body.append(assetRow?.price
         ? el('div', 'ship-price', `${money(assetRow.price.price)} · ${assetRow.price.terminal}`)
-        : el('div', 'ship-price muted', 'not sold in game'));
+        : el('div', 'ship-price muted', tx('not sold in game')));
     }
 
     // A rentable model might be a rental rather than yours; the card says so
     // and leaves the tick to the only person who knows.
     if (assetRow?.rental) {
       const hint = el('div', 'ship-rental muted',
-        `rentable ${money(assetRow.rental.price)} at ${assetRow.rental.terminal}`);
-      hint.title = 'If this one was rented, untick it above';
+        tx('rentable {price} at {place}', { price: money(assetRow.rental.price), place: assetRow.rental.terminal }));
+      hint.title = tx('If this one was rented, untick it above');
       body.append(hint);
     }
 
@@ -20969,20 +21432,20 @@ function renderFleetShips() {
     // made only where it can be kept.
     const actions = el('div', 'ship-actions');
     if (!grounded) {
-      const garage = el('button', 'ghost ship-upgrade', 'Garage');
-      garage.title = `${ship.name}'s numbers, what fits it, and what a part would change`;
+      const garage = el('button', 'ghost ship-upgrade', tx('Garage'));
+      garage.title = tx('{ship}\'s numbers, what fits it, and what a part would change', { ship: ship.name });
       garage.addEventListener('click', () => openGarageFor(ship.className || ship.name));
       actions.append(garage);
     }
 
-    const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? 'Selected to compare' : 'Compare');
+    const compare = el('button', hangarComparison.has(ship.name) ? 'ghost tiny ship-compare active' : 'ghost tiny ship-compare', hangarComparison.has(ship.name) ? tx('Selected to compare') : tx('Compare'));
     compare.type = 'button';
     compare.disabled = off || !!ship.photographedAt;
     compare.title = off
-      ? 'Tick this ship as owned before comparing it in Hangar'
+      ? tx('Tick this ship as owned before comparing it in Hangar')
       : ship.photographedAt
-        ? 'A photographed fit has no flight or size record to compare in Hangar'
-      : 'Select this ship and one other, then compare them in Hangar';
+        ? tx('A photographed fit has no flight or size record to compare in Hangar')
+      : tx('Select this ship and one other, then compare them in Hangar');
     compare.addEventListener('click', () => {
       if (hangarComparison.has(ship.name)) hangarComparison.delete(ship.name);
       else {
@@ -21021,7 +21484,7 @@ function drawFleetChart(history) {
 
   if (history.length < 2) {
     const text = svgEl('text', { x: 500, y: 110, 'text-anchor': 'middle', class: 'map-label' });
-    text.textContent = 'NOT ENOUGH DATA YET';
+    text.textContent = tx('NOT ENOUGH DATA YET');
     svg.append(text);
     return;
   }
@@ -21078,12 +21541,12 @@ function renderSpending(stats) {
   const net = Number(stats.net) || 0;
 
   tiles('#spend-summary', [
-    ['Cargo income', money(stats.income)],
-    ['Item spend', money(stats.spend)],
-    ['Cargo spend', money(stats.commoditySpend)],
-    [net >= 0 ? 'Net gain' : 'Net loss', money(Math.abs(net))],
-    ['Purchases', stats.purchaseCount],
-    ['Cargo trades', stats.tradeCount],
+    [tx('Cargo income'), money(stats.income)],
+    [tx('Item spend'), money(stats.spend)],
+    [tx('Cargo spend'), money(stats.commoditySpend)],
+    [net >= 0 ? tx('Net gain') : tx('Net loss'), money(Math.abs(net))],
+    [tx('Purchases'), stats.purchaseCount],
+    [tx('Cargo trades'), stats.tradeCount],
   ]);
   const netTile = $('#spend-summary')?.children[3];
   if (netTile) netTile.classList.toggle('net-negative', net < 0);
@@ -21099,16 +21562,16 @@ function renderSpending(stats) {
       money);
   } else {
     $('#trade-chart').textContent = '';
-    $('#trade-chart').append(el('p', 'muted', 'No commodity sales recorded yet.'));
+    $('#trade-chart').append(el('p', 'muted', tx('No commodity sales recorded yet.')));
   }
 
   const shopRows = stats.shops.slice(0, 15).map((s) => ({ label: s.name, value: s.count }));
-  const shopFormat = (v) => `${v} buy${v === 1 ? '' : 's'}`;
+  const shopFormat = (v) => txn(v, '{count} buy', '{count} buys');
   bars('#shops-chart', shopRows.slice(0, 7), shopFormat);
   const moreShops = $('#shops-more');
   if (moreShops) {
     moreShops.hidden = shopRows.length <= 7;
-    $('#shops-more-count').textContent = shopRows.length > 7 ? `${shopRows.length - 7} more` : '';
+    $('#shops-more-count').textContent = shopRows.length > 7 ? tx('{count} more', { count: shopRows.length - 7 }) : '';
     bars('#shops-more-chart', shopRows.slice(7), shopFormat);
   }
 
@@ -21121,7 +21584,7 @@ function renderSpending(stats) {
   const moreItems = $('#items-more');
   if (moreItems) {
     moreItems.hidden = itemRows.length <= 9;
-    $('#items-more-count').textContent = itemRows.length > 9 ? `${itemRows.length - 9} more` : '';
+    $('#items-more-count').textContent = itemRows.length > 9 ? tx('{count} more', { count: itemRows.length - 9 }) : '';
     bars('#items-more-chart', itemRows.slice(9), money);
   }
 }
@@ -21253,9 +21716,11 @@ function loadoutFigure(equipped) {
     .map((part) => `loadout-has-${part}`)
     .join(' ');
   const figure = el('div', `loadout-figure loadout-profile-${profile.id} ${observedParts}`);
+  // The profile word and the zone words are page text; the markup is built
+  // here, so they are looked up here rather than by the document walk.
   figure.innerHTML = `
-    <div class="loadout-figure-tag">${profile.label.toUpperCase()} ARMOUR PROFILE</div>
-    <div class="loadout-figure-status"><b>${observedZones.length}/6</b> BODY ZONES OBSERVED</div>
+    <div class="loadout-figure-tag">${tx('{profile} ARMOUR PROFILE', { profile: tx(profile.label).toUpperCase() })}</div>
+    <div class="loadout-figure-status"><b>${observedZones.length}/6</b> ${tx('BODY ZONES OBSERVED')}</div>
     <div class="loadout-pilot-frame">
       <img class="loadout-pilot-art" src="${profile.art}" alt="" />
       <span class="loadout-pilot-zone loadout-pilot-zone-head"></span>
@@ -21265,7 +21730,7 @@ function loadoutFigure(equipped) {
       <span class="loadout-pilot-zone loadout-pilot-zone-arms"></span>
       <span class="loadout-pilot-zone loadout-pilot-zone-legs"></span>
     </div>
-    <div class="loadout-figure-key"><span>HEAD</span><span>CORE</span><span>BASE</span><span>PACK</span><span>OBSERVED ZONES LIT</span></div>`;
+    <div class="loadout-figure-key"><span>${tx('HEAD')}</span><span>${tx('CORE')}</span><span>${tx('BASE')}</span><span>${tx('PACK')}</span><span>${tx('OBSERVED ZONES LIT')}</span></div>`;
   return figure;
 }
 
@@ -21277,23 +21742,24 @@ function loadoutItemName(item) {
 function loadoutItemFacts(item) {
   const ref = item.reference;
   if (!ref)
-    return { text: 'Game-log item class only', known: false };
+    return { text: tx('Game-log item class only'), known: false };
 
   const facts = [];
   if (ref.manufacturer) facts.push(ref.manufacturer);
   const kind = [ref.type, ref.subType].filter(Boolean).join(' / ');
   if (kind) facts.push(kind);
   if (ref.size > 0) facts.push(`S${ref.size}`);
-  if (ref.grade > 0) facts.push(`Grade ${gradeLetter(ref.grade)}`);
-  return { text: facts.join(' · ') || 'Catalogue entry has no extra specification', known: true };
+  if (ref.grade > 0) facts.push(tx('Grade {grade}', { grade: gradeLetter(ref.grade) }));
+  return { text: facts.join(' · ') || tx('Catalogue entry has no extra specification'), known: true };
 }
 
 function loadoutSlotContents(slot, compact = false) {
   const body = el('div', 'slot-body');
-  body.append(el('div', 'slot-category', slot.category || 'Other'));
+  // The category is the server's word for a fixed set; the reader gets the page's.
+  body.append(el('div', 'slot-category', tx(slot.category || 'Other')));
 
   const label = slot.slotCount > 1
-    ? `${slot.label || slot.port} · ${slot.slotCount} slots`
+    ? `${slot.label || slot.port} · ${tx('{count} slots', { count: slot.slotCount })}`
     : slot.label || slot.port;
   body.append(el('div', 'card-label', label));
 
@@ -21308,14 +21774,14 @@ function loadoutSlotContents(slot, compact = false) {
   }
 
   if (!compact && slot.currentSeen)
-    body.append(el('div', 'slot-when', `last observed ${relative(slot.currentSeen)}`));
+    body.append(el('div', 'slot-when', tx('last observed {when}', { when: relative(slot.currentSeen) })));
   return body;
 }
 
 function loadoutItemInspect(slot) {
   const inspect = el('div', 'loadout-item-inspect');
   inspect.setAttribute('role', 'tooltip');
-  inspect.append(el('div', 'loadout-inspect-eyebrow', `Inspect · ${slot.label || slot.port}`));
+  inspect.append(el('div', 'loadout-inspect-eyebrow', `${tx('Inspect')} · ${slot.label || slot.port}`));
 
   for (const item of slot.items) {
     const entry = el('div', 'loadout-inspect-entry');
@@ -21327,7 +21793,7 @@ function loadoutItemInspect(slot) {
   }
 
   if (slot.currentSeen)
-    inspect.append(el('div', 'loadout-inspect-seen', `Last observed ${relative(slot.currentSeen)}`));
+    inspect.append(el('div', 'loadout-inspect-seen', tx('Last observed {when}', { when: relative(slot.currentSeen) })));
   return inspect;
 }
 
@@ -21335,7 +21801,7 @@ function loadoutEquipSlot(slot, placement) {
   const card = el('article', `loadout-slot loadout-equip-slot loadout-equip-${placement}`);
   card.dataset.category = slot.category || 'Other';
   card.tabIndex = 0;
-  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+  card.setAttribute('aria-label', tx('Inspect {slot}', { slot: slot.label || slot.port }));
 
   const icon = el('div', 'slot-icon');
   icon.innerHTML = slotIconSvg(slot);
@@ -21349,7 +21815,7 @@ function loadoutInventorySlot(slot) {
   const card = el('article', 'loadout-slot loadout-inventory-slot');
   card.dataset.category = slot.category || 'Other';
   card.tabIndex = 0;
-  card.setAttribute('aria-label', `Inspect ${slot.label || slot.port}`);
+  card.setAttribute('aria-label', tx('Inspect {slot}', { slot: slot.label || slot.port }));
   const icon = el('div', 'slot-icon');
   icon.innerHTML = slotIconSvg(slot);
   card.append(icon);
@@ -21363,14 +21829,14 @@ function loadoutInventorySlot(slot) {
    one attachment does not make the rest of the recorded kit disappear. */
 function loadoutReadiness(slots, completeSighting) {
   const strip = el('section', 'loadout-readiness');
-  strip.setAttribute('aria-label', 'Observed kit readiness');
+  strip.setAttribute('aria-label', tx('Observed kit readiness'));
   const zones = [
     ['head', 'Head'], ['core', 'Core'], ['base', 'Base'],
     ['back', 'Pack'], ['arms', 'Arms'], ['legs', 'Legs'],
   ];
   const observed = new Set(slots.map(loadoutPlacement));
   const observedZones = zones.filter(([id]) => observed.has(id));
-  const unseenZones = zones.filter(([id]) => !observed.has(id)).map(([, label]) => label);
+  const unseenZones = zones.filter(([id]) => !observed.has(id)).map(([, label]) => tx(label));
   const weaponItems = slots
     .filter((slot) => /weapon/i.test(slot.category || ''))
     .flatMap((slot) => slot.items || []);
@@ -21384,27 +21850,27 @@ function loadoutReadiness(slots, completeSighting) {
 
   const add = (label, value, note, state = '') => {
     const card = el('div', `loadout-readiness-card ${state}`.trim());
-    card.append(el('div', 'loadout-readiness-label', label));
+    card.append(el('div', 'loadout-readiness-label', tx(label)));
     card.append(el('strong', null, value));
     card.append(el('span', null, note));
     strip.append(card);
   };
 
-  add('Coverage', `${observedZones.length}/6 zones observed`,
-    unseenZones.length ? `Not observed: ${unseenZones.join(' · ')}` : 'Every body zone was observed',
+  add('Coverage', tx('{count}/6 zones observed', { count: observedZones.length }),
+    unseenZones.length ? tx('Not observed: {zones}', { zones: unseenZones.join(' · ') }) : tx('Every body zone was observed'),
     unseenZones.length ? 'partial' : 'complete');
   add('Weapons', weaponItems.length
-    ? `${weaponItems.length} weapon${weaponItems.length === 1 ? '' : 's'} observed`
-    : 'No weapon observed', weaponItems.length
+    ? txn(weaponItems.length, '{count} weapon observed', '{count} weapons observed')
+    : tx('No weapon observed'), weaponItems.length
     ? weaponItems.slice(0, 2).map(loadoutItemName).join(' · ')
-    : 'The log has no weapon attachment for this kit');
+    : tx('The log has no weapon attachment for this kit'));
   add('Consumables', consumables.length
-    ? `${itemCount(consumableSlots.flatMap((slot) => slot.items || []))} carried`
-    : 'No consumables observed', consumables.length
+    ? txn(itemCount(consumableSlots.flatMap((slot) => slot.items || [])), '{count} carried', '{count} carried')
+    : tx('No consumables observed'), consumables.length
     ? consumables.join(' · ')
-    : 'The log has no medical or throwable attachment for this kit');
-  add('Sighting', sighting ? `Observed ${relative(sighting)}` : 'No sighting time recorded',
-    sighting ? 'Latest complete kit when available' : 'Individual cards may still carry a time');
+    : tx('The log has no medical or throwable attachment for this kit'));
+  add('Sighting', sighting ? tx('Observed {when}', { when: relative(sighting) }) : tx('No sighting time recorded'),
+    sighting ? tx('Latest complete kit when available') : tx('Individual cards may still carry a time'));
   return strip;
 }
 
@@ -21412,16 +21878,16 @@ function loadoutReadiness(slots, completeSighting) {
  * at widget width, a readable inventory order answers faster than body-zone art. */
 function overlayLoadoutStrip(slots, asOf) {
   const strip = el('section', 'overlay-loadout-strip');
-  strip.setAttribute('aria-label', 'Current loadout summary');
+  strip.setAttribute('aria-label', tx('Current loadout summary'));
   const equipped = slots.filter((slot) => loadoutPlacement(slot));
   const stowed = slots.length - equipped.length;
   const facts = [
-    `${equipped.length} worn`,
-    `${stowed} carried`,
-    asOf ? `seen ${relative(asOf)}` : 'latest observed kit',
+    txn(equipped.length, '{count} worn', '{count} worn'),
+    txn(stowed, '{count} carried', '{count} carried'),
+    asOf ? tx('seen {ago}', { ago: relative(asOf) }) : tx('latest observed kit'),
   ];
-  strip.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
-  strip.append(el('strong', null, `${slots.length} observed slots`));
+  strip.append(el('span', 'overlay-loadout-kicker', tx('Current kit')));
+  strip.append(el('strong', null, tx('{count} observed slots', { count: slots.length })));
   strip.append(el('span', 'overlay-loadout-facts', facts.join(' · ')));
   return strip;
 }
@@ -21436,12 +21902,12 @@ function renderLoadout(stats) {
     const compactOverlay = isOverlay || document.body.classList.contains('overlay');
     if (compactOverlay) {
       const empty = el('section', 'overlay-loadout-empty');
-      empty.append(el('span', 'overlay-loadout-kicker', 'Current kit'));
-      empty.append(el('strong', null, 'No equipment observed yet'));
-      empty.append(el('span', null, 'Quantum Wake will list attachments after the game writes an equipment event.'));
+      empty.append(el('span', 'overlay-loadout-kicker', tx('Current kit')));
+      empty.append(el('strong', null, tx('No equipment observed yet')));
+      empty.append(el('span', null, tx('Quantum Wake will list attachments after the game writes an equipment event.')));
       host.append(empty);
     } else {
-      host.append(el('p', 'muted', 'No attachment events recorded yet.'));
+      host.append(el('p', 'muted', tx('No attachment events recorded yet.')));
     }
     return;
   }
@@ -21456,23 +21922,25 @@ function renderLoadout(stats) {
     || slot.items.some((item) => item.name.toLowerCase().includes(term)));
 
   if (!slots.length) {
-    host.append(el('p', 'muted', 'Nothing matches that search.'));
+    host.append(el('p', 'muted', tx('Nothing matches that search.')));
     return;
   }
 
   const compactOverlay = isOverlay || document.body.classList.contains('overlay');
   const screen = el('section', 'loadout-character');
+  screen.dataset.mark = tx('PERSONAL ARMOURY');
   if (compactOverlay) screen.append(overlayLoadoutStrip(slots, stats.loadoutAsOf));
   const head = el('div', 'loadout-character-head');
   const meta = stats.loadoutAsOf
-    ? `Last complete sighting ${relative(stats.loadoutAsOf)}`
-    : 'Each card says when the log last saw it.';
-  head.append(el('div', 'loadout-eyebrow', term ? `${slots.length} matching slots` : `${slots.length} observed slots`));
+    ? tx('Last complete sighting {when}', { when: relative(stats.loadoutAsOf) })
+    : tx('Each card says when the log last saw it.');
+  head.append(el('div', 'loadout-eyebrow', term
+    ? tx('{count} matching slots', { count: slots.length })
+    : tx('{count} observed slots', { count: slots.length })));
   head.append(el('p', 'muted', meta));
   screen.append(head);
   screen.append(el('p', 'loadout-overview',
-    'Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. '
-    + 'Everything here is the latest equipment the log observed, not a live game inventory.'));
+    tx('Wearable kit sits around the pilot. Stowed weapons, supplies and tools sit in the Field Kit. Everything here is the latest equipment the log observed, not a live game inventory.')));
   screen.append(loadoutReadiness(stats.loadout, stats.loadoutAsOf));
 
   const sheet = el('div', 'loadout-sheet');
@@ -21481,9 +21949,9 @@ function renderLoadout(stats) {
   const right = el('div', 'loadout-equipment loadout-equipment-right');
   const field = el('aside', 'loadout-field-kit');
   const fieldHead = el('div', 'loadout-field-head');
-  fieldHead.append(el('div', 'loadout-eyebrow', 'Field kit'));
+  fieldHead.append(el('div', 'loadout-eyebrow', tx('Field kit')));
   const stowedCount = slots.filter((slot) => !loadoutPlacement(slot)).length;
-  fieldHead.append(el('span', 'group-meta', `${stowedCount} stowed slot${stowedCount === 1 ? '' : 's'}`));
+  fieldHead.append(el('span', 'group-meta', txn(stowedCount, '{count} stowed slot', '{count} stowed slots')));
   field.append(fieldHead);
   const inventory = el('div', 'loadout-inventory-grid');
 
@@ -21500,9 +21968,9 @@ function renderLoadout(stats) {
 
   // A sparse log is normal. Keep both sides balanced rather than making a
   // character frame lean just because one attachment type was never logged.
-  if (!left.childElementCount) left.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
-  if (!right.childElementCount) right.append(el('div', 'loadout-empty-slot', 'No observed body slots'));
-  if (!inventory.childElementCount) inventory.append(el('p', 'muted', 'No stowed kit observed.'));
+  if (!left.childElementCount) left.append(el('div', 'loadout-empty-slot', tx('No observed body slots')));
+  if (!right.childElementCount) right.append(el('div', 'loadout-empty-slot', tx('No observed body slots')));
+  if (!inventory.childElementCount) inventory.append(el('p', 'muted', tx('No stowed kit observed.')));
 
   avatarRig.append(left, loadoutFigure(equipped), right);
   field.append(inventory);
@@ -21531,11 +21999,12 @@ function expandableList(card, items, limit, renderItem, expanded) {
     return;
 
   const hidden = items.length - limit;
-  const toggle = el('button', 'more-toggle', `show ${hidden} more`);
+  const more = tx('show {count} more', { count: hidden });
+  const toggle = el('button', 'more-toggle', more);
 
   toggle.addEventListener('click', () => {
     const showing = list.classList.toggle('show-all');
-    toggle.textContent = showing ? 'show less' : `show ${hidden} more`;
+    toggle.textContent = showing ? tx('show less') : more;
   });
 
   card.append(toggle);
@@ -21574,7 +22043,7 @@ async function renderStash(stats) {
 
   if (!stats.stash || !stats.stash.length) {
     grid.append(el('p', 'muted',
-      'Nothing recorded yet. Open a local inventory in game and it will appear here.'));
+      tx('Nothing recorded yet. Open a local inventory in game and it will appear here.')));
     return;
   }
 
@@ -21634,7 +22103,7 @@ async function renderStash(stats) {
     .filter(Boolean);
 
   if (!places.length) {
-    grid.append(el('p', 'muted', 'Nothing matches that search.'));
+    grid.append(el('p', 'muted', tx('Nothing matches that search.')));
     return;
   }
 
@@ -21647,11 +22116,11 @@ async function renderStash(stats) {
     const measured = place.microScu > 0 ? ` · ${volume(place.microScu)}` : '';
 
     card.append(el('div', 'sub',
-      `${place.itemCount} item types${measured} · last seen ${dateOf(place.lastSeen)}`));
+      `${tx('{count} item types', { count: place.itemCount })}${measured} · ${tx('last seen {date}', { date: dateOf(place.lastSeen) })}`));
 
     for (const group of place.groups) {
       const head = el('div', 'stash-group');
-      head.append(el('span', 'stash-group-name', group.category));
+      head.append(el('span', 'stash-group-name', tx(group.category)));
       head.append(el('span', 'slot-count', String(group.items.length)));
       card.append(head);
 
@@ -21730,12 +22199,12 @@ function updateHereControl() {
   const here = currentMapLocation();
   control.disabled = !here;
   control.classList.toggle('located', !!here);
-  label.textContent = here ? `You · ${here.name}` : 'Location unknown';
+  label.textContent = here ? tx('You · {place}', { place: here.name }) : tx('Location unknown');
 
-  if (!here) control.title = 'The live log has not named your location yet';
-  else if (mapMode() === 'network') control.title = `Show ${here.name} in ${here.system}`;
-  else if (mapSystem() !== here.system) control.title = `Show ${here.name} in ${here.system}`;
-  else control.title = `Centre on ${here.name}`;
+  if (!here) control.title = tx('The live log has not named your location yet');
+  else if (mapMode() === 'network' || mapSystem() !== here.system)
+    control.title = tx('Show {place} in {system}', { place: here.name, system: here.system });
+  else control.title = tx('Centre on {place}', { place: here.name });
 }
 
 /** Makes the player's system and place visible without changing filters. */
@@ -21777,8 +22246,9 @@ function syncMapModeControls() {
   system.hidden = mode.value !== 'system';
   const note = $('#map-mode-note');
   if (note) note.textContent = mode.value === 'system'
-    ? `${system.value || 'This system'}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.`
-    : 'Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.';
+    ? tx('{system}: real body bearings and relative orbit distances. Bodies without a community coordinate are amber and explicitly unpositioned.',
+      { system: system.value || tx('This system') })
+    : tx('Jump network: systems and jump connections only — schematic, not to scale. Select a system to inspect its bodies and locations.');
   updateHereControl();
 }
 
@@ -21792,6 +22262,9 @@ const SERVICE_META = {
   clinic: { icon: '✚', label: 'Clinic' },
   repair: { icon: '⚙', label: 'Repair' },
 };
+/** A service's name in the page's language; the key stays the server's. */
+const serviceLabel = (service) => (SERVICE_META[service] ? tx(SERVICE_META[service].label) : service);
+
 const mapServicesByPlace = new Map();
 let mapServiceFilter = '';
 let mapFocusFilter = '';
@@ -21875,7 +22348,7 @@ async function loadGameData() {
   }[state?.state] || '';
 
   if (problem) {
-    problem.textContent = state?.problem || '';
+    problem.textContent = serverText(state?.problem) || '';
     problem.hidden = !state?.problem;
   }
 
@@ -21904,11 +22377,11 @@ async function loadGameData() {
 /** What to say to a page that has nothing to show yet. */
 function gameDataExcuse() {
   if (gameDataState?.state === 'reading') {
-    return 'Still reading your game files — this takes about half a minute after a patch.';
+    return tx('Still reading your game files — this takes about half a minute after a patch.');
   }
 
-  if (gameDataState?.state === 'noinstall') return 'No game install was found.';
-  if (gameDataState?.state === 'failed') return gameDataState.problem;
+  if (gameDataState?.state === 'noinstall') return tx('No game install was found.');
+  if (gameDataState?.state === 'failed') return serverText(gameDataState.problem);
 
   return null;
 }
@@ -21931,10 +22404,15 @@ async function loadMapAmenities() {
     select.append(new Option(`${mapFacilityLabel(amenity)} (${count})`, amenity));
 }
 
-const mapFacilityLabel = (amenity) => ({
-  'Commodity Trading - Freight Elevator': 'Cargo · Freight elevator',
-  'Commodity Trading - Loading Dock': 'Cargo · Loading dock',
-}[amenity] || amenity);
+// The other facility names are the game's and stay as it writes them; these
+// two are the app's own shortening, so they are page text.
+const mapFacilityLabel = (amenity) => {
+  const short = {
+    'Commodity Trading - Freight Elevator': 'Cargo · Freight elevator',
+    'Commodity Trading - Loading Dock': 'Cargo · Loading dock',
+  }[amenity];
+  return short ? tx(short) : amenity;
+};
 
 /** Whether the game lists a facility at a place, matched on the readable name. */
 const hasAmenity = (location, amenity) =>
@@ -21947,15 +22425,16 @@ function clearMapClosest() {
 
 function closestMapFacilities(amenity, service) {
   const here = currentMapLocation();
-  const label = mapFacilityLabel(amenity) || SERVICE_META[service]?.label;
-  if (!label) return { message: 'Choose a facility (such as Refinery or Cargo), or a service, then select closest.' };
-  if (!here?.system) return { message: 'Your last known location is unavailable. Wait for the log to name a place before finding the closest facility.' };
+  const label = mapFacilityLabel(amenity) || (SERVICE_META[service] ? serviceLabel(service) : null);
+  if (!label) return { message: tx('Choose a facility (such as Refinery or Cargo), or a service, then select closest.') };
+  if (!here?.system) return { message: tx('Your last known location is unavailable. Wait for the log to name a place before finding the closest facility.') };
   const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
   const matches = atlas.filter((location) => same(location.system, here.system)
     && (amenity ? hasAmenity(location, amenity) : servicesAt(location).includes(service)));
-  if (!matches.length) return { message: `No ${label} facilities are listed in ${here.system}. Other systems cannot be compared by distance.` };
+  const at = { facility: label, place: here.name, system: here.system };
+  if (!matches.length) return { message: tx('No {facility} facilities are listed in {system}. Other systems cannot be compared by distance.', at) };
   const atHere = matches.find((location) => location.rawId === here.rawId);
-  if (atHere) return { locations: [atHere], message: `${label} is listed at ${here.name}, your last known location.` };
+  if (atHere) return { locations: [atHere], message: tx('{facility} is listed at {place}, your last known location.', at) };
 
   // Display positions are compressed and spread out for labels. Only the
   // source body coordinates can rank proximity; sites on one body stay tied.
@@ -21970,13 +22449,13 @@ function closestMapFacilities(amenity, service) {
     return { location, distance };
   });
   const known = ranked.filter((entry) => entry.distance !== null);
-  if (!known.length) return { message: `Cannot determine the closest ${label} from ${here.name}: body coordinates are missing and no matching facility is on the same body.` };
+  if (!known.length) return { message: tx('Cannot determine the closest {facility} from {place}: body coordinates are missing and no matching facility is on the same body.', at) };
   const best = Math.min(...known.map((entry) => entry.distance));
   const locations = known.filter((entry) => entry.distance === best).map((entry) => entry.location)
     .sort((a, b) => a.name.localeCompare(b.name));
-  let message = `Approximate closest ${label} from ${here.name} (last known location), within ${here.system}. Based on body positions, not travel distance; exact facility coordinates are unavailable.`;
-  if (locations.length > 1) message += ' These places are tied; choose one below.';
-  if (known.length < matches.length) message += ' Some matching facilities lack body coordinates and could not be compared.';
+  let message = tx('Approximate closest {facility} from {place} (last known location), within {system}. Based on body positions, not travel distance; exact facility coordinates are unavailable.', at);
+  if (locations.length > 1) message += ` ${tx('These places are tied; choose one below.')}`;
+  if (known.length < matches.length) message += ` ${tx('Some matching facilities lack body coordinates and could not be compared.')}`;
   return { locations, message };
 }
 
@@ -22035,7 +22514,7 @@ function drawServiceBadges(group, x, y, radius, services) {
     }));
 
     const title = svgEl('title');
-    title.textContent = SERVICE_META[service]?.label || service;
+    title.textContent = serviceLabel(service);
     badge.append(title);
     badges.append(badge);
   });
@@ -22054,7 +22533,7 @@ function drawMapNoteBadge(group, x, y, radius) {
     d: `M ${bx} ${by - size} L ${bx + size} ${by} L ${bx} ${by + size} L ${bx - size} ${by} Z`,
   }));
   const title = svgEl('title');
-  title.textContent = 'Personal map note';
+  title.textContent = tx('Personal map note');
   badge.append(title);
   group.append(badge);
 }
@@ -22104,8 +22583,8 @@ function saveMapView() {
   try { localStorage.setItem(MAP_SAVED_VIEW_KEY, JSON.stringify(saved)); } catch { /* private mode */ }
 
   const button = $('#map-save-preset');
-  button.textContent = 'Saved';
-  button.title = 'Saved view updated';
+  button.textContent = tx('Saved');
+  button.title = tx('Saved view updated');
 }
 
 function applyMapPreset(name) {
@@ -22308,7 +22787,7 @@ let view = { ...HOME_VIEW };
 const labelSize = (scale = 1) => (view.w / HOME_VIEW.w) * 9.5 * scale;
 
 async function loadAtlas() {
-  setWorkspaceState('#map-state', 'loading', 'Loading known places…');
+  setWorkspaceState('#map-state', 'loading', tx('Loading known places…'));
   let mapUnavailable = false;
   const [data, servicePlaces] = await Promise.all([
     getJson('/api/map').catch(() => {
@@ -22331,8 +22810,8 @@ async function loadAtlas() {
   if (mapInfoLocation) renderMapInfoServices(mapInfoLocation);
   setWorkspaceState('#map-state', mapUnavailable ? 'offline' : atlas.length ? 'ready' : 'empty',
     mapUnavailable
-      ? 'Map data is unavailable. Refresh after the local server reconnects.'
-      : 'No known places are available yet.');
+      ? tx('Map data is unavailable. Refresh after the local server reconnects.')
+      : tx('No known places are available yet.'));
 }
 
 /** Real body coordinates per system, when the community dataset supplies them. */
@@ -22773,7 +23252,7 @@ function drawNetworkHere(map) {
     x: point.x, y: point.y - point.radius - 26, 'text-anchor': 'middle',
     class: 'map-label here-label', style: `font-size:${labelSize(0.85)}px`,
   });
-  label.textContent = `YOU · ${here.name}`;
+  label.textContent = tx('YOU · {place}', { place: here.name });
   group.append(label);
   map.append(group);
 }
@@ -23135,7 +23614,7 @@ function renderSearchResults() {
     row.type = 'button';
     row.append(el('span', 'name good', good.name));
     row.append(el('span', 'where',
-      `commodity · ${good.sold.length} sellers`));
+      `${tx('commodity')} · ${txn(good.sold.length, '{count} seller', '{count} sellers')}`));
 
     row.addEventListener('click', () => {
       box.hidden = true;
@@ -23167,10 +23646,10 @@ function priceFreshness(seenAt) {
   if (!Number.isFinite(at)) return null;
   const hours = Math.max(0, (Date.now() - at) / 3600000);
   return hours > 14 * 24
-    ? { state: 'stale', label: `UEX report ${Math.floor(hours / 24)}d old` }
+    ? { state: 'stale', label: tx('UEX report {n}d old', { n: Math.floor(hours / 24) }) }
     : hours > 72
-      ? { state: 'aging', label: `UEX report ${Math.floor(hours / 24)}d old` }
-      : { state: 'fresh', label: `UEX report ${Math.max(1, Math.round(hours))}h old` };
+      ? { state: 'aging', label: tx('UEX report {n}d old', { n: Math.floor(hours / 24) }) }
+      : { state: 'fresh', label: tx('UEX report {n}h old', { n: Math.max(1, Math.round(hours)) }) };
 }
 
 const SHADE_STOPS = ['#24543f', '#4fd48a', '#ffe08a'];
@@ -23297,8 +23776,8 @@ function prepareShading(term, sites) {
     invert,
     unit: byScu ? 'SCU' : 'aUEC/SCU',
     label: buying
-      ? (byScu ? 'stock on offer' : 'buy price, cheapest is gold')
-      : (byScu ? 'sell capacity' : 'sell price, best is gold'),
+      ? (byScu ? tx('stock on offer') : tx('buy price, cheapest is gold'))
+      : (byScu ? tx('sell capacity') : tx('sell price, best is gold')),
   };
 }
 
@@ -23440,13 +23919,13 @@ function cargoPanelHead(kicker, title) {
 }
 
 const windowWord = () =>
-  (PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
+  tx(PERIODS.find((p) => p.days === cargo.days)?.label || 'All time').toLowerCase();
 
 function renderCommodityPanel(entry) {
-  const body = cargoPanelHead(cargo.buying ? 'Commodity · buying' : 'Commodity · selling', entry.name);
+  const body = cargoPanelHead(cargo.buying ? tx('Commodity · buying') : tx('Commodity · selling'), entry.name);
 
   // What the market says today, from the rows the shading already fetched.
-  body.append(el('div', 'cargo-h', cargo.buying ? 'Cheapest terminals' : 'Best terminals'));
+  body.append(el('div', 'cargo-h', cargo.buying ? tx('Cheapest terminals') : tx('Best terminals')));
 
   if (shadeRows.name === entry.name && shadeRows.rows?.length) {
     const priceOf = (row) => (cargo.buying ? row.buy : row.sell);
@@ -23467,24 +23946,27 @@ function renderCommodityPanel(entry) {
       body.append(cargoRow({
         colour: shadeColour(cargo.buying ? 1 - t : t),
         name: row.terminal,
-        sub: `${Math.round(scuOf(row)).toLocaleString()} SCU ${cargo.buying ? 'in stock' : 'of demand'}`,
+        sub: cargo.buying
+          ? tx('{scu} SCU in stock', { scu: Math.round(scuOf(row)).toLocaleString() })
+          : tx('{scu} SCU of demand', { scu: Math.round(scuOf(row)).toLocaleString() }),
         value: priceOf(row),
         onClick: () => centreOnTerminal(row.terminal, row.placeId),
       }));
     }
   } else {
     body.append(el('div', 'cargo-empty', shadeRows.name === entry.name
-      ? 'No live prices for this commodity. UEX may be off — see Settings.'
-      : 'Fetching live prices…'));
+      ? tx('No live prices for this commodity. UEX may be off — see Settings.')
+      : tx('Fetching live prices…')));
   }
 
   // What the player was actually paid, which the market cannot tell them.
   const mine = receiptsFor(entry.name, cargo.buying);
-  body.append(el('div', 'cargo-h', `Your receipts · ${windowWord()}`));
+  body.append(el('div', 'cargo-h', `${tx('Your receipts')} · ${windowWord()}`));
 
   if (!mine.length) {
-    body.append(el('div', 'cargo-empty',
-      `You have never ${cargo.buying ? 'bought' : 'sold'} this in that window.`));
+    body.append(el('div', 'cargo-empty', cargo.buying
+      ? tx('You have never bought this in that window.')
+      : tx('You have never sold this in that window.')));
   }
 
   const best = mine.length ? mine[0].best : 0;
@@ -23497,8 +23979,8 @@ function renderCommodityPanel(entry) {
     body.append(cargoRow({
       colour: shadeColour(cargo.buying ? 1 - t : t),
       name: row.name,
-      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
-        + ` · avg ${Math.round(row.average).toLocaleString()} · ${dayOf(row.latestAt)}`,
+      sub: `${txn(row.trades, '{count} receipt', '{count} receipts')} · ${row.scu.toLocaleString()} SCU`
+        + ` · ${tx('avg {price}', { price: Math.round(row.average).toLocaleString() })} · ${dayOf(row.latestAt)}`,
       value: row.best,
       onClick: () => {
         if (row.id) centreOn(row.id);
@@ -23508,7 +23990,7 @@ function renderCommodityPanel(entry) {
   }
 
   const history = receiptsInWindow().filter((t) => t.commodity === entry.name);
-  body.append(el('div', 'cargo-h', `Trade history · ${history.length}`));
+  body.append(el('div', 'cargo-h', `${tx('Trade history')} · ${history.length}`));
   cargoHistory(body, history, (t) => t.place);
 }
 
@@ -23522,31 +24004,31 @@ function renderCommodityPanel(entry) {
 function renderStationPanel() {
   const place = cargo.place;
   const key = place.id || place.name;
-  const body = cargoPanelHead('Station', place.name);
+  const body = cargoPanelHead(tx('Station'), place.name);
 
   const at = receiptsInWindow().filter((t) => (t.placeId || t.place) === key);
 
-  const add = el('button', 'ghost tiny wide', 'Add as a stop');
-  add.title = 'Put this place on the flight plan';
+  const add = el('button', 'ghost tiny wide', tx('Add as a stop'));
+  add.title = tx('Put this place on the flight plan');
   add.addEventListener('click', () => addStop(place.id, place.name, null));
   body.append(add);
 
-  cargoSection(body, 'Accepts · you sold here', at.filter((t) => t.isSell), false);
-  cargoSection(body, 'Offers · you bought here', at.filter((t) => !t.isSell), true);
+  cargoSection(body, tx('Accepts · you sold here'), at.filter((t) => t.isSell), false);
+  cargoSection(body, tx('Offers · you bought here'), at.filter((t) => !t.isSell), true);
 
   // The catalogue's own answer, which covers commodities never traded here.
   const catalogue = place.location ? commoditiesSoldAt(place.location) : [];
 
   if (catalogue.length) {
-    body.append(el('div', 'cargo-h', `Catalogue says it sells · ${catalogue.length}`));
+    body.append(el('div', 'cargo-h', `${tx('Catalogue says it sells')} · ${catalogue.length}`));
 
     const list = el('div', 'cargo-goods');
     list.textContent = catalogue.slice(0, 24).join(', ')
-      + (catalogue.length > 24 ? `, +${catalogue.length - 24} more` : '');
+      + (catalogue.length > 24 ? `, ${tx('+{count} more', { count: catalogue.length - 24 })}` : '');
     body.append(list);
   }
 
-  body.append(el('div', 'cargo-h', `Trade history · ${at.length}`));
+  body.append(el('div', 'cargo-h', `${tx('Trade history')} · ${at.length}`));
   cargoHistory(body, at, (t) => t.commodity);
 }
 
@@ -23555,7 +24037,7 @@ function cargoSection(body, title, trades, buying) {
   body.append(el('div', 'cargo-h', title));
 
   if (!trades.length) {
-    body.append(el('div', 'cargo-empty', 'Nothing on record in that window.'));
+    body.append(el('div', 'cargo-empty', tx('Nothing on record in that window.')));
     return;
   }
 
@@ -23577,7 +24059,7 @@ function cargoSection(body, title, trades, buying) {
     body.append(cargoRow({
       colour: buying ? '#ffab3d' : '#4fd48a',
       name: row.name,
-      sub: `${row.trades} receipt${row.trades === 1 ? '' : 's'} · ${row.scu.toLocaleString()} SCU`
+      sub: `${txn(row.trades, '{count} receipt', '{count} receipts')} · ${row.scu.toLocaleString()} SCU`
         + ` · ${dayOf(row.latestAt)}`,
       value: row.amount / (row.scu || 1),
 
@@ -23621,7 +24103,7 @@ function cargoRow({ colour, name, sub, value, onClick }) {
 /** The receipt list: newest first, capped so a long history stays scrollable. */
 function cargoHistory(body, trades, describe) {
   if (!trades.length) {
-    body.append(el('div', 'cargo-empty', 'No trades in that window.'));
+    body.append(el('div', 'cargo-empty', tx('No trades in that window.')));
     return;
   }
 
@@ -23629,13 +24111,13 @@ function cargoHistory(body, trades, describe) {
     const line = el('div', `cargo-line ${trade.isSell ? 'sell' : 'buy'}`);
     line.append(el('span', 'when', dayOf(trade.at)));
     line.append(el('span', 'what',
-      `${trade.isSell ? 'Sold' : 'Bought'} ${trade.scu} SCU · ${describe(trade)}`));
+      `${trade.isSell ? tx('Sold {count} SCU', { count: trade.scu }) : tx('Bought {count} SCU', { count: trade.scu })} · ${describe(trade)}`));
     line.append(el('span', 'rate', Math.round(trade.unitPrice).toLocaleString()));
     body.append(line);
   }
 
   if (trades.length > 30) {
-    body.append(el('div', 'cargo-empty', `+ ${trades.length - 30} older, on the Cargo page.`));
+    body.append(el('div', 'cargo-empty', tx('+ {count} older, on the Cargo page.', { count: trades.length - 30 })));
   }
 }
 
@@ -23743,9 +24225,9 @@ function shadeFromReceipts(name, buying) {
     invert: buying,
     unit: 'aUEC/SCU',
     label: buying
-      ? `your buy price, ${windowWord()}, cheapest is gold`
-      : `your sell price, ${windowWord()}, best is gold`,
-    plain: 'no receipt of yours here',
+      ? tx('your buy price, {window}, cheapest is gold', { window: windowWord() })
+      : tx('your sell price, {window}, best is gold', { window: windowWord() }),
+    plain: tx('no receipt of yours here'),
   };
 }
 
@@ -24006,12 +24488,11 @@ function showTripPanel() {
 
 function renderTripPanel() {
   const trip = tracked();
-  const body = cargoPanelHead('Flight plan', trip ? trip.title : 'No plan yet');
+  const body = cargoPanelHead(tx('Flight plan'), trip ? trip.title : tx('No plan yet'));
 
   if (!trip || !trip.stops.length) {
     body.append(el('div', 'cargo-empty',
-      'Double-click a place, or use Add stop on its card, to start a plan. '
-      + 'A trade route or a shopping list can start one for you.'));
+      tx('Double-click a place, or use Add stop on its card, to start a plan. A trade route or a shopping list can start one for you.')));
 
     // Finishing your only run leaves nothing tracked, and the runs you have
     // flown are exactly what you want to see at that moment - so the filed
@@ -24021,7 +24502,7 @@ function renderTripPanel() {
   }
 
   const done = trip.stops.filter((s) => s.done).length;
-  body.append(jobProgress(done, trip.stops.length, `${done} of ${trip.stops.length} stops`));
+  body.append(jobProgress(done, trip.stops.length, tx('{done} of {total} stops', { done, total: trip.stops.length })));
 
   const next = nextStop(trip);
 
@@ -24032,24 +24513,24 @@ function renderTripPanel() {
     const tools = el('div', 'trip-tools');
 
     const up = el('button', 'ghost tiny', '↑');
-    up.title = 'Earlier in the run';
+    up.title = tx('Earlier in the run');
     up.disabled = index === 0;
     up.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=-1`));
 
     const down = el('button', 'ghost tiny', '↓');
-    down.title = 'Later in the run';
+    down.title = tx('Later in the run');
     down.disabled = index === trip.stops.length - 1;
     down.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=1`));
 
     const drop = el('button', 'ghost tiny', '×');
-    drop.title = 'Drop this stop';
+    drop.title = tx('Drop this stop');
     drop.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
 
     const addAction = el('button', 'ghost tiny', '+');
-    addAction.title = 'Add a run-sheet action at this stop';
+    addAction.title = tx('Add a run-sheet action at this stop');
     addAction.addEventListener('click', () => {
       const existing = row.querySelector('.run-action-form');
       if (existing) existing.remove();
@@ -24067,11 +24548,11 @@ function renderTripPanel() {
   // tell setting off from opening the page, so it asks once and then knows.
   if (trip.archived === 'No' || trip.archived === undefined) {
     const lifecycle = el('button', trip.flying ? 'primary' : 'ghost',
-      trip.flying ? 'Finish run' : 'Start run');
+      trip.flying ? tx('Finish run') : tx('Start run'));
 
     lifecycle.title = trip.flying
-      ? 'Stop the clock and file this run'
-      : 'Start the clock — elapsed time is measured from here, not from when you wrote the plan';
+      ? tx('Stop the clock and file this run')
+      : tx('Start the clock — elapsed time is measured from here, not from when you wrote the plan');
 
     lifecycle.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/${trip.flying ? 'finish' : 'start'}`));
@@ -24079,12 +24560,12 @@ function renderTripPanel() {
     actions.append(lifecycle);
   }
 
-  const track = el('button', 'ghost', trip.tracked ? 'Stop tracking' : 'Track');
-  track.title = 'Show this plan on the Now page';
+  const track = el('button', 'ghost', trip.tracked ? tx('Stop tracking') : tx('Track'));
+  track.title = tx('Show this plan on the Now page');
   track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
   actions.append(track);
 
-  const scrap = el('button', 'ghost danger', 'Delete plan');
+  const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
     await tripCall(`/api/trips/${trip.id}`, 'DELETE');
     cargo.trip = false;
@@ -24097,14 +24578,14 @@ function renderTripPanel() {
 
   if (trip.flying) {
     body.append(el('div', 'trip-elapsed muted',
-      `Running for ${spanOf(trip.elapsedSeconds)} — since you pressed Start, not since you wrote it.`));
+      tx('Running for {span} — since you pressed Start, not since you wrote it.', { span: spanOf(trip.elapsedSeconds) })));
   }
 
   // Other plans, so one can be picked up again without a management screen.
   const others = trips.filter((t) => t !== trip && !isFiled(t));
 
   if (others.length) {
-    body.append(el('div', 'cargo-h', 'Other plans'));
+    body.append(el('div', 'cargo-h', tx('Other plans')));
 
     for (const other of others) {
       const row = el('div', 'cargo-row');
@@ -24113,7 +24594,7 @@ function renderTripPanel() {
       const main = el('div', 'cargo-row-main');
       main.append(el('div', 'name', other.title));
       main.append(el('div', 'sub',
-        `${other.stops.filter((s) => s.done).length} of ${other.stops.length} stops`));
+        tx('{done} of {total} stops', { done: other.stops.filter((s) => s.done).length, total: other.stops.length })));
       row.append(main);
 
       row.tabIndex = 0;
@@ -24136,7 +24617,7 @@ function renderFiledRuns(body) {
   const filed = trips.filter(isFiled);
   if (!filed.length) return;
 
-  body.append(el('div', 'cargo-h', 'Finished and filed'));
+  body.append(el('div', 'cargo-h', tx('Finished and filed')));
 
   for (const run of filed) {
     const row = el('div', 'cargo-row');
@@ -24146,9 +24627,10 @@ function renderFiledRuns(body) {
     main.append(el('div', 'name', run.title));
 
     const done = run.stops.filter((s) => s.done).length;
+    const stops = tx('{done} of {total} stops', { done, total: run.stops.length });
     main.append(el('div', 'sub', run.archived === 'Quiet'
-      ? `${done} of ${run.stops.length} stops — filed itself after going quiet`
-      : `${done} of ${run.stops.length} stops — ${spanOf(run.elapsedSeconds)}`));
+      ? `${stops} — ${tx('filed itself after going quiet')}`
+      : `${stops} — ${spanOf(run.elapsedSeconds)}`));
 
     row.append(main);
 
@@ -24158,19 +24640,19 @@ function renderFiledRuns(body) {
     // finished, and a button undoing that would make the sweep and the pilot
     // look like the same decision.
     if (run.archived === 'Quiet') {
-      const resume = el('button', 'ghost tiny', 'Resume');
-      resume.title = 'Put this back — it keeps the time it started';
+      const resume = el('button', 'ghost tiny', tx('Resume'));
+      resume.title = tx('Put this back — it keeps the time it started');
       resume.addEventListener('click', () => tripCall(`/api/trips/${run.id}/resume`));
       tools.append(resume);
     }
 
-    const look = el('button', 'ghost tiny', 'Review');
-    look.title = 'What this run planned, against what your logs recorded';
+    const look = el('button', 'ghost tiny', tx('Review'));
+    look.title = tx('What this run planned, against what your logs recorded');
     look.addEventListener('click', () => showRunReview(run.id).catch(() => {}));
     tools.append(look);
 
-    const again = el('button', 'ghost tiny', 'Repeat');
-    again.title = 'Fly the same route again, with nothing ticked off';
+    const again = el('button', 'ghost tiny', tx('Repeat'));
+    again.title = tx('Fly the same route again, with nothing ticked off');
     again.addEventListener('click', () => tripCall(`/api/trips/${run.id}/repeat`));
     tools.append(again);
 
@@ -24186,7 +24668,7 @@ function isFiled(trip) {
 
 /** A duration in the shortest words that stay honest about it. */
 function spanOf(seconds) {
-  if (!seconds || seconds < 0) return 'no time at all';
+  if (!seconds || seconds < 0) return tx('no time at all');
 
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
@@ -24212,16 +24694,16 @@ async function showRunReview(id) {
   cargo.place = null;
   cargo.trip = false;
 
-  const body = cargoPanelHead('Run review', 'Reading the logs…');
+  const body = cargoPanelHead(tx('Run review'), tx('Reading the logs…'));
 
   let review;
 
   try {
     review = await getJson(`/api/trips/${encodeURIComponent(id)}/review`);
   } catch {
-    cargoPanelHead('Run review', 'Nothing to review')
+    cargoPanelHead(tx('Run review'), tx('Nothing to review'))
       .append(el('div', 'cargo-empty',
-        'This plan has never been started, so there is nothing to compare against yet.'));
+        tx('This plan has never been started, so there is nothing to compare against yet.')));
     return;
   }
 
@@ -24229,35 +24711,36 @@ async function showRunReview(id) {
 }
 
 function renderRunReview(review) {
-  const body = cargoPanelHead('Run review', review.title);
+  const body = cargoPanelHead(tx('Run review'), review.title);
 
   const when = [
-    review.startedAt ? `Started ${dateOf(review.startedAt)}` : null,
-    review.elapsedSeconds ? `took ${spanOf(review.elapsedSeconds)}` : null,
+    review.startedAt ? tx('Started {date}', { date: dateOf(review.startedAt) }) : null,
+    review.elapsedSeconds ? tx('took {span}', { span: spanOf(review.elapsedSeconds) }) : null,
   ].filter(Boolean).join(' · ');
 
   if (when) body.append(el('div', 'sub muted', when));
 
-  body.append(runFigure('Money in', review.earned));
-  body.append(runFigure('Money out', review.spent));
+  body.append(runFigure(tx('Money in'), review.earned));
+  body.append(runFigure(tx('Money out'), review.spent));
 
-  body.append(el('div', 'cargo-h', 'Stop by stop'));
+  body.append(el('div', 'cargo-h', tx('Stop by stop')));
 
   for (const stop of review.stops) {
     const block = el('div', 'run-stop');
 
     const head = el('div', 'run-stop-head');
     head.append(el('span', 'name', stop.place));
-    head.append(el('span', 'muted', stop.doneAt ? dateOf(stop.doneAt) : 'never reached'));
+    head.append(el('span', 'muted', stop.doneAt ? dateOf(stop.doneAt) : tx('never reached')));
     block.append(head);
 
     if (stop.note) block.append(el('div', 'sub muted', stop.note));
 
     for (const action of stop.planned) block.append(runPlannedRow(review, stop, action));
 
+    // The kind is the ledger's English; the reader gets the page's.
     for (const claim of stop.claimed) {
       const row = el('div', 'run-claim');
-      row.append(el('span', 'muted', claim.kind));
+      row.append(el('span', 'muted', tx(claim.kind)));
       row.append(el('span', null, claim.what));
       row.append(el('span', claim.amount >= 0 ? 'amount in' : 'amount out', money(claim.amount)));
       block.append(row);
@@ -24266,22 +24749,21 @@ function renderRunReview(review) {
     // Said rather than left blank: most stops move no money, and an empty space
     // reads as a gap in the data instead of an ordinary stop.
     if (!stop.planned.length && !stop.claimed.length) {
-      block.append(el('div', 'sub muted', 'Nothing planned, and no money moved here.'));
+      block.append(el('div', 'sub muted', tx('Nothing planned, and no money moved here.')));
     }
 
     body.append(block);
   }
 
   if (review.unclaimed.length) {
-    body.append(el('div', 'cargo-h', 'During the run, but not at a stop'));
+    body.append(el('div', 'cargo-h', tx('During the run, but not at a stop')));
     body.append(el('div', 'sub muted',
-      'Money that moved while this run was going that no stop can account for. '
-      + 'Listed rather than added in — attaching it to the nearest stop would be a guess.'));
+      tx('Money that moved while this run was going that no stop can account for. Listed rather than added in — attaching it to the nearest stop would be a guess.')));
 
     for (const claim of review.unclaimed) {
       const row = el('div', 'run-claim');
       row.append(el('span', 'muted', dateOf(claim.at)));
-      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+      row.append(el('span', null, tx('{what} at {where}', { what: claim.what, where: claim.where })));
 
       // Muted, not green: this money is real and is not in the figure above,
       // and colouring it like counted income would say otherwise.
@@ -24305,13 +24787,13 @@ function runFigure(label, figure) {
   head.append(el('span', 'muted', label));
   head.append(el('span', 'run-figure-value', money(figure.value)));
 
-  const why = el('button', 'ghost tiny', 'Why this number?');
+  const why = el('button', 'ghost tiny', tx('Why this number?'));
   const detail = el('div', 'run-why');
   detail.hidden = true;
 
   why.addEventListener('click', () => {
     detail.hidden = !detail.hidden;
-    why.textContent = detail.hidden ? 'Why this number?' : 'Hide';
+    why.textContent = detail.hidden ? tx('Why this number?') : tx('Hide');
   });
 
   head.append(why);
@@ -24327,14 +24809,14 @@ function runFigure(label, figure) {
     for (const claim of figure.from) {
       const row = el('div', 'run-claim');
       row.append(el('span', 'muted', dateOf(claim.at)));
-      row.append(el('span', null, `${claim.what} at ${claim.where}`));
+      row.append(el('span', null, tx('{what} at {where}', { what: claim.what, where: claim.where })));
       row.append(el('span', 'amount', money(claim.amount)));
       list.append(row);
     }
 
     detail.append(list);
   } else {
-    detail.append(el('div', 'sub muted', 'No records behind this one — nothing was matched to a stop.'));
+    detail.append(el('div', 'sub muted', tx('No records behind this one — nothing was matched to a stop.')));
   }
 
   block.append(detail);
@@ -24351,19 +24833,19 @@ function runFigure(label, figure) {
 function runPlannedRow(review, stop, action) {
   const row = el('div', 'run-planned');
 
-  row.append(el('span', 'muted', action.kind));
+  row.append(el('span', 'muted', runActionLabel(action.kind)));
   row.append(el('span', null, action.text));
 
   const planned = action.quantity === null || action.quantity === undefined
     ? '—'
     : `${action.quantity.toLocaleString()}${action.unit ? ` ${action.unit}` : ''}`;
 
-  row.append(el('span', 'muted planned-was', `planned ${planned}`));
+  row.append(el('span', 'muted planned-was', tx('planned {amount}', { amount: planned })));
 
   const actual = el('input', 'run-actual');
   actual.type = 'number';
-  actual.placeholder = 'actual';
-  actual.title = 'What it came to. Leave empty if you have not checked.';
+  actual.placeholder = tx('actual');
+  actual.title = tx('What it came to. Leave empty if you have not checked.');
   if (action.actual !== null && action.actual !== undefined) actual.value = String(action.actual);
 
   actual.addEventListener('change', async () => {
@@ -24411,7 +24893,7 @@ function renderKits() {
   list.textContent = '';
 
   if (!kits.length) {
-    list.append(el('p', 'muted', 'No kits yet. Save what you are wearing to make one.'));
+    list.append(el('p', 'muted', tx('No kits yet. Save what you are wearing to make one.')));
     return;
   }
 
@@ -24421,16 +24903,16 @@ function renderKits() {
     const main = el('div', 'kit-row-main');
     main.append(el('div', 'name', kit.name));
     main.append(el('div', 'sub muted',
-      `${kit.items.length} item${kit.items.length === 1 ? '' : 's'}`));
+      txn(kit.items.length, '{count} item', '{count} items')));
     row.append(main);
 
-    const prepare = el('button', 'ghost tiny', 'Prepare');
-    prepare.title = 'Compare this kit with what you have';
+    const prepare = el('button', 'ghost tiny', tx('Prepare'));
+    prepare.title = tx('Compare this kit with what you have');
     prepare.addEventListener('click', () => prepareKit(kit.id).catch(() => {}));
     row.append(prepare);
 
     const drop = el('button', 'ghost tiny danger', '×');
-    drop.title = 'Delete this kit';
+    drop.title = tx('Delete this kit');
     drop.addEventListener('click', async () => {
       await fetch(`/api/kits/${encodeURIComponent(kit.id)}`, { method: 'DELETE' });
       if (preparing?.kitId === kit.id) closeKitPrepare();
@@ -24458,7 +24940,7 @@ async function saveWornAsKit() {
     .map((item) => ({ name: item.name, quantity: item.count || 1, optional: false }));
 
   if (!items.length) {
-    status.textContent = 'Nothing is showing in your loadout yet, so there is nothing to save.';
+    status.textContent = tx('Nothing is showing in your loadout yet, so there is nothing to save.');
     return;
   }
 
@@ -24469,7 +24951,7 @@ async function saveWornAsKit() {
   });
 
   $('#kit-name').value = '';
-  status.textContent = `Saved ${items.length} item${items.length === 1 ? '' : 's'}.`;
+  status.textContent = txn(items.length, 'Saved {count} item.', 'Saved {count} items.');
   await loadKits();
 }
 
@@ -24483,21 +24965,22 @@ function renderKitPrepare() {
   panel.hidden = !preparing;
   if (!preparing) return;
 
-  $('#kit-prepare-title').textContent = `Preparing ${preparing.name}`;
-  $('#kit-prepare-rule').textContent = preparing.rule;
+  $('#kit-prepare-title').textContent = tx('Preparing {kit}', { kit: preparing.name });
+  $('#kit-prepare-rule').textContent = serverText(preparing.rule);
 
   const body = $('#kit-prepare-table').querySelector('tbody');
   body.textContent = '';
 
   for (const line of preparing.lines) {
-    const [words, asks] = KIT_HOLDING[line.holding] || [line.holding, false];
+    const [english, asks] = KIT_HOLDING[line.holding] || [line.holding, false];
+    const words = tx(english);
 
     const row = el('tr');
 
     const name = el('td');
     name.append(el('span', null, line.name));
     if (line.quantity > 1) name.append(el('span', 'note-inline muted', ` ×${line.quantity}`));
-    if (line.optional) name.append(el('span', 'note-inline muted', ' optional'));
+    if (line.optional) name.append(el('span', 'note-inline muted', ` ${tx('optional')}`));
     row.append(name);
 
     // Where it was only matters for the lines that need answering. Equipped
@@ -24508,7 +24991,7 @@ function renderKitPrepare() {
     // that one is on the character, then leaves the pilot unable to tell why
     // the shopping list has three rather than four.
     const holding = line.short > 0
-      ? `${line.held} on you · ${line.short} still needed`
+      ? txn(line.short, '{held} on you · {count} still needed', '{held} on you · {count} still needed', { held: line.held })
       : asks && line.where ? `${words} — ${line.where}` : words;
     row.append(el('td', line.holding === 'Missing' ? 'muted want' : 'muted', holding));
 
@@ -24521,20 +25004,20 @@ function renderKitPrepare() {
     // take, and offering one against "never seen" asks about nothing.
     if (asks) {
       const gone = el('button', 'ghost tiny');
-      gone.textContent = 'I have it';
+      gone.textContent = tx('I have it');
       gone.dataset.name = line.name;
       gone.dataset.gone = 'false';
 
       gone.addEventListener('click', () => {
         const isGone = gone.dataset.gone !== 'true';
         gone.dataset.gone = String(isGone);
-        gone.textContent = isGone ? 'It is gone' : 'I have it';
+        gone.textContent = isGone ? tx('It is gone') : tx('I have it');
         gone.classList.toggle('want', isGone);
       });
 
       answer.append(gone);
     } else {
-      answer.append(el('span', 'muted', line.holding === 'Missing' ? 'on the list' : 'settled'));
+      answer.append(el('span', 'muted', line.holding === 'Missing' ? tx('on the list') : tx('settled')));
     }
 
     row.append(answer);
@@ -24559,8 +25042,8 @@ async function makeKitShopping() {
   const answer = await response.json();
 
   status.textContent = answer.items === 0
-    ? 'Nothing to buy — everything in this kit is either on you or accounted for.'
-    : `Made a list of ${answer.items} item${answer.items === 1 ? '' : 's'}. It is on the Jobs page.`;
+    ? tx('Nothing to buy — everything in this kit is either on you or accounted for.')
+    : txn(answer.items, 'Made a list of {count} item. It is on the Jobs page.', 'Made a list of {count} items. It is on the Jobs page.');
 
   closeKitPrepare();
   await loadJobs().catch(() => {});
@@ -24636,7 +25119,7 @@ function drawTripPath() {
     badge.append(number);
 
     const title = svgEl('title');
-    title.textContent = `Stop ${point.index + 1}: ${point.stop.place}`
+    title.textContent = tx('Stop {n}: {place}', { n: point.index + 1, place: point.stop.place })
       + (point.stop.note ? ` — ${point.stop.note}` : '');
     badge.append(title);
 
@@ -25165,12 +25648,12 @@ function appendTipGoods(tip, names) {
   if (!names.length) return;
 
   const shown = names.slice(0, 6).join(', ');
-  tip.append(el('span', 'goods', `Sells ${shown}${names.length > 6 ? '…' : ''}`));
+  tip.append(el('span', 'goods', tx('Sells {names}', { names: `${shown}${names.length > 6 ? '…' : ''}` })));
 
   // A tooltip cannot hold a hundred names, so it says where they are rather
   // than trailing off into "+109 more" with no way to see them.
   if (names.length > 6)
-    tip.append(el('span', 'goods hint', `click for all ${names.length}`));
+    tip.append(el('span', 'goods hint', tx('click for all {count}', { count: names.length })));
 }
 
 /** The hover tooltip: name, kind and history at the cursor, instantly. */
@@ -25181,17 +25664,18 @@ function showMapTip(location) {
 
   tip.textContent = '';
   tip.append(el('strong', null, location.name));
-  tip.append(el('span', 'muted', location.kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
+  tip.append(el('span', 'muted', placeKindWord(location.kind)));
   tip.append(el('span', null, location.visits > 0
-    ? `${location.visits} visit${location.visits === 1 ? '' : 's'}`
-    : 'never visited'));
+    ? txn(location.visits, '{count} visit', '{count} visits')
+    : tx('never visited')));
 
   // In shaded commodity mode, the number behind this node's colour.
   const shade = nodeShade.get(location.rawId);
   if (shade && shadeScale) {
-    tip.append(el('span', 'price',
-      `${shadeScale.invert ? 'buy at' : shadeScale.unit === 'SCU' ? 'capacity' : 'sells at'} ` +
-      `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`));
+    const figure = `${Math.round(shade.value).toLocaleString()} ${shadeScale.unit}`;
+    tip.append(el('span', 'price', shadeScale.invert ? tx('buy at {figure}', { figure })
+      : shadeScale.unit === 'SCU' ? tx('capacity {figure}', { figure })
+      : tx('sells at {figure}', { figure })));
   }
 
   if (highlightIds?.has(location.rawId) && mapPriceFreshness)
@@ -25202,7 +25686,7 @@ function showMapTip(location) {
   const services = servicesAt(location);
   if (services.length)
     tip.append(el('span', 'service-tip', services
-      .map((service) => `${SERVICE_META[service]?.label || service}`)
+      .map((service) => serviceLabel(service))
       .join(' · ')));
 
   tip.hidden = false;
@@ -25229,18 +25713,18 @@ function showBodyTip(bodyName, system, sites) {
   tip.textContent = '';
   tip.append(el('strong', null, bodyName));
   tip.append(el('span', 'muted', system));
-  tip.append(el('span', null, `${sites.length} place${sites.length === 1 ? '' : 's'} · ${visited.length} visited`));
+  tip.append(el('span', null, `${txn(sites.length, '{count} place', '{count} places')} · ${tx('{count} visited', { count: visited.length })}`));
 
   if (visits > 0)
-    tip.append(el('span', null, `${visits} visit${visits === 1 ? '' : 's'} · last ${relative(last)}`));
+    tip.append(el('span', null, `${txn(visits, '{count} visit', '{count} visits')} · ${tx('last {when}', { when: relative(last) })}`));
 
   const plan = sites.filter((site) => planPlaceIds().has(site.rawId)).length;
   const shopping = sites.filter((site) => mapShoppingIds.has(site.rawId)).length;
   const stash = sites.filter((site) => mapStashIds.has(site.rawId)).length;
   const work = [
-    plan && `${plan} plan stop${plan === 1 ? '' : 's'}`,
-    shopping && `${shopping} shopping place${shopping === 1 ? '' : 's'}`,
-    stash && `${stash} stash place${stash === 1 ? '' : 's'}`,
+    plan && txn(plan, '{count} plan stop', '{count} plan stops'),
+    shopping && txn(shopping, '{count} shopping place', '{count} shopping places'),
+    stash && txn(stash, '{count} stash place', '{count} stash places'),
   ].filter(Boolean);
   if (work.length) tip.append(el('span', 'service-tip', work.join(' · ')));
 
@@ -25250,7 +25734,7 @@ function showBodyTip(bodyName, system, sites) {
       serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
   if (serviceCounts.size) {
     const summary = [...serviceCounts.entries()]
-      .map(([service, count]) => `${count} ${SERVICE_META[service]?.label || service}`)
+      .map(([service, count]) => `${count} ${serviceLabel(service)}`)
       .join(' · ');
     tip.append(el('span', 'service-tip', summary));
   }
@@ -25324,7 +25808,7 @@ async function saveMapNote(body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error('Could not save note');
+  if (!response.ok) throw new Error(tx('Could not save note'));
   await loadMapNotes();
 }
 
@@ -25339,20 +25823,20 @@ function renderMapInfoNotes(location) {
   host.textContent = '';
 
   const notes = mapNotes.filter((note) => note.placeId === location.rawId);
-  host.append(el('div', 'map-note-heading', notes.length ? `Your notes · ${notes.length}` : 'Personal map note'));
+  host.append(el('div', 'map-note-heading', notes.length ? `${tx('Your notes')} · ${notes.length}` : tx('Personal map note')));
 
   for (const note of notes) {
     const card = el('div', 'map-note');
     const top = el('div', 'map-note-top');
     top.append(el('b', null, note.title));
     const remove = el('button', 'ghost tiny', '×');
-    remove.title = 'Remove this map note';
+    remove.title = tx('Remove this map note');
     remove.addEventListener('click', () => removeMapNote(note.id));
     top.append(remove);
     card.append(top);
     if (note.note) card.append(el('div', 'map-note-text', note.note));
     if (note.tags?.length) card.append(el('div', 'map-note-tags', note.tags.join(' · ')));
-    card.append(el('div', 'map-note-age', `written ${relative(note.updatedAt)}`));
+    card.append(el('div', 'map-note-age', tx('written {when}', { when: relative(note.updatedAt) })));
     host.append(card);
   }
 
@@ -25360,16 +25844,16 @@ function renderMapInfoNotes(location) {
   const title = document.createElement('input');
   title.type = 'text';
   title.className = 'search';
-  title.placeholder = 'Title, e.g. cargo entrance';
+  title.placeholder = tx('Title, e.g. cargo entrance');
   const detail = document.createElement('input');
   detail.type = 'text';
   detail.className = 'search';
-  detail.placeholder = 'Optional note';
+  detail.placeholder = tx('Optional note');
   const tags = document.createElement('input');
   tags.type = 'text';
   tags.className = 'search';
-  tags.placeholder = 'Tags, comma separated';
-  const save = el('button', 'ghost tiny', 'Save note');
+  tags.placeholder = tx('Tags, comma separated');
+  const save = el('button', 'ghost tiny', tx('Save note'));
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
@@ -25404,21 +25888,21 @@ function renderMapInfoSold() {
   list.textContent = '';
 
   if (!marketEntries.length) {
-    list.append(el('span', 'muted', 'Needs the community dataset (Settings).'));
+    list.append(el('span', 'muted', tx('Needs the community dataset (Settings).')));
   } else {
     const names = commoditiesSoldAt(mapInfoLocation);
 
     if (!names.length) {
-      list.append(el('span', 'muted', 'Nothing known to sell here.'));
+      list.append(el('span', 'muted', tx('Nothing known to sell here.')));
     } else {
       // The count matters when there are a hundred: the tooltip promised them
       // all, and this is where they are.
-      list.append(el('div', 'sold-count muted', `${names.length} sold here · click one to light its sellers`));
+      list.append(el('div', 'sold-count muted', tx('{count} sold here · click one to light its sellers', { count: names.length })));
 
       for (const name of names) {
         const chip = el('button', 'sold-chip', name);
         chip.type = 'button';
-        chip.title = 'Light every place that sells this';
+        chip.title = tx('Light every place that sells this');
         chip.addEventListener('click', () => {
           $('#map-search').value = name;
           drawMap();
@@ -25464,7 +25948,7 @@ async function showMapInfo(location) {
   const trade = $('#map-info-trade');
   if (highlightIds && commoditySites(($('#map-search')?.value || '').trim().toLowerCase())) {
     const sells = highlightIds.has(location.rawId);
-    trade.textContent = sells ? 'sells the searched commodity' : 'does not sell it';
+    trade.textContent = sells ? tx('sells the searched commodity') : tx('does not sell it');
     trade.className = sells ? 'inward' : 'muted';
     trade.hidden = false;
   } else {
@@ -25510,7 +25994,7 @@ function renderMapInfoPlace(location) {
     if (found.amenities?.length) {
       amenityNode.textContent = '';
       amenityNode.append(
-        el('span', 'muted', found.parent ? `In ${found.parent} · has ` : 'Has '));
+        el('span', 'muted', `${found.parent ? tx('In {place} · has', { place: found.parent }) : tx('Has')} `));
 
       for (const amenity of found.amenities) amenityNode.append(el('span', 'amenity', amenity));
 
@@ -25530,9 +26014,9 @@ function renderMapInfoServices(location) {
     if (!meta) continue;
     const chip = el('button', 'map-service-chip');
     chip.type = 'button';
-    chip.title = `Filter the map to ${meta.label.toLowerCase()}`;
+    chip.title = tx('Filter the map to {service}', { service: serviceLabel(service).toLowerCase() });
     chip.append(mapServiceIcon(service));
-    chip.append(el('span', 'service-text', meta.label));
+    chip.append(el('span', 'service-text', serviceLabel(service)));
     chip.addEventListener('click', () => selectMapService(service));
     host.append(chip);
   }
@@ -25558,13 +26042,13 @@ function renderMapInfoSupport(location, services) {
     return;
   }
 
-  host.append(el('div', 'map-support-copy', 'Need a service that is not listed here?'));
+  host.append(el('div', 'map-support-copy', tx('Need a service that is not listed here?')));
   const choices = el('div', 'map-support-actions');
   for (const service of missing) {
-    const meta = SERVICE_META[service];
-    const button = el('button', 'ghost tiny', `Find ${meta.label.toLowerCase()}`);
+    const word = serviceLabel(service).toLowerCase();
+    const button = el('button', 'ghost tiny', tx('Find {service}', { service: word }));
     button.type = 'button';
-    button.title = `Find the closest ${meta.label.toLowerCase()} from your last known location`;
+    button.title = tx('Find the closest {service} from your last known location', { service: word });
     button.addEventListener('click', () => findMapSupport(service));
     choices.append(button);
   }
@@ -25595,20 +26079,21 @@ function renderMapInfoPlan(location) {
   if (stop) {
     const next = nextStop(trip);
     const complete = trip.stops.filter((item) => item.done).length;
-    state.textContent = stop.done ? 'Complete' : stop === next ? 'Next stop' : `Stop ${stopIndex + 1}`;
+    state.textContent = stop.done ? tx('Complete') : stop === next ? tx('Next stop') : tx('Stop {n}', { n: stopIndex + 1 });
     state.hidden = false;
     copy.append(el('b', null, trip.title));
-    copy.append(el('span', null, stop.done
-      ? ` · completed stop ${stopIndex + 1} of ${trip.stops.length}`
-      : ` · stop ${stopIndex + 1} of ${trip.stops.length}, ${complete} complete`));
+    const at = { n: stopIndex + 1, total: trip.stops.length, complete };
+    copy.append(el('span', null, ` · ${stop.done
+      ? tx('completed stop {n} of {total}', at)
+      : tx('stop {n} of {total}, {complete} complete', at)}`));
   } else if (trip) {
-    copy.append(el('span', null, `${trip.title} · this place is not on the flight plan.`));
+    copy.append(el('span', null, `${trip.title} · ${tx('this place is not on the flight plan.')}`));
   } else {
-    copy.append(el('span', null, 'No active flight plan. Add this place when you are ready to route it.'));
+    copy.append(el('span', null, tx('No active flight plan. Add this place when you are ready to route it.')));
   }
   host.append(copy);
 
-  const button = el('button', 'map-plan-primary', stop ? 'Open flight plan' : 'Add to flight plan');
+  const button = el('button', 'map-plan-primary', stop ? tx('Open flight plan') : tx('Add to flight plan'));
   button.type = 'button';
   button.addEventListener('click', async () => {
     if (stop) {
@@ -25626,7 +26111,7 @@ function renderMapInfoPlan(location) {
       await loadTrips();
       if (mapInfoLocation === location) renderMapInfoPlan(location);
     } catch {
-      button.textContent = 'Could not add stop';
+      button.textContent = tx('Could not add stop');
       button.disabled = false;
     }
   });
@@ -25644,11 +26129,11 @@ function renderMapInfoData() {
   host.textContent = '';
 
   if (price.hidden) {
-    host.append(el('span', 'muted', 'No reported price for this place. Service counters are listed by UEX; facilities below come from the game data.'));
+    host.append(el('span', 'muted', tx('No reported price for this place. Service counters are listed by UEX; facilities below come from the game data.')));
     return;
   }
 
-  host.append(el('span', 'map-data-label', 'Reported price'));
+  host.append(el('span', 'map-data-label', tx('Reported price')));
   host.append(el('span', null, price.textContent));
 }
 
@@ -25719,10 +26204,10 @@ function drawJumpNetwork(map, locations) {
     x: home.w / 2, y: 92, 'text-anchor': 'middle', class: 'map-label',
     style: `font-size:${labelSize(1.35)}px;fill:#7796b0;letter-spacing:.18em`,
   });
-  title.textContent = 'JUMP NETWORK · SCHEMATIC · NOT TO SCALE';
+  title.textContent = tx('JUMP NETWORK · SCHEMATIC · NOT TO SCALE');
   map.append(title);
 
-  $('#map-count').textContent = `${systems.length} systems · jump network`;
+  $('#map-count').textContent = txn(systems.length, '{count} system · jump network', '{count} systems · jump network');
   drawNetworkHere(map);
   updateHereControl();
   drawLegend([]);
@@ -25800,9 +26285,14 @@ function drawMap() {
   const count = $('#map-count');
   if (count) {
     const seen = atlas.filter((l) => l.visits > 0).length;
+    // The filter words are the toolbar's own labels, so the count and the
+    // button say the same thing in either language.
+    const focusWord = tx({ plan: 'Plan', shopping: 'Shopping', stash: 'Stash', notes: 'Notes' }[mapFocusFilter] || mapFocusFilter).toLowerCase();
+    const serviceWord = mapServiceFilter ? serviceLabel(mapServiceFilter).toLowerCase() : tx('service');
+
     if (mapServiceFilter && serviceIds?.size === 0)
-      count.textContent = `no ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} locations known`;
-    else if (term && !highlightIds) count.textContent = 'no match';
+      count.textContent = tx('no {filter} locations known', { filter: serviceWord });
+    else if (term && !highlightIds) count.textContent = tx('no match');
     else if (sites) {
       // Name what was matched: the term may have been a fragment, and the
       // user should see which commodity the map decided they meant.
@@ -25810,19 +26300,19 @@ function drawMap() {
       const what = matched ? matched.name : term;
 
       count.textContent = term.startsWith('buy:')
-        ? `${what} — stocked at ${highlightIds.size} places the map can name`
-        : `${what} — sells at ${highlightIds.size} places the map can name`;
+        ? tx('{what} — stocked at {count} places the map can name', { what, count: highlightIds.size })
+        : tx('{what} — sells at {count} places the map can name', { what, count: highlightIds.size });
     }
-    else if (term) count.textContent = `${highlightIds.size} place${highlightIds.size === 1 ? '' : 's'} lit`;
+    else if (term) count.textContent = txn(highlightIds.size, '{count} place lit', '{count} places lit');
     else if (mapFocusFilter && focusIds?.size === 0)
-      count.textContent = `no ${mapFocusFilter} locations can be placed yet`;
+      count.textContent = tx('no {filter} locations can be placed yet', { filter: focusWord });
     else if (mapFocusFilter)
-      count.textContent = `${locations.length} ${mapFocusFilter} location${locations.length === 1 ? '' : 's'} shown`;
+      count.textContent = txn(locations.length, '{count} {filter} location shown', '{count} {filter} locations shown', { filter: focusWord });
     else if (mapServiceFilter)
-      count.textContent = `${locations.length} ${SERVICE_META[mapServiceFilter]?.label.toLowerCase() || 'service'} location${locations.length === 1 ? '' : 's'} shown`;
+      count.textContent = txn(locations.length, '{count} {filter} location shown', '{count} {filter} locations shown', { filter: serviceWord });
     else if (mapMode() === 'system')
-      count.textContent = `${locations.length} shown in ${selectedSystem} · ${seen} of ${atlas.length} visited`;
-    else count.textContent = `${locations.length} shown · ${seen} of ${atlas.length} visited`;
+      count.textContent = tx('{count} shown in {system} · {seen} of {total} visited', { count: locations.length, system: selectedSystem, seen, total: atlas.length });
+    else count.textContent = tx('{count} shown · {seen} of {total} visited', { count: locations.length, seen, total: atlas.length });
   }
 
   // Soft glow, applied to stars and jump lanes for the HUD look.
@@ -26030,7 +26520,7 @@ function drawMap() {
         style: `fill:${!place.positioned && mapMode() === 'system' ? '#ffab3d' : '#7796b0'};font-size:${bodyLabelSize}px;letter-spacing:.14em;text-transform:uppercase`,
       });
       bodyLabel.textContent = bodyName === '—' ? ''
-        : `${bodyName}${!place.positioned && mapMode() === 'system' ? ' · position unavailable' : ''}`;
+        : `${bodyName}${!place.positioned && mapMode() === 'system' ? ` · ${tx('position unavailable')}` : ''}`;
       map.append(bodyLabel);
 
       if (bodyLabel.textContent) {
@@ -26563,7 +27053,7 @@ function drawLegend(locations) {
     for (const service of shown) {
       const item = el('div', 'item');
       item.append(mapServiceIcon(service));
-      item.append(el('span', null, `${SERVICE_META[service]?.label || service} badge`));
+      item.append(el('span', null, tx('{service} badge', { service: serviceLabel(service) })));
       legend.append(item);
     }
   };
@@ -26588,7 +27078,7 @@ function drawLegend(locations) {
     const swatch = el('span', 'swatch');
     swatch.style.background = NO_TRADE;
     plain.append(swatch);
-    plain.append(el('span', null, shadeScale.plain ?? 'no UEX price for it here'));
+    plain.append(el('span', null, shadeScale.plain ?? tx('no UEX price for it here')));
     legend.append(plain);
     appendPriceFreshness();
     appendServiceLegend();
@@ -26607,12 +27097,12 @@ function drawLegend(locations) {
     swatch.setAttribute('class', 'swatch-mark');
     swatch.append(kindMark(kind, 0, 0, 1, MAP_KIND_COLOURS[kind] || MAP_KIND_COLOURS.Unknown, true));
     item.append(swatch);
-    item.append(el('span', null, kind.replace(/([a-z])([A-Z])/g, '$1 $2')));
+    item.append(el('span', null, placeKindWord(kind)));
     legend.append(item);
   }
 
   const historyKey = el('div', 'item map-history-key');
-  historyKey.append(el('span', null, 'Filled: visited · Outline: unvisited'));
+  historyKey.append(el('span', null, tx('Filled: visited · Outline: unvisited')));
   legend.append(historyKey);
   appendPriceFreshness();
   appendServiceLegend();
@@ -27243,7 +27733,7 @@ function updateNowButton(result) {
       if (!response.ok) {
         // The server's own words: it knows whether the folder was writable,
         // the download was short, or something had the file open.
-        $('#update-detail').textContent = answer?.message || tx('The update could not be applied.');
+        $('#update-detail').textContent = serverText(answer?.message) || tx('The update could not be applied.');
         install.textContent = tx('Try again');
         install.disabled = false;
         return;
@@ -28099,7 +28589,7 @@ async function boot() {
     // Said in full on hover: on a window too narrow for the top bar the label
     // still gives way to an ellipsis, and a count cut to "60 LO…" says nothing.
     $('#install').title = txn(install.backups, '{channel} install · {count} log read', '{channel} install · {count} logs read', { channel: install.channel });
-    $('#about-install').textContent = `${install.channel} · ${install.backups} logs`;
+    $('#about-install').textContent = `${install.channel} · ${txn(install.backups, '{count} log', '{count} logs')}`;
   } catch {
     $('#install').textContent = tx('no install found');
     $('#about-install').textContent = 'none found';

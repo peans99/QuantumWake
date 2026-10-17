@@ -7,7 +7,7 @@ namespace Quantumwake.WebTests;
 /// </summary>
 public class ArmouryPageTests
 {
-    private const string Model = """
+    internal const string Model = """
         {"ready":true,"itemPricesKnown":true,"picturesKnown":true,
          "counts":{"weapons":327,"plain":3,"armour":2349,"sets":3},
          "weapons":[
