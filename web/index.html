@@ -2609,33 +2609,16 @@
   <section id="view-garage" class="view">
     <div class="section-bar garage-toolbar">
       <h2>Garage</h2>
-      <div class="controls garage-pickers">
-        <label class="garage-picker">
-          <span>Flight log</span>
-          <select id="garage-mine" class="select" title="Ships the logs have seen you fly"></select>
-        </label>
-        <label class="garage-picker">
-          <span>Ship library</span>
-          <select id="garage-all" class="select" title="Every ship in the reference"></select>
-        </label>
-      </div>
+      <details class="garage-ship-picker" id="garage-picker">
+        <summary><span>Ship</span> <b id="garage-picker-name">Choose a ship…</b></summary>
+        <div class="garage-picker-menu">
+          <input type="search" class="search" id="garage-ship-search" placeholder="Find a ship…" aria-label="Find a ship" />
+          <select id="garage-ship" class="select" size="8" aria-label="Choose a ship"></select>
+          <p class="muted small" id="garage-picker-empty" hidden>No matching ships.</p>
+        </div>
+      </details>
     </div>
-    <details class="garage-guide">
-      <summary>How these fitted figures work</summary>
-      <p class="muted caption">
-      A ship's numbers, and what a part would do to them. Every figure here is
-      recomputed from the fitted parts using the community dataset's own model
-      &mdash; the same files and the same arithmetic that produced its published
-      totals, checked against them on every ship (<code>docs/garage.md</code>).
-      <b>Signatures are the shields-up, everything-at-maximum scenario</b> the
-      dataset and erkul publish; a pilot who has pulled power off the guns is
-      quieter than this says. The logs name the ship you fly but not its parts,
-      so the sheet starts from the stock fit.
-      </p>
-    </details>
-
     <p class="muted" id="garage-unavailable" hidden></p>
-
     <div id="garage-head" class="garage-head" hidden>
       <div class="garage-title" id="garage-title"></div>
       <div class="muted" id="garage-sub"></div>
@@ -2648,98 +2631,11 @@
       </div>
     </div>
 
-    <section id="garage-rig" class="garage-rig" hidden aria-label="Ship component layout">
-      <div class="garage-rig-head">
-        <div>
-          <div class="garage-eyebrow">Fitted layout</div>
-          <p>Pick a fitted component to inspect compatible replacements below.</p>
-        </div>
-        <span class="muted" id="garage-rig-count"></span>
-      </div>
-      <div class="garage-rig-body">
-        <div class="garage-rig-slots garage-rig-left" id="garage-rig-left"></div>
-        <div class="garage-ship-stage">
-          <div class="garage-ship-grid" aria-hidden="true"></div>
-          <div id="garage-ship-model" class="garage-ship-model"></div>
-          <div class="garage-ship-summary" id="garage-ship-summary"></div>
-        </div>
-        <div class="garage-rig-slots garage-rig-right" id="garage-rig-right"></div>
-      </div>
-    </section>
-
-    <div class="sheet" id="garage-sheet"></div>
-
-    <div id="garage-notes" class="garage-notes" hidden></div>
-
-    <section class="garage-optimizer" id="garage-optimizer" hidden aria-labelledby="garage-optimizer-title">
-      <div class="garage-optimizer-copy">
-        <div class="garage-eyebrow">Auto-fit</div>
-        <h3 id="garage-optimizer-title">Optimise this loadout</h3>
-        <p>Only the component types that affect the chosen goal are changed. Review the sheet before buying.</p>
-      </div>
-      <div class="garage-optimizer-tools">
-        <select class="select" id="garage-optimise-goal" aria-label="Optimisation goal">
-          <option value="stealth">Best stealth</option>
-          <option value="alpha">Best alpha DPS</option>
-          <option value="sustained">Best sustained DPS</option>
-          <option value="missile">Most missile damage</option>
-          <option value="shield">Strongest shields</option>
-          <option value="quantumSpeed">Fastest quantum drive</option>
-          <option value="quantumRange">Longest quantum range</option>
-          <option value="cooling">Most cooling</option>
-          <option value="power">Most power headroom</option>
-        </select>
-        <label class="toggle" title="Only consider parts with a known NPC-terminal aUEC seller; crafting and player listings are not included">
-          <input type="checkbox" id="garage-optimise-buyable" /> <span>Terminal aUEC only</span>
-        </label>
-        <button type="button" class="ghost tiny" id="garage-optimise">Optimise fit</button>
-      </div>
-      <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
-    </section>
-
-    <!-- Does a load of crates fit this hull? The grids are the community
-         dump's, the crates the install's, the packing this app's - the
-         panel says which is which. -->
-    <section class="garage-cargo" id="garage-cargo" hidden aria-labelledby="garage-cargo-title">
-      <div class="garage-cargo-copy">
-        <div class="garage-eyebrow">Cargo fit</div>
-        <h3 id="garage-cargo-title">Will it fit?</h3>
-        <p class="muted" id="garage-cargo-sub"></p>
-      </div>
-      <div class="garage-cargo-load" id="garage-cargo-load" aria-label="Crates to fit"></div>
-      <div class="garage-cargo-tools">
-        <button type="button" class="ghost tiny" id="garage-cargo-fit">Fit it</button>
-        <button type="button" class="ghost tiny" id="garage-cargo-clear">Clear</button>
-      </div>
-      <p class="garage-cargo-verdict" id="garage-cargo-verdict" aria-live="polite"></p>
-      <div class="garage-cargo-grids" id="garage-cargo-grids"></div>
-      <div class="garage-cargo-fleet" id="garage-cargo-fleet" hidden></div>
-      <p class="muted small" id="garage-cargo-note"></p>
-    </section>
-
-    <!-- The ship's fit as last photographed at a Vehicle Loadout Manager,
-         offered as a starting point. Dated, because a screenshot is a moment
-         and not a state; hidden when no loadout reading is of this ship. -->
-    <section class="garage-photo" id="garage-photo" hidden aria-labelledby="garage-photo-title">
-      <div class="garage-photo-copy">
-        <div class="garage-eyebrow">Photographed fit</div>
-        <h3 id="garage-photo-title"></h3>
-        <p class="muted" id="garage-photo-sub"></p>
-        <ul class="garage-photo-unsettled" id="garage-photo-unsettled"></ul>
-      </div>
-      <div class="garage-photo-tools" id="garage-photo-tools">
-        <label class="muted" title="Open a ship on the bench already fitted as its newest screenshot showed it. Untick to open every ship at stock and start from a photograph only when you press the button.">
-          <input type="checkbox" id="garage-photo-auto" checked> <span>Start from the newest photograph</span>
-        </label>
-        <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
-        <span class="muted" id="garage-photo-state"></span>
-      </div>
-    </section>
-
     <div class="bench-bar" id="garage-bench-bar" hidden>
-      <h2 class="spaced">Bench</h2>
+      <h2 class="spaced">Your fit</h2>
       <div class="bench-state">
         <span id="garage-changes" class="muted">Stock fit</span>
+        <span id="garage-fit-source" class="muted small" hidden></span>
         <label class="toggle compare-against"><span>Compare against</span>
           <select id="garage-compare" class="select tiny" title="What the struck figures are measured from">
             <option value="">Stock</option>
@@ -2758,34 +2654,121 @@
     </form>
     <div class="builds" id="garage-builds" hidden></div>
     <p class="shop-result" id="garage-shop-result" hidden></p>
-    <p class="muted caption" id="garage-bench-caption" hidden>
-      Pick a port, then a part that fits it. The sheet above moves as you do:
-      every figure that changed shows what it was, coloured by whether it got
-      better <em>for that figure</em> &mdash; less IR is better, less DPS is not.
-      <b>Save build…</b> keeps a fit under a name; it survives rescans and travels
-      in a backup. <b>Compare against</b> measures the struck figures from a
-      saved build instead of stock, which is how two fits are set side by side.
-    </p>
-    <div class="bench" id="garage-bench" hidden>
-      <div class="bench-ports" id="garage-bench-ports"></div>
-      <div class="bench-panel" id="garage-bench-panel">
-        <p class="muted">Pick a port on the left.</p>
-      </div>
-    </div>
 
-    <!-- UEX's player marketplace, kept to parts this ship can take. Off
-         until the feed is fetched; the panel says so rather than hiding,
-         because an empty list would read as "nobody sells these". -->
-    <section class="garage-market" id="garage-market" hidden aria-labelledby="garage-market-title">
-      <div class="garage-market-head">
-        <div>
-          <div class="garage-eyebrow">For sale by players</div>
-          <h3 id="garage-market-title">On UEX's marketplace</h3>
+    <div class="garage-workspace" id="garage-workspace">
+      <section id="garage-rig" class="garage-rig" hidden aria-label="Ship component layout">
+        <div class="garage-rig-head">
+          <div>
+            <div class="garage-eyebrow">Fitted layout</div>
+            <p>Select a component to compare and fit a replacement.</p>
+          </div>
+          <span class="muted" id="garage-rig-count"></span>
         </div>
-        <span class="muted" id="garage-market-note"></span>
-      </div>
-      <div class="bench-panel market-list" id="garage-market-body"></div>
-    </section>
+        <div class="garage-rig-body">
+          <div class="garage-rig-slots garage-rig-left" id="garage-rig-left"></div>
+          <div class="garage-ship-stage">
+            <div class="garage-ship-grid" aria-hidden="true"></div>
+            <div id="garage-ship-model" class="garage-ship-model"></div>
+            <div class="garage-ship-summary" id="garage-ship-summary"></div>
+          </div>
+          <div class="garage-rig-slots garage-rig-right" id="garage-rig-right"></div>
+        </div>
+      </section>
+
+      <section class="garage-replacements" id="garage-bench" hidden aria-label="Compatible replacements">
+        <div class="garage-replacements-head"><span class="garage-eyebrow">Compatible replacements</span><button type="button" class="ghost tiny" id="garage-close-choices">Close replacements</button></div>
+        <div class="bench-panel" id="garage-bench-panel" aria-live="polite"></div>
+      </section>
+    </div>
+    <div id="garage-notes" class="garage-notes" hidden></div>
+
+    <details class="garage-extra" id="garage-stats-details">
+      <summary>Full ship stats</summary>
+      <div class="sheet" id="garage-sheet"></div>
+
+    </details>
+    <details class="garage-extra">
+      <summary>Photographed fit</summary>
+      <section class="garage-photo" id="garage-photo" hidden aria-labelledby="garage-photo-title">
+        <div class="garage-photo-copy">
+          <div class="garage-eyebrow">Photographed fit</div>
+          <h3 id="garage-photo-title"></h3>
+          <p class="muted" id="garage-photo-sub"></p>
+          <ul class="garage-photo-unsettled" id="garage-photo-unsettled"></ul>
+        </div>
+        <div class="garage-photo-tools" id="garage-photo-tools">
+          <label class="muted" title="Open a ship on the bench already fitted as its newest screenshot showed it. Untick to open every ship at stock and start from a photograph only when you press the button.">
+            <input type="checkbox" id="garage-photo-auto" checked> <span>Start from the newest photograph</span>
+          </label>
+          <button type="button" class="ghost tiny" id="garage-photo-apply">Start from the photographed fit</button>
+          <span class="muted" id="garage-photo-state"></span>
+        </div>
+      </section>
+
+    </details>
+    <details class="garage-extra">
+      <summary>Auto-fit</summary>
+      <section class="garage-optimizer" id="garage-optimizer" hidden aria-labelledby="garage-optimizer-title">
+        <div class="garage-optimizer-copy">
+          <div class="garage-eyebrow">Auto-fit</div>
+          <h3 id="garage-optimizer-title">Optimise this loadout</h3>
+          <p>Only the component types that affect the chosen goal are changed. Review the sheet before buying.</p>
+        </div>
+        <div class="garage-optimizer-tools">
+          <select class="select" id="garage-optimise-goal" aria-label="Optimisation goal">
+            <option value="stealth">Best stealth</option>
+            <option value="alpha">Best alpha DPS</option>
+            <option value="sustained">Best sustained DPS</option>
+            <option value="missile">Most missile damage</option>
+            <option value="shield">Strongest shields</option>
+            <option value="quantumSpeed">Fastest quantum drive</option>
+            <option value="quantumRange">Longest quantum range</option>
+            <option value="cooling">Most cooling</option>
+            <option value="power">Most power headroom</option>
+          </select>
+          <label class="toggle" title="Only consider parts with a known NPC-terminal aUEC seller; crafting and player listings are not included">
+            <input type="checkbox" id="garage-optimise-buyable" /> <span>Terminal aUEC only</span>
+          </label>
+          <button type="button" class="ghost tiny" id="garage-optimise">Optimise fit</button>
+        </div>
+        <p class="muted" id="garage-optimise-status" aria-live="polite"></p>
+      </section>
+
+    </details>
+    <details class="garage-extra">
+      <summary>Cargo fit</summary>
+      <section class="garage-cargo" id="garage-cargo" hidden aria-labelledby="garage-cargo-title">
+        <div class="garage-cargo-copy">
+          <div class="garage-eyebrow">Cargo fit</div>
+          <h3 id="garage-cargo-title">Will it fit?</h3>
+          <p class="muted" id="garage-cargo-sub"></p>
+        </div>
+        <div class="garage-cargo-load" id="garage-cargo-load" aria-label="Crates to fit"></div>
+        <div class="garage-cargo-tools">
+          <button type="button" class="ghost tiny" id="garage-cargo-fit">Fit it</button>
+          <button type="button" class="ghost tiny" id="garage-cargo-clear">Clear</button>
+        </div>
+        <p class="garage-cargo-verdict" id="garage-cargo-verdict" aria-live="polite"></p>
+        <div class="garage-cargo-grids" id="garage-cargo-grids"></div>
+        <div class="garage-cargo-fleet" id="garage-cargo-fleet" hidden></div>
+        <p class="muted small" id="garage-cargo-note"></p>
+      </section>
+
+    </details>
+    <details class="garage-extra">
+      <summary>Player marketplace</summary>
+      <section class="garage-market" id="garage-market" hidden aria-labelledby="garage-market-title">
+        <div class="garage-market-head">
+          <div><div class="garage-eyebrow">For sale by players</div><h3 id="garage-market-title">On UEX's marketplace</h3></div>
+          <span class="muted" id="garage-market-note"></span>
+        </div>
+        <div class="bench-panel market-list" id="garage-market-body"></div>
+      </section>
+    </details>
+    <details class="garage-guide">
+      <summary>How these fitted figures work</summary>
+      <p class="muted caption">These are planned fits, recomputed from community reference data. The logs name the ship you fly but not its fitted parts. A photographed fit is a dated starting point, not a live reading. Signature figures assume shields up and every part at maximum.</p>
+    </details>
   </section>
 
   <section id="view-armoury" class="view">

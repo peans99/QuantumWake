@@ -177,26 +177,30 @@ in a footnote.
 
 ## What it looks like
 
-A **Garage** page under Gear (Loadout, Stash, Loot, **Garage**), and the Fleet
-card's *Upgrades* button opens the same page on that ship rather than the
-current panel.
+A **Garage** page under Hangar. The Fleet and Hangar cards' *Garage* buttons
+open the same editor on that ship.
 
-1. **Pick a ship.** Your fleet first - the ships the logs have seen you fly,
-   most flown first - then any ship in the reference. The class name is the
-   key throughout, as it is everywhere else.
-2. **The sheet.** Everything the dataset knows, grouped the way a pilot thinks:
+1. **Pick a ship.** One searchable picker at the top groups ships seen in the
+   flight logs before the rest of the reference library. Searching matches
+   name, role or class; a ship appears only in its fleet or library group.
+2. **Select a component around the hull.** Compatible replacements open beside
+   the layout on a wide window, below it on a narrow window. The cards are the
+   editor's only component list. A replacement shows its primary figures and
+   their differences from the fitted part, with extra specs behind a disclosure.
+   Fit updates the cards and totals without leaving the editor. Closing the
+   replacements returns focus to the component, and selecting another component
+   keeps the current planned fit visible.
+3. **The sheet expands below the editor.** Everything the dataset knows,
+   grouped the way a pilot thinks:
    *Hull* (HP, mass, cross-section, crew, cargo), *Flight* (SCM, boost, max,
    pitch/yaw/roll), *Weapons* (fixed DPS with each gun, turret DPS, missiles),
    *Defence* (shield HP, regen, face type, resistances), *Signature* (EM, IR
    by group, both power states), *Systems* (power and cooling budget),
    *Quantum* (speed, range, spool, fuel). Every group names its source.
-3. **The bench.** The ship's editable ports, each with its fitted part. Pick a
-   port, and the parts that fit are listed with the figure that matters for
-   that kind - DPS for a gun, HP and regen for a shield, coolant for a cooler,
-   speed for a drive - plus price and where it is sold. Choosing one changes
-   the sheet: each figure that moved shows *was → now* with the delta
-   coloured, and a "power over budget" or "cooling over budget" line appears
-   when the draw exceeds generation.
+   Changed figures retain the previous value and colour their movement. Budget
+   warnings stay visible outside the collapsed stats. Photographed fits,
+   auto-fit, cargo fitting and the player marketplace each expand separately;
+   a photograph used as the starting point stays dated above the editor.
 4. **Save the build.** A named plan - "Gladius, stealth fit" - kept as authored
    data (`builds.json`, `IStamped`, in the backup like the rest). Reopen it,
    compare two builds side by side, revert to stock.
@@ -206,6 +210,14 @@ current panel.
    known sellers into a stop-efficient starting route; the pilot can still
    choose another counter for any line. From there it is the existing flow:
    Now page, overlay, MFD List page.
+
+The 0.18.21 headless-Chrome check used a copy of the installed data: selecting a
+Gladius power plant opened replacements without scrolling, fitting a replacement
+updated its card and comparisons, and no duplicate Bench list remained. The
+Garage's replacement buttons fit a narrow window. A separate existing issue
+remains at phone widths: the global navigation overflows and mobile Chrome
+shrinks the whole document. Changing the Garage layout does not repair that
+header.
 
 ## Storage, API, digest
 

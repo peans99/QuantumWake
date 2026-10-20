@@ -5731,9 +5731,46 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
    close by without putting it between the pilot and their ship. */
 #view-garage > .garage-toolbar { align-items: end; padding: 10px 12px; border-color: var(--rule-hot); background: linear-gradient(90deg, rgba(53, 200, 240, .08), rgba(4, 10, 17, .35) 48%, transparent); }
 #view-garage > .garage-toolbar h2 { margin-bottom: 3px; }
-.garage-pickers { gap: 8px; }
-.garage-picker { display: grid; gap: 3px; min-width: min(100%, 230px); color: var(--dim); font: 8.5px var(--mono); letter-spacing: .13em; text-transform: uppercase; }
-.garage-picker .select { min-width: 230px; }
+.garage-ship-picker { position: relative; width: min(100%, 390px); }
+.garage-ship-picker > summary { cursor: pointer; padding: 9px 12px; border: 1px solid var(--cyan-deep); background: var(--panel); font-size: 13px; }
+.garage-ship-picker > summary span { margin-right: 10px; color: var(--dim); font: 10px var(--mono); text-transform: uppercase; }
+.garage-ship-picker > summary b { font-weight: 500; }
+.garage-picker-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 20; display: grid; gap: 8px; width: max(100%, 330px); max-width: calc(100vw - 40px); padding: 12px; border: 1px solid var(--cyan-deep); background: var(--panel); box-shadow: 0 16px 35px #0009; }
+.garage-picker-menu .search, .garage-picker-menu .select { width: 100%; min-width: 0; }
+.garage-picker-menu .select { padding: 5px; }
+.garage-picker-menu option { padding: 5px 8px; }
+.garage-extra { margin: 9px 0; border: 1px solid var(--rule); background: rgba(4, 10, 17, .35); }
+.garage-extra > summary { cursor: pointer; padding: 12px 14px; color: var(--muted); font: 11px var(--mono); }
+.garage-extra > summary:hover { color: var(--cyan-hot); }
+.garage-extra[open] > summary { margin-bottom: 12px; border-bottom: 1px solid var(--rule); color: var(--cyan-hot); }
+.garage-extra > .sheet, .garage-extra > section { margin: 0 12px 12px; }
+.garage-workspace { display: grid; gap: 14px; align-items: start; margin-top: 12px; }
+.garage-workspace > .garage-rig { min-width: 0; margin: 0; }
+.garage-workspace.choosing { grid-template-columns: minmax(0, 1fr) minmax(380px, .9fr); }
+.garage-workspace.choosing .garage-rig-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.garage-workspace.choosing .garage-ship-stage { grid-column: 1 / -1; grid-row: 1; min-height: 220px; border: 0; border-bottom: 1px solid var(--rule); }
+.garage-workspace.choosing .garage-rig-left .garage-rig-slot { text-align: left; flex-direction: row; }
+.garage-workspace.choosing .garage-rig-slot::after { display: none; }
+.garage-replacements { position: sticky; top: 70px; scroll-margin-top: 70px; min-width: 0; border: 1px solid var(--cyan-deep); background: var(--panel); }
+.garage-replacements-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.garage-replacements .bench-panel { border: 0; }
+.garage-replacements .candidates { max-height: min(650px, 65vh); overflow-y: auto; overscroll-behavior: contain; }
+.garage-replacements .candidate .part-mark { width: 36px; height: 36px; }
+.garage-replacements .c-figures { gap: 5px 10px; }
+#garage-bench-bar { margin-top: 10px; }
+#garage-bench-bar h2.spaced { margin: 0; }
+#garage-bench-bar .bench-state { flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 1100px) {
+  .garage-workspace.choosing { grid-template-columns: minmax(0, 1fr); }
+  .garage-replacements { position: static; }
+}
+@media (max-width: 520px) {
+  .garage-workspace.choosing .garage-rig-body { grid-template-columns: minmax(0, 1fr); }
+  #garage-bench-bar .bench-state { justify-content: flex-start; gap: 8px; }
+  .garage-replacements .candidate { gap: 7px; padding: 10px; }
+  .garage-replacements .candidate > .part-mark { display: none; }
+  .garage-replacements .candidate { grid-template-columns: minmax(0, 1fr) auto; }
+}
 .garage-guide { margin: 7px 0; color: var(--muted); font-size: 11px; }
 .garage-guide summary { width: max-content; max-width: 100%; cursor: pointer; color: var(--dim); font: 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .garage-guide summary:hover { color: var(--cyan-hot); }
@@ -5786,15 +5823,14 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .garage-duty-legend .garage-duty { cursor: help; }
 @media (max-width: 780px) {
   #view-garage > .garage-toolbar { align-items: stretch; }
-  .garage-pickers { width: 100%; }
-  .garage-picker, .garage-picker .select { min-width: 0; width: 100%; }
+  .garage-ship-picker { width: 100%; }
   .garage-head { grid-template-columns: 1fr; gap: 6px; }
   .garage-duty-legend { justify-content: flex-start; }
 }
 
 /* The fitted layout is an instrument panel, not a fictional cutaway. The
    game data gives us the real component ports but not their 3D coordinates,
-   so the cards orbit the game's ship picture and lead into the precise bench. */
+   so the cards orbit the game's ship picture and open compatible replacements. */
 .garage-rig {
   margin: 0 0 16px;
   border: 1px solid var(--rule-hot);
@@ -6022,44 +6058,12 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .bench-state { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .bench-state .changed { color: var(--cyan); }
 
-.bench { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr); gap: var(--gap); align-items: start; }
-@media (max-width: 900px) { .bench { grid-template-columns: 1fr; } }
-
-.bench-ports, .bench-panel {
+.bench-panel {
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 6px;
   overflow: hidden;
 }
-.bench-kind {
-  padding: 8px 12px 4px;
-  font-size: 10.5px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--dim);
-  border-top: 1px solid var(--rule);
-}
-.bench-kind:first-child { border-top: 0; }
-
-/* A port row: the maker's mark, what is in it, the size and grade chip and
-   the one figure that matters for its kind. Clicking it opens the panel. */
-.bench-port {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 7px 12px;
-  cursor: pointer;
-  border-top: 1px solid var(--rule);
-}
-.bench-port:hover { background: var(--panel-2); }
-.bench-port.selected { background: rgba(53, 200, 240, .08); box-shadow: inset 3px 0 0 var(--cyan); }
-.bench-port.changed .part-name { color: var(--cyan); }
-.bench-port .part-name { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bench-port .port-name { font-size: 11px; color: var(--muted); }
-.bench-port .port-name .was { color: var(--dim); margin-left: 6px; }
-.bench-port .figure { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; white-space: nowrap; }
-.bench-port .figure b { display: block; color: var(--text); font-weight: normal; font-size: 12.5px; }
 
 /* The part's face: the wiki's cutout of it where the wiki has one (about half
    the bench), else the maker's mark - the Fankit logo where the app has one,
@@ -6186,6 +6190,8 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .candidate.fitted { background: rgba(53, 200, 240, .06); }
 .candidate .c-name { font-size: 13px; color: var(--text); }
 .candidate .c-maker { font-size: 11px; color: var(--muted); }
+.candidate .c-specs { margin-top: 5px; }
+.candidate .c-specs > summary { color: var(--dim); font: 10px var(--mono); cursor: pointer; }
 .candidate .c-figures { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
 .candidate .c-figures b { color: var(--text); font-weight: normal; }
 .candidate .c-figures .d-up { color: var(--cyan); }

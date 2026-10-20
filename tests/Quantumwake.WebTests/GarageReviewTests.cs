@@ -121,7 +121,7 @@ public class GarageReviewTests
         // The bench as it stands: cooler 1 already a Glacier, cooler 2 still stock.
         page.Serve("/api/garage/AEGS_Gladius/sheet", Ship("AEGS_Gladius", "Aegis Gladius", "COOL_JUST_S01_Glacier_SCItem", "Glacier", true));
         page.Do("garageSwaps = { p1: 'COOL_JUST_S01_Glacier_SCItem' }; await refitGarage(); await selectBenchPort('p1');");
-        Assert.Equal(2, (int)page.Number("__dom.node('#garage-bench-ports').byClass('bench-port').length"));
+        Assert.Equal(2, (int)page.Number("__dom.node('#garage-rig-left').byClass('garage-rig-slot').length"));
         Assert.Equal("p1", page.Text("siblingsOf('p1').join('|')"));
 
         page.Do("await fitPart('p1', 'COOL_ACAS_S01_Endo_SCItem');");

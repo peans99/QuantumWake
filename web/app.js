@@ -15061,9 +15061,36 @@ function fmtDistance(metres) {
 /** Drive speed, in km/s - the figure the in-game drive screen shows. */
 const fmtSpeed = (mps) => `${Math.round((Number(mps) || 0) / 1000).toLocaleString()} km/s`;
 
+let garageShips = null;
+
+function renderGaragePicker() {
+  if (!garageShips) return;
+  const select = $('#garage-ship');
+  const term = $('#garage-ship-search').value.trim().toLowerCase();
+  const mine = new Set(garageShips.mine.map((s) => s.class));
+  select.textContent = '';
+  let count = 0;
+  for (const [label, ships] of [
+    [tx('Your fleet'), garageShips.mine],
+    [tx('Ship library'), garageShips.all.filter((s) => !mine.has(s.class))],
+  ]) {
+    const group = el('optgroup');
+    group.label = label;
+    for (const ship of ships) {
+      if (term && !`${ship.name} ${ship.role || ''} ${ship.class}`.toLowerCase().includes(term)) continue;
+      const option = el('option', null, `${ship.name}${ship.role ? ` · ${ship.role}` : ''}`);
+      option.value = ship.class;
+      group.append(option);
+      count++;
+    }
+    if (group.childElementCount) select.append(group);
+  }
+  select.value = garageClass || '';
+  $('#garage-picker-empty').hidden = count !== 0;
+}
+
 async function loadGarage() {
-  const mine = $('#garage-mine');
-  if (!mine) return;
+  if (!$('#garage-ship')) return;
 
   let data;
   try {
@@ -15080,27 +15107,13 @@ async function loadGarage() {
   }
   unavailable.hidden = true;
 
-  fillGaragePicker(mine, tx('Your fleet…'), data.mine.map((s) => [s.class, `${s.name} · ${txn(s.sorties, '{count} sortie', '{count} sorties')}`]));
-  fillGaragePicker($('#garage-all'), tx('Any ship…'), data.all.map((s) => [s.class, `${s.name}${s.role ? ` · ${s.role}` : ''}`]));
+  garageShips = data;
+  renderGaragePicker();
+  if (!garageClass && !data.mine.length) $('#garage-picker').open = true;
 
   // Open the ship already on the bench, else the one flown most, else nothing.
   const first = garageClass || data.mine[0]?.class || null;
   if (first) await openGarage(first);
-}
-
-function fillGaragePicker(select, prompt, entries) {
-  if (!select) return;
-  const keep = select.value;
-  select.textContent = '';
-  const head = el('option', null, prompt);
-  head.value = '';
-  select.append(head);
-  for (const [value, label] of entries) {
-    const option = el('option', null, label);
-    option.value = value;
-    select.append(option);
-  }
-  select.value = entries.some(([v]) => v === keep) ? keep : '';
 }
 
 /*
@@ -15120,14 +15133,13 @@ async function openGarage(cls) {
   garageClass = cls;
   // A new ship is a clean bench: swaps belong to the ship they were made on.
   garageSwaps = {};
-  garageSelectedPort = null;
-  garageOptions = null;
+  closeGarageChoices(false);
+  $('#garage-fit-source').hidden = true;
+  $('#garage-bench-panel').textContent = '';
+  $('#garage-ship-search').value = '';
+  renderGaragePicker();
+  $('#garage-picker').open = false;
   $('#garage-optimise-status').textContent = '';
-  for (const id of ['#garage-mine', '#garage-all']) {
-    const select = $(id);
-    if (select && [...select.options].some((o) => o.value === cls)) select.value = cls;
-    else if (select) select.value = '';
-  }
 
   let data;
   try {
@@ -15142,6 +15154,8 @@ async function openGarage(cls) {
   if (request !== garageRequest) return;
 
   garageStock = data;
+  $('#garage-unavailable').hidden = true;
+  $('#garage-picker-name').textContent = data.ship.name;
   garageSheet = data.sheet;
   garageOpenBuild = null;
   garageCompare = '';
@@ -15428,8 +15442,7 @@ function renderCargoFleet(data) {
 
 /** Opens the Garage on another hull and runs the same load there. */
 function openGarageShipForCargo(cls) {
-  const pick = $('#garage-all');
-  if (pick) { pick.value = cls; pick.dispatchEvent(new Event('change')); }
+  openGarage(cls).catch(() => {});
 }
 
 $('#garage-cargo-fit')?.addEventListener('click', () => fitCargo().catch(() => {}));
@@ -15501,6 +15514,10 @@ function renderGaragePhoto() {
   const box = $('#garage-photo');
   if (!box) return;
   const fit = garagePhoto;
+  const source = $('#garage-fit-source');
+  source.hidden = !garagePhotoApplied || !fit;
+  source.textContent = garagePhotoApplied && fit
+    ? tx('Started from photograph · {when}', { when: new Date(fit.shotAt).toLocaleString(QW_DATE_LOCALES) }) : '';
   const tools = $('#garage-photo-tools');
   box.hidden = false;
 
@@ -15800,12 +15817,12 @@ function garageShipDiscipline(career, role) {
 }
 
 /**
- * The bench is where alternatives are compared; this is the fitted ship at a
- * glance. Ports stay as real, clickable cards rather than being painted onto
+ * Ports stay as real, clickable cards rather than being painted onto
  * an approximate hull drawing - the data knows attachment names, not 3D
  * coordinates, and inventing coordinates would make a useful fit look exact.
  */
 function renderGarageRig(data) {
+  garageRigData = data;
   const rig = $('#garage-rig');
   const ports = (data.ports || []).filter((p) => BENCH_KINDS.includes(p.group));
   rig.hidden = ports.length === 0;
@@ -15854,6 +15871,7 @@ function garageRigSlot(port, ship) {
   button.type = 'button';
   button.dataset.port = port.portIds[0];
   button.setAttribute('aria-pressed', String(selected));
+  button.setAttribute('aria-controls', 'garage-bench');
   const many = port.portIds.length > 1;
   const name = port.name || port.class || tx('Empty port');
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
@@ -15867,6 +15885,8 @@ function garageRigSlot(port, ship) {
   if (port.fitted) part.append(partChip(port.fitted));
   if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
   body.append(part);
+  if (port.changed) body.append(el('span', 'garage-rig-slot-spec', tx('was {part}', { part: port.stockName || port.stockClass || tx('empty') })));
+  if (many) body.append(el('span', 'garage-rig-slot-spec', tx('{port} and {count} more', { port: garagePortName(port.hardpoint), count: port.portIds.length - 1 })));
   if (port.fixedReason) body.append(el('span', 'garage-rig-slot-spec', port.fixedReason));
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
@@ -16192,6 +16212,7 @@ function benchRows(ports) {
 
 /** The bench's ports as last drawn - the current fit, not stock. */
 let garageBenchPorts = [];
+let garageRigData = null;
 
 /**
  * Every port folded into the row that holds this one - the row as it is on
@@ -16211,9 +16232,8 @@ function renderBench(data) {
   garageBenchPorts = ports;
   const optimizer = $('#garage-optimizer');
   const bar = $('#garage-bench-bar');
-  const bench = $('#garage-bench');
-  const caption = $('#garage-bench-caption');
-  optimizer.hidden = bar.hidden = bench.hidden = caption.hidden = ports.length === 0;
+  optimizer.hidden = bar.hidden = ports.length === 0;
+  if (!ports.length) closeGarageChoices(false);
   if (!ports.length) return;
 
   const changed = ports.filter((p) => p.changed).length;
@@ -16222,42 +16242,6 @@ function renderBench(data) {
   $('#garage-reset').hidden = !changed;
   $('#garage-shop').hidden = !changed;
 
-  const list = $('#garage-bench-ports');
-  list.textContent = '';
-
-  for (const [kind, group] of benchGroups(ports)) {
-    list.append(el('div', 'bench-kind', `${garageWord(kind)}${group.length > 1 ? ` · ${group.length}` : ''}`));
-    for (const port of benchRows(group)) {
-      const many = port.portIds.length > 1;
-      const selected = port.portIds.includes(garageSelectedPort);
-      const rowEl = el('div', `bench-port${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
-      rowEl.dataset.port = port.portIds[0];
-      rowEl.dataset.count = String(port.portIds.length);
-      rowEl.append(partMark(port.fitted));
-
-      const mid = el('div');
-      const name = el('div', 'part-name', port.name || (port.class ? port.class : tx('empty')));
-      if (port.fitted) name.append(partChip(port.fitted));
-      if (many) name.append(el('span', 'chip count', `×${port.portIds.length}`));
-      mid.append(name);
-      const sub = el('div', 'port-name', many
-        ? tx('{port} and {count} more', { port: garagePortName(port.hardpoint), count: port.portIds.length - 1 })
-        : garagePortName(port.hardpoint));
-      if (port.changed) sub.append(el('span', 'was', tx('was {part}', { part: port.stockName || port.stockClass || tx('empty') })));
-      mid.append(sub);
-      if (port.fixedReason) mid.append(el('span', 'muted small', port.fixedReason));
-      rowEl.append(mid);
-
-      const figure = el('div', 'figure');
-      const [first, second] = partFigures(port.fitted, data.ship);
-      if (first) figure.append(el('b', null, `${first[2]} ${first[0]}`));
-      if (second) figure.append(document.createTextNode(`${second[2]} ${second[0]}`));
-      rowEl.append(figure);
-
-      if (!port.fixedReason) rowEl.addEventListener('click', () => selectBenchPort(port.portIds[0]).catch(() => {}));
-      list.append(rowEl);
-    }
-  }
 }
 
 /** Opens the candidates for one port. */
@@ -16266,10 +16250,10 @@ async function selectBenchPort(portId, revealChoices = false) {
   const request = ++benchRequest;
   const cls = garageClass;
   garageSelectedPort = portId;
-  for (const rowEl of $$('#garage-bench-ports .bench-port')) rowEl.classList.toggle('selected', rowEl.dataset.port === portId);
-  // The fitted-layout cards are another way into this same port, so the
-  // selected state must move in both views rather than leaving two answers.
-  renderGarageRig(garageStock);
+  garageOptions = null;
+  renderGarageRig(garageRigData || garageStock);
+  $('#garage-workspace').classList.add('choosing');
+  $('#garage-bench').hidden = false;
 
   const panel = $('#garage-bench-panel');
   panel.textContent = '';
@@ -16289,15 +16273,25 @@ async function selectBenchPort(portId, revealChoices = false) {
 
   garageOptions = options;
   renderBenchPanel();
-  if (revealChoices) revealGarageChoices(panel);
+  if (revealChoices) {
+    // Keep the hull in view on desktop; on narrow screens the panel follows it.
+    panel.querySelector('.bench-search')?.focus({ preventScroll: true });
+    if (window.innerWidth <= 1100) $('#garage-bench').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
-/** A card in the fitted layout opens a result well below the fold. Move to
- * that answer once it has rendered; without this, the click can look inert. */
-function revealGarageChoices(panel) {
-  panel.tabIndex = -1;
-  panel.focus({ preventScroll: true });
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function closeGarageChoices(restoreFocus = true) {
+  ++benchRequest;
+  const selected = garageSelectedPort;
+  garageSelectedPort = null;
+  garageOptions = null;
+  $('#garage-workspace').classList.remove('choosing');
+  $('#garage-bench').hidden = true;
+  if (garageRigData) renderGarageRig(garageRigData);
+  if (restoreFocus) {
+    const card = $$('#garage-rig .garage-rig-slot').find((node) => node.dataset.port === selected);
+    card?.focus({ preventScroll: window.innerWidth > 1100 });
+  }
 }
 
 function renderBenchPanel() {
@@ -16406,6 +16400,7 @@ function renderBenchPanel() {
     // Each figure beside how it compares with what is in the port now, coloured
     // by whether that is better for the figure: less IR good, less DPS not.
     const figures = el('div', 'c-figures');
+    const moreFigures = el('div', 'c-figures');
     partFigures(part, ship).forEach(([label, value, text, lowerIsBetter], i) => {
       const span = el('span');
       span.append(el('b', null, text), document.createTextNode(` ${label}`));
@@ -16415,9 +16410,14 @@ function renderBenchPanel() {
         const diff = value - ref[1];
         span.append(el('span', better ? 'd-up' : 'd-down', ` ${diff > 0 ? '+' : '−'}${fmtSmart(Math.abs(diff))}`));
       }
-      figures.append(span);
+      (i < 2 ? figures : moreFigures).append(span);
     });
     mid.append(figures);
+    if (moreFigures.childElementCount) {
+      const specs = el('details', 'c-specs');
+      specs.append(el('summary', null, tx('More specs')), moreFigures);
+      mid.append(specs);
+    }
 
     const shop = el('div', 'c-shop');
     if (option.shops && option.shops.length) {
@@ -16719,7 +16719,6 @@ async function refitGarage() {
 
   garageSheet = current.sheet;
   renderGarage(current, reference === current ? null : reference);
-  renderBench(current);
   renderBenchPanel();
   renderBuilds();
 }
@@ -16854,8 +16853,12 @@ $('#garage-optimise-buyable')?.addEventListener('change', () => {
   if (garageOptions) renderBenchPanel();
 });
 
-onInput('#garage-mine', () => { const v = $('#garage-mine').value; if (v) openGarage(v).catch(() => {}); });
-onInput('#garage-all', () => { const v = $('#garage-all').value; if (v) openGarage(v).catch(() => {}); });
+onInput('#garage-ship-search', renderGaragePicker);
+onInput('#garage-ship', () => { const v = $('#garage-ship').value; if (v) openGarage(v).catch(() => {}); });
+$('#garage-close-choices')?.addEventListener('click', () => closeGarageChoices());
+$('#garage-bench')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') { event.preventDefault(); closeGarageChoices(); }
+});
 onInput('#servers-troubled', renderServers);
 
 /**

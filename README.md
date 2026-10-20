@@ -179,7 +179,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.18.20
+### 0.18.21
+
+**Fit a ship directly in the Garage.** Choose a ship from one searchable picker, then select a component around the hull to compare replacements beside it. Save and shopping actions stay above the layout; full stats, photographed fits, auto-fit, cargo and the player marketplace expand when needed. Extra replacement specs expand within each part, and changing components keeps your planned fit visible.
 
 **Plugging in a USB device no longer closes Quantum Wake.** With the Cougar MFDs turned on, connecting any USB device (a stick, a headset, a memory stick) could make the app vanish. The MFD buttons were read through an old Windows joystick interface whose device list is rebuilt whenever something is plugged in, and that rebuild crashed inside Windows, taking the app with it. The MFD buttons are now read a different way that never touches that code. Nothing changes in how they work: the same buttons do the same things, including while the game has focus.
 

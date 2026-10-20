@@ -58,7 +58,7 @@ public class GaragePageTests
             renderGarage(garageStock);
             """);
         Assert.Contains(name, page.NodeText("#garage-rig-right"));
-        Assert.Contains(label, page.NodeText("#garage-bench-ports"));
+        Assert.Contains(label, page.NodeText("#garage-rig-right"));
         page.Serve("/api/garage/AEGS_Gladius/options?port=head", """{"port":{"portId":"head","kinds":[],"minSize":1,"maxSize":2},"options":[]}""");
         page.Do("await __dom.node('#garage-rig-right').descendants().find(n => n.classList.contains('garage-rig-slot')).fire('click');");
         Assert.Contains("GET /api/garage/AEGS_Gladius/options?port=head", page.Fetched());
@@ -101,7 +101,46 @@ public class GaragePageTests
         Assert.Contains("Military", page.NodeText("#garage-sub"));
         Assert.Equal("military", page.Text("__dom.node('#garage-sub').descendants().find(n => n.classList.contains('garage-duty')).dataset.discipline"));
         Assert.Contains("4.10.0-LIVE.12519617", page.NodeText("#garage-source"));
-        Assert.Equal("AEGS_Gladius", page.Text("__dom.node('#garage-mine').value"));
+        Assert.Equal("AEGS_Gladius", page.Text("__dom.node('#garage-ship').value"));
+    }
+
+    [Fact]
+    public void The_ship_picker_groups_the_fleet_first_and_searches_the_library()
+    {
+        var page = Opened();
+        var groups = "__dom.node('#garage-ship').children";
+        Assert.Equal("Your fleet|Ship library", page.Text($"{groups}.map(g => g.label).join('|')"));
+        Assert.Equal("AEGS_Gladius|DRAK_Cutlass_Black", page.Text($"{groups}.flatMap(g => g.children).map(o => o.value).join('|')"));
+        page.Do("__dom.node('#garage-ship-search').value = 'cutlass'; renderGaragePicker();");
+        Assert.Equal("DRAK_Cutlass_Black", page.Text($"{groups}.flatMap(g => g.children).map(o => o.value).join('|')"));
+        page.Do("__dom.node('#garage-ship-search').value = 'no such hull'; renderGaragePicker();");
+        Assert.False(page.Truth("__dom.node('#garage-picker-empty').hidden"));
+    }
+
+    [Fact]
+    public void Replacements_close_and_a_new_ship_clears_the_old_candidates()
+    {
+        var page = Bench();
+        Assert.True(page.Truth("__dom.node('#garage-bench').hidden"));
+        page.Do("await selectBenchPort('p1');");
+        Assert.False(page.Truth("__dom.node('#garage-bench').hidden"));
+        Assert.True(page.Truth("__dom.node('#garage-workspace').classList.contains('choosing')"));
+        page.Do("closeGarageChoices();");
+        Assert.True(page.Truth("__dom.node('#garage-bench').hidden"));
+        Assert.False(page.Truth("__dom.node('#garage-rig-left').descendants().some(n => n.classList.contains('selected'))"));
+        page.Do("await selectBenchPort('p1'); await openGarage('AEGS_Gladius');");
+        Assert.True(page.Truth("__dom.node('#garage-bench').hidden"));
+        Assert.Equal("", page.NodeText("#garage-bench-panel"));
+    }
+
+    [Fact]
+    public void Selecting_another_component_keeps_the_current_fit_in_the_ship_cards()
+    {
+        var page = Bench();
+        page.Serve("/api/garage/AEGS_Gladius/options?port=p2", CoolerOptions.Replace("\"portId\":\"p1\"", "\"portId\":\"p2\""));
+        page.Do("await selectBenchPort('p1'); await fitPart('p1', 'COOL_JUST_S01_Glacier_SCItem'); await selectBenchPort('p2');");
+        Assert.Contains("Glacier", page.NodeText("#garage-rig-left"));
+        Assert.Contains("was Bracer", page.NodeText("#garage-rig-left"));
     }
 
     [Fact]
@@ -319,7 +358,7 @@ public class GaragePageTests
     public void The_bench_lists_the_ports_by_kind_with_a_mark_and_the_figure_that_matters()
     {
         var page = Bench();
-        var text = page.NodeText("#garage-bench-ports");
+        var text = page.NodeText("#garage-rig-left");
 
         Assert.Contains("Cooler", text);
         Assert.Contains("Bracer", text);
@@ -329,7 +368,7 @@ public class GaragePageTests
         Assert.Contains("Beacon", text);
 
         // Aegis has a Fankit mark; the stub sees the image's alt text.
-        Assert.True(page.Truth("__dom.node('#garage-bench-ports').descendants().some(n => n.tagName === 'img' && n.src === 'assets/manufacturers/AEGS.png')"));
+        Assert.True(page.Truth("__dom.node('#garage-rig-left').descendants().some(n => n.tagName === 'img' && n.src === 'assets/manufacturers/AEGS.png')"));
         Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
         Assert.True(page.Truth("__dom.node('#garage-reset').hidden"));
     }
@@ -390,7 +429,7 @@ public class GaragePageTests
         Assert.Contains("8,502", page.Text($"{ir}.textContent"));
         Assert.Equal("1 part changed", page.NodeText("#garage-changes"));
         Assert.False(page.Truth("__dom.node('#garage-reset').hidden"));
-        Assert.Contains("was Bracer", page.NodeText("#garage-bench-ports"));
+        Assert.Contains("was Bracer", page.NodeText("#garage-rig-left"));
     }
 
     [Fact]
@@ -401,7 +440,7 @@ public class GaragePageTests
 
         Assert.Equal("Stock fit", page.NodeText("#garage-changes"));
         Assert.Equal(1, page.Fetched().Count(f => f.StartsWith("POST /api/garage/AEGS_Gladius/sheet")));
-        Assert.DoesNotContain("was Bracer", page.NodeText("#garage-bench-ports"));
+        Assert.DoesNotContain("was Bracer", page.NodeText("#garage-rig-left"));
     }
 
     /// <summary>Changing ships empties the bench: swaps belong to the hull they were made on.</summary>
@@ -433,10 +472,10 @@ public class GaragePageTests
         page.Serve("/api/garage/AEGS_Gladius/sheet", Gladius);
         page.Do("await loadGarage();");
 
-        var rows = "__dom.node('#garage-bench-ports').descendants().filter(n => n.classList.contains('bench-port'))";
+        var rows = "__dom.node('#garage-rig-right').descendants().filter(n => n.classList.contains('garage-rig-slot'))";
         Assert.Equal("1", page.Text($"String({rows}.filter(r => r.textContent.includes('Thunderbolt')).length)"));
-        Assert.Contains("×4", page.NodeText("#garage-bench-ports"));
-        Assert.Contains("and 3 more", page.NodeText("#garage-bench-ports"));
+        Assert.Contains("×4", page.NodeText("#garage-rig-right"));
+        Assert.Contains("and 3 more", page.NodeText("#garage-rig-right"));
 
         page.Do("await selectBenchPort('m1'); await fitPart('m1', 'MISL_S03_B');");
 
