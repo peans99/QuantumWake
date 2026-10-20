@@ -313,4 +313,13 @@ internal sealed class CougarEdges
         return Enumerable.Range(1, 28).Where(n => (pressed & (1u << (n - 1))) != 0).ToArray();
     }
     public void Disconnect() => _previous = null;
+
+    /// <summary>The HID button usages a report holds down, as the mask <see cref="Read"/> takes.</summary>
+    public static uint Buttons(ReadOnlySpan<ushort> usages)
+    {
+        var mask = 0u;
+        foreach (var usage in usages)
+            if (usage is >= 1 and <= 32) mask |= 1u << (usage - 1);
+        return mask;
+    }
 }

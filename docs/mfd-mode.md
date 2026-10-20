@@ -491,13 +491,15 @@ as it is pressed, which is the whole discovery procedure.
 
 Screen brightness — and idle dimming with it — changes the rendered page, not
 the Cougar LEDs. Native
-USB reads use Windows `joyGetPosEx` and do not consume game inputs or send
-keystrokes. A button also bound in Star Citizen can therefore affect both.
-No T.A.R.G.E.T. profile is needed. A virtual controller replacing the default
-devices, renamed devices, and devices outside the Windows joystick API's
-slots 1–16 are not supported by this initial reader. Setup reports missing
-devices; duplicate MFD numbers pause input for those numbers. Held buttons
-do not repeat, and buttons held during connection are ignored until released.
+USB reads use Windows Raw Input (`RIDEV_INPUTSINK`, so presses arrive while the
+game has focus) and do not consume game inputs or send keystrokes. A button
+also bound in Star Citizen can therefore affect both. No T.A.R.G.E.T. profile
+is needed. A device is recognised by its HID product string, `F16 MFD 1`–`8`;
+a virtual controller replacing the default devices and renamed devices are not
+supported. Setup reports missing devices; duplicate MFD numbers pause input for
+those numbers. Held buttons do not repeat. Raw Input reports only changes, so a
+button already held when an MFD connects counts as a press at that MFD's next
+report.
 
 The browser links on the Overlay page preview the layout and data without
 native USB input. Opened that way the editor has nothing to detect, so it draws
@@ -548,6 +550,20 @@ The native run exposed a negative result worth retaining: `joyGetDevCapsW`
 returned **Microsoft PC-joystick driver** for every occupied slot on this
 machine. Matching that field alone detected no Cougars. Resolving the slot's
 OEM registry entry produced the actual MFD names and detected both devices.
+
+**The winmm reader itself had to go (0.18.20).** Plugging in a USB device could
+close the app. Five crash dumps between 2026-10-15 and 2026-10-19 stop in the
+same place: `winmm!joyGetDevCapsW` → `dinput!CJoyCfg_GetConfig` →
+`dinput!DIHid_BuildHidList`, reallocating DirectInput's own HID list after the
+device set changed. Four ended as heap corruption (`c0000374`), one as an
+access violation. That is Windows code corrupting its own buffer, which no
+managed `catch` can stand between, and every joystick call through winmm
+reaches it once a device has come or gone. The reader now uses Raw Input,
+which does not load DirectInput. On 2026-10-19 Raw Input listed this desk's
+six controllers. Both MFDs report as **game pads** (usage 5), not joysticks
+like the Warthog, so registering for joysticks alone would have found neither.
+Their HID product strings read `F16 MFD 1` and `F16 MFD 2`, the same names the
+OEM registry entry gave.
 
 ### The Act, Cargo and Contract pages, and the button map
 

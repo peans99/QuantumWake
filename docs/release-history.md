@@ -3,6 +3,30 @@
 Older release notes live here so the [main README](../README.md) stays useful to
 pilots installing and using Quantum Wake for the first time.
 
+### 0.18.19
+
+**Quantum Wake now reads in French.** Choose Français under Settings → General; English stays the default. Every page is translated, in the browser and in the overlay:
+
+- **Every tab:** Now, Map, Log, Operations, Flight, Economy, Reference, Hangar, every Settings page and Help & FAQ, plus the item card that opens from anywhere.
+- **The notes the app writes for you:** what each screenshot reading checked against your logs (readings taken before this update included), the rock calculator's notes, the Garage's warnings, the cargo fit's reasons, when a gun's second fire mode takes over, a recipe's choice of materials, the haul plan's notes and the app's error messages.
+- **Outside the browser:** the Cougar MFD pages and their setup window, the tray icon's menu and notices, and the overlay's header. On the frames, the captions under each button stay the cockpit's codes (NAV, CRGO, BRT), because six characters is all a button has and the game's own HUD uses the same English codes.
+- **A recap you save** is a French file.
+
+**What stays as the game writes it:** ships, makers, places, commodities, minerals, items, blueprints, careers, terminals, shops, shard IDs, gun kinds and fire modes, keybinding actions, stick names, Loadout's slot names, the handles of the people you flew with, and the text read off a screenshot. Your own names and notes stay as you wrote them. A copied server report stays in English, because it is meant to be pasted where other pilots will read it. `Game.log` is always English whatever language the game is set to, so reading your logs works the same in a French game.
+
+**Item labels say when your game is set to another language.** Star Citizen reads the text file of the language it is set to, and the labels go into the English one, so in a game set to French they would be installed and never shown. Settings → Item labels now says which language the game is set to and when the labels will not show, and warns before you install StarStrings that it sets the game back to English: its own user.cfg says `g_language = english`.
+
+**Six English labels are worded more precisely**, because each old word also meant something else on another page and a translation could only pick one:
+
+- Servers: a stay you ended yourself reads "you left".
+- Crew: a member's connection dropping is "Went offline", next to "Came online".
+- Log: how long a session ran is "Duration", since "Length" is a ship's length on Hangar.
+- Armoury: where a gun's damage starts to fall is "Drop-off".
+- Controls: the activation mode that fires while a button is held is "hold down", since "hold" is a ship's cargo hold elsewhere.
+- About: the line naming your game install is "Game install".
+
+**A small fix on the Overlay page.** Ticking a page or card for the widget now says "saved" under the list. It used to print a garbled line instead, because the save was handed the click itself where it expected a message.
+
 ### 0.18.8
 
 **The README is now a player guide.** It starts with what Quantum Wake does,

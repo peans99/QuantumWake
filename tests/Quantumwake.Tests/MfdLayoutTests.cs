@@ -222,4 +222,17 @@ public class MfdLayoutTests
         Assert.Equal(new[] { 3 }, right.Read(4));
         Assert.Empty(left.Read(4));
     }
+
+    [Fact]
+    public void HidButtonUsagesBecomeTheMaskTheEdgesRead()
+    {
+        // HID numbers buttons from 1, as the Cougar's labels and the edges do.
+        Assert.Equal(1u | (1u << 19) | (1u << 27), CougarEdges.Buttons([1, 20, 28]));
+        Assert.Equal(0u, CougarEdges.Buttons([]));
+        // Usage 0 is "no button"; past 32 cannot be held in the mask.
+        Assert.Equal(1u << 31, CougarEdges.Buttons([0, 32, 33]));
+        var edges = new CougarEdges();
+        edges.Read(0);
+        Assert.Equal(new[] { 21 }, edges.Read(CougarEdges.Buttons([21])));
+    }
 }
