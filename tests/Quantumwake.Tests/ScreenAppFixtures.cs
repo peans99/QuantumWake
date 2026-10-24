@@ -219,6 +219,47 @@ internal static class ScreenAppFixtures
         new("NEKRON", 980, 1330, 12),
     ];
 
+    /// <summary>
+    /// ScreenShot-2026-10-24_16-25-55-75F.jpg, Red Wind again an hour and a
+    /// half later, with a flare across the left of the panel: the engine
+    /// returned DOSSIER and lost CAREER and SEARCH.
+    /// </summary>
+    public static readonly ScreenTextLine[] RepRedWindFlare =
+    [
+        new("DOSSIER", 1545, 148, 18),
+        new("RED WIND LINEHAUL", 1395, 263, 38),
+        new("NEUTRAL", 1394, 321, 17),
+        new("HEADHUNTERS", 800, 338, 18),
+        new("HAULING", 1411, 423, 21),
+        new("HOCKROW AGENCY", 808, 491, 17),
+        new("HOCKROW", 695, 517, 12),
+        new("INTERSEC DEFENSE SOLUTIONS", 809, 640, 18),
+        new("JUNIOR", 2376, 661, 14),
+        new("ROOKIE", 2060, 662, 14),
+        new("NOT ELIGIBLE", 1426, 663, 14),
+        new("TRAINEE", 1742, 663, 14),
+        new("LING FAMILY HAULING", 802, 790, 17),
+        new("RED WIND LINEHAUL", 771, 943, 18),
+        new("MASTER", 2395, 986, 15),
+        new("EXPERIENCED", 1745, 987, 15),
+        new("SENIOR", 2070, 987, 15),
+        new("MEMBER", 1418, 989, 14),
+        new("ELO EMP'öÖM", 816, 1082, 38),
+        new("1,922.537", 986, 1296, 24),
+        new("REP", 2216, 1322, 13),
+        new("WALLET", 2311, 1322, 13),
+        new("LANDING", 2439, 1323, 13),
+        new("VEHICLES", 2564, 1323, 13),
+        new("ASSETS", 2053, 1324, 14),
+        new("MAPS", 1802, 1325, 13),
+        new("COMMS", 1536, 1326, 13),
+        new("CONTRACTS", 1648, 1326, 12),
+        new("JOURNAL", 1919, 1326, 13),
+        new("NEKRON", 980, 1327, 13),
+        new("HEALTH", 1404, 1328, 13),
+        new("HOME", 1281, 1329, 13),
+    ];
+
     /// <summary>ScreenShot-2026-10-24_14-59-59-A70.jpg, Red Wind: seven of the eight hauling ranks, MASTER scrolled off.</summary>
     public static readonly ScreenTextLine[] RepRedWind =
     [

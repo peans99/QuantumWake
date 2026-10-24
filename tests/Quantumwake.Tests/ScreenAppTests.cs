@@ -203,6 +203,37 @@ public class ScreenAppTests
             rep.Ranks!.Select(c => c.Name));
     }
 
+    /// <summary>
+    /// A flare cost the frame its CAREER tab and its search box, and it was
+    /// filed as a mobiGlas screen nobody can read. DOSSIER alone anchors now,
+    /// with the ladder under it to make the case.
+    /// </summary>
+    [Fact]
+    public void One_tab_and_a_ladder_are_enough_to_know_the_rep_app()
+    {
+        var frame = Read(ScreenAppFixtures.RepRedWindFlare);
+
+        Assert.Equal(ScreenKind.Reputation, frame.Kind);
+        Assert.Equal("RED WIND LINEHAUL", frame.Reputation!.Organisation);
+        Assert.Equal("HAULING", frame.Reputation.Section);
+        Assert.Equal(
+            ["NOT ELIGIBLE", "TRAINEE", "ROOKIE", "JUNIOR", "MEMBER", "EXPERIENCED", "SENIOR", "MASTER"],
+            frame.Reputation.Ranks!.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void A_lone_dossier_with_no_ladder_under_it_is_not_the_rep_app()
+    {
+        var frame = Read(
+        [
+            new("DOSSIER", 1545, 148, 18),
+            new("RED WIND LINEHAUL", 1395, 263, 38),
+            new("NEUTRAL", 1394, 321, 17),
+        ]);
+
+        Assert.NotEqual(ScreenKind.Reputation, frame.Kind);
+    }
+
     /// <summary>The one frame on which the balance read, and the reading it gave.</summary>
     [Fact]
     public void The_wallet_reads_on_the_rep_frame()

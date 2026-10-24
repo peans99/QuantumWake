@@ -1553,6 +1553,19 @@ Red Wind went from Junior to Member before any Red Wind contract the logs
 kept. The contracts between two readings are therefore shown as a floor, and
 the estimate stays an estimate.
 
+**The check that closed (24 October, 15:00 to 16:25).** Two Red Wind frames
+an hour and a half apart, the second taken through a flare that cost it its
+CAREER tab (see `RepHead`). Between them the log holds exactly seven
+completed contracts, all Red Wind, all `Member | Stellar Medium Haul`, and
+nothing else of Red Wind's: completions at 19:44:49Z, five between 20:16:04Z
+and 20:16:25Z, and 20:25:31Z, against shots at 18:59:59Z and 20:25:55Z. Their
+StarStrings tag gives the ladder, 500 for Member's work. Predicted: 7 x 500 =
+3,500, which is 15.6 points of Member's 22,500 - 54.0% to 69.6%. Measured:
+54.0% to 69.0%, 3,375 give or take 132. One pixel. So within Member, at least,
+the bar fills in proportion and the estimate is the reputation, to the pixel;
+it is still called an estimate, because one rank on one ladder is what has
+been checked.
+
 **Readings from before.** Readings taken before 0.18.22 kept the text and not
 the pixels, so every install that photographed the Rep app holds readings
 with no rank. The screenshot watch reads those files again, once each, when

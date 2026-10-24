@@ -6808,3 +6808,7 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
   .rep-fact:nth-child(odd) { border-left: 0; }
   .rep-fact:nth-child(n + 3) { border-top: 1px solid var(--rule); }
 }
+/* The organisation's own mark beside its name, at the size the Rep app's list uses. */
+.rep-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rep-logo { height: 28px; width: auto; max-width: 112px; object-fit: contain; flex: none; }
+.rep-card .wikelo-head { align-items: center; }
