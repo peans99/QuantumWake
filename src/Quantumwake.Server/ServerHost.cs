@@ -1922,6 +1922,31 @@ public static class ServerHost
         // down. See LogLibrary.Standings for why those are two different things.
         app.MapGet("/api/standing", (LogLibrary lib, int? days) => lib.Standings(days ?? 0));
 
+        // Reputation as the Rep app showed it, one photograph at a time. The
+        // logs have none of it; see ReputationBoards. Whether this copy can
+        // read screenshots at all goes with it, so an empty page can say why.
+        app.MapGet("/api/reputation", (
+            LogLibrary lib, ScreenReadingStore readings, ScreenInsightService insight, ScreenSettingsStore settings) =>
+        {
+            var board = ReputationBoards.Build(
+                readings.ReputationHistory(), lib.GameCommodities.Reputation, [.. lib.ContractRecords()]);
+
+            // Waiting to be read again, which needs the file; a reading whose
+            // file has gone stays on the page without a rank.
+            var waiting = insight.Unmeasured(install?.RootPath).Count;
+
+            return new
+            {
+                board.Organisations,
+                board.Readings,
+                unmeasured = waiting,
+                unmeasurable = Math.Max(0, board.Unmeasured - waiting),
+                canRead = insight.CanReadScreenshots,
+                watching = settings.Current.Mode == ScreenMode.Screenshots && settings.Current.WatchScreenshots,
+                ladders = lib.GameCommodities.Reputation.Scopes.Count,
+            };
+        });
+
         // Who the party channel has named. See LogLibrary.Wingmen for why these
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));

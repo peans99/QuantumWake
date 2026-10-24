@@ -10,10 +10,17 @@ mentioning reputation is the gRPC channel being opened.
 ```
 
 Not one faction, value or delta. Reputation lives on a server the client asks
-over that channel, and the answers never reach the log. So there is no way to
+over that channel, and the answers never reach the log. So the logs cannot
 report a rep total, and the app does not pretend otherwise.
 
-Two things can be done instead, and the app does both:
+Three things can be done instead, and the app does all of them:
+
+- **Read the Rep app.** Since 0.18.22 a screenshot of the mobiGlas Rep app
+  gives the rank held and how far through it, off the card's progress bar, and
+  the installed ladder turns that into an estimate. It is the only route to an
+  actual standing, and it has exactly as many points as the pilot takes
+  screenshots. The measurements are in `docs/screen-insight.md` under "The Rep
+  app's bars".
 
 - **Count the work.** Contracts taken, finished and abandoned per issuer is what
   actually moves standing, and all of it is in the logs. That is the *Standing*

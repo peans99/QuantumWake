@@ -141,6 +141,40 @@ public sealed class WindowsScreenReader : IScreenReader
         })];
     }
 
+    /// <remarks>
+    /// Straight, so not premultiplied: a screenshot is opaque, and asking for
+    /// the alpha to be folded in only invites a decoder that does it to
+    /// darken the colours being measured.
+    /// </remarks>
+    public async Task<ColourPatch?> PixelsAsync(string imagePath, ScreenPatch patch, CancellationToken token = default)
+    {
+        var file = await StorageFile.GetFileFromPathAsync(imagePath).AsTask(token);
+        using var stream = await file.OpenAsync(FileAccessMode.Read).AsTask(token);
+
+        var decoder = await BitmapDecoder.CreateAsync(stream).AsTask(token);
+
+        var left = (int)Math.Clamp(Math.Floor(patch.Left), 0, decoder.PixelWidth);
+        var top = (int)Math.Clamp(Math.Floor(patch.Top), 0, decoder.PixelHeight);
+        var width = (int)Math.Clamp(Math.Ceiling(patch.Width), 0, decoder.PixelWidth - left);
+        var height = (int)Math.Clamp(Math.Ceiling(patch.Height), 0, decoder.PixelHeight - top);
+
+        if (width < 1 || height < 1) return null;
+
+        var transform = new BitmapTransform
+        {
+            Bounds = new BitmapBounds { X = (uint)left, Y = (uint)top, Width = (uint)width, Height = (uint)height },
+        };
+
+        var data = await decoder.GetPixelDataAsync(
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Straight,
+            transform,
+            ExifOrientationMode.IgnoreExifOrientation,
+            ColorManagementMode.DoNotColorManage).AsTask(token);
+
+        return new ColourPatch(left, top, width, height, data.DetachPixelData());
+    }
+
     private static byte[] Shear(byte[] source, int width, int height, double shear)
     {
         if (shear == 0) return source;

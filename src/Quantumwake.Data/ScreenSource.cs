@@ -48,10 +48,62 @@ public interface IScreenReader
     /// </remarks>
     Task<IReadOnlyList<ScreenTextLine>> ReadAsync(
         string imagePath, ScreenPatch patch, ScreenTreatment treatment, CancellationToken token = default);
+
+    /// <summary>
+    /// One patch of the frame as colour, unscaled, or null when this reader
+    /// cannot decode pixels.
+    /// </summary>
+    /// <remarks>
+    /// For the things on a screen that are drawn rather than written - the
+    /// Rep app's progress bars, which are a teal fill on a grey track with no
+    /// figure anywhere. See <see cref="RepBars"/>.
+    /// </remarks>
+    Task<ColourPatch?> PixelsAsync(string imagePath, ScreenPatch patch, CancellationToken token = default) =>
+        Task.FromResult<ColourPatch?>(null);
 }
 
 /// <summary>A rectangle of the frame, in its pixels.</summary>
 public sealed record ScreenPatch(double Left, double Top, double Width, double Height);
+
+/// <summary>A rectangle of a frame in colour, addressed in the frame's own pixels.</summary>
+/// <remarks>
+/// Frame coordinates rather than patch coordinates so that a caller measuring
+/// against the read's text lines never has to subtract anything. A pixel
+/// outside the patch reads as the nearest edge, the way <see cref="GreyImage"/>
+/// clamps, so a search that strays a pixel over does not throw.
+/// </remarks>
+public sealed class ColourPatch
+{
+    private readonly byte[] _bgra;
+
+    public ColourPatch(int left, int top, int width, int height, byte[] bgra)
+    {
+        if (bgra.Length != width * height * 4)
+            throw new ArgumentException($"expected {width * height * 4} bytes, got {bgra.Length}", nameof(bgra));
+
+        Left = left;
+        Top = top;
+        Width = width;
+        Height = height;
+        _bgra = bgra;
+    }
+
+    public int Left { get; }
+
+    public int Top { get; }
+
+    public int Width { get; }
+
+    public int Height { get; }
+
+    public (byte R, byte G, byte B) At(int x, int y)
+    {
+        var px = Math.Clamp(x - Left, 0, Width - 1);
+        var py = Math.Clamp(y - Top, 0, Height - 1);
+        var at = (py * Width + px) * 4;
+        return (_bgra[at + 2], _bgra[at + 1], _bgra[at]);
+    }
+}
 
 /// <summary>What to do to a patch before the engine reads it.</summary>
 /// <param name="Scale">How many times larger to draw it.</param>

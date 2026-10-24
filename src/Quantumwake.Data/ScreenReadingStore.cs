@@ -42,6 +42,9 @@ public sealed record ScreenSighting(
     MiningScanReading? Mining = null,
     RefineryReading? Refinery = null);
 
+/// <summary>One Rep app reading, kept for the reputation history.</summary>
+public sealed record RepSighting(string Shot, DateTimeOffset ShotAt, ReputationReading Reading, bool Dismissed = false);
+
 /// <summary>The paint a loadout screenshot showed a ship wearing, and which shot.</summary>
 public sealed record PhotographedPaint(string Item, string Name, string Shot, DateTimeOffset ShotAt);
 
@@ -140,17 +143,37 @@ public sealed class ScreenReadingStore
     private readonly string _path;
     private readonly string _clipboardPath;
     private readonly string _pinsPath;
+    private readonly string _reputationPath;
     private readonly Lock _gate = new();
     private List<ScreenSighting> _sightings = [];
     private List<ClipboardSighting> _clipboard = [];
     private List<PinnedLocation> _pins = [];
+    private List<RepSighting> _reputation = [];
 
     public ScreenReadingStore(string? directory = null)
     {
         _path = Path.Combine(directory ?? AppPaths.Root, "screen-readings.json");
         _clipboardPath = Path.Combine(directory ?? AppPaths.Root, "screen-clipboard.json");
         _pinsPath = Path.Combine(directory ?? AppPaths.Root, "pinned-locations.json");
+        _reputationPath = Path.Combine(directory ?? AppPaths.Root, "screen-reputation.json");
         Load();
+    }
+
+    /// <summary>
+    /// Every Rep app reading ever kept, newest first - including the ones the
+    /// bounded log has since let go.
+    /// </summary>
+    /// <remarks>
+    /// Its own file and unbounded, because a trend is the point of it: three
+    /// hundred readings is a few evenings of kiosks and maps, and a reputation
+    /// photographed in September would be gone before October's was taken. A
+    /// reading is small - a name, a rank, a dozen cards - so a year of them is
+    /// a few hundred kilobytes. Seeded from the log on load, so readings kept
+    /// before this file existed are not lost.
+    /// </remarks>
+    public IReadOnlyList<RepSighting> ReputationHistory()
+    {
+        lock (_gate) return [.. _reputation];
     }
 
     /// <summary>Newest first.</summary>
@@ -426,6 +449,18 @@ public sealed class ScreenReadingStore
                 _sightings.RemoveRange(Keep, _sightings.Count - Keep);
 
             Save();
+
+            // A shot read again replaces its old reading here too, or goes
+            // when it no longer reads as the Rep app at all.
+            var removed = _reputation.RemoveAll(r => string.Equals(r.Shot, sighting.Shot, StringComparison.OrdinalIgnoreCase));
+
+            if (sighting.Reputation is { } rep)
+            {
+                _reputation.Add(new RepSighting(sighting.Shot, sighting.ShotAt, rep, sighting.Dismissed));
+                _reputation.Sort((a, b) => b.ShotAt.CompareTo(a.ShotAt));
+            }
+
+            if (removed > 0 || sighting.Reputation is not null) SaveReputation();
         }
     }
 
@@ -443,6 +478,14 @@ public sealed class ScreenReadingStore
 
             _sightings[at] = _sightings[at] with { Dismissed = dismissed };
             Save();
+
+            var rep = _reputation.FindIndex(r => string.Equals(r.Shot, shot, StringComparison.OrdinalIgnoreCase));
+            if (rep >= 0)
+            {
+                _reputation[rep] = _reputation[rep] with { Dismissed = dismissed };
+                SaveReputation();
+            }
+
             return _sightings[at];
         }
     }
@@ -453,8 +496,10 @@ public sealed class ScreenReadingStore
         {
             _sightings.Clear();
             _clipboard.Clear();
+            _reputation.Clear();
             Save();
             SaveClipboard();
+            SaveReputation();
         }
     }
 
@@ -463,6 +508,46 @@ public sealed class ScreenReadingStore
         LoadSightings();
         LoadClipboard();
         LoadPins();
+        LoadReputation();
+    }
+
+    private void LoadReputation()
+    {
+        try
+        {
+            if (File.Exists(_reputationPath))
+                _reputation = JsonSerializer.Deserialize<List<RepSighting>>(File.ReadAllText(_reputationPath), Json) ?? [];
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            _reputation = [];
+        }
+
+        // Readings the log holds that this file does not: every one, on the
+        // first start after 0.18.22.
+        var known = _reputation.Select(r => r.Shot).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = _sightings
+            .Where(s => s.Reputation is not null && !known.Contains(s.Shot))
+            .Select(s => new RepSighting(s.Shot, s.ShotAt, s.Reputation!, s.Dismissed))
+            .ToList();
+
+        _reputation.AddRange(missing);
+        _reputation.Sort((a, b) => b.ShotAt.CompareTo(a.ShotAt));
+
+        if (missing.Count > 0) SaveReputation();
+    }
+
+    private void SaveReputation()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_reputationPath)!);
+            File.WriteAllText(_reputationPath, JsonSerializer.Serialize(_reputation, Json));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Kept in memory for the session; the next reading tries again.
+        }
     }
 
     private void LoadSightings()

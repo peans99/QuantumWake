@@ -133,8 +133,12 @@ public class ScreenAppTests
 
     // ---- the Rep app ----
 
+    /// <summary>
+    /// The text alone names every card and not the one held: that is drawn,
+    /// and comes from the bars - see <see cref="RepBarsTests"/>.
+    /// </summary>
     [Fact]
-    public void The_rep_app_reads_the_organisation_and_standing_and_admits_the_rank_does_not()
+    public void The_rep_app_reads_the_organisation_the_standing_and_every_rank_card_but_not_which_is_held()
     {
         var frame = Read(ScreenAppFixtures.Reputation);
 
@@ -144,12 +148,59 @@ public class ScreenAppTests
         Assert.Equal("HEADHUNTERS", rep.Organisation);
         Assert.Equal("NEUTRAL", rep.Standing);
         Assert.Null(rep.Rank);
+        Assert.Null(rep.Progress);
         Assert.Equal(6, rep.Organisations.Count);
         Assert.Contains("RED WIND LINEHAUL", rep.Organisations);
 
+        Assert.Equal(
+            ["NOT ELIGIBLE", "APPLICANT", "RANK I", "RANK II", "RANK III", "RANK IV", "RANK V", "RANK VI"],
+            rep.Ranks!.Select(c => c.Name));
+        Assert.Equal("ADDITIONAL CONTRACTS", rep.Ranks![2].Perk);
+        Assert.Null(rep.Ranks![1].Perk);
+        Assert.All(rep.Ranks!, c => Assert.Null(c.Fill));
+
         var check = Only(ScreenChecks.Check(frame, At, new Beliefs(), null), "Reputation");
         Assert.Equal("new", check.Verdict);
-        Assert.Contains("highlight", check.Note);
+    }
+
+    /// <summary>
+    /// The GUILD STEWARD caption over a card's corner is the perk's size, and
+    /// as the topmost line it took the card's name and dropped it to the end
+    /// of the ladder. Only a label-sized line starts a card now.
+    /// </summary>
+    [Fact]
+    public void A_caption_printed_over_a_card_does_not_become_a_rank()
+    {
+        var rep = Read(ScreenAppFixtures.RepBounty).Reputation!;
+
+        Assert.Equal("BOUNTY HUNTING", rep.Section);
+        Assert.Equal(
+            ["NOT ELIGIBLE", "APPLICANT", "PROBATIONARY GUILD MEMBER", "JUNIOR GUILD MEMBER",
+             "GUILD MEMBER", "SENIOR GUILD MEMBER", "VETERAN GUILD MEMBER"],
+            rep.Ranks!.Select(c => c.Name));
+        Assert.Equal("ADDITIONAL CONTRACTS", rep.Ranks![6].Perk);
+    }
+
+    [Fact]
+    public void Two_line_ranks_keep_their_perks_apart_and_the_ampersand_reads()
+    {
+        var rep = Read(ScreenAppFixtures.RepWikelo).Reputation!;
+
+        Assert.Equal("WIKELO EMPORIUM", rep.Organisation);
+        Assert.Equal("BARTER & TRADE", rep.Section);
+        Assert.Equal(["NEW CUSTOMER", "VERY GOOD CUSTOMER", "VERY BEST CUSTOMER"], rep.Ranks!.Select(c => c.Name));
+        Assert.Equal([null, "SPECIAL WOLF BARTER CONTRACT", "SPECIAL IDRIS-P BARTER CONTRACT"], rep.Ranks!.Select(c => c.Perk));
+    }
+
+    /// <summary>The app bar along the bottom is set at a label's size and must not read as another row of ranks.</summary>
+    [Fact]
+    public void The_mobiglas_app_bar_is_not_a_row_of_ranks()
+    {
+        var rep = Read(ScreenAppFixtures.RepRedWind).Reputation!;
+
+        Assert.Equal(
+            ["NOT ELIGIBLE", "TRAINEE", "ROOKIE", "JUNIOR", "MEMBER", "EXPERIENCED", "SENIOR"],
+            rep.Ranks!.Select(c => c.Name));
     }
 
     /// <summary>The one frame on which the balance read, and the reading it gave.</summary>

@@ -124,6 +124,29 @@ public sealed class ScreenInsightService(
     }
 
     /// <summary>
+    /// Rep app screenshots read before the bars were measured, newest first,
+    /// whose files are still in the game's folder.
+    /// </summary>
+    /// <remarks>
+    /// The rank and its progress come from pixels, and a reading taken before
+    /// 0.18.22 kept only the text - so every install that photographed the
+    /// Rep app before then holds readings with no rank in them, and the most
+    /// history shows the least. Reading the file again is the only way back,
+    /// and costs a fifth of a second a frame.
+    /// </remarks>
+    public IReadOnlyList<string> Unmeasured(string? installRoot)
+    {
+        if (Excuse(installRoot) is not null) return [];
+
+        var folder = Screenshots.FolderFor(installRoot!);
+
+        return [.. readings.ReputationHistory()
+            .Where(r => !r.Dismissed && r.Reading.Ranks?.Any(c => c.Fill is not null) != true)
+            .Select(r => Path.Combine(folder, r.Shot))
+            .Where(File.Exists)];
+    }
+
+    /// <summary>
     /// Reads the newest unread screenshots, at most <paramref name="take"/> of
     /// them, and says how many are still waiting. The archive on demand: the
     /// watch reads nothing that was there before it began, and the loadout a
@@ -201,9 +224,13 @@ public sealed class ScreenInsightService(
         var scan = await MiningSecondLook.SettleAsync(lines,
             (patch, treatment, t) => reader.ReadAsync(path, patch, treatment, t), CommodityNames(), token);
 
+        // The rank held is drawn, not written; see RepBars. Only decodes
+        // pixels when the frame has rank cards on it.
+        var bars = await RepBars.MeasureAsync(lines, (patch, t) => reader.PixelsAsync(path, patch, t), token);
+
         watch.Stop();
 
-        var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds, scan);
+        var sighting = Understand(info.Name, shotAt, lines, watch.ElapsedMilliseconds, scan, bars);
         readings.Add(sighting);
         return sighting;
     }
@@ -211,12 +238,15 @@ public sealed class ScreenInsightService(
     /// <summary>Everything after the engine, with nothing written: what a frame's lines mean.</summary>
     public ScreenSighting Understand(
         string shot, DateTimeOffset shotAt, IReadOnlyList<ScreenTextLine> lines, long tookMs,
-        MiningScanReading? settledScan = null)
+        MiningScanReading? settledScan = null, IReadOnlyList<RepRankCard>? repBars = null)
     {
         var items = library.Items();
         var ships = ShipNames(items);
 
         var frame = ScreenFrames.Read(lines, items, ships, CommodityNames(), settledScan);
+
+        if (frame.Reputation is { } rep && repBars is { Count: > 0 })
+            frame = frame with { Reputation = rep.WithBars(repBars) };
         var beliefs = new LibraryBeliefs(library);
         var checks = ScreenChecks.Check(frame, shotAt, beliefs, readings.LastWallet(before: shotAt));
 
@@ -334,7 +364,9 @@ public sealed class ScreenInsightService(
             $"{frame.Fleet.Ships.Count} ships at the Fleet Manager",
         ScreenKind.Reputation when frame.Reputation is not null =>
             frame.Reputation.Organisation is { Length: > 0 } org
-                ? $"reputation with {org}" + (frame.Reputation.Standing is { Length: > 0 } s ? $": {s}" : "")
+                ? $"reputation with {org}" + (frame.Reputation.Rank is { Length: > 0 } rank
+                    ? $": {rank} {Math.Round((frame.Reputation.Progress ?? 0) * 100)}%"
+                    : frame.Reputation.Standing is { Length: > 0 } s ? $": {s}" : "")
                 : "the Rep app",
         ScreenKind.Kiosk when frame.Kiosk is not null =>
             $"a kiosk {(frame.Kiosk.Buying == false ? "selling" : "buying")}, {frame.Kiosk.Rows.Count} commodities listed",

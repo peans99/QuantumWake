@@ -430,6 +430,7 @@ function showView(name) {
   if (name === 'armoury') loadArmoury().catch(() => {});
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
+  if (name === 'reputation') loadReputation().catch(() => {});
   if (name === 'events') loadEvents().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
@@ -9392,6 +9393,322 @@ window.addEventListener('resize', () => {
   if (hangarShips && $('#view-hangar')?.classList.contains('active')
     && $('#hangar-mode')?.value === 'scale') renderHangar();
 });
+
+/* ---- Reputation: the Rep app's ladders, one screenshot at a time ----
+   The logs carry no reputation, so every point is a photograph the pilot took
+   and every figure is dated by it. The rank is read off the card's bar; the
+   reputation is that bar laid on the installed ladder, and is called an
+   estimate wherever it is shown. */
+
+let reputationAll = null;
+
+async function loadReputation() {
+  const list = $('#reputation-list');
+  if (!list) return;
+
+  try {
+    reputationAll = await getJson('/api/reputation');
+  } catch {
+    list.textContent = '';
+    list.append(el('p', 'muted', tx('Could not load reputation — is the app still running?')));
+    return;
+  }
+
+  renderReputation();
+}
+
+function renderReputation() {
+  const list = $('#reputation-list');
+  if (!list) return;
+
+  list.textContent = '';
+  const data = reputationAll || {};
+  const orgs = data.organisations || [];
+
+  const count = $('#reputation-count');
+  if (count) {
+    count.textContent = orgs.length
+      ? `${txn(orgs.length, '{count} organisation', '{count} organisations')} · ${txn(data.readings || 0, '{count} screenshot', '{count} screenshots')}`
+      : '';
+  }
+
+  const notice = $('#reputation-notice');
+  if (notice) {
+    const said = reputationNotice(data);
+    notice.hidden = !said;
+    notice.textContent = said || '';
+  }
+
+  if (!orgs.length) {
+    list.append(el('p', 'muted', data.canRead === false
+      ? tx('This copy cannot read screenshots — the overlay does that. Start Quantum Wake from its tray icon and the Rep app screenshots you take will be read.')
+      : tx('No Rep app screenshots yet. In the game, open the mobiGlas Rep app, pick an organisation and press Print Screen — one screenshot starts its line here, and each one after adds a point.')));
+    return;
+  }
+
+  for (const org of orgs) list.append(reputationCard(org));
+}
+
+/** What the page cannot do yet and why, or null when it is all there. */
+function reputationNotice(data) {
+  const said = [];
+
+  if (data.unmeasured > 0) {
+    said.push(data.watching
+      ? txn(data.unmeasured,
+        '{count} Rep screenshot taken before ranks were read is being read again.',
+        '{count} Rep screenshots taken before ranks were read are being read again.')
+      : txn(data.unmeasured,
+        '{count} Rep screenshot was read before ranks were; turn on screenshot reading in Overlay settings to read it again.',
+        '{count} Rep screenshots were read before ranks were; turn on screenshot reading in Overlay settings to read them again.'));
+  }
+
+  if (data.unmeasurable > 0) {
+    said.push(txn(data.unmeasurable,
+      '{count} older reading has no rank, and its screenshot is no longer in the game folder.',
+      '{count} older readings have no rank, and their screenshots are no longer in the game folder.'));
+  }
+
+  if (data.ladders === 0) {
+    said.push(tx('The ladders come from your installed game files, which have not been read yet — ranks still show, and the reputation estimates follow once Settings says the game data is ready.'));
+  }
+
+  return said.join(' ');
+}
+
+function reputationPercent(progress) {
+  return tx('{n}%', { n: Math.round((progress || 0) * 100) });
+}
+
+function reputationCard(org) {
+  const card = el('article', 'point-card rep-card');
+
+  const head = el('div', 'wikelo-head');
+  head.append(el('div', 'point-name-read', org.name));
+  head.append(el('div', 'muted', tx('last seen {when}', { when: ago(org.lastSeen) })));
+  card.append(head);
+
+  if (org.rank) {
+    card.append(reputationSummary(org));
+  } else {
+    card.append(el('div', 'muted rep-unread', tx('Rank not read — this screenshot was read before ranks were.')));
+  }
+  if (org.ladder?.length) card.append(reputationLadder(org));
+
+  if (org.change) {
+    card.append(reputationChange(org));
+  } else if (org.rank) {
+    card.append(el('div', 'muted rep-change', tx('One reading so far. Take another after some contracts to see it move.')));
+  }
+
+  const trend = reputationTrend(org.history || [], org.ladder || []);
+  if (trend) card.append(trend);
+
+  // The word under the name in the app is how they regard you - Neutral,
+  // Liked - and not a rank; it is said once, small, so it is not mistaken
+  // for one.
+  const foot = [];
+  if (org.standing) foot.push(tx('They regard you as {standing}', { standing: org.standing.toLowerCase() }));
+  if (org.work) {
+    foot.push(tx('{issuer} in your logs: {done} finished, {abandoned} abandoned, {failed} failed', {
+      issuer: org.work.issuer, done: org.work.completed, abandoned: org.work.abandoned, failed: org.work.failed,
+    }));
+  }
+  if (foot.length) card.append(el('div', 'muted rep-foot', foot.join(' · ')));
+
+  return card;
+}
+
+/** The four answers people come here for, each given a stable label. */
+function reputationSummary(org) {
+  const place = org.place;
+  const summary = el('dl', 'rep-summary');
+  const fact = (label, value, emphasis) => {
+    const item = el('div', emphasis ? 'rep-fact emphasis' : 'rep-fact');
+    item.append(el('dt', 'rep-fact-label', tx(label)));
+    item.append(el('dd', 'rep-fact-value', value));
+    summary.append(item);
+  };
+
+  fact('Rank', place?.rank || org.rank, true);
+  fact('Progress', reputationPercent(org.progress));
+
+  if (place) {
+    fact('Estimated reputation', tx('about {rep} rep ±{margin}', {
+      rep: place.estimate.toLocaleString(), margin: place.resolution.toLocaleString(),
+    }));
+    fact('Next rank', place.next != null
+      ? tx('{left} rep to {rank}', {
+        left: Math.max(0, place.next - place.estimate).toLocaleString(),
+        rank: org.ladder?.[place.rankIndex + 1]?.name || tx('the next rank'),
+      })
+      : tx('the top rank'));
+  } else {
+    fact('Career', org.section || tx('unknown'));
+  }
+
+  if (org.section && place) summary.append(el('div', 'rep-section', org.section));
+  return summary;
+}
+
+/** Every rank as a short bar, with a label that stays usable away from a mouse. */
+function reputationLadder(org) {
+  const wrap = el('section', 'rep-ladder-wrap');
+  wrap.append(el('div', 'rep-ladder-heading', tx('Rank path')));
+
+  const row = el('div', 'rep-ladder');
+  row.setAttribute('role', 'list');
+  row.setAttribute('aria-label', tx('Rank path'));
+  const held = org.place?.rankIndex ?? (org.ladder || []).findIndex((r) => r.name === org.rank);
+
+  org.ladder.forEach((rank, i) => {
+    const rung = el('div', i === held ? 'rep-rung held' : 'rep-rung');
+    rung.setAttribute('role', 'listitem');
+    const bar = el('div', 'rep-rung-bar');
+    const fill = el('div', 'rep-rung-fill');
+    fill.style.width = `${Math.round(Math.max(0, Math.min(1, rank.fill ?? 0)) * 100)}%`;
+    bar.append(fill);
+    rung.append(bar);
+    rung.append(el('div', 'rep-rung-name', rank.name));
+    rung.title = org.place
+      ? tx('{rank} from {rep} rep', { rank: rank.name, rep: rank.minReputation.toLocaleString() })
+        + (rank.perk ? ` · ${rank.perk}` : '')
+      : rank.name;
+    rung.setAttribute('aria-label', rung.title + (i === held ? ` · ${tx('Current rank')}` : ''));
+    row.append(rung);
+  });
+
+  wrap.append(row);
+  return wrap;
+}
+
+/** The two newest readings set side by side, with the contracts in between. */
+function reputationChange(org) {
+  const change = org.change;
+  const line = el('div', 'rep-change');
+  // The ladder's spelling where there is one - Member, not MEMBER - so the
+  // line reads like the rest of the card.
+  const named = (p) => ({ ...p, rank: org.ladder?.[p.rankIndex]?.name || p.rank });
+  const history = (org.history || []).filter((p) => p.rank).map(named);
+  const from = history[history.length - 2];
+  const to = history[history.length - 1];
+
+  const parts = [tx('Since {date}', { date: dateOf(change.from) })];
+
+  if (change.ranks > 0) {
+    parts.push(tx('{from} {fromPct} → {to} {toPct}', {
+      from: from.rank, fromPct: reputationPercent(from.progress), to: to.rank, toPct: reputationPercent(to.progress),
+    }));
+  } else if (change.ranks < 0) {
+    parts.push(tx('down from {from} to {to}', { from: from.rank, to: to.rank }));
+  }
+
+  // Two pixels either way is the reading's own wobble: the Headhunters bar
+  // read 66.9% in September and 67.8% in October with no contract between.
+  const still = change.ranks === 0 && change.progress != null && Math.abs(change.progress) < 2 / 170;
+
+  if (still) {
+    parts.push(tx('no movement beyond a pixel of the bar'));
+  } else if (change.ranks === 0 && change.progress != null) {
+    const points = Math.round(change.progress * 100);
+    parts.push(tx('{sign}{n} points of {rank}', { sign: points > 0 ? '+' : '−', n: Math.abs(points), rank: to.rank }));
+  }
+
+  if (!still && change.estimate != null && change.estimate !== 0) {
+    parts.push(tx('about {sign}{rep} rep', {
+      sign: change.estimate > 0 ? '+' : '−', rep: Math.abs(change.estimate).toLocaleString(),
+    }));
+  }
+
+  // A floor: the logs hold what the backups kept and what put up a marker.
+  // On this install Red Wind went from Junior to Member before the first
+  // Red Wind contract the logs hold, so the count is never the whole story.
+  if (change.work) {
+    parts.push(txn(change.work.completed,
+      'at least {count} {issuer} contract finished in between',
+      'at least {count} {issuer} contracts finished in between',
+      { issuer: change.work.issuer }));
+  }
+
+  line.textContent = parts.join(' · ');
+  return line;
+}
+
+/**
+ * Position on the ladder over time: the rank's index plus the way through it,
+ * so a rank gained is a step up and not a fall back to an empty bar. Drawn
+ * only from two readings with a rank.
+ */
+function reputationTrend(history, ladder) {
+  const points = history.filter((p) => p.rank && p.rankIndex != null);
+  if (points.length < 2) return null;
+
+  const rankName = (index) => ladder[index]?.name || points.find((p) => p.rankIndex === index)?.rank || tx('unknown');
+  const ns = 'http://www.w3.org/2000/svg';
+  const make = (tag) => (typeof document.createElementNS === 'function' ? document.createElementNS(ns, tag) : el(tag));
+  const width = 300;
+  const height = 48;
+  const times = points.map((p) => new Date(p.at).getTime());
+  const levels = points.map((p) => p.rankIndex + (p.progress || 0));
+  const t0 = Math.min(...times);
+  const span = Math.max(1, Math.max(...times) - t0);
+  const low = Math.floor(Math.min(...levels));
+  const high = Math.ceil(Math.max(...levels));
+  const range = Math.max(1, high - low);
+  const x = (t) => 4 + ((t - t0) / span) * (width - 8);
+  const y = (v) => height - 4 - ((v - low) / range) * (height - 8);
+
+  const svg = make('svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('class', 'rep-trend');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', tx('Reputation trend from {first} to {last}', {
+    first: dateOf(points[0].at), last: dateOf(points[points.length - 1].at),
+  }));
+
+  for (let level = low + 1; level < high; level++) {
+    const rule = make('line');
+    rule.setAttribute('x1', '0');
+    rule.setAttribute('x2', String(width));
+    rule.setAttribute('y1', String(y(level)));
+    rule.setAttribute('y2', String(y(level)));
+    rule.setAttribute('class', 'rep-trend-rank');
+    svg.append(rule);
+  }
+
+  const line = make('polyline');
+  line.setAttribute('points', points.map((p, i) => `${x(times[i]).toFixed(1)},${y(levels[i]).toFixed(1)}`).join(' '));
+  line.setAttribute('class', 'rep-trend-line');
+  svg.append(line);
+
+  points.forEach((p, i) => {
+    const dot = make('circle');
+    dot.setAttribute('cx', x(times[i]).toFixed(1));
+    dot.setAttribute('cy', y(levels[i]).toFixed(1));
+    dot.setAttribute('r', '2.5');
+    dot.setAttribute('class', 'rep-trend-dot');
+    const title = make('title');
+    title.textContent = `${dateOf(p.at)} · ${p.rank} ${reputationPercent(p.progress)}`
+      + (p.estimate != null ? ` · ${tx('about {rep} rep', { rep: p.estimate.toLocaleString() })}` : '');
+    dot.append(title);
+    svg.append(dot);
+  });
+
+  const wrap = el('figure', 'rep-trend-wrap');
+  wrap.append(el('figcaption', 'rep-trend-heading', tx('Trend')));
+  const chart = el('div', 'rep-trend-chart');
+  const axis = el('div', 'rep-trend-axis');
+  axis.setAttribute('aria-hidden', 'true');
+  for (let level = high; level >= low; level--) {
+    axis.append(el('span', 'rep-trend-rank-label', rankName(level)));
+  }
+  chart.append(axis, svg);
+  wrap.append(chart);
+  wrap.append(el('div', 'muted rep-trend-caption', txn(points.length,
+    '{count} reading, {first} to {last}', '{count} readings, {first} to {last}',
+    { first: dateOf(points[0].at), last: dateOf(points[points.length - 1].at) })));
+  return wrap;
+}
 
 /* ---- Wikelo's emporium: what he trades, from the game files, against the stash ----
    Every number on this page is the installed patch's. What the page cannot

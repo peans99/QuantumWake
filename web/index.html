@@ -37,6 +37,7 @@
         <button data-view="jobs">Command deck</button>
         <button data-view="routes">Routes</button>
         <button data-view="contracts">Contracts</button>
+        <button data-view="reputation">Reputation</button>
         <button data-view="checklists">Checklists</button>
         <button data-view="blueprints">Blueprints</button>
         <button data-view="wikelo">Wikelo</button>
@@ -1718,6 +1719,29 @@
   <!-- WIKELO: the Banu trader's collection contracts, read from the installed
        game rather than a guide, each checked against what the stash sightings
        say is held. Tracking one makes a shopping list of its requirements. -->
+  <!-- REPUTATION: standing as the Rep app showed it, one screenshot at a time.
+       The logs carry none (docs/findings.md); the rank is read off the card's
+       bar and turned into reputation with the installed ladder, so every figure
+       is an estimate and every organisation says when it was last seen. -->
+  <section id="view-reputation" class="view">
+    <div class="section-bar">
+      <h2>Reputation</h2>
+      <div class="controls">
+        <span class="muted" id="reputation-count"></span>
+      </div>
+    </div>
+    <p class="muted caption">
+      Your standing as the mobiGlas Rep app showed it, one screenshot at a time. The game
+      never writes reputation to its logs, so each point here is a screenshot you took:
+      open an organisation in the Rep app and press Print Screen. The rank is read off the
+      card's bar, and the bar's share of the rank is turned into reputation with the
+      thresholds in your installed game files — an <b>estimate</b>, which assumes the bar
+      fills evenly. Contracts come from your logs.
+    </p>
+    <div id="reputation-notice" class="muted" hidden></div>
+    <div id="reputation-list" class="points-list"></div>
+  </section>
+
   <section id="view-wikelo" class="view">
     <div class="section-bar">
       <h2>Wikelo's emporium</h2>

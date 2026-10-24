@@ -69,6 +69,12 @@ public sealed class ScreenWatchService(
 
                 var waiting = insight.Unread(install.RootPath);
 
+                if (waiting.Count == 0)
+                {
+                    await Remeasure(stoppingToken);
+                    continue;
+                }
+
                 foreach (var file in waiting.Take(BatchPerTick))
                 {
                     try
@@ -94,6 +100,36 @@ public sealed class ScreenWatchService(
         catch (OperationCanceledException)
         {
             // Shutting down.
+        }
+    }
+
+    /// <summary>Rep frames already tried this run, so one that still will not measure is not read every tick.</summary>
+    private readonly HashSet<string> _remeasured = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Reads again the Rep app frames that were read before their bars were
+    /// measured - see <see cref="ScreenInsightService.Unmeasured"/>. Only when
+    /// nothing new is waiting, so a fresh screenshot never queues behind them.
+    /// A reading the pilot dismissed is left dismissed, which is why those are
+    /// not offered.
+    /// </summary>
+    private async Task Remeasure(CancellationToken token)
+    {
+        foreach (var path in insight.Unmeasured(install!.RootPath).Where(_remeasured.Add).Take(BatchPerTick))
+        {
+            try
+            {
+                var sighting = await insight.ReadShotAsync(path, token);
+                logger.LogInformation("Measured {Shot} again: {Summary}", sighting.Shot, sighting.Summary);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Could not measure {Shot} again", path);
+            }
         }
     }
 }
