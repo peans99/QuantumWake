@@ -9544,7 +9544,7 @@ function reputationSummary(org) {
       })
       : tx('the top rank'));
   } else {
-    fact('Track', org.section || tx('unknown'));
+    fact('Career', org.section || tx('unknown'));
   }
 
   if (org.section && place) summary.append(el('div', 'rep-section', org.section));

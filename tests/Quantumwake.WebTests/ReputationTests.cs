@@ -117,7 +117,7 @@ public class ReputationTests
 
         Assert.Equal(3, page.Count("__dom.node('#reputation-list').byClass('rep-fact').length"));
         Assert.Equal(0, page.Count("__dom.node('#reputation-list').byClass('rep-section').length"));
-        Assert.Contains("TrackHauling", page.NodeText("#reputation-list"));
+        Assert.Contains("CareerHauling", page.NodeText("#reputation-list"));
     }
     /// <summary>A reading from before the bars were read says so, rather than drawing an empty one.</summary>
     [Fact]

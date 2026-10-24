@@ -37,6 +37,31 @@ public class LocaleCatalogueTests
     private static Dictionary<string, JsonElement> Read(string language) =>
         JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(Web("locales", $"{language}.json")))!;
 
+    /// <summary>
+    /// One English, one translation. A key written twice is not an error to
+    /// any JSON reader - the last one wins, the browser's included - so the
+    /// Reputation page's "Track" label (Filière) once turned the trip plan's
+    /// "Track" button from Suivre into Filière, and nothing went red.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Catalogues))]
+    public void No_english_is_translated_twice(string language)
+    {
+        var reader = new Utf8JsonReader(File.ReadAllBytes(Web("locales", $"{language}.json")));
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var twice = new List<string>();
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.PropertyName && reader.CurrentDepth == 1
+                && !seen.Add(reader.GetString()!))
+                twice.Add(reader.GetString()!);
+        }
+
+        Assert.True(twice.Count == 0,
+            $"{language}.json translates the same English more than once:\n  {string.Join("\n  ", twice)}");
+    }
+
     /// <summary>Each form an entry can take: one string, or a plural's forms.</summary>
     private static IEnumerable<(string Form, string Text)> Forms(JsonElement value) =>
         value.ValueKind == JsonValueKind.String
