@@ -5,9 +5,12 @@ Every release is a version bump plus a tag. The pipeline does the rest.
 ## The rule
 
 **The version is bumped in the same pull request as the work, or in one of its
-own before tagging.** `Directory.Build.props` is the single declaration —
-`Version`, `AssemblyVersion` and `FileVersion` — and everything else reads from
-it.
+own before tagging.** `Directory.Build.props` declares it once, as `Version`, and everything else
+reads from it. `AssemblyVersion` and `FileVersion` are deliberately not written
+there: the SDK derives both from `Version`. Written out by hand they stayed at
+0.18.11 through 0.18.23, and since the app reads `AssemblyVersion` to know what
+it is, every one of those builds called itself 0.18.11 and offered an update to
+itself. `VersionTests` now fails if the built assembly disagrees with `Version`.
 
 This is enforced, not trusted: `release.yml` refuses to build when the tag and
 `Directory.Build.props` disagree.
