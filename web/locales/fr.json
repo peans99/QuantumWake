@@ -4405,7 +4405,6 @@
   "the logs record what was paid, never what was asked": "les journaux enregistrent ce qui a été payé, jamais ce qui était demandé",
   "nothing - the logs never carry a shop's price": "rien - les journaux ne portent jamais le prix d’une boutique",
   "nothing - the logs never carry reputation": "rien - les journaux ne portent jamais la réputation",
-  "the rank is a highlighted card among identical ones, and a highlight is not text, so it does not read": "le rang est une carte mise en évidence parmi des cartes identiques, et une mise en évidence n’est pas du texte, donc il ne se lit pas",
   "nothing - the ship did not read": "rien - le vaisseau ne s’est pas lu",
   "(no ship read)": "(aucun vaisseau lu)",
   "nothing named, so nothing compared": "rien de nommé, donc rien de comparé",
@@ -5089,5 +5088,59 @@
   "Trading layout": "Disposition Commerce",
   "Minimal layout": "Disposition minimale",
   "Star Citizen is set to {language}; installing StarStrings sets it back to English, because its user.cfg says g_language = english.": "Star Citizen est réglé sur {language} ; installer StarStrings le remet en anglais, car son user.cfg indique g_language = english.",
-  "Star Citizen is set to {language}, so it reads that language's text file, not the English one these labels go into: they show only while the game is set to English.": "Star Citizen est réglé sur {language}, il lit donc le fichier de texte de cette langue, pas le fichier anglais où vont ces étiquettes : elles ne s’affichent que lorsque le jeu est en anglais."
+  "Star Citizen is set to {language}, so it reads that language's text file, not the English one these labels go into: they show only while the game is set to English.": "Star Citizen est réglé sur {language}, il lit donc le fichier de texte de cette langue, pas le fichier anglais où vont ces étiquettes : elles ne s’affichent que lorsque le jeu est en anglais.",
+  "Your standing as the mobiGlas Rep app showed it, one screenshot at a time. The game never writes reputation to its logs, so each point here is a screenshot you took: open an organisation in the Rep app and press Print Screen. The rank is read off the card's bar, and the bar's share of the rank is turned into reputation with the thresholds in your installed game files — an <b>estimate</b>, which assumes the bar fills evenly. Contracts come from your logs.": "Votre réputation telle que l’application Réputation du mobiGlas l’a montrée, une capture à la fois. Le jeu n’écrit jamais la réputation dans ses journaux, donc chaque point ici est une capture que vous avez prise : ouvrez une organisation dans l’application Réputation et appuyez sur Impr. écran. Le rang se lit sur la barre de la carte, et la part de la barre remplie devient de la réputation grâce aux seuils des fichiers du jeu installé — une <b>estimation</b>, qui suppose que la barre se remplit régulièrement. Les contrats viennent de vos journaux.",
+  "Could not load reputation — is the app still running?": "Impossible de charger la réputation — l’application tourne-t-elle encore ?",
+  "{count} organisations": {
+    "one": "{count} organisation",
+    "other": "{count} organisations"
+  },
+  "{count} screenshots": {
+    "one": "{count} capture d’écran",
+    "other": "{count} captures d’écran"
+  },
+  "This copy cannot read screenshots — the overlay does that. Start Quantum Wake from its tray icon and the Rep app screenshots you take will be read.": "Cette copie ne sait pas lire les captures — c’est l’overlay qui s’en charge. Lancez Quantum Wake depuis son icône de la zone de notification et vos captures de l’application Réputation seront lues.",
+  "No Rep app screenshots yet. In the game, open the mobiGlas Rep app, pick an organisation and press Print Screen — one screenshot starts its line here, and each one after adds a point.": "Aucune capture de l’application Réputation pour l’instant. En jeu, ouvrez l’application Réputation du mobiGlas, choisissez une organisation et appuyez sur Impr. écran — une capture ouvre sa ligne ici, et chacune des suivantes ajoute un point.",
+  "{count} Rep screenshots taken before ranks were read are being read again.": {
+    "one": "{count} capture Réputation prise avant la lecture des rangs est en cours de relecture.",
+    "other": "{count} captures Réputation prises avant la lecture des rangs sont en cours de relecture."
+  },
+  "{count} Rep screenshots were read before ranks were; turn on screenshot reading in Overlay settings to read them again.": {
+    "one": "{count} capture Réputation a été lue avant les rangs ; activez la lecture des captures dans les réglages de l’overlay pour la relire.",
+    "other": "{count} captures Réputation ont été lues avant les rangs ; activez la lecture des captures dans les réglages de l’overlay pour les relire."
+  },
+  "{count} older readings have no rank, and their screenshots are no longer in the game folder.": {
+    "one": "{count} lecture plus ancienne n’a pas de rang, et sa capture n’est plus dans le dossier du jeu.",
+    "other": "{count} lectures plus anciennes n’ont pas de rang, et leurs captures ne sont plus dans le dossier du jeu."
+  },
+  "The ladders come from your installed game files, which have not been read yet — ranks still show, and the reputation estimates follow once Settings says the game data is ready.": "Les échelles viennent des fichiers du jeu installé, qui n’ont pas encore été lus — les rangs s’affichent déjà, et les estimations de réputation suivront quand les Réglages indiqueront que les données du jeu sont prêtes.",
+  "{n}%": "{n} %",
+  "last seen {when}": "vu {when}",
+  "{pct} of the way through": "{pct} du chemin parcouru",
+  "Rank not read — this screenshot was read before ranks were.": "Rang non lu — cette capture a été lue avant les rangs.",
+  "One reading so far. Take another after some contracts to see it move.": "Une seule lecture pour l’instant. Prenez-en une autre après quelques contrats pour la voir bouger.",
+  "They regard you as {standing}": "Ils vous considèrent comme {standing}",
+  "{issuer} in your logs: {done} finished, {abandoned} abandoned, {failed} failed": "{issuer} dans vos journaux : {done} terminés, {abandoned} abandonnés, {failed} échoués",
+  "about {rep} rep (±{margin}, estimate)": "environ {rep} rép. (±{margin}, estimation)",
+  "{left} to {rank} at {at}": "{left} avant {rank} à {at}",
+  "the next rank": "le rang suivant",
+  "the top rank": "le rang le plus haut",
+  "{rank} from {rep} rep": "{rank} à partir de {rep} rép.",
+  "Since {date}": "Depuis le {date}",
+  "{from} {fromPct} → {to} {toPct}": "{from} {fromPct} → {to} {toPct}",
+  "down from {from} to {to}": "redescendu de {from} à {to}",
+  "{sign}{n} points of {rank}": "{sign}{n} points de {rank}",
+  "about {sign}{rep} rep": "environ {sign}{rep} rép.",
+  "at least {count} {issuer} contracts finished in between": {
+    "one": "au moins {count} contrat {issuer} terminé entre-temps",
+    "other": "au moins {count} contrats {issuer} terminés entre-temps"
+  },
+  "about {rep} rep": "environ {rep} rép.",
+  "{count} readings, {first} to {last}": {
+    "one": "{count} lecture, du {first} au {last}",
+    "other": "{count} lectures, du {first} au {last}"
+  },
+  "the rank is read off the card's bar, which is drawn rather than written; the Reputation page turns it into an estimate": "le rang se lit sur la barre de la carte, qui est dessinée et non écrite ; la page Réputation en tire une estimation",
+  "the rank is drawn on the card's bar rather than written, and this frame was read without its pixels": "le rang est dessiné sur la barre de la carte plutôt qu’écrit, et cette image a été lue sans ses pixels",
+  "no movement beyond a pixel of the bar": "aucun mouvement au-delà d’un pixel de la barre"
 }

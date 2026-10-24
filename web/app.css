@@ -6770,3 +6770,25 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
   body.overlay.glance .now-focus[data-urgency="live"] .now-focus-mark { animation: none; }
   .toast { animation: none; }
 }
+
+/* Reputation: each organisation's ladder as a row of short bars, the held
+   rank lit, and its position over time as a line that steps up a rank. */
+.rep-where { font-size: 13px; }
+.rep-estimate { font-size: 12px; color: var(--cyan-hot); }
+.rep-ladder { display: flex; gap: 8px 4px; flex-wrap: wrap; }
+/* Four to a row, as the game lays its cards: eight ranks across one card ran their names together. */
+.rep-rung { flex: 1 1 calc(25% - 4px); display: flex; flex-direction: column; gap: 3px; }
+.rep-rung-bar { height: 4px; background: var(--rule); }
+.rep-rung-fill { height: 100%; background: var(--cyan-deep); }
+.rep-rung.held .rep-rung-fill { background: var(--green); }
+.rep-rung-name { font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); line-height: 1.2; }
+.rep-rung.held .rep-rung-name { color: var(--text); }
+.rep-change { font-size: 12px; }
+.rep-foot { font-size: 11px; }
+.rep-trend-wrap { display: flex; flex-direction: column; gap: 2px; }
+.rep-trend { width: 100%; height: auto; display: block; }
+.rep-trend-rank { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.rep-trend-line { fill: none; stroke: var(--green); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.rep-trend-dot { fill: var(--green); }
+.rep-trend-caption { font-size: 10.5px; }
+#reputation-notice { margin: 0 0 var(--gap); font-size: 12px; color: var(--amber); }

@@ -292,11 +292,15 @@ public static class ScreenChecks
     private static ScreenCheck Reputation(ReputationReading rep)
     {
         var claim = rep.Organisation is { Length: > 0 } org
-            ? rep.Standing is { Length: > 0 } standing ? $"{org}: {standing}" : org
+            ? rep.Rank is { Length: > 0 } rank
+                ? $"{org}: {rank} {Math.Round((rep.Progress ?? 0) * 100)}%"
+                : rep.Standing is { Length: > 0 } standing ? $"{org}: {standing}" : org
             : $"{rep.Organisations.Count} organisations listed";
 
         return new ScreenCheck("Reputation", claim, "nothing - the logs never carry reputation", "new",
-            "the rank is a highlighted card among identical ones, and a highlight is not text, so it does not read");
+            rep.Rank is not null
+                ? "the rank is read off the card's bar, which is drawn rather than written; the Reputation page turns it into an estimate"
+                : "the rank is drawn on the card's bar rather than written, and this frame was read without its pixels");
     }
 
     /// <summary>The parts read off the loadout screen against the ship's factory fit.</summary>

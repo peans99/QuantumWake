@@ -980,7 +980,8 @@ the factory comparison need no second path.
 **The Rep app's rank does not read, and the reading says so.** Eight
 identical cards with one highlighted; the engine returns eight labels and no
 highlight. The organisation and its standing read because they are set
-large.
+large. *Superseded in 0.18.22: the rank is drawn, and the drawing reads - see
+"The Rep app's bars" below.*
 
 **Two corrections to earlier rules.** The game prints `Empty` in a port with
 nothing in it - the Hermes' flair ports - and that is a claim the reading now
@@ -1462,6 +1463,101 @@ takes `left,top,right,bottom` in fractions when the panels were somewhere else;
 the default is the right-hand panel, where a location's stash sits.
 
 ---
+
+## The Rep app's bars
+
+The rank held is never written on the Rep app. Every card prints its name; the
+only mark of which one is held is drawn - a bar above each label, teal for the
+part earned, a border round the card. Fourteen frames from this install, two
+from 8 September and twelve from 24 October, all 3440x1440:
+
+| What | Measured |
+|---|---|
+| Card background | about (56, 74, 87) |
+| Empty track | about (66, 92, 113) - twenty-odd levels bluer than the card |
+| Teal fill | (144, 255, 212) at its brightest |
+| Bar length | 168 to 173 px on every card of every frame |
+| Bar thickness | seven rows |
+| Bar position | its top about 1.3 label heights above the label's top, starting about one label height left of it |
+
+So the bar is found from the label the engine already placed, and measured in
+label heights so it holds at other resolutions. The track is found by being
+bluer than the pixels a bar's thickness above and below it, never against a
+fixed level: the panel is translucent, and the glow behind it lifts whole
+regions by as much as the track differs from the card. One pixel is about
+half a percent of a rank.
+
+**Which card is held.** The last card with any teal. Every rank before it is
+full; the first card can be an empty NOT ELIGIBLE below ranks already earned
+(Red Wind, Covalex, Dead Saints, the Bounty Hunters Guild), so "the first card
+not full" is wrong. A last teal card that is full is the next rank just
+reached.
+
+**The labels.** Two lines for some ranks (`JR.` / `CONTRACTOR`), and a perk
+under some in a smaller face (`SPECIAL WOLF` / `BARTER CONTRACT`, 11 px against
+14). Only a label-sized line starts a card: the Bounty Hunters' VETERAN GUILD
+MEMBER card has `GUILD` / `STEWARD` printed over its corner by the game, in
+the perk's face, and as the topmost line it took the card's name. The
+mobiGlas's own app bar along the bottom is set at a label's size and is
+fenced off by its names.
+
+**What it read.** All fourteen frames gave a rank; checked by eye against the
+pictures:
+
+| Organisation | 8 Sept | 24 Oct |
+|---|---|---|
+| Red Wind Linehaul | Junior 60.4% | Member 54.0% |
+| Headhunters | Rank I 66.9% | Rank I 67.8% |
+| Bounty Hunters Guild | | Guild Member 12.1% |
+| Covalex | | Member 1.1% |
+| Dead Saints | | Rookie 75.9% |
+| FTL Courier | | Neutral 75.3% |
+| Hockrow Agency | | Neutral 25.9% |
+| Intersec Defense Solutions | | Neutral 13.5% |
+| Adagio Holdings | | Neutral 13.0% |
+| Ling Family Hauling | | Neutral 7.1% |
+| Wikelo Emporium | | New Customer 4.1% |
+| Foxwell Enforcement | | Neutral 1.8% |
+
+The Headhunters pair is the closest thing to a repeat measurement: no
+Headhunters contract in the logs between them, and the two readings differ by
+under two pixels. The page treats a change that small as no change.
+
+One frame caught a card mid-animation, RANK VI sliding in over its neighbour
+with no bar where one should be. A card that cannot be read after the rank
+held does not matter, since every card after it is empty; one the answer
+depends on leaves the rank unsaid.
+
+**The ladder.** The word under the organisation's name - NEUTRAL on all
+fourteen - is not the rank: Wikelo prints NEUTRAL there while the rank held is
+NEW CUSTOMER. It is the Affinity scope every organisation carries (Hated to
+Exalted). The ranks belong to a scope, `SReputationScopeParams`, whose
+`standingMap` holds a `reputationCeiling` and its `standings`, each with a
+`minReputation`; 39 scopes carry named ranks in 4.10.2. Ladders are shared -
+Red Wind, Covalex, Ling and FTL all rank on `ReputationScope_Hauling`, Not
+Eligible at -1,000 to Master at 237,750 - and an organisation's own list of
+scopes in the DataCore leaves out ones the app plainly shows (the Headhunters'
+Rank I to VI). So the page's ladder is found from its cards: the scope whose
+rank names are the ones read, the heading and the perks breaking ties between
+ladders that share every name. The Headhunters' heading is shown in game as
+its own key, `@REPSCOPE_SHIPCOMBAT_HEADHUNTERS_NAME`, which has no English in
+`global.ini` - and that key is exactly what names the ladder.
+
+**The estimate.** The rank's threshold plus the bar's share of the gap to the
+next: Red Wind Member at 54% is 5,250 + 0.54 x 22,500, about 17,400, give or
+take 132 (one pixel). That assumes the bar fills in proportion, which nothing
+has confirmed. The obvious check - the hauls the logs hold between the two Red
+Wind photographs - does not close: the logs hold eleven completed Red Wind
+contracts in between, the first on 7 October already titled for Members, so
+Red Wind went from Junior to Member before any Red Wind contract the logs
+kept. The contracts between two readings are therefore shown as a floor, and
+the estimate stays an estimate.
+
+**Readings from before.** Readings taken before 0.18.22 kept the text and not
+the pixels, so every install that photographed the Rep app holds readings
+with no rank. The screenshot watch reads those files again, once each, when
+nothing new is waiting; a reading whose file has gone is shown without a rank
+and counted as such.
 
 ## Open questions
 

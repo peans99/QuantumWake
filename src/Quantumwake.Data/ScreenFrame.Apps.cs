@@ -79,17 +79,37 @@ public sealed record FleetRow(
 public sealed record FleetReading(IReadOnlyList<FleetRow> Ships);
 
 /// <summary>What the mobiGlas Rep app said about one organisation.</summary>
-/// <param name="Standing">"NEUTRAL", as printed under the name.</param>
-/// <param name="Rank">
-/// Always null, and worth a field so the absence is a statement: the current
-/// rank is a highlighted card among eight identical ones, and a highlight is
-/// not text.
+/// <param name="Standing">
+/// "NEUTRAL", as printed under the name. Not the rank: Wikelo prints NEUTRAL
+/// there while the rank held is NEW CUSTOMER.
 /// </param>
+/// <param name="Rank">
+/// The rank held, from the bars - see <see cref="RepBars"/>. Null when the
+/// bars were not measured, which is every reading taken before 0.18.22 and
+/// any frame read without pixels.
+/// </param>
+/// <param name="Section">The ladder's heading - "HAULING", "STANDING", "BARTER & TRADE".</param>
+/// <param name="Ranks">Every card on the ladder, in layout order, with its bar when measured.</param>
+/// <param name="Progress">How far into <paramref name="Rank"/>, 0 to 1, read off its bar.</param>
 public sealed record ReputationReading(
     string? Organisation,
     string? Standing,
     string? Rank,
-    IReadOnlyList<string> Organisations);
+    IReadOnlyList<string> Organisations,
+    string? Section = null,
+    IReadOnlyList<RepRankCard>? Ranks = null,
+    double? Progress = null)
+{
+    /// <summary>The same reading with its bars measured and the rank they show.</summary>
+    public ReputationReading WithBars(IReadOnlyList<RepRankCard> measured)
+    {
+        if (measured.Count == 0) return this;
+
+        return RepBars.Held(measured) is var (index, progress)
+            ? this with { Ranks = measured, Rank = measured[index].Name, Progress = progress }
+            : this with { Ranks = measured };
+    }
+}
 
 public static partial class ScreenFrames
 {
@@ -637,16 +657,39 @@ public static partial class ScreenFrames
     /// <summary>The mobiGlas Rep app, or null when this is not it.</summary>
     /// <remarks>
     /// The list of organisations reads, the selected one reads because it is
-    /// set large, and the standing under it reads. The rank does not: it is
-    /// eight identical cards with one highlighted, and the engine returns all
-    /// eight labels and no highlight. So the reading carries the rank as null
-    /// and the page says why.
+    /// set large, and the standing under it reads. So do the rank cards'
+    /// labels, all of them alike; which one is held is drawn rather than
+    /// written, so the rank comes later from the bars - see
+    /// <see cref="RepBars"/> - and a reading made from text alone carries it
+    /// as null.
     /// </remarks>
     private static ReputationReading? ReadReputation(IReadOnlyList<ScreenTextLine> lines)
     {
+        if (RepHead(lines) is not var (_, org, standing)) return null;
+
+        var search = lines.FirstOrDefault(line => Is(line.Text, "SEARCH"));
+
+        var organisations = search is null ? [] : lines
+            .Where(line => line.Top > search.Top + search.Height)
+            .Where(line => line.Left >= search.Left + search.Height * 2 && line.Left <= search.Left + search.Height * 8)
+            .Where(line => line.Height >= search.Height * 0.8)
+            .Where(line => line.Text.Length >= 4)
+            .OrderBy(line => line.Top)
+            .Select(line => line.Text)
+            .ToList();
+
+        var cards = RepCards(lines);
+
+        return new ReputationReading(org?.Text, standing?.Text, null, organisations,
+            RepSection(lines, org, standing)?.Text is { } section ? Section(section) : null,
+            cards.Count > 0 ? [.. cards.Select(c => new RepRankCard(c.Name, c.Perk, null))] : null);
+    }
+
+    /// <summary>The Rep app's tabs, the organisation open and the standing under it; null when this is not the app.</summary>
+    private static (ScreenTextLine Career, ScreenTextLine? Org, ScreenTextLine? Standing)? RepHead(IReadOnlyList<ScreenTextLine> lines)
+    {
         var career = lines.FirstOrDefault(line => Is(line.Text, "CAREER"));
         var dossier = lines.FirstOrDefault(line => Is(line.Text, "DOSSIER"));
-        var search = lines.FirstOrDefault(line => Is(line.Text, "SEARCH"));
 
         if (career is null || dossier is null || Math.Abs(career.Top - dossier.Top) > career.Height) return null;
 
@@ -660,17 +703,146 @@ public static partial class ScreenFrames
             .Where(line => line != org && line.Top > org.Top && line.Top - org.Top <= org.Height * 2.5)
             .Where(line => Math.Abs(line.Left - org.Left) <= org.Height)
             .OrderBy(line => line.Top)
-            .FirstOrDefault()?.Text;
+            .FirstOrDefault();
 
-        var organisations = search is null ? [] : lines
-            .Where(line => line.Top > search.Top + search.Height)
-            .Where(line => line.Left >= search.Left + search.Height * 2 && line.Left <= search.Left + search.Height * 8)
-            .Where(line => line.Height >= search.Height * 0.8)
-            .Where(line => line.Text.Length >= 4)
+        return (career, org, standing);
+    }
+
+    /// <summary>
+    /// The ladder's heading: the first line under the standing, in line with
+    /// the name and set larger than the standing - 22 px against 17 on a
+    /// 3440-wide frame.
+    /// </summary>
+    private static ScreenTextLine? RepSection(IReadOnlyList<ScreenTextLine> lines, ScreenTextLine? org, ScreenTextLine? standing)
+    {
+        if (org is null || standing is null) return null;
+
+        return lines
+            .Where(line => line.Top > standing.Top + standing.Height)
+            .Where(line => Math.Abs(line.Left - org.Left) <= org.Height)
+            .Where(line => line.Height >= standing.Height * 1.1 && line.Height < org.Height)
             .OrderBy(line => line.Top)
-            .Select(line => line.Text)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// The engine reads the ampersand of BARTER &amp; TRADE as a lone "e". A
+    /// heading the game never translated is shown as its key -
+    /// "@REPSCOPE_SHIPCOMBAT_HEADHUNTERS_NAME" on the Headhunters' page in
+    /// 4.10.2 - and is kept as read, because the key is exactly what names
+    /// the ladder; see <see cref="ReputationLadders"/>.
+    /// </summary>
+    private static string Section(string read) => read.Replace(" e ", " & ");
+
+    /// <summary>
+    /// The rank cards' labels, grouped a card at a time, in the order the app
+    /// lays them out: across, then down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A card's label is left-aligned and runs to two lines - "JR." over
+    /// "CONTRACTOR" - and some carry a perk under it in a smaller face:
+    /// "SPECIAL WOLF" / "BARTER CONTRACT" under Wikelo's ranks, "ADDITIONAL" /
+    /// "CONTRACTS" under the Headhunters'. The perk is told from the name by
+    /// height, 11-12 px against 13-16; the closest pair measured was RANK V
+    /// at 14 over ADDITIONAL at 12.
+    /// </para>
+    /// <para>
+    /// The grid sits right of the organisation's name, below the standing,
+    /// and above the mobiGlas's own bar of app names, which are set at much
+    /// the same size and would otherwise read as one more row of ranks.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<RepBars.Card> RepCards(IReadOnlyList<ScreenTextLine> lines)
+    {
+        if (RepHead(lines) is not (_, { } org, { } standing)) return [];
+
+        var below = RepSection(lines, org, standing) ?? standing;
+
+        var dock = lines
+            .Where(line => DockApps.Contains(line.Text.Trim()))
+            .Select(line => line.Top)
+            .DefaultIfEmpty(double.MaxValue)
+            .Min();
+
+        var floor = Math.Min(dock - org.Height, org.Top + 22 * org.Height);
+
+        var candidates = lines
+            .Where(line => line.Top > below.Top + below.Height * 2 && line.Top < floor)
+            .Where(line => line.Left >= org.Left - org.Height)
+            .Where(line => line.Height < standing.Height * 1.1)
+            .Where(line => line.Text.Count(char.IsLetter) >= 2)
+            .OrderBy(line => line.Top)
+            .ThenBy(line => line.Left)
             .ToList();
 
-        return new ReputationReading(org?.Text, standing, null, organisations);
+        if (candidates.Count == 0) return [];
+
+        // Only a line set at a label's size starts a card; a smaller one can
+        // only follow one. The Bounty Hunters' VETERAN GUILD MEMBER card has
+        // "GUILD" / "STEWARD" printed over its corner in the perk's face -
+        // the game's, not the engine's - and as the topmost line it took the
+        // card's name and its place in the order. Labels measure 13-16 px,
+        // perks and that caption 10-12, and the frames that set the bar
+        // tightest are Intersec's, CONTRACTOR at 16 beside NEUTRAL at 13.
+        var labelSize = candidates.Max(line => line.Height) * 0.8;
+        var groups = new List<List<ScreenTextLine>>();
+
+        foreach (var line in candidates)
+        {
+            var group = groups.FirstOrDefault(g =>
+                Math.Abs(g[0].Left - line.Left) <= 1.5 * g[0].Height
+                && line.Top - g[^1].Top > 0
+                && line.Top - g[^1].Top <= 2.2 * g[^1].Height);
+
+            if (group is not null) group.Add(line);
+            else if (line.Height >= labelSize) groups.Add([line]);
+        }
+
+        var typical = groups.Select(g => g[0].Height).Order().ElementAt(groups.Count / 2);
+
+        var cards = new List<RepBars.Card>();
+
+        foreach (var group in groups)
+        {
+            var label = group[0];
+            var name = group.TakeWhile(line => line.Height >= label.Height * 0.88).ToList();
+            var perk = group.Skip(name.Count).ToList();
+
+            cards.Add(new RepBars.Card(
+                RankName(string.Join(" ", name.Select(line => line.Text.Trim()))),
+                perk.Count > 0 ? string.Join(" ", perk.Select(line => line.Text.Trim())) : null,
+                label));
+        }
+
+        // Rows by the first label's line, then across; the labels of one
+        // row sit within a few pixels of each other and rows are twenty
+        // label heights apart.
+        var rows = new List<List<RepBars.Card>>();
+
+        foreach (var card in cards.OrderBy(c => c.Label.Top))
+        {
+            if (rows.Count > 0 && card.Label.Top - rows[^1][0].Label.Top <= 2 * typical)
+                rows[^1].Add(card);
+            else
+                rows.Add([card]);
+        }
+
+        return [.. rows.SelectMany(row => row.OrderBy(c => c.Label.Left))];
     }
+
+    /// <summary>
+    /// The mobiGlas's app bar, along the bottom of every app. Not CONTRACTS,
+    /// which is also the second line of the Headhunters' perk.
+    /// </summary>
+    private static readonly HashSet<string> DockApps = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "HOME", "HEALTH", "COMMS", "MAPS", "JOURNAL", "ASSETS", "WALLET", "LANDING", "VEHICLES",
+    };
+
+    /// <summary>"RANK Ill" is RANK III: the engine reads a roman I as a lower-case l.</summary>
+    private static string RankName(string read) =>
+        read.StartsWith("RANK ", StringComparison.OrdinalIgnoreCase)
+            ? "RANK " + read[5..].Replace('l', 'I')
+            : read;
 }

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -73,6 +73,42 @@ if (args.Contains("--maker-logos"))
 if (GetOption(args, "--screen") is { } screenFile)
 {
     return Screen(screenFile, install.RootPath, GetOption(args, "--catalogue"));
+}
+
+// The reputation ladders as the install has them, and every Rep app reading
+// the app has kept, placed on its ladder. The table behind the Reputation
+// page's estimates. --data names the app's folder to read from, and the
+// game-data cache is kept there too: point it at a copy, because opening the
+// readings writes the reputation history beside them.
+if (args.Contains("--reputation"))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var game = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json"));
+    var catalogue = game.Reputation;
+
+    Console.WriteLine($"{catalogue.Scopes.Count} ladders");
+    foreach (var scope in catalogue.Scopes)
+    {
+        Console.WriteLine($"  {scope.Id,-44} {scope.Name ?? $"({scope.NameKey})"}  ceiling {scope.Ceiling:N0}");
+        Console.WriteLine("      " + string.Join(" | ", scope.Ranks.Select(r => $"{r.Name} {r.MinReputation:N0}" + (r.Perk is null ? "" : " +"))));
+    }
+
+    Console.WriteLine();
+    var history = new ScreenReadingStore(data).ReputationHistory();
+    Console.WriteLine($"{history.Count} Rep readings");
+
+    foreach (var r in history.OrderBy(r => r.ShotAt))
+    {
+        var reading = r.Reading;
+        var scope = ReputationLadders.Match(reading, catalogue);
+        var place = ReputationLadders.Place(reading, catalogue);
+        Console.WriteLine($"  {r.ShotAt:yyyy-MM-dd HH:mm} {reading.Organisation,-28} {reading.Rank ?? "(no rank)",-22} "
+            + (reading.Progress is { } p ? $"{p,6:P1}" : "      ")
+            + $"  ladder {scope?.Id ?? "-",-40}"
+            + (place is null ? "" : $"  ~{place.Estimate:N0} ±{place.Resolution:N0}  [{place.Floor:N0}..{place.Next?.ToString("N0") ?? "top"}]"));
+    }
+
+    return 0;
 }
 
 // The mining model as the install has it: the constants, every mineral's

@@ -143,6 +143,105 @@ internal static class ScreenAppFixtures
         new("HEALTH", 1401, 1335, 13),
     ];
 
+    /// <summary>
+    /// ScreenShot-2026-10-24_14-59-49-1D6.jpg, the Bounty Hunters Guild: two-line
+    /// ranks with a perk under most, and "GUILD" / "STEWARD" printed by the game
+    /// over the corner of the VETERAN GUILD MEMBER card in the perk's face.
+    /// </summary>
+    public static readonly ScreenTextLine[] RepBounty =
+    [
+        new("SEARCH", 721, 148, 18),
+        new("CAREER", 1375, 149, 18),
+        new("DOSSIER", 1546, 150, 18),
+        new("BOUNTY HUNTERS GUILD", 1396, 266, 37),
+        new("NEUTRAL", 1394, 322, 18),
+        new("BOUNTY HUNTING", 1412, 423, 21),
+        new("PROBATIONARY", 2060, 662, 14),
+        new("JUNIOR GUILD", 2373, 662, 13),
+        new("NOT ELIGIBLE", 1428, 664, 15),
+        new("APPLICANT", 1743, 664, 14),
+        new("MEMBER", 2374, 681, 14),
+        new("GUILD MEMBER", 2060, 682, 14),
+        new("ADDITIONAL", 2060, 707, 11),
+        new("ADDITIONAL", 2374, 707, 10),
+        new("CONTRACTS", 2375, 721, 11),
+        new("CONTRACTS", 2060, 722, 11),
+        new("GUILD", 2057, 958, 11),
+        new("STEWARD", 2058, 974, 11),
+        new("VETERAN GUILD", 2069, 985, 15),
+        new("SENIOR GUILD", 1746, 987, 15),
+        new("GUILD MEMBER", 1420, 989, 15),
+        new("MEMBER", 2071, 1007, 14),
+        new("MEMBER", 1746, 1008, 15),
+        new("ADDITIONAL", 1419, 1015, 11),
+        new("CONTRACTS", 1418, 1030, 12),
+        new("ADDITIONAL", 2072, 1033, 12),
+        new("ADDITIONAL", 1746, 1035, 11),
+        new("CONTRACTS", 2073, 1049, 12),
+        new("CONTRACTS", 1746, 1050, 12),
+        new("LANDING", 2434, 1318, 12),
+        new("VEHICLES", 2558, 1318, 12),
+        new("WALLET", 2309, 1319, 13),
+        new("REP", 2214, 1320, 13),
+        new("MAPS", 1802, 1322, 13),
+        new("JOURNAL", 1917, 1322, 12),
+        new("ASSETS", 2052, 1322, 13),
+        new("CONTRACTS", 1649, 1324, 14),
+        new("COMMS", 1536, 1326, 13),
+        new("HEALTH", 1405, 1327, 12),
+        new("NEKRON", 981, 1328, 12),
+    ];
+
+    /// <summary>ScreenShot-2026-10-24_15-00-00-E6B.jpg, Wikelo: the ampersand read as "e", perks under two ranks.</summary>
+    public static readonly ScreenTextLine[] RepWikelo =
+    [
+        new("SEARCH", 721, 151, 18),
+        new("CAREER", 1375, 152, 18),
+        new("x", 2760, 152, 22),
+        new("DOSSIER", 1546, 153, 18),
+        new("WIKELO EMPORIUM", 1393, 268, 38),
+        new("NEUTRAL", 1394, 326, 16),
+        new("BARTER e TRADE", 1411, 426, 21),
+        new("VERY BEST", 2057, 665, 14),
+        new("VERY GOOD", 1742, 666, 14),
+        new("NEW CUSTOMER", 1426, 667, 14),
+        new("CUSTOMER", 2058, 685, 15),
+        new("CUSTOMER", 1742, 686, 14),
+        new("SPECIAL IDRIS-P", 2058, 710, 11),
+        new("SPECIAL WOLF", 1743, 711, 11),
+        new("BARTER CONTRACT", 2059, 725, 11),
+        new("BARTER CONTRACT", 1743, 726, 11),
+        new("REP", 2213, 1321, 13),
+        new("VEHICLES", 2557, 1321, 13),
+        new("ASSETS", 2051, 1323, 14),
+        new("WALLET", 2307, 1323, 12),
+        new("CONTRACTS", 1648, 1327, 13),
+        new("NEKRON", 980, 1330, 12),
+    ];
+
+    /// <summary>ScreenShot-2026-10-24_14-59-59-A70.jpg, Red Wind: seven of the eight hauling ranks, MASTER scrolled off.</summary>
+    public static readonly ScreenTextLine[] RepRedWind =
+    [
+        new("x", 2760, 152, 22),
+        new("CAREER", 1376, 153, 18),
+        new("DOSSIER", 1545, 154, 17),
+        new("RED WIND LINEHAUL", 1395, 269, 37),
+        new("NEUTRAL", 1394, 326, 17),
+        new("HAULING", 1411, 427, 21),
+        new("JUNIOR", 2372, 665, 14),
+        new("NOT ELIGIBLE", 1427, 666, 15),
+        new("TRAINEE", 1743, 666, 14),
+        new("ROOKIE", 2059, 666, 14),
+        new("SENIOR", 2069, 989, 15),
+        new("EXPERIENCED", 1745, 990, 15),
+        new("MEMBER", 1420, 992, 15),
+        new("WALLET", 2308, 1322, 13),
+        new("LANDING", 2434, 1322, 12),
+        new("REP", 2213, 1323, 13),
+        new("CONTRACTS", 1648, 1327, 13),
+        new("NEKRON", 981, 1330, 13),
+    ];
+
     /// <summary>ScreenShot-2026-09-08_21-50-17-701.jpg</summary>
     public static readonly ScreenTextLine[] MapSplit =
     [

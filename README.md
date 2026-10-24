@@ -94,7 +94,8 @@ when you are ready to set it up.
 
 You can ask Quantum Wake to read a saved Star Citizen screenshot or a copied
 `/showlocation` result. This can add facts the log does not carry, such as a
-kiosk balance or fitted ship parts. It reads the saved file locally; it never
+kiosk balance, fitted ship parts or your rank with an organisation in the Rep
+app. It reads the saved file locally; it never
 captures your screen or reads game memory.
 
 ## What Quantum Wake reads
@@ -178,6 +179,14 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.18.22
+
+**A Reputation page: your rank with each organisation, and how it moves.** The game never writes reputation to its logs, but the mobiGlas Rep app shows it, and Quantum Wake now reads it from your screenshots. Open an organisation in the Rep app and press Print Screen. The new Reputation page, under Operations, shows the rank you hold, how far through it you are, and an estimate of the reputation behind that, worked out from the rank thresholds in your installed game files. Each new screenshot adds a point, so the page shows how a standing has changed since the last one, next to the contracts for that organisation your logs show you finishing in between.
+
+The estimate assumes the bar in the Rep app fills evenly through a rank, which nothing has confirmed yet, so it is labelled as an estimate and shows its margin: one pixel of the bar, a few reputation on a low rank and over a hundred on a high one. The contract count between two screenshots is a floor, because the logs only hold what they kept.
+
+Rep app screenshots you took before this version had their rank left out. While screenshot reading is on, they are read again on their own, so an existing history gets its ranks back.
 
 ### 0.18.20
 
