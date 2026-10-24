@@ -147,6 +147,31 @@ public sealed class ScreenInsightService(
     }
 
     /// <summary>
+    /// Screenshots filed as a mobiGlas screen this app cannot read that carry
+    /// one of the Rep app's tabs - the frames a stricter reader turned away -
+    /// whose files are still in the game's folder.
+    /// </summary>
+    /// <remarks>
+    /// Before 0.18.26 the Rep app needed both CAREER and DOSSIER to read, and
+    /// a frame where the engine lost one was filed as unreadable for good: the
+    /// log is not read twice. These are worth one more look with the reader
+    /// as it is now. Kept apart from <see cref="Unmeasured"/>, which the page
+    /// counts as Rep readings waiting - these may turn out not to be.
+    /// </remarks>
+    public IReadOnlyList<string> Misfiled(string? installRoot)
+    {
+        if (Excuse(installRoot) is not null) return [];
+
+        var folder = Screenshots.FolderFor(installRoot!);
+
+        return [.. readings.All()
+            .Where(s => !s.Dismissed && s.Kind == ScreenKind.MobiGlas)
+            .Where(s => s.Lines.Any(line => line.Trim() is "CAREER" or "DOSSIER"))
+            .Select(s => Path.Combine(folder, s.Shot))
+            .Where(File.Exists)];
+    }
+
+    /// <summary>
     /// Reads the newest unread screenshots, at most <paramref name="take"/> of
     /// them, and says how many are still waiting. The archive on demand: the
     /// watch reads nothing that was there before it began, and the loadout a

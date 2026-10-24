@@ -665,7 +665,11 @@ public static partial class ScreenFrames
     /// </remarks>
     private static ReputationReading? ReadReputation(IReadOnlyList<ScreenTextLine> lines)
     {
-        if (RepHead(lines) is not var (_, org, standing)) return null;
+        if (RepHead(lines) is not var (_, org, standing, lone)) return null;
+
+        // One tab is a weaker sign than two, so it takes the ladder to make
+        // the case: a lone DOSSIER with no rank cards under it is not this app.
+        if (lone && RepCards(lines).Count < 3) return null;
 
         var search = lines.FirstOrDefault(line => Is(line.Text, "SEARCH"));
 
@@ -685,17 +689,32 @@ public static partial class ScreenFrames
             cards.Count > 0 ? [.. cards.Select(c => new RepRankCard(c.Name, c.Perk, null))] : null);
     }
 
-    /// <summary>The Rep app's tabs, the organisation open and the standing under it; null when this is not the app.</summary>
-    private static (ScreenTextLine Career, ScreenTextLine? Org, ScreenTextLine? Standing)? RepHead(IReadOnlyList<ScreenTextLine> lines)
+    /// <summary>
+    /// The Rep app's tabs, the organisation open and the standing under it;
+    /// null when this is not the app. <c>Lone</c> when only one tab read.
+    /// </summary>
+    /// <remarks>
+    /// CAREER is white on a green pill, and on one frame of fifteen - Red Wind
+    /// at 16:25 on 24 October, a flare across the left of the panel - the
+    /// engine returned DOSSIER and not CAREER, and the frame was filed as a
+    /// mobiGlas screen nobody can read. So either tab anchors, measured from
+    /// where the tabs sit: the name starts just left of CAREER, about nine of
+    /// DOSSIER's heights left of DOSSIER.
+    /// </remarks>
+    private static (ScreenTextLine Tab, ScreenTextLine? Org, ScreenTextLine? Standing, bool Lone)? RepHead(IReadOnlyList<ScreenTextLine> lines)
     {
         var career = lines.FirstOrDefault(line => Is(line.Text, "CAREER"));
         var dossier = lines.FirstOrDefault(line => Is(line.Text, "DOSSIER"));
 
-        if (career is null || dossier is null || Math.Abs(career.Top - dossier.Top) > career.Height) return null;
+        if (career is not null && dossier is not null && Math.Abs(career.Top - dossier.Top) > career.Height) return null;
+        if ((career ?? dossier) is not { } tab) return null;
+
+        var lone = career is null || dossier is null;
+        var reach = career is not null ? career.Height : 10 * tab.Height;
 
         var org = lines
-            .Where(line => line.Top > career.Top + career.Height && line.Left >= career.Left - career.Height)
-            .Where(line => line.Height >= career.Height * 1.6)
+            .Where(line => line.Top > tab.Top + tab.Height && line.Left >= tab.Left - reach)
+            .Where(line => line.Height >= tab.Height * 1.6)
             .OrderBy(line => line.Top)
             .FirstOrDefault();
 
@@ -705,7 +724,7 @@ public static partial class ScreenFrames
             .OrderBy(line => line.Top)
             .FirstOrDefault();
 
-        return (career, org, standing);
+        return (tab, org, standing, lone);
     }
 
     /// <summary>
@@ -755,7 +774,7 @@ public static partial class ScreenFrames
     /// </remarks>
     public static IReadOnlyList<RepBars.Card> RepCards(IReadOnlyList<ScreenTextLine> lines)
     {
-        if (RepHead(lines) is not (_, { } org, { } standing)) return [];
+        if (RepHead(lines) is not (_, { } org, { } standing, _)) return [];
 
         var below = RepSection(lines, org, standing) ?? standing;
 

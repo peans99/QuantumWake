@@ -108,14 +108,16 @@ public sealed class ScreenWatchService(
 
     /// <summary>
     /// Reads again the Rep app frames that were read before their bars were
-    /// measured - see <see cref="ScreenInsightService.Unmeasured"/>. Only when
+    /// measured - see <see cref="ScreenInsightService.Unmeasured"/> - and the
+    /// ones filed as unreadable that carry a Rep tab - see
+    /// <see cref="ScreenInsightService.Misfiled"/>. Only when
     /// nothing new is waiting, so a fresh screenshot never queues behind them.
     /// A reading the pilot dismissed is left dismissed, which is why those are
     /// not offered.
     /// </summary>
     private async Task Remeasure(CancellationToken token)
     {
-        foreach (var path in insight.Unmeasured(install!.RootPath).Where(_remeasured.Add).Take(BatchPerTick))
+        foreach (var path in insight.Unmeasured(install!.RootPath).Concat(insight.Misfiled(install.RootPath)).Where(_remeasured.Add).Take(BatchPerTick))
         {
             try
             {
