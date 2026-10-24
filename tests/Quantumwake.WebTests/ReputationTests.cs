@@ -163,4 +163,17 @@ public class ReputationTests
         Assert.DoesNotContain("of the way through", list);
         Assert.Equal("2 organisations · 3 captures d’écran", page.NodeText("#reputation-count").Replace(' ', ' '));
     }
+
+    /// <summary>The game's own mark where the install has one; no empty frame where it has none.</summary>
+    [Fact]
+    public void An_organisation_wears_its_logo_when_the_game_has_one()
+    {
+        var page = Loaded(Board.Replace(
+            "{\"name\":\"RED WIND LINEHAUL\",",
+            "{\"name\":\"RED WIND LINEHAUL\",\"logo\":\"/api/reputation/logo/FactionReputation_Lawful_RedWindLinehaul\","));
+
+        var logos = "__dom.node('#reputation-list').byClass('rep-logo')";
+        Assert.Equal(1, Convert.ToInt32(page.Eval($"{logos}.length")));
+        Assert.Equal("/api/reputation/logo/FactionReputation_Lawful_RedWindLinehaul", page.Text($"{logos}[0].src"));
+    }
 }

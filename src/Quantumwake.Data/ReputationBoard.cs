@@ -28,6 +28,10 @@ public sealed record RepLadderRank(string Name, string? Perk, long MinReputation
 /// <param name="Standing">The word under the name - "NEUTRAL" - which is not the rank.</param>
 /// <param name="History">Every reading, oldest first.</param>
 /// <param name="Work">All the contracts of theirs the logs hold, when the logs name them.</param>
+/// <param name="Logo">
+/// Where the page fetches the organisation's own mark from the game files, or
+/// null when the install has none for it - Dead Saints, on 4.10.2.
+/// </param>
 public sealed record RepOrganisation(
     string Name,
     string? Standing,
@@ -40,7 +44,8 @@ public sealed record RepOrganisation(
     string LastShot,
     IReadOnlyList<RepPoint> History,
     RepChange? Change,
-    RepWork? Work);
+    RepWork? Work,
+    string? Logo = null);
 
 /// <param name="Unmeasured">Rep readings with no bars in them yet - taken before 0.18.22 and not yet read again.</param>
 public sealed record ReputationBoard(IReadOnlyList<RepOrganisation> Organisations, int Readings, int Unmeasured);
@@ -140,8 +145,28 @@ public static class ReputationBoards
             latest.Point.Shot,
             [.. points.Select(p => p.Point)],
             change,
-            Work(showing.Reading.Organisation!, contracts, DateTimeOffset.MinValue, DateTimeOffset.MaxValue));
+            Work(showing.Reading.Organisation!, contracts, DateTimeOffset.MinValue, DateTimeOffset.MaxValue),
+            LogoOf(showing.Reading.Organisation!, catalogue));
     }
+
+    /// <summary>
+    /// The address of an organisation's logo, by the game's name for it -
+    /// INTERSEC DEFENSE SOLUTIONS is the record's "InterSec Defense Solutions"
+    /// letter for letter, as every one of the twelve on this install is.
+    /// </summary>
+    internal static string? LogoOf(string organisation, GameReputationCatalogue catalogue)
+    {
+        var letters = Letters(organisation);
+
+        return catalogue.Organisations?
+            .FirstOrDefault(o => o.Logo is not null && Letters(o.Name) == letters) is { } found
+            ? $"/api/reputation/logo/{Uri.EscapeDataString(found.Id)}"
+            : null;
+    }
+
+    /// <summary>The archive entry behind a logo address <see cref="LogoOf"/> gave out.</summary>
+    public static string? LogoEntry(string id, GameReputationCatalogue catalogue) =>
+        catalogue.Organisations?.FirstOrDefault(o => string.Equals(o.Id, id, StringComparison.Ordinal))?.Logo;
 
     private static int? IndexOf(ReputationReading reading) =>
         reading.Rank is { } rank && reading.Ranks is { } cards

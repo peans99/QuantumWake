@@ -1947,6 +1947,18 @@ public static class ServerHost
             };
         });
 
+        // An organisation's own mark, out of the game files, by the record id
+        // the board handed the page. Only an id the catalogue knows is looked
+        // up, so this cannot be pointed at any other archive entry.
+        app.MapGet("/api/reputation/logo/{id}", (string id, LogLibrary lib, HttpContext ctx) =>
+        {
+            if (ReputationBoards.LogoEntry(id, lib.GameCommodities.Reputation) is not { } entry)
+                return Results.NotFound();
+
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return ArchivePicture(entry, "rep-logos");
+        });
+
         // Who the party channel has named. See LogLibrary.Wingmen for why these
         // are floors rather than totals.
         app.MapGet("/api/crew", (LogLibrary lib, int? days) => lib.Wingmen(days ?? 0));

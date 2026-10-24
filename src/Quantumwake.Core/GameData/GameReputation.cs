@@ -21,10 +21,21 @@ public sealed record GameRepRank(string Name, string? Perk, long MinReputation);
 public sealed record GameRepScope(
     string Id, string? Name, string? NameKey, long Ceiling, IReadOnlyList<GameRepRank> Ranks);
 
-/// <summary>Every reputation ladder the install defines.</summary>
-public sealed record GameReputationCatalogue(IReadOnlyList<GameRepScope> Scopes)
+/// <summary>An organisation as the Rep app lists it, and its mark.</summary>
+/// <param name="Id">The record, <c>FactionReputation_Lawful_RedWindLinehaul</c>.</param>
+/// <param name="Name">"Red Wind Linehaul", the name the Rep app prints.</param>
+/// <param name="Logo">
+/// The archive entry of its logo, <c>Data\UI\SharedAssets\ManufacturerLogos\rep_ui_icon_logo_redwind.dds</c>,
+/// or null when the record names none or the archive does not hold it.
+/// </param>
+public sealed record GameRepOrganisation(string Id, string Name, string? Logo);
+
+/// <summary>Every reputation ladder the install defines, and the organisations.</summary>
+/// <param name="Organisations">Null in a cache written before they were read.</param>
+public sealed record GameReputationCatalogue(
+    IReadOnlyList<GameRepScope> Scopes, IReadOnlyList<GameRepOrganisation>? Organisations = null)
 {
-    public static GameReputationCatalogue Empty { get; } = new([]);
+    public static GameReputationCatalogue Empty { get; } = new([], []);
 }
 
 /// <summary>
@@ -56,19 +67,29 @@ public sealed record GameReputationCatalogue(IReadOnlyList<GameRepScope> Scopes)
 public static class GameReputation
 {
     private const string ScopeStruct = "SReputationScopeParams";
+    private const string OrganisationStruct = "FactionReputation";
 
-    public static GameReputationCatalogue Read(DataCore core, IReadOnlyDictionary<string, string> text)
+    /// <param name="logoEntries">
+    /// The archive's listing of <see cref="GameMakerLogos.Folder"/>, where every
+    /// organisation's mark lives beside the makers' - so a logo is offered only
+    /// when the file is there to decode.
+    /// </param>
+    public static GameReputationCatalogue Read(
+        DataCore core, IReadOnlyDictionary<string, string> text, IEnumerable<string>? logoEntries = null)
     {
         var scopeStruct = core.StructIndexOf(ScopeStruct);
         if (scopeStruct < 0) return GameReputationCatalogue.Empty;
 
+        var organisationStruct = core.StructIndexOf(OrganisationStruct);
         var byId = new Dictionary<Guid, DataRecord>();
         var scopes = new List<DataRecord>();
+        var organisations = new List<DataRecord>();
 
         foreach (var record in core.Records())
         {
             byId.TryAdd(record.Hash, record);
             if (record.StructIndex == scopeStruct) scopes.Add(record);
+            if (record.StructIndex == organisationStruct) organisations.Add(record);
         }
 
         var read = new List<GameRepScope>();
@@ -110,7 +131,56 @@ public static class GameReputation
                 [.. ranks.OrderBy(r => r.MinReputation)]));
         }
 
-        return new GameReputationCatalogue([.. read.OrderBy(s => s.Id, StringComparer.Ordinal)]);
+        return new GameReputationCatalogue(
+            [.. read.OrderBy(s => s.Id, StringComparer.Ordinal)],
+            Organisations(core, text, organisations, logoEntries ?? []));
+    }
+
+    /// <summary>
+    /// Every organisation with a name, and its logo where the archive has it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A <c>FactionReputation</c>'s <c>logo</c> names a <c>.tif</c> under
+    /// <c>UI/SharedAssets/ManufacturerLogos</c> - <c>rep_ui_icon_logo_redwind.tif</c>
+    /// - and the archive ships the <c>.dds</c> it was cooked to, as it does for
+    /// the makers. Measured on 4.10.2: 39 records, 37 with a name, 35 of those
+    /// naming a logo the archive holds. Dead Saints and Highpoint Wilderness
+    /// Specialists name none, and the Rep app shows Dead Saints' card with no
+    /// mark either. Sizes vary - 256, 400 and 500 square, and eight (Adagio,
+    /// Hockrow and Wikelo among them) as a split mip chain - all shapes the
+    /// maker-logo route already decodes.
+    /// </para>
+    /// <para>
+    /// Two records carry <c>&lt;= PLACEHOLDER =&gt;</c> for a name; they are not
+    /// organisations anybody can be shown, and are left out.
+    /// </para>
+    /// </remarks>
+    private static List<GameRepOrganisation> Organisations(
+        DataCore core, IReadOnlyDictionary<string, string> text, List<DataRecord> records, IEnumerable<string> logoEntries)
+    {
+        var present = new HashSet<string>(logoEntries.Select(Path.GetFileName)!, StringComparer.OrdinalIgnoreCase);
+        var read = new List<GameRepOrganisation>();
+
+        foreach (var record in records)
+        {
+            var at = core.InstanceAt(record, record.VariantIndex);
+            var name = Localised(text, core.StringAt(at, record.StructIndex, "displayName"));
+            if (name is null || name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase)) continue;
+
+            string? entry = null;
+
+            if (core.StringAt(at, record.StructIndex, "logo") is { Length: > 0 } logo
+                && logo.Contains("ManufacturerLogos", StringComparison.OrdinalIgnoreCase))
+            {
+                var file = Path.GetFileNameWithoutExtension(logo) + ".dds";
+                if (present.Contains(file)) entry = GameMakerLogos.Folder + file;
+            }
+
+            read.Add(new GameRepOrganisation(Bare(record.Name), name, entry));
+        }
+
+        return [.. read.OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>

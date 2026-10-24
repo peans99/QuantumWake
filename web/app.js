@@ -9484,7 +9484,22 @@ function reputationCard(org) {
   const card = el('article', 'point-card rep-card');
 
   const head = el('div', 'wikelo-head');
-  head.append(el('div', 'point-name-read', org.name));
+  const title = el('div', 'rep-title');
+
+  // The organisation's own mark from the game files, as the Rep app shows
+  // it. Left out rather than drawn as a gap when the install has none, and
+  // taken away again if the picture will not load.
+  if (org.logo) {
+    const logo = el('img', 'rep-logo');
+    logo.src = org.logo;
+    logo.alt = '';
+    logo.loading = 'lazy';
+    logo.addEventListener?.('error', () => logo.remove());
+    title.append(logo);
+  }
+
+  title.append(el('div', 'point-name-read', org.name));
+  head.append(title);
   head.append(el('div', 'muted', tx('last seen {when}', { when: ago(org.lastSeen) })));
   card.append(head);
 

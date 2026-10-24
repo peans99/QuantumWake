@@ -187,4 +187,32 @@ public class ReputationLadderTests
 
         Assert.Empty(board.Organisations);
     }
+
+    /// <summary>
+    /// The app prints INTERSEC DEFENSE SOLUTIONS and the record says "InterSec
+    /// Defense Solutions"; the letters are the same, and that is the match.
+    /// Dead Saints' record names no logo, so its card gets none.
+    /// </summary>
+    [Fact]
+    public void A_logo_is_found_by_the_games_name_and_only_where_the_game_has_one()
+    {
+        var catalogue = Catalogue with
+        {
+            Organisations =
+            [
+                new("FactionReputation_Lawful_InterSecDefenseSolutions", "InterSec Defense Solutions",
+                    @"Data\UI\SharedAssets\ManufacturerLogos\rep_ui_icon_logo_intersec.dds"),
+                new("FactionReputation_Unlawful_DeadSaints", "Dead Saints", null),
+            ],
+        };
+
+        Assert.Equal("/api/reputation/logo/FactionReputation_Lawful_InterSecDefenseSolutions",
+            ReputationBoards.LogoOf("INTERSEC DEFENSE SOLUTIONS", catalogue));
+        Assert.Null(ReputationBoards.LogoOf("DEAD SAINTS", catalogue));
+        Assert.Null(ReputationBoards.LogoOf("RED WIND LINEHAUL", catalogue));
+
+        Assert.Equal(@"Data\UI\SharedAssets\ManufacturerLogos\rep_ui_icon_logo_intersec.dds",
+            ReputationBoards.LogoEntry("FactionReputation_Lawful_InterSecDefenseSolutions", catalogue));
+        Assert.Null(ReputationBoards.LogoEntry("Data", catalogue));
+    }
 }
