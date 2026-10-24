@@ -56,9 +56,11 @@ public class ReputationTests
         var list = Loaded().NodeText("#reputation-list");
 
         Assert.Contains("RED WIND LINEHAUL", list);
-        Assert.Contains("Member · 54% of the way through · Hauling", list);
-        Assert.Contains("about 17,405 rep (±132, estimate)", list);
-        Assert.Contains("10,345 to Experienced at 27,750", list);
+        Assert.Contains("RankMember", list);
+        Assert.Contains("Progress54%", list);
+        Assert.Contains("Estimated reputationabout 17,405 rep ±132", list);
+        Assert.Contains("Next rank10,345 rep to Experienced", list);
+        Assert.Contains("Hauling", list);
         Assert.Contains("They regard you as neutral", list);
         Assert.Contains("Red Wind in your logs: 11 finished", list);
     }
@@ -85,6 +87,38 @@ public class ReputationTests
         Assert.Equal("54%", page.Text("__dom.node('#reputation-list').byClass('rep-rung-fill')[4].style.width"));
     }
 
+    [Fact]
+    public void The_rank_path_and_trend_are_labelled_without_relying_on_hover()
+    {
+        var page = Loaded();
+
+        Assert.Equal("Rank path", page.Text("__dom.node('#reputation-list').byClass('rep-ladder-heading')[0].textContent"));
+        Assert.Equal("Trend", page.Text("__dom.node('#reputation-list').byClass('rep-trend-heading')[0].textContent"));
+        Assert.Contains("Junior", page.Text("__dom.node('#reputation-list').byClass('rep-trend-axis')[0].textContent"));
+        Assert.Contains("Member", page.Text("__dom.node('#reputation-list').byClass('rep-trend-axis')[0].textContent"));
+        Assert.Contains("Reputation trend", page.Text("__dom.node('#reputation-list').byClass('rep-trend')[0].getAttribute('aria-label')"));
+        Assert.Contains("Current rank", page.Text("__dom.node('#reputation-list').byClass('held')[0].getAttribute('aria-label')"));
+    }
+
+    [Fact]
+    public void An_unmatched_ladder_shows_the_track_once_in_the_summary()
+    {
+        var page = Loaded();
+        page.Do("""
+            reputationAll = { organisations: [{
+              name: 'UNMATCHED', standing: 'NEUTRAL', section: 'Hauling', rank: 'MEMBER', progress: 0.54,
+              place: null, ladder: [{ name: 'Member', perk: null, minReputation: 0, fill: 0.54 }],
+              lastSeen: '2026-10-24T18:59:59Z', lastShot: 'unmatched.jpg',
+              history: [{ at: '2026-10-24T18:59:59Z', shot: 'unmatched.jpg', rank: 'MEMBER', rankIndex: 0, progress: 0.54 }],
+              change: null, work: null
+            }], readings: 1, unmeasured: 0, canRead: true, watching: true, ladders: 0 };
+            renderReputation();
+            """);
+
+        Assert.Equal(3, page.Count("__dom.node('#reputation-list').byClass('rep-fact').length"));
+        Assert.Equal(0, page.Count("__dom.node('#reputation-list').byClass('rep-section').length"));
+        Assert.Contains("TrackHauling", page.NodeText("#reputation-list"));
+    }
     /// <summary>A reading from before the bars were read says so, rather than drawing an empty one.</summary>
     [Fact]
     public void A_reading_without_a_rank_says_why_and_the_notice_says_it_is_being_read_again()
@@ -121,8 +155,9 @@ public class ReputationTests
         var list = page.NodeText("#reputation-list").Replace(' ', ' ').Replace(' ', ' ');
 
         Assert.Contains("RED WIND LINEHAUL", list);
-        Assert.Contains("Member · 54 % du chemin parcouru · Hauling", list);
-        Assert.Contains("estimation", list);
+        Assert.Contains("RangMember", list);
+        Assert.Contains("Progression54 %", list);
+        Assert.Contains("Réputation estimée", list);
         Assert.Contains("au moins 10 contrats Red Wind terminés entre-temps", list);
         Assert.Contains("Rang non lu", list);
         Assert.DoesNotContain("of the way through", list);

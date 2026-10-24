@@ -6773,8 +6773,16 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 
 /* Reputation: each organisation's ladder as a row of short bars, the held
    rank lit, and its position over time as a line that steps up a rank. */
-.rep-where { font-size: 13px; }
-.rep-estimate { font-size: 12px; color: var(--cyan-hot); }
+.rep-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border: 1px solid var(--rule); background: rgba(6, 18, 29, .5); }
+.rep-fact { min-width: 0; padding: 7px 8px; border-left: 1px solid var(--rule); }
+.rep-fact:first-child { border-left: 0; }
+.rep-fact.emphasis { background: rgba(41, 205, 154, .08); }
+.rep-fact-label { margin: 0 0 3px; color: var(--dim); font: 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.rep-fact-value { margin: 0; font-size: 12px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.rep-section { grid-column: 1 / -1; padding: 5px 8px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 11px; }
+.rep-unread { font-size: 12px; }
+.rep-ladder-wrap { display: flex; flex-direction: column; gap: 5px; }
+.rep-ladder-heading, .rep-trend-heading { color: var(--dim); font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .rep-ladder { display: flex; gap: 8px 4px; flex-wrap: wrap; }
 /* Four to a row, as the game lays its cards: eight ranks across one card ran their names together. */
 .rep-rung { flex: 1 1 calc(25% - 4px); display: flex; flex-direction: column; gap: 3px; }
@@ -6785,10 +6793,18 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .rep-rung.held .rep-rung-name { color: var(--text); }
 .rep-change { font-size: 12px; }
 .rep-foot { font-size: 11px; }
-.rep-trend-wrap { display: flex; flex-direction: column; gap: 2px; }
+.rep-trend-wrap { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.rep-trend-chart { display: grid; grid-template-columns: minmax(54px, max-content) minmax(0, 1fr); gap: 6px; align-items: stretch; }
+.rep-trend-axis { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 2px 0; color: var(--dim); font: 9px/1.1 var(--mono); text-align: right; overflow: hidden; }
+.rep-trend-rank-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rep-trend { width: 100%; height: auto; display: block; }
 .rep-trend-rank { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .rep-trend-line { fill: none; stroke: var(--green); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .rep-trend-dot { fill: var(--green); }
 .rep-trend-caption { font-size: 10.5px; }
 #reputation-notice { margin: 0 0 var(--gap); font-size: 12px; color: var(--amber); }
+@media (max-width: 720px) {
+  .rep-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rep-fact:nth-child(odd) { border-left: 0; }
+  .rep-fact:nth-child(n + 3) { border-top: 1px solid var(--rule); }
+}

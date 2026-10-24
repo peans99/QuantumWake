@@ -9488,17 +9488,11 @@ function reputationCard(org) {
   head.append(el('div', 'muted', tx('last seen {when}', { when: ago(org.lastSeen) })));
   card.append(head);
 
-  const where = el('div', 'rep-where');
   if (org.rank) {
-    where.append(el('span', 'strong', org.place?.rank || org.rank));
-    where.append(el('span', null, ` · ${tx('{pct} of the way through', { pct: reputationPercent(org.progress) })}`));
+    card.append(reputationSummary(org));
   } else {
-    where.append(el('span', 'muted', tx('Rank not read — this screenshot was read before ranks were.')));
+    card.append(el('div', 'muted rep-unread', tx('Rank not read — this screenshot was read before ranks were.')));
   }
-  if (org.section) where.append(el('span', 'muted', ` · ${org.section}`));
-  card.append(where);
-
-  if (org.place) card.append(el('div', 'rep-estimate', reputationEstimate(org)));
   if (org.ladder?.length) card.append(reputationLadder(org));
 
   if (org.change) {
@@ -9507,7 +9501,7 @@ function reputationCard(org) {
     card.append(el('div', 'muted rep-change', tx('One reading so far. Take another after some contracts to see it move.')));
   }
 
-  const trend = reputationTrend(org.history || []);
+  const trend = reputationTrend(org.history || [], org.ladder || []);
   if (trend) card.append(trend);
 
   // The word under the name in the app is how they regard you - Neutral,
@@ -9525,33 +9519,51 @@ function reputationCard(org) {
   return card;
 }
 
-/** The estimate, its margin, and what is left to the next rank. */
-function reputationEstimate(org) {
+/** The four answers people come here for, each given a stable label. */
+function reputationSummary(org) {
   const place = org.place;
-  const parts = [tx('about {rep} rep (±{margin}, estimate)', {
-    rep: place.estimate.toLocaleString(), margin: place.resolution.toLocaleString(),
-  })];
+  const summary = el('dl', 'rep-summary');
+  const fact = (label, value, emphasis) => {
+    const item = el('div', emphasis ? 'rep-fact emphasis' : 'rep-fact');
+    item.append(el('dt', 'rep-fact-label', tx(label)));
+    item.append(el('dd', 'rep-fact-value', value));
+    summary.append(item);
+  };
 
-  if (place.next != null) {
-    parts.push(tx('{left} to {rank} at {at}', {
-      left: Math.max(0, place.next - place.estimate).toLocaleString(),
-      rank: org.ladder?.[place.rankIndex + 1]?.name || tx('the next rank'),
-      at: place.next.toLocaleString(),
+  fact('Rank', place?.rank || org.rank, true);
+  fact('Progress', reputationPercent(org.progress));
+
+  if (place) {
+    fact('Estimated reputation', tx('about {rep} rep ±{margin}', {
+      rep: place.estimate.toLocaleString(), margin: place.resolution.toLocaleString(),
     }));
+    fact('Next rank', place.next != null
+      ? tx('{left} rep to {rank}', {
+        left: Math.max(0, place.next - place.estimate).toLocaleString(),
+        rank: org.ladder?.[place.rankIndex + 1]?.name || tx('the next rank'),
+      })
+      : tx('the top rank'));
   } else {
-    parts.push(tx('the top rank'));
+    fact('Track', org.section || tx('unknown'));
   }
 
-  return parts.join(' · ');
+  if (org.section && place) summary.append(el('div', 'rep-section', org.section));
+  return summary;
 }
 
-/** Every rank as a short bar, the held one marked, with its threshold on hover. */
+/** Every rank as a short bar, with a label that stays usable away from a mouse. */
 function reputationLadder(org) {
+  const wrap = el('section', 'rep-ladder-wrap');
+  wrap.append(el('div', 'rep-ladder-heading', tx('Rank path')));
+
   const row = el('div', 'rep-ladder');
+  row.setAttribute('role', 'list');
+  row.setAttribute('aria-label', tx('Rank path'));
   const held = org.place?.rankIndex ?? (org.ladder || []).findIndex((r) => r.name === org.rank);
 
   org.ladder.forEach((rank, i) => {
     const rung = el('div', i === held ? 'rep-rung held' : 'rep-rung');
+    rung.setAttribute('role', 'listitem');
     const bar = el('div', 'rep-rung-bar');
     const fill = el('div', 'rep-rung-fill');
     fill.style.width = `${Math.round(Math.max(0, Math.min(1, rank.fill ?? 0)) * 100)}%`;
@@ -9562,10 +9574,12 @@ function reputationLadder(org) {
       ? tx('{rank} from {rep} rep', { rank: rank.name, rep: rank.minReputation.toLocaleString() })
         + (rank.perk ? ` · ${rank.perk}` : '')
       : rank.name;
+    rung.setAttribute('aria-label', rung.title + (i === held ? ` · ${tx('Current rank')}` : ''));
     row.append(rung);
   });
 
-  return row;
+  wrap.append(row);
+  return wrap;
 }
 
 /** The two newest readings set side by side, with the contracts in between. */
@@ -9625,10 +9639,11 @@ function reputationChange(org) {
  * so a rank gained is a step up and not a fall back to an empty bar. Drawn
  * only from two readings with a rank.
  */
-function reputationTrend(history) {
+function reputationTrend(history, ladder) {
   const points = history.filter((p) => p.rank && p.rankIndex != null);
   if (points.length < 2) return null;
 
+  const rankName = (index) => ladder[index]?.name || points.find((p) => p.rankIndex === index)?.rank || tx('unknown');
   const ns = 'http://www.w3.org/2000/svg';
   const make = (tag) => (typeof document.createElementNS === 'function' ? document.createElementNS(ns, tag) : el(tag));
   const width = 300;
@@ -9646,6 +9661,10 @@ function reputationTrend(history) {
   const svg = make('svg');
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('class', 'rep-trend');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', tx('Reputation trend from {first} to {last}', {
+    first: dateOf(points[0].at), last: dateOf(points[points.length - 1].at),
+  }));
 
   for (let level = low + 1; level < high; level++) {
     const rule = make('line');
@@ -9675,8 +9694,16 @@ function reputationTrend(history) {
     svg.append(dot);
   });
 
-  const wrap = el('div', 'rep-trend-wrap');
-  wrap.append(svg);
+  const wrap = el('figure', 'rep-trend-wrap');
+  wrap.append(el('figcaption', 'rep-trend-heading', tx('Trend')));
+  const chart = el('div', 'rep-trend-chart');
+  const axis = el('div', 'rep-trend-axis');
+  axis.setAttribute('aria-hidden', 'true');
+  for (let level = high; level >= low; level--) {
+    axis.append(el('span', 'rep-trend-rank-label', rankName(level)));
+  }
+  chart.append(axis, svg);
+  wrap.append(chart);
   wrap.append(el('div', 'muted rep-trend-caption', txn(points.length,
     '{count} reading, {first} to {last}', '{count} readings, {first} to {last}',
     { first: dateOf(points[0].at), last: dateOf(points[points.length - 1].at) })));
