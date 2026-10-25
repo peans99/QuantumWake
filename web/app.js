@@ -24875,10 +24875,36 @@ async function loadTrips() {
   else drawTripPath();
 }
 
+function itineraryError(message) {
+  const box = $('#itinerary-error');
+  if (!box) return;
+  box.textContent = message;
+  box.hidden = !message;
+  if (message && shownView !== 'itinerary') toast('trip-error', message, '');
+}
+
+async function tripRequest(url, options) {
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error('trip request failed');
+    itineraryError('');
+    return response;
+  } catch {
+    itineraryError(tx('Could not save the change. Please try again.'));
+    return null;
+  }
+}
+
+async function tripRefresh() {
+  try { await loadTrips(); }
+  catch { itineraryError(tx('Saved, but the plan could not be refreshed. Refresh the page to see it.')); }
+}
+
 /** POST/DELETE against the trip API, then re-read: plans are small. */
 async function tripCall(url, method = 'POST') {
-  await fetch(url, { method });
-  await loadTrips();
+  if (!await tripRequest(url, { method })) return false;
+  await tripRefresh();
+  return true;
 }
 
 /** A run sheet is authored work, so checks and edits use the same small trip API. */
@@ -24888,8 +24914,9 @@ async function runActionCall(url, method = 'POST', body = null) {
     options.headers = { 'Content-Type': 'application/json' };
     options.body = JSON.stringify(body);
   }
-  await fetch(url, options);
-  await loadTrips();
+  if (!await tripRequest(url, options)) return false;
+  await tripRefresh();
+  return true;
 }
 
 const runActionLabel = (kind) => tx({
@@ -24903,8 +24930,10 @@ function runActionRow(trip, stop, action, editable = false) {
   check.type = 'checkbox';
   check.checked = !!action.done;
   check.title = action.done ? tx('Mark as still to do') : tx('Mark action complete');
-  check.addEventListener('change', () =>
-    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`));
+  check.addEventListener('change', async () => {
+    if (!await runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`))
+      check.checked = !check.checked;
+  });
   row.append(check);
 
   const text = el('span', 'run-action-text');
@@ -25054,21 +25083,24 @@ function tradeTweakForm(trip, stop, action) {
     const units = quantity.value === '' ? null : Number(quantity.value);
     const each = price.value === '' ? null : Number(price.value);
     const url = (s, a) => `/api/trips/${trip.id}/stops/${s.id}/actions/${a.id}/tweak`;
-    const post = (s, a, body) => fetch(url(s, a), {
+    const post = (s, a, body) => tripRequest(url(s, a), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
 
-    await post(stop, action, { quantity: units, price: each });
+    if (!await post(stop, action, { quantity: units, price: each })) return;
 
     if (action.kind === 'buy' && units !== action.quantity) {
       const sells = trip.stops.flatMap((s) => (s.actions || []).filter((a) => a.kind === 'sell').map((a) => [s, a]));
       if (sells.length === 1 && sells[0][1].quantity === action.quantity) {
         const [sellStop, sell] = sells[0];
-        await post(sellStop, sell, { quantity: units, price: sell.price });
+        if (!await post(sellStop, sell, { quantity: units, price: sell.price })) {
+          itineraryError(tx('The buy was saved, but the matching sale could not be updated.'));
+          return;
+        }
       }
     }
 
-    await loadTrips();
+    await tripRefresh();
   });
 
   form.append(quantity, price, save);
@@ -25076,7 +25108,7 @@ function tradeTweakForm(trip, stop, action) {
 }
 
 function runActionForm(trip, stop) {
-  const form = el('div', 'run-action-form');
+  const form = el('div', 'run-action-form run-action-new-form');
   const kind = document.createElement('select');
   kind.className = 'select';
   for (const value of ['load', 'unload', 'buy', 'sell', 'collect', 'refuel', 'repair', 'do'])
@@ -25102,17 +25134,21 @@ function runActionForm(trip, stop) {
   unit.append(new Option('aUEC', 'aUEC'));
 
   const save = el('button', 'ghost tiny', tx('Add'));
-  save.addEventListener('click', () => {
+  save.addEventListener('click', async () => {
     if (!text.value.trim()) {
       text.focus();
       return;
     }
-    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions`, 'POST', {
-      kind: kind.value,
-      text: text.value,
-      quantity: quantity.value === '' ? null : Number(quantity.value),
-      unit: unit.value || null,
+    save.disabled = true;
+    const response = await tripRequest(`/api/trips/${trip.id}/stops/${stop.id}/actions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: kind.value, text: text.value,
+        quantity: quantity.value === '' ? null : Number(quantity.value), unit: unit.value || null }),
     });
+    save.disabled = false;
+    if (!response) return;
+    form.remove();
+    await tripRefresh();
   });
 
   form.append(kind, text, quantity, unit, save);
@@ -25296,8 +25332,10 @@ function renderTripPanel() {
 
     const drop = el('button', 'ghost tiny', '×');
     drop.title = tx('Drop this stop');
-    drop.addEventListener('click',
-      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+    drop.addEventListener('click', () => {
+      if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
+        return tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE');
+    });
 
     const addAction = el('button', 'ghost tiny', '+');
     addAction.title = tx('Add a run-sheet action at this stop');
@@ -25345,7 +25383,8 @@ function renderTripPanel() {
 
   const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
-    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+    if (!confirm(tx('Delete the plan “{title}” and all its stops?', { title: trip.title }))) return;
+    if (!await tripCall(`/api/trips/${trip.id}`, 'DELETE')) return;
     cargo.trip = false;
     $('#cargo-panel').hidden = true;
     drawMap();
@@ -25494,6 +25533,10 @@ function renderItinerary() {
   const oldPlace = main.querySelector('.itinerary-place-input');
   const oldNote = main.querySelector('.itinerary-note-input');
   const active = document.activeElement;
+  const actionForms = Array.from(main.querySelectorAll('.itinerary-stop')).map((card) => ({
+    stopId: card.dataset.stop, form: card.querySelector('.run-action-new-form'),
+  })).filter((item) => item.form);
+  const activeForm = actionForms.find((item) => item.form.contains?.(active));
   const draft = {
     name: oldPlan?.value || '', place: oldPlace?.value || '', note: oldNote?.value || '',
     tripId: main.dataset.tripId,
@@ -25523,6 +25566,17 @@ function renderItinerary() {
   }
 
   renderItineraryPlan(main, trip);
+
+  if (draft.tripId === trip.id) {
+    for (const card of main.querySelectorAll('.itinerary-stop')) {
+      const saved = actionForms.find((item) => item.stopId === card.dataset.stop);
+      if (saved) card.querySelector('.itinerary-stop-main')?.append(saved.form);
+    }
+    if (activeForm && active) {
+      active.focus();
+      if (draft.start != null && draft.end != null && active.type !== 'number') active.setSelectionRange?.(draft.start, draft.end);
+    }
+  }
 
   const newPlace = main.querySelector('.itinerary-place-input');
   const newNote = main.querySelector('.itinerary-note-input');
@@ -25572,16 +25626,17 @@ function renderItineraryPlans(box, open, working) {
   make.title = tx('A new plan is the one the map and the Now page follow');
   const create = async () => {
     const submitted = name.value;
-    const response = await fetch('/api/trips', {
+    const response = await tripRequest('/api/trips', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: submitted.trim() || null, stops: [] }),
     });
-    const created = response.ok ? await response.json() : null;
+    if (!response) return;
+    const created = await response.json();
     if (created?.id) itineraryTripId = created.id;
     const current = $('#itinerary-plans')?.querySelector('.itinerary-new')?.querySelector('.search');
     if (response.ok && current && current.value === submitted) current.value = '';
-    await loadTrips();
+    await tripRefresh();
   };
 
   make.addEventListener('click', create);
@@ -25651,7 +25706,7 @@ function itineraryPlanTools(trip) {
     ? tx('Open the star map with this plan drawn on it')
     : tx('Track this plan and open the star map with it drawn on it');
   map.addEventListener('click', async () => {
-    if (!trip.tracked) await tripCall(`/api/trips/${trip.id}/track`);
+    if (!trip.tracked && !await tripCall(`/api/trips/${trip.id}/track`)) return;
     showView('map');
     showTripPanel();
     drawMap();
@@ -25660,8 +25715,8 @@ function itineraryPlanTools(trip) {
 
   const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
-    itineraryTripId = null;
-    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+    if (!confirm(tx('Delete the plan “{title}” and all its stops?', { title: trip.title }))) return;
+    if (await tripCall(`/api/trips/${trip.id}`, 'DELETE')) itineraryTripId = null;
   });
   tools.append(scrap);
 
@@ -25747,8 +25802,10 @@ function itineraryStop(trip, stop, index, isNext) {
 
   const drop = el('button', 'ghost tiny', '×');
   drop.title = tx('Drop this stop');
-  drop.addEventListener('click',
-    () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+  drop.addEventListener('click', () => {
+    if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
+      return tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE');
+  });
 
   tools.append(addLine, drop);
   card.append(tools);
@@ -25799,8 +25856,25 @@ function itineraryStop(trip, stop, index, isNext) {
 /** One run-sheet line on a stop card, with a grip that carries it to another stop. */
 function itineraryLine(trip, stop, action, at) {
   const line = el('div', 'itinerary-line');
-  const grip = el('span', 'itinerary-line-grip', '⠿');
-  grip.title = tx('Drag this line onto another stop');
+  line.dataset.action = action.id;
+  const grip = el('button', 'itinerary-line-grip', '⠿');
+  grip.type = 'button';
+  grip.title = tx('Drag this line, or use up and down to reorder and left and right to move between stops');
+  grip.setAttribute('aria-label', grip.title);
+  grip.addEventListener('keydown', async (event) => {
+    const vertical = { ArrowUp: -1, ArrowDown: 1 }[event.key];
+    const horizontal = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (vertical === undefined && horizontal === undefined) return;
+    event.preventDefault();
+    const stopIndex = trip.stops.findIndex((item) => item.id === stop.id);
+    const target = horizontal === undefined ? stop : trip.stops[stopIndex + horizontal];
+    const to = vertical === undefined ? (target?.actions || []).length : at + vertical;
+    if (!target || to < 0 || (vertical !== undefined && to >= (stop.actions || []).length)) return;
+    if (!await tripCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/move`
+      + `?toStop=${encodeURIComponent(target.id)}&to=${to}`)) return;
+    const lines = $('#itinerary-main')?.querySelectorAll('.itinerary-line') || [];
+    Array.from(lines).find((item) => item.dataset.action === action.id)?.querySelector('.itinerary-line-grip')?.focus();
+  });
   grip.addEventListener('mousedown', () => { line.draggable = true; });
   grip.addEventListener('mouseup', () => { line.draggable = false; });
   line.append(grip, runActionRow(trip, stop, action, true));
@@ -25874,16 +25948,16 @@ async function itineraryDrop(trip) {
     const from = trip.stops.findIndex((s) => s.id === drag.stopId);
     const to = drag.target.at - (from < drag.target.at ? 1 : 0);
     if (from < 0 || to === from) return;
-    await fetch(`/api/trips/${trip.id}/stops/${drag.stopId}/place?to=${to}`, { method: 'POST' });
+    if (!await tripRequest(`/api/trips/${trip.id}/stops/${drag.stopId}/place?to=${to}`, { method: 'POST' })) return;
   } else {
     const same = drag.target.stopId === drag.stopId;
     const to = drag.target.at - (same && drag.from < drag.target.at ? 1 : 0);
     if (same && to === drag.from) return;
-    await fetch(`/api/trips/${trip.id}/stops/${drag.stopId}/actions/${drag.actionId}/move`
-      + `?toStop=${encodeURIComponent(drag.target.stopId)}&to=${to}`, { method: 'POST' });
+    if (!await tripRequest(`/api/trips/${trip.id}/stops/${drag.stopId}/actions/${drag.actionId}/move`
+      + `?toStop=${encodeURIComponent(drag.target.stopId)}&to=${to}`, { method: 'POST' })) return;
   }
 
-  await loadTrips();
+  await tripRefresh();
 }
 
 function itineraryDragEnd(node) {
@@ -25945,11 +26019,12 @@ function itineraryAddStop(trip) {
 
     const submittedPlace = place.value;
     const submittedNote = note.value;
-    const response = await fetch(`/api/trips/${trip.id}/stops`, {
+    const response = await tripRequest(`/api/trips/${trip.id}/stops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ placeId: node?.rawId || '', place: node?.name || typed, note: submittedNote.trim() || null }),
     });
+    if (!response) return;
     const main = $('#itinerary-main');
     if (response.ok && main?.dataset.tripId === trip.id) {
       const currentPlace = main.querySelector('.itinerary-place-input');
@@ -25957,7 +26032,7 @@ function itineraryAddStop(trip) {
       if (currentPlace && currentPlace.value === submittedPlace) currentPlace.value = '';
       if (currentNote && currentNote.value === submittedNote) currentNote.value = '';
     }
-    await loadTrips();
+    await tripRefresh();
     $('#itinerary-add-place')?.focus();
   };
 

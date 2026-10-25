@@ -4473,6 +4473,8 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 .itinerary-stop .run-action { font-size: 12px; margin-top: 0; }
 .itinerary-stop .run-action-text b { font-size: 9.5px; }
 .itinerary-stop .run-action-form { margin-top: 8px; }
+.itinerary-error { margin: 8px 0; padding: 9px 12px; border: 1px solid var(--amber); color: var(--amber); }
+.itinerary-error[hidden] { display: none; }
 
 /* Grips say they are handles with the cursor before they are touched. */
 .itinerary-grip,

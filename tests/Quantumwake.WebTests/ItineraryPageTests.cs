@@ -43,6 +43,107 @@ public class ItineraryPageTests
     private const string Stops = "__dom.node('#itinerary-main').byClass('itinerary-stop')";
 
     [Fact]
+    public void A_live_refresh_keeps_an_open_run_sheet_draft()
+    {
+        var page = Itinerary();
+        page.Do($$"""
+            {{Stops}}[0].byClass('ghost').find(b => b.textContent === '+ Line').click();
+            const form = {{Stops}}[0].byClass('run-action-new-form')[0];
+            form.byClass('search')[0].value = 'Load medical supplies';
+            form.byClass('search')[1].value = '12';
+            form.byClass('select')[1].value = 'SCU';
+            await loadTrips();
+            """);
+        Assert.Equal("Load medical supplies", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('search')[0].value"));
+        Assert.Equal("12", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('search')[1].value"));
+        Assert.Equal("SCU", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('select')[1].value"));
+    }
+
+    [Fact]
+    public void A_failed_run_sheet_save_reports_the_error_and_keeps_the_draft()
+    {
+        var page = Itinerary();
+        page.Fail("/api/trips/t1/stops/s1/actions", 500, "{}");
+        page.Do($$"""
+            {{Stops}}[0].byClass('ghost').find(b => b.textContent === '+ Line').click();
+            const form = {{Stops}}[0].byClass('run-action-new-form')[0];
+            form.byClass('search')[0].value = 'Load cargo';
+            await form.byClass('ghost')[0].fire('click');
+            """);
+        Assert.Equal("Load cargo", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('search')[0].value"));
+        Assert.Contains("Could not save", page.NodeText("#itinerary-error"));
+        Assert.False(page.Truth("__dom.node('#itinerary-error').hidden"));
+    }
+
+    [Fact]
+    public void Plan_and_stop_deletion_can_be_cancelled()
+    {
+        var page = Itinerary();
+        page.Do($$"""
+            globalThis.confirm = () => false;
+            __dom.node('#itinerary-main').byClass('danger')[0].click();
+            {{Stops}}[0].byClass('ghost').find(b => b.title === 'Drop this stop').click();
+            """);
+        Assert.DoesNotContain(page.Fetched(), call => call.StartsWith("DELETE /api/trips/"));
+    }
+
+    [Fact]
+    public void Confirmed_stop_deletion_is_sent()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/stops/s1", "{}");
+        page.Do($$"""
+            globalThis.confirm = () => true;
+            await {{Stops}}[0].byClass('ghost').find(b => b.title === 'Drop this stop').fire('click');
+            """);
+        Assert.Contains("DELETE /api/trips/t1/stops/s1", page.Fetched());
+    }
+
+    [Fact]
+    public void A_saved_run_sheet_draft_closes_after_the_server_accepts_it()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/stops/s1/actions", "{}");
+        page.Do($$"""
+            {{Stops}}[0].byClass('ghost').find(b => b.textContent === '+ Line').click();
+            const form = {{Stops}}[0].byClass('run-action-new-form')[0];
+            form.byClass('search')[0].value = 'Load cargo';
+            await form.byClass('ghost')[0].fire('click');
+            """);
+        Assert.Equal(0, page.Count($"{Stops}[0].byClass('run-action-new-form').length"));
+        Assert.Contains("Load cargo", page.BodyOf("/api/trips/t1/stops/s1/actions"));
+    }
+
+    [Fact]
+    public void Line_handles_use_arrow_keys_to_reorder_and_move_between_stops()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/stops/s1/actions/a1/move?toStop=s1&to=1", "{}");
+        page.Serve("/api/trips/t1/stops/s1/actions/a1/move?toStop=s2&to=0", "{}");
+        page.Do($$"""
+            const grip = {{Stops}}[0].byClass('itinerary-line-grip')[0];
+            await grip.fire('keydown', {key:'ArrowDown', preventDefault() {} });
+            await {{Stops}}[0].byClass('itinerary-line-grip')[0].fire('keydown', {key:'ArrowRight', preventDefault() {} });
+            """);
+        Assert.Contains("POST /api/trips/t1/stops/s1/actions/a1/move?toStop=s1&to=1", page.Fetched());
+        Assert.Contains("POST /api/trips/t1/stops/s1/actions/a1/move?toStop=s2&to=0", page.Fetched());
+    }
+
+    [Fact]
+    public void A_failed_stop_save_reports_the_error_without_clearing_the_input()
+    {
+        var page = Itinerary();
+        page.Fail("/api/trips/t1/stops", 500, "{}");
+        page.Do("""
+            const add = __dom.node('#itinerary-main').byClass('itinerary-add')[0];
+            add.byClass('search')[0].value = 'Lorville';
+            await add.byClass('ghost')[0].fire('click');
+            """);
+        Assert.Contains("Could not save", page.NodeText("#itinerary-error"));
+        Assert.Equal("Lorville", page.Text("__dom.node('#itinerary-main').byClass('itinerary-place-input')[0].value"));
+    }
+
+    [Fact]
     public void Live_refresh_keeps_the_unfinished_plan_and_stop()
     {
         var page = Itinerary();

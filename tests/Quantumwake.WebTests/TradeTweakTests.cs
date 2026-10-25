@@ -66,6 +66,8 @@ public class TradeTweakTests
     public void Cutting_the_buy_short_cuts_the_whole_load_sale_with_it()
     {
         var page = Panel();
+        page.Serve("/api/trips/t1/stops/s1/actions/a1/tweak", "{}");
+        page.Serve("/api/trips/t1/stops/s2/actions/a2/tweak", "{}");
         page.Do("""
             {
               const body = __dom.node('#cargo-body');
