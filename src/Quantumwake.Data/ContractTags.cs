@@ -57,6 +57,30 @@ public static partial class ContractTags
         return match.Success && int.TryParse(match.Groups["rep"].Value, out var rep) ? rep : null;
     }
 
+    /// <summary>
+    /// The reputation ladder a title carries, lowest rank first, or null when
+    /// it carries none.
+    /// </summary>
+    /// <remarks>
+    /// The figures are per rank of the ladder, not a sum. Red Wind's hauls
+    /// carry seven figures to Pyro and eight from Ruin Station; either way the
+    /// last is Master's, so a rank's figure is found counting from the top.
+    /// </remarks>
+    public static IReadOnlyList<int>? LadderFrom(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return null;
+
+        var match = LadderTag.Match(title);
+        if (!match.Success)
+            return null;
+
+        return [.. Digits.Matches(match.Value).Select(m => int.Parse(m.Value))];
+    }
+
+    [GeneratedRegex(@"\d{1,7}")]
+    private static partial Regex Digits { get; }
+
     /// <summary>Whether a title is tagged as awarding a blueprint.</summary>
     public static bool AwardsBlueprint(string? title) =>
         !string.IsNullOrWhiteSpace(title) && BlueprintTag.IsMatch(title);

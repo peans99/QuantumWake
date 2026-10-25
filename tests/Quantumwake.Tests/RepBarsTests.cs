@@ -19,7 +19,8 @@ public class RepBarsTests
 
     /// <summary>A patch around one card with its bar filled to <paramref name="fill"/>.</summary>
     /// <param name="glow">Added to every channel across the right half, as the panel's translucency does.</param>
-    private static ColourPatch Drawn(double? fill, int glow = 0)
+    /// <param name="ink">The fill's colour, when it is not the usual teal.</param>
+    private static ColourPatch Drawn(double? fill, int glow = 0, (byte R, byte G, byte B)? ink = null)
     {
         const int left = 1300, top = 560, width = 500, height = 120;
         var bytes = new byte[width * height * 4];
@@ -45,7 +46,7 @@ public class RepBarsTests
 
             for (var y = barTop; y < barTop + 7; y++)
                 for (var x = barLeft; x < barLeft + barLength; x++)
-                    Paint(x, y, x < reached ? Teal : Track);
+                    Paint(x, y, x < reached ? ink ?? Teal : Track);
         }
 
         return new ColourPatch(left, top, width, height, bytes);
@@ -63,6 +64,23 @@ public class RepBarsTests
         Assert.Equal(1423, bar.Left);
         Assert.Equal(1592, bar.Right);
         Assert.InRange(bar.Fill, fill - 1.0 / 170, fill + 1.0 / 170);
+    }
+
+    /// <summary>
+    /// The fill is not one colour. The 24 October frames read (188, 252, 226)
+    /// at 16:25 and (192, 253, 245) at 22:46, the second washed nearly cyan -
+    /// and before 0.18.28 that one read as no fill at all, Member 0% for a bar
+    /// at 78%.
+    /// </summary>
+    [Theory]
+    [InlineData(188, 252, 226)]
+    [InlineData(192, 253, 245)]
+    [InlineData(177, 253, 240)]
+    public void A_fill_washed_towards_cyan_is_still_fill(byte r, byte g, byte b)
+    {
+        var bar = RepBars.Measure(Drawn(0.782, ink: (r, g, b)), Label)!;
+
+        Assert.InRange(bar.Fill, 0.782 - 1.0 / 170, 0.782 + 1.0 / 170);
     }
 
     [Fact]

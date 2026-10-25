@@ -6812,3 +6812,18 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .rep-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rep-logo { height: 28px; width: auto; max-width: 112px; object-fit: contain; flex: none; }
 .rep-card .wikelo-head { align-items: center; }
+/* The rep run: the pilot's standing, five short fields, and what the climb takes. */
+.rep-run-standing { margin: 10px 0 8px; font-size: 12px; }
+.rep-run-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.rep-run-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 10.5px; }
+.rep-run-field .search, .rep-run-field .select { width: 100%; min-width: 0; }
+.rep-run-source { margin: 8px 0 4px; font-size: 10.5px; }
+.rep-run-summary { margin: 4px 0 8px; font-size: 12px; }
+.rep-run-empty { margin: 8px 0; font-size: 12px; }
+/* A trade run's money, and the buys and sells that can be changed after it is saved. */
+.run-action.tradeable { grid-template-columns: 15px minmax(0, 1fr); }
+.run-action-tools { grid-column: 2; display: flex; gap: 4px; }
+.run-action-was { display: block; color: var(--amber); }
+.run-tweak-form { grid-column: 2; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+.trade-run-money { margin: 6px 0 8px; padding: 6px 8px; border: 1px solid var(--rule); font-size: 11px; line-height: 1.4; }
+.trade-run-warning { color: var(--amber); }

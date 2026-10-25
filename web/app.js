@@ -422,7 +422,10 @@ function showView(name) {
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
-  if (name === 'routes') loadRoutes().catch(() => {});
+  if (name === 'routes') {
+    loadRoutes().catch(() => {});
+    loadRepRun().catch(() => {});
+  }
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
@@ -14197,6 +14200,16 @@ async function loadRouteCircuits(query) {
   panel.hidden = circuits.length === 0;
 }
 
+/**
+ * One buy or sell as a run-sheet line, priced, so the plan can be tweaked
+ * once it is flown - fewer SCU in stock, a buyer that moved - and the
+ * profit worked out again from what it says rather than a note written
+ * before any of that happened.
+ */
+const tradeAction = (kind, commodity, units, price) => ({
+  kind, text: commodity, quantity: Math.floor(Number(units) || 0), unit: 'SCU', price: Number(price) || 0,
+});
+
 /** Save either the best buyer or a named alternate as the same editable flight plan. */
 function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
   rememberRoute({ ...route, sellAt, sellPrice }, label ? 'alternate' : 'route');
@@ -14204,12 +14217,12 @@ function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
     {
       placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
       place: route.buyAt,
-      note: tx('Buy {units} SCU at {price}', { units: Math.floor(route.units).toLocaleString(), price: money(route.buyPrice) }),
+      actions: [tradeAction('buy', route.commodity, route.units, route.buyPrice)],
     },
     {
       placeId: sellAtId || placeIdForTerminal(sellAt),
       place: sellAt,
-      note: `${tx('Sell at {price}', { price: money(sellPrice) })} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
+      actions: [tradeAction('sell', route.commodity, route.units, sellPrice)],
     },
   ]);
 }
@@ -14221,10 +14234,276 @@ function saveSplitTradeRoute(route, portions) {
   rememberRoute({ ...route, sellAt: txn(portions.length, '{count} buyer', '{count} buyers'), profit, outlay: Number(route.buyPrice) * units }, 'split load');
   planTrip(tx('{commodity} split load', { commodity: route.commodity }), [
     { placeId: route.buyAtId || placeIdForTerminal(route.buyAt), place: route.buyAt,
-      note: tx('Buy {units} SCU at {price}', { units: units.toLocaleString(), price: money(route.buyPrice) }) },
+      actions: [tradeAction('buy', route.commodity, units, route.buyPrice)] },
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
-      note: `${tx('Sell {units} SCU at {price}', { units: portion.units.toLocaleString(), price: money(portion.sellPrice) })} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
+      actions: [tradeAction('sell', route.commodity, portion.units, portion.sellPrice)] })),
   ]);
+}
+
+/* ---------- rep runs ----------
+   One small delivery flown again and again until the next rank. The rank and
+   the estimate are the Reputation page's, read off the last Rep app
+   screenshot; what one delivery pays is the newest StarStrings tag on the
+   organisation's contracts, or what the pilot types. Everything past the
+   first drop is arithmetic on those two, so the stops call it "about". */
+
+/** The most deliveries one plan writes out: a shift, not the whole climb. */
+const REP_RUN_MOST = 25;
+
+let repRunBoard = null;
+const repRun = { org: '', rep: '', count: '', pickup: '', drop: '' };
+
+/** Organisations a run can aim at: a rank measured on a ladder, with a rank above it. */
+const repRunCandidates = (board) => (board?.organisations || [])
+  .filter((org) => org.place && org.place.next != null);
+
+/** The rank an estimate falls in and how far through it, by the ladder's thresholds. */
+function repRunStanding(org, estimate) {
+  const place = org.place;
+  const ladder = org.ladder || [];
+  let index = place.rankIndex;
+  while (index + 1 < ladder.length && estimate >= ladder[index + 1].minReputation) index++;
+
+  const floor = index === place.rankIndex ? place.floor : ladder[index].minReputation;
+  const next = index === place.rankIndex ? place.next
+    : index + 1 < ladder.length ? ladder[index + 1].minReputation : null;
+
+  return {
+    rank: ladder[index]?.name || place.rank,
+    progress: next != null && next > floor ? Math.min(1, (estimate - floor) / (next - floor)) : null,
+    ranks: index - place.rankIndex,
+  };
+}
+
+/**
+ * Where each of `count` deliveries paying `rep` leaves the pilot, and how
+ * many it takes to reach the next rank from the estimate.
+ */
+function repRunPlan(org, rep, count) {
+  const place = org.place;
+  const pay = Math.max(0, Math.floor(Number(rep) || 0));
+  const gap = Math.max(0, place.next - place.estimate);
+  const needed = pay > 0 ? Math.max(1, Math.ceil(gap / pay)) : null;
+  const deliveries = [];
+
+  for (let number = 1; number <= count; number++) {
+    const estimate = place.estimate + pay * number;
+    deliveries.push({ number, estimate, ...repRunStanding(org, estimate) });
+  }
+
+  return { pay, gap, needed, deliveries };
+}
+
+/** Pickup then drop, once per delivery, each with its crate on the run sheet. */
+function repRunStops(plan, pickup, drop) {
+  const total = plan.deliveries.length;
+  const stops = [];
+  let ranks = 0;
+
+  for (const delivery of plan.deliveries) {
+    stops.push({
+      placeId: pickup.placeId,
+      place: pickup.place,
+      note: tx('Delivery {n} of {total} · pick up the crate', { n: delivery.number, total }),
+      actions: [{ kind: 'collect', text: tx('One crate'), quantity: null, unit: null }],
+    });
+
+    // The rank is named on the drop that reaches it, so the stop list says
+    // where the climb ends without anybody doing the sum.
+    const reached = delivery.ranks > ranks;
+    ranks = delivery.ranks;
+    const standing = delivery.progress == null
+      ? delivery.rank
+      : `${delivery.rank} ${reputationPercent(delivery.progress)}`;
+
+    stops.push({
+      placeId: drop.placeId,
+      place: drop.place,
+      note: reached
+        ? tx('Delivery {n} of {total} · about {rep} rep — {rank} reached', {
+          n: delivery.number, total, rep: delivery.estimate.toLocaleString(), rank: delivery.rank,
+        })
+        : tx('Delivery {n} of {total} · about {rep} rep, {standing}', {
+          n: delivery.number, total, rep: delivery.estimate.toLocaleString(), standing,
+        }),
+      actions: [{ kind: 'unload', text: tx('One crate'), quantity: null, unit: null }],
+    });
+  }
+
+  return stops;
+}
+
+/** A typed place, matched to the map when the map knows it. */
+function repRunPlace(typed) {
+  const name = String(typed || '').trim();
+  if (!name) return null;
+  const known = atlas.find((node) => node.name?.toLowerCase() === name.toLowerCase());
+  return known
+    ? { placeId: known.rawId || '', place: known.name }
+    : { placeId: placeIdForTerminal(name), place: name };
+}
+
+async function loadRepRun() {
+  if (!$('#rep-run-body')) return;
+  repRunBoard = await getJson('/api/reputation').catch(() => null);
+  renderRepRun();
+}
+
+/** Where one delivery's figure came from, said beside the box it fills. */
+function repRunPaySource(org) {
+  const pay = org.pay;
+  if (!pay) {
+    return tx('None of their contracts in your logs carries a rep tag, so type what one delivery pays.');
+  }
+  return pay.source === 'ladder'
+    ? tx('The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {
+      rank: org.place.rank, contract: pay.contract,
+    })
+    : tx('The rep tag on “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {
+      contract: pay.contract,
+    });
+}
+
+function renderRepRun() {
+  const host = $('#rep-run-body');
+  if (!host) return;
+  host.textContent = '';
+
+  const candidates = repRunCandidates(repRunBoard);
+  if (!candidates.length) {
+    const empty = el('p', 'muted rep-run-empty', repRunBoard?.organisations?.length
+      ? tx('None of your Rep app screenshots has a rank placed on a ladder with one above it yet, so there is nothing to climb towards.')
+      : tx('Take a Rep app screenshot of the organisation you are working for. Its rank and the reputation to the next one come from that.'));
+    const link = el('a', 'ghost tiny', tx('Reputation'));
+    link.href = '#reputation';
+    host.append(empty, link);
+    return;
+  }
+
+  const org = candidates.find((o) => o.name === repRun.org) || candidates[0];
+  if (org.name !== repRun.org) {
+    repRun.org = org.name;
+    repRun.rep = '';
+    repRun.count = '';
+  }
+
+  const fields = el('div', 'rep-run-fields');
+  const field = (label, control) => {
+    const wrap = el('label', 'rep-run-field');
+    wrap.append(el('span', 'muted', tx(label)), control);
+    fields.append(wrap);
+    return control;
+  };
+
+  const choose = document.createElement('select');
+  choose.className = 'select';
+  choose.id = 'rep-run-org';
+  for (const candidate of candidates) choose.append(new Option(candidate.name, candidate.name));
+  choose.value = org.name;
+  choose.addEventListener('change', () => {
+    repRun.org = choose.value;
+    renderRepRun();
+  });
+  field('Organisation', choose);
+
+  const number = (id, value, placeholder) => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'search';
+    input.id = id;
+    input.min = '1';
+    input.step = '1';
+    input.placeholder = placeholder;
+    input.value = value;
+    return input;
+  };
+
+  const rep = field('Rep per delivery', number('rep-run-rep', repRun.rep || org.pay?.rep || '', tx('rep')));
+  const count = field('Deliveries in this plan', number('rep-run-count', repRun.count, tx('how many')));
+  count.max = String(REP_RUN_MOST);
+
+  const placeInput = (id, value, placeholder) => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'search';
+    input.id = id;
+    input.placeholder = placeholder;
+    input.value = value;
+    input.setAttribute('list', 'rep-run-places');
+    return input;
+  };
+
+  const pickup = field('Pick up at', placeInput('rep-run-pickup', repRun.pickup, tx('where the crate waits')));
+  const drop = field('Deliver to', placeInput('rep-run-drop', repRun.drop, tx('where it goes')));
+
+  const places = document.createElement('datalist');
+  places.id = 'rep-run-places';
+  for (const node of atlas) {
+    if (node.name) places.append(new Option(node.name, node.name));
+  }
+
+  const standing = el('div', 'rep-run-standing');
+  standing.append(el('b', null, org.place.rank));
+  standing.append(document.createTextNode(` · ${tx('about {rep} rep ±{margin}', {
+    rep: org.place.estimate.toLocaleString(), margin: org.place.resolution.toLocaleString(),
+  })} · ${tx('{left} rep to {rank}', {
+    left: Math.max(0, org.place.next - org.place.estimate).toLocaleString(),
+    rank: org.ladder?.[org.place.rankIndex + 1]?.name || tx('the next rank'),
+  })} · ${tx('read {when}', { when: ago(org.lastSeen) })}`));
+
+  const source = el('p', 'muted rep-run-source', repRunPaySource(org));
+  const summary = el('p', 'rep-run-summary');
+  summary.id = 'rep-run-summary';
+
+  const make = el('button', 'primary rep-run-make', tx('Make it the flight plan'));
+  make.title = tx('Write the pickups and drops into a tracked flight plan, with the reputation expected after each drop');
+
+  const refresh = () => {
+    repRun.rep = rep.value;
+    repRun.count = count.value;
+    repRun.pickup = pickup.value;
+    repRun.drop = drop.value;
+
+    const sized = repRunPlan(org, rep.value, 0);
+    if (!sized.needed) {
+      summary.textContent = tx('Type what one delivery pays to see how many it takes.');
+      make.disabled = true;
+      return null;
+    }
+
+    if (!count.value) count.placeholder = String(Math.min(sized.needed, REP_RUN_MOST));
+    const planned = Math.min(REP_RUN_MOST, Math.max(1, Math.floor(Number(count.value) || Math.min(sized.needed, REP_RUN_MOST))));
+    const plan = repRunPlan(org, rep.value, planned);
+    const next = org.ladder?.[org.place.rankIndex + 1]?.name || tx('the next rank');
+
+    const said = [txn(sized.needed,
+      '{count} delivery at {rep} rep reaches {rank}.', '{count} deliveries at {rep} rep reach {rank}.',
+      { rep: plan.pay.toLocaleString(), rank: next })];
+    if (planned < sized.needed) {
+      said.push(tx('This plan writes out the first {count}; take a fresh Rep screenshot when they are done and plan the rest from there.', { count: planned }));
+    }
+    summary.textContent = said.join(' ');
+    make.disabled = !pickup.value.trim() || !drop.value.trim();
+    make.title = make.disabled
+      ? tx('Say where the crate is picked up and where it goes')
+      : tx('Write the pickups and drops into a tracked flight plan, with the reputation expected after each drop');
+    return plan;
+  };
+
+  for (const input of [rep, count, pickup, drop]) input.addEventListener('input', refresh);
+
+  make.addEventListener('click', () => {
+    const plan = refresh();
+    const from = repRunPlace(pickup.value);
+    const to = repRunPlace(drop.value);
+    if (!plan || !from || !to) return;
+    return planTrip(txn(plan.deliveries.length,
+      '{organisation} rep run · {count} delivery', '{organisation} rep run · {count} deliveries',
+      { organisation: org.name }), repRunStops(plan, from, to));
+  });
+
+  host.append(standing, fields, places, source, summary, make);
+  refresh();
 }
 
 /** Finds a safer first choice without silently changing a pilot's explicit safety or pad requirement. */
@@ -24633,17 +24912,165 @@ function runActionRow(trip, stop, action, editable = false) {
     const quantity = Number(action.quantity).toLocaleString();
     text.append(el('span', 'run-action-quantity', `${quantity}${action.unit ? ` ${action.unit}` : ''}`));
   }
+  if (isTradeAction(action)) {
+    text.append(el('span', 'run-action-quantity', tx('at {price} each', { price: money(action.price) })));
+
+    // What it was first planned at, beside what it is now: the point of
+    // keeping both is that the change is visible.
+    if (action.was) {
+      text.append(el('span', 'run-action-was', tx('planned {amount}', {
+        amount: tradeFigures(action.was.quantity, action.unit, action.was.price),
+      })));
+    }
+  }
   row.append(text);
+
+  if (editable && isTradeAction(action)) {
+    // The map's panel is narrow, and two buttons beside the line left the
+    // text a letter wide; a trade line puts them on a row of their own.
+    row.classList.add('tradeable');
+    const tools = el('span', 'run-action-tools');
+    const tweak = el('button', 'ghost tiny run-action-tweak', tx('Change'));
+    tweak.title = tx('Change the SCU or the price — the profit is worked out again, and the planned figures stay beside it');
+    tweak.addEventListener('click', () => {
+      const open = row.querySelector('.run-tweak-form');
+      if (open) open.remove();
+      else row.append(tradeTweakForm(trip, stop, action));
+    });
+    tools.append(tweak);
+    row.append(tools);
+  }
 
   if (editable) {
     const remove = el('button', 'ghost tiny', '×');
     remove.title = tx('Remove this action');
     remove.addEventListener('click', () =>
       runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
-    row.append(remove);
+    (row.querySelector('.run-action-tools') || row).append(remove);
   }
 
   return row;
+}
+
+/** A buy or a sell that carries its price, which is what a run's profit is worked out from. */
+const isTradeAction = (action) => (action.kind === 'buy' || action.kind === 'sell')
+  && action.price !== null && action.price !== undefined;
+
+/** "96 SCU at 1,234 aUEC". */
+const tradeFigures = (quantity, unit, price) =>
+  `${Number(quantity ?? 0).toLocaleString()}${unit ? ` ${unit}` : ''} ${tx('at {price} each', { price: money(price) })}`;
+
+/**
+ * What a trade run's buys and sells come to, as they stand and as first
+ * planned. Null when the plan has no priced trade in it.
+ *
+ * Summed over the run sheet rather than read from a route, because the run
+ * sheet is what the pilot changes: half the hold sold at one buyer and the
+ * rest at a second is two sells, and a price fixed after a kiosk refused the
+ * planned one is the only price that still means anything.
+ */
+function tradeRunMoney(trip) {
+  const actions = (trip?.stops || []).flatMap((stop) => stop.actions || []).filter(isTradeAction);
+  if (!actions.length) return null;
+
+  const sum = (kind, figures) => actions.filter((a) => a.kind === kind)
+    .reduce((total, a) => {
+      const { quantity, price } = figures(a);
+      return total + (Number(quantity) || 0) * (Number(price) || 0);
+    }, 0);
+  const units = (kind) => actions.filter((a) => a.kind === kind).reduce((total, a) => total + (Number(a.quantity) || 0), 0);
+
+  const now = (a) => a;
+  const planned = (a) => a.was || a;
+
+  return {
+    outlay: sum('buy', now),
+    takings: sum('sell', now),
+    profit: sum('sell', now) - sum('buy', now),
+    plannedProfit: sum('sell', planned) - sum('buy', planned),
+    tweaked: actions.some((a) => a.was),
+    bought: units('buy'),
+    sold: units('sell'),
+  };
+}
+
+/** The run's money in a line, with what the tweaks did to it. */
+function tradeRunSummary(trip) {
+  const figures = tradeRunMoney(trip);
+  if (!figures) return null;
+
+  const box = el('div', 'trade-run-money');
+  const signed = (n) => `${n >= 0 ? '+' : '−'}${money(Math.abs(n))}`;
+
+  box.append(el('div', null, tx('Buy for {outlay} · sell for {takings} · profit {profit}', {
+    outlay: money(figures.outlay), takings: money(figures.takings), profit: signed(figures.profit),
+  })));
+
+  if (figures.tweaked) {
+    box.append(el('div', 'muted', tx('Planned {planned}; your changes moved it {change}.', {
+      planned: signed(figures.plannedProfit), change: signed(figures.profit - figures.plannedProfit),
+    })));
+  }
+
+  // A buy cut short leaves the sells promising cargo that is not aboard.
+  if (figures.sold > figures.bought) {
+    box.append(el('div', 'trade-run-warning', tx('Selling {sold} SCU of the {bought} bought.', {
+      sold: figures.sold.toLocaleString(), bought: figures.bought.toLocaleString(),
+    })));
+  }
+
+  return box;
+}
+
+/**
+ * Two boxes, SCU and price, for one buy or sell.
+ *
+ * Cutting a buy short also cuts the sale, when there is exactly one sale and
+ * it was for the whole load: that is the case where the pilot plainly means
+ * "I only got 80", and making them edit both ends is a second chance to forget.
+ */
+function tradeTweakForm(trip, stop, action) {
+  const form = el('div', 'run-action-form run-tweak-form');
+
+  const box = (value, label) => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'search run-action-amount';
+    input.min = '0';
+    input.step = 'any';
+    input.value = value === null || value === undefined ? '' : String(value);
+    input.title = label;
+    input.placeholder = label;
+    return input;
+  };
+
+  const quantity = box(action.quantity, tx('SCU'));
+  const price = box(action.price, tx('aUEC each'));
+  const save = el('button', 'ghost tiny', tx('Save'));
+
+  save.addEventListener('click', async () => {
+    const units = quantity.value === '' ? null : Number(quantity.value);
+    const each = price.value === '' ? null : Number(price.value);
+    const url = (s, a) => `/api/trips/${trip.id}/stops/${s.id}/actions/${a.id}/tweak`;
+    const post = (s, a, body) => fetch(url(s, a), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+
+    await post(stop, action, { quantity: units, price: each });
+
+    if (action.kind === 'buy' && units !== action.quantity) {
+      const sells = trip.stops.flatMap((s) => (s.actions || []).filter((a) => a.kind === 'sell').map((a) => [s, a]));
+      if (sells.length === 1 && sells[0][1].quantity === action.quantity) {
+        const [sellStop, sell] = sells[0];
+        await post(sellStop, sell, { quantity: units, price: sell.price });
+      }
+    }
+
+    await loadTrips();
+  });
+
+  form.append(quantity, price, save);
+  return form;
 }
 
 function runActionForm(trip, stop) {
@@ -24763,6 +25190,12 @@ function renderTripCard() {
     jump.append(el('div', 'now-trip-label', next.done ? tx('At this stop') : tx('Jump next')));
     jump.append(el('div', 'now-trip-where', next.place));
     if (next.note) jump.append(el('div', 'now-trip-note', next.note));
+
+    // A trade stop carries its figures on the run sheet rather than in a
+    // note, so they stay true after a tweak; say them here all the same.
+    for (const action of (next.actions || []).filter((a) => !a.done && isTradeAction(a))) {
+      jump.append(el('div', 'now-trip-note', `${runActionLabel(action.kind)} ${action.text} · ${tradeFigures(action.quantity, action.unit, action.price)}`));
+    }
   } else {
     jump.append(el('div', 'inward', tx('Every stop is crossed off. Good run.')));
   }
@@ -24835,6 +25268,9 @@ function renderTripPanel() {
 
   const done = trip.stops.filter((s) => s.done).length;
   body.append(jobProgress(done, trip.stops.length, tx('{done} of {total} stops', { done, total: trip.stops.length })));
+
+  const trade = tradeRunSummary(trip);
+  if (trade) body.append(trade);
 
   const next = nextStop(trip);
 

@@ -1566,6 +1566,30 @@ the bar fills in proportion and the estimate is the reputation, to the pixel;
 it is still called an estimate, because one rank on one ladder is what has
 been checked.
 
+**What one more delivery pays (0.18.27).** The rep run on the Flight plan
+page needs a figure per delivery, and StarStrings carries one per rank on
+Red Wind's titles. Two shapes are in this install's logs: seven figures on
+hauls to Ruin Station (`[50/200/250/500/1000/2000/4000 Rep]`) and eight on
+hauls from it (`[50/100/200/250/500/1000/2000/4000 Rep]`). Hauling has eight
+ranks, Not Eligible to Master, and both tags end at Master, so a rank's figure
+is counted from the top: Member, fourth from the top, is 500 in both - the
+figure the 15:00 to 16:25 check above bore out. A title with one figure,
+`[200 Rep]`, is used only when no ladder is in the organisation's logs, and a
+title with neither leaves the box for the pilot to fill.
+
+**A washed fill, and the second check (24 October, 16:25 to 22:46).** The
+22:46 Red Wind frame was kept as Member 0%, with Trainee empty too, though
+both bars plainly show fill. The fill there measured (192, 253, 245) against
+(188, 252, 226) at 16:25: washed nearly cyan, so a rule asking for green
+fifteen levels clear of blue turned every bar away. Green no weaker than blue
+is enough - track and card never reach a green of 150 - and across all 17 Rep
+frames on this install the change moved only that frame and, by one pixel,
+the 21 October Red Wind one (53.4% to 54.0%). Re-measured, 22:46 reads Member
+78.2%. Between the two shots the log holds four completed Red Wind contracts
+(and four abandoned): 4 x 500 = 2,000 predicts 69.0% + 8.9% = 77.9%. Half a
+pixel. Readings kept at exactly 0%, or with no fill on any card, are read again
+when the screenshot watch is idle (`ScreenInsightService.Doubtful`).
+
 **Readings from before.** Readings taken before 0.18.22 kept the text and not
 the pixels, so every install that photographed the Rep app holds readings
 with no rank. The screenshot watch reads those files again, once each, when

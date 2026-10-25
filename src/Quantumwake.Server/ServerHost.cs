@@ -3360,6 +3360,14 @@ public static class ServerHost
                 });
         });
 
+        // A tweak changes the plan itself - fewer SCU, a buyer's new price -
+        // and the store keeps the first figures beside it.
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/tweak",
+            (string id, string stopId, string actionId, TripStore trips, RunActionTweak body) =>
+            trips.Tweak(id, stopId, actionId, body.Quantity, body.Price)
+                ? Results.Ok(new { id, stopId, actionId })
+                : Results.NotFound());
+
         // A correction sits beside the estimate rather than replacing it.
         app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/actual",
             (string id, string stopId, string actionId, TripStore trips, decimal? amount) =>
@@ -5825,6 +5833,9 @@ public sealed record HaulTripRequest(string? PlanId);
 
 /// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
 public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit, RunActionLink? Link = null);
+
+/// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions/{actionId}/tweak: both figures, as they should now be.</summary>
+public sealed record RunActionTweak(decimal? Quantity, decimal? Price);
 
 /// <summary>Body of POST /api/map-notes.</summary>
 public sealed record MapNoteRequest(

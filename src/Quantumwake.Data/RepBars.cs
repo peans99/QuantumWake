@@ -145,10 +145,15 @@ public static class RepBars
         // at least one neighbour off it.
         var reach = Math.Max(4, (int)Math.Round(0.6 * h));
 
+        // Green well clear of red and no weaker than blue. The fill is not one
+        // colour: the 24 October frames read (188, 252, 226) at 16:25 and
+        // (192, 253, 245) at 22:46, the second washed nearly cyan, and a rule
+        // asking for green fifteen clear of blue read every bar of that frame
+        // as empty. Track and card never reach a green of 150.
         bool Teal(int x, int y)
         {
             var (r, g, b) = pixels.At(x, y);
-            return g >= 150 && g - r >= 50 && g - b >= 15;
+            return g >= 150 && g - r >= 50 && g >= b;
         }
 
         bool Lit(int x, int y)
