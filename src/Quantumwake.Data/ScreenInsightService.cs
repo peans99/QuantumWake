@@ -172,6 +172,31 @@ public sealed class ScreenInsightService(
     }
 
     /// <summary>
+    /// Rep readings whose bars say nothing was earned on the rank held - no
+    /// fill on any card, or the held rank at exactly nothing - whose files
+    /// are still in the game's folder.
+    /// </summary>
+    /// <remarks>
+    /// Before 0.18.28 a fill washed nearly cyan was not counted as fill at
+    /// all, and the 24 October 22:46 frame was kept as Red Wind Member 0%
+    /// when its bar showed 78%. A real 0% needs the pilot to photograph the
+    /// moment of a promotion, so these are worth one more look; a reading
+    /// that is right costs a fifth of a second to confirm.
+    /// </remarks>
+    public IReadOnlyList<string> Doubtful(string? installRoot)
+    {
+        if (Excuse(installRoot) is not null) return [];
+
+        var folder = Screenshots.FolderFor(installRoot!);
+
+        return [.. readings.ReputationHistory()
+            .Where(r => !r.Dismissed && r.Reading.Ranks?.Any(c => c.Fill is not null) == true)
+            .Where(r => r.Reading.Progress is 0 || r.Reading.Ranks!.All(c => c.Fill is null or 0))
+            .Select(r => Path.Combine(folder, r.Shot))
+            .Where(File.Exists)];
+    }
+
+    /// <summary>
     /// Reads the newest unread screenshots, at most <paramref name="take"/> of
     /// them, and says how many are still waiting. The archive on demand: the
     /// watch reads nothing that was there before it began, and the loadout a
