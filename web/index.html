@@ -30,6 +30,7 @@
   <nav class="tabs" id="tabs">
     <button data-view="now" class="active">Now</button>
     <button data-view="map">Map</button>
+    <button data-view="itinerary">Itinerary</button>
     <button data-view="log">Log</button>
     <div class="tab-group">
       <button type="button" class="group-btn">Operations<span class="caret">▾</span></button>
@@ -601,6 +602,29 @@
   </section>
 
   <!-- ROUTES -->
+  <section id="view-itinerary" class="view">
+    <div class="section-bar">
+      <div>
+        <span class="operations-kicker">Flight plan</span>
+        <h2>Itinerary</h2>
+      </div>
+      <div class="controls">
+        <span class="muted" id="itinerary-count"></span>
+        <a class="ghost" href="#routes" title="Find a trade run or a rep run to start a plan from">Find a run</a>
+      </div>
+    </div>
+    <p class="muted caption">
+      The same plans as the map's flight-plan panel, with room to work on them. Drag a stop by its
+      handle to change the order, and drag a run-sheet line onto another stop to move it there.
+      Whatever you change here is what the map, the Now page and the overlay follow.
+    </p>
+    <div class="itinerary">
+      <aside class="itinerary-plans" id="itinerary-plans" aria-label="Plans"></aside>
+      <div class="itinerary-main" id="itinerary-main" aria-live="polite"></div>
+    </div>
+    <datalist id="itinerary-places"></datalist>
+  </section>
+
   <section id="view-routes" class="view">
     <div class="section-bar flight-toolbar">
       <div>

@@ -291,6 +291,25 @@ public sealed class TripStore
         }
     }
 
+    /// <summary>
+    /// Adds a stop to one named plan. The Itinerary page can have any plan
+    /// open, and a stop typed there going to whichever plan is tracked would
+    /// land somewhere the pilot is not looking. Null when the plan is unknown.
+    /// </summary>
+    public Trip? AddStopTo(string tripId, TripStop stop)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == tripId);
+            if (index < 0)
+                return null;
+
+            _trips[index] = _trips[index] with { Stops = [.. _trips[index].Stops, Fresh(stop)] };
+            Save();
+            return _trips[index];
+        }
+    }
+
     public bool ToggleStop(string tripId, string stopId)
     {
         lock (_gate)
@@ -401,6 +420,72 @@ public sealed class TripStore
 
             (stops[at], stops[to]) = (stops[to], stops[at]);
             _trips[index] = _trips[index] with { Stops = stops };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Puts a stop at a position in the running order, counted after it has
+    /// been lifted out - where a drag lets go, which is one call however far it
+    /// travelled. A position past either end is the end.
+    /// </summary>
+    public bool PlaceStop(string tripId, string stopId, int to)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == tripId);
+            if (index < 0)
+                return false;
+
+            var stops = _trips[index].Stops.ToList();
+            var at = stops.FindIndex(s => s.Id == stopId);
+            if (at < 0)
+                return false;
+
+            var stop = stops[at];
+            stops.RemoveAt(at);
+            stops.Insert(Math.Clamp(to, 0, stops.Count), stop);
+
+            _trips[index] = _trips[index] with { Stops = stops };
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Carries one run-sheet line to another stop of the same plan, at a
+    /// position in that stop's list. A drop collected at the wrong stop is one
+    /// line, and deleting it to type it again loses its price, its planned
+    /// figures and the contract it came from.
+    /// </summary>
+    public bool MoveAction(string tripId, string stopId, string actionId, string toStopId, int to)
+    {
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var from = stops.FindIndex(stop => stop.Id == stopId);
+            var into = stops.FindIndex(stop => stop.Id == toStopId);
+            if (from < 0 || into < 0) return false;
+
+            var source = (stops[from].Actions ?? []).ToList();
+            var at = source.FindIndex(action => action.Id == actionId);
+            if (at < 0) return false;
+
+            var action = source[at];
+            source.RemoveAt(at);
+            stops[from] = stops[from] with { Actions = source };
+
+            // Read after the removal, so a move within one stop sees the list
+            // with the line already lifted out, as PlaceStop does.
+            var target = (stops[into].Actions ?? []).ToList();
+            target.Insert(Math.Clamp(to, 0, target.Count), action);
+            stops[into] = stops[into] with { Actions = target };
+
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
             Save();
             return true;
         }

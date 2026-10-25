@@ -277,8 +277,8 @@ const GROUPS = {
   'select.period': ['#map-window'],
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
-  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining', '#test-tab-jobs'],
-  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs'],
+  '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining', '#test-tab-jobs', '#test-tab-itinerary'],
+  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs', '#view-itinerary'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
     '#now-status-card', '#now-briefing-card', '#now-feed-card',
@@ -360,6 +360,10 @@ node('#test-tab-fleet').dataset.view = 'fleet';
 node('#test-tab-garage').dataset.view = 'garage';
 node('#test-tab-mining').dataset.view = 'mining';
 node('#test-tab-jobs').dataset.view = 'jobs';
+
+/* The Itinerary page renders on entry, so the map panel's button can be seen
+   to land there rather than only to set the plan it should open. */
+node('#test-tab-itinerary').dataset.view = 'itinerary';
 
 node('#side-sell').dataset.side = 'sell';
 node('#side-buy').dataset.side = 'buy';

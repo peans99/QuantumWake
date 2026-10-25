@@ -3836,6 +3836,19 @@ public static class ServerHost
         app.MapPost("/api/trips/{id}/stops/{stopId}/move", (string id, string stopId, int delta, TripStore trips) =>
             trips.MoveStop(id, stopId, delta) ? Results.Ok(new { id }) : Results.NotFound());
 
+        app.MapPost("/api/trips/{id}/stops", (string id, TripStore trips, TripStop body) =>
+            trips.AddStopTo(id, body) is { } trip
+                ? Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count })
+                : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/place", (string id, string stopId, int to, TripStore trips) =>
+            trips.PlaceStop(id, stopId, to) ? Results.Ok(new { id }) : Results.NotFound());
+
+        app.MapPost("/api/trips/{id}/stops/{stopId}/actions/{actionId}/move", (string id, string stopId,
+            string actionId, string toStop, int to, TripStore trips) =>
+            trips.MoveAction(id, stopId, actionId, toStop, to)
+                ? Results.Ok(new { id, stopId = toStop, actionId }) : Results.NotFound());
+
         app.MapPost("/api/trips/{id}/stops/{stopId}/actions", (string id, string stopId,
             TripStore trips, RunActionRequest body) =>
             trips.AddAction(id, stopId, body.Kind, body.Text, body.Quantity, body.Unit, body.Link)

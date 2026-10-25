@@ -4384,6 +4384,145 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 .trip-tools { display: flex; gap: 3px; }
 .trip-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 
+/* ---------- the Itinerary page ----------
+   The map panel's plan with the room it lacks: the same stops and run-sheet
+   lines, sized to be read and grabbed rather than squeezed beside a map. */
+.itinerary {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .itinerary { grid-template-columns: minmax(0, 1fr); }
+}
+
+.itinerary-plans,
+.itinerary-main {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  background: linear-gradient(158deg, var(--panel), var(--deep));
+}
+
+.itinerary-plan {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 9px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: rgba(0, 0, 0, .2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.itinerary-plan:hover { border-left-color: var(--rule-hot); }
+.itinerary-plan.open { border-left-color: var(--cyan); background: rgba(53, 200, 240, .08); }
+.itinerary-plan-name { font-family: var(--display); font-size: 13px; overflow-wrap: anywhere; }
+.itinerary-plan-sub { color: var(--dim); font-size: 10.5px; }
+.itinerary-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; margin: 10px 0 4px; }
+
+/* The filed list is shared with the map panel, where its three buttons sit
+   beside the name. This column is narrower, and beside them the name came
+   out a word to a line, so here they take a row of their own. */
+.itinerary-plans .cargo-row { grid-template-columns: 9px minmax(0, 1fr); }
+.itinerary-plans .cargo-row .trip-tools { grid-column: 2; flex-wrap: wrap; }
+.itinerary-plans .cargo-row .name { white-space: normal; }
+
+.itinerary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 18px;
+}
+.itinerary-heading { min-width: 220px; flex: 1 1 260px; }
+.itinerary-heading h3 { margin: 0 0 6px; font-family: var(--display); font-size: 17px; }
+.itinerary-tools { margin-top: 0; }
+
+.itinerary-stops {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.itinerary-stop {
+  display: grid;
+  grid-template-columns: 16px 26px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-hot);
+  background: var(--panel-2);
+}
+.itinerary-stop.next { border-left-color: var(--cyan); background: rgba(53, 200, 240, .06); }
+.itinerary-stop.done { opacity: .6; }
+.itinerary-stop.done > .itinerary-stop-main > .trip-place { text-decoration: line-through; }
+.itinerary-stop .trip-number { width: 26px; height: 26px; font-size: 12px; }
+.itinerary-stop.next .trip-number { border-color: var(--cyan); color: var(--cyan-hot); }
+.itinerary-stop.done .trip-number { color: var(--green); border-color: #1f5c3d; }
+.itinerary-stop .trip-place { font-size: 15px; }
+.itinerary-stop-main { min-width: 0; }
+.itinerary-where { margin-top: 1px; color: var(--dim); font: 10px var(--mono); letter-spacing: .06em; }
+.itinerary-stop .trip-note { margin-top: 3px; font-size: 11.5px; }
+.itinerary-stop .run-action { font-size: 12px; margin-top: 0; }
+.itinerary-stop .run-action-text b { font-size: 9.5px; }
+.itinerary-stop .run-action-form { margin-top: 8px; }
+
+/* Grips say they are handles with the cursor before they are touched. */
+.itinerary-grip,
+.itinerary-line-grip {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 26px;
+  cursor: grab;
+}
+.itinerary-line-grip { font-size: 11px; line-height: 1.5; }
+.itinerary-grip:hover,
+.itinerary-line-grip:hover { color: var(--cyan-hot); }
+.itinerary-grip:active,
+.itinerary-line-grip:active { cursor: grabbing; }
+
+.itinerary-lines { display: grid; gap: 3px; margin-top: 6px; }
+.itinerary-line {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  padding: 2px 4px;
+}
+
+/* Where a drop would land: a bar above or below, or the whole stop outlined
+   when a line would join the end of its run sheet. Drawn with a shadow so
+   marking a card never moves the cards around it. */
+.itinerary-stop.dragging,
+.itinerary-line.dragging { opacity: .45; }
+.itinerary-stop.drop-before { box-shadow: 0 -3px 0 var(--cyan); }
+.itinerary-stop.drop-after { box-shadow: 0 3px 0 var(--cyan); }
+.itinerary-stop.drop-into { outline: 1px dashed var(--cyan); outline-offset: 2px; }
+.itinerary-line.drop-before { box-shadow: inset 0 2px 0 var(--cyan); }
+.itinerary-line.drop-after { box-shadow: inset 0 -2px 0 var(--cyan); }
+
+.itinerary-add {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(140px, .7fr) auto;
+  gap: 6px;
+  margin-top: 14px;
+}
+.itinerary-add-hint { grid-column: 1 / -1; font-size: 10.5px; }
+@media (max-width: 640px) {
+  .itinerary-add { grid-template-columns: minmax(0, 1fr); }
+}
+.itinerary-empty { padding: 12px 0; color: var(--muted); }
+
 button.ghost.tiny {
   padding: 2px 7px;
   font-size: 10px;
