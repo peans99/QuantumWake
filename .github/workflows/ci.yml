@@ -27,9 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Pinned with release.yml, for the reason given there: '10.0.x' resolves
+      # to an SDK whose download link is refused.
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '10.0.402'
 
       - name: Restore
         run: dotnet restore Quantumwake.slnx
