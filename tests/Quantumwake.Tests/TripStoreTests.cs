@@ -321,6 +321,97 @@ public class TripStoreTests : IDisposable
         Assert.Empty(NewStore().All());
     }
 
+    /// <summary>
+    /// A drag lets go once, wherever it ends: the stop lands there in one call
+    /// rather than being swapped a place at a time, and the others keep their order.
+    /// </summary>
+    [Fact]
+    public void A_dragged_stop_lands_where_it_was_let_go()
+    {
+        var store = NewStore();
+        var trip = store.Add("Run", [
+            Stop("A", "Area18"), Stop("B", "Baijini"), Stop("C", "CRU-L1"), Stop("D", "Daymar"),
+        ]);
+        var last = trip.Stops[3];
+
+        Assert.True(store.PlaceStop(trip.Id, last.Id, 0));
+        Assert.Equal(["D", "A", "B", "C"], store.All().Single().Stops.Select(s => s.PlaceId));
+
+        // Past the end is the end, not a refusal: the drop target below the
+        // last card has no index of its own.
+        Assert.True(store.PlaceStop(trip.Id, last.Id, 99));
+        Assert.Equal(["A", "B", "C", "D"], store.All().Single().Stops.Select(s => s.PlaceId));
+
+        Assert.False(store.PlaceStop(trip.Id, "nope", 0));
+    }
+
+    /// <summary>
+    /// A line carried to another stop is the same line: its id, its tick and
+    /// its figures go with it, because re-typing it would lose the price.
+    /// </summary>
+    [Fact]
+    public void A_run_sheet_line_carried_to_another_stop_keeps_what_it_was()
+    {
+        var store = NewStore();
+        var trip = store.Add("Haul", [Stop("A", "Area18"), Stop("B", "Baijini")]);
+        var (first, second) = (trip.Stops[0], trip.Stops[1]);
+        store.AddAction(trip.Id, first.Id, "load", "Crate", 2, "SCU");
+        store.AddAction(trip.Id, first.Id, "unload", "Crate", 2, "SCU");
+        store.AddAction(trip.Id, second.Id, "refuel", "Top up", null, null);
+
+        var drop = store.All().Single().Stops[0].Actions![1];
+        store.ToggleAction(trip.Id, first.Id, drop.Id);
+
+        Assert.True(store.MoveAction(trip.Id, first.Id, drop.Id, second.Id, 0));
+
+        var moved = store.All().Single();
+        Assert.Single(moved.Stops[0].Actions!);
+        Assert.Equal(["unload", "refuel"], moved.Stops[1].Actions!.Select(a => a.Kind));
+
+        var carried = moved.Stops[1].Actions![0];
+        Assert.Equal(drop.Id, carried.Id);
+        Assert.True(carried.Done);
+        Assert.Equal(2, carried.Quantity);
+    }
+
+    /// <summary>
+    /// The Itinerary page can have a plan open that is not the tracked one,
+    /// and a stop typed there belongs to the plan on screen.
+    /// </summary>
+    [Fact]
+    public void A_stop_added_to_a_named_plan_goes_to_that_plan_and_not_the_tracked_one()
+    {
+        var store = NewStore();
+        var open = store.Add("Open on the page", [Stop("A", "Area18")]);
+        var followed = store.Add("Tracked", [Stop("B", "Baijini")]);
+
+        var landed = store.AddStopTo(open.Id, Stop("C", "CRU-L1", "Refuel"));
+
+        Assert.Equal(open.Id, landed?.Id);
+        Assert.Equal(["A", "C"], store.All().Single(t => t.Id == open.Id).Stops.Select(s => s.PlaceId));
+        Assert.Single(store.All().Single(t => t.Id == followed.Id).Stops);
+        Assert.Equal(followed.Id, store.Tracked()?.Id);
+        Assert.Null(store.AddStopTo("nope", Stop("D", "Daymar")));
+    }
+
+    [Fact]
+    public void A_line_moved_within_its_own_stop_is_reordered()
+    {
+        var store = NewStore();
+        var trip = store.Add("Haul", [Stop("A", "Area18")]);
+        var stop = trip.Stops[0];
+        store.AddAction(trip.Id, stop.Id, "load", "First", null, null);
+        store.AddAction(trip.Id, stop.Id, "load", "Second", null, null);
+        store.AddAction(trip.Id, stop.Id, "load", "Third", null, null);
+
+        var first = store.All().Single().Stops[0].Actions![0];
+        Assert.True(store.MoveAction(trip.Id, stop.Id, first.Id, stop.Id, 2));
+
+        Assert.Equal(["Second", "Third", "First"], store.All().Single().Stops[0].Actions!.Select(a => a.Text));
+        Assert.False(store.MoveAction(trip.Id, stop.Id, first.Id, "nowhere", 0));
+        Assert.Equal(3, store.All().Single().Stops[0].Actions!.Count);
+    }
+
     public void Dispose()
     {
         GC.SuppressFinalize(this);

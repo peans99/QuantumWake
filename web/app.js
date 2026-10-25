@@ -434,6 +434,7 @@ function showView(name) {
   if (name === 'points') loadPoints().catch(() => {});
   if (name === 'wikelo') loadWikelo().catch(() => {});
   if (name === 'reputation') loadReputation().catch(() => {});
+  if (name === 'itinerary') renderItinerary();
   if (name === 'events') loadEvents().catch(() => {});
 
   // The overlay page shows live state from both halves of the app.
@@ -24865,6 +24866,7 @@ async function loadTrips() {
   trips = await getJson(`/api/trips${importedQuery()}`);
   renderTripCard();
   renderRouteFlightBrief();
+  renderItinerary();
   reloadPilotBriefing().catch(() => {});
   if (!$('#cargo-panel').hidden && cargo.trip) renderTripPanel();
   // A plan can itself be the active map layer; rebuild then so adding,
@@ -25333,6 +25335,14 @@ function renderTripPanel() {
   track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
   actions.append(track);
 
+  const page = el('button', 'ghost', tx('Itinerary'));
+  page.title = tx('Open this plan on the Itinerary page, with room to drag its stops and lines about');
+  page.addEventListener('click', () => {
+    itineraryTripId = trip.id;
+    showView('itinerary');
+  });
+  actions.append(page);
+
   const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
     await tripCall(`/api/trips/${trip.id}`, 'DELETE');
@@ -25432,6 +25442,491 @@ function renderFiledRuns(body) {
 /** Out of the working list, however it got there. */
 function isFiled(trip) {
   return trip.archived === 'You' || trip.archived === 'Quiet';
+}
+
+/* ---------- the Itinerary page ---------- */
+
+/**
+ * The plan the Itinerary page has open. Null follows the tracked plan, so the
+ * page opens on whatever the map and the Now card are showing; opening another
+ * plan here does not take the tracking from it.
+ */
+let itineraryTripId = null;
+
+/**
+ * The drag under way, if any: a stop or one run-sheet line, and where it
+ * would land if it were let go now.
+ */
+let itineraryDrag = null;
+
+/** A redraw that arrived during a drag, held until the drag is over. */
+let itineraryRedrawWaiting = false;
+
+/** The one card or line showing where a drop would land. */
+let itineraryMarked = null;
+
+/** How many atlas places the shared place list was last filled from. */
+let itineraryPlacesFilled = -1;
+
+function itineraryTrip() {
+  return trips.find((t) => t.id === itineraryTripId)
+    || tracked()
+    || trips.find((t) => !isFiled(t))
+    || null;
+}
+
+function renderItinerary() {
+  const plans = $('#itinerary-plans');
+  const main = $('#itinerary-main');
+  if (!plans || !main) return;
+
+  // The live stream re-reads plans whenever the logs move, and a redraw
+  // replaces the card being carried. The browser then never sends its
+  // dragend, and the drag is left holding a card that no longer exists.
+  if (itineraryDrag) {
+    itineraryRedrawWaiting = true;
+    return;
+  }
+
+  const working = trips.filter((t) => !isFiled(t));
+  const trip = itineraryTrip();
+
+  $('#itinerary-count').textContent = txn(working.length, '{count} plan', '{count} plans');
+  renderItineraryPlans(plans, trip, working);
+
+  main.textContent = '';
+  if (!trip) {
+    main.append(el('div', 'itinerary-empty',
+      tx('No plan yet. Name one on the left and add its stops here, or start one from a trade route, a rep run or a shopping list.')));
+    return;
+  }
+
+  renderItineraryPlan(main, trip);
+}
+
+function renderItineraryPlans(box, open, working) {
+  box.textContent = '';
+  box.append(el('div', 'cargo-h', tx('Plans')));
+
+  for (const plan of working) {
+    const row = el('button', `itinerary-plan${plan === open ? ' open' : ''}`);
+    row.type = 'button';
+    row.append(el('span', 'itinerary-plan-name', plan.title));
+
+    const done = plan.stops.filter((s) => s.done).length;
+    const facts = [tx('{done} of {total} stops', { done, total: plan.stops.length })];
+    if (plan.flying) facts.push(tx('flying'));
+    else if (plan.tracked) facts.push(tx('tracked'));
+    row.append(el('span', 'itinerary-plan-sub', facts.join(' · ')));
+
+    row.addEventListener('click', () => {
+      itineraryTripId = plan.id;
+      renderItinerary();
+    });
+    box.append(row);
+  }
+
+  const form = el('div', 'itinerary-new');
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'search';
+  name.placeholder = tx('Name a new plan');
+
+  const make = el('button', 'ghost tiny', tx('New plan'));
+  make.type = 'button';
+  make.title = tx('A new plan is the one the map and the Now page follow');
+
+  const create = async () => {
+    const response = await fetch('/api/trips', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: name.value.trim() || null, stops: [] }),
+    });
+    const created = response.ok ? await response.json() : null;
+    if (created?.id) itineraryTripId = created.id;
+    await loadTrips();
+  };
+
+  make.addEventListener('click', create);
+  name.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') create();
+  });
+
+  form.append(name, make);
+  box.append(form);
+
+  renderFiledRuns(box);
+}
+
+function renderItineraryPlan(main, trip) {
+  const head = el('div', 'itinerary-head');
+  const heading = el('div', 'itinerary-heading');
+  heading.append(el('h3', null, trip.title));
+
+  const done = trip.stops.filter((s) => s.done).length;
+  heading.append(jobProgress(done, trip.stops.length,
+    tx('{done} of {total} stops', { done, total: trip.stops.length })));
+
+  head.append(heading, itineraryPlanTools(trip));
+  main.append(head);
+
+  if (trip.flying) {
+    main.append(el('div', 'trip-elapsed muted',
+      tx('Running for {span} — since you pressed Start, not since you wrote it.', { span: spanOf(trip.elapsedSeconds) })));
+  }
+
+  const trade = tradeRunSummary(trip);
+  if (trade) main.append(trade);
+
+  const list = el('ol', 'itinerary-stops');
+  const next = nextStop(trip);
+  trip.stops.forEach((stop, index) => list.append(itineraryStop(trip, stop, index, stop === next)));
+  if (!trip.stops.length) list.append(el('li', 'itinerary-empty', tx('No stops yet. Add the first one below.')));
+  main.append(list);
+
+  main.append(itineraryAddStop(trip));
+}
+
+function itineraryPlanTools(trip) {
+  const tools = el('div', 'trip-actions itinerary-tools');
+
+  if (trip.archived === 'No' || trip.archived === undefined) {
+    const lifecycle = el('button', trip.flying ? 'primary' : 'ghost',
+      trip.flying ? tx('Finish run') : tx('Start run'));
+    lifecycle.title = trip.flying
+      ? tx('Stop the clock and file this run')
+      : tx('Start the clock — elapsed time is measured from here, not from when you wrote the plan');
+    lifecycle.addEventListener('click',
+      () => tripCall(`/api/trips/${trip.id}/${trip.flying ? 'finish' : 'start'}`));
+    tools.append(lifecycle);
+  }
+
+  const track = el('button', 'ghost', trip.tracked ? tx('Stop tracking') : tx('Track'));
+  track.title = tx('Show this plan on the Now page');
+  track.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/track`));
+  tools.append(track);
+
+  // The map's panel only ever shows the tracked plan, so showing this one
+  // there means tracking it - said on the button rather than discovered when
+  // the map opens on a different plan.
+  const map = el('button', 'ghost', tx('Show on the map'));
+  map.title = trip.tracked
+    ? tx('Open the star map with this plan drawn on it')
+    : tx('Track this plan and open the star map with it drawn on it');
+  map.addEventListener('click', async () => {
+    if (!trip.tracked) await tripCall(`/api/trips/${trip.id}/track`);
+    showView('map');
+    showTripPanel();
+    drawMap();
+  });
+  tools.append(map);
+
+  const scrap = el('button', 'ghost danger', tx('Delete plan'));
+  scrap.addEventListener('click', async () => {
+    itineraryTripId = null;
+    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+  });
+  tools.append(scrap);
+
+  return tools;
+}
+
+/**
+ * Where a stop is, as the atlas has it: its body and system. A stop with no
+ * map place, or one whose place the map does not hold, says that instead of
+ * leaving a blank that reads like a place with nothing known about it. Not
+ * "typed by hand": a haul plan writes stops by name too, when a contract
+ * names a place the atlas has no id for.
+ */
+function itineraryWhere(stop) {
+  const node = stop.placeId ? atlas.find((n) => n.rawId === stop.placeId) : null;
+  if (!node) return stop.placeId ? tx('not found on the map') : tx('a name only, not placed on the map');
+
+  const body = node.body && node.body !== node.name ? node.body : null;
+  return [body, node.system].filter(Boolean).join(' · ') || null;
+}
+
+function itineraryStop(trip, stop, index, isNext) {
+  const card = el('li', `itinerary-stop${stop.done ? ' done' : ''}${isNext ? ' next' : ''}`);
+  card.dataset.stop = stop.id;
+
+  const grip = el('button', 'itinerary-grip', '⠿');
+  grip.type = 'button';
+  grip.title = tx('Drag to move this stop; the arrow keys move it too');
+  grip.setAttribute('aria-label', grip.title);
+
+  // As on the Now page: the card drags only while its grip is held, or no
+  // text on it could be selected.
+  grip.addEventListener('mousedown', () => { card.draggable = true; });
+  grip.addEventListener('mouseup', () => { card.draggable = false; });
+
+  grip.addEventListener('keydown', (event) => {
+    const delta = { ArrowUp: -1, ArrowDown: 1 }[event.key];
+    if (delta === undefined) return;
+
+    event.preventDefault();
+    const to = index + delta;
+    if (to < 0 || to >= trip.stops.length) return;
+
+    // The list is rebuilt around the stop, so the focus is put back on its
+    // grip and the next press carries on from there.
+    tripCall(`/api/trips/${trip.id}/stops/${stop.id}/place?to=${to}`)
+      .then(() => document.querySelector(`.itinerary-stop[data-stop="${stop.id}"] .itinerary-grip`)?.focus());
+  });
+  card.append(grip);
+
+  const number = el('button', 'trip-number', stop.done ? '✓' : String(index + 1));
+  number.title = stop.done ? tx('Not done after all') : tx('Cross this stop off');
+  number.addEventListener('click',
+    () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/toggle`));
+  card.append(number);
+
+  const main = el('div', 'itinerary-stop-main');
+  const name = el('button', 'trip-place', stop.place);
+  name.title = tx('Show it on the map');
+  name.addEventListener('click', () => {
+    showView('map');
+    if (stop.placeId) centreOn(stop.placeId);
+  });
+  main.append(name);
+
+  const where = itineraryWhere(stop);
+  if (where) main.append(el('div', 'itinerary-where', where));
+  if (stop.note) main.append(el('div', 'trip-note', stop.note));
+
+  const lines = el('div', 'itinerary-lines');
+  (stop.actions || []).forEach((action, at) => lines.append(itineraryLine(trip, stop, action, at)));
+  main.append(lines);
+  card.append(main);
+
+  const tools = el('div', 'trip-tools');
+  const addLine = el('button', 'ghost tiny', tx('+ Line'));
+  addLine.title = tx('Add a run-sheet action at this stop');
+  addLine.addEventListener('click', () => {
+    const existing = main.querySelector('.run-action-form');
+    if (existing) existing.remove();
+    else main.append(runActionForm(trip, stop));
+  });
+
+  const drop = el('button', 'ghost tiny', '×');
+  drop.title = tx('Drop this stop');
+  drop.addEventListener('click',
+    () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+
+  tools.append(addLine, drop);
+  card.append(tools);
+
+  card.addEventListener('dragstart', (event) => {
+    // A line dragged inside this card starts its own drag; the card only
+    // moves when its own grip is held.
+    if (!card.draggable) return;
+    itineraryDrag = { kind: 'stop', stopId: stop.id, target: null };
+    card.classList.add('dragging');
+    itineraryCarry(event, stop.id);
+  });
+
+  card.addEventListener('dragend', () => itineraryDragEnd(card));
+
+  card.addEventListener('dragover', (event) => {
+    const drag = itineraryDrag;
+    if (!drag) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+
+    if (drag.kind === 'stop') {
+      if (drag.stopId === stop.id) {
+        drag.target = null;
+        itineraryMark(null);
+        return;
+      }
+      const after = itineraryPast(event, card);
+      drag.target = { at: index + (after ? 1 : 0) };
+      itineraryMark(card, after ? 'drop-after' : 'drop-before');
+      return;
+    }
+
+    // A line let go anywhere on a stop other than over another line joins
+    // the end of that stop's run sheet.
+    drag.target = { stopId: stop.id, at: (stop.actions || []).length };
+    itineraryMark(card, 'drop-into');
+  });
+
+  card.addEventListener('drop', (event) => {
+    event.preventDefault();
+    return itineraryDrop(trip);
+  });
+
+  return card;
+}
+
+/** One run-sheet line on a stop card, with a grip that carries it to another stop. */
+function itineraryLine(trip, stop, action, at) {
+  const line = el('div', 'itinerary-line');
+  const grip = el('span', 'itinerary-line-grip', '⠿');
+  grip.title = tx('Drag this line onto another stop');
+  grip.addEventListener('mousedown', () => { line.draggable = true; });
+  grip.addEventListener('mouseup', () => { line.draggable = false; });
+  line.append(grip, runActionRow(trip, stop, action, true));
+
+  line.addEventListener('dragstart', (event) => {
+    if (!line.draggable) return;
+    event.stopPropagation?.();
+    itineraryDrag = { kind: 'line', stopId: stop.id, actionId: action.id, from: at, target: null };
+    line.classList.add('dragging');
+    itineraryCarry(event, action.id);
+  });
+
+  line.addEventListener('dragend', (event) => {
+    event?.stopPropagation?.();
+    itineraryDragEnd(line);
+  });
+
+  line.addEventListener('dragover', (event) => {
+    if (itineraryDrag?.kind !== 'line') return;
+    event.preventDefault();
+    event.stopPropagation?.();
+
+    const after = itineraryPast(event, line);
+    itineraryDrag.target = { stopId: stop.id, at: at + (after ? 1 : 0) };
+    itineraryMark(line, after ? 'drop-after' : 'drop-before');
+  });
+
+  line.addEventListener('drop', (event) => {
+    if (itineraryDrag?.kind !== 'line') return undefined;
+    event.preventDefault();
+    event.stopPropagation?.();
+    return itineraryDrop(trip);
+  });
+
+  return line;
+}
+
+/** Firefox starts no drag at all unless something is carried. */
+function itineraryCarry(event, id) {
+  if (!event?.dataTransfer) return;
+  event.dataTransfer.effectAllowed = 'move';
+  try { event.dataTransfer.setData('text/plain', id); } catch { /* not fatal */ }
+}
+
+/** Whether the pointer is in the lower half of a card or line. */
+function itineraryPast(event, node) {
+  const box = node.getBoundingClientRect();
+  return (event.clientY - box.top) > box.height / 2;
+}
+
+function itineraryMark(node, mark) {
+  itineraryMarked?.classList.remove('drop-before', 'drop-after', 'drop-into');
+  itineraryMarked = node;
+  if (node) node.classList.add(mark);
+}
+
+/**
+ * Sends a drop to the server, in the server's terms. Positions are counted
+ * after the carried stop or line is lifted out, so a move further down the
+ * same list is one fewer than the slot it was let go over.
+ */
+async function itineraryDrop(trip) {
+  const drag = itineraryDrag;
+  // Cleared before the call, so the redraw it causes is not held back as if
+  // the drag were still going.
+  itineraryDrag = null;
+  itineraryMark(null);
+  if (!drag?.target) return;
+
+  if (drag.kind === 'stop') {
+    const from = trip.stops.findIndex((s) => s.id === drag.stopId);
+    const to = drag.target.at - (from < drag.target.at ? 1 : 0);
+    if (from < 0 || to === from) return;
+    await fetch(`/api/trips/${trip.id}/stops/${drag.stopId}/place?to=${to}`, { method: 'POST' });
+  } else {
+    const same = drag.target.stopId === drag.stopId;
+    const to = drag.target.at - (same && drag.from < drag.target.at ? 1 : 0);
+    if (same && to === drag.from) return;
+    await fetch(`/api/trips/${trip.id}/stops/${drag.stopId}/actions/${drag.actionId}/move`
+      + `?toStop=${encodeURIComponent(drag.target.stopId)}&to=${to}`, { method: 'POST' });
+  }
+
+  await loadTrips();
+}
+
+function itineraryDragEnd(node) {
+  node.draggable = false;
+  node.classList.remove('dragging');
+  itineraryMark(null);
+  itineraryDrag = null;
+
+  if (itineraryRedrawWaiting) {
+    itineraryRedrawWaiting = false;
+    renderItinerary();
+  }
+}
+
+/**
+ * The atlas as one shared list of place names, refilled only when the atlas
+ * changes size: rebuilt on every redraw, a few thousand options would be
+ * written again each time a stop is ticked.
+ */
+function fillItineraryPlaces() {
+  const list = $('#itinerary-places');
+  if (!list || itineraryPlacesFilled === atlas.length) return;
+
+  list.textContent = '';
+  const names = new Set(atlas.map((node) => node.name).filter(Boolean));
+  for (const name of [...names].sort((a, b) => a.localeCompare(b))) list.append(new Option(name, name));
+  itineraryPlacesFilled = atlas.length;
+}
+
+function itineraryAddStop(trip) {
+  const form = el('div', 'itinerary-add');
+  fillItineraryPlaces();
+
+  const place = document.createElement('input');
+  place.type = 'text';
+  place.className = 'search';
+  place.id = 'itinerary-add-place';
+  place.placeholder = tx('Add a stop: a station, an outpost, a city…');
+  place.setAttribute('list', 'itinerary-places');
+
+  const note = document.createElement('input');
+  note.type = 'text';
+  note.className = 'search';
+  note.placeholder = tx('Note, if any');
+
+  const add = el('button', 'ghost', tx('Add stop'));
+  add.type = 'button';
+
+  const submit = async () => {
+    const typed = place.value.trim();
+    if (!typed) {
+      place.focus();
+      return;
+    }
+
+    // A name the map knows is placed on it; anything else is kept as typed,
+    // and the card says it is not on the map rather than guessing a match.
+    const wanted = typed.toLowerCase();
+    const node = atlas.find((n) => (n.name || '').toLowerCase() === wanted);
+
+    await fetch(`/api/trips/${trip.id}/stops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placeId: node?.rawId || '', place: node?.name || typed, note: note.value.trim() || null }),
+    });
+    await loadTrips();
+    $('#itinerary-add-place')?.focus();
+  };
+
+  add.addEventListener('click', submit);
+  for (const input of [place, note]) {
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') submit();
+    });
+  }
+
+  form.append(place, note, add);
+  form.append(el('div', 'muted itinerary-add-hint',
+    tx('A name the map knows is placed on it; anything else is kept as you typed it.')));
+  return form;
 }
 
 /** A duration in the shortest words that stay honest about it. */

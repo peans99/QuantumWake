@@ -5186,5 +5186,32 @@
   "Buy for {outlay} · sell for {takings} · profit {profit}": "Achat {outlay} · vente {takings} · bénéfice {profit}",
   "Planned {planned}; your changes moved it {change}.": "Prévu {planned} ; vos modifications l’ont fait varier de {change}.",
   "Selling {sold} SCU of the {bought} bought.": "Vente de {sold} SCU sur les {bought} achetés.",
-  "aUEC each": "aUEC l’unité"
+  "aUEC each": "aUEC l’unité",
+  "Itinerary": "Feuille de route",
+  "Find a run": "Trouver une tournée",
+  "Find a trade run or a rep run to start a plan from": "Trouver une tournée commerciale ou de réputation d’où partir",
+  "The same plans as the map's flight-plan panel, with room to work on them. Drag a stop by its handle to change the order, and drag a run-sheet line onto another stop to move it there. Whatever you change here is what the map, the Now page and the overlay follow.": "Les mêmes plans que le panneau Plan de vol de la carte, avec la place de les travailler. Glissez un arrêt par sa poignée pour changer l’ordre, et glissez une ligne de la feuille de tournée sur un autre arrêt pour l’y déplacer. Ce que vous changez ici est ce que suivent la carte, la page Direct et l’overlay.",
+  "{count} plans": {
+    "one": "{count} plan",
+    "other": "{count} plans"
+  },
+  "No plan yet. Name one on the left and add its stops here, or start one from a trade route, a rep run or a shopping list.": "Aucun plan pour l’instant. Nommez-en un à gauche et ajoutez ses arrêts ici, ou partez d’une route commerciale, d’une tournée de réputation ou d’une liste d’achats.",
+  "Plans": "Plans",
+  "flying": "en vol",
+  "Name a new plan": "Nommer un nouveau plan",
+  "New plan": "Nouveau plan",
+  "A new plan is the one the map and the Now page follow": "Un nouveau plan devient celui que suivent la carte et la page Direct",
+  "No stops yet. Add the first one below.": "Aucun arrêt pour l’instant. Ajoutez le premier ci-dessous.",
+  "Open the star map with this plan drawn on it": "Ouvrir la carte stellaire avec ce plan tracé dessus",
+  "Track this plan and open the star map with it drawn on it": "Suivre ce plan et ouvrir la carte stellaire avec lui tracé dessus",
+  "not found on the map": "introuvable sur la carte",
+  "a name only, not placed on the map": "un nom seulement, non placé sur la carte",
+  "Drag to move this stop; the arrow keys move it too": "Glissez pour déplacer cet arrêt ; les flèches du clavier le déplacent aussi",
+  "+ Line": "+ Ligne",
+  "Drag this line onto another stop": "Glissez cette ligne sur un autre arrêt",
+  "Add a stop: a station, an outpost, a city…": "Ajouter un arrêt : une station, un avant-poste, une ville…",
+  "Note, if any": "Note, s’il y en a une",
+  "Add stop": "Ajouter l’arrêt",
+  "A name the map knows is placed on it; anything else is kept as you typed it.": "Un nom que la carte connaît y est placé ; tout autre est gardé tel que vous l’avez saisi.",
+  "Open this plan on the Itinerary page, with room to drag its stops and lines about": "Ouvrir ce plan sur la page Feuille de route, avec la place d’en glisser les arrêts et les lignes"
 }
