@@ -31,9 +31,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # Pinned to the SDK the runner image already carries. On 2026-10-25
+      # aka.ms sent 10.0.403 to a Microsoft storage account answering 409
+      # ("Public access is not permitted"), so '10.0.x' could not install and
+      # v0.18.29 failed here twice before building anything. Raise it, or go
+      # back to '10.0.x', once a fresh install downloads again.
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '10.0.402'
 
       - name: Version from tag
         id: version
@@ -66,7 +71,9 @@ jobs:
       - name: Publish the application
         shell: pwsh
         run: |
-          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          # The commit checked out, not github.sha: a run started by hand for an
+          # existing tag has github.sha on the branch it was started from.
+          $shortSha = (git rev-parse --short=7 HEAD).Trim()
 
           dotnet publish src/Quantumwake.Overlay -c Release -r win-x64 `
             --self-contained true -p:PublishSingleFile=true `
