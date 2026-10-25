@@ -42,6 +42,27 @@ public class TripStoreTests : IDisposable
         Assert.Equal("Sell the ore", trip.Stops[1].Note);
     }
 
+    /// <summary>
+    /// A plan written whole brings its run sheet: a rep run's crates, cleaned
+    /// as one added by hand would be, and never already ticked.
+    /// </summary>
+    [Fact]
+    public void A_plan_written_whole_keeps_its_actions_unticked()
+    {
+        var store = NewStore();
+        var crate = new RunAction("theirs", "Collect", "  One crate ", null, "crates", Done: true, DoneAt: DateTimeOffset.UtcNow);
+        var blank = new RunAction("x", "do", " ", null, null, Done: false, DoneAt: null);
+
+        var trip = store.Add("Rep run", [Stop("GrimHEX", "GrimHEX") with { Actions = [crate, blank] }]);
+
+        var action = Assert.Single(trip.Stops[0].Actions!);
+        Assert.Equal("collect", action.Kind);
+        Assert.Equal("One crate", action.Text);
+        Assert.Null(action.Unit);
+        Assert.False(action.Done);
+        Assert.NotEqual("theirs", action.Id);
+    }
+
     [Fact]
     public void Adding_a_stop_with_no_plan_starts_one()
     {

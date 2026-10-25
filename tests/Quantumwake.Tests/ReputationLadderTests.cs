@@ -165,6 +165,52 @@ public class ReputationLadderTests
         Assert.Equal(0, board.Unmeasured);
     }
 
+    private static ContractRecord Titled(string title, DateTimeOffset at) =>
+        new(at.AddMinutes(-40), "raw", "Red Wind · Haul", "Red Wind", "Pyro", null, "Hauling", true)
+        {
+            Outcome = ContractOutcome.Completed,
+            CompletedAt = at,
+            Title = title,
+        };
+
+    /// <summary>
+    /// The 24 October check: a Member haul's ladder tag pays Member 500,
+    /// whether the title carries seven figures or eight - both end at Master.
+    /// </summary>
+    [Theory]
+    [InlineData("Member | Stellar Medium Haul | to Ruin Station [50/200/250/500/1000/2000/4000 Rep]: ")]
+    [InlineData("Member | Stellar Medium Haul | from Ruin Station [50/100/200/250/500/1000/2000/4000 Rep]: ")]
+    public void One_more_contract_pays_the_held_ranks_figure_on_the_newest_ladder_tag(string title)
+    {
+        var history = new[] { new RepSighting("a.jpg", October, RedWind(1, 0.54)) };
+        var contracts = new[]
+        {
+            Titled("Junior | Stellar Small Haul | to Gaslight [250 Rep]: ", October.AddDays(-1)),
+            Titled(title, October.AddHours(-2)),
+        };
+
+        var pay = Assert.Single(ReputationBoards.Build(history, Catalogue, contracts).Organisations).Pay!;
+
+        Assert.Equal(500, pay.Rep);
+        Assert.Equal("ladder", pay.Source);
+        Assert.StartsWith("Member | Stellar Medium Haul", pay.Contract);
+        Assert.DoesNotContain("Rep]", pay.Contract);
+    }
+
+    [Fact]
+    public void Without_a_ladder_the_newest_single_figure_is_used_and_without_either_nothing_is_guessed()
+    {
+        var history = new[] { new RepSighting("a.jpg", October, RedWind(1, 0.54)) };
+
+        var tagged = ReputationBoards.Build(history, Catalogue,
+            [Titled("Large Covalex Shipment Needs Recovering [200 Rep]: ", October.AddHours(-1))]);
+        var pay = Assert.Single(tagged.Organisations).Pay!;
+        Assert.Equal((200, "tag"), (pay.Rep, pay.Source));
+
+        var bare = ReputationBoards.Build(history, Catalogue, [Titled("Red Wind Seeking New Haulers: ", October)]);
+        Assert.Null(Assert.Single(bare.Organisations).Pay);
+    }
+
     /// <summary>A reading the bars never measured stays on the page, counted, with no rank and no change.</summary>
     [Fact]
     public void A_reading_from_before_the_bars_is_counted_as_unmeasured()

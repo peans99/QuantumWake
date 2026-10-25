@@ -5149,5 +5149,39 @@
   },
   "the rank is read off the card's bar, which is drawn rather than written; the Reputation page turns it into an estimate": "le rang se lit sur la barre de la carte, qui est dessinée et non écrite ; la page Réputation en tire une estimation",
   "the rank is drawn on the card's bar rather than written, and this frame was read without its pixels": "le rang est dessiné sur la barre de la carte plutôt qu’écrit, et cette image a été lue sans ses pixels",
-  "no movement beyond a pixel of the bar": "aucun mouvement au-delà d’un pixel de la barre"
+  "no movement beyond a pixel of the bar": "aucun mouvement au-delà d’un pixel de la barre",
+  "Rep run": "Course de réputation",
+  "One-crate delivery rep run": "Livraison d’une caisse pour la réputation",
+  "The same small delivery, flown again and again until the next rank. Your rank comes from your last Rep app screenshot.": "La même petite livraison, refaite encore et encore jusqu’au rang suivant. Votre rang vient de votre dernière capture de l’application Réputation.",
+  "Delivery {n} of {total} · pick up the crate": "Livraison {n} sur {total} · prendre la caisse",
+  "One crate": "Une caisse",
+  "Delivery {n} of {total} · about {rep} rep — {rank} reached": "Livraison {n} sur {total} · environ {rep} de réputation — {rank} atteint",
+  "Delivery {n} of {total} · about {rep} rep, {standing}": "Livraison {n} sur {total} · environ {rep} de réputation, {standing}",
+  "None of their contracts in your logs carries a rep tag, so type what one delivery pays.": "Aucun de leurs contrats dans vos journaux ne porte de marque de réputation : saisissez ce que rapporte une livraison.",
+  "The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.": "Le chiffre {rank} de la marque de réputation de « {contract} » — une recherche de StarStrings, pas une donnée du jeu. Remplacez-le si une livraison rapporte autre chose.",
+  "The rep tag on “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.": "La marque de réputation de « {contract} » — une recherche de StarStrings, pas une donnée du jeu. Remplacez-la si une livraison rapporte autre chose.",
+  "None of your Rep app screenshots has a rank placed on a ladder with one above it yet, so there is nothing to climb towards.": "Aucune de vos captures de l’application Réputation n’a encore de rang placé sur une échelle avec un rang au-dessus : il n’y a rien vers quoi grimper.",
+  "Take a Rep app screenshot of the organisation you are working for. Its rank and the reputation to the next one come from that.": "Prenez une capture de l’application Réputation pour l’organisation pour laquelle vous travaillez. Son rang et la réputation jusqu’au suivant en viennent.",
+  "Organisation": "Organisation",
+  "Rep per delivery": "Réputation par livraison",
+  "Deliveries in this plan": "Livraisons dans ce plan",
+  "rep": "rép.",
+  "how many": "combien",
+  "Pick up at": "Prendre à",
+  "Deliver to": "Livrer à",
+  "where the crate waits": "où attend la caisse",
+  "where it goes": "où elle va",
+  "read {when}": "lu {when}",
+  "Write the pickups and drops into a tracked flight plan, with the reputation expected after each drop": "Écrire les prises et les livraisons dans un plan de vol suivi, avec la réputation attendue après chaque livraison",
+  "Type what one delivery pays to see how many it takes.": "Saisissez ce que rapporte une livraison pour voir combien il en faut.",
+  "{count} deliveries at {rep} rep reach {rank}.": {
+    "one": "{count} livraison à {rep} de réputation atteint {rank}.",
+    "other": "{count} livraisons à {rep} de réputation atteignent {rank}."
+  },
+  "This plan writes out the first {count}; take a fresh Rep screenshot when they are done and plan the rest from there.": "Ce plan écrit les {count} premières ; prenez une nouvelle capture Réputation quand elles sont faites et planifiez la suite à partir de là.",
+  "Say where the crate is picked up and where it goes": "Indiquez où la caisse est prise et où elle va",
+  "{organisation} rep run · {count} deliveries": {
+    "one": "{organisation} · course de réputation · {count} livraison",
+    "other": "{organisation} · course de réputation · {count} livraisons"
+  }
 }

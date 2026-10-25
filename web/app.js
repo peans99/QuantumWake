@@ -422,7 +422,10 @@ function showView(name) {
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
 
   // These read live state or want the freshest prices, so they re-run on entry.
-  if (name === 'routes') loadRoutes().catch(() => {});
+  if (name === 'routes') {
+    loadRoutes().catch(() => {});
+    loadRepRun().catch(() => {});
+  }
   if (name === 'casualties') loadCasualties().catch(() => {});
   if (name === 'crew') loadCrew().catch(() => {});
   if (name === 'servers') loadServers().catch(() => {});
@@ -14225,6 +14228,272 @@ function saveSplitTradeRoute(route, portions) {
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
       note: `${tx('Sell {units} SCU at {price}', { units: portion.units.toLocaleString(), price: money(portion.sellPrice) })} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
   ]);
+}
+
+/* ---------- rep runs ----------
+   One small delivery flown again and again until the next rank. The rank and
+   the estimate are the Reputation page's, read off the last Rep app
+   screenshot; what one delivery pays is the newest StarStrings tag on the
+   organisation's contracts, or what the pilot types. Everything past the
+   first drop is arithmetic on those two, so the stops call it "about". */
+
+/** The most deliveries one plan writes out: a shift, not the whole climb. */
+const REP_RUN_MOST = 25;
+
+let repRunBoard = null;
+const repRun = { org: '', rep: '', count: '', pickup: '', drop: '' };
+
+/** Organisations a run can aim at: a rank measured on a ladder, with a rank above it. */
+const repRunCandidates = (board) => (board?.organisations || [])
+  .filter((org) => org.place && org.place.next != null);
+
+/** The rank an estimate falls in and how far through it, by the ladder's thresholds. */
+function repRunStanding(org, estimate) {
+  const place = org.place;
+  const ladder = org.ladder || [];
+  let index = place.rankIndex;
+  while (index + 1 < ladder.length && estimate >= ladder[index + 1].minReputation) index++;
+
+  const floor = index === place.rankIndex ? place.floor : ladder[index].minReputation;
+  const next = index === place.rankIndex ? place.next
+    : index + 1 < ladder.length ? ladder[index + 1].minReputation : null;
+
+  return {
+    rank: ladder[index]?.name || place.rank,
+    progress: next != null && next > floor ? Math.min(1, (estimate - floor) / (next - floor)) : null,
+    ranks: index - place.rankIndex,
+  };
+}
+
+/**
+ * Where each of `count` deliveries paying `rep` leaves the pilot, and how
+ * many it takes to reach the next rank from the estimate.
+ */
+function repRunPlan(org, rep, count) {
+  const place = org.place;
+  const pay = Math.max(0, Math.floor(Number(rep) || 0));
+  const gap = Math.max(0, place.next - place.estimate);
+  const needed = pay > 0 ? Math.max(1, Math.ceil(gap / pay)) : null;
+  const deliveries = [];
+
+  for (let number = 1; number <= count; number++) {
+    const estimate = place.estimate + pay * number;
+    deliveries.push({ number, estimate, ...repRunStanding(org, estimate) });
+  }
+
+  return { pay, gap, needed, deliveries };
+}
+
+/** Pickup then drop, once per delivery, each with its crate on the run sheet. */
+function repRunStops(plan, pickup, drop) {
+  const total = plan.deliveries.length;
+  const stops = [];
+  let ranks = 0;
+
+  for (const delivery of plan.deliveries) {
+    stops.push({
+      placeId: pickup.placeId,
+      place: pickup.place,
+      note: tx('Delivery {n} of {total} · pick up the crate', { n: delivery.number, total }),
+      actions: [{ kind: 'collect', text: tx('One crate'), quantity: null, unit: null }],
+    });
+
+    // The rank is named on the drop that reaches it, so the stop list says
+    // where the climb ends without anybody doing the sum.
+    const reached = delivery.ranks > ranks;
+    ranks = delivery.ranks;
+    const standing = delivery.progress == null
+      ? delivery.rank
+      : `${delivery.rank} ${reputationPercent(delivery.progress)}`;
+
+    stops.push({
+      placeId: drop.placeId,
+      place: drop.place,
+      note: reached
+        ? tx('Delivery {n} of {total} · about {rep} rep — {rank} reached', {
+          n: delivery.number, total, rep: delivery.estimate.toLocaleString(), rank: delivery.rank,
+        })
+        : tx('Delivery {n} of {total} · about {rep} rep, {standing}', {
+          n: delivery.number, total, rep: delivery.estimate.toLocaleString(), standing,
+        }),
+      actions: [{ kind: 'unload', text: tx('One crate'), quantity: null, unit: null }],
+    });
+  }
+
+  return stops;
+}
+
+/** A typed place, matched to the map when the map knows it. */
+function repRunPlace(typed) {
+  const name = String(typed || '').trim();
+  if (!name) return null;
+  const known = atlas.find((node) => node.name?.toLowerCase() === name.toLowerCase());
+  return known
+    ? { placeId: known.rawId || '', place: known.name }
+    : { placeId: placeIdForTerminal(name), place: name };
+}
+
+async function loadRepRun() {
+  if (!$('#rep-run-body')) return;
+  repRunBoard = await getJson('/api/reputation').catch(() => null);
+  renderRepRun();
+}
+
+/** Where one delivery's figure came from, said beside the box it fills. */
+function repRunPaySource(org) {
+  const pay = org.pay;
+  if (!pay) {
+    return tx('None of their contracts in your logs carries a rep tag, so type what one delivery pays.');
+  }
+  return pay.source === 'ladder'
+    ? tx('The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {
+      rank: org.place.rank, contract: pay.contract,
+    })
+    : tx('The rep tag on “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {
+      contract: pay.contract,
+    });
+}
+
+function renderRepRun() {
+  const host = $('#rep-run-body');
+  if (!host) return;
+  host.textContent = '';
+
+  const candidates = repRunCandidates(repRunBoard);
+  if (!candidates.length) {
+    const empty = el('p', 'muted rep-run-empty', repRunBoard?.organisations?.length
+      ? tx('None of your Rep app screenshots has a rank placed on a ladder with one above it yet, so there is nothing to climb towards.')
+      : tx('Take a Rep app screenshot of the organisation you are working for. Its rank and the reputation to the next one come from that.'));
+    const link = el('a', 'ghost tiny', tx('Reputation'));
+    link.href = '#reputation';
+    host.append(empty, link);
+    return;
+  }
+
+  const org = candidates.find((o) => o.name === repRun.org) || candidates[0];
+  if (org.name !== repRun.org) {
+    repRun.org = org.name;
+    repRun.rep = '';
+    repRun.count = '';
+  }
+
+  const fields = el('div', 'rep-run-fields');
+  const field = (label, control) => {
+    const wrap = el('label', 'rep-run-field');
+    wrap.append(el('span', 'muted', tx(label)), control);
+    fields.append(wrap);
+    return control;
+  };
+
+  const choose = document.createElement('select');
+  choose.className = 'select';
+  choose.id = 'rep-run-org';
+  for (const candidate of candidates) choose.append(new Option(candidate.name, candidate.name));
+  choose.value = org.name;
+  choose.addEventListener('change', () => {
+    repRun.org = choose.value;
+    renderRepRun();
+  });
+  field('Organisation', choose);
+
+  const number = (id, value, placeholder) => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'search';
+    input.id = id;
+    input.min = '1';
+    input.step = '1';
+    input.placeholder = placeholder;
+    input.value = value;
+    return input;
+  };
+
+  const rep = field('Rep per delivery', number('rep-run-rep', repRun.rep || org.pay?.rep || '', tx('rep')));
+  const count = field('Deliveries in this plan', number('rep-run-count', repRun.count, tx('how many')));
+  count.max = String(REP_RUN_MOST);
+
+  const placeInput = (id, value, placeholder) => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'search';
+    input.id = id;
+    input.placeholder = placeholder;
+    input.value = value;
+    input.setAttribute('list', 'rep-run-places');
+    return input;
+  };
+
+  const pickup = field('Pick up at', placeInput('rep-run-pickup', repRun.pickup, tx('where the crate waits')));
+  const drop = field('Deliver to', placeInput('rep-run-drop', repRun.drop, tx('where it goes')));
+
+  const places = document.createElement('datalist');
+  places.id = 'rep-run-places';
+  for (const node of atlas) {
+    if (node.name) places.append(new Option(node.name, node.name));
+  }
+
+  const standing = el('div', 'rep-run-standing');
+  standing.append(el('b', null, org.place.rank));
+  standing.append(document.createTextNode(` · ${tx('about {rep} rep ±{margin}', {
+    rep: org.place.estimate.toLocaleString(), margin: org.place.resolution.toLocaleString(),
+  })} · ${tx('{left} rep to {rank}', {
+    left: Math.max(0, org.place.next - org.place.estimate).toLocaleString(),
+    rank: org.ladder?.[org.place.rankIndex + 1]?.name || tx('the next rank'),
+  })} · ${tx('read {when}', { when: ago(org.lastSeen) })}`));
+
+  const source = el('p', 'muted rep-run-source', repRunPaySource(org));
+  const summary = el('p', 'rep-run-summary');
+  summary.id = 'rep-run-summary';
+
+  const make = el('button', 'primary rep-run-make', tx('Make it the flight plan'));
+  make.title = tx('Write the pickups and drops into a tracked flight plan, with the reputation expected after each drop');
+
+  const refresh = () => {
+    repRun.rep = rep.value;
+    repRun.count = count.value;
+    repRun.pickup = pickup.value;
+    repRun.drop = drop.value;
+
+    const sized = repRunPlan(org, rep.value, 0);
+    if (!sized.needed) {
+      summary.textContent = tx('Type what one delivery pays to see how many it takes.');
+      make.disabled = true;
+      return null;
+    }
+
+    if (!count.value) count.placeholder = String(Math.min(sized.needed, REP_RUN_MOST));
+    const planned = Math.min(REP_RUN_MOST, Math.max(1, Math.floor(Number(count.value) || Math.min(sized.needed, REP_RUN_MOST))));
+    const plan = repRunPlan(org, rep.value, planned);
+    const next = org.ladder?.[org.place.rankIndex + 1]?.name || tx('the next rank');
+
+    const said = [txn(sized.needed,
+      '{count} delivery at {rep} rep reaches {rank}.', '{count} deliveries at {rep} rep reach {rank}.',
+      { rep: plan.pay.toLocaleString(), rank: next })];
+    if (planned < sized.needed) {
+      said.push(tx('This plan writes out the first {count}; take a fresh Rep screenshot when they are done and plan the rest from there.', { count: planned }));
+    }
+    summary.textContent = said.join(' ');
+    make.disabled = !pickup.value.trim() || !drop.value.trim();
+    make.title = make.disabled
+      ? tx('Say where the crate is picked up and where it goes')
+      : tx('Write the pickups and drops into a tracked flight plan, with the reputation expected after each drop');
+    return plan;
+  };
+
+  for (const input of [rep, count, pickup, drop]) input.addEventListener('input', refresh);
+
+  make.addEventListener('click', () => {
+    const plan = refresh();
+    const from = repRunPlace(pickup.value);
+    const to = repRunPlace(drop.value);
+    if (!plan || !from || !to) return;
+    return planTrip(txn(plan.deliveries.length,
+      '{organisation} rep run · {count} delivery', '{organisation} rep run · {count} deliveries',
+      { organisation: org.name }), repRunStops(plan, from, to));
+  });
+
+  host.append(standing, fields, places, source, summary, make);
+  refresh();
 }
 
 /** Finds a safer first choice without silently changing a pilot's explicit safety or pad requirement. */

@@ -13,6 +13,15 @@ public sealed record RepPoint(
 /// <param name="RepFrom">How many of the contracts that figure came from.</param>
 public sealed record RepWork(string Issuer, int Completed, int Abandoned, int Failed, int Rep, int RepFrom);
 
+/// <summary>What one more contract of theirs pays at the rank held, by a title's own tag.</summary>
+/// <param name="Source">
+/// <c>ladder</c> when the figure is the held rank's on a title's rep ladder
+/// (<c>[50/200/250/500/1000/2000/4000 Rep]</c>), which assumes work of the
+/// pilot's own rank; <c>tag</c> when a title carried one figure for itself.
+/// </param>
+/// <param name="Contract">The title it was read from, without its tags, for the page to name.</param>
+public sealed record RepPay(int Rep, string Source, string Contract, DateTimeOffset At);
+
 /// <summary>What changed between the two newest measured photographs.</summary>
 /// <param name="Ranks">How many ranks up, or down when negative.</param>
 /// <param name="Estimate">Reputation gained by the estimates, or null when either has none.</param>
@@ -45,7 +54,8 @@ public sealed record RepOrganisation(
     IReadOnlyList<RepPoint> History,
     RepChange? Change,
     RepWork? Work,
-    string? Logo = null);
+    string? Logo = null,
+    RepPay? Pay = null);
 
 /// <param name="Unmeasured">Rep readings with no bars in them yet - taken before 0.18.22 and not yet read again.</param>
 public sealed record ReputationBoard(IReadOnlyList<RepOrganisation> Organisations, int Readings, int Unmeasured);
@@ -146,7 +156,57 @@ public static class ReputationBoards
             [.. points.Select(p => p.Point)],
             change,
             Work(showing.Reading.Organisation!, contracts, DateTimeOffset.MinValue, DateTimeOffset.MaxValue),
-            LogoOf(showing.Reading.Organisation!, catalogue));
+            LogoOf(showing.Reading.Organisation!, catalogue),
+            Pay(showing.Reading.Organisation!, contracts, described.Place));
+    }
+
+    /// <summary>
+    /// What the next contract of theirs should pay, from the newest title
+    /// that says, or null when none does.
+    /// </summary>
+    /// <remarks>
+    /// A ladder is preferred to a single figure, because it is priced for the
+    /// rank the pilot holds now rather than the one they held when the tagged
+    /// contract was flown. Both are StarStrings' research, not the game's own
+    /// word - see <see cref="ContractTags"/> - and the page lets the pilot
+    /// type over either.
+    /// </remarks>
+    internal static RepPay? Pay(string organisation, IReadOnlyList<ContractRecord> contracts, ReputationPlace? place)
+    {
+        var theirs = Theirs(organisation, contracts)
+            .OrderByDescending(c => c.CompletedAt ?? c.FirstSeen)
+            .ToList();
+
+        if (place is not null)
+        {
+            foreach (var contract in theirs)
+            {
+                if (ContractTags.LadderFrom(contract.Title) is not { } ladder) continue;
+
+                // Counted from the top: the ladders run seven or eight figures
+                // long and both end at Master.
+                var at = ladder.Count - (place.RankCount - place.RankIndex);
+                if (at < 0 || at >= ladder.Count) continue;
+
+                return new RepPay(ladder[at], "ladder", ContractTags.Clean(contract.Title),
+                    contract.CompletedAt ?? contract.FirstSeen);
+            }
+        }
+
+        return theirs
+            .Where(c => ContractTags.RepFrom(c.Title) is > 0)
+            .Select(c => new RepPay(ContractTags.RepFrom(c.Title)!.Value, "tag", ContractTags.Clean(c.Title),
+                c.CompletedAt ?? c.FirstSeen))
+            .FirstOrDefault();
+    }
+
+    /// <summary>The contracts whose issuer is the front of the organisation's name.</summary>
+    private static List<ContractRecord> Theirs(string organisation, IReadOnlyList<ContractRecord> contracts)
+    {
+        var org = Letters(organisation);
+
+        return [.. contracts.Where(c => ContractTags.IssuerKey(c.Issuer) is { Length: >= 4 } key
+            && org.StartsWith(key, StringComparison.OrdinalIgnoreCase))];
     }
 
     /// <summary>
@@ -185,12 +245,7 @@ public static class ReputationBoards
     internal static RepWork? Work(
         string organisation, IReadOnlyList<ContractRecord> contracts, DateTimeOffset after, DateTimeOffset until)
     {
-        var org = Letters(organisation);
-
-        var theirs = contracts
-            .Where(c => ContractTags.IssuerKey(c.Issuer) is { Length: >= 4 } key
-                && org.StartsWith(key, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var theirs = Theirs(organisation, contracts);
 
         if (theirs.Count == 0) return null;
 

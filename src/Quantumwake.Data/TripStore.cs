@@ -503,6 +503,12 @@ public sealed class TripStore
 
     private static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
+    /// <remarks>
+    /// A plan written whole - a rep run's pickups and drops, a trade's buy and
+    /// sell - arrives with its run sheet, so the actions come along under the
+    /// same rules <see cref="AddAction"/> applies one at a time. Never ticked:
+    /// a new plan has not been flown.
+    /// </remarks>
     private static TripStop Fresh(TripStop stop) => new(
         NewId(),
         stop.PlaceId ?? string.Empty,
@@ -510,7 +516,16 @@ public sealed class TripStore
         string.IsNullOrWhiteSpace(stop.Note) ? null : stop.Note.Trim(),
         Done: false,
         DoneAt: null,
-        Actions: []);
+        Actions: [.. (stop.Actions ?? [])
+            .Where(action => action is not null && !string.IsNullOrWhiteSpace(action.Text))
+            .Take(MaxActions)
+            .Select(action => new RunAction(NewId(), RunAction.CleanKind(action.Kind),
+                Sanitise.Clean(action.Text, "Action"), RunAction.CleanQuantity(action.Quantity),
+                RunAction.CleanUnit(action.Unit), Done: false, DoneAt: null,
+                Link: RunActionLink.Clean(action.Link)))]);
+
+    /// <summary>The same ceiling a run sheet arriving in a file is held to.</summary>
+    private const int MaxActions = ImportReader.MaxRunActions;
 
     /// <summary>Tracks one plan and only that one. Caller holds the lock.</summary>
     private void Follow(string id)

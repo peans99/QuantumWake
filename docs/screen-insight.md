@@ -1566,6 +1566,17 @@ the bar fills in proportion and the estimate is the reputation, to the pixel;
 it is still called an estimate, because one rank on one ladder is what has
 been checked.
 
+**What one more delivery pays (0.18.27).** The rep run on the Flight plan
+page needs a figure per delivery, and StarStrings carries one per rank on
+Red Wind's titles. Two shapes are in this install's logs: seven figures on
+hauls to Ruin Station (`[50/200/250/500/1000/2000/4000 Rep]`) and eight on
+hauls from it (`[50/100/200/250/500/1000/2000/4000 Rep]`). Hauling has eight
+ranks, Not Eligible to Master, and both tags end at Master, so a rank's figure
+is counted from the top: Member, fourth from the top, is 500 in both - the
+figure the 15:00 to 16:25 check above bore out. A title with one figure,
+`[200 Rep]`, is used only when no ladder is in the organisation's logs, and a
+title with neither leaves the box for the pilot to fill.
+
 **Readings from before.** Readings taken before 0.18.22 kept the text and not
 the pixels, so every install that photographed the Rep app holds readings
 with no rank. The screenshot watch reads those files again, once each, when
