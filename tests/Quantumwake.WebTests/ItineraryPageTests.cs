@@ -42,6 +42,36 @@ public class ItineraryPageTests
 
     private const string Stops = "__dom.node('#itinerary-main').byClass('itinerary-stop')";
 
+    [Fact]
+    public void Live_refresh_keeps_the_unfinished_plan_and_stop()
+    {
+        var page = Itinerary();
+        page.Do("""
+            __dom.node('#itinerary-plans').byClass('itinerary-new')[0].byClass('search')[0].value = 'Next run';
+            __dom.node('#itinerary-main').byClass('itinerary-place-input')[0].value = 'Lorville';
+            __dom.node('#itinerary-main').byClass('itinerary-note-input')[0].value = 'Pick up cargo';
+            await loadTrips();
+            """);
+
+        Assert.Equal("Next run", page.Text("__dom.node('#itinerary-plans').byClass('itinerary-new')[0].byClass('search')[0].value"));
+        Assert.Equal("Lorville", page.Text("__dom.node('#itinerary-main').byClass('itinerary-place-input')[0].value"));
+        Assert.Equal("Pick up cargo", page.Text("__dom.node('#itinerary-main').byClass('itinerary-note-input')[0].value"));
+    }
+
+    [Fact]
+    public void A_stop_draft_does_not_move_to_another_plan()
+    {
+        var page = Itinerary();
+        page.Do("""
+            __dom.node('#itinerary-main').byClass('itinerary-place-input')[0].value = 'Lorville';
+            __dom.node('#itinerary-main').byClass('itinerary-note-input')[0].value = 'Pick up cargo';
+            __dom.node('#itinerary-plans').byClass('itinerary-plan')[1].click();
+            """);
+
+        Assert.Equal("", page.Text("__dom.node('#itinerary-main').byClass('itinerary-place-input')[0].value"));
+        Assert.Equal("", page.Text("__dom.node('#itinerary-main').byClass('itinerary-note-input')[0].value"));
+    }
+
     /// <summary>Picks a stop up by its grip, the only way a card starts to drag.</summary>
     private static void LiftStop(Page page, int index) => page.Do($$"""
         {

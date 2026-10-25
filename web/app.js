@@ -25488,20 +25488,55 @@ function renderItinerary() {
     return;
   }
 
+  // A live refresh replaces the forms even while a pilot is writing in them.
+  // Keep those drafts separate from the server's saved plans.
+  const oldPlan = plans.querySelector('.itinerary-new')?.querySelector('.search');
+  const oldPlace = main.querySelector('.itinerary-place-input');
+  const oldNote = main.querySelector('.itinerary-note-input');
+  const active = document.activeElement;
+  const draft = {
+    name: oldPlan?.value || '', place: oldPlace?.value || '', note: oldNote?.value || '',
+    tripId: main.dataset.tripId,
+    focused: active && active === oldPlan ? 'name' : active && active === oldPlace ? 'place' : active && active === oldNote ? 'note' : null,
+    start: active?.selectionStart, end: active?.selectionEnd,
+  };
+
   const working = trips.filter((t) => !isFiled(t));
   const trip = itineraryTrip();
 
   $('#itinerary-count').textContent = txn(working.length, '{count} plan', '{count} plans');
   renderItineraryPlans(plans, trip, working);
 
+  const newPlan = plans.querySelector('.itinerary-new')?.querySelector('.search');
+  if (newPlan) newPlan.value = draft.name;
+
   main.textContent = '';
+  main.dataset.tripId = trip?.id || '';
   if (!trip) {
     main.append(el('div', 'itinerary-empty',
       tx('No plan yet. Name one on the left and add its stops here, or start one from a trade route, a rep run or a shopping list.')));
+    if (draft.focused === 'name' && newPlan) {
+      newPlan.focus();
+      if (draft.start != null && draft.end != null) newPlan.setSelectionRange?.(draft.start, draft.end);
+    }
     return;
   }
 
   renderItineraryPlan(main, trip);
+
+  const newPlace = main.querySelector('.itinerary-place-input');
+  const newNote = main.querySelector('.itinerary-note-input');
+  if (draft.tripId === trip.id) {
+    if (newPlace) newPlace.value = draft.place;
+    if (newNote) newNote.value = draft.note;
+  }
+  const focus = draft.focused === 'name' ? newPlan
+    : draft.tripId === trip.id && draft.focused === 'place' ? newPlace
+      : draft.tripId === trip.id && draft.focused === 'note' ? newNote : null;
+  if (focus) {
+    focus.focus();
+    if (draft.start != null && draft.end != null) focus.setSelectionRange?.(draft.start, draft.end);
+  }
 }
 
 function renderItineraryPlans(box, open, working) {
@@ -25535,15 +25570,17 @@ function renderItineraryPlans(box, open, working) {
   const make = el('button', 'ghost tiny', tx('New plan'));
   make.type = 'button';
   make.title = tx('A new plan is the one the map and the Now page follow');
-
   const create = async () => {
+    const submitted = name.value;
     const response = await fetch('/api/trips', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: name.value.trim() || null, stops: [] }),
+      body: JSON.stringify({ title: submitted.trim() || null, stops: [] }),
     });
     const created = response.ok ? await response.json() : null;
     if (created?.id) itineraryTripId = created.id;
+    const current = $('#itinerary-plans')?.querySelector('.itinerary-new')?.querySelector('.search');
+    if (response.ok && current && current.value === submitted) current.value = '';
     await loadTrips();
   };
 
@@ -25882,19 +25919,18 @@ function itineraryAddStop(trip) {
 
   const place = document.createElement('input');
   place.type = 'text';
-  place.className = 'search';
+  place.className = 'search itinerary-place-input';
   place.id = 'itinerary-add-place';
   place.placeholder = tx('Add a stop: a station, an outpost, a city…');
   place.setAttribute('list', 'itinerary-places');
 
   const note = document.createElement('input');
   note.type = 'text';
-  note.className = 'search';
+  note.className = 'search itinerary-note-input';
   note.placeholder = tx('Note, if any');
 
   const add = el('button', 'ghost', tx('Add stop'));
   add.type = 'button';
-
   const submit = async () => {
     const typed = place.value.trim();
     if (!typed) {
@@ -25907,11 +25943,20 @@ function itineraryAddStop(trip) {
     const wanted = typed.toLowerCase();
     const node = atlas.find((n) => (n.name || '').toLowerCase() === wanted);
 
-    await fetch(`/api/trips/${trip.id}/stops`, {
+    const submittedPlace = place.value;
+    const submittedNote = note.value;
+    const response = await fetch(`/api/trips/${trip.id}/stops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ placeId: node?.rawId || '', place: node?.name || typed, note: note.value.trim() || null }),
+      body: JSON.stringify({ placeId: node?.rawId || '', place: node?.name || typed, note: submittedNote.trim() || null }),
     });
+    const main = $('#itinerary-main');
+    if (response.ok && main?.dataset.tripId === trip.id) {
+      const currentPlace = main.querySelector('.itinerary-place-input');
+      const currentNote = main.querySelector('.itinerary-note-input');
+      if (currentPlace && currentPlace.value === submittedPlace) currentPlace.value = '';
+      if (currentNote && currentNote.value === submittedNote) currentNote.value = '';
+    }
     await loadTrips();
     $('#itinerary-add-place')?.focus();
   };

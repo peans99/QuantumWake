@@ -13,7 +13,7 @@
     <!-- The only version. AssemblyVersion and FileVersion are left to the SDK,
          which derives both from this one: written out by hand they stayed at
          0.18.11 for four releases, and the app read AssemblyVersion. -->
-    <Version>0.19.0</Version>
+    <Version>0.19.1</Version>
 
     <RepositoryUrl>https://github.com/peans99/QuantumWake</RepositoryUrl>
     <PackageProjectUrl>https://github.com/peans99/QuantumWake</PackageProjectUrl>
