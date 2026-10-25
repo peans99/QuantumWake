@@ -14200,6 +14200,16 @@ async function loadRouteCircuits(query) {
   panel.hidden = circuits.length === 0;
 }
 
+/**
+ * One buy or sell as a run-sheet line, priced, so the plan can be tweaked
+ * once it is flown - fewer SCU in stock, a buyer that moved - and the
+ * profit worked out again from what it says rather than a note written
+ * before any of that happened.
+ */
+const tradeAction = (kind, commodity, units, price) => ({
+  kind, text: commodity, quantity: Math.floor(Number(units) || 0), unit: 'SCU', price: Number(price) || 0,
+});
+
 /** Save either the best buyer or a named alternate as the same editable flight plan. */
 function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
   rememberRoute({ ...route, sellAt, sellPrice }, label ? 'alternate' : 'route');
@@ -14207,12 +14217,12 @@ function saveTradeRoute(route, sellAt, sellAtId, sellPrice, label = '') {
     {
       placeId: route.buyAtId || placeIdForTerminal(route.buyAt),
       place: route.buyAt,
-      note: tx('Buy {units} SCU at {price}', { units: Math.floor(route.units).toLocaleString(), price: money(route.buyPrice) }),
+      actions: [tradeAction('buy', route.commodity, route.units, route.buyPrice)],
     },
     {
       placeId: sellAtId || placeIdForTerminal(sellAt),
       place: sellAt,
-      note: `${tx('Sell at {price}', { price: money(sellPrice) })} · +${money((Number(sellPrice) - Number(route.buyPrice)) * Number(route.units))}`,
+      actions: [tradeAction('sell', route.commodity, route.units, sellPrice)],
     },
   ]);
 }
@@ -14224,9 +14234,9 @@ function saveSplitTradeRoute(route, portions) {
   rememberRoute({ ...route, sellAt: txn(portions.length, '{count} buyer', '{count} buyers'), profit, outlay: Number(route.buyPrice) * units }, 'split load');
   planTrip(tx('{commodity} split load', { commodity: route.commodity }), [
     { placeId: route.buyAtId || placeIdForTerminal(route.buyAt), place: route.buyAt,
-      note: tx('Buy {units} SCU at {price}', { units: units.toLocaleString(), price: money(route.buyPrice) }) },
+      actions: [tradeAction('buy', route.commodity, units, route.buyPrice)] },
     ...portions.map((portion) => ({ placeId: portion.placeId || placeIdForTerminal(portion.terminal), place: portion.terminal,
-      note: `${tx('Sell {units} SCU at {price}', { units: portion.units.toLocaleString(), price: money(portion.sellPrice) })} · +${money((Number(portion.sellPrice) - Number(route.buyPrice)) * portion.units)}` })),
+      actions: [tradeAction('sell', route.commodity, portion.units, portion.sellPrice)] })),
   ]);
 }
 
@@ -24902,17 +24912,165 @@ function runActionRow(trip, stop, action, editable = false) {
     const quantity = Number(action.quantity).toLocaleString();
     text.append(el('span', 'run-action-quantity', `${quantity}${action.unit ? ` ${action.unit}` : ''}`));
   }
+  if (isTradeAction(action)) {
+    text.append(el('span', 'run-action-quantity', tx('at {price} each', { price: money(action.price) })));
+
+    // What it was first planned at, beside what it is now: the point of
+    // keeping both is that the change is visible.
+    if (action.was) {
+      text.append(el('span', 'run-action-was', tx('planned {amount}', {
+        amount: tradeFigures(action.was.quantity, action.unit, action.was.price),
+      })));
+    }
+  }
   row.append(text);
+
+  if (editable && isTradeAction(action)) {
+    // The map's panel is narrow, and two buttons beside the line left the
+    // text a letter wide; a trade line puts them on a row of their own.
+    row.classList.add('tradeable');
+    const tools = el('span', 'run-action-tools');
+    const tweak = el('button', 'ghost tiny run-action-tweak', tx('Change'));
+    tweak.title = tx('Change the SCU or the price — the profit is worked out again, and the planned figures stay beside it');
+    tweak.addEventListener('click', () => {
+      const open = row.querySelector('.run-tweak-form');
+      if (open) open.remove();
+      else row.append(tradeTweakForm(trip, stop, action));
+    });
+    tools.append(tweak);
+    row.append(tools);
+  }
 
   if (editable) {
     const remove = el('button', 'ghost tiny', '×');
     remove.title = tx('Remove this action');
     remove.addEventListener('click', () =>
       runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
-    row.append(remove);
+    (row.querySelector('.run-action-tools') || row).append(remove);
   }
 
   return row;
+}
+
+/** A buy or a sell that carries its price, which is what a run's profit is worked out from. */
+const isTradeAction = (action) => (action.kind === 'buy' || action.kind === 'sell')
+  && action.price !== null && action.price !== undefined;
+
+/** "96 SCU at 1,234 aUEC". */
+const tradeFigures = (quantity, unit, price) =>
+  `${Number(quantity ?? 0).toLocaleString()}${unit ? ` ${unit}` : ''} ${tx('at {price} each', { price: money(price) })}`;
+
+/**
+ * What a trade run's buys and sells come to, as they stand and as first
+ * planned. Null when the plan has no priced trade in it.
+ *
+ * Summed over the run sheet rather than read from a route, because the run
+ * sheet is what the pilot changes: half the hold sold at one buyer and the
+ * rest at a second is two sells, and a price fixed after a kiosk refused the
+ * planned one is the only price that still means anything.
+ */
+function tradeRunMoney(trip) {
+  const actions = (trip?.stops || []).flatMap((stop) => stop.actions || []).filter(isTradeAction);
+  if (!actions.length) return null;
+
+  const sum = (kind, figures) => actions.filter((a) => a.kind === kind)
+    .reduce((total, a) => {
+      const { quantity, price } = figures(a);
+      return total + (Number(quantity) || 0) * (Number(price) || 0);
+    }, 0);
+  const units = (kind) => actions.filter((a) => a.kind === kind).reduce((total, a) => total + (Number(a.quantity) || 0), 0);
+
+  const now = (a) => a;
+  const planned = (a) => a.was || a;
+
+  return {
+    outlay: sum('buy', now),
+    takings: sum('sell', now),
+    profit: sum('sell', now) - sum('buy', now),
+    plannedProfit: sum('sell', planned) - sum('buy', planned),
+    tweaked: actions.some((a) => a.was),
+    bought: units('buy'),
+    sold: units('sell'),
+  };
+}
+
+/** The run's money in a line, with what the tweaks did to it. */
+function tradeRunSummary(trip) {
+  const figures = tradeRunMoney(trip);
+  if (!figures) return null;
+
+  const box = el('div', 'trade-run-money');
+  const signed = (n) => `${n >= 0 ? '+' : '−'}${money(Math.abs(n))}`;
+
+  box.append(el('div', null, tx('Buy for {outlay} · sell for {takings} · profit {profit}', {
+    outlay: money(figures.outlay), takings: money(figures.takings), profit: signed(figures.profit),
+  })));
+
+  if (figures.tweaked) {
+    box.append(el('div', 'muted', tx('Planned {planned}; your changes moved it {change}.', {
+      planned: signed(figures.plannedProfit), change: signed(figures.profit - figures.plannedProfit),
+    })));
+  }
+
+  // A buy cut short leaves the sells promising cargo that is not aboard.
+  if (figures.sold > figures.bought) {
+    box.append(el('div', 'trade-run-warning', tx('Selling {sold} SCU of the {bought} bought.', {
+      sold: figures.sold.toLocaleString(), bought: figures.bought.toLocaleString(),
+    })));
+  }
+
+  return box;
+}
+
+/**
+ * Two boxes, SCU and price, for one buy or sell.
+ *
+ * Cutting a buy short also cuts the sale, when there is exactly one sale and
+ * it was for the whole load: that is the case where the pilot plainly means
+ * "I only got 80", and making them edit both ends is a second chance to forget.
+ */
+function tradeTweakForm(trip, stop, action) {
+  const form = el('div', 'run-action-form run-tweak-form');
+
+  const box = (value, label) => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'search run-action-amount';
+    input.min = '0';
+    input.step = 'any';
+    input.value = value === null || value === undefined ? '' : String(value);
+    input.title = label;
+    input.placeholder = label;
+    return input;
+  };
+
+  const quantity = box(action.quantity, tx('SCU'));
+  const price = box(action.price, tx('aUEC each'));
+  const save = el('button', 'ghost tiny', tx('Save'));
+
+  save.addEventListener('click', async () => {
+    const units = quantity.value === '' ? null : Number(quantity.value);
+    const each = price.value === '' ? null : Number(price.value);
+    const url = (s, a) => `/api/trips/${trip.id}/stops/${s.id}/actions/${a.id}/tweak`;
+    const post = (s, a, body) => fetch(url(s, a), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+
+    await post(stop, action, { quantity: units, price: each });
+
+    if (action.kind === 'buy' && units !== action.quantity) {
+      const sells = trip.stops.flatMap((s) => (s.actions || []).filter((a) => a.kind === 'sell').map((a) => [s, a]));
+      if (sells.length === 1 && sells[0][1].quantity === action.quantity) {
+        const [sellStop, sell] = sells[0];
+        await post(sellStop, sell, { quantity: units, price: sell.price });
+      }
+    }
+
+    await loadTrips();
+  });
+
+  form.append(quantity, price, save);
+  return form;
 }
 
 function runActionForm(trip, stop) {
@@ -25032,6 +25190,12 @@ function renderTripCard() {
     jump.append(el('div', 'now-trip-label', next.done ? tx('At this stop') : tx('Jump next')));
     jump.append(el('div', 'now-trip-where', next.place));
     if (next.note) jump.append(el('div', 'now-trip-note', next.note));
+
+    // A trade stop carries its figures on the run sheet rather than in a
+    // note, so they stay true after a tweak; say them here all the same.
+    for (const action of (next.actions || []).filter((a) => !a.done && isTradeAction(a))) {
+      jump.append(el('div', 'now-trip-note', `${runActionLabel(action.kind)} ${action.text} · ${tradeFigures(action.quantity, action.unit, action.price)}`));
+    }
   } else {
     jump.append(el('div', 'inward', tx('Every stop is crossed off. Good run.')));
   }
@@ -25104,6 +25268,9 @@ function renderTripPanel() {
 
   const done = trip.stops.filter((s) => s.done).length;
   body.append(jobProgress(done, trip.stops.length, tx('{done} of {total} stops', { done, total: trip.stops.length })));
+
+  const trade = tradeRunSummary(trip);
+  if (trade) body.append(trade);
 
   const next = nextStop(trip);
 

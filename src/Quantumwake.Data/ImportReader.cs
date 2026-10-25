@@ -501,7 +501,9 @@ public static class ImportReader
             RunAction.CleanQuantity(action.Quantity),
             RunAction.CleanUnit(action.Unit),
             action.Done,
-            Dated(action.DoneAt, now) ? action.DoneAt!.Value.ToUniversalTime() : null);
+            Dated(action.DoneAt, now) ? action.DoneAt!.Value.ToUniversalTime() : null,
+            Price: RunAction.CleanPrice(action.Price),
+            Was: RunActionWas.Clean(action.Was));
 
     /// <summary>
     /// A date the reader's own lists can be sorted by without being hijacked.

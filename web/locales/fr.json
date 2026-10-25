@@ -605,14 +605,11 @@
   "Sell {commodity}; buy {next}": "Vendre {commodity} ; acheter {next}",
   "Sell {commodity}": "Vendre {commodity}",
   "{commodity} run": "Tournée {commodity}",
-  "Buy {units} SCU at {price}": "Acheter {units} SCU à {price}",
-  "Sell at {price}": "Vendre à {price}",
   "{count} buyers": {
     "one": "{count} acheteur",
     "other": "{count} acheteurs"
   },
   "{commodity} split load": "{commodity} en chargement partagé",
-  "Sell {units} SCU at {price}": "Vendre {units} SCU à {price}",
   "Checking current price reports…": "Vérification des prix actuels…",
   "Origin: {place}; results require UEX to match this terminal.": "Départ : {place} ; les résultats exigent qu’UEX connaisse ce terminal.",
   "Sized per SCU: {ship}'s hold is not on record. Enter it above to size a full load.": "Calculé par SCU : la soute de ce vaisseau ({ship}) n’est pas connue. Saisissez-la ci-dessus pour calculer un chargement complet.",
@@ -5183,5 +5180,11 @@
   "{organisation} rep run · {count} deliveries": {
     "one": "{organisation} · course de réputation · {count} livraison",
     "other": "{organisation} · course de réputation · {count} livraisons"
-  }
+  },
+  "at {price} each": "à {price} l’unité",
+  "Change the SCU or the price — the profit is worked out again, and the planned figures stay beside it": "Modifier les SCU ou le prix — le bénéfice est recalculé, et les chiffres prévus restent à côté",
+  "Buy for {outlay} · sell for {takings} · profit {profit}": "Achat {outlay} · vente {takings} · bénéfice {profit}",
+  "Planned {planned}; your changes moved it {change}.": "Prévu {planned} ; vos modifications l’ont fait varier de {change}.",
+  "Selling {sold} SCU of the {bought} bought.": "Vente de {sold} SCU sur les {bought} achetés.",
+  "aUEC each": "aUEC l’unité"
 }

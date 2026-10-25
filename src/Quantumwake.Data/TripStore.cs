@@ -49,6 +49,14 @@ public sealed record RunActionLink(string? MissionId, IReadOnlyList<string>? Leg
 /// and the outcome are the comparison, and overwriting one destroys the point
 /// of recording either.
 /// </param>
+/// <param name="Price">
+/// aUEC per unit of <paramref name="Quantity"/>, on a trade's buy or sell, so
+/// the run's profit can be worked out again when either is changed.
+/// </param>
+/// <param name="Was">
+/// The quantity and price as first planned, set the first time the pilot
+/// changes either and dropped again if they put them back.
+/// </param>
 public sealed record RunAction(
     string Id,
     string Kind,
@@ -58,7 +66,9 @@ public sealed record RunAction(
     bool Done,
     DateTimeOffset? DoneAt,
     decimal? Actual = null,
-    RunActionLink? Link = null)
+    RunActionLink? Link = null,
+    decimal? Price = null,
+    RunActionWas? Was = null)
 {
     /// <summary>
     /// The kinds a run sheet may use, with anything else read as a plain "do".
@@ -94,6 +104,20 @@ public sealed record RunAction(
     /// </remarks>
     public static decimal? CleanQuantity(decimal? value) =>
         value is >= 0 and <= 1_000_000 ? value : null;
+
+    /// <summary>
+    /// A unit price arithmetic can survive. Wider than a quantity: a ship
+    /// component bought from a shop counter runs to millions apiece.
+    /// </summary>
+    public static decimal? CleanPrice(decimal? value) =>
+        value is >= 0 and <= 1_000_000_000 ? value : null;
+}
+
+/// <summary>A trade action's figures as first planned, kept once the pilot changes them.</summary>
+public sealed record RunActionWas(decimal? Quantity, decimal? Price)
+{
+    internal static RunActionWas? Clean(RunActionWas? value) =>
+        value is null ? null : new RunActionWas(RunAction.CleanQuantity(value.Quantity), RunAction.CleanPrice(value.Price));
 }
 
 /// <summary>
@@ -522,7 +546,7 @@ public sealed class TripStore
             .Select(action => new RunAction(NewId(), RunAction.CleanKind(action.Kind),
                 Sanitise.Clean(action.Text, "Action"), RunAction.CleanQuantity(action.Quantity),
                 RunAction.CleanUnit(action.Unit), Done: false, DoneAt: null,
-                Link: RunActionLink.Clean(action.Link)))]);
+                Link: RunActionLink.Clean(action.Link), Price: RunAction.CleanPrice(action.Price)))]);
 
     /// <summary>The same ceiling a run sheet arriving in a file is held to.</summary>
     private const int MaxActions = ImportReader.MaxRunActions;
@@ -650,6 +674,11 @@ public sealed class TripStore
                         // it would present that as this run's result before it
                         // has been flown.
                         Actual = null,
+
+                        // A tweak was the plan meeting the last run; what it
+                        // settled on is this run's plan, with nothing to
+                        // compare it against yet.
+                        Was = null,
                     })],
                 })]);
 
@@ -731,6 +760,52 @@ public sealed class TripStore
             actions[actionIndex] = actions[actionIndex] with
             {
                 Actual = actual is null ? null : RunAction.CleanQuantity(actual),
+            };
+
+            stops[stopIndex] = stops[stopIndex] with { Actions = actions };
+            _trips[tripIndex] = _trips[tripIndex] with { Stops = stops };
+
+            Save();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Changes what a planned action is for - the SCU of a buy, the price of a
+    /// sale - keeping what it was first planned at beside it.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="Correct"/>, which records an outcome after the fact,
+    /// this changes the plan: the kiosk had less stock, the buyer moved its
+    /// price, the hold was smaller than the plan assumed. The first figures
+    /// are kept once, on the first change, so a run tweaked three times still
+    /// compares against what was planned rather than the second guess; putting
+    /// them back drops the comparison, because there is nothing left to compare.
+    /// </remarks>
+    public bool Tweak(string tripId, string stopId, string actionId, decimal? quantity, decimal? price)
+    {
+        lock (_gate)
+        {
+            var tripIndex = _trips.FindIndex(t => t.Id == tripId);
+            if (tripIndex < 0) return false;
+
+            var stops = _trips[tripIndex].Stops.ToList();
+            var stopIndex = stops.FindIndex(s => s.Id == stopId);
+            if (stopIndex < 0) return false;
+
+            var actions = (stops[stopIndex].Actions ?? []).ToList();
+            var actionIndex = actions.FindIndex(a => a.Id == actionId);
+            if (actionIndex < 0) return false;
+
+            var before = actions[actionIndex];
+            var was = before.Was ?? new RunActionWas(before.Quantity, before.Price);
+            var now = new RunActionWas(RunAction.CleanQuantity(quantity), RunAction.CleanPrice(price));
+
+            actions[actionIndex] = before with
+            {
+                Quantity = now.Quantity,
+                Price = now.Price,
+                Was = now == was ? null : was,
             };
 
             stops[stopIndex] = stops[stopIndex] with { Actions = actions };
