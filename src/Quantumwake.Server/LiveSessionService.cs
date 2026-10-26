@@ -635,6 +635,8 @@ public sealed partial class LiveSessionService : BackgroundService
     /// </remarks>
     private TimelineEntry Named(TimelineEntry entry)
     {
+        entry = ShopNamed(entry, _library.ShopLabel);
+
         if (entry.Subject is not { Length: > 0 } itemClass) return entry;
 
         var name = _library.ItemName(itemClass);
@@ -642,6 +644,27 @@ public sealed partial class LiveSessionService : BackgroundService
         return name == itemClass
             ? entry
             : entry with { Text = entry.Text.Replace(itemClass, name, StringComparison.Ordinal) };
+    }
+
+    /// <summary>Puts the shop's name where a purchase or trade line has its id.</summary>
+    /// <remarks>
+    /// The builder writes "977 aUEC · Pyro RStop stall med 001 rund weaponsmith",
+    /// the id with its underscores spaced out, and until now the feed served it
+    /// that way for every shop - even Casaba, which the Ledger has always named.
+    /// </remarks>
+    internal static TimelineEntry ShopNamed(TimelineEntry entry, Func<string, string> shopLabel)
+    {
+        if (entry.Kind is not ("bought" or "sold") || entry.Detail is not { } detail)
+            return entry;
+
+        var cut = detail.LastIndexOf(" · ", StringComparison.Ordinal);
+        if (cut < 0)
+            return entry;
+
+        var shop = detail[(cut + 3)..];
+        var label = shopLabel(shop);
+
+        return label == shop ? entry : entry with { Detail = detail[..(cut + 3)] + label };
     }
 
     /// <summary>

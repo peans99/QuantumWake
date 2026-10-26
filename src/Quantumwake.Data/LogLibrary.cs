@@ -543,12 +543,18 @@ public static class LoadoutCategories
         if (Has(port, "weapon_attach_hand"))
             return false;
 
-        // Fixtures with exactly one possible occupant.
+        // Fixtures with exactly one possible occupant. light_1 and light_2 hold
+        // the beams inside a fitted flashlight - weapon_underbarrel_light_narrow
+        // and _wide, and nothing else in 273 logs - which the game names nowhere
+        // because nobody ever holds one.
         return !Has(port, "mobiglas")
             && !Has(port, "necksock")
             && !port.Equals("radar", StringComparison.OrdinalIgnoreCase)
             && !port.Equals("helmet_visor", StringComparison.OrdinalIgnoreCase)
-            && !port.Equals("Lens_ItemPort", StringComparison.OrdinalIgnoreCase);
+            && !port.Equals("Lens_ItemPort", StringComparison.OrdinalIgnoreCase)
+            && !(port.StartsWith("light_", StringComparison.OrdinalIgnoreCase)
+                && port.Length > "light_".Length
+                && port["light_".Length..].All(char.IsDigit));
     }
 }
 
@@ -799,11 +805,21 @@ public sealed class LogLibrary : IDisposable
     /// unnamed, and a blank line is worse than the class with its underscores
     /// opened out, which is what the last resort gives.
     /// </para>
+    /// <para>
+    /// Nor is a catalogue "name" that is only the class again: the catalogue
+    /// keeps the class when the game wrote no name, and taking that as an answer
+    /// meant the name table - which knows <c>volt_ubarrel_flsh_s1_Sniperglint</c>
+    /// is a variant of the Lux Flashlight - was never asked.
+    /// </para>
     /// </remarks>
     public string ItemName(string itemClass) =>
-        GameCommodities.Item(itemClass)?.Name is { Length: > 0 } named ? named
-        : GameCommodities.Item($"{itemClass}_SCItem")?.Name is { Length: > 0 } suffixed ? suffixed
-        : Names.Item(itemClass);
+        Catalogued(itemClass) ?? Catalogued($"{itemClass}_SCItem") ?? Names.Item(itemClass);
+
+    private string? Catalogued(string itemClass) =>
+        GameCommodities.Item(itemClass)?.Name is { Length: > 0 } named
+            && !named.Equals(itemClass, StringComparison.OrdinalIgnoreCase)
+            ? named
+            : null;
 
     /// <summary>
     /// What the game calls a logged resource id.
@@ -1438,19 +1454,13 @@ public sealed class LogLibrary : IDisposable
 
     /// <summary>The vendor's brand name where the game publishes one.</summary>
     /// <remarks>
-    /// Commodity kiosks have no brand - every one of them logs as
-    /// <c>SCShop_Admin_lt_base_g</c> - so they get a plain description instead of
-    /// the mangled id.
+    /// Commodity kiosks, food carts and stalls have no brand, so they get a plain
+    /// description from <see cref="ShopNames"/> instead of the mangled id. Public
+    /// because the live feed writes the shop into its sentences when they are
+    /// stored, as the id, and puts the name in when they are served.
     /// </remarks>
-    private string ShopLabel(string shop)
-    {
-        if (Names.Shop(shop) is { } branded)
-            return branded;
-
-        return shop.StartsWith("Admin", StringComparison.OrdinalIgnoreCase)
-            ? "Cargo terminal"
-            : shop;
-    }
+    public string ShopLabel(string shop) =>
+        Names.Shop(shop) ?? ShopNames.Describe(shop) ?? shop;
 
     /// <summary>
     /// Cargo trades, newest first, with unit price worked out.
