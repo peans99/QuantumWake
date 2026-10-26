@@ -22,13 +22,41 @@ there is no account and no required online service.
   <tr>
     <td width="33%"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="The Now page"></a><br><sub><b>Now</b><br>Start with the last known location, ship, wake-up point and this session.</sub></td>
     <td width="33%"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><sub><b>Map</b><br>Find places you have visited and nearby refuel, repair or clinic services.</sub></td>
-    <td width="33%"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="A route plan"></a><br><sub><b>Routes</b><br>Keep a flight plan, cargo run or next stop in view.</sub></td>
+    <td width="33%"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary page"></a><br><sub><b>Itinerary</b><br>Lay out a flight plan stop by stop, and merge a hauling run into it.</sub></td>
   </tr>
 </table>
 
+<details>
+<summary>More pages</summary>
+
+<table>
+  <tr>
+    <td width="33%"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="The Command deck"></a><br><sub><b>Command deck</b><br>Shopping lists, checklists, projects and the contracts open in this session.</sub></td>
+    <td width="33%"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="The Routes page"></a><br><sub><b>Routes</b><br>Find a cargo run sized to your ship, or a rep run to the next rank.</sub></td>
+    <td width="33%"><a href="docs/images/reputation.png"><img src="docs/images/reputation.png" alt="The Reputation page"></a><br><sub><b>Reputation</b><br>Your rank with each organisation, read from Rep app screenshots.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/events.png"><img src="docs/images/events.png" alt="The Events page"></a><br><sub><b>Events</b><br>The points behind each event bar, counted from contracts you finished.</sub></td>
+    <td><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="The Logbook"></a><br><sub><b>Logbook</b><br>Sessions, purchases and discoveries, newest first.</sub></td>
+    <td><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="The Sessions page"></a><br><sub><b>Sessions</b><br>Every session with its ship, time, jumps, contracts and server.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="The Ledger"></a><br><sub><b>Ledger</b><br>Money in and out as the logs record it, with cash on hand from a screenshot.</sub></td>
+    <td><a href="docs/images/market.png"><img src="docs/images/market.png" alt="The Market page"></a><br><sub><b>Market</b><br>Every commodity, where it sells, and your own trading against it.</sub></td>
+    <td><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="The Fleet page"></a><br><sub><b>Fleet</b><br>The ships you fly, with flight counts, claim times and prices.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><sub><b>Garage</b><br>A ship's fitted parts and the figures they add up to.</sub></td>
+    <td><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><sub><b>Armoury</b><br>Guns, armour and attachments from your installed game files.</sub></td>
+    <td></td>
+  </tr>
+</table>
+</details>
+
 The dashboard is for planning and history. The optional overlay gives the same
 short answers over the game, and the optional Cougar MFD mode keeps navigation,
-tasks and cargo close to the cockpit.
+tasks and cargo close to the cockpit. The dashboard, overlay and MFD pages are
+in English or French; choose under **Settings → General**.
 
 ## Start here
 
@@ -70,9 +98,13 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 |---|---|
 | Check your last location, ship or wake-up point | **Now** |
 | Find a station, city, outpost or nearby service | **Map** |
-| Review a flight, session, place or server | **Logbook** |
-| Plan a route, cargo run, checklist or event | **Command Deck** |
-| Look up ships, parts, mining, crafting or gear | **Hangar** and **Reference** |
+| Lay out a flight plan, or merge a hauling run into one | **Itinerary** |
+| Read the live feed, or a screenshot you just took | **Log** |
+| Find a cargo or rep run, follow contracts, reputation or an event | **Operations** |
+| Review a flight, session, place or server | **Flight** |
+| Follow money in and out, or commodity prices | **Economy** |
+| Look up ships, parts, mining or crafting | **Reference** |
+| See your ships, fittings, stash and gear | **Hangar** |
 | Keep a small answer visible in Star Citizen | **Overlay** |
 
 ## Optional extras
@@ -81,22 +113,22 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 
 The overlay starts off. Star Citizen needs **Borderless Windowed** mode for it
 to sit above the game. Use the tray icon or `Ctrl+Alt+O` to show it. Its pin
-button makes it click-through; `Ctrl+Alt+←/→` changes page and `Ctrl+Alt+F`
-expands it.
+button makes it click-through; `Ctrl+Alt+←/→` changes page, `Ctrl+Alt+F`
+expands it and `Ctrl+Alt+C` switches to a small glance view.
 
 ### Cockpit HUD
 
 If you use paired Cougar MFDs, Quantum Wake can show navigation, tasks, cargo,
 contracts, money and the live feed on them. Read the [Cockpit HUD guide](docs/mfd-mode.md)
-when you are ready to set it up.
+when you are ready to set it up; `Ctrl+Alt+M` opens MFD setup from anywhere.
 
 ### Screenshots and copied locations
 
 You can ask Quantum Wake to read a saved Star Citizen screenshot or a copied
 `/showlocation` result. This can add facts the log does not carry, such as a
-kiosk balance, fitted ship parts or your rank with an organisation in the Rep
-app. It reads the saved file locally; it never
-captures your screen or reads game memory.
+kiosk balance, fitted ship parts, your rank with an organisation in the Rep
+app, or the pickups and SCU on a hauling contract in the Contracts app. It reads
+the saved file locally; it never captures your screen or reads game memory.
 
 ## What Quantum Wake reads
 
@@ -179,6 +211,12 @@ trademarks of Cloud Imperium Rights LLC. Quantum Wake is an unofficial fan
 project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
+
+### 0.19.7
+
+**Shops and gear are called what the game calls them.** Purchases at food carts, Pyro's rest-stop stalls and a few other counters showed the shop's internal code: "Pyro RStop stall med 001 rund weaponsmith", "HotDogBar Food RestStop". They now read "Weaponsmith Stall", "Hot Dogs", "Ellroy's Coffee", "Chuan Cart" and so on, using the game's own names where it has them. "Conscientious Objects" is recognised too; the game misspells it in its own files, which is why it never matched. The live feed on the Now page had shown that code for every purchase, even at shops like Casaba Outlet that the Ledger always named, and now shows the name. About 180 items the game files under a variant of the usual key, among them the ORC-mkX SecondWind helmet, showed their code in your stash; they are named now, as is a variant flashlight that read "volt_ubarrel_flsh_s1_Sniperglint" (it is a Lux Flashlight). The beam inside a fitted flashlight no longer appears in your loadout as a piece of gear of its own. The first start after updating takes a little longer while the item names are read from your game files again.
+
+**Quantum jumps say where you were heading instead of showing the game's internal code.** A jump to a mission beacon, a party member, your parked ship, an orbital laser platform or one of the surface outpost clusters used to appear in the live feed, the Now page and the logbook under an id such as `orbtl_002_plat_001_util_a_orbital_001_occu_a_final`. In one long history that was 54 of the 203 places ever targeted. They now read "Distress Beacon", "Party Member", "Unattended Ship", "Rayari Research Cluster" and so on. The asteroid mining bases, which read like "ab mine med 006, Crusader", are now "Mining Base, Crusader", and a wake-up point at one of Nyx's numbered QV extraction stations reads "QV Extraction Station 028" instead of "Nyx_TSG_QVExtractionStation_028". Once you land, a jump to a party member or a cluster takes the name of the place you actually arrived at. Orbital laser platforms are named from your game files. The game numbers them without saying which moon they circle, and the same number is used above more than one moon, so where it could be either the jump says "Attritus OLP or Vivere OLP" rather than guessing. Your history is read again once after updating, so older sessions get the names too.
 
 ### 0.19.5
 

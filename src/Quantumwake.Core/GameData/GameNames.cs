@@ -171,7 +171,8 @@ public sealed class GameNames
             {
                 var related = probe.Equals(key, StringComparison.OrdinalIgnoreCase)
                     || probe.StartsWith(key, StringComparison.OrdinalIgnoreCase)
-                    || key.StartsWith(probe, StringComparison.OrdinalIgnoreCase);
+                    || key.StartsWith(probe, StringComparison.OrdinalIgnoreCase)
+                    || Misspelt(probe, key);
 
                 if (related && key.Length > bestLength)
                 {
@@ -182,6 +183,28 @@ public sealed class GameNames
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// Whether two long words differ by one letter dropped or added.
+    /// </summary>
+    /// <remarks>
+    /// The game's own key is <c>shop_name_conscientousobjects</c> while the shop
+    /// logs as <c>SCShop_ConscientiousObjects_Levski-001</c>, so the one shop the
+    /// table does name never matched it - 26 visits on this install. Only long
+    /// words, where one letter cannot turn one brand into another.
+    /// </remarks>
+    internal static bool Misspelt(string a, string b)
+    {
+        if (a.Length < 10 || b.Length < 10 || Math.Abs(a.Length - b.Length) != 1)
+            return false;
+
+        var (longer, shorter) = a.Length > b.Length ? (a, b) : (b, a);
+        var i = 0;
+        while (i < shorter.Length && char.ToLowerInvariant(longer[i]) == char.ToLowerInvariant(shorter[i]))
+            i++;
+
+        return longer[(i + 1)..].Equals(shorter[i..], StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Normalise(string value) =>

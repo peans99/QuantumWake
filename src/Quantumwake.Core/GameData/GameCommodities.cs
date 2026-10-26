@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 50;
+    private const int CacheVersion = 51;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     private const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -196,6 +196,35 @@ public sealed partial class GameCommodities
     /// <summary>Everything read, keyed by resource id.</summary>
     public IReadOnlyDictionary<string, string> All => _byId;
 
+    /// <summary>The English table, key to text, as the records' references spell the keys.</summary>
+    /// <remarks>
+    /// "item_Name_cds_combat_medium_helmet_01_02_01,P" loses its ",P", the
+    /// variant suffix <see cref="GameNames"/> has always cut and this table did
+    /// not. 181 item names carry it; any of them the catalogue holds, an ORC-mkX
+    /// helmet among them, came out under its class instead of its name.
+    /// </remarks>
+    internal static Dictionary<string, string> EnglishText(string ini)
+    {
+        var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var line in ini.Split('\n'))
+        {
+            var eq = line.IndexOf('=');
+            if (eq <= 0) continue;
+
+            var value = line[(eq + 1)..].TrimEnd('\r').Trim();
+            if (value.Length == 0) continue;
+
+            var key = line[..eq].TrimStart('﻿').Trim();
+            var comma = key.IndexOf(',');
+            if (comma > 0) key = key[..comma];
+
+            text.TryAdd(key, value);
+        }
+
+        return text;
+    }
+
     /// <summary>
     /// Loads from the install, using the cache when it is current.
     /// </summary>
@@ -249,16 +278,7 @@ public sealed partial class GameCommodities
             if (blob is null || ini is null)
                 return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation);
 
-            var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var line in Encoding.UTF8.GetString(ini).Split('\n'))
-            {
-                var eq = line.IndexOf('=');
-                if (eq <= 0) continue;
-
-                var value = line[(eq + 1)..].TrimEnd('\r').Trim();
-                if (value.Length > 0) text.TryAdd(line[..eq].TrimStart('﻿').Trim(), value);
-            }
+            var text = EnglishText(Encoding.UTF8.GetString(ini));
 
             var core = new DataCore(blob);
 
