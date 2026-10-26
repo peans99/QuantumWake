@@ -18270,12 +18270,15 @@ function renderHaulPlan(host, plan) {
     if (c.legs.length) {
       const legs = el('ul', 'haul-legs');
       for (const leg of c.legs) {
+        // A place the game's own letter left unnamed is a different thing
+        // from one the screenshot did not reach, and the fix is different:
+        // the marker in game, not another photograph.
         const from = leg.pickup
           ? `${leg.pickup}${leg.pickupBody ? ` (${leg.pickupBody})` : ''}`
-          : tx('pickup not known');
+          : leg.unnamed ? tx('a pickup the game left unnamed ({name})', { name: leg.unnamed }) : tx('pickup not known');
         const to = leg.delivery
           ? `${leg.delivery}${leg.deliveryBody ? ` (${leg.deliveryBody})` : ''}`
-          : tx('drop-off not known');
+          : leg.unnamed ? tx('a drop-off the game left unnamed ({name})', { name: leg.unnamed }) : tx('drop-off not known');
         const scu = leg.scu != null ? ` · ${leg.scuDone || 0}/${leg.scu} SCU` : '';
         legs.append(el('li', leg.pickup && leg.delivery ? null : 'muted', `${from} → ${to}${scu}`));
       }

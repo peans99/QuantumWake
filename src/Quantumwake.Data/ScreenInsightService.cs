@@ -197,6 +197,33 @@ public sealed class ScreenInsightService(
     }
 
     /// <summary>
+    /// Contracts app frames read before 0.19.4 on which the engine split an
+    /// objective's diamond from its text, whose files are still in the
+    /// game's folder.
+    /// </summary>
+    /// <remarks>
+    /// Those are the frames the older reader joined into one objective or
+    /// lost objectives from - see <see cref="ScreenFrames.ContractsReader"/>.
+    /// The stored lines carry no positions, so they cannot be read again
+    /// without the image; a frame that was read whole is left alone, and one
+    /// read again is marked with the new reader and not offered twice.
+    /// </remarks>
+    public IReadOnlyList<string> Unjoined(string? installRoot)
+    {
+        if (Excuse(installRoot) is not null) return [];
+
+        var folder = Screenshots.FolderFor(installRoot!);
+
+        return [.. readings.ContractFrames()
+            .Where(s => !s.Dismissed && s.Contracts is { Reader: < ScreenFrames.ContractsReader })
+            .Where(s => s.Lines.Any(line => line.Trim() is "o" or "O" or "0"
+                || line.TrimStart().StartsWith("Deliver ", StringComparison.Ordinal)
+                || line.TrimStart().StartsWith("Collect ", StringComparison.Ordinal)))
+            .Select(s => Path.Combine(folder, s.Shot))
+            .Where(File.Exists)];
+    }
+
+    /// <summary>
     /// Reads the newest unread screenshots, at most <paramref name="take"/> of
     /// them, and says how many are still waiting. The archive on demand: the
     /// watch reads nothing that was there before it began, and the loadout a

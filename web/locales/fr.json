@@ -1300,6 +1300,8 @@
   "title only": "titre seul",
   "pickup not known": "chargement inconnu",
   "drop-off not known": "livraison inconnue",
+  "a pickup the game left unnamed ({name})": "un chargement que le jeu n’a pas nommé ({name})",
+  "a drop-off the game left unnamed ({name})": "une livraison que le jeu n’a pas nommée ({name})",
   "{scu} SCU contracted · {remaining} remaining": "{scu} SCU au contrat · {remaining} restants",
   "{count} delivered": "livrés : {count}",
   "{done} of {count} pickups done": {

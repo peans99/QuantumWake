@@ -545,4 +545,48 @@ public class HaulPlannerTests
         Assert.Equal(before.Stops.Select(s => s.Place), after.Stops.Select(s => s.Place));
         Assert.Equal(HaulPlanner.Fingerprint(before), HaulPlanner.Fingerprint(after));
     }
+
+    private const string Multi2Carbon = "RedWind_Pyro_SupplyGrade_Solar_HH_StationToRuin_Carbon_CargoHauling_Multi2ToSingle";
+
+    private static ScreenSighting CardAt(string shot, TimeSpan after, string title, params string[] objectives) =>
+        new(shot, T0 + after, ScreenKind.Contracts, "", [], null, null, null, null, [], 0,
+            Contracts: new ContractsReading(null, null, [], title, null, null, objectives,
+                [.. objectives.Select((text, i) => ScreenFrames.Step(text, i == 0 ? 0 : 1))]));
+
+    /// <summary>
+    /// 25 Oct: two Carbon hauls with two pickups each, each photographed a
+    /// second after it was accepted. Once the second was handed in, the first
+    /// took its card - the newer of two that fitted - and Gaslight and
+    /// Checkmate became Starlight and Dudley &amp; Daughters. The card the
+    /// game opened on accepting a contract stays that contract's.
+    /// </summary>
+    [Fact]
+    public void A_card_photographed_just_after_an_acceptance_stays_with_that_contract()
+    {
+        const string title = "Member | Stellar Medium Haul | to Ruin Station";
+        ContractRecord[] contracts =
+        [
+            Contract("first", Multi2Carbon, title),
+            Contract("second", Multi2Carbon, title, 1, ContractOutcome.Completed),
+        ];
+        ScreenSighting[] frames =
+        [
+            CardAt("a.jpg", TimeSpan.FromSeconds(9), "Member I Stellar Medium Haul I to Ruin Station",
+                "Deliver 0/158 SCU of Carbon to Ruin Station.", "Collect Carbon from Gaslight.", "Collect Carbon from Checkmate."),
+            CardAt("b.jpg", TimeSpan.FromSeconds(61), "Member I Stellar Medium Haul I to Ruin Station [50/200/250/500/1000/2000/4000",
+                "Deliver 0/173 SCU of Carbon to Ruin Station.", "Collect Carbon from Starlight Service Station.", "Collect Carbon from Dudley & Daughters."),
+        ];
+
+        var planned = Assert.Single(HaulPlanner.Plan(contracts, frames, Atlas).Contracts);
+
+        Assert.Equal("a.jpg", planned.Shot);
+        Assert.Equal(["Gaslight", "Checkmate"], planned.Legs.Select(l => l.Pickup));
+    }
+
+    /// <summary>The rep bracket the headline swallowed is not part of the title.</summary>
+    [Fact]
+    public void A_title_read_with_its_rep_bracket_is_still_the_same_contract() =>
+        Assert.True(ScreenFrames.SameContract(
+            "Member I Stellar Medium Haul I to Ruin Station [50/200/250/500/1000/2000/4000",
+            "Member | Stellar Medium Haul | to Ruin Station"));
 }
