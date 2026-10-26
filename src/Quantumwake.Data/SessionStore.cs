@@ -220,7 +220,14 @@ public sealed class SessionStore : IDisposable
     //     withdrawn one - and then completes is completed, not lost. Four in
     //     509 contracts on this install, two of them Discovery Month patrols
     //     worth 667 points that a stored summary would otherwise keep losing.
-    private const int PayloadVersion = 18;
+    // 19: quantum targets the resolver could not name - mission beacons with a
+    //     purpose after "Beacon", party and parked-ship markers, operators'
+    //     outpost clusters, orbital laser platforms - are named, and the 18
+    //     asteroid mining bases stop reading "ab mine med 006". A jump's
+    //     destination and its "Quantum to" line are written into the summary,
+    //     so 54 of 203 distinct targets on this install would otherwise go on
+    //     showing their raw ids in every session already stored.
+    private const int PayloadVersion = 19;
 
 
     /// <summary>

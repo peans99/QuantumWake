@@ -294,6 +294,126 @@ public class LocationResolverTests
         Assert.NotEqual(id, location.DisplayName);
     }
 
+    /// <summary>
+    /// Quantum targets that used to reach the live feed as their raw id - 54 of
+    /// the 203 distinct targets selected on this install. None names a place
+    /// the map could hold, but each says what it is.
+    /// </summary>
+    [Theory]
+    [InlineData("MISSION_QT_Distress_Beacon_SupportAttackedShip_863273994735", "Distress Beacon", LocationKind.MissionBeacon)]
+    [InlineData("MISSION_QT_Quantum_Beacon_LongRange_864896026617", "Mission Beacon", LocationKind.MissionBeacon)]
+    [InlineData("MISSION_QT_Quantum_Beacon_ShortRange_Salvage_527766621511", "Mission Beacon", LocationKind.MissionBeacon)]
+    [InlineData("PartyMemberMarker_297611060881", "Party Member", LocationKind.NavPoint)]
+    [InlineData("UnattendedVehicleMarker_848089599253", "Unattended Ship", LocationKind.NavPoint)]
+    [InlineData("rayari_cluster_001_frost_{43C7065A-E2FC-4386-AEB6-CA4BF813F5B0}.socpak", "Rayari Research Cluster", LocationKind.Research)]
+    [InlineData("hurdyn_cluster_003_sand_red_{877EEE75-D129-4CF2-BBB4-39693B27EEEF}.socpak", "HurDyn Mining Cluster", LocationKind.Mine)]
+    [InlineData("arccorp_cluster_004_dust_{E43B2A37-F470-4E93-8E49-E317E21DA116}.socpak", "ArcCorp Mining Cluster", LocationKind.Mine)]
+    [InlineData("indy_farmer_001_frost_{D855A44F-A730-4C30-8165-EC314B7C4235}.socpak", "Independent Farm", LocationKind.Outpost)]
+    [InlineData("stash_001_frost_{CCC84E13-6B15-4F3D-BF90-557F40DBDF24}.socpak", "Stash", LocationKind.Outpost)]
+    [InlineData("levski_all-001", "Levski", LocationKind.City)]
+    [InlineData("GrimHEX_OC", "GrimHEX", LocationKind.Station)]
+    [InlineData("oc_st4_drlct_rclmr_sfce_frst_ovgr_a", "Derelict Reclaimer, microTech", LocationKind.Unknown)]
+    [InlineData("AsteroidCluster_Pyro_RegionB_BGR-560", "Asteroid Cluster BGR-560", LocationKind.Asteroid)]
+    [InlineData("ab_mine_pyro_regionb_med_008", "Region B Mining Base", LocationKind.Mine)]
+    [InlineData("RegionA_1base_ab_pyro_final_set_encounter-003", "Region A Asteroid Base", LocationKind.Asteroid)]
+    [InlineData("util_a_orbital_001_occu_a_final-001", "Orbital Platform", LocationKind.Station)]
+    [InlineData("Nyx_TSG_QVExtractionStation_028", "QV Extraction Station 028", LocationKind.Station)]
+    [InlineData("Nyx_TSG_QVExtractionStation_Interior", "QV Extraction Station", LocationKind.Station)]
+    public void Names_quantum_targets_the_id_describes_but_does_not_name(
+        string id, string name, LocationKind kind)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.Equal(name, location.DisplayName);
+        Assert.Equal(kind, location.Kind);
+    }
+
+    /// <summary>
+    /// The system token sits mid-id, which the embedded-system rule also
+    /// matches - it used to win and call these "ab mine med 011, microTech".
+    /// </summary>
+    [Theory]
+    [InlineData("ab_mine_stanton4_med_011", "Mining Base, microTech", "microTech", LocationKind.Mine)]
+    [InlineData("ab_mine_stanton2_med_006", "Mining Base, Crusader", "Crusader", LocationKind.Mine)]
+    [InlineData("ab_mine_stanton4_sml_006", "Mining Base, microTech", "microTech", LocationKind.Mine)]
+    [InlineData("ab_collector_gas_Stanton4", "Gas Collector, microTech", "microTech", LocationKind.Asteroid)]
+    public void Names_asteroid_bases_by_the_planet_they_circle(
+        string id, string name, string body, LocationKind kind)
+    {
+        var location = LocationResolver.Resolve(id);
+
+        Assert.Equal(name, location.DisplayName);
+        Assert.Equal("Stanton", location.System);
+        Assert.Equal(body, location.Body);
+        Assert.Equal(kind, location.Kind);
+    }
+
+    /// <summary>
+    /// A marker or an operator's cluster says what was aimed at, not which
+    /// place - so the jump waits for the arrival to name it, as a rest stop does.
+    /// </summary>
+    [Theory]
+    [InlineData("PartyMemberMarker_297611060881")]
+    [InlineData("UnattendedVehicleMarker_848089599253")]
+    [InlineData("rayari_cluster_001_frost_{43C7065A-E2FC-4386-AEB6-CA4BF813F5B0}.socpak")]
+    [InlineData("MISSION_QT_Distress_Beacon_SupportAttackedShip_863273994735")]
+    public void Treats_markers_and_clusters_as_categories(string id) =>
+        Assert.True(LocationResolver.IsAmbiguous(id));
+
+    /// <summary>
+    /// Platform ids number a platform without its moon, and the game's table
+    /// reuses the numbers. These five entries are the real ones.
+    /// </summary>
+    private static string? Platforms(string id) => id switch
+    {
+        "Stanton1b_OLP_001" => "Ruptura OLP",
+        "Stanton1b_OLP_002" => "Vivere OLP",
+        "Stanton2b_OLP_001" => "Lamina OLP",
+        "Stanton2b_OLP_002" => "Attritus OLP",
+        "Pyro5a_OLP_001" => "Lamina OLP",
+        _ => null
+    };
+
+    [Fact]
+    public void Names_every_platform_a_shared_number_could_be()
+    {
+        var (name, system, body) = LocationResolver.Platform("002", Platforms);
+
+        Assert.Equal("Attritus OLP or Vivere OLP", name);
+        Assert.Equal("Stanton", system);
+        Assert.Null(body);
+    }
+
+    [Fact]
+    public void Leaves_the_system_open_when_a_number_is_used_in_two()
+    {
+        var (name, system, _) = LocationResolver.Platform("001", Platforms);
+
+        Assert.Equal("Lamina OLP or Ruptura OLP", name);
+        Assert.Null(system);
+    }
+
+    [Fact]
+    public void Names_a_platform_whose_number_is_its_own()
+    {
+        var (name, system, body) = LocationResolver.Platform(
+            "003", id => id == "Stanton4a_OLP_003" ? "Example OLP" : null);
+
+        Assert.Equal("Example OLP", name);
+        Assert.Equal("Stanton", system);
+        Assert.Equal("Calliope", body);
+    }
+
+    [Fact]
+    public void Calls_a_platform_a_platform_without_the_games_names()
+    {
+        var (name, system, body) = LocationResolver.Platform("002", lookup: null);
+
+        Assert.Equal("Orbital Laser Platform", name);
+        Assert.Null(system);
+        Assert.Null(body);
+    }
+
     [Fact]
     public void Caches_repeated_lookups()
     {

@@ -62,7 +62,9 @@ public static partial class LocationResolver
         return rawId.Equals("ObjectContainer_RestStop", StringComparison.OrdinalIgnoreCase)
             || rawId.Equals("RestStop", StringComparison.OrdinalIgnoreCase)
             || NavPointRegex.IsMatch(rawId)
-            || MissionBeaconRegex.IsMatch(rawId);
+            || MissionBeaconRegex.IsMatch(rawId)
+            || MarkerRegex.IsMatch(rawId)
+            || OutpostClusterRegex.IsMatch(rawId);
     }
 
     /// <summary>Resolves an id, caching the result.</summary>
@@ -93,6 +95,10 @@ public static partial class LocationResolver
                .Replace("ObjectContainer_", string.Empty, StringComparison.OrdinalIgnoreCase)
                .Replace("_LOC", string.Empty, StringComparison.OrdinalIgnoreCase);
 
+        // Only as a suffix: "_OC" anywhere else would bite into "_occu_".
+        if (id.EndsWith("_OC", StringComparison.OrdinalIgnoreCase))
+            id = id[..^3];
+
         var resolved = TryNamedPlace(rawId, id)
             ?? TryNyx(rawId, id)
             ?? TryJumpPointRestStop(rawId, id)
@@ -101,9 +107,13 @@ public static partial class LocationResolver
             ?? TryRsExt(rawId, id)
             ?? TryPlanetary(rawId, id)
             ?? TryOrbital(rawId, id)
+            ?? TryAsteroidBase(rawId, id)
             ?? TryEmbeddedSystem(rawId, id)
             ?? TryNavPoint(rawId, id)
             ?? TryWellKnown(rawId, id)
+            ?? TryMarker(rawId, id)
+            ?? TryOrbitalPlatform(rawId, id)
+            ?? TryUnnamedSite(rawId, id)
             ?? ResolvedLocation.Unresolved(rawId);
 
         // The game's own name beats a derived one, but the id still supplies the
@@ -152,6 +162,20 @@ public static partial class LocationResolver
             : id.Contains("Keeger", StringComparison.OrdinalIgnoreCase) ? "Keeger Belt"
             : id.Contains("Levski", StringComparison.OrdinalIgnoreCase) ? "Delamar"
             : null;
+
+        // Nyx_TSG_QVExtractionStation_028 and its siblings have no entry in the
+        // game's names. The number stays, as BRK-267 does on a breaker station:
+        // they are different stations, and a respawn is told from a revive by
+        // the name changing - one name for all of them turned waking at 028
+        // after going down in a station interior into "revived where you fell".
+        var extraction = QvExtractionRegex.Match(id);
+        if (extraction.Success)
+        {
+            var name = extraction.Groups["n"].Success
+                ? $"QV Extraction Station {extraction.Groups["n"].Value}"
+                : "QV Extraction Station";
+            return new ResolvedLocation(rawId, name, "Nyx", body, LocationKind.Station, true);
+        }
 
         var kind = NyxKind(id);
         if (kind is null)
@@ -228,6 +252,34 @@ public static partial class LocationResolver
         var (name, kind) = DescribeSite(rest, body);
 
         return new ResolvedLocation(rawId, name, system, body, kind, body is not null);
+    }
+
+    /// <summary>
+    /// <c>ab_mine_stanton4_med_011</c>, <c>ab_collector_gas_Stanton4</c>: a base
+    /// in the asteroids around a planet.
+    /// </summary>
+    /// <remarks>
+    /// Ahead of <see cref="TryEmbeddedSystem"/>, which also matches the
+    /// <c>_stanton4_</c> in these and used to name 18 mining bases on this
+    /// install "ab mine med 011, microTech". The game calls each one
+    /// "Mining Base #XJZ-JR2"; the code is not in the id, so the planet stands in.
+    /// </remarks>
+    private static ResolvedLocation? TryAsteroidBase(string rawId, string id)
+    {
+        var m = AsteroidBaseRegex.Match(id);
+        if (!m.Success)
+            return null;
+
+        var system = m.Groups["system"].Value.Equals("pyro", StringComparison.OrdinalIgnoreCase) ? "Pyro" : "Stanton";
+        var bodies = system == "Pyro" ? Universe.PyroBodies : Universe.StantonBodies;
+        var body = bodies.GetValueOrDefault(m.Groups["body"].Value);
+
+        var (name, kind) = m.Groups["what"].Value.Equals("mine", StringComparison.OrdinalIgnoreCase)
+            ? ("Mining Base", LocationKind.Mine)
+            : ("Gas Collector", LocationKind.Asteroid);
+
+        return new ResolvedLocation(
+            rawId, body is null ? name : $"{name}, {body}", system, body, kind, body is not null);
     }
 
     /// <summary><c>RR_JP_StantonPyro</c> - a rest stop sitting at a jump point.</summary>
@@ -381,7 +433,157 @@ public static partial class LocationResolver
             return new ResolvedLocation(rawId, "Nav Point", null, null, LocationKind.NavPoint, true);
 
         if (MissionBeaconRegex.IsMatch(id))
-            return new ResolvedLocation(rawId, "Mission Beacon", null, null, LocationKind.MissionBeacon, true);
+        {
+            var name = id.Contains("Distress", StringComparison.OrdinalIgnoreCase) ? "Distress Beacon" : "Mission Beacon";
+            return new ResolvedLocation(rawId, name, null, null, LocationKind.MissionBeacon, true);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// <c>PartyMemberMarker_297611060881</c>, <c>UnattendedVehicleMarker_848089599253</c>:
+    /// a marker hung on something that moves, so it names who or what was
+    /// followed and never where. The arrival says where.
+    /// </summary>
+    private static ResolvedLocation? TryMarker(string rawId, string id)
+    {
+        var m = MarkerRegex.Match(id);
+        if (!m.Success)
+            return null;
+
+        var name = m.Groups["what"].Value.Equals("PartyMember", StringComparison.OrdinalIgnoreCase)
+            ? "Party Member"
+            : "Unattended Ship";
+
+        return new ResolvedLocation(rawId, name, null, null, LocationKind.NavPoint, true);
+    }
+
+    /// <summary>
+    /// <c>orbtl_002_plat_001_util_a_orbital_001_occu_a_final</c>, an orbital
+    /// laser platform.
+    /// </summary>
+    /// <remarks>
+    /// The id numbers the platform but never says which moon it circles, and
+    /// the numbers repeat: the game's own table has <c>Stanton1b_OLP_002</c>
+    /// "Vivere OLP" and <c>Stanton2b_OLP_002</c> "Attritus OLP". When only one
+    /// body has that number it is the platform; when several do, all of them
+    /// are named rather than one picked. The log does name the platform in a
+    /// routing line, but only when a moon is in the way - 252 of 1,022 target
+    /// selections on this install had one, and most of those name the body
+    /// being routed round rather than the destination.
+    /// </remarks>
+    private static ResolvedLocation? TryOrbitalPlatform(string rawId, string id)
+    {
+        var m = OrbitalPlatformRegex.Match(id);
+        if (m.Success)
+        {
+            var (name, system, body) = Platform(m.Groups["n"].Value, NameLookup);
+            return new ResolvedLocation(rawId, name, system, body, LocationKind.Station, body is not null);
+        }
+
+        // A platform's interior without the orbtl_ prefix that numbers it.
+        if (id.StartsWith("util_a_orbital_", StringComparison.OrdinalIgnoreCase))
+            return new ResolvedLocation(rawId, "Orbital Platform", null, null, LocationKind.Station, false);
+
+        return null;
+    }
+
+    /// <summary>The platform, or platforms, the game's names give a number.</summary>
+    internal static (string Name, string? System, string? Body) Platform(
+        string number, Func<string, string?>? lookup)
+    {
+        var found = new List<(string Name, string System, string? Body)>();
+
+        if (lookup is not null)
+        {
+            foreach (var (system, bodies) in new[] { ("Stanton", Universe.StantonBodies), ("Pyro", Universe.PyroBodies) })
+            {
+                // Moons are asked for by letter rather than from the table, which
+                // lists none of Pyro's - and Pyro5a_OLP_001 is a platform too.
+                foreach (var planet in bodies.Keys.Where(k => k.All(char.IsDigit)))
+                {
+                    foreach (var token in "abcdef".Select(letter => planet + letter).Prepend(planet))
+                    {
+                        if (lookup($"{system}{token}_OLP_{number}") is { Length: > 0 } name)
+                            found.Add((name, system, bodies.GetValueOrDefault(token)));
+                    }
+                }
+            }
+        }
+
+        if (found.Count == 1)
+            return found[0];
+
+        if (found.Count == 0)
+            return ("Orbital Laser Platform", null, null);
+
+        var names = found.Select(f => f.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var systems = found.Select(f => f.System).Distinct().ToList();
+        return (string.Join(" or ", names), systems.Count == 1 ? systems[0] : null, null);
+    }
+
+    /// <summary>
+    /// Sites the id describes but does not name: one operator's cluster of
+    /// surface outposts, a farm, a stash, a derelict, Pyro's asteroid regions.
+    /// </summary>
+    /// <remarks>
+    /// <c>rayari_cluster_001_frost</c> says whose outposts and on what ground,
+    /// never which one, so like <c>shubin_cluster</c> it gets the operator's
+    /// name and the arrival supplies the outpost.
+    /// </remarks>
+    private static ResolvedLocation? TryUnnamedSite(string rawId, string id)
+    {
+        if (id.StartsWith("levski_", StringComparison.OrdinalIgnoreCase))
+        {
+            var levski = Universe.WellKnown["Levski"];
+            return new ResolvedLocation(rawId, levski.Name, levski.System, levski.Body, levski.Kind, true);
+        }
+
+        var cluster = OutpostClusterRegex.Match(id);
+        if (cluster.Success)
+        {
+            var (name, kind) = cluster.Groups["op"].Value.ToLowerInvariant() switch
+            {
+                "rayari" => ("Rayari Research Cluster", LocationKind.Research),
+                "hurdyn" => ("HurDyn Mining Cluster", LocationKind.Mine),
+                "arccorp" => ("ArcCorp Mining Cluster", LocationKind.Mine),
+                var other => ($"{Title(other)} Outpost Cluster", LocationKind.Outpost)
+            };
+
+            return new ResolvedLocation(rawId, name, null, null, kind, true);
+        }
+
+        if (id.StartsWith("indy_farmer_", StringComparison.OrdinalIgnoreCase))
+            return new ResolvedLocation(rawId, "Independent Farm", null, null, LocationKind.Outpost, true);
+
+        if (id.StartsWith("stash_", StringComparison.OrdinalIgnoreCase))
+            return new ResolvedLocation(rawId, "Stash", null, null, LocationKind.Outpost, true);
+
+        var derelict = DerelictRegex.Match(id);
+        if (derelict.Success)
+        {
+            var body = Universe.StantonBodies.GetValueOrDefault(derelict.Groups["body"].Value);
+            var ship = derelict.Groups["ship"].Value.Equals("rclmr", StringComparison.OrdinalIgnoreCase)
+                ? "Derelict Reclaimer"
+                : "Derelict Ship";
+
+            return new ResolvedLocation(
+                rawId, body is null ? ship : $"{ship}, {body}", "Stanton", body, LocationKind.Unknown, body is not null);
+        }
+
+        var region = PyroRegionRegex.Match(id);
+        if (region.Success)
+        {
+            var letter = region.Groups["region"].Value.ToUpperInvariant();
+            var (name, kind) = region.Groups["code"].Success
+                ? ($"Asteroid Cluster {region.Groups["code"].Value}", LocationKind.Asteroid)
+                : region.Groups["mine"].Success
+                    ? ($"Region {letter} Mining Base", LocationKind.Mine)
+                    : ($"Region {letter} Asteroid Base", LocationKind.Asteroid);
+
+            return new ResolvedLocation(rawId, name, "Pyro", null, kind, true);
+        }
 
         return null;
     }
@@ -399,25 +601,6 @@ public static partial class LocationResolver
 
         if (trimmed.Equals("RestStop", StringComparison.OrdinalIgnoreCase))
             return new ResolvedLocation(rawId, "Rest Stop", null, null, LocationKind.RestStop, true);
-
-        var mine = MineRegex.Match(id);
-        if (mine.Success)
-        {
-            var systemToken = mine.Groups["system"].Value;
-            var number = mine.Groups["body"].Value;
-            var bodies = systemToken.Equals("pyro", StringComparison.OrdinalIgnoreCase)
-                ? Universe.PyroBodies
-                : Universe.StantonBodies;
-
-            var body = bodies.TryGetValue(number, out var b) ? b : null;
-            return new ResolvedLocation(
-                rawId,
-                body is null ? "Mine" : $"{body} Mine",
-                Title(systemToken),
-                body,
-                LocationKind.Mine,
-                body is not null);
-        }
 
         if (id.StartsWith("shubin", StringComparison.OrdinalIgnoreCase))
             return new ResolvedLocation(rawId, "Shubin Mining Cluster", null, null, LocationKind.Outpost, true);
@@ -520,11 +703,38 @@ public static partial class LocationResolver
     [GeneratedRegex(@"^NavPoint_\w+_\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex NavPointRegex { get; }
 
-    [GeneratedRegex(@"^MISSION_QT_\w*Beacon_\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    // MISSION_QT_Bounty_Beacon_N, and the ones that say what the beacon is for
+    // after it: MISSION_QT_Distress_Beacon_SupportAttackedShip_N.
+    [GeneratedRegex(@"^MISSION_QT_\w*Beacon(?:_[A-Za-z]\w*?)?_\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex MissionBeaconRegex { get; }
 
-    [GeneratedRegex(@"^ab_mine_(?<system>[a-z]+?)(?<body>\d[a-z]?)_", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
-    private static partial Regex MineRegex { get; }
+    [GeneratedRegex(@"^(?<what>PartyMember|UnattendedVehicle)Marker_\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex MarkerRegex { get; }
+
+    [GeneratedRegex(@"^orbtl_(?<n>\d+)_plat_", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex OrbitalPlatformRegex { get; }
+
+    // Matched against the raw id too, by IsAmbiguous, so no anchor at the end.
+    [GeneratedRegex(@"^(?<op>[a-z]+)_cluster_\d+_", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex OutpostClusterRegex { get; }
+
+    // oc_st4_drlct_rclmr_sfce_frst_ovgr_a: a Reclaimer derelict on microTech's surface.
+    [GeneratedRegex(@"^oc_st(?<body>\d[a-z]?)_drlct_(?<ship>[a-z]+)_", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex DerelictRegex { get; }
+
+    // AsteroidCluster_Pyro_RegionB_BGR-560, ab_mine_pyro_regionb_med_008,
+    // RegionA_1base_ab_pyro_final_set_encounter-003.
+    [GeneratedRegex(
+        @"^(?:AsteroidCluster_Pyro_Region(?<region>[a-z])_(?<code>[A-Z]+-\d+)|(?<mine>ab_mine_)pyro_region(?<region>[a-z])_|Region(?<region>[a-z])_\w*?_ab_pyro_)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex PyroRegionRegex { get; }
+
+    [GeneratedRegex(@"QVExtractionStation(?:_(?<n>\d+))?", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex QvExtractionRegex { get; }
+
+    // ab_mine_stanton4_med_011, ab_collector_gas_Stanton4.
+    [GeneratedRegex(@"^ab_(?<what>mine|collector)_(?:[a-z]+_)?(?<system>stanton|pyro)(?<body>\d[a-z]?)(?:_|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex AsteroidBaseRegex { get; }
 
     [GeneratedRegex(@"_?\{[0-9A-Fa-f-]{36}\}", RegexOptions.Compiled)]
     private static partial Regex GuidSuffixRegex { get; }
