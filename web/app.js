@@ -25194,6 +25194,44 @@ async function planTrip(title, stops) {
   drawMap();
 }
 
+/**
+ * What a plan knows about contracts that have ended: missions some of its
+ * lines were written for that the session no longer holds. Null when none
+ * has, and when no session is running to ask - the server sends nothing then,
+ * because out of the game every contract would look ended.
+ */
+function tripEnded(trip) {
+  const ended = new Set(trip?.endedMissions || []);
+  if (!ended.size) return null;
+
+  const linked = (trip.stops || []).flatMap((stop) => stop.actions || []).filter((a) => a.link?.missionId);
+  const lines = linked.filter((a) => ended.has(a.link.missionId)).length;
+  return { ended, lines, all: lines === linked.length };
+}
+
+/**
+ * The plan's own say about its ended contracts, with the way out. A plan
+ * written for contracts the game has dropped stayed tracked for a month and
+ * kept ticking its stops as the pilot flew new hauls past them.
+ */
+function tripEndedNotice(trip) {
+  const ended = tripEnded(trip);
+  if (!ended) return null;
+
+  const box = el('div', 'trip-ended');
+  box.append(el('span', 'outward', ended.all
+    ? tx('None of the contracts this plan was written for are open in this session, so landing at its stops will not cross them off.')
+    : txn(ended.ended.size, '{count} contract on this plan is no longer open; its lines are marked.',
+      '{count} contracts on this plan are no longer open; their lines are marked.')));
+
+  const clear = el('button', 'ghost tiny', txn(ended.lines, 'Remove {count} ended line', 'Remove {count} ended lines'));
+  clear.type = 'button';
+  clear.title = tx('Takes those lines off, and any stop not yet reached that held nothing else');
+  clear.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/ended/remove`));
+  box.append(clear);
+  return box;
+}
+
 /* ---------- the Now card ---------- */
 
 /**
@@ -25237,6 +25275,11 @@ function renderTripCard() {
   } else {
     jump.append(el('div', 'inward', tx('Every stop is crossed off. Good run.')));
   }
+
+  // A plan whose contracts have all gone is still tracked, and says so
+  // rather than going on pointing at stops nobody is paying for.
+  if (tripEnded(trip)?.all) jump.append(el('div', 'now-trip-note outward',
+    tx('The contracts this plan was written for have ended.')));
 
   // The whole path, in order, ticked as it goes - the flight plan proper.
   const list = $('#now-trip-stops');
@@ -25667,6 +25710,9 @@ function renderItineraryPlan(main, trip) {
       tx('Running for {span} — since you pressed Start, not since you wrote it.', { span: spanOf(trip.elapsedSeconds) })));
   }
 
+  const ended = tripEndedNotice(trip);
+  if (ended) main.append(ended);
+
   const trade = tradeRunSummary(trip);
   if (trade) main.append(trade);
 
@@ -25878,6 +25924,11 @@ function itineraryLine(trip, stop, action, at) {
   grip.addEventListener('mousedown', () => { line.draggable = true; });
   grip.addEventListener('mouseup', () => { line.draggable = false; });
   line.append(grip, runActionRow(trip, stop, action, true));
+
+  if (action.link?.missionId && tripEnded(trip)?.ended.has(action.link.missionId)) {
+    line.classList.add('ended');
+    line.append(el('span', 'itinerary-ended', tx('contract ended')));
+  }
 
   line.addEventListener('dragstart', (event) => {
     if (!line.draggable) return;

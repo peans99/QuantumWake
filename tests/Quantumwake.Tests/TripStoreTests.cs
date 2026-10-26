@@ -160,6 +160,62 @@ public class TripStoreTests : IDisposable
         Assert.False(after.Stops[2].Done);
     }
 
+    private static RunAction Haul(string kind, string missionId) =>
+        new("x", kind, $"Carbon — {missionId}", null, null, Done: false, DoneAt: null,
+            Link: new RunActionLink(missionId, ["leg-1"]));
+
+    /// <summary>
+    /// The 23 Sep hauling plan was still tracked on 24 Oct, and landing at
+    /// Gaslight for a new Carbon haul ticked its Gaslight stop - for contracts
+    /// the game had dropped weeks before.
+    /// </summary>
+    [Fact]
+    public void Arriving_leaves_a_stop_alone_when_its_contracts_have_ended()
+    {
+        var store = NewStore();
+        var trip = store.Add("Hauling run · 6 contracts", [
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [Haul("load", "2d6b7f9a"), Haul("load", "c58a5952")] },
+        ]);
+
+        Assert.False(store.Arrived("RR_P5_L2", "Gaslight", _ => false));
+        Assert.False(store.All().Single(t => t.Id == trip.Id).Stops[0].Done);
+
+        // One contract still open is enough: the stop has work at it.
+        Assert.True(store.Arrived("RR_P5_L2", "Gaslight", id => id == "c58a5952"));
+    }
+
+    /// <summary>A stop with nothing on its run sheet is the pilot's own, and still ticks.</summary>
+    [Fact]
+    public void Arriving_still_ticks_a_stop_with_no_contract_lines()
+    {
+        var store = NewStore();
+        store.Add("Run", [Stop("RR_P5_L2", "Gaslight")]);
+
+        Assert.True(store.Arrived("RR_P5_L2", "Gaslight", _ => false));
+    }
+
+    [Fact]
+    public void Ended_contracts_come_off_and_take_their_empty_stops_with_them()
+    {
+        var store = NewStore();
+        var hand = new RunAction("x", "do", "Refuel", null, null, Done: false, DoneAt: null);
+        var trip = store.Add("Mixed", [
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [Haul("load", "old")] },
+            Stop("RR_P2_L4", "Checkmate") with { Actions = [Haul("load", "old"), Haul("load", "new")] },
+            Stop("RR_P6_L5", "Megumi Refueling") with { Actions = [Haul("unload", "old"), hand] },
+            Stop("RuinStation", "Ruin Station"),
+        ]);
+
+        Assert.Equal(["old"], TripStore.EndedMissions(trip, id => id == "new"));
+        Assert.Equal(3, store.RemoveEnded(trip.Id, id => id == "new"));
+
+        var after = store.All().Single(t => t.Id == trip.Id);
+        Assert.Equal(["Checkmate", "Megumi Refueling", "Ruin Station"], after.Stops.Select(s => s.Place));
+        Assert.Equal("new", Assert.Single(after.Stops[0].Actions!).Link?.MissionId);
+        Assert.Equal("Refuel", Assert.Single(after.Stops[1].Actions!).Text);
+        Assert.Null(store.RemoveEnded("nope", _ => true));
+    }
+
     [Fact]
     public void Arriving_leaves_untracked_plans_alone()
     {

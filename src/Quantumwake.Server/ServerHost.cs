@@ -3308,14 +3308,19 @@ public static class ServerHost
         });
 
         app.MapGet("/api/trips", (TripStore trips, ImportStore imports,
-            RunSettingsStore settings, string? imported) =>
+            RunSettingsStore settings, LiveSessionService live, string? imported) =>
         {
             // Swept here rather than on a timer: the list is the only place the
             // result is visible, so filing on read costs nothing and cannot
             // drift out of step with what is on screen.
             trips.SweepQuiet(settings.Current.Idle, DateTimeOffset.UtcNow);
 
-            return trips.All().Select(trip => Draw(trip, null))
+            // Which contracts are still open is only known while a session
+            // runs. Out of the game nothing is called ended, because a plan
+            // for tomorrow evening's hauls is not stale for want of a game.
+            var open = live.Current.InGame ? live.OpenMissions : null;
+
+            return trips.All().Select(trip => Draw(trip, null, open))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Trips ?? [])
                         .Select(trip => Draw(trip, batch))));
@@ -3335,6 +3340,20 @@ public static class ServerHost
 
         app.MapPost("/api/trips/{id}/resume", (string id, TripStore trips) =>
             trips.Resume(id) ? Results.Ok(new { id }) : Results.NotFound());
+
+        // Clears the lines for contracts the session no longer holds. Refused
+        // out of the game: with no session to ask, every contract would look
+        // ended and the whole run sheet would go.
+        app.MapPost("/api/trips/{id}/ended/remove", (string id, TripStore trips, LiveSessionService live) =>
+        {
+            if (!live.Current.InGame)
+                return Results.BadRequest(new { message = "No session running, so which contracts are still open is not known." });
+
+            var open = live.OpenMissions;
+            return trips.RemoveEnded(id, open.Contains) is { } removed
+                ? Results.Ok(new { id, removed })
+                : Results.NotFound();
+        });
 
         app.MapPost("/api/trips/{id}/repeat", (string id, TripStore trips) =>
             trips.Repeat(id, DateTimeOffset.UtcNow) is { } copy
@@ -4932,7 +4951,7 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     }
 
     /// <summary>A flight plan as a page sees it.</summary>
-    static object Draw(Trip trip, ImportBatch? from) => new
+    static object Draw(Trip trip, ImportBatch? from, IReadOnlySet<string>? openMissions = null) => new
     {
         Id = from is null ? trip.Id : SharedId(from, trip.Id),
         trip.Title,
@@ -4956,6 +4975,12 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         Archived = from is null ? trip.Archived : Archived.No,
         Flying = from is null && trip.Flying,
         ElapsedSeconds = from is null ? trip.Elapsed(DateTimeOffset.UtcNow)?.TotalSeconds : null,
+
+        // The contracts this plan was written for that the session no longer
+        // holds - null when no session is running to ask.
+        EndedMissions = from is null && openMissions is not null
+            ? TripStore.EndedMissions(trip, openMissions.Contains)
+            : null,
         imported = from is null ? null : Marker(from),
     };
 

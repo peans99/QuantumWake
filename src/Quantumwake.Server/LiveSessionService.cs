@@ -279,6 +279,19 @@ public sealed partial class LiveSessionService : BackgroundService
     /// <summary>Where the player was last seen, so an arrival fires once.</summary>
     private string? _lastPlace;
 
+    /// <summary>Mission ids the session holds open, refreshed with every snapshot.</summary>
+    private IReadOnlySet<string> _openMissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The missions the session being played has taken and not closed. Empty
+    /// when no session is running, which is not the same as every contract
+    /// having ended - so callers ask <see cref="NowState.InGame"/> first.
+    /// </summary>
+    public IReadOnlySet<string> OpenMissions
+    {
+        get { lock (_gate) return _openMissions; }
+    }
+
     private readonly ScreenReadingStore? _screen;
     private readonly ScreenSettingsStore? _screenSettings;
 
@@ -429,7 +442,7 @@ public sealed partial class LiveSessionService : BackgroundService
             if (Current.LocationId is { Length: > 0 } here && here != _lastPlace)
             {
                 _lastPlace = here;
-                _trips?.Arrived(here, Current.Location);
+                _trips?.Arrived(here, Current.Location, _openMissions.Contains);
             }
         }
     }
@@ -521,6 +534,12 @@ public sealed partial class LiveSessionService : BackgroundService
     {
         var summary = _builder.Build();
         var location = _builder.Location;
+
+        _openMissions = summary.Contracts
+            .Where(c => c.MissionId is { Length: > 0 } && c.CompletedAt is null
+                && c.Outcome is ContractOutcome.Unknown or ContractOutcome.InProgress)
+            .Select(c => c.MissionId!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Keep the tail of the timeline for the live feed.
         _recent.Clear();

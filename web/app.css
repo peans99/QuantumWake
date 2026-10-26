@@ -4525,6 +4525,24 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 }
 .itinerary-empty { padding: 12px 0; color: var(--muted); }
 
+/* A plan written for contracts that have since ended says so above its stops,
+   and each such line carries the same word, so the stale half of a mixed
+   plan can be told from the live half at a glance. */
+.trip-ended {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-size: 12px;
+}
+.itinerary-line.ended { grid-template-columns: 12px minmax(0, 1fr) auto; }
+.itinerary-line.ended .run-action { opacity: .55; }
+.itinerary-ended { color: var(--amber); font: 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+
 button.ghost.tiny {
   padding: 2px 7px;
   font-size: 10px;

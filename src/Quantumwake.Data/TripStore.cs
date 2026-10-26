@@ -564,8 +564,19 @@ public sealed class TripStore
     /// since they are the ones the map cannot draw either. A name is only
     /// consulted for a stop with no id, so an id never loses to one.
     /// </para>
+    /// <para>
+    /// A stop whose every line belongs to a contract that is no longer open is
+    /// left alone. A hauling plan written on 23 Sep was still tracked a month
+    /// later, and landing at Gaslight on 24 Oct for a new Carbon haul ticked
+    /// the old plan's Gaslight stop - work for contracts the game had dropped
+    /// weeks before, crossed off as though it had been done.
+    /// </para>
     /// </remarks>
-    public bool Arrived(string? placeId, string? placeName = null)
+    /// <param name="missionOpen">
+    /// Whether a mission is open in the session being played. Null when that
+    /// is not known, and then every stop ticks as it always did.
+    /// </param>
+    public bool Arrived(string? placeId, string? placeName = null, Func<string, bool>? missionOpen = null)
     {
         if (string.IsNullOrWhiteSpace(placeId) && string.IsNullOrWhiteSpace(placeName))
             return false;
@@ -578,11 +589,13 @@ public sealed class TripStore
 
             var stops = _trips[index].Stops.ToList();
 
-            var at = stops.FindIndex(s => !s.Done && Same(s.PlaceId, placeId));
+            bool Live(TripStop stop) => missionOpen is null || !OnlyEnded(stop, missionOpen);
+
+            var at = stops.FindIndex(s => !s.Done && Same(s.PlaceId, placeId) && Live(s));
 
             if (at < 0)
                 at = stops.FindIndex(s =>
-                    !s.Done && string.IsNullOrWhiteSpace(s.PlaceId) && Same(s.Place, placeName));
+                    !s.Done && string.IsNullOrWhiteSpace(s.PlaceId) && Same(s.Place, placeName) && Live(s));
 
             if (at < 0)
                 return false;
@@ -591,6 +604,73 @@ public sealed class TripStore
             _trips[index] = _trips[index] with { Stops = stops };
             Save();
             return true;
+        }
+    }
+
+    /// <summary>
+    /// The contracts a plan's lines were written for that are not open now.
+    /// </summary>
+    /// <remarks>
+    /// Only lines that carry a mission id can be asked about; a line typed by
+    /// hand belongs to no contract and is never called ended.
+    /// </remarks>
+    public static IReadOnlyList<string> EndedMissions(Trip trip, Func<string, bool> missionOpen) =>
+        [.. trip.Stops
+            .SelectMany(stop => stop.Actions ?? [])
+            .Select(action => action.Link?.MissionId)
+            .Where(id => id is { Length: > 0 } && !missionOpen(id))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>Whether every line at a stop is for a contract no longer open. A stop with no lines is not.</summary>
+    private static bool OnlyEnded(TripStop stop, Func<string, bool> missionOpen)
+    {
+        var actions = stop.Actions ?? [];
+        return actions.Count > 0
+            && actions.All(action => action.Link?.MissionId is { Length: > 0 } id && !missionOpen(id));
+    }
+
+    /// <summary>
+    /// Takes the lines for ended contracts off a plan, and the unreached
+    /// stops that held nothing else. Returns how many lines went, or null when
+    /// the plan is unknown.
+    /// </summary>
+    /// <remarks>
+    /// A reached stop keeps its place even when emptied: it is the record that
+    /// the run went there. A stop that never had lines is the pilot's own and
+    /// is left alone.
+    /// </remarks>
+    public int? RemoveEnded(string tripId, Func<string, bool> missionOpen)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == tripId);
+            if (index < 0)
+                return null;
+
+            var removed = 0;
+            var stops = new List<TripStop>();
+
+            foreach (var stop in _trips[index].Stops)
+            {
+                var actions = stop.Actions ?? [];
+                var kept = actions
+                    .Where(action => action.Link?.MissionId is not { Length: > 0 } id || missionOpen(id))
+                    .ToList();
+                removed += actions.Count - kept.Count;
+
+                if (actions.Count > 0 && kept.Count == 0 && !stop.Done)
+                    continue;
+
+                stops.Add(kept.Count == actions.Count ? stop : stop with { Actions = kept });
+            }
+
+            if (removed == 0)
+                return 0;
+
+            _trips[index] = _trips[index] with { Stops = stops };
+            Save();
+            return removed;
         }
     }
 

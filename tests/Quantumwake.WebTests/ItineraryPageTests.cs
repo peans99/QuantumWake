@@ -401,6 +401,32 @@ public class ItineraryPageTests
         Assert.True(page.Truth("shownView === 'itinerary'"));
     }
 
+    private const string StalePlan = """
+        [{"id":"t1","title":"Hauling run · 6 contracts","tracked":true,"done":false,"archived":"No","flying":false,
+          "endedMissions":["old"],
+          "stops":[
+            {"id":"s1","placeId":"RR_P5_L2","place":"Gaslight","done":false,
+             "actions":[{"id":"a1","kind":"load","text":"Carbon","done":false,"link":{"missionId":"old","legIds":["leg-1"]}},
+                        {"id":"a2","kind":"load","text":"Potassium","done":false,"link":{"missionId":"new","legIds":["leg-1"]}}]}]}]
+        """;
+
+    /// <summary>
+    /// A plan whose contracts the game has dropped says so, marks the lines,
+    /// and offers to take them off rather than leaving the pilot to find them.
+    /// </summary>
+    [Fact]
+    public void Lines_for_ended_contracts_are_marked_and_can_be_cleared()
+    {
+        var page = Itinerary(StalePlan);
+        page.Serve("/api/trips/t1/ended/remove", """{"id":"t1","removed":1}""");
+
+        Assert.Contains("1 contract on this plan is no longer open", page.NodeText("#itinerary-main"));
+        Assert.Equal(1, page.Count("__dom.node('#itinerary-main').byClass('itinerary-ended').length"));
+
+        page.Do("await __dom.node('#itinerary-main').byClass('trip-ended')[0].byClass('ghost')[0].fire('click');");
+        Assert.Contains("POST /api/trips/t1/ended/remove", page.Fetched());
+    }
+
     [Fact]
     public void With_no_plans_the_page_says_how_to_start_one()
     {
