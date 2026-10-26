@@ -21,6 +21,11 @@ public sealed record ContractCard(string Title, string? Reward, string? Issuer);
 /// with one source and several destinations; the objectives panel shows
 /// the first two or three and the rest are below the fold.
 /// </param>
+/// <param name="Reader">
+/// Which objectives reader produced this - 0 for every reading stored before
+/// 0.19.4, <see cref="ScreenFrames.ContractsReader"/> since - so a frame read
+/// before a reader fix is read once more, and only once.
+/// </param>
 public sealed record ContractsReading(
     int? Accepted,
     int? Capacity,
@@ -31,7 +36,8 @@ public sealed record ContractsReading(
     IReadOnlyList<string> Objectives,
     IReadOnlyList<ContractStep>? Steps = null,
     IReadOnlyList<PickupSite>? PickupSites = null,
-    IReadOnlyList<PickupSite>? DropSites = null);
+    IReadOnlyList<PickupSite>? DropSites = null,
+    int Reader = 0);
 
 /// <summary>One objective of the selected contract, as the mobiGlas prints it.</summary>
 /// <remarks>
@@ -114,6 +120,12 @@ public sealed record ReputationReading(
 public static partial class ScreenFrames
 {
     // ---- the Contracts app ----
+
+    /// <summary>
+    /// The objectives reader's version. 1 is 0.19.4's: diamonds read apart
+    /// from their lines, and objectives that open with their verb.
+    /// </summary>
+    public const int ContractsReader = 1;
 
     /// <summary>The Contracts app's Accepted tab, or null when this is not it.</summary>
     /// <remarks>
@@ -222,7 +234,8 @@ public static partial class ScreenFrames
         var steps = objectivesHead is null ? [] : ReadObjectives(lines, objectivesHead);
 
         return new ContractsReading(accepted, capacity, cards, selected, reward2, issuer2,
-            [.. steps.Select(s => s.Text)], steps, ReadSites(lines, "PICK UP LOCATIONS"), ReadSites(lines, "DROP OFF LOCATIONS"));
+            [.. steps.Select(s => s.Text)], steps, ReadSites(lines, "PICK UP LOCATIONS"), ReadSites(lines, "DROP OFF LOCATIONS"),
+            ContractsReader);
     }
 
     /// <summary>
@@ -230,6 +243,7 @@ public static partial class ScreenFrames
     /// wrapped onto joined back, and the indent measured against the heading.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A wrapped objective - "Deliver 0/2 SCU of Waste to Seraphim Station
     /// above" then "Crusader." on the next line - returns as two lines, the
     /// second without a diamond. It is taken as a continuation when it sits
@@ -237,6 +251,20 @@ public static partial class ScreenFrames
     /// than its text: a new objective always brings its own diamond. Reading
     /// stops at the first gap of more than four heights, which is where the
     /// TRACK and SHARE buttons at the panel's foot begin.
+    /// </para>
+    /// <para>
+    /// The engine does not always read the diamond as part of its line. On
+    /// the 25 Oct 21:25:59 Potassium card it read the three indented diamonds
+    /// as lines of their own ("o") and the three Collect lines without them,
+    /// and every Collect was joined onto the Deliver above it - one objective
+    /// reading "Deliver 0/249 SCU of Potassium to Ruin Station above Pyro VI.
+    /// Collect Potassium from Dudley S Daughters. Collect...", which put a
+    /// drop-off at Megumi Refueling. On the 21:26:12 Waste card it did the
+    /// same to the Deliver parents, and two of three drops were lost. An
+    /// objective always opens with its verb, so a line that does is a new
+    /// objective whatever happened to its diamond; and a diamond read alone
+    /// gives its indent to the text beside it.
+    /// </para>
     /// </remarks>
     private static List<ContractStep> ReadObjectives(IReadOnlyList<ScreenTextLine> lines, ScreenTextLine head)
     {
@@ -246,18 +274,38 @@ public static partial class ScreenFrames
             .OrderBy(line => line.Top)
             .ToList();
 
-        var steps = new List<(ScreenTextLine Line, string Text)>();
+        var diamonds = column.Where(line => LoneDiamondRegex().IsMatch(line.Text.Trim())).ToList();
+
+        // Where a line's diamond sits: on the line when the engine kept it,
+        // else a lone diamond on the same row just to its left, else where
+        // one would be - the text starts a diamond and a space further in,
+        // 33 px at a 22 px line on the 21:26:12 frame.
+        double DiamondLeft(ScreenTextLine line) => diamonds
+            .Where(d => d.Left < line.Left && line.Left - d.Left <= line.Height * 3)
+            .Where(d => Math.Abs(d.Top - line.Top) <= Math.Max(d.Height, line.Height) * 0.8)
+            .Select(d => (double?)d.Left)
+            .FirstOrDefault() ?? line.Left - line.Height * 1.5;
+
+        var steps = new List<(double Left, double Height, string Text)>();
         ScreenTextLine? last = null;
 
         foreach (var line in column)
         {
             if (last is not null && line.Top - last.Top > last.Height * 4) break;
+            if (diamonds.Contains(line)) continue;
 
             var m = ObjectiveRegex().Match(line.Text);
 
             if (m.Success)
             {
-                steps.Add((line, m.Groups["text"].Value.Trim()));
+                steps.Add((line.Left, line.Height, m.Groups["text"].Value.Trim()));
+                last = line;
+                continue;
+            }
+
+            if (ObjectiveVerbRegex().IsMatch(line.Text.Trim()))
+            {
+                steps.Add((DiamondLeft(line), line.Height, line.Text.Trim()));
                 last = line;
                 continue;
             }
@@ -266,17 +314,17 @@ public static partial class ScreenFrames
 
             if (line.Top - last.Top <= last.Height * 2.2 && line.Left >= last.Left)
             {
-                var (first, text) = steps[^1];
-                steps[^1] = (first, text + " " + line.Text.Trim());
+                var (left, height, text) = steps[^1];
+                steps[^1] = (left, height, text + " " + line.Text.Trim());
                 last = line;
             }
         }
 
         // The shallowest diamond is the margin; a step more than half a height
         // further in is indented under the one before it.
-        var margin = steps.Count == 0 ? 0 : steps.Min(s => s.Line.Left);
+        var margin = steps.Count == 0 ? 0 : steps.Min(s => s.Left);
 
-        return [.. steps.Select(s => Step(s.Text, s.Line.Left - margin > s.Line.Height * 0.5 ? 1 : 0))];
+        return [.. steps.Select(s => Step(s.Text, s.Left - margin > s.Height * 0.5 ? 1 : 0))];
     }
 
     /// <summary>One objective line read into its parts, or filed as "other" with its text intact.</summary>
@@ -301,8 +349,34 @@ public static partial class ScreenFrames
             return new ContractStep(text, "collect", Clean(collect.Groups["cargo"]), place, body, null, null, depth);
         }
 
-        return new ContractStep(text, "other", null, null, null, null, null, depth);
+        // The game types an objective in a letter at a time when the card
+        // opens, and a screenshot taken in that second gets "Deliver 0/189
+        // SCU of Car" - three of the nine 25 Oct frames did. No place, but
+        // the count and sometimes the cargo are already there to keep.
+        var cut = CutObjectiveRegex().Match(text);
+
+        return cut.Success
+            ? new ContractStep(text, "other", Clean(cut.Groups["cargo"]), null, null,
+                Count(cut.Groups["done"]), Count(cut.Groups["total"]), depth)
+            : new ContractStep(text, "other", null, null, null, null, null, depth);
     }
+
+    /// <summary>
+    /// Whether an objective was read whole. The game ends every objective with
+    /// a full stop and types it in when the card opens, so one without was
+    /// photographed part-written - "Collect Carbon from Dudley e D" - and its
+    /// place is the first letters of a name, not a name.
+    /// </summary>
+    public static bool Whole(ContractStep step) => step.Text.TrimEnd().EndsWith('.');
+
+    /// <summary>
+    /// "Location2Address", "Destination2Address": what the game prints in a
+    /// contract's letter when it has no name for a place. Two of the nine
+    /// 25 Oct frames listed one. It is a place the contract wants, unnamed,
+    /// not a station called that.
+    /// </summary>
+    public static bool IsPlaceholder(string? place) =>
+        place is not null && PlaceholderRegex().IsMatch(place.Trim());
 
     private static string? Clean(Group group) =>
         group.Success && group.Value.Trim().Length > 0 ? group.Value.Trim() : null;
@@ -412,14 +486,23 @@ public static partial class ScreenFrames
     /// The game's titles carry bars - "Junior | Stellar Small Haul | to Stanton
     /// Gateway" - which the screen sets in capitals and the engine reads as an
     /// I. A lone I is never a word in a title, so it goes from both sides.
+    /// The rep bracket goes too: with StarStrings the detail panel sets
+    /// "[50/200/250/500/1000/2000/4000" on the line under the title at the
+    /// title's own size, so the headline reads it as part of the title - three
+    /// of the nine 25 Oct frames did, and none of them matched its contract.
     /// </remarks>
     public static bool SameContract(string a, string b) =>
         TitleKey(a) == TitleKey(b) && TitleKey(a).Length > 0;
 
     private static string TitleKey(string title) =>
-        ScreenInsight.Fold(string.Concat(title
+        ScreenInsight.Fold(string.Concat(TitleBracketRegex().Replace(title, "")
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(word => ScreenInsight.Plain(word) is not ("I" or "l" or "L" or "1" or ""))));
+
+    // The rep ladder from its opening bracket - read as [, t, ( or nothing -
+    // to the end of the title.
+    [GeneratedRegex(@"\s*[\[t(lI]?\s*[0-9SsOo]{2,4}/[0-9SsOo]{3,4}/.*$")]
+    private static partial Regex TitleBracketRegex();
 
     [GeneratedRegex(@"^ACCEPTED\s*\(?(?<n>\d+)\s*/\s*(?<of>\d+)\)?", RegexOptions.IgnoreCase)]
     private static partial Regex AcceptedTabRegex();
@@ -435,6 +518,21 @@ public static partial class ScreenFrames
     // The objective diamond reads as O, 0, o or a bullet.
     [GeneratedRegex(@"^[Oo0•◇◆]\s+(?<text>\S.*)$")]
     private static partial Regex ObjectiveRegex();
+
+    // The same diamond read as a line of its own.
+    [GeneratedRegex(@"^[Oo0•◇◆]$")]
+    private static partial Regex LoneDiamondRegex();
+
+    // An objective whose diamond went missing still opens with its verb.
+    [GeneratedRegex(@"^(?:Deliver|Collect)\s")]
+    private static partial Regex ObjectiveVerbRegex();
+
+    // A part-written objective: "Deliver 0/189 SCU of Car", "Collect Potassium from".
+    [GeneratedRegex(@"^(?:Deliver\s+(?<done>[0-9Oo]+)\s*/\s*(?<total>[0-9Oo]+)\s*SCU(?:\s+of\s+(?<cargo>\S.*?))?|Collect\s+(?<cargo>\S.*?)\s+from)\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex CutObjectiveRegex();
+
+    [GeneratedRegex(@"^(?:Location|Destination|Pickup|Dropoff|Drop-off)\d*Address$", RegexOptions.IgnoreCase)]
+    private static partial Regex PlaceholderRegex();
 
     // "Deliver 0/18 SCU of Aluminum to Stanton Gateway." and, on a direct
     // haul, "Deliver 0/13 SCU to NB Int. Spaceport." with no cargo named. The
@@ -453,8 +551,9 @@ public static partial class ScreenFrames
 
     // "Patch City at the L3 Lagrange of Pyro III" and "Beautiful Glen Station
     // at Crusader's L5 Lagrange point": the L reads as I or 1 as often as
-    // not, and the 21 Sep frames read L5 as "LS" and L1 as "LI".
-    [GeneratedRegex(@"^(?<place>.+?)\s+at\s+(?:the\s+[LI1][\dSOIl]\s+Lagrange\s+(?:point\s+)?of\s+(?<of>.+?)|(?<whose>.+?)'?s\s+[LI1][\dSOIl]\s+Lagrange(?:\s+point)?)\s*$", RegexOptions.IgnoreCase)]
+    // not, and the 21 Sep frames read L5 as "LS" and L1 as "LI". The 25 Oct
+    // frames add "1.4" for L4, "L 3" for L3 and "LSE" for L5.
+    [GeneratedRegex(@"^(?<place>.+?)\s+at\s+(?:the\s+[LI1][.,]?\s?[\dSOIl][A-Z]?\s+Lagrange\s+(?:point\s+)?of\s+(?<of>.+?)|(?<whose>.+?)'?s\s+[LI1][.,]?\s?[\dSOIl][A-Z]?\s+Lagrange(?:\s+point)?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex LagrangeRegex();
 
     [GeneratedRegex(@"\s{2,}")]

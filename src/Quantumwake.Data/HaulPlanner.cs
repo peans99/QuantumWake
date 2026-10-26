@@ -126,20 +126,27 @@ public static class HaulPlanner
             .OrderBy(c => c.FirstSeen)
             .ToList();
 
+        var bound = BoundFrames(contracts, frames);
+
         var planned = new List<PlannedContract>();
         var taken = new HashSet<string>(StringComparer.Ordinal);
 
         // One reading per frame, shared by every contract that considers it.
+        // Keyed with the title's route as well, which fills in an end the
+        // card was photographed before it finished printing; only contracts
+        // whose title the card carries ask about it, so in practice the key
+        // is the shot.
         var legsByShot = new Dictionary<string, IReadOnlyList<HaulLeg>>(StringComparer.Ordinal);
-        IReadOnlyList<HaulLeg> LegsOf(ScreenSighting frame)
+        IReadOnlyList<HaulLeg> LegsOf(ScreenSighting frame, HaulRoute? route)
         {
-            if (legsByShot.TryGetValue(frame.Shot, out var known)) return known;
+            var key = $"{frame.Shot}|{route?.Pickup}|{route?.Delivery}";
+            if (legsByShot.TryGetValue(key, out var known)) return known;
 
             // A frame with no reading has no legs. Candidates only asks about
             // frames it has already filtered for one, so this is the memo
             // being honest rather than a case that happens.
-            var legs = frame.Contracts is { } reading ? HaulLegs.From(reading).Legs : [];
-            return legsByShot[frame.Shot] = legs;
+            var legs = frame.Contracts is { } reading ? HaulLegs.From(reading, route).Legs : [];
+            return legsByShot[key] = legs;
         }
 
         // Every contract's compatible frames before any is handed out. On
@@ -155,7 +162,9 @@ public static class HaulPlanner
             var archetype = HaulingContract.FromArchetype(contract.Raw);
             var titleIsAmbiguous = hauling.Count(other =>
                 ScreenFrames.SameContract(ContractTags.Clean(other.Name), title)) > 1;
-            return (title, archetype, candidates: Candidates(contract, title, archetype, titleIsAmbiguous, frames, LegsOf));
+            var route = HaulingContract.RouteFromTitle(contract.Title);
+            return (title, archetype, candidates: Candidates(contract, title, archetype, titleIsAmbiguous, frames,
+                frame => LegsOf(frame, route), bound));
         }).ToList();
 
         var claims = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -177,8 +186,15 @@ public static class HaulPlanner
             if (frame is not null)
             {
                 taken.Add(frame.Shot);
-                var (readLegs, readDeliveries) = HaulLegs.From(frame.Contracts!);
-                var legs = WithIds(readLegs);
+                var (readLegs, readDeliveries) = HaulLegs.From(frame.Contracts!, route);
+
+                // The archetype spells the cargo whole; a part-written card
+                // may have got as far as "Car".
+                var legs = WithIds([.. readLegs.Select(leg => archetype?.Commodity is { } named
+                    && (leg.Commodity is null || SameCargo(leg.Commodity, named)) ? leg with { Commodity = named } : leg)]);
+                readDeliveries = [.. readDeliveries.Select(d => archetype?.Commodity is { } named
+                    && (d.Commodity is null || SameCargo(d.Commodity, named)) ? d with { Commodity = named } : d)];
+                var unnamed = legs.Where(l => l.Unnamed is not null).Select(l => l.Unnamed!).Distinct().ToList();
                 var deliveries = DeliveryDetails(legs, readDeliveries);
                 var scu = deliveries.Any(d => d.Scu is not null)
                     ? deliveries.Sum(d => d.Scu ?? 0)
@@ -191,8 +207,13 @@ public static class HaulPlanner
                     archetype?.Shape ?? HaulShape.Unknown, legs, "screenshot", frame.Shot, frame.ShotAt,
                     contract.Pickups, contract.PickupsDone, contract.Deliveries, contract.DeliveriesDone,
                     scu,
-                    reused ? "read from a frame that also matched another card with this title; photograph this card to be sure"
-                        : null,
+                    string.Join("; ", new[]
+                    {
+                        reused ? "read from a frame that also matched another card with this title; photograph this card to be sure" : null,
+                        unnamed.Count > 0
+                            ? $"the game's own text leaves {(unnamed.Count == 1 ? "a place" : $"{unnamed.Count} places")} unnamed (it printed {string.Join(", ", unnamed)}); look at the marker in game to find it"
+                            : null,
+                    }.Where(note => note is not null)) is { Length: > 0 } note ? note : null,
                     deliveries, scuDone, remaining));
                 continue;
             }
@@ -284,6 +305,57 @@ public static class HaulPlanner
     private static ScreenSighting? Pick(IEnumerable<(ScreenSighting Frame, int Score)> candidates) =>
         candidates.OrderByDescending(c => c.Score).ThenByDescending(c => c.Frame.ShotAt).Select(c => c.Frame).FirstOrDefault();
 
+    /// <summary>How soon after an acceptance a card is taken to be the one just accepted.</summary>
+    private static readonly TimeSpan JustAccepted = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// Frames that can only be one contract's: the first card photographed
+    /// within seconds of an acceptance, showing that contract's title, is the
+    /// card the game opened on accepting it. Shot → mission id.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every one of the nine 25 Oct frames came 1 to 10 seconds after an
+    /// acceptance, and each showed the contract just taken: the right cargo,
+    /// and as many pickups or drops as its archetype. Matching on those alone
+    /// was not enough. Two Carbon hauls with two pickups each fit each other's
+    /// cards, and once one was handed in the other took its card, because the
+    /// newest compatible frame wins a tie - Gaslight and Checkmate became
+    /// Starlight and Dudley &amp; Daughters.
+    /// </para>
+    /// <para>
+    /// Asked of every contract the session took, handed in or not, so a card
+    /// stays with its contract after that contract is gone rather than passing
+    /// to a look-alike. Only the first frame after an acceptance: a batch of
+    /// cards photographed after a batch of acceptances, as on 24 Oct, has the
+    /// pilot clicking through the list, and only the first is the new one.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, string> BoundFrames(IReadOnlyList<ContractRecord> contracts, IReadOnlyList<ScreenSighting> frames)
+    {
+        var accepted = contracts
+            .Where(c => c.MissionId is { Length: > 0 } && HaulingContract.IsHauling(c.Raw))
+            .OrderBy(c => c.FirstSeen)
+            .ToList();
+        var shots = frames.Where(f => !f.Dismissed).OrderBy(f => f.ShotAt).ToList();
+        var bound = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var contract in accepted)
+        {
+            var first = shots.FirstOrDefault(f => f.ShotAt >= contract.FirstSeen);
+            if (first is null || first.ShotAt - contract.FirstSeen > JustAccepted) continue;
+
+            // Another acceptance in between: the card is that one's, if anyone's.
+            if (accepted.Any(other => other.FirstSeen > contract.FirstSeen && other.FirstSeen <= first.ShotAt)) continue;
+
+            if (first.Contracts?.SelectedTitle is { } shown
+                && ScreenFrames.SameContract(shown, ContractTags.Clean(contract.Name)))
+                bound[first.Shot] = contract.MissionId!;
+        }
+
+        return bound;
+    }
+
     /// <summary>
     /// Every frame showing this contract selected, taken after it was
     /// accepted, that the cargo and the source count do not rule out - scored
@@ -297,7 +369,8 @@ public static class HaulPlanner
     /// </param>
     private static List<(ScreenSighting Frame, int Score)> Candidates(
         ContractRecord contract, string title, HaulArchetype? archetype, bool titleIsAmbiguous,
-        IReadOnlyList<ScreenSighting> frames, Func<ScreenSighting, IReadOnlyList<HaulLeg>> legsOf)
+        IReadOnlyList<ScreenSighting> frames, Func<ScreenSighting, IReadOnlyList<HaulLeg>> legsOf,
+        IReadOnlyDictionary<string, string> bound)
     {
         var candidates = new List<(ScreenSighting, int)>();
 
@@ -309,10 +382,19 @@ public static class HaulPlanner
             if (!ScreenFrames.SameContract(frame.Contracts!.SelectedTitle!, title))
                 continue;
 
+            // The card the game opened on accepting another contract is that
+            // contract's, whether or not it is still open.
+            var mine = bound.TryGetValue(frame.Shot, out var owner);
+            if (mine && owner != contract.MissionId)
+                continue;
+
             var legs = legsOf(frame);
             if (legs.Count == 0)
                 continue;
 
+            // Not scored above the rest: a card photographed again later, with
+            // some of its cargo delivered, is the newer word on the same
+            // contract and should still win.
             var signals = 0;
             if (archetype?.Commodity is { } cargo && legs.Any(l => l.Commodity is not null))
             {
@@ -324,11 +406,15 @@ public static class HaulPlanner
                 signals += 2;
             }
 
+            // A pickup the game left unnamed is still one of the contract's
+            // sources: the 21:26:44 card listed two stations and a
+            // "Location2Address" for a three-pickup Carbon haul.
             var pickupCount = legs
                 .Where(l => l.Pickup is not null)
                 .Select(l => ScreenInsight.Fold(l.Pickup!))
                 .Distinct()
-                .Count();
+                .Count()
+                + legs.Count(l => l.Pickup is null && l.Unnamed is not null);
 
             if (archetype?.Pickups is { } sources && pickupCount > 0)
             {
@@ -341,7 +427,7 @@ public static class HaulPlanner
             // A shared title is not enough to give a card's route to one of
             // several contracts. Keep the safer title-only route until the
             // screenshot reads a signal that distinguishes its card.
-            if (titleIsAmbiguous && signals == 0)
+            if (titleIsAmbiguous && signals == 0 && !mine)
                 continue;
 
             candidates.Add((frame, signals));

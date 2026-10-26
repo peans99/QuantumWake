@@ -354,4 +354,76 @@ public class HaulLegsTests
         new("- Freight elevator at Endgame at the L3 Lagrange of Pyro VI", 367, 311, 10),
         new("I'd recommend taking a few minutes to plan your route before", 367, 344, 10),
     ];
+
+    /// <summary>
+    /// 25 Oct 21:25:59: the engine read the indented diamonds as lines of
+    /// their own and every Collect without one. The old reader joined all
+    /// three onto the Deliver above, and the run had Megumi Refueling - a
+    /// pickup - as a drop-off, twice.
+    /// </summary>
+    [Fact]
+    public void Collect_lines_that_lost_their_diamonds_are_still_pickups_under_the_delivery()
+    {
+        var app = Read(HaulingFrameFixtures.Potassium2125).Contracts!;
+
+        Assert.Equal(["deliver", "collect", "collect", "collect"], app.Steps!.Select(s => s.Kind));
+        Assert.Equal([0, 1, 1, 1], app.Steps!.Select(s => s.Depth));
+
+        var (legs, deliveries) = HaulLegs.From(app);
+
+        Assert.Equal(["Dudley & Daughters", "Megumi Refueling", "Rat's Nest"], legs.Select(l => l.Pickup));
+        Assert.All(legs, leg => Assert.Equal("Ruin Station", leg.Delivery));
+        Assert.Equal(249, Assert.Single(deliveries).Scu);
+    }
+
+    /// <summary>
+    /// 25 Oct 21:26:12: a Waste multi-drop whose Deliver parents lost their
+    /// diamonds, so two of its three drops were read as nothing. The letter's
+    /// list ends in "Destination2Address", a drop the game has no name for.
+    /// </summary>
+    [Fact]
+    public void A_multi_drop_whose_diamonds_were_read_apart_keeps_every_drop()
+    {
+        var app = Read(HaulingFrameFixtures.Waste2126).Contracts!;
+
+        Assert.Equal(["deliver", "collect", "deliver", "collect", "deliver", "collect"], app.Steps!.Select(s => s.Kind));
+        Assert.Equal([0, 1, 0, 1, 0, 1], app.Steps!.Select(s => s.Depth));
+
+        var (legs, deliveries) = HaulLegs.From(app);
+        var named = legs.Where(l => l.Unnamed is null).ToList();
+
+        // The count is printed on each Deliver parent, so it rides on the delivery.
+        Assert.Equal([72, 65, 47], deliveries.Select(d => d.Scu));
+        Assert.Equal(["Megumi Refueling", "Rat's Nest", "Megumi Refueling"], named.Select(l => l.Delivery));
+        Assert.All(legs, leg => Assert.Equal("Ruin Station", leg.Pickup));
+        Assert.Equal("Destination2Address", Assert.Single(legs, l => l.Unnamed is not null).Unnamed);
+    }
+
+    /// <summary>
+    /// 25 Oct 21:26:44: photographed while the game was still typing the
+    /// objectives in - "Deliver 0/189 SCU of Car", "Collect Carbon fro" -
+    /// next to a letter printed whole, which lists two stations and a
+    /// "Location2Address". The pickups come from the letter, the destination
+    /// from the title, and the count from the part-written Deliver.
+    /// </summary>
+    [Fact]
+    public void A_card_photographed_before_its_objectives_finished_is_read_from_the_letter_and_title()
+    {
+        var app = Read(HaulingFrameFixtures.Carbon2126).Contracts!;
+
+        var (legs, deliveries) = HaulLegs.From(app, new Quantumwake.Core.State.HaulRoute(null, "Ruin Station"));
+
+        Assert.Equal(["Dudley & Daughters", "Rod's Fuel 'N Supplies", null], legs.Select(l => l.Pickup));
+        Assert.All(legs, leg => Assert.Equal("Ruin Station", leg.Delivery));
+        Assert.Equal("Location2Address", legs[2].Unnamed);
+        Assert.Equal(189, Assert.Single(deliveries).Scu);
+    }
+
+    /// <summary>A part-written objective is filed whole only when it reached its full stop.</summary>
+    [Theory]
+    [InlineData("Collect Carbon from Gaslight.", true)]
+    [InlineData("Collect Carbon from Dudley e D", false)]
+    [InlineData("Deliver 0/189 SCU of Car", false)]
+    public void An_objective_is_whole_once_it_reaches_its_full_stop(string text, bool whole) =>
+        Assert.Equal(whole, ScreenFrames.Whole(ScreenFrames.Step(text, 0)));
 }

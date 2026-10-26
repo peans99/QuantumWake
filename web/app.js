@@ -18270,12 +18270,15 @@ function renderHaulPlan(host, plan) {
     if (c.legs.length) {
       const legs = el('ul', 'haul-legs');
       for (const leg of c.legs) {
+        // A place the game's own letter left unnamed is a different thing
+        // from one the screenshot did not reach, and the fix is different:
+        // the marker in game, not another photograph.
         const from = leg.pickup
           ? `${leg.pickup}${leg.pickupBody ? ` (${leg.pickupBody})` : ''}`
-          : tx('pickup not known');
+          : leg.unnamed ? tx('a pickup the game left unnamed ({name})', { name: leg.unnamed }) : tx('pickup not known');
         const to = leg.delivery
           ? `${leg.delivery}${leg.deliveryBody ? ` (${leg.deliveryBody})` : ''}`
-          : tx('drop-off not known');
+          : leg.unnamed ? tx('a drop-off the game left unnamed ({name})', { name: leg.unnamed }) : tx('drop-off not known');
         const scu = leg.scu != null ? ` · ${leg.scuDone || 0}/${leg.scu} SCU` : '';
         legs.append(el('li', leg.pickup && leg.delivery ? null : 'muted', `${from} → ${to}${scu}`));
       }
@@ -24875,10 +24878,36 @@ async function loadTrips() {
   else drawTripPath();
 }
 
+function itineraryError(message) {
+  const box = $('#itinerary-error');
+  if (!box) return;
+  box.textContent = message;
+  box.hidden = !message;
+  if (message && shownView !== 'itinerary') toast('trip-error', message, '');
+}
+
+async function tripRequest(url, options) {
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error('trip request failed');
+    itineraryError('');
+    return response;
+  } catch {
+    itineraryError(tx('Could not save the change. Please try again.'));
+    return null;
+  }
+}
+
+async function tripRefresh() {
+  try { await loadTrips(); }
+  catch { itineraryError(tx('Saved, but the plan could not be refreshed. Refresh the page to see it.')); }
+}
+
 /** POST/DELETE against the trip API, then re-read: plans are small. */
 async function tripCall(url, method = 'POST') {
-  await fetch(url, { method });
-  await loadTrips();
+  if (!await tripRequest(url, { method })) return false;
+  await tripRefresh();
+  return true;
 }
 
 /** A run sheet is authored work, so checks and edits use the same small trip API. */
@@ -24888,8 +24917,9 @@ async function runActionCall(url, method = 'POST', body = null) {
     options.headers = { 'Content-Type': 'application/json' };
     options.body = JSON.stringify(body);
   }
-  await fetch(url, options);
-  await loadTrips();
+  if (!await tripRequest(url, options)) return false;
+  await tripRefresh();
+  return true;
 }
 
 const runActionLabel = (kind) => tx({
@@ -24903,8 +24933,10 @@ function runActionRow(trip, stop, action, editable = false) {
   check.type = 'checkbox';
   check.checked = !!action.done;
   check.title = action.done ? tx('Mark as still to do') : tx('Mark action complete');
-  check.addEventListener('change', () =>
-    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`));
+  check.addEventListener('change', async () => {
+    if (!await runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/toggle`))
+      check.checked = !check.checked;
+  });
   row.append(check);
 
   const text = el('span', 'run-action-text');
@@ -25054,21 +25086,24 @@ function tradeTweakForm(trip, stop, action) {
     const units = quantity.value === '' ? null : Number(quantity.value);
     const each = price.value === '' ? null : Number(price.value);
     const url = (s, a) => `/api/trips/${trip.id}/stops/${s.id}/actions/${a.id}/tweak`;
-    const post = (s, a, body) => fetch(url(s, a), {
+    const post = (s, a, body) => tripRequest(url(s, a), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
 
-    await post(stop, action, { quantity: units, price: each });
+    if (!await post(stop, action, { quantity: units, price: each })) return;
 
     if (action.kind === 'buy' && units !== action.quantity) {
       const sells = trip.stops.flatMap((s) => (s.actions || []).filter((a) => a.kind === 'sell').map((a) => [s, a]));
       if (sells.length === 1 && sells[0][1].quantity === action.quantity) {
         const [sellStop, sell] = sells[0];
-        await post(sellStop, sell, { quantity: units, price: sell.price });
+        if (!await post(sellStop, sell, { quantity: units, price: sell.price })) {
+          itineraryError(tx('The buy was saved, but the matching sale could not be updated.'));
+          return;
+        }
       }
     }
 
-    await loadTrips();
+    await tripRefresh();
   });
 
   form.append(quantity, price, save);
@@ -25076,7 +25111,7 @@ function tradeTweakForm(trip, stop, action) {
 }
 
 function runActionForm(trip, stop) {
-  const form = el('div', 'run-action-form');
+  const form = el('div', 'run-action-form run-action-new-form');
   const kind = document.createElement('select');
   kind.className = 'select';
   for (const value of ['load', 'unload', 'buy', 'sell', 'collect', 'refuel', 'repair', 'do'])
@@ -25102,17 +25137,21 @@ function runActionForm(trip, stop) {
   unit.append(new Option('aUEC', 'aUEC'));
 
   const save = el('button', 'ghost tiny', tx('Add'));
-  save.addEventListener('click', () => {
+  save.addEventListener('click', async () => {
     if (!text.value.trim()) {
       text.focus();
       return;
     }
-    runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions`, 'POST', {
-      kind: kind.value,
-      text: text.value,
-      quantity: quantity.value === '' ? null : Number(quantity.value),
-      unit: unit.value || null,
+    save.disabled = true;
+    const response = await tripRequest(`/api/trips/${trip.id}/stops/${stop.id}/actions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: kind.value, text: text.value,
+        quantity: quantity.value === '' ? null : Number(quantity.value), unit: unit.value || null }),
     });
+    save.disabled = false;
+    if (!response) return;
+    form.remove();
+    await tripRefresh();
   });
 
   form.append(kind, text, quantity, unit, save);
@@ -25158,6 +25197,46 @@ async function planTrip(title, stops) {
   drawMap();
 }
 
+/**
+ * What a plan knows about contracts that have ended: missions some of its
+ * lines were written for that the session no longer holds. Null when none
+ * has, and when no session is running to ask - the server sends nothing then,
+ * because out of the game every contract would look ended.
+ */
+function tripEnded(trip) {
+  const ended = new Set(trip?.endedMissions || []);
+  if (!ended.size) return null;
+
+  // Unticked lines only, as the server counts them: a contract handed in is
+  // not open either, and its ticked drop is the record of the work.
+  const linked = (trip.stops || []).flatMap((stop) => stop.actions || []).filter((a) => a.link?.missionId && !a.done);
+  const lines = linked.filter((a) => ended.has(a.link.missionId)).length;
+  return { ended, lines, all: lines === linked.length };
+}
+
+/**
+ * The plan's own say about its ended contracts, with the way out. A plan
+ * written for contracts the game has dropped stayed tracked for a month and
+ * kept ticking its stops as the pilot flew new hauls past them.
+ */
+function tripEndedNotice(trip) {
+  const ended = tripEnded(trip);
+  if (!ended) return null;
+
+  const box = el('div', 'trip-ended');
+  box.append(el('span', 'outward', ended.all
+    ? tx('None of the contracts this plan was written for are open in this session, so landing at its stops will not cross them off.')
+    : txn(ended.ended.size, '{count} contract on this plan is no longer open; its lines are marked.',
+      '{count} contracts on this plan are no longer open; their lines are marked.')));
+
+  const clear = el('button', 'ghost tiny', txn(ended.lines, 'Remove {count} ended line', 'Remove {count} ended lines'));
+  clear.type = 'button';
+  clear.title = tx('Takes those lines off, and any stop not yet reached that held nothing else');
+  clear.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/ended/remove`));
+  box.append(clear);
+  return box;
+}
+
 /* ---------- the Now card ---------- */
 
 /**
@@ -25201,6 +25280,11 @@ function renderTripCard() {
   } else {
     jump.append(el('div', 'inward', tx('Every stop is crossed off. Good run.')));
   }
+
+  // A plan whose contracts have all gone is still tracked, and says so
+  // rather than going on pointing at stops nobody is paying for.
+  if (tripEnded(trip)?.all) jump.append(el('div', 'now-trip-note outward',
+    tx('The contracts this plan was written for have ended.')));
 
   // The whole path, in order, ticked as it goes - the flight plan proper.
   const list = $('#now-trip-stops');
@@ -25296,8 +25380,10 @@ function renderTripPanel() {
 
     const drop = el('button', 'ghost tiny', '×');
     drop.title = tx('Drop this stop');
-    drop.addEventListener('click',
-      () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+    drop.addEventListener('click', () => {
+      if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
+        return tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE');
+    });
 
     const addAction = el('button', 'ghost tiny', '+');
     addAction.title = tx('Add a run-sheet action at this stop');
@@ -25345,7 +25431,8 @@ function renderTripPanel() {
 
   const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
-    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+    if (!confirm(tx('Delete the plan “{title}” and all its stops?', { title: trip.title }))) return;
+    if (!await tripCall(`/api/trips/${trip.id}`, 'DELETE')) return;
     cargo.trip = false;
     $('#cargo-panel').hidden = true;
     drawMap();
@@ -25468,6 +25555,183 @@ let itineraryMarked = null;
 /** How many atlas places the shared place list was last filled from. */
 let itineraryPlacesFilled = -1;
 
+/** The live hauling run, for the page to merge from: null out of the game, or with no run to show. */
+let itineraryHaul = null;
+
+/** Which of the run's lines are ticked, as "stop:line", and the run they were ticked in. */
+let itineraryHaulPicks = { planId: null, keys: new Set() };
+
+/** When the run was last asked for. */
+let itineraryHaulAt = 0;
+
+/**
+ * Asks for the run again once it is a few seconds old. The live stream
+ * redraws this page every time the logs move, and planning the run on each
+ * redraw would be a request per log line.
+ */
+async function loadItineraryHaul(force = false) {
+  if (!force && Date.now() - itineraryHaulAt < 10000) return;
+  itineraryHaulAt = Date.now();
+
+  let plan = null;
+  try {
+    const response = await fetch('/api/haul/plan');
+    plan = response.ok ? await response.json() : null;
+  } catch {
+    plan = null;
+  }
+
+  const run = plan?.inGame && plan.stops?.length ? plan : null;
+  const changed = (run?.planId || null) !== (itineraryHaul?.planId || null);
+  itineraryHaul = run;
+  if (changed && shownView === 'itinerary') renderItinerary();
+}
+
+/** Whether a plan already carries this run line: the same contract, the same legs, the same verb. */
+function itineraryHaulOnPlan(trip, action) {
+  if (!trip || !action.missionId) return false;
+  const legs = (action.legIds || []).slice().sort().join(',');
+  return trip.stops.some((stop) => (stop.actions || []).some((line) => line.link?.missionId === action.missionId
+    && line.kind === action.kind
+    && (line.link.legIds || []).slice().sort().join(',') === legs));
+}
+
+/**
+ * The live run beside the open plan, one tick box per load and drop, so the
+ * pilot can take the whole run, one contract, or a single drop into the plan
+ * they are flying - and put it in order there. Before this a run could only
+ * become a new plan, all of it, and two runs flown together were two plans.
+ */
+function itineraryHaulPanel(trip) {
+  const run = itineraryHaul;
+  if (!run) return null;
+
+  // A run that has changed is a different list, and ticks kept by position
+  // would land on other lines. Everything the plan does not carry yet starts
+  // ticked: taking the whole run is the common case.
+  if (itineraryHaulPicks.planId !== run.planId) {
+    const keys = new Set();
+    run.stops.forEach((stop, i) => stop.actions.forEach((action, j) => {
+      if (!itineraryHaulOnPlan(trip, action)) keys.add(`${i}:${j}`);
+    }));
+    itineraryHaulPicks = { planId: run.planId, keys };
+  }
+  const picks = itineraryHaulPicks.keys;
+
+  const chosen = () => [...picks]
+    .map((key) => key.split(':').map(Number))
+    .filter(([i, j]) => run.stops[i]?.actions[j] && !itineraryHaulOnPlan(trip, run.stops[i].actions[j]))
+    .map(([stop, action]) => ({ stop, action }));
+
+  const box = el('section', 'itinerary-haul');
+  const head = el('div', 'itinerary-haul-head');
+  head.append(el('b', null, tx('Hauling run')));
+  head.append(el('span', 'muted', txn(run.contracts.length, '{count} contract open', '{count} contracts open')));
+  box.append(head);
+  box.append(el('p', 'muted caption', trip
+    ? tx('Tick the loads and drops to put on this plan. A line it already carries is marked, and is never added twice.')
+    : tx('Tick the loads and drops to make a plan from.')));
+
+  const add = el('button', 'primary', '');
+  const label = () => {
+    const n = chosen().length;
+    add.textContent = trip
+      ? txn(n, 'Add {count} line to this plan', 'Add {count} lines to this plan')
+      : txn(n, 'Make a plan from {count} line', 'Make a plan from {count} lines');
+    add.disabled = n === 0;
+  };
+
+  const stops = el('div', 'itinerary-haul-stops');
+  run.stops.forEach((stop, i) => {
+    const group = el('div', 'itinerary-haul-stop');
+    const place = el('div', 'itinerary-haul-place');
+    place.append(el('b', null, stop.place));
+    if (stop.body) place.append(el('span', 'muted', ` · ${stop.body}`));
+    group.append(place);
+
+    stop.actions.forEach((action, j) => {
+      const key = `${i}:${j}`;
+      const there = itineraryHaulOnPlan(trip, action);
+      const row = el('label', `itinerary-haul-line${there ? ' there' : ''}`);
+      const tick = document.createElement('input');
+      tick.type = 'checkbox';
+      tick.checked = !there && picks.has(key);
+      tick.disabled = there;
+      tick.addEventListener('change', () => {
+        if (tick.checked) picks.add(key); else picks.delete(key);
+        label();
+      });
+
+      const verb = action.kind === 'load' ? tx('Load') : tx('Unload');
+      const scu = action.scu != null ? `${action.scu} SCU ` : '';
+      row.append(tick, el('span', null, `${verb} ${scu}${action.commodity || tx('cargo')} — ${action.contractTitle}`));
+      if (there) row.append(el('span', 'itinerary-haul-there', tx('on this plan')));
+      group.append(row);
+    });
+
+    stops.append(group);
+  });
+  box.append(stops);
+
+  const tools = el('div', 'itinerary-haul-tools');
+  const every = el('button', 'ghost tiny', tx('Tick all'));
+  every.type = 'button';
+  every.addEventListener('click', () => {
+    run.stops.forEach((stop, i) => stop.actions.forEach((_, j) => picks.add(`${i}:${j}`)));
+    renderItinerary();
+  });
+  const none = el('button', 'ghost tiny', tx('Tick none'));
+  none.type = 'button';
+  none.addEventListener('click', () => {
+    picks.clear();
+    renderItinerary();
+  });
+
+  const order = document.createElement('input');
+  order.type = 'checkbox';
+  order.checked = true;
+  const orderLabel = el('label', 'itinerary-haul-order');
+  orderLabel.append(order, el('span', null, tx('then put the stops in order')));
+
+  add.type = 'button';
+  add.addEventListener('click', async () => {
+    const picked = chosen();
+    if (!picked.length) return;
+    add.disabled = true;
+
+    let response = null;
+    try {
+      response = await fetch(`/api/trips/${trip ? trip.id : 'new'}/haul`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: run.planId, picks: picked }),
+      });
+    } catch {
+      response = null;
+    }
+
+    const answer = response ? await response.json().catch(() => null) : null;
+    if (!response?.ok) {
+      // The run moved under the ticks - a card photographed, a contract
+      // handed in. Show the new run rather than add lines nobody chose.
+      itineraryError(serverText(answer?.message) || tx('Could not save the change. Please try again.'));
+      if (answer?.planId) await loadItineraryHaul(true);
+      else add.disabled = false;
+      return;
+    }
+
+    itineraryError('');
+    if (answer?.id) itineraryTripId = answer.id;
+    if (order.checked && answer?.id) await tripRequest(`/api/trips/${answer.id}/optimise`, { method: 'POST' });
+    await tripRefresh();
+  });
+  label();
+
+  tools.append(add, orderLabel, every, none);
+  box.append(tools);
+  return box;
+}
+
 function itineraryTrip() {
   return trips.find((t) => t.id === itineraryTripId)
     || tracked()
@@ -25479,6 +25743,11 @@ function renderItinerary() {
   const plans = $('#itinerary-plans');
   const main = $('#itinerary-main');
   if (!plans || !main) return;
+
+  // The run moves as contracts are taken and handed in; a redraw is the
+  // page being looked at, so it is when to ask again - at most every few
+  // seconds.
+  if (shownView === 'itinerary') loadItineraryHaul().catch(() => {});
 
   // The live stream re-reads plans whenever the logs move, and a redraw
   // replaces the card being carried. The browser then never sends its
@@ -25494,6 +25763,10 @@ function renderItinerary() {
   const oldPlace = main.querySelector('.itinerary-place-input');
   const oldNote = main.querySelector('.itinerary-note-input');
   const active = document.activeElement;
+  const actionForms = Array.from(main.querySelectorAll('.itinerary-stop')).map((card) => ({
+    stopId: card.dataset.stop, form: card.querySelector('.run-action-new-form'),
+  })).filter((item) => item.form);
+  const activeForm = actionForms.find((item) => item.form.contains?.(active));
   const draft = {
     name: oldPlan?.value || '', place: oldPlace?.value || '', note: oldNote?.value || '',
     tripId: main.dataset.tripId,
@@ -25515,6 +25788,8 @@ function renderItinerary() {
   if (!trip) {
     main.append(el('div', 'itinerary-empty',
       tx('No plan yet. Name one on the left and add its stops here, or start one from a trade route, a rep run or a shopping list.')));
+    const haul = itineraryHaulPanel(null);
+    if (haul) main.append(haul);
     if (draft.focused === 'name' && newPlan) {
       newPlan.focus();
       if (draft.start != null && draft.end != null) newPlan.setSelectionRange?.(draft.start, draft.end);
@@ -25523,6 +25798,17 @@ function renderItinerary() {
   }
 
   renderItineraryPlan(main, trip);
+
+  if (draft.tripId === trip.id) {
+    for (const card of main.querySelectorAll('.itinerary-stop')) {
+      const saved = actionForms.find((item) => item.stopId === card.dataset.stop);
+      if (saved) card.querySelector('.itinerary-stop-main')?.append(saved.form);
+    }
+    if (activeForm && active) {
+      active.focus();
+      if (draft.start != null && draft.end != null && active.type !== 'number') active.setSelectionRange?.(draft.start, draft.end);
+    }
+  }
 
   const newPlace = main.querySelector('.itinerary-place-input');
   const newNote = main.querySelector('.itinerary-note-input');
@@ -25572,16 +25858,17 @@ function renderItineraryPlans(box, open, working) {
   make.title = tx('A new plan is the one the map and the Now page follow');
   const create = async () => {
     const submitted = name.value;
-    const response = await fetch('/api/trips', {
+    const response = await tripRequest('/api/trips', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: submitted.trim() || null, stops: [] }),
     });
-    const created = response.ok ? await response.json() : null;
+    if (!response) return;
+    const created = await response.json();
     if (created?.id) itineraryTripId = created.id;
     const current = $('#itinerary-plans')?.querySelector('.itinerary-new')?.querySelector('.search');
     if (response.ok && current && current.value === submitted) current.value = '';
-    await loadTrips();
+    await tripRefresh();
   };
 
   make.addEventListener('click', create);
@@ -25611,6 +25898,12 @@ function renderItineraryPlan(main, trip) {
     main.append(el('div', 'trip-elapsed muted',
       tx('Running for {span} — since you pressed Start, not since you wrote it.', { span: spanOf(trip.elapsedSeconds) })));
   }
+
+  const ended = tripEndedNotice(trip);
+  if (ended) main.append(ended);
+
+  const haul = itineraryHaulPanel(trip);
+  if (haul) main.append(haul);
 
   const trade = tradeRunSummary(trip);
   if (trade) main.append(trade);
@@ -25651,17 +25944,25 @@ function itineraryPlanTools(trip) {
     ? tx('Open the star map with this plan drawn on it')
     : tx('Track this plan and open the star map with it drawn on it');
   map.addEventListener('click', async () => {
-    if (!trip.tracked) await tripCall(`/api/trips/${trip.id}/track`);
+    if (!trip.tracked && !await tripCall(`/api/trips/${trip.id}/track`)) return;
     showView('map');
     showTripPanel();
     drawMap();
   });
   tools.append(map);
 
+  // Said plainly that it is not a shortest route: the atlas has no distances.
+  const optimise = el('button', 'ghost', tx('Put in order'));
+  optimise.type = 'button';
+  optimise.title = tx('Each contract’s pickups before its drop, then stops on the same moon or planet together, starting from where you are. Distances are not known, so this is an order that holds together, not the shortest one.');
+  optimise.disabled = trip.stops.filter((stop) => !stop.done || (stop.actions || []).some((a) => !a.done)).length < 2;
+  optimise.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/optimise`));
+  tools.append(optimise);
+
   const scrap = el('button', 'ghost danger', tx('Delete plan'));
   scrap.addEventListener('click', async () => {
-    itineraryTripId = null;
-    await tripCall(`/api/trips/${trip.id}`, 'DELETE');
+    if (!confirm(tx('Delete the plan “{title}” and all its stops?', { title: trip.title }))) return;
+    if (await tripCall(`/api/trips/${trip.id}`, 'DELETE')) itineraryTripId = null;
   });
   tools.append(scrap);
 
@@ -25747,8 +26048,10 @@ function itineraryStop(trip, stop, index, isNext) {
 
   const drop = el('button', 'ghost tiny', '×');
   drop.title = tx('Drop this stop');
-  drop.addEventListener('click',
-    () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE'));
+  drop.addEventListener('click', () => {
+    if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
+      return tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE');
+  });
 
   tools.append(addLine, drop);
   card.append(tools);
@@ -25799,11 +26102,33 @@ function itineraryStop(trip, stop, index, isNext) {
 /** One run-sheet line on a stop card, with a grip that carries it to another stop. */
 function itineraryLine(trip, stop, action, at) {
   const line = el('div', 'itinerary-line');
-  const grip = el('span', 'itinerary-line-grip', '⠿');
-  grip.title = tx('Drag this line onto another stop');
+  line.dataset.action = action.id;
+  const grip = el('button', 'itinerary-line-grip', '⠿');
+  grip.type = 'button';
+  grip.title = tx('Drag this line, or use up and down to reorder and left and right to move between stops');
+  grip.setAttribute('aria-label', grip.title);
+  grip.addEventListener('keydown', async (event) => {
+    const vertical = { ArrowUp: -1, ArrowDown: 1 }[event.key];
+    const horizontal = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (vertical === undefined && horizontal === undefined) return;
+    event.preventDefault();
+    const stopIndex = trip.stops.findIndex((item) => item.id === stop.id);
+    const target = horizontal === undefined ? stop : trip.stops[stopIndex + horizontal];
+    const to = vertical === undefined ? (target?.actions || []).length : at + vertical;
+    if (!target || to < 0 || (vertical !== undefined && to >= (stop.actions || []).length)) return;
+    if (!await tripCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}/move`
+      + `?toStop=${encodeURIComponent(target.id)}&to=${to}`)) return;
+    const lines = $('#itinerary-main')?.querySelectorAll('.itinerary-line') || [];
+    Array.from(lines).find((item) => item.dataset.action === action.id)?.querySelector('.itinerary-line-grip')?.focus();
+  });
   grip.addEventListener('mousedown', () => { line.draggable = true; });
   grip.addEventListener('mouseup', () => { line.draggable = false; });
   line.append(grip, runActionRow(trip, stop, action, true));
+
+  if (action.link?.missionId && !action.done && tripEnded(trip)?.ended.has(action.link.missionId)) {
+    line.classList.add('ended');
+    line.append(el('span', 'itinerary-ended', tx('contract ended')));
+  }
 
   line.addEventListener('dragstart', (event) => {
     if (!line.draggable) return;
@@ -25874,16 +26199,16 @@ async function itineraryDrop(trip) {
     const from = trip.stops.findIndex((s) => s.id === drag.stopId);
     const to = drag.target.at - (from < drag.target.at ? 1 : 0);
     if (from < 0 || to === from) return;
-    await fetch(`/api/trips/${trip.id}/stops/${drag.stopId}/place?to=${to}`, { method: 'POST' });
+    if (!await tripRequest(`/api/trips/${trip.id}/stops/${drag.stopId}/place?to=${to}`, { method: 'POST' })) return;
   } else {
     const same = drag.target.stopId === drag.stopId;
     const to = drag.target.at - (same && drag.from < drag.target.at ? 1 : 0);
     if (same && to === drag.from) return;
-    await fetch(`/api/trips/${trip.id}/stops/${drag.stopId}/actions/${drag.actionId}/move`
-      + `?toStop=${encodeURIComponent(drag.target.stopId)}&to=${to}`, { method: 'POST' });
+    if (!await tripRequest(`/api/trips/${trip.id}/stops/${drag.stopId}/actions/${drag.actionId}/move`
+      + `?toStop=${encodeURIComponent(drag.target.stopId)}&to=${to}`, { method: 'POST' })) return;
   }
 
-  await loadTrips();
+  await tripRefresh();
 }
 
 function itineraryDragEnd(node) {
@@ -25945,11 +26270,12 @@ function itineraryAddStop(trip) {
 
     const submittedPlace = place.value;
     const submittedNote = note.value;
-    const response = await fetch(`/api/trips/${trip.id}/stops`, {
+    const response = await tripRequest(`/api/trips/${trip.id}/stops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ placeId: node?.rawId || '', place: node?.name || typed, note: submittedNote.trim() || null }),
     });
+    if (!response) return;
     const main = $('#itinerary-main');
     if (response.ok && main?.dataset.tripId === trip.id) {
       const currentPlace = main.querySelector('.itinerary-place-input');
@@ -25957,7 +26283,7 @@ function itineraryAddStop(trip) {
       if (currentPlace && currentPlace.value === submittedPlace) currentPlace.value = '';
       if (currentNote && currentNote.value === submittedNote) currentNote.value = '';
     }
-    await loadTrips();
+    await tripRefresh();
     $('#itinerary-add-place')?.focus();
   };
 

@@ -111,7 +111,9 @@ public sealed class ScreenWatchService(
     /// measured - see <see cref="ScreenInsightService.Unmeasured"/> - and the
     /// ones filed as unreadable that carry a Rep tab - see
     /// <see cref="ScreenInsightService.Misfiled"/> - and the ones whose bars
-    /// read as nothing earned - see <see cref="ScreenInsightService.Doubtful"/>.
+    /// read as nothing earned - see <see cref="ScreenInsightService.Doubtful"/>
+    /// - and the Contracts cards whose objectives an older reader ran together
+    /// - see <see cref="ScreenInsightService.Unjoined"/>.
     /// Only when nothing new is waiting, so a fresh screenshot never queues
     /// behind them. A reading the pilot dismissed is left dismissed, which is
     /// why those are not offered.
@@ -119,7 +121,8 @@ public sealed class ScreenWatchService(
     private async Task Remeasure(CancellationToken token)
     {
         var root = install!.RootPath;
-        var waiting = insight.Unmeasured(root).Concat(insight.Misfiled(root)).Concat(insight.Doubtful(root));
+        var waiting = insight.Unmeasured(root).Concat(insight.Misfiled(root)).Concat(insight.Doubtful(root))
+            .Concat(insight.Unjoined(root));
 
         foreach (var path in waiting.Where(_remeasured.Add).Take(BatchPerTick))
         {

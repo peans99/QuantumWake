@@ -24,11 +24,12 @@ public class ItineraryPageTests
           "stops":[{"id":"s9","placeId":"GrimHEX","place":"GrimHEX","done":false,"actions":[]}]}]
         """;
 
-    private static Page Itinerary(string plans = Plans)
+    private static Page Itinerary(string plans = Plans, string? haul = null)
     {
         var page = new Page();
         page.Serve("/api/trips", plans);
         page.Serve("/api/briefing", "{}");
+        if (haul is not null) page.Serve("/api/haul/plan", haul);
         page.Do("""
             atlas = [
               { rawId: 'HUR_LOR', name: 'Lorville', system: 'Stanton', body: 'Hurston', kind: 'City', visits: 4 },
@@ -41,6 +42,107 @@ public class ItineraryPageTests
     }
 
     private const string Stops = "__dom.node('#itinerary-main').byClass('itinerary-stop')";
+
+    [Fact]
+    public void A_live_refresh_keeps_an_open_run_sheet_draft()
+    {
+        var page = Itinerary();
+        page.Do($$"""
+            {{Stops}}[0].byClass('ghost').find(b => b.textContent === '+ Line').click();
+            const form = {{Stops}}[0].byClass('run-action-new-form')[0];
+            form.byClass('search')[0].value = 'Load medical supplies';
+            form.byClass('search')[1].value = '12';
+            form.byClass('select')[1].value = 'SCU';
+            await loadTrips();
+            """);
+        Assert.Equal("Load medical supplies", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('search')[0].value"));
+        Assert.Equal("12", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('search')[1].value"));
+        Assert.Equal("SCU", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('select')[1].value"));
+    }
+
+    [Fact]
+    public void A_failed_run_sheet_save_reports_the_error_and_keeps_the_draft()
+    {
+        var page = Itinerary();
+        page.Fail("/api/trips/t1/stops/s1/actions", 500, "{}");
+        page.Do($$"""
+            {{Stops}}[0].byClass('ghost').find(b => b.textContent === '+ Line').click();
+            const form = {{Stops}}[0].byClass('run-action-new-form')[0];
+            form.byClass('search')[0].value = 'Load cargo';
+            await form.byClass('ghost')[0].fire('click');
+            """);
+        Assert.Equal("Load cargo", page.Text($"{Stops}[0].byClass('run-action-new-form')[0].byClass('search')[0].value"));
+        Assert.Contains("Could not save", page.NodeText("#itinerary-error"));
+        Assert.False(page.Truth("__dom.node('#itinerary-error').hidden"));
+    }
+
+    [Fact]
+    public void Plan_and_stop_deletion_can_be_cancelled()
+    {
+        var page = Itinerary();
+        page.Do($$"""
+            globalThis.confirm = () => false;
+            __dom.node('#itinerary-main').byClass('danger')[0].click();
+            {{Stops}}[0].byClass('ghost').find(b => b.title === 'Drop this stop').click();
+            """);
+        Assert.DoesNotContain(page.Fetched(), call => call.StartsWith("DELETE /api/trips/"));
+    }
+
+    [Fact]
+    public void Confirmed_stop_deletion_is_sent()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/stops/s1", "{}");
+        page.Do($$"""
+            globalThis.confirm = () => true;
+            await {{Stops}}[0].byClass('ghost').find(b => b.title === 'Drop this stop').fire('click');
+            """);
+        Assert.Contains("DELETE /api/trips/t1/stops/s1", page.Fetched());
+    }
+
+    [Fact]
+    public void A_saved_run_sheet_draft_closes_after_the_server_accepts_it()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/stops/s1/actions", "{}");
+        page.Do($$"""
+            {{Stops}}[0].byClass('ghost').find(b => b.textContent === '+ Line').click();
+            const form = {{Stops}}[0].byClass('run-action-new-form')[0];
+            form.byClass('search')[0].value = 'Load cargo';
+            await form.byClass('ghost')[0].fire('click');
+            """);
+        Assert.Equal(0, page.Count($"{Stops}[0].byClass('run-action-new-form').length"));
+        Assert.Contains("Load cargo", page.BodyOf("/api/trips/t1/stops/s1/actions"));
+    }
+
+    [Fact]
+    public void Line_handles_use_arrow_keys_to_reorder_and_move_between_stops()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/stops/s1/actions/a1/move?toStop=s1&to=1", "{}");
+        page.Serve("/api/trips/t1/stops/s1/actions/a1/move?toStop=s2&to=0", "{}");
+        page.Do($$"""
+            const grip = {{Stops}}[0].byClass('itinerary-line-grip')[0];
+            await grip.fire('keydown', {key:'ArrowDown', preventDefault() {} });
+            await {{Stops}}[0].byClass('itinerary-line-grip')[0].fire('keydown', {key:'ArrowRight', preventDefault() {} });
+            """);
+        Assert.Contains("POST /api/trips/t1/stops/s1/actions/a1/move?toStop=s1&to=1", page.Fetched());
+        Assert.Contains("POST /api/trips/t1/stops/s1/actions/a1/move?toStop=s2&to=0", page.Fetched());
+    }
+
+    [Fact]
+    public void A_failed_stop_save_reports_the_error_without_clearing_the_input()
+    {
+        var page = Itinerary();
+        page.Fail("/api/trips/t1/stops", 500, "{}");
+        page.Do("""
+            const add = __dom.node('#itinerary-main').byClass('itinerary-add')[0];
+            add.byClass('search')[0].value = 'Lorville';
+            await add.byClass('ghost')[0].fire('click');
+            """);
+        Assert.Contains("Could not save", page.NodeText("#itinerary-error"));
+        Assert.Equal("Lorville", page.Text("__dom.node('#itinerary-main').byClass('itinerary-place-input')[0].value"));
+    }
 
     [Fact]
     public void Live_refresh_keeps_the_unfinished_plan_and_stop()
@@ -298,6 +400,115 @@ public class ItineraryPageTests
 
         Assert.Equal("t1", page.Text("itineraryTripId"));
         Assert.True(page.Truth("shownView === 'itinerary'"));
+    }
+
+    private const string StalePlan = """
+        [{"id":"t1","title":"Hauling run · 6 contracts","tracked":true,"done":false,"archived":"No","flying":false,
+          "endedMissions":["old"],
+          "stops":[
+            {"id":"s1","placeId":"RR_P5_L2","place":"Gaslight","done":false,
+             "actions":[{"id":"a1","kind":"load","text":"Carbon","done":false,"link":{"missionId":"old","legIds":["leg-1"]}},
+                        {"id":"a2","kind":"load","text":"Potassium","done":false,"link":{"missionId":"new","legIds":["leg-1"]}}]}]}]
+        """;
+
+    /// <summary>
+    /// A plan whose contracts the game has dropped says so, marks the lines,
+    /// and offers to take them off rather than leaving the pilot to find them.
+    /// </summary>
+    [Fact]
+    public void Lines_for_ended_contracts_are_marked_and_can_be_cleared()
+    {
+        var page = Itinerary(StalePlan);
+        page.Serve("/api/trips/t1/ended/remove", """{"id":"t1","removed":1}""");
+
+        Assert.Contains("1 contract on this plan is no longer open", page.NodeText("#itinerary-main"));
+        Assert.Equal(1, page.Count("__dom.node('#itinerary-main').byClass('itinerary-ended').length"));
+
+        page.Do("await __dom.node('#itinerary-main').byClass('trip-ended')[0].byClass('ghost')[0].fire('click');");
+        Assert.Contains("POST /api/trips/t1/ended/remove", page.Fetched());
+    }
+
+    private const string HaulPlan = """
+        [{"id":"t1","title":"Carbon run","tracked":true,"done":false,"archived":"No","flying":false,
+          "stops":[
+            {"id":"s1","placeId":"RR_P5_L2","place":"Gaslight","done":false,
+             "actions":[{"id":"a1","kind":"load","text":"Carbon","done":false,"link":{"missionId":"m1","legIds":["leg-1"]}}]}]}]
+        """;
+
+    private const string Run = """
+        {"inGame":true,"planId":"run1","contracts":[{"title":"Haul A"},{"title":"Haul B"}],
+         "stops":[
+           {"place":"Gaslight","placeId":"RR_P5_L2","body":"Pyro V","actions":[
+             {"kind":"load","commodity":"Carbon","contract":0,"contractTitle":"Haul A","missionId":"m1","legIds":["leg-1"]}]},
+           {"place":"Ruin Station","placeId":"","actions":[
+             {"kind":"unload","commodity":"Carbon","scu":158,"contract":0,"contractTitle":"Haul A","missionId":"m1","legIds":["leg-1"]},
+             {"kind":"unload","commodity":"Waste","contract":1,"contractTitle":"Haul B","missionId":"m2","legIds":["title-route"]}]}]}
+        """;
+
+    private const string HaulLines = "__dom.node('#itinerary-main').byClass('itinerary-haul-line')";
+
+    /// <summary>
+    /// The live run sits beside the plan with a tick per load and drop. A line
+    /// the plan already carries is marked and cannot be added again - the two
+    /// sets of the same contracts that started this - and a drop left unticked
+    /// stays out.
+    /// </summary>
+    [Fact]
+    public void Ticked_run_lines_are_merged_into_the_open_plan_and_put_in_order()
+    {
+        var page = Itinerary(HaulPlan, Run);
+        page.Serve("/api/trips/t1/haul", """{"id":"t1","added":1,"alreadyThere":0,"newStops":1}""");
+        page.Serve("/api/trips/t1/optimise", """{"id":"t1","moved":0}""");
+
+        Assert.Equal(3, page.Count($"{HaulLines}.length"));
+        Assert.True(page.Truth($"{HaulLines}[0].classList.contains('there')"));
+        Assert.True(page.Truth($"{HaulLines}[0].querySelectorAll('input')[0].disabled"));
+        Assert.Contains("Add 2 lines to this plan", page.NodeText("#itinerary-main"));
+
+        // Only the Carbon drop: the Waste haul is for another day.
+        page.Do($$"""
+            const tick = {{HaulLines}}[2].querySelectorAll('input')[0];
+            tick.checked = false;
+            tick.fire('change');
+            """);
+        Assert.Contains("Add 1 line to this plan", page.NodeText("#itinerary-main"));
+
+        page.Do("await __dom.node('#itinerary-main').byClass('itinerary-haul-tools')[0].byClass('primary')[0].fire('click');");
+
+        var sent = page.BodyOf("/api/trips/t1/haul");
+        Assert.Contains("\"planId\":\"run1\"", sent);
+        Assert.Contains("\"picks\":[{\"stop\":1,\"action\":0}]", sent);
+        Assert.Contains("POST /api/trips/t1/optimise", page.Fetched());
+    }
+
+    /// <summary>With no plan open, the same ticks make a new one.</summary>
+    [Fact]
+    public void With_no_plan_the_run_becomes_a_new_one()
+    {
+        var page = Itinerary("[]", Run);
+        page.Serve("/api/trips/new/haul", """{"id":"t9","added":3,"alreadyThere":0,"newStops":2}""");
+
+        Assert.Contains("Make a plan from 3 lines", page.NodeText("#itinerary-main"));
+        page.Do("await __dom.node('#itinerary-main').byClass('itinerary-haul-tools')[0].byClass('primary')[0].fire('click');");
+        Assert.Contains("POST /api/trips/new/haul", page.Fetched());
+        Assert.Equal("t9", page.Text("itineraryTripId"));
+    }
+
+    [Fact]
+    public void Put_in_order_asks_the_server_to_order_the_plan()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/optimise", """{"id":"t1","moved":2}""");
+
+        page.Do("await __dom.node('#itinerary-main').byClass('itinerary-tools')[0].byClass('ghost').find(b => b.textContent === 'Put in order').fire('click');");
+        Assert.Contains("POST /api/trips/t1/optimise", page.Fetched());
+    }
+
+    [Fact]
+    public void Out_of_the_game_there_is_no_run_to_merge()
+    {
+        var page = Itinerary(Plans, """{"inGame":false,"contracts":[],"stops":[]}""");
+        Assert.Equal(0, page.Count("__dom.node('#itinerary-main').byClass('itinerary-haul').length"));
     }
 
     [Fact]
