@@ -22,13 +22,41 @@ there is no account and no required online service.
   <tr>
     <td width="33%"><a href="docs/images/now.png"><img src="docs/images/now.png" alt="The Now page"></a><br><sub><b>Now</b><br>Start with the last known location, ship, wake-up point and this session.</sub></td>
     <td width="33%"><a href="docs/images/map.png"><img src="docs/images/map.png" alt="The map"></a><br><sub><b>Map</b><br>Find places you have visited and nearby refuel, repair or clinic services.</sub></td>
-    <td width="33%"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="A route plan"></a><br><sub><b>Routes</b><br>Keep a flight plan, cargo run or next stop in view.</sub></td>
+    <td width="33%"><a href="docs/images/itinerary.png"><img src="docs/images/itinerary.png" alt="The Itinerary page"></a><br><sub><b>Itinerary</b><br>Lay out a flight plan stop by stop, and merge a hauling run into it.</sub></td>
   </tr>
 </table>
 
+<details>
+<summary>More pages</summary>
+
+<table>
+  <tr>
+    <td width="33%"><a href="docs/images/operations.png"><img src="docs/images/operations.png" alt="The Command deck"></a><br><sub><b>Command deck</b><br>Shopping lists, checklists, projects and the contracts open in this session.</sub></td>
+    <td width="33%"><a href="docs/images/routes.png"><img src="docs/images/routes.png" alt="The Routes page"></a><br><sub><b>Routes</b><br>Find a cargo run sized to your ship, or a rep run to the next rank.</sub></td>
+    <td width="33%"><a href="docs/images/reputation.png"><img src="docs/images/reputation.png" alt="The Reputation page"></a><br><sub><b>Reputation</b><br>Your rank with each organisation, read from Rep app screenshots.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/events.png"><img src="docs/images/events.png" alt="The Events page"></a><br><sub><b>Events</b><br>The points behind each event bar, counted from contracts you finished.</sub></td>
+    <td><a href="docs/images/logbook.png"><img src="docs/images/logbook.png" alt="The Logbook"></a><br><sub><b>Logbook</b><br>Sessions, purchases and discoveries, newest first.</sub></td>
+    <td><a href="docs/images/sessions.png"><img src="docs/images/sessions.png" alt="The Sessions page"></a><br><sub><b>Sessions</b><br>Every session with its ship, time, jumps, contracts and server.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/ledger.png"><img src="docs/images/ledger.png" alt="The Ledger"></a><br><sub><b>Ledger</b><br>Money in and out as the logs record it, with cash on hand from a screenshot.</sub></td>
+    <td><a href="docs/images/market.png"><img src="docs/images/market.png" alt="The Market page"></a><br><sub><b>Market</b><br>Every commodity, where it sells, and your own trading against it.</sub></td>
+    <td><a href="docs/images/fleet.png"><img src="docs/images/fleet.png" alt="The Fleet page"></a><br><sub><b>Fleet</b><br>The ships you fly, with flight counts, claim times and prices.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><sub><b>Garage</b><br>A ship's fitted parts and the figures they add up to.</sub></td>
+    <td><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><sub><b>Armoury</b><br>Guns, armour and attachments from your installed game files.</sub></td>
+    <td></td>
+  </tr>
+</table>
+</details>
+
 The dashboard is for planning and history. The optional overlay gives the same
 short answers over the game, and the optional Cougar MFD mode keeps navigation,
-tasks and cargo close to the cockpit.
+tasks and cargo close to the cockpit. The dashboard, overlay and MFD pages are
+in English or French; choose under **Settings → General**.
 
 ## Start here
 
@@ -70,9 +98,13 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 |---|---|
 | Check your last location, ship or wake-up point | **Now** |
 | Find a station, city, outpost or nearby service | **Map** |
-| Review a flight, session, place or server | **Logbook** |
-| Plan a route, cargo run, checklist or event | **Command Deck** |
-| Look up ships, parts, mining, crafting or gear | **Hangar** and **Reference** |
+| Lay out a flight plan, or merge a hauling run into one | **Itinerary** |
+| Read the live feed, or a screenshot you just took | **Log** |
+| Find a cargo or rep run, follow contracts, reputation or an event | **Operations** |
+| Review a flight, session, place or server | **Flight** |
+| Follow money in and out, or commodity prices | **Economy** |
+| Look up ships, parts, mining or crafting | **Reference** |
+| See your ships, fittings, stash and gear | **Hangar** |
 | Keep a small answer visible in Star Citizen | **Overlay** |
 
 ## Optional extras
@@ -81,22 +113,22 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 
 The overlay starts off. Star Citizen needs **Borderless Windowed** mode for it
 to sit above the game. Use the tray icon or `Ctrl+Alt+O` to show it. Its pin
-button makes it click-through; `Ctrl+Alt+←/→` changes page and `Ctrl+Alt+F`
-expands it.
+button makes it click-through; `Ctrl+Alt+←/→` changes page, `Ctrl+Alt+F`
+expands it and `Ctrl+Alt+C` switches to a small glance view.
 
 ### Cockpit HUD
 
 If you use paired Cougar MFDs, Quantum Wake can show navigation, tasks, cargo,
 contracts, money and the live feed on them. Read the [Cockpit HUD guide](docs/mfd-mode.md)
-when you are ready to set it up.
+when you are ready to set it up; `Ctrl+Alt+M` opens MFD setup from anywhere.
 
 ### Screenshots and copied locations
 
 You can ask Quantum Wake to read a saved Star Citizen screenshot or a copied
 `/showlocation` result. This can add facts the log does not carry, such as a
-kiosk balance, fitted ship parts or your rank with an organisation in the Rep
-app. It reads the saved file locally; it never
-captures your screen or reads game memory.
+kiosk balance, fitted ship parts, your rank with an organisation in the Rep
+app, or the pickups and SCU on a hauling contract in the Contracts app. It reads
+the saved file locally; it never captures your screen or reads game memory.
 
 ## What Quantum Wake reads
 
