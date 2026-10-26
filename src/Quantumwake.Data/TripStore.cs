@@ -310,6 +310,108 @@ public sealed class TripStore
         }
     }
 
+    /// <summary>
+    /// Puts the lines of a hauling run the pilot ticked into a plan: each at
+    /// an unreached stop for its place when the plan has one, else at a new
+    /// stop on the end. Null when the plan is unknown.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A line the plan already carries for the same contract leg is left out.
+    /// Merging the same run twice, or a run into the plan it was made from,
+    /// otherwise doubles every line - two sets of the same contracts on one
+    /// plan, which is what the pilot was looking at when this was asked for.
+    /// </para>
+    /// <para>
+    /// A pickup goes to the first unreached stop for its place and a drop to
+    /// the last, so a place the plan calls at twice keeps the drop on the
+    /// later visit, after the cargo is aboard.
+    /// </para>
+    /// </remarks>
+    public MergeResult? Merge(string tripId, IReadOnlyList<HaulPick> picks)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == tripId);
+            if (index < 0)
+                return null;
+
+            var stops = _trips[index].Stops.ToList();
+            int added = 0, already = 0, created = 0;
+
+            foreach (var pick in picks.Where(p => !string.IsNullOrWhiteSpace(p.Text)))
+            {
+                if (stops.Any(stop => (stop.Actions ?? []).Any(action => TripOrder.SameLine(action, pick))))
+                {
+                    already++;
+                    continue;
+                }
+
+                var place = new TripStop(string.Empty, pick.PlaceId ?? string.Empty, pick.Place, null, false, null);
+                var matches = stops.Select((stop, i) => (stop, i))
+                    .Where(x => !x.stop.Done && TripOrder.SamePlace(x.stop, place))
+                    .Select(x => x.i)
+                    .ToList();
+
+                var at = matches.Count == 0 ? -1
+                    : RunAction.CleanKind(pick.Kind) is "unload" or "sell" ? matches[^1] : matches[0];
+
+                if (at < 0)
+                {
+                    stops.Add(Fresh(place));
+                    at = stops.Count - 1;
+                    created++;
+                }
+
+                if ((stops[at].Actions ?? []).Count >= MaxActions)
+                    continue;
+
+                var action = new RunAction(NewId(), RunAction.CleanKind(pick.Kind), Sanitise.Clean(pick.Text, "Action"),
+                    RunAction.CleanQuantity(pick.Quantity), RunAction.CleanUnit(pick.Unit), Done: false, DoneAt: null,
+                    Link: RunActionLink.Clean(pick.Link));
+                stops[at] = stops[at] with { Actions = [.. (stops[at].Actions ?? []), action] };
+                added++;
+            }
+
+            if (added > 0)
+            {
+                _trips[index] = _trips[index] with { Stops = stops };
+                Save();
+            }
+
+            return new MergeResult(added, already, created);
+        }
+    }
+
+    /// <summary>
+    /// Puts a plan's stops in the given order. Refused unless the ids are
+    /// exactly the plan's own, so a reorder computed against a plan that has
+    /// since changed cannot drop or duplicate a stop.
+    /// </summary>
+    public bool Reorder(string tripId, IReadOnlyList<string> stopIds)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == tripId);
+            if (index < 0)
+                return false;
+
+            var stops = _trips[index].Stops;
+            if (stopIds.Count != stops.Count
+                || !stopIds.Order(StringComparer.Ordinal).SequenceEqual(stops.Select(s => s.Id).Order(StringComparer.Ordinal), StringComparer.Ordinal))
+                return false;
+
+            var byId = stops.ToDictionary(s => s.Id, StringComparer.Ordinal);
+            var ordered = stopIds.Select(id => byId[id]).ToList();
+            if (ordered.SequenceEqual(stops))
+                return true;
+
+            _trips[index] = _trips[index] with { Stops = ordered };
+            Save();
+            return true;
+        }
+    }
+
     public bool ToggleStop(string tripId, string stopId)
     {
         lock (_gate)
@@ -608,15 +710,18 @@ public sealed class TripStore
     }
 
     /// <summary>
-    /// The contracts a plan's lines were written for that are not open now.
+    /// The contracts a plan still has unticked lines for that are not open now.
     /// </summary>
     /// <remarks>
     /// Only lines that carry a mission id can be asked about; a line typed by
-    /// hand belongs to no contract and is never called ended.
+    /// hand belongs to no contract and is never called ended. Ticked lines do
+    /// not count: a contract handed in is not open either, and its finished
+    /// drop is not stale.
     /// </remarks>
     public static IReadOnlyList<string> EndedMissions(Trip trip, Func<string, bool> missionOpen) =>
         [.. trip.Stops
             .SelectMany(stop => stop.Actions ?? [])
+            .Where(action => !action.Done)
             .Select(action => action.Link?.MissionId)
             .Where(id => id is { Length: > 0 } && !missionOpen(id))
             .Cast<string>()
@@ -631,14 +736,22 @@ public sealed class TripStore
     }
 
     /// <summary>
-    /// Takes the lines for ended contracts off a plan, and the unreached
-    /// stops that held nothing else. Returns how many lines went, or null when
-    /// the plan is unknown.
+    /// Takes the unticked lines for ended contracts off a plan, and the stops
+    /// that held nothing else. Returns how many lines went, or null when the
+    /// plan is unknown.
     /// </summary>
     /// <remarks>
-    /// A reached stop keeps its place even when emptied: it is the record that
-    /// the run went there. A stop that never had lines is the pilot's own and
-    /// is left alone.
+    /// <para>
+    /// A ticked line stays: a contract handed in is no longer open either, and
+    /// its ticked drop is the record of the work, not something left undone.
+    /// A stop that never had lines is the pilot's own and is left alone.
+    /// </para>
+    /// <para>
+    /// A stop emptied of everything goes even when it was crossed off. The
+    /// Gaslight stop of the 23 Sep plan was ticked by a landing for another
+    /// contract, so it recorded nothing; kept, it sat in front of the new
+    /// Gaslight stop the merged run added and read as a visit already made.
+    /// </para>
     /// </remarks>
     public int? RemoveEnded(string tripId, Func<string, bool> missionOpen)
     {
@@ -655,11 +768,11 @@ public sealed class TripStore
             {
                 var actions = stop.Actions ?? [];
                 var kept = actions
-                    .Where(action => action.Link?.MissionId is not { Length: > 0 } id || missionOpen(id))
+                    .Where(action => action.Done || action.Link?.MissionId is not { Length: > 0 } id || missionOpen(id))
                     .ToList();
                 removed += actions.Count - kept.Count;
 
-                if (actions.Count > 0 && kept.Count == 0 && !stop.Done)
+                if (actions.Count > 0 && kept.Count == 0)
                     continue;
 
                 stops.Add(kept.Count == actions.Count ? stop : stop with { Actions = kept });

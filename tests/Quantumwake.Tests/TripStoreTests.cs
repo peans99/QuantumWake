@@ -204,15 +204,25 @@ public class TripStoreTests : IDisposable
             Stop("RR_P2_L4", "Checkmate") with { Actions = [Haul("load", "old"), Haul("load", "new")] },
             Stop("RR_P6_L5", "Megumi Refueling") with { Actions = [Haul("unload", "old"), hand] },
             Stop("RuinStation", "Ruin Station"),
+            Stop("RR_P3_L1", "Starlight Service Station") with { Actions = [Haul("unload", "handed-in")] },
         ]);
 
-        Assert.Equal(["old"], TripStore.EndedMissions(trip, id => id == "new"));
-        Assert.Equal(3, store.RemoveEnded(trip.Id, id => id == "new"));
+        // A contract handed in is not open either; its drop, once ticked, is
+        // the record of the work and not a stale line.
+        store.ToggleAction(trip.Id, trip.Stops[4].Id, trip.Stops[4].Actions![0].Id);
+        store.ToggleStop(trip.Id, trip.Stops[0].Id);
+        trip = store.All().Single(t => t.Id == trip.Id);
+        bool open(string id) => id == "new";
 
+        Assert.Equal(["old"], TripStore.EndedMissions(trip, open));
+        Assert.Equal(3, store.RemoveEnded(trip.Id, open));
+
+        // Gaslight goes although it was crossed off: it held nothing else.
         var after = store.All().Single(t => t.Id == trip.Id);
-        Assert.Equal(["Checkmate", "Megumi Refueling", "Ruin Station"], after.Stops.Select(s => s.Place));
+        Assert.Equal(["Checkmate", "Megumi Refueling", "Ruin Station", "Starlight Service Station"], after.Stops.Select(s => s.Place));
         Assert.Equal("new", Assert.Single(after.Stops[0].Actions!).Link?.MissionId);
         Assert.Equal("Refuel", Assert.Single(after.Stops[1].Actions!).Text);
+        Assert.True(Assert.Single(after.Stops[3].Actions!).Done);
         Assert.Null(store.RemoveEnded("nope", _ => true));
     }
 
@@ -466,6 +476,97 @@ public class TripStoreTests : IDisposable
         Assert.Equal(["Second", "Third", "First"], store.All().Single().Stops[0].Actions!.Select(a => a.Text));
         Assert.False(store.MoveAction(trip.Id, stop.Id, first.Id, "nowhere", 0));
         Assert.Equal(3, store.All().Single().Stops[0].Actions!.Count);
+    }
+
+    private static HaulPick Pick(string placeId, string place, string kind, string mission, params string[] legs) =>
+        new(placeId, place, kind, $"Carbon — {mission}", null, null, new RunActionLink(mission, legs));
+
+    /// <summary>
+    /// A run merged into a plan joins the stops it shares, adds the rest, and
+    /// never doubles a line the plan already has for the same contract leg.
+    /// </summary>
+    [Fact]
+    public void A_merged_run_joins_matching_stops_and_skips_lines_already_there()
+    {
+        var store = NewStore();
+        var trip = store.Add("Carbon run", [
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [Haul("load", "m1")] },
+            Stop("", "Ruin Station"),
+        ]);
+
+        var result = store.Merge(trip.Id, [
+            Pick("RR_P5_L2", "Gaslight", "load", "m1", "leg-1"),
+            Pick("RR_P2_L4", "Checkmate", "load", "m2", "leg-1"),
+            Pick("", "Ruin Station", "unload", "m1", "leg-1"),
+        ]);
+
+        Assert.Equal(new MergeResult(2, 1, 1), result);
+        var after = store.All().Single(t => t.Id == trip.Id);
+        Assert.Equal(["Gaslight", "Ruin Station", "Checkmate"], after.Stops.Select(s => s.Place));
+        Assert.Single(after.Stops[0].Actions!);
+        Assert.Equal("unload", Assert.Single(after.Stops[1].Actions!).Kind);
+
+        // The same run again adds nothing.
+        Assert.Equal(new MergeResult(0, 3, 0), store.Merge(trip.Id, [
+            Pick("RR_P5_L2", "Gaslight", "load", "m1", "leg-1"),
+            Pick("RR_P2_L4", "Checkmate", "load", "m2", "leg-1"),
+            Pick("", "Ruin Station", "unload", "m1", "leg-1"),
+        ]));
+    }
+
+    private static StopWhere Pyro(TripStop stop) => stop.Place switch
+    {
+        "Gaslight" or "Rat's Nest" => new("Pyro V", "Pyro"),
+        "Checkmate" => new("Pyro II", "Pyro"),
+        "Megumi Refueling" or "Endgame" => new("Terminus", "Pyro"),
+        _ => new(null, "Pyro"),
+    };
+
+    /// <summary>
+    /// Put in order: each contract's pickups before its drop, stops on one
+    /// body together, starting where the pilot is - and a stop already flown
+    /// stays at the front.
+    /// </summary>
+    [Fact]
+    public void Putting_a_plan_in_order_keeps_pickups_before_drops_and_bodies_together()
+    {
+        var store = NewStore();
+        var trip = store.Add("Pulled about", [
+            Stop("", "Orison"),
+            Stop("", "Ruin Station") with { Actions = [Haul("unload", "m1"), Haul("unload", "m2")] },
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [Haul("load", "m1")] },
+            Stop("RR_P6_L5", "Megumi Refueling") with { Actions = [Haul("load", "m2")] },
+            Stop("RR_P5_L5", "Rat's Nest") with { Actions = [Haul("load", "m2")] },
+            Stop("RR_P6_L3", "Endgame") with { Actions = [Haul("load", "m1")] },
+        ]);
+        store.ToggleStop(trip.Id, trip.Stops[0].Id);
+        trip = store.All().Single(t => t.Id == trip.Id);
+
+        var here = new TripStop("", "RR_P6_L4", "Dudley & Daughters", null, false, null);
+        var order = TripOrder.Optimise(trip, Pyro, here, new StopWhere("Terminus", "Pyro"));
+        Assert.True(store.Reorder(trip.Id, order));
+
+        Assert.Equal(["Orison", "Megumi Refueling", "Endgame", "Gaslight", "Rat's Nest", "Ruin Station"],
+            store.All().Single(t => t.Id == trip.Id).Stops.Select(s => s.Place));
+
+        // An order that drops a stop is refused rather than applied.
+        Assert.False(store.Reorder(trip.Id, order.Skip(1).ToList()));
+    }
+
+    /// <summary>A trade run's sale never moves ahead of its purchase, whatever the bodies say.</summary>
+    [Fact]
+    public void Putting_a_trade_run_in_order_keeps_its_buys_and_sells_in_sequence()
+    {
+        var buy = new RunAction("b", "buy", "Agricium", 96, "SCU", Done: false, DoneAt: null);
+        var sell = new RunAction("s", "sell", "Agricium", 96, "SCU", Done: false, DoneAt: null);
+        var trip = NewStore().Add("Trade", [
+            Stop("", "Ruin Station") with { Actions = [buy] },
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [sell] },
+        ]);
+
+        var order = TripOrder.Optimise(trip, Pyro, new TripStop("", "RR_P5_L5", "Rat's Nest", null, false, null), new StopWhere("Pyro V", "Pyro"));
+
+        Assert.Equal(trip.Stops.Select(s => s.Id), order);
     }
 
     public void Dispose()

@@ -3825,14 +3825,85 @@ public static class ServerHost
             {
                 foreach (var action in plan.Stops[i].Actions)
                 {
-                    var what = action.Commodity ?? "cargo";
-                    var text = $"{what} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
-                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, text, action.Scu, action.Scu is null ? null : "SCU",
+                    trips.AddAction(trip.Id, trip.Stops[i].Id, action.Kind, HaulLine(action), action.Scu, action.Scu is null ? null : "SCU",
                         new RunActionLink(action.MissionId, action.LegIds));
                 }
             }
 
             return Results.Ok(new { trip.Id, trip.Title, stops = trip.Stops.Count });
+        });
+
+        // The lines of the run the pilot ticked, merged into a plan - the one
+        // open on the Itinerary page, or a new one for "new". Checked against
+        // the run the page was showing, as the button above is, because the
+        // picks are positions in that run.
+        app.MapPost("/api/trips/{id}/haul", (string id, LiveSessionService live, ScreenReadingStore readings, LogLibrary lib,
+            TripStore trips, HaulMergeRequest body) =>
+        {
+            var now = live.Current;
+            if (!now.InGame)
+                return Results.BadRequest(new { message = "No session running, so no contracts to plan." });
+
+            var plan = HaulPlanner.Plan(live.LiveSummary.Contracts, readings.ContractFrames(), name => ResolvePlace(lib, name), HaulStart(now));
+            var current = HaulPlanner.Fingerprint(plan);
+            if (body.PlanId is { Length: > 0 } seen && seen != current)
+                return Results.Json(
+                    new { message = "The run changed since this was shown - here it is again, have another look.", planId = current },
+                    statusCode: StatusCodes.Status409Conflict);
+
+            var picks = (body.Picks ?? [])
+                .Where(p => p.Stop >= 0 && p.Stop < plan.Stops.Count && p.Action >= 0 && p.Action < plan.Stops[p.Stop].Actions.Count)
+                .Distinct()
+                .Select(p =>
+                {
+                    var stop = plan.Stops[p.Stop];
+                    var action = stop.Actions[p.Action];
+                    return new HaulPick(stop.PlaceId, stop.Place, action.Kind, HaulLine(action), action.Scu,
+                        action.Scu is null ? null : "SCU", new RunActionLink(action.MissionId, action.LegIds));
+                })
+                .ToList();
+
+            if (picks.Count == 0)
+                return Results.BadRequest(new { message = "Nothing ticked to add." });
+
+            var tripId = id;
+            if (id == "new")
+            {
+                var contracts = picks.Select(p => p.Link?.MissionId).Distinct().Count();
+                tripId = trips.Add($"Hauling run · {contracts} contract{(contracts == 1 ? "" : "s")}").Id;
+            }
+
+            return trips.Merge(tripId, picks) is { } merged
+                ? Results.Ok(new { id = tripId, merged.Added, merged.AlreadyThere, merged.NewStops })
+                : Results.NotFound();
+        });
+
+        // The plan's unfinished stops put in an order that can be flown - see
+        // TripOrder. Where each stop is comes from the atlas by id, then by
+        // name; where the pilot is comes from the live feed, and only counts
+        // while a session is running.
+        app.MapPost("/api/trips/{id}/optimise", (string id, TripStore trips, LiveSessionService live, LogLibrary lib) =>
+        {
+            if (trips.All().FirstOrDefault(t => t.Id == id) is not { } trip)
+                return Results.NotFound();
+
+            var atlas = lib.Atlas()
+                .GroupBy(p => p.RawId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            StopWhere Where(TripStop stop) =>
+                stop.PlaceId.Length > 0 && atlas.TryGetValue(stop.PlaceId, out var known)
+                    ? new StopWhere(known.Body, known.System)
+                    : ResolvePlace(lib, stop.Place) is { } named ? new StopWhere(named.Body, named.System) : new StopWhere(null, null);
+
+            var now = live.Current;
+            var here = now.InGame ? HaulStart(now) : null;
+            var start = here is null ? null : new TripStop("", here.Id, here.Name, null, false, null);
+
+            var order = TripOrder.Optimise(trip, Where, start, here is null ? null : new StopWhere(here.Body, here.System));
+            var moved = order.Where((stopId, i) => trip.Stops[i].Id != stopId).Count();
+
+            return trips.Reorder(id, order) ? Results.Ok(new { id, moved }) : Results.Conflict(new { message = "The plan changed while it was being ordered. Try again." });
         });
 
         app.MapPost("/api/trips", (TripStore trips, TripRequest body) =>
@@ -4763,6 +4834,10 @@ static WipeScope ScopeOf(List<string>? covers)
 
     return scope == WipeScope.None ? WipeScope.Everything : scope;
 }
+
+/// <summary>A run's load or unload as a plan's line reads it: the cargo, then the contract it is for.</summary>
+static string HaulLine(HaulAction action) =>
+    $"{action.Commodity ?? "cargo"} — {action.ContractTitle}{(action.Note is null ? "" : $" ({action.Note})")}";
 
 /// <summary>The last known location is an origin, not evidence that cargo was loaded there.</summary>
 static ResolvedPlace? HaulStart(NowState now) =>
@@ -5868,6 +5943,12 @@ public sealed record TripRequest(string? Title, List<TripStop>? Stops);
 /// a caller that never rendered one wants.
 /// </param>
 public sealed record HaulTripRequest(string? PlanId);
+
+/// <summary>Body of POST /api/trips/{id}/haul: the run the page showed, and the lines ticked in it.</summary>
+public sealed record HaulMergeRequest(string? PlanId, List<HaulPickRef>? Picks);
+
+/// <summary>One ticked line, by its stop's position in the run and its own position at that stop.</summary>
+public sealed record HaulPickRef(int Stop, int Action);
 
 /// <summary>Body of POST /api/trips/{id}/stops/{stopId}/actions.</summary>
 public sealed record RunActionRequest(string? Kind, string? Text, decimal? Quantity, string? Unit, RunActionLink? Link = null);

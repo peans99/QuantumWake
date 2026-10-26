@@ -24,11 +24,12 @@ public class ItineraryPageTests
           "stops":[{"id":"s9","placeId":"GrimHEX","place":"GrimHEX","done":false,"actions":[]}]}]
         """;
 
-    private static Page Itinerary(string plans = Plans)
+    private static Page Itinerary(string plans = Plans, string? haul = null)
     {
         var page = new Page();
         page.Serve("/api/trips", plans);
         page.Serve("/api/briefing", "{}");
+        if (haul is not null) page.Serve("/api/haul/plan", haul);
         page.Do("""
             atlas = [
               { rawId: 'HUR_LOR', name: 'Lorville', system: 'Stanton', body: 'Hurston', kind: 'City', visits: 4 },
@@ -425,6 +426,89 @@ public class ItineraryPageTests
 
         page.Do("await __dom.node('#itinerary-main').byClass('trip-ended')[0].byClass('ghost')[0].fire('click');");
         Assert.Contains("POST /api/trips/t1/ended/remove", page.Fetched());
+    }
+
+    private const string HaulPlan = """
+        [{"id":"t1","title":"Carbon run","tracked":true,"done":false,"archived":"No","flying":false,
+          "stops":[
+            {"id":"s1","placeId":"RR_P5_L2","place":"Gaslight","done":false,
+             "actions":[{"id":"a1","kind":"load","text":"Carbon","done":false,"link":{"missionId":"m1","legIds":["leg-1"]}}]}]}]
+        """;
+
+    private const string Run = """
+        {"inGame":true,"planId":"run1","contracts":[{"title":"Haul A"},{"title":"Haul B"}],
+         "stops":[
+           {"place":"Gaslight","placeId":"RR_P5_L2","body":"Pyro V","actions":[
+             {"kind":"load","commodity":"Carbon","contract":0,"contractTitle":"Haul A","missionId":"m1","legIds":["leg-1"]}]},
+           {"place":"Ruin Station","placeId":"","actions":[
+             {"kind":"unload","commodity":"Carbon","scu":158,"contract":0,"contractTitle":"Haul A","missionId":"m1","legIds":["leg-1"]},
+             {"kind":"unload","commodity":"Waste","contract":1,"contractTitle":"Haul B","missionId":"m2","legIds":["title-route"]}]}]}
+        """;
+
+    private const string HaulLines = "__dom.node('#itinerary-main').byClass('itinerary-haul-line')";
+
+    /// <summary>
+    /// The live run sits beside the plan with a tick per load and drop. A line
+    /// the plan already carries is marked and cannot be added again - the two
+    /// sets of the same contracts that started this - and a drop left unticked
+    /// stays out.
+    /// </summary>
+    [Fact]
+    public void Ticked_run_lines_are_merged_into_the_open_plan_and_put_in_order()
+    {
+        var page = Itinerary(HaulPlan, Run);
+        page.Serve("/api/trips/t1/haul", """{"id":"t1","added":1,"alreadyThere":0,"newStops":1}""");
+        page.Serve("/api/trips/t1/optimise", """{"id":"t1","moved":0}""");
+
+        Assert.Equal(3, page.Count($"{HaulLines}.length"));
+        Assert.True(page.Truth($"{HaulLines}[0].classList.contains('there')"));
+        Assert.True(page.Truth($"{HaulLines}[0].querySelectorAll('input')[0].disabled"));
+        Assert.Contains("Add 2 lines to this plan", page.NodeText("#itinerary-main"));
+
+        // Only the Carbon drop: the Waste haul is for another day.
+        page.Do($$"""
+            const tick = {{HaulLines}}[2].querySelectorAll('input')[0];
+            tick.checked = false;
+            tick.fire('change');
+            """);
+        Assert.Contains("Add 1 line to this plan", page.NodeText("#itinerary-main"));
+
+        page.Do("await __dom.node('#itinerary-main').byClass('itinerary-haul-tools')[0].byClass('primary')[0].fire('click');");
+
+        var sent = page.BodyOf("/api/trips/t1/haul");
+        Assert.Contains("\"planId\":\"run1\"", sent);
+        Assert.Contains("\"picks\":[{\"stop\":1,\"action\":0}]", sent);
+        Assert.Contains("POST /api/trips/t1/optimise", page.Fetched());
+    }
+
+    /// <summary>With no plan open, the same ticks make a new one.</summary>
+    [Fact]
+    public void With_no_plan_the_run_becomes_a_new_one()
+    {
+        var page = Itinerary("[]", Run);
+        page.Serve("/api/trips/new/haul", """{"id":"t9","added":3,"alreadyThere":0,"newStops":2}""");
+
+        Assert.Contains("Make a plan from 3 lines", page.NodeText("#itinerary-main"));
+        page.Do("await __dom.node('#itinerary-main').byClass('itinerary-haul-tools')[0].byClass('primary')[0].fire('click');");
+        Assert.Contains("POST /api/trips/new/haul", page.Fetched());
+        Assert.Equal("t9", page.Text("itineraryTripId"));
+    }
+
+    [Fact]
+    public void Put_in_order_asks_the_server_to_order_the_plan()
+    {
+        var page = Itinerary();
+        page.Serve("/api/trips/t1/optimise", """{"id":"t1","moved":2}""");
+
+        page.Do("await __dom.node('#itinerary-main').byClass('itinerary-tools')[0].byClass('ghost').find(b => b.textContent === 'Put in order').fire('click');");
+        Assert.Contains("POST /api/trips/t1/optimise", page.Fetched());
+    }
+
+    [Fact]
+    public void Out_of_the_game_there_is_no_run_to_merge()
+    {
+        var page = Itinerary(Plans, """{"inGame":false,"contracts":[],"stops":[]}""");
+        Assert.Equal(0, page.Count("__dom.node('#itinerary-main').byClass('itinerary-haul').length"));
     }
 
     [Fact]

@@ -4539,6 +4539,37 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
   color: var(--amber);
   font-size: 12px;
 }
+/* The live hauling run beside the plan, one tick per load and drop. */
+.itinerary-haul {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cyan);
+  background: var(--panel-2);
+}
+.itinerary-haul-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.itinerary-haul-head b { font-family: var(--display); font-size: 14px; }
+.itinerary-haul .caption { margin: 4px 0 8px; }
+.itinerary-haul-stops {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 8px 16px;
+}
+.itinerary-haul-place { font-size: 12.5px; margin-bottom: 2px; }
+.itinerary-haul-line {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: baseline;
+  padding: 1px 0;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.itinerary-haul-line.there { color: var(--dim); cursor: default; }
+.itinerary-haul-there { font: 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.itinerary-haul-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; }
+.itinerary-haul-order { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; cursor: pointer; }
+
 .itinerary-line.ended { grid-template-columns: 12px minmax(0, 1fr) auto; }
 .itinerary-line.ended .run-action { opacity: .55; }
 .itinerary-ended { color: var(--amber); font: 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }

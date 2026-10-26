@@ -5217,6 +5217,26 @@
   "Delete the plan “{title}” and all its stops?": "Supprimer le plan « {title} » et tous ses arrêts ?",
   "Remove the stop “{place}” and its run-sheet lines?": "Supprimer l’arrêt « {place} » et les lignes de sa feuille de route ?",
   "contract ended": "contrat terminé",
+  "{count} contracts open": {
+    "one": "{count} contrat ouvert",
+    "other": "{count} contrats ouverts"
+  },
+  "Tick the loads and drops to put on this plan. A line it already carries is marked, and is never added twice.": "Cochez les chargements et les livraisons à mettre dans ce plan. Une ligne qu’il contient déjà est signalée et n’est jamais ajoutée deux fois.",
+  "Tick the loads and drops to make a plan from.": "Cochez les chargements et les livraisons à partir desquels créer un plan.",
+  "Add {count} lines to this plan": {
+    "one": "Ajouter {count} ligne à ce plan",
+    "other": "Ajouter {count} lignes à ce plan"
+  },
+  "Make a plan from {count} lines": {
+    "one": "Créer un plan à partir de {count} ligne",
+    "other": "Créer un plan à partir de {count} lignes"
+  },
+  "on this plan": "dans ce plan",
+  "Tick all": "Tout cocher",
+  "Tick none": "Tout décocher",
+  "then put the stops in order": "puis remettre les arrêts dans l’ordre",
+  "Put in order": "Remettre dans l’ordre",
+  "Each contract’s pickups before its drop, then stops on the same moon or planet together, starting from where you are. Distances are not known, so this is an order that holds together, not the shortest one.": "Les chargements de chaque contrat avant sa livraison, puis les arrêts d’une même lune ou planète regroupés, en partant de là où vous êtes. Les distances ne sont pas connues : c’est un ordre cohérent, pas le plus court.",
   "The contracts this plan was written for have ended.": "Les contrats pour lesquels ce plan a été écrit sont terminés.",
   "None of the contracts this plan was written for are open in this session, so landing at its stops will not cross them off.": "Aucun des contrats pour lesquels ce plan a été écrit n’est ouvert dans cette session : se poser à ses arrêts ne les cochera pas.",
   "{count} contracts on this plan are no longer open; their lines are marked.": {
