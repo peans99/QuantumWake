@@ -5247,7 +5247,14 @@
     "one": "Retirer {count} ligne terminée",
     "other": "Retirer {count} lignes terminées"
   },
-  "Takes those lines off, and any stop not yet reached that held nothing else": "Retire ces lignes, ainsi que tout arrêt pas encore atteint qui ne contenait rien d’autre",
+  "Takes those lines off, and any stop that held nothing else. They are kept under Removed, where each contract can be put back": "Retire ces lignes, ainsi que tout arrêt qui ne contenait rien d’autre. Elles restent sous Retirées, d’où chaque contrat peut être remis",
+  "Removed with ended contracts · {count} contracts": {
+    "one": "Retirées avec les contrats terminés · {count} contrat",
+    "other": "Retirées avec les contrats terminés · {count} contrats"
+  },
+  "removed {when}": "retirées {when}",
+  "Put back": "Remettre",
+  "Return these lines to the plan, and any stop that went with them": "Remet ces lignes dans le plan, ainsi que tout arrêt parti avec elles",
   "Add a stop: a station, an outpost, a city…": "Ajouter un arrêt : une station, un avant-poste, une ville…",
   "Note, if any": "Note, s’il y en a une",
   "Add stop": "Ajouter l’arrêt",

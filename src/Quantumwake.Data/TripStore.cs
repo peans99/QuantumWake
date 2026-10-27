@@ -141,6 +141,32 @@ public enum Archived
     Quiet
 }
 
+/// <summary>
+/// A run-sheet line taken off with the ended contracts, kept so it can be put back.
+/// </summary>
+/// <remarks>
+/// The stop is described as well as named by id, because the removal takes a
+/// stop away with its last line, and putting the line back has to rebuild it.
+/// The positions are where the stop and the line stood when they went; the
+/// plan may have changed since, so they are a place to aim for, not a promise.
+/// </remarks>
+public sealed record RemovedLine(
+    string StopId,
+    string PlaceId,
+    string Place,
+    string? StopNote,
+    int StopAt,
+    int LineAt,
+    RunAction Action,
+    DateTimeOffset RemovedAt,
+    bool StopDone = false,
+    DateTimeOffset? StopDoneAt = null);
+
+/// <param name="Removed">
+/// Lines taken off for contracts that had ended, newest last. Removing them used
+/// to be one click with no way back, so a click on the wrong plan, or before the
+/// pilot had read what it would take, cost the run sheet for good.
+/// </param>
 public sealed record Trip(
     string Id,
     string Title,
@@ -151,7 +177,8 @@ public sealed record Trip(
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? FinishedAt = null,
     Archived Archived = Archived.No,
-    DateTimeOffset? ArchivedAt = null) : IStamped<Trip>
+    DateTimeOffset? ArchivedAt = null,
+    IReadOnlyList<RemovedLine>? Removed = null) : IStamped<Trip>
 {
     public string StampId => Id;
     /// <remarks>
@@ -752,8 +779,12 @@ public sealed class TripStore
     /// contract, so it recorded nothing; kept, it sat in front of the new
     /// Gaslight stop the merged run added and read as a visit already made.
     /// </para>
+    /// <para>
+    /// Every line that goes is kept in <see cref="Trip.Removed"/>, so
+    /// <see cref="PutBack"/> can return it.
+    /// </para>
     /// </remarks>
-    public int? RemoveEnded(string tripId, Func<string, bool> missionOpen)
+    public int? RemoveEnded(string tripId, Func<string, bool> missionOpen, DateTimeOffset? now = null)
     {
         lock (_gate)
         {
@@ -761,16 +792,26 @@ public sealed class TripStore
             if (index < 0)
                 return null;
 
-            var removed = 0;
+            var at = now ?? DateTimeOffset.UtcNow;
+            var gone = new List<RemovedLine>();
             var stops = new List<TripStop>();
+            var source = _trips[index].Stops;
 
-            foreach (var stop in _trips[index].Stops)
+            for (var s = 0; s < source.Count; s++)
             {
+                var stop = source[s];
                 var actions = stop.Actions ?? [];
-                var kept = actions
-                    .Where(action => action.Done || action.Link?.MissionId is not { Length: > 0 } id || missionOpen(id))
-                    .ToList();
-                removed += actions.Count - kept.Count;
+                var kept = new List<RunAction>();
+
+                for (var a = 0; a < actions.Count; a++)
+                {
+                    var action = actions[a];
+                    if (action.Done || action.Link?.MissionId is not { Length: > 0 } id || missionOpen(id))
+                        kept.Add(action);
+                    else
+                        gone.Add(new RemovedLine(stop.Id, stop.PlaceId, stop.Place, stop.Note, s, a, action, at,
+                            stop.Done, stop.DoneAt));
+                }
 
                 if (actions.Count > 0 && kept.Count == 0)
                     continue;
@@ -778,14 +819,87 @@ public sealed class TripStore
                 stops.Add(kept.Count == actions.Count ? stop : stop with { Actions = kept });
             }
 
-            if (removed == 0)
+            if (gone.Count == 0)
                 return 0;
 
-            _trips[index] = _trips[index] with { Stops = stops };
+            _trips[index] = _trips[index] with
+            {
+                Stops = stops,
+                Removed = [.. (_trips[index].Removed ?? []).Concat(gone).TakeLast(MaxRemoved)],
+            };
             Save();
-            return removed;
+            return gone.Count;
         }
     }
+
+    /// <summary>
+    /// Returns the lines removed for one contract to the plan, rebuilding any
+    /// stop that went with them. Returns how many came back, or null when the
+    /// plan is unknown.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A stop still on the plan takes its lines back where they stood, as near
+    /// as the plan now allows. A stop that went is rebuilt under its old id at
+    /// its old position, ticked or not as it was. A landing ticks the stop and
+    /// never its lines, so an unticked line under a ticked stop is the normal
+    /// state of a pickup made and not yet confirmed, not a sign the tick lied.
+    /// </para>
+    /// <para>
+    /// The contract is put back whether or not the session still holds it.
+    /// Asking for it back is the pilot overruling that, and the plan will mark
+    /// the lines as ended again, which is the truth the app has.
+    /// </para>
+    /// </remarks>
+    public int? PutBack(string tripId, string missionId)
+    {
+        lock (_gate)
+        {
+            var index = _trips.FindIndex(t => t.Id == tripId);
+            if (index < 0)
+                return null;
+
+            var removed = _trips[index].Removed ?? [];
+            bool Ours(RemovedLine line) =>
+                string.Equals(line.Action.Link?.MissionId, missionId, StringComparison.OrdinalIgnoreCase);
+
+            var back = removed.Where(Ours).OrderBy(line => line.StopAt).ThenBy(line => line.LineAt).ToList();
+            if (back.Count == 0)
+                return 0;
+
+            var stops = _trips[index].Stops.ToList();
+            var taken = stops.SelectMany(stop => stop.Actions ?? []).Select(action => action.Id).ToHashSet();
+
+            foreach (var line in back)
+            {
+                var at = stops.FindIndex(stop => stop.Id == line.StopId);
+                if (at < 0)
+                {
+                    at = Math.Clamp(line.StopAt, 0, stops.Count);
+                    stops.Insert(at, new TripStop(line.StopId, line.PlaceId, line.Place, line.StopNote,
+                        line.StopDone, line.StopDoneAt, Actions: []));
+                }
+
+                // The id may have been handed out again since; two lines with
+                // one id would tick together.
+                var action = taken.Add(line.Action.Id) ? line.Action : line.Action with { Id = NewId() };
+                var actions = (stops[at].Actions ?? []).ToList();
+                actions.Insert(Math.Clamp(line.LineAt, 0, actions.Count), action);
+                stops[at] = stops[at] with { Actions = actions };
+            }
+
+            var left = removed.Where(line => !Ours(line)).ToList();
+            _trips[index] = _trips[index] with { Stops = stops, Removed = left.Count == 0 ? null : left };
+            Save();
+            return back.Count;
+        }
+    }
+
+    /// <summary>
+    /// How many removed lines a plan remembers. A long-lived plan merged into
+    /// run after run would otherwise carry every contract it ever outlived.
+    /// </summary>
+    private const int MaxRemoved = 200;
 
     /// <summary>Two names for one place, ignoring case, spacing and punctuation.</summary>
     /// <remarks>

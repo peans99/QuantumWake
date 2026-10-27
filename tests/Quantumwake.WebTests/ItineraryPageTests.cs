@@ -428,6 +428,36 @@ public class ItineraryPageTests
         Assert.Contains("POST /api/trips/t1/ended/remove", page.Fetched());
     }
 
+    private const string RemovedPlan = """
+        [{"id":"t1","title":"Hauling run","tracked":true,"done":false,"archived":"No","flying":false,
+          "stops":[{"id":"s2","placeId":"RuinStation","place":"Ruin Station","done":false,"actions":[]}],
+          "removed":[
+            {"stopId":"s1","placeId":"RR_P5_L2","place":"Gaslight","stopAt":0,"lineAt":0,"removedAt":"2026-10-26T10:00:00Z",
+             "action":{"id":"a1","kind":"load","text":"Carbon — Red Wind haul","done":false,"link":{"missionId":"old 1","legIds":["leg-1"]}}},
+            {"stopId":"s2","placeId":"RuinStation","place":"Ruin Station","stopAt":1,"lineAt":0,"removedAt":"2026-10-26T10:00:00Z",
+             "action":{"id":"a2","kind":"unload","text":"Carbon — Red Wind haul","done":false,"link":{"missionId":"old 1","legIds":["leg-1"]}}}]}]
+        """;
+
+    /// <summary>
+    /// What "Remove ended lines" took off stays on the plan, one contract to a
+    /// row, and Put back asks for that contract by its mission id.
+    /// </summary>
+    [Fact]
+    public void Removed_contracts_are_listed_and_can_be_put_back()
+    {
+        var page = Itinerary(RemovedPlan);
+        page.Serve("/api/trips/t1/ended/restore?mission=old%201", """{"id":"t1","restored":2}""");
+
+        var text = page.NodeText("#itinerary-main");
+        Assert.Contains("Removed with ended contracts · 1 contract", text);
+        Assert.Contains("Red Wind haul", text);
+        Assert.Contains("2 lines", text);
+        Assert.Contains("Load · Carbon — Red Wind haul · Gaslight", text);
+
+        page.Do("await __dom.node('#itinerary-main').byClass('trip-removed')[0].byClass('ghost')[0].fire('click');");
+        Assert.Contains("POST /api/trips/t1/ended/restore?mission=old%201", page.Fetched());
+    }
+
     private const string HaulPlan = """
         [{"id":"t1","title":"Carbon run","tracked":true,"done":false,"archived":"No","flying":false,
           "stops":[
