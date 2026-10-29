@@ -26,7 +26,7 @@ public static class GameMakerLogos
 
     public static Dictionary<string, string> Read(DataCore core, IEnumerable<string> archiveEntries)
     {
-        var present = new HashSet<string>(archiveEntries.Select(Path.GetFileName)!, StringComparer.OrdinalIgnoreCase);
+        var present = new HashSet<string>(archiveEntries.Select(P4kArchive.EntryFileName), StringComparer.OrdinalIgnoreCase);
         var logos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var record in core.Records())
@@ -41,7 +41,7 @@ public static class GameMakerLogos
                 continue;
 
             // The record says .tif; the archive ships the .dds it was cooked to.
-            var file = Path.GetFileNameWithoutExtension(logo) + ".dds";
+            var file = P4kArchive.EntryStem(logo) + ".dds";
             if (!present.Contains(file)) continue;
 
             var entry = Folder + file;

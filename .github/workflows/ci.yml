@@ -1,10 +1,9 @@
 name: CI
 
-# Windows only, and not by preference: Quantumwake.Overlay targets
-# net10.0-windows for WPF, so the solution cannot restore on a Linux runner.
-# Core, Data, Server and the tests are all plain net10.0 and would build
-# anywhere - if a Linux-hosted server mode ever lands, split the solution and
-# add an ubuntu job for those four.
+# The solution builds on Windows: Quantumwake.Overlay targets net10.0-windows
+# for WPF, so it cannot restore on a Linux runner. Core, Data, Server and the
+# two main test suites are plain net10.0, and the `linux` job runs those on
+# their own - see docs/linux.md.
 
 on:
   push:
@@ -51,6 +50,28 @@ jobs:
           name: test-results
           path: artifacts/test
           if-no-files-found: ignore
+
+  # The server and dashboard are meant to run on Linux, and a green Windows run
+  # says nothing about that: Path splits on '\' there and nowhere else, which
+  # quietly lost the default liveries and attachment icons the first time these
+  # suites ran on Linux. The projects, not the solution, for the reason at the
+  # top of this file; Quantumwake.OcrTests is Windows-only by design.
+  linux:
+    name: Tests on Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.403'
+
+      - name: Test the parser, resolvers and stores
+        run: dotnet test tests/Quantumwake.Tests -c Release
+
+      - name: Test the dashboard
+        run: dotnet test tests/Quantumwake.WebTests -c Release
 
   # The most expensive failure this project has is silent: the parser learns to
   # read something, and nobody sees it, because backups are skipped by

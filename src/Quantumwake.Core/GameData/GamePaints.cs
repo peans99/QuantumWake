@@ -85,7 +85,7 @@ public static class GamePaints
                 var item = record.Name["EntityClassDefinition.".Length..];
                 var name = Localised(core, text, at, field.StructIndex) ?? item.Replace('_', ' ');
 
-                paints.Add(new GamePaint(item, name, tag, RenderFolder + Path.GetFileNameWithoutExtension(logo) + ".dds"));
+                paints.Add(new GamePaint(item, name, tag, RenderFolder + P4kArchive.EntryStem(logo) + ".dds"));
                 break;
             }
         }
@@ -112,7 +112,7 @@ public static class GamePaints
             if (!entry.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) continue;
             if (claimed.Contains(entry)) continue;
 
-            var stem = Path.GetFileNameWithoutExtension(entry);
+            var stem = P4kArchive.EntryStem(entry);
             var lower = stem.ToLowerInvariant();
             if (!lower.StartsWith("paint_") || !(lower.Contains("_default") || lower.Contains("_base"))) continue;
 

@@ -88,7 +88,7 @@ public static class GameVehicles
                     if (ui.StructIndex != display) continue;
                     var path = core.StringAt(core.InstanceAt(ui), display, "displayIcon");
                     if (path is { Length: > 0 } && path.Contains("VehicleIcon_", StringComparison.OrdinalIgnoreCase))
-                        icon = IconFolder + Path.GetFileNameWithoutExtension(path) + ".dds";
+                        icon = IconFolder + P4kArchive.EntryStem(path) + ".dds";
                     break;
                 }
             }

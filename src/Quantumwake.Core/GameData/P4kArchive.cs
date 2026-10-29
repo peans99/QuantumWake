@@ -47,6 +47,26 @@ public sealed class P4kArchive
 
     public static bool Exists(string installRoot) => File.Exists(PathFor(installRoot));
 
+    /// <summary>The file name of an entry, or of a path the DataCore records for one.</summary>
+    /// <remarks>
+    /// Not <see cref="Path.GetFileName(string)"/>. Entry names are Windows paths
+    /// whatever machine reads them, and <see cref="Path"/> only splits on '\'
+    /// where '\' is the platform's separator: on Linux it hands back
+    /// <c>Data\UI\...\logo.dds</c> whole, which cost the default liveries and
+    /// the attachment icons there. The DataCore writes some of its paths with
+    /// '/', so both count.
+    /// </remarks>
+    public static string EntryFileName(string entry) =>
+        entry[(entry.LastIndexOfAny(['\\', '/']) + 1)..];
+
+    /// <summary>The file name of an entry without its extension; see <see cref="EntryFileName"/>.</summary>
+    public static string EntryStem(string entry)
+    {
+        var name = EntryFileName(entry);
+        var dot = name.LastIndexOf('.');
+        return dot < 0 ? name : name[..dot];
+    }
+
     /// <summary>
     /// Extracts one entry by full path, e.g.
     /// <c>Data\Localization\english\global.ini</c>.

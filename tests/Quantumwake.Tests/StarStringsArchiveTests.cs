@@ -13,7 +13,10 @@ namespace Quantumwake.Tests;
 /// </remarks>
 public class StarStringsArchiveTests
 {
-    private const string Root = @"C:\Games\StarCitizen\LIVE";
+    // Built, not written as C:\...: on Linux that is not a rooted path, so
+    // GetFullPath lands it under the working directory and every allowed entry
+    // reads as a failure.
+    private static readonly string Root = Path.Combine(Path.GetTempPath(), "Games", "StarCitizen", "LIVE");
 
     private static string? Target(string entry) => StarStringsArchive.TargetFor(entry, Root);
 

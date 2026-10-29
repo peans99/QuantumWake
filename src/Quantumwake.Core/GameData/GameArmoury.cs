@@ -461,7 +461,7 @@ public static class GameArmoury
     {
         var have = entries
             .Where(e => e.StartsWith(AttachmentIconFolder, StringComparison.OrdinalIgnoreCase) && e.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
-            .Select(e => Path.GetFileNameWithoutExtension(e))
+            .Select(e => P4kArchive.EntryStem(e))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < data.Attachments.Count; i++)
         {

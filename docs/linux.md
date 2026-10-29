@@ -42,40 +42,43 @@ way a real Linux disk is.
 
 ## The eight failures
 
+Fixed in 0.19.10.
+
 **Archive entry names are Windows paths, and `Path` stops treating `\` as a
-separator on Linux** (6 failures, all real bugs). Names inside `Data.p4k` look
+separator on Linux** (3 failures, real bugs). Names inside `Data.p4k` look
 like `Data\UI\SharedAssets\PaintColorLogos\...`. On Linux,
 `Path.GetFileNameWithoutExtension` reads that whole string as a single file
 name, so every stem comes out wrong. As a result:
 
 - `GamePaintsTests`: 2 failures. The default liveries vanish.
 - `ArmouryKitTests`: 1 failure. Attachments lose their icons.
-- `StarStringsArchiveTests`: 3 of the 5 `The_two_things_the_mod_is_are_allowed`
-  cases. This one is the localisation-mod installer: a zip entry written as
-  `Data\Localization\...` is only rewritten for `/`, so on Linux it lands as a
-  single file with backslashes in its name.
 
-`Path.GetFileName*`, `GetDirectoryName` and `GetExtension` appear 11 times
-across 8 files in `Core/GameData` and `Core/Controls`. The fix is one helper
-for archive names that splits on both separators, used at all 11 call sites,
-plus `\` normalised in `StarStringsArchive.TargetFor`. Because this touches
-`Core/GameData`, the game-data cache version moves with it.
+Nine call sites in `Core/GameData` and `Core/Controls` handed an archive name
+to `Path`: in `GameArmoury`, `GameMakerLogos` (2), `GamePaints` (2),
+`GameReputation` (2), `GameVehicles` and `GameControls`. The other two `Path`
+calls there are on real disk paths and stay. All nine now go through
+`P4kArchive.EntryFileName` and `EntryStem`, which split on both separators. On
+Windows `Path` already split on both, so nothing stored changes there and no
+cache version moves.
 
-**A test fixture roots itself at `C:\Games\StarCitizen\LIVE`** (the other 2
-`StarStrings` cases). On Linux that path is not rooted, so `GetFullPath`
-resolves it against the working directory. This is a test-only fault: the
-fixture should build its root from `Path.GetTempPath()`.
+**A test fixture roots itself at `C:\Games\StarCitizen\LIVE`** (all 5
+`StarStringsArchiveTests.The_two_things_the_mod_is_are_allowed` cases). On
+Linux that path is not rooted, so `GetFullPath` resolves it against the
+working directory. This is a test-only fault: the fixture now builds its root
+from `Path.GetTempPath()`. The installer itself was already safe, since
+`StarStringsArchive.TargetFor` turns `\` into `/` before anything else.
 
 ## Work, in order
 
 ### 1. It runs and reads the logs
 
-- **Archive-name helper and fixture fix** (above). Done when the suite is green
-  on Linux.
-- **A Linux CI job.** `ci.yml` already runs two jobs on `ubuntu-latest` for
-  git-only checks. Add one that runs `Quantumwake.Tests` and
-  `Quantumwake.WebTests` there, so a Windows-only assumption fails the pull
-  request instead of a Linux pilot's dashboard.
+- **Archive-name helper and fixture fix** (above). Done in 0.19.10: on WSL
+  Ubuntu, `Quantumwake.Tests` passes 1,747 of 1,747 and `Quantumwake.WebTests`
+  1,265 of 1,265.
+- **A Linux CI job.** Done in 0.19.10: the `linux` job in `ci.yml` runs
+  `Quantumwake.Tests` and `Quantumwake.WebTests` on `ubuntu-latest`, so a
+  Windows-only assumption fails the pull request instead of a Linux pilot's
+  dashboard.
 - **Install discovery in Wine prefixes.** `GameInstallLocator.RelativeRoots`
   (`GameInstall.cs:37`) is built from backslash paths and walked across drive
   letters with `DriveInfo`. Both are meaningless on Linux. A Linux branch has to

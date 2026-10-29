@@ -212,6 +212,10 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
+### 0.19.10
+
+**Groundwork for running the dashboard on Linux.** Nothing changes on Windows. Linux support is being prepared for the dashboard, under Wine or Proton (the overlay, the MFD HUD and joystick input stay Windows-only), and this version fixes the first thing that would have gone wrong there: ship paints and weapon-attachment icons that would have gone missing. There is no Linux download yet.
+
 ### 0.19.9
 
 **Security update: built on .NET 10.0.14.** Quantum Wake carries its own copy of .NET inside `QuantumWake.exe`, so updating .NET on your PC does not update the copy the app uses. Only a new build does. 0.19.7 and earlier were built on 10.0.13, which predates Microsoft's 25 October out-of-band fix for CVE-2026-111497 (Brotli decompression) and CVE-2026-70197 (socket memory corruption). Nothing in Quantum Wake is known to reach either flaw: it decompresses no Brotli, and its dashboard only listens on your own PC unless you turn on LAN access. Updating is still recommended, and it matters most if you use the dashboard from a tablet over LAN.
