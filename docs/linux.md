@@ -117,7 +117,18 @@ second look, the Rep bars, Contracts, refinery, scan) was tuned against the
 particular misreads of `Windows.Media.Ocr`, and any other engine misreads
 differently.
 
-Candidates:
+**Decided (2026-10-29): Microsoft's ONNX Runtime running PaddleOCR's models,
+with our own code around it.** That means the `Microsoft.ML.OnnxRuntime` NuGet
+package (MIT, with the native runtime for `win-x64` and `linux-x64` included),
+plus PaddleOCR's text detection and recognition models exported to ONNX
+(Apache 2.0, as published by the RapidOCR project). We write the image
+preparation, the step that turns detection output into line boxes, and the
+text decoding ourselves. No Python, no distro package, and no community .NET
+wrapper: `Sdcb.PaddleOCR` and the RapidOCR C# ports were set aside so the
+only third-party code in the reading path is Microsoft's runtime and a model
+file.
+
+The comparison that led there:
 
 | | Tesseract CLI (call `tesseract … tsv`) | PaddleOCR models via ONNX Runtime |
 |---|---|---|
@@ -127,16 +138,19 @@ Candidates:
 | Output | Words, which need grouping | Text lines, which match `ScreenTextLine` directly |
 | Extra benefit | — | Could also back Windows installs with no English language pack, so `OcrTests` would stop passing by doing nothing |
 
-**Leaning towards PaddleOCR, not decided.** Decide on numbers: this install has
-146 files in `LIVE\screenshots`. Run every reader over them with
-`Windows.Media.Ocr` and with each candidate, and count where the answers differ,
-the same way the CLI checks the parser against the backups.
+**The engine is chosen; whether the readers survive it is not.** This install
+has 146 files in `LIVE\screenshots`. Run every reader over them with
+`Windows.Media.Ocr` and with the ONNX reader, and count where the answers
+differ, the same way the CLI checks the parser against the backups. The ONNX
+reader is done when every disagreement is either fixed or written down here as
+one it cannot help.
 
-Whichever engine wins, the two Windows-only image classes also need a
-cross-platform image library: `WindowsScreenReader` (crop, scale, shear,
-`PixelsAsync`) and `WindowsTileImageLoader` both decode through
-`Windows.Graphics.Imaging`. SkiaSharp is MIT-licensed and ships Linux native
-libraries.
+The two Windows-only image classes also need a cross-platform image library:
+`WindowsScreenReader` (crop, scale, shear, `PixelsAsync`) and
+`WindowsTileImageLoader` both decode through `Windows.Graphics.Imaging`.
+SkiaSharp is MIT-licensed, maintained under the .NET Foundation by Microsoft's
+.NET team, and ships Linux native libraries. `System.Drawing` is not an option:
+since .NET 6 it is Windows-only.
 
 ## What the Linux install has to show
 
