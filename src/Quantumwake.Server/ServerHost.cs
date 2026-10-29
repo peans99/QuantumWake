@@ -3355,6 +3355,13 @@ public static class ServerHost
                 : Results.NotFound();
         });
 
+        // Undoes the above, one contract at a time. Allowed out of the game:
+        // it asks the session nothing, it only returns what the pilot took off.
+        app.MapPost("/api/trips/{id}/ended/restore", (string id, string mission, TripStore trips) =>
+            trips.PutBack(id, mission) is { } restored
+                ? Results.Ok(new { id, restored })
+                : Results.NotFound());
+
         app.MapPost("/api/trips/{id}/repeat", (string id, TripStore trips) =>
             trips.Repeat(id, DateTimeOffset.UtcNow) is { } copy
                 ? Results.Ok(new { copy.Id, copy.Title, stops = copy.Stops.Count })
@@ -5056,6 +5063,10 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         EndedMissions = from is null && openMissions is not null
             ? TripStore.EndedMissions(trip, openMissions.Contains)
             : null,
+
+        // What "Remove ended lines" took off, so it can be put back. Never on a
+        // shared plan: nothing of somebody else's was removed here.
+        Removed = from is null ? trip.Removed : null,
         imported = from is null ? null : Marker(from),
     };
 

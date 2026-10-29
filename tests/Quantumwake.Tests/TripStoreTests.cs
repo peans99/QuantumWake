@@ -226,6 +226,70 @@ public class TripStoreTests : IDisposable
         Assert.Null(store.RemoveEnded("nope", _ => true));
     }
 
+    /// <summary>
+    /// Removing ended lines was final. Put back has to rebuild the plan as it
+    /// was - the stops that went in their places, the lines in their order -
+    /// and the record has to survive a restart, since that is when somebody
+    /// notices what they lost.
+    /// </summary>
+    [Fact]
+    public void Removed_contracts_can_be_put_back_where_they_were()
+    {
+        var store = NewStore();
+        var hand = new RunAction("x", "do", "Refuel", null, null, Done: false, DoneAt: null);
+        var trip = store.Add("Mixed", [
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [Haul("load", "old")] },
+            Stop("RR_P2_L4", "Checkmate") with { Actions = [Haul("load", "old"), Haul("load", "new")] },
+            Stop("RR_P6_L5", "Megumi Refueling") with { Actions = [Haul("unload", "old"), hand] },
+            Stop("RuinStation", "Ruin Station"),
+        ]);
+        store.ToggleStop(trip.Id, trip.Stops[0].Id);
+        var before = store.All().Single(t => t.Id == trip.Id);
+
+        Assert.Equal(3, store.RemoveEnded(trip.Id, id => id == "new"));
+
+        var reopened = NewStore();
+        var removed = reopened.All().Single(t => t.Id == trip.Id).Removed!;
+        Assert.Equal(3, removed.Count);
+        Assert.All(removed, line => Assert.Equal("old", line.Action.Link?.MissionId));
+
+        Assert.Equal(0, reopened.PutBack(trip.Id, "never-removed"));
+        Assert.Null(reopened.PutBack("nope", "old"));
+        Assert.Equal(3, reopened.PutBack(trip.Id, "old"));
+
+        var after = reopened.All().Single(t => t.Id == trip.Id);
+        Assert.Equal(before.Stops.Select(s => s.Id), after.Stops.Select(s => s.Id));
+        Assert.Equal(
+            before.Stops.Select(s => string.Join(",", (s.Actions ?? []).Select(a => a.Id))),
+            after.Stops.Select(s => string.Join(",", (s.Actions ?? []).Select(a => a.Id))));
+
+        // Gaslight comes back ticked, as it went: a landing ticks the stop and
+        // leaves the lines for the pilot.
+        Assert.True(after.Stops[0].Done);
+        Assert.Equal(before.Stops[0].DoneAt, after.Stops[0].DoneAt);
+        Assert.Null(after.Removed);
+    }
+
+    [Fact]
+    public void Putting_one_contract_back_leaves_the_others_removed()
+    {
+        var store = NewStore();
+        var trip = store.Add("Two", [
+            Stop("RR_P5_L2", "Gaslight") with { Actions = [Haul("load", "a"), Haul("load", "b")] },
+            Stop("RR_P2_L4", "Checkmate") with { Actions = [Haul("unload", "b")] },
+        ]);
+
+        Assert.Equal(3, store.RemoveEnded(trip.Id, _ => false));
+        Assert.Empty(store.All().Single(t => t.Id == trip.Id).Stops);
+
+        Assert.Equal(1, store.PutBack(trip.Id, "a"));
+
+        var after = store.All().Single(t => t.Id == trip.Id);
+        Assert.Equal("Gaslight", Assert.Single(after.Stops).Place);
+        Assert.Equal("a", Assert.Single(after.Stops[0].Actions!).Link?.MissionId);
+        Assert.Equal(["b", "b"], after.Removed!.Select(line => line.Action.Link?.MissionId));
+    }
+
     [Fact]
     public void Arriving_leaves_untracked_plans_alone()
     {

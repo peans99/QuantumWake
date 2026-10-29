@@ -4539,6 +4539,18 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
   color: var(--amber);
   font-size: 12px;
 }
+/* What that notice's button took off, kept folded beneath it with the way
+   back. Quiet on purpose: it is a record, not a warning. */
+.trip-removed {
+  margin: 10px 0 0;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  font-size: 12px;
+}
+.trip-removed > summary { cursor: pointer; color: var(--muted); }
+.trip-removed-contract { margin: 8px 0 0; }
+.trip-removed-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.trip-removed-lines { margin: 4px 0 0; padding-left: 18px; }
 /* The live hauling run beside the plan, one tick per load and drop. */
 .itinerary-haul {
   margin: 12px 0 0;

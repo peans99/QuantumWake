@@ -25231,9 +25231,64 @@ function tripEndedNotice(trip) {
 
   const clear = el('button', 'ghost tiny', txn(ended.lines, 'Remove {count} ended line', 'Remove {count} ended lines'));
   clear.type = 'button';
-  clear.title = tx('Takes those lines off, and any stop not yet reached that held nothing else');
+  clear.title = tx('Takes those lines off, and any stop that held nothing else. They are kept under Removed, where each contract can be put back');
   clear.addEventListener('click', () => tripCall(`/api/trips/${trip.id}/ended/remove`));
   box.append(clear);
+  return box;
+}
+
+/**
+ * The lines "Remove ended lines" took off, one contract to a row, each with
+ * the way back. Removing them used to be final, so a click on the wrong plan
+ * cost the run sheet.
+ *
+ * Grouped by contract because that is what the pilot removed and what they
+ * would want back; a line on its own is half a haul.
+ */
+function tripRemovedLog(trip) {
+  const removed = trip?.removed || [];
+  if (!removed.length) return null;
+
+  const contracts = new Map();
+  for (const line of removed) {
+    const mission = line.action?.link?.missionId;
+    if (!mission) continue;
+    if (!contracts.has(mission)) contracts.set(mission, []);
+    contracts.get(mission).push(line);
+  }
+  if (!contracts.size) return null;
+
+  const box = el('details', 'trip-removed');
+  box.append(el('summary', null, txn(contracts.size,
+    'Removed with ended contracts · {count} contract', 'Removed with ended contracts · {count} contracts')));
+
+  // Newest removal first: the one just taken off is the one most likely wanted back.
+  const newest = (lines) => Math.max(...lines.map((line) => new Date(line.removedAt).getTime() || 0));
+  for (const [mission, lines] of [...contracts].sort((a, b) => newest(b[1]) - newest(a[1]))) {
+    const row = el('div', 'trip-removed-contract');
+    const head = el('div', 'trip-removed-head');
+
+    // Hauling lines read "Carbon — <contract title>"; the title is the half
+    // that names what was removed.
+    const text = lines[0].action.text || '';
+    head.append(el('b', null, text.includes(' — ') ? text.slice(text.indexOf(' — ') + 3) : text));
+    head.append(el('span', 'muted', `${txn(lines.length, '{count} line', '{count} lines')} · ${tx('removed {when}', { when: relative(lines[0].removedAt) })}`));
+
+    const back = el('button', 'ghost tiny', tx('Put back'));
+    back.type = 'button';
+    back.title = tx('Return these lines to the plan, and any stop that went with them');
+    back.addEventListener('click', () =>
+      tripCall(`/api/trips/${trip.id}/ended/restore?mission=${encodeURIComponent(mission)}`));
+    head.append(back);
+    row.append(head);
+
+    const list = el('ul', 'trip-removed-lines');
+    for (const line of lines)
+      list.append(el('li', 'muted', `${runActionLabel(line.action.kind)} · ${line.action.text} · ${line.place}`));
+    row.append(list);
+    box.append(row);
+  }
+
   return box;
 }
 
@@ -25901,6 +25956,9 @@ function renderItineraryPlan(main, trip) {
 
   const ended = tripEndedNotice(trip);
   if (ended) main.append(ended);
+
+  const removed = tripRemovedLog(trip);
+  if (removed) main.append(removed);
 
   const haul = itineraryHaulPanel(trip);
   if (haul) main.append(haul);
