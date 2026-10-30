@@ -3,6 +3,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Quantumwake.Core\Quantumwake.Core.csproj" />
     <ProjectReference Include="..\Quantumwake.Data\Quantumwake.Data.csproj" />
+    <!-- For the ocr command: the screen reader run over a folder of screenshots, the way
+         the backups are run through the parser. -->
+    <ProjectReference Include="..\Quantumwake.Ocr.Onnx\Quantumwake.Ocr.Onnx.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

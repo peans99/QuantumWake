@@ -125,6 +125,15 @@ public static class ServerHost
         builder.Services.AddSingleton<ScreenSettingsStore>();
         builder.Services.AddSingleton<ScreenReadingStore>();
 
+        // A host that brought no screen reader gets the one that runs anywhere:
+        // the Linux server, and a Windows machine whose OCR has no English.
+        // Its models are fetched on first use, which the screen settings say.
+        screen ??= new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+
+        // The same for the clipboard, where Linux has a command for it.
+        if (clipboard is null && LinuxClipboardReader.Available)
+            clipboard = new LinuxClipboardReader();
+
         // Built by hand rather than resolved, because the two readers come from
         // the host and may not exist at all.
         builder.Services.AddSingleton(sp =>
@@ -3478,6 +3487,13 @@ public static class ServerHost
             canReadScreenshots = insight.CanReadScreenshots,
             canReadClipboard = insight.CanReadClipboard,
 
+            // Which engine reads, and whether its models are on disk yet: the
+            // ONNX one fetches 14 MB on first use, and a first read that takes
+            // a minute should not look like a read that failed.
+            engine = screen is Quantumwake.Ocr.Onnx.OnnxScreenReader onnx
+                ? new { name = "onnx", ready = onnx.Ready }
+                : new { name = "windows", ready = true },
+
             // Where the watch looks, said out loud: the pilot is agreeing to a
             // folder being followed, and should be able to see which.
             folder = install is null ? null : Screenshots.FolderFor(install.RootPath),
@@ -3490,7 +3506,27 @@ public static class ServerHost
 
         app.MapPost("/api/screen/settings", (
             ScreenSettingsStore settings, ScreenMode? mode, bool? watch, bool? watchScreenshots) =>
-            Results.Ok(settings.Save(mode, watch, watchScreenshots)));
+        {
+            var saved = settings.Save(mode, watch, watchScreenshots);
+
+            // Asking for screenshots is the moment to fetch the models, so
+            // they are there before the first frame rather than in front of it.
+            if (saved.Mode == ScreenMode.Screenshots && screen is Quantumwake.Ocr.Onnx.OnnxScreenReader { Ready: false } onnx)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Quantumwake.Ocr.Onnx.OnnxModels.EnsureAsync(onnx.Models);
+                        DiagnosticTrace.Mark("screen", "OCR models fetched.");
+                    }
+                    catch (Exception e)
+                    {
+                        DiagnosticTrace.Mark("screen", $"OCR models could not be fetched ({e.GetType().Name}).");
+                    }
+                });
+
+            return Results.Ok(saved);
+        });
 
         // What the screenshots said, newest first, with what the logs believed
         // beside each. The whole store: it is bounded, and a page that has to

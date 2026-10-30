@@ -337,8 +337,9 @@ jobs:
           logs out of the prefix. It finds the game in a LUG Helper, Lutris, Proton,
           Bottles or Heroic prefix on its own; if it comes up empty, the dashboard says
           which prefixes it searched and asks for the folder - the prefix itself, or the
-          ``LIVE`` folder under its ``drive_c`` - and remembers it. The overlay, the MFD
-          and joystick input are Windows-only, and so is reading screenshots for now.
+          ``LIVE`` folder under its ``drive_c`` - and remembers it. Screenshots are read
+          with PaddleOCR's models on ONNX Runtime, fetched (14 MB) the first time you
+          switch screenshots on. The overlay, the MFD and joystick input are Windows-only.
 
           ### What it does not do
 

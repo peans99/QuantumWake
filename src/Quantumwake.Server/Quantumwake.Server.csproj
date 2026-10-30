@@ -3,6 +3,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Quantumwake.Core\Quantumwake.Core.csproj" />
     <ProjectReference Include="..\Quantumwake.Data\Quantumwake.Data.csproj" />
+
+    <!-- The screen reader a host without Windows OCR falls back to: the bare
+         server on Linux, and a Windows machine with no English language pack. -->
+    <ProjectReference Include="..\Quantumwake.Ocr.Onnx\Quantumwake.Ocr.Onnx.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

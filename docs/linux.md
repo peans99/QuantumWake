@@ -11,7 +11,7 @@ cannot come over are the ones that need a Windows desktop.
 ## Scope
 
 **In:** the server and the web dashboard, the CLI, reading the logs and the game
-archive, the clipboard, and, as a later step, screenshots.
+archive, the clipboard, and screenshots.
 
 **Out:** the overlay, the MFD HUD and live joystick input. All three are WPF or
 WinRT, and none of them is what a Linux pilot is missing. The Controls page
@@ -152,57 +152,121 @@ from `Path.GetTempPath()`. The installer itself was already safe, since
 
 ### 2. The clipboard
 
-Worth more than the OCR. Clipboard-only is the narrow screen mode a pilot picks
-first, and `/showlocation` → *points from here* runs entirely on the clipboard.
-A Linux `IClipboardReader` runs `wl-paste --no-newline` and falls back to
-`xclip -o -selection clipboard`. When neither is installed the reader is not
-registered, so the panel says the clipboard cannot be read instead of showing
-nothing. To check on the Linux install: does Wine hand what the game copied to
-the desktop clipboard at all, under both X11 and Wayland?
+Done in 0.19.13: `LinuxClipboardReader` in the server runs `wl-paste
+--no-newline`, else `xclip -o -selection clipboard`, else `xsel`, whichever is
+on the path, Wayland's first because a Wayland session usually has an X bridge
+and the X tools then read a clipboard the game never wrote to. When none is
+installed the reader is not registered and the panel says the clipboard cannot
+be read. `wl-paste` answering "Nothing is copied" (exit 1) reads as an empty
+clipboard, not a failure. Measured 2026-10-30 on Fedora, KDE on Wayland:
+`wl-paste` is installed, `xclip` and `xsel` are not. **Whether Wine hands what
+the game copied to that clipboard is still unmeasured**; it needs the game
+running.
 
 ### 3. Screenshots
 
-On Linux the screenshots mode says "not on Linux yet" until this step lands.
+Done in 0.19.13, in `src/Quantumwake.Ocr.Onnx`: `OnnxScreenReader` is the
+`IScreenReader` the server falls back to when the host brought none - the
+Linux server, and a Windows machine whose OCR has no English language pack -
+on Microsoft's ONNX Runtime (1.31.1) running PaddleOCR's models, with
+SkiaSharp (4.154.0, the NoDependencies Linux build, so no fontconfig is
+needed) for decoding, cropping, scaling and shearing. Nothing else: the box
+reading, the CTC decoding, the line grouping and the second look are this
+project's code, written to the same contract as `WindowsScreenReader`, so
+`ScreenInsightService` and every reader run unchanged.
 
-The engine is the smaller part of the work. Every screen reader (the wallet's
-second look, the Rep bars, Contracts, refinery, scan) was tuned against the
-particular misreads of `Windows.Media.Ocr`, and any other engine misreads
-differently.
+**The models.** PP-OCRv4's detector (4.7 MB) and PP-OCRv3's English
+recogniser (9.0 MB), as RapidOCR exports them, from
+`huggingface.co/SWHL/RapidOCR` pinned to revision `1cfba2e9` and checked
+against a SHA-256 on arrival (`OnnxModels.cs`). No PP-OCRv4 English export is
+published; the multilingual PP-OCRv4 recogniser (10.9 MB, 6,623 characters) is
+kept as an alternative for the comparison harness. **Fetched on first use**,
+into `<data>/ocr` (`QUANTUMWAKE_OCR_MODELS` moves it), rather than shipped in
+the binary or checked in - a departure from what this plan first said, for a
+reason: fifteen megabytes of model in the repository's history for ever, and
+in every Windows build that never loads them, against a download the app
+already makes for StarStrings and the community dataset. Switching the
+screenshots mode on starts the fetch, so it is there before the first frame;
+`/api/screen/settings` reports `engine: { name, ready }` so a page can say so.
+The character tables are PaddleOCR's and are embedded (Apache 2.0, in NOTICE).
 
-**Decided (2026-10-29): Microsoft's ONNX Runtime running PaddleOCR's models,
-with our own code around it.** That means the `Microsoft.ML.OnnxRuntime` NuGet
-package (MIT, with the native runtime for `win-x64` and `linux-x64` included),
-plus PaddleOCR's text detection and recognition models exported to ONNX
-(Apache 2.0, as published by the RapidOCR project). We write the image
-preparation, the step that turns detection output into line boxes, and the
-text decoding ourselves. No Python, no distro package, and no community .NET
-wrapper: `Sdcb.PaddleOCR` and the RapidOCR C# ports were set aside so the
-only third-party code in the reading path is Microsoft's runtime and a model
-file.
+**How it reads.** The frame goes into the detector at its own size, each side
+rounded to a multiple of 32, up to a long side of 4,096 - not the reference
+960, which would put the 12-pixel item names at four pixels. The probability
+map is thresholded at 0.3, grouped into four-connected components, each
+scored by its mean and kept above 0.5, and grown back out by `area × 1.6 /
+perimeter`; axis-aligned, since the game writes nothing slanted but the one
+line the second look stands up. Each box is cut from the original frame, drawn
+48 pixels tall, read, and dropped below 0.4 confidence. Boxes that overlap in
+height by half the shorter and sit within 1.2 heights of each other are one
+line, left to right. **The geometry reported is the ink's, not the box's**:
+rows and columns of the crop that vary by more than a fifth of its most
+varied row are glyph, the rest the unclip margin, so a line's height is its
+glyphs' as it is on Windows, where every distance the readers measure is in
+those heights.
 
-The comparison that led there:
+**Measured, 2026-10-30, on the 146 screenshots in this install's
+`LIVE/screenshots`** (3440×1440, the same files the Windows readers were
+tuned on), with `Quantumwake.Cli --ocr-check <folder>`, which runs the whole
+`ReadShotAsync` - second looks, Rep bars, `Understand` - and prints what each
+frame was taken for:
 
-| | Tesseract CLI (call `tesseract … tsv`) | PaddleOCR models via ONNX Runtime |
-|---|---|---|
-| Effort | Small: parse the TSV and group words into lines | Bigger: ~500 lines to post-process detection and decode recognition |
-| What the pilot installs | Tesseract from their distro | Nothing; ~15 MB of models ship with the app |
-| Light HUD text on dark game backgrounds | Weak without inverting, upscaling and thresholding | Built for on-screen and photographed text |
-| Output | Words, which need grouping | Text lines, which match `ScreenTextLine` directly |
-| Extra benefit | — | Could also back Windows installs with no English language pack, so `OcrTests` would stop passing by doing nothing |
+| Kind | Frames |
+|---|---|
+| Contracts | 37 |
+| Reputation | 21 |
+| Loadout | 20 |
+| MobiGlas (an app without a reader) | 13 |
+| Map | 7 |
+| Mining | 4 |
+| Fleet, Kiosk, Refinery, Tooltip | 3 each |
+| Unknown | 32 |
 
-**The engine is chosen; whether the readers survive it is not.** This install
-has 146 files in `LIVE\screenshots`. Run every reader over them with
-`Windows.Media.Ocr` and with the ONNX reader, and count where the answers
-differ, the same way the CLI checks the parser against the backups. The ONNX
-reader is done when every disagreement is either fixed or written down here as
-one it cannot help.
+The wallet figure was read on 103 frames. Twelve of the 32 unknowns are one
+identical all-black 136 KB JPEG the game wrote twelve times; the other twenty
+are in-flight HUD frames whose reads are noise, as a HUD over a planet is.
+The three tooltips name `Arlington Rifle` twice and `Sion Corpeneator2`
+(the catalogue's `Sion Corp Eneator 2` would be a confusable, not a miss). A
+first read costs about 5 s for loading the sessions; after that the median
+frame takes 1.3 s on this four-core VirtualBox guest, with 0.9 s the fastest
+and 7 s the slowest, against 170 ms for the Windows engine. Fast enough for a
+file the pilot saved; it is not a live reader and does not need to be.
 
-The two Windows-only image classes also need a cross-platform image library:
-`WindowsScreenReader` (crop, scale, shear, `PixelsAsync`) and
-`WindowsTileImageLoader` both decode through `Windows.Graphics.Imaging`.
-SkiaSharp is MIT-licensed, maintained under the .NET Foundation by Microsoft's
-.NET team, and ships Linux native libraries. `System.Drawing` is not an option:
-since .NET 6 it is Windows-only.
+**What the comparison still lacks is the other half.** The same command on
+Windows, over the same folder, with `WindowsScreenReader` behind it, is what
+says where the two engines disagree frame by frame; this machine has no
+Windows engine. Run it there, diff the two outputs, and write the
+disagreements here. Known differences already: the English recogniser drops
+the space after some labels (`Volume:13000 SCU`, `Item Type:Rifle`,
+`Effective Range50m`), which the tooltip reader survives because it splits on
+the colon, and it reads `W` for the mobiGlas glyphs the Windows engine skips.
+The readers were not retuned for this engine: anything that reads here reads
+on the rules written for Windows.
+
+**English or multilingual recogniser.** Both were run over every ninth frame
+(17 frames) with `--ocr-check`, at the same speed (1.46 s a frame each).
+Fourteen frames read the same. The multilingual PP-OCRv4 model read a Fleet
+Manager frame the English one left unknown (five ships) and a map footer's
+`SYSTEM` without the trailing `I` the English model added; the English model
+read a Rep card's `RED WIND LINEHAUL: MEMBER 78%` where the multilingual one
+answered `☆`, a glyph from its 6,623-character table that the readers have no
+rule for. English stays the default: a table that cannot emit a stray CJK or
+symbol character cannot hand the readers one, and the two frames it lost are
+the kind of marginal read the Windows comparison will say more about.
+
+**`--ocr <file-or-folder> [--out <dir>] [--show] [--rec ch]`** is the other
+harness: the lines each frame read, their boxes, and the time, written in the
+probe's own `[ left top hNN]  text` format so `--screen` reads them back.
+
+**Tests.** `tests/Quantumwake.OnnxOcrTests` (11, on the Linux CI job and the
+Windows one) draws its fixtures with SkiaSharp through a font opened by file,
+reads them, and checks the geometry: a line sits where it was drawn at its
+glyphs' height, a second look maps its boxes back into frame pixels, a shear
+drawn and undone leaves the box in place, a patch off the frame is clamped,
+pixels come back in colour, ink is measured inside a padded crop, and words
+group into lines by row and gap. The models are fetched once into the app's
+folder and cached by CI; a runner with no network stands the reading tests
+down and says why.
 
 ## Four tests that fail on this machine, and not because of Linux
 
@@ -247,13 +311,16 @@ three questions stay open.
    `! unmatched known tags` at 0 (one log; there are no backups yet to make
    the count mean more).
 4. **The clipboard.** `wl-paste` is installed and the session is Wayland;
-   `xclip` and `xsel` are not. Whether Wine hands what the game copied to that
-   clipboard is unmeasured: it needs the game running.
+   `xclip` and `xsel` are not. The reader is built (step 2). Whether Wine hands
+   what the game copied to that clipboard is unmeasured: it needs the game
+   running.
 5. **The localisation mod** - unmeasured, for the same reason.
 6. **Screenshots.** `LIVE/screenshots` holds 146 JPEGs at 3440×1440, named
    `ScreenShot-2026-09-07_21-00-35-8E4.jpg` and so on. They predate the
    prefix, so they were copied in from the Windows install and say nothing
-   about what the game writes under Wine. Unmeasured.
+   about what the game writes under Wine; what they say about reading them on
+   Linux is in step 3 above. Twelve of them are the same all-black 136 KB
+   file, so the game does sometimes write a black screenshot.
 7. **The process name** - unmeasured. `GameProcess.IsRunning()` in the server
    accepts `StarCitizen` and `StarCitizen.exe` on Linux, because the kernel
    cuts a process name at 15 characters and `StarCitizen.exe` is exactly that
