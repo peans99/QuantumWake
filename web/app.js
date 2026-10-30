@@ -13484,6 +13484,33 @@ async function renderOverlayLayout() {
   $('#overlay-layout-status').textContent = '';
 }
 
+/**
+ * The "no install" box says where it looked. Its markup says every drive was
+ * searched, which is true on Windows and meaningless on Linux, where the game
+ * sits inside a Wine prefix: there the box names the prefixes it looked in -
+ * or says it found none - and the example folder is a prefix one.
+ */
+async function describeInstallSearch() {
+  let search;
+  try {
+    search = await getJson('/api/install/path');
+  } catch {
+    return;
+  }
+  if (!search || search.windows !== false) return;
+
+  const prefixes = Array.isArray(search.prefixes) ? search.prefixes : [];
+  const where = $('#install-search');
+  if (where) {
+    where.textContent = prefixes.length
+      ? tx('The Wine prefixes at {prefixes} were searched, along with the RSI launcher\'s own record of where it installed the game. If it lives somewhere else, point us at it: the folder holding Game.log, its parent, or the prefix itself - usually something ending in StarCitizen/LIVE under drive_c.', { prefixes: prefixes.join(', ') })
+      : tx('No Wine prefix was found in the usual places: ~/Games, ~/.wine, Steam, Bottles and Heroic. Point us at the game: the folder holding Game.log, its parent, or the prefix itself - usually something ending in StarCitizen/LIVE under drive_c.');
+  }
+
+  const input = $('#install-path');
+  if (input) input.placeholder = (prefixes[0] || '~/Games/star-citizen') + '/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE';
+}
+
 $('#install-path-save')?.addEventListener('click', async (e) => {
   const status = $('#install-path-status');
   const path = $('#install-path').value.trim();
@@ -30288,7 +30315,10 @@ async function boot() {
 
     // Nothing to read: ask where the game lives rather than showing an
     // app full of empty pages.
-    if (!isOverlay) $('#no-install').hidden = false;
+    if (!isOverlay) {
+      $('#no-install').hidden = false;
+      describeInstallSearch();
+    }
   }
 
   try {

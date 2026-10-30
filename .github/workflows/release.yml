@@ -334,11 +334,11 @@ jobs:
           Download **QuantumWake-${{ steps.version.outputs.version }}-linux-x64.tar.gz**,
           unpack it and run ``./quantumwake``, then open http://localhost:31337. The game
           runs under Wine or Proton; Quantum Wake runs natively beside it and reads the
-          logs out of the prefix. It cannot find the game inside a prefix on its own yet,
-          so the dashboard asks for the folder the first time and remembers it: the one
-          ending in ``drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE``.
-          The overlay, the MFD and joystick input are Windows-only, and so is reading
-          screenshots for now.
+          logs out of the prefix. It finds the game in a LUG Helper, Lutris, Proton,
+          Bottles or Heroic prefix on its own; if it comes up empty, the dashboard says
+          which prefixes it searched and asks for the folder - the prefix itself, or the
+          ``LIVE`` folder under its ``drive_c`` - and remembers it. The overlay, the MFD
+          and joystick input are Windows-only, and so is reading screenshots for now.
 
           ### What it does not do
 

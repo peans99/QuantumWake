@@ -86,7 +86,7 @@ public static class ControlsEndpoints
             return Results.Ok(new
             {
                 ready = !controls.Catalogue.IsEmpty,
-                gameRunning = System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0,
+                gameRunning = GameProcess.IsRunning(),
                 profilePath = path,
                 profileFound = profile is not null,
                 problem,
@@ -161,7 +161,7 @@ public static class ControlsEndpoints
         app.MapPost("/api/controls/restore", (RestoreRequest body, ControlsStore store) =>
         {
             if (install is null) return Results.NotFound(new { message = "No install." });
-            if (System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0)
+            if (GameProcess.IsRunning())
                 return Results.Conflict(new { message = "Star Citizen is running. It reads the profile at start and rewrites it in play, so close the game first - or export this version and import it from the keybinding screen instead." });
             if (string.IsNullOrWhiteSpace(body.Source) || store.Read(body.Source) is not { } bytes)
                 return Results.NotFound(new { message = "No such version." });
@@ -195,7 +195,7 @@ public static class ControlsEndpoints
             if (!File.Exists(path)) return Results.NotFound(new { message = "The game has not written a keybinding profile yet." });
             if (body.Instance <= 0) return Results.BadRequest(new { message = "Which stick?" });
 
-            var running = System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0;
+            var running = GameProcess.IsRunning();
             var how = body.How ?? (running ? "export" : "live");
             if (how == "live" && running)
                 return Results.Conflict(new { message = "Star Citizen is running. Close it to write the profile, or apply as an import file and load it from the keybinding screen." });
@@ -245,7 +245,7 @@ public static class ControlsEndpoints
                 .ToList();
             if (changes.Count == 0) return Results.BadRequest(new { message = "Nothing to change." });
 
-            var running = System.Diagnostics.Process.GetProcessesByName("StarCitizen").Length > 0;
+            var running = GameProcess.IsRunning();
             var how = body.How ?? (running ? "export" : "live");
             if (how == "live" && running)
                 return Results.Conflict(new { message = "Star Citizen is running. Close it to write the profile, or apply as an import file and load it from the keybinding screen." });

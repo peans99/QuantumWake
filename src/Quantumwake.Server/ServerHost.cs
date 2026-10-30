@@ -306,7 +306,12 @@ public static class ServerHost
         {
             saved = InstallPathStore.Load(),
             detected = GameInstallLocator.Discover().Select(i => new { i.Channel, i.RootPath }),
-            fromLauncher = GameInstallLocator.FromLauncherLog().Select(i => new { i.Channel, i.RootPath })
+            fromLauncher = GameInstallLocator.FromLauncherLog().Select(i => new { i.Channel, i.RootPath }),
+
+            // What was searched, so the page can say so instead of claiming
+            // every drive was: on Linux there are no drives, only prefixes.
+            windows = OperatingSystem.IsWindows(),
+            prefixes = OperatingSystem.IsWindows() ? [] : GameInstallLocator.WinePrefixes()
         });
 
         app.MapPost("/api/install/path", (InstallPathRequest body) =>
@@ -322,8 +327,13 @@ public static class ServerHost
             return resolved is null
                 ? Results.BadRequest(new
                 {
-                    message = "No Star Citizen logs there. Pick the folder holding Game.log "
-                        + "or its parent - usually ...\\StarCitizen\\LIVE."
+                    // Two whole sentences rather than a shared stem, so each
+                    // stays one catalogue key the dashboard can translate.
+                    message = OperatingSystem.IsWindows()
+                        ? "No Star Citizen logs there. Pick the folder holding Game.log "
+                            + "or its parent - usually ...\\StarCitizen\\LIVE."
+                        : "No Star Citizen logs there. Pick the folder holding Game.log, its parent, "
+                            + "or the Wine prefix itself - usually something ending in StarCitizen/LIVE under drive_c."
                 })
                 : Results.Ok(new { resolved.Channel, resolved.RootPath, restartNeeded = true });
         });

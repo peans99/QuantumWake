@@ -1,6 +1,6 @@
 # Linux
 
-Plan, partly built. Quantum Wake on Linux, for the line after 0.19.9 (`dev0190`).
+Partly built. Quantum Wake on Linux, the line after 0.19.9 (`dev0190`).
 
 The game runs on Linux under Wine or Proton and writes the same `Game.log` it
 writes on Windows, just inside a Wine prefix. Everything Quantum Wake knows comes
@@ -79,22 +79,45 @@ from `Path.GetTempPath()`. The installer itself was already safe, since
   `Quantumwake.Tests` and `Quantumwake.WebTests` on `ubuntu-latest`, so a
   Windows-only assumption fails the pull request instead of a Linux pilot's
   dashboard.
-- **Install discovery in Wine prefixes.** `GameInstallLocator.RelativeRoots`
-  (`GameInstall.cs:37`) is built from backslash paths and walked across drive
-  letters with `DriveInfo`. Both are meaningless on Linux. A Linux branch has to
-  look inside the usual prefixes for `drive_c/Program Files/Roberts Space
-  Industries/StarCitizen/<channel>`. The launcher-log fallback
-  (`GameInstall.cs:139`) reads `ApplicationData`, which on Linux is the native
-  `~/.config` and not the prefix's `AppData/Roaming`. The `C:\...` paths it finds
-  there also have to be mapped back through the prefix's `drive_c`.
-  `--path` and `QUANTUMWAKE_DATA` already work as escape hatches, and so does
-  the dashboard's own "No Star Citizen logs found" box, which remembers the
-  folder. Its wording ("Every drive was searched", a `D:\Games\...`
-  placeholder) is Windows-shaped and should change with discovery.
+- **Install discovery in Wine prefixes.** Done in 0.19.12, in
+  `GameInstall.Wine.cs`, and measured on 2026-10-30 against a LUG Helper
+  (4.17) install on Fedora. On Linux `Discover()` walks prefixes instead of
+  drives, and under each prefix's drives the same `RelativeRoots` list as on
+  Windows, with the slashes turned round. The prefixes, surest first, every one
+  checked for a `drive_c` before it counts:
 
-  **The prefix locations are not measured yet.** The Wine installer helper,
-  Lutris and Proton each put the prefix somewhere different, and the list
-  belongs here only once the Linux install has shown them.
+  | Where | Why |
+  |---|---|
+  | `$WINEPREFIX` | The one the game is launched with, when the server inherits it |
+  | `~/.config/starcitizen-lug/winedir.conf` | The LUG Helper writes the prefix it made there. **Measured:** `/home/user/Games/star-citizen`. `gamedir.conf` beside it names the `StarCitizen` folder itself, and is searched as a game folder outright |
+  | `~/Games/star-citizen`, then every folder under `~/Games` | The LUG Helper's default, and the Lutris installer's. **Measured** for the helper |
+  | `~/.wine` | Wine's own default |
+  | `steamapps/compatdata/<appid>/pfx` under `~/.local/share/Steam`, `~/.steam/steam` (followed as a link, so one install is not listed twice) and the Flatpak Steam | Proton. From Valve's layout, not measured here |
+  | `~/.local/share/bottles/bottles/*` and the Flatpak Bottles | From Bottles' layout, not measured here |
+  | `~/Games/Heroic/Prefixes/default/*` | From Heroic's layout, not measured here |
+
+  A prefix's drives are `drive_c` and every `dosdevices/<letter>:` link that
+  points at a folder, each named as the folder the link resolves to rather
+  than as the link: `c:` is a link to `drive_c`, `z:` is `/`, and an install
+  reached two ways would otherwise carry two paths and, since the session
+  cache is keyed on the path, two caches. A player who told the launcher to
+  install on `D:` has that letter pointed at a Linux folder, and the walk goes
+  there too.
+
+  The launcher-log fallback reads the same `log.log` from inside each prefix
+  (`drive_c/users/*/AppData/Roaming/rsilauncher/logs/log.log`) and turns the
+  `C:\...` paths in it into prefix paths through `dosdevices`, matching each
+  segment case-insensitively when the exact name is missing, since Wine looks
+  names up the way Windows does and Linux does not. On Windows nothing moves:
+  the log is read from `%APPDATA%` as before, and every path is used as
+  written.
+
+  `FromPath` - `--path` on the CLI, and the dashboard's "No Star Citizen logs
+  found" box - accepts three more spellings on Linux: the prefix itself, a
+  `C:\...` path copied out of the launcher, and `~`. The box itself now says
+  which prefixes it searched, or that it found none in the usual places, and
+  shows a prefix path as its example, instead of claiming every drive was
+  searched. `/api/install/path` carries `windows` and `prefixes` for that.
 - **The data folder.** Fixed in 0.19.11. On Linux, .NET maps
   `LocalApplicationData` to `$XDG_DATA_HOME` (default `~/.local/share`), so
   `AppPaths.Root` is `~/.local/share/Quantumwake`, but only when it asks with
@@ -181,26 +204,59 @@ SkiaSharp is MIT-licensed, maintained under the .NET Foundation by Microsoft's
 .NET team, and ships Linux native libraries. `System.Drawing` is not an option:
 since .NET 6 it is Windows-only.
 
-## What the Linux install has to show
+## Four tests that fail on this machine, and not because of Linux
 
-Nothing in phase 1 beyond the test fixes, the data folder and packaging should
-be built before these are answered:
+Measured 2026-10-30 on the Fedora VirtualBox guest above, on `main` with no
+change applied, three runs each: `MiningLogStoreTests.The_newest_run_is_first`,
+`ChangeStampTests.Editing_one_record_does_not_stamp_its_neighbours` and the two
+`ControlsStoreTests` snapshot tests fail in three, four, three of three runs.
+Each writes two rows a few microseconds apart and expects their stamps to
+differ, and on this guest `DateTimeOffset.UtcNow` answered the same value for
+both (`20:17:41.2101456` twice, in the one failure read in full). The same
+suite passed whole on WSL Ubuntu, and these four pass on Windows, so the clock
+is this virtual machine's and not a Linux fault; they are listed so the next
+run here is not spent on them.
 
-1. Where each launcher's prefix puts the game, as a directory listing down to
-   `LIVE/Game.log`, `logbackups/` and `screenshots/`, with the names in their
-   real case.
-2. Where the RSI launcher's `log.log` lands inside the prefix, and how the paths
-   in it are written (`C:\...`, `Z:\...`, or something else).
-3. That `Game.log` lines are byte-identical to Windows ones. Run the CLI over
-   the Linux backups: `! unmatched known tags` should read 0.
-4. Whether `/showlocation` reaches `wl-paste` or `xclip`, and on which display
-   server.
-5. Whether the localisation mod installs into the prefix, and the game reads
-   it.
-6. Whether F12 screenshots come out as the same JPEGs, at the same resolution
-   the readers expect.
-7. What the running game is called to Linux. The Controls page refuses to
-   restore a profile while `Process.GetProcessesByName("StarCitizen")` finds
-   the game, and under Wine the process may be named `StarCitizen.exe` or after
-   the Wine loader instead. `ps -eo comm,args | grep -i starcitizen` while it
-   runs answers it.
+## What the Linux install has shown
+
+Measured 2026-10-30 on Fedora (kernel 7.2, KDE on Wayland), on an install made
+by the LUG Helper 4.17 with its `lug-wine-tkg-git-11.18-1` runner, one game
+session in. The game was not running while this was measured, so the last
+three questions stay open.
+
+1. **Where the game is.** The prefix is `/home/user/Games/star-citizen`. The
+   game is at `drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE`,
+   in that case, with `Bin64/`, `Data.p4k` (156 GB), `Game.log`, `logs/`,
+   `screenshots/` and `EasyAntiCheat/` beside it. No `logbackups/` yet: the game
+   makes it on its second start, and this install has had one. No `user/`
+   folder either, so there is no `actionmaps.xml` for the Controls page to read
+   until the game writes one; the page already says so. Answered by the
+   `winedir.conf` and `gamedir.conf` the helper writes under
+   `~/.config/starcitizen-lug/`, which name both folders outright.
+2. **The launcher's log** is at
+   `drive_c/users/user/AppData/Roaming/rsilauncher/logs/log.log` (207 KB after
+   a day). Its paths are `C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE`,
+   JSON-escaped, so the Windows regex matches them as it stands; 13 lines in
+   this log name the LIVE folder, and none names any other drive letter. The
+   prefix's `dosdevices/` holds `c:` → `drive_c` and `z:` → `/`.
+3. **`Game.log` is the Windows one.** It starts with the same
+   `BackupNameAttachment` line, names the executable as
+   `C:\Program Files\...\Bin64\StarCitizen.exe` and reports Build 12913470,
+   FileVersion 4.10.197.2878. The CLI run from this tree, with no `--path`,
+   finds the install through the helper's config and reads it with
+   `! unmatched known tags` at 0 (one log; there are no backups yet to make
+   the count mean more).
+4. **The clipboard.** `wl-paste` is installed and the session is Wayland;
+   `xclip` and `xsel` are not. Whether Wine hands what the game copied to that
+   clipboard is unmeasured: it needs the game running.
+5. **The localisation mod** - unmeasured, for the same reason.
+6. **Screenshots.** `LIVE/screenshots` holds 146 JPEGs at 3440×1440, named
+   `ScreenShot-2026-09-07_21-00-35-8E4.jpg` and so on. They predate the
+   prefix, so they were copied in from the Windows install and say nothing
+   about what the game writes under Wine. Unmeasured.
+7. **The process name** - unmeasured. `GameProcess.IsRunning()` in the server
+   accepts `StarCitizen` and `StarCitizen.exe` on Linux, because the kernel
+   cuts a process name at 15 characters and `StarCitizen.exe` is exactly that
+   long, so the cut name and the full one are the same string. `ps -eo
+   comm,args | grep -i starcitizen` while the game runs is what confirms or
+   corrects it.

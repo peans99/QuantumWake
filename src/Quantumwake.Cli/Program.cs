@@ -29,7 +29,9 @@ var install = pathArg is not null
 
 if (install is null)
 {
-    Console.Error.WriteLine("No Star Citizen install found. Pass --path <StarCitizen\\LIVE>.");
+    Console.Error.WriteLine(OperatingSystem.IsWindows()
+        ? "No Star Citizen install found. Pass --path <StarCitizen\\LIVE>."
+        : "No Star Citizen install found in any Wine prefix. Pass --path <prefix>, or the LIVE folder under its drive_c.");
     return 1;
 }
 
