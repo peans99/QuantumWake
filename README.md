@@ -212,9 +212,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.19.10
+### 0.19.11
 
-**Groundwork for running the dashboard on Linux.** Nothing changes on Windows. Linux support is being prepared for the dashboard, under Wine or Proton (the overlay, the MFD HUD and joystick input stay Windows-only), and this version fixes the first thing that would have gone wrong there: ship paints and weapon-attachment icons that would have gone missing. There is no Linux download yet.
+**A first Linux download.** Nothing changes on Windows. Alongside `QuantumWake.exe` the release now carries `QuantumWake-0.19.11-linux-x64.tar.gz`: the dashboard and the command-line tool, for pilots who run Star Citizen under Wine or Proton. Unpack it, run `./quantumwake` and open http://localhost:31337. It cannot yet find the game inside a Wine prefix by itself, so the dashboard asks for the folder the first time (the one ending in `StarCitizen/LIVE` under the prefix's `drive_c`) and remembers it. The overlay, the MFD HUD and joystick input stay Windows-only, and reading screenshots does not work on Linux yet. Two things that would have gone wrong there are fixed: ship paints and weapon-attachment icons went missing, and on a fresh Linux account the app kept a separate history in every folder it was started from.
 
 ### 0.19.9
 

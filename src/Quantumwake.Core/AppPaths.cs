@@ -26,9 +26,23 @@ public static class AppPaths
     public static string Root => _root ??=
         Environment.GetEnvironmentVariable("QUANTUMWAKE_DATA") is { Length: > 0 } fromEnvironment
             ? fromEnvironment
-            : Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Quantumwake");
+            : DefaultRoot();
+
+    /// <summary>The data folder when nothing has moved it.</summary>
+    /// <remarks>
+    /// <c>DoNotVerify</c>, because on Linux an unverified lookup answers an empty
+    /// string when <c>~/.local/share</c> does not exist yet, which on a fresh
+    /// account it may not. The data folder then came out as the relative
+    /// <c>Quantumwake</c>, and the app kept a separate history in every folder
+    /// it was started from. Windows always has a LocalAppData, so nothing moves
+    /// there.
+    /// </remarks>
+    internal static string DefaultRoot() =>
+        Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData,
+                Environment.SpecialFolderOption.DoNotVerify),
+            "Quantumwake");
 
     /// <summary>True when the data folder was moved off its default.</summary>
     public static bool IsRelocated { get; private set; }

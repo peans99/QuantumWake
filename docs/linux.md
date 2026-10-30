@@ -1,6 +1,6 @@
 # Linux
 
-Plan, unbuilt. Quantum Wake on Linux, for the line after 0.19.9 (`dev0190`).
+Plan, partly built. Quantum Wake on Linux, for the line after 0.19.9 (`dev0190`).
 
 The game runs on Linux under Wine or Proton and writes the same `Game.log` it
 writes on Windows, just inside a Wine prefix. Everything Quantum Wake knows comes
@@ -87,19 +87,45 @@ from `Path.GetTempPath()`. The installer itself was already safe, since
   (`GameInstall.cs:139`) reads `ApplicationData`, which on Linux is the native
   `~/.config` and not the prefix's `AppData/Roaming`. The `C:\...` paths it finds
   there also have to be mapped back through the prefix's `drive_c`.
-  `--path` and `QUANTUMWAKE_DATA` already work as escape hatches.
+  `--path` and `QUANTUMWAKE_DATA` already work as escape hatches, and so does
+  the dashboard's own "No Star Citizen logs found" box, which remembers the
+  folder. Its wording ("Every drive was searched", a `D:\Games\...`
+  placeholder) is Windows-shaped and should change with discovery.
 
   **The prefix locations are not measured yet.** The Wine installer helper,
   Lutris and Proton each put the prefix somewhere different, and the list
   belongs here only once the Linux install has shown them.
-- **The data folder needs no change.** On Linux, .NET maps
+- **The data folder.** Fixed in 0.19.11. On Linux, .NET maps
   `LocalApplicationData` to `$XDG_DATA_HOME` (default `~/.local/share`), so
-  `AppPaths.Root` becomes `~/.local/share/Quantumwake`.
-- **Packaging.** `release.yml` publishes `win-x64` only. Cross-publish
-  `linux-x64` (self-contained single-file server, plus the CLI) from the same
-  Windows runner, so the Defender scan covers the Linux files too, and ship a
-  `.tar.gz`. AppImage and Flatpak would collide with Wine prefixes kept under
-  `$HOME`, and nothing so far asks for them.
+  `AppPaths.Root` is `~/.local/share/Quantumwake`, but only when it asks with
+  `SpecialFolderOption.DoNotVerify`. The default lookup answers an empty string
+  when that folder does not exist yet, and the smoke run below found the data
+  folder sitting in the directory the server was started from. Windows always
+  has a LocalAppData, so nothing moved there. `AppPathsTests` points
+  `XDG_DATA_HOME` at a missing folder and fails without the fix.
+  `GameInstall.cs:140` asks for `ApplicationData` the same unverified way; it
+  belongs to install discovery and changes with it.
+- **Packaging.** Done in 0.19.11. `release.yml` cross-publishes `linux-x64` from
+  the same Windows runner, so the Defender scan covers the Linux files too: the
+  bare server as one self-contained file renamed `quantumwake` (70.6 MB), and
+  the CLI framework-dependent beside it. It ships as
+  `QuantumWake-<version>-linux-x64.tar.gz` (62.6 MB), written with
+  `System.Formats.Tar` rather than `tar.exe` because nothing on a Windows disk
+  carries an execute bit: `quantumwake` and `Quantumwake.Cli` go in as 0755,
+  everything else 0644. The web SDK leaves an empty
+  `staticwebassets.endpoints.json` beside the binary, which the one-file check
+  caught; it is removed like the Windows build's stray runtimeconfig. AppImage
+  and Flatpak would collide with Wine prefixes kept under `$HOME`, and nothing
+  so far asks for them.
+
+  Smoke run on WSL Ubuntu, from the tarball as built by those steps, against a
+  LogSim install laid out as `prefix/drive_c/Program Files/Roberts Space
+  Industries/StarCitizen/LIVE`: the CLI reads it with `! unmatched known tags`
+  at 0; the server serves the embedded dashboard; with no install found it
+  answers `"detected":[]`, and a folder posted to `/api/install/path` survives
+  a restart. In-place updating stays Windows-only: `SelfUpdate` replaces only a
+  file named `QuantumWake.exe`, so on Linux the update notice offers the
+  release page instead of an install button.
 
 ### 2. The clipboard
 
@@ -157,8 +183,8 @@ since .NET 6 it is Windows-only.
 
 ## What the Linux install has to show
 
-Nothing in phase 1 beyond the test fixes should be built before these are
-answered:
+Nothing in phase 1 beyond the test fixes, the data folder and packaging should
+be built before these are answered:
 
 1. Where each launcher's prefix puts the game, as a directory listing down to
    `LIVE/Game.log`, `logbackups/` and `screenshots/`, with the names in their
@@ -173,3 +199,8 @@ answered:
    it.
 6. Whether F12 screenshots come out as the same JPEGs, at the same resolution
    the readers expect.
+7. What the running game is called to Linux. The Controls page refuses to
+   restore a profile while `Process.GetProcessesByName("StarCitizen")` finds
+   the game, and under Wine the process may be named `StarCitizen.exe` or after
+   the Wine loader instead. `ps -eo comm,args | grep -i starcitizen` while it
+   runs answers it.
