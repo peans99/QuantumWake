@@ -715,35 +715,53 @@ static async Task<int> OcrCheck(string folder, string installRoot, string? recog
 
     var kinds = new SortedDictionary<string, int>();
 
-    foreach (var file in files)
+    try
     {
-        var sighting = await insight.ReadShotAsync(file);
-        kinds[sighting.Kind.ToString()] = kinds.GetValueOrDefault(sighting.Kind.ToString()) + 1;
+        foreach (var file in files)
+        {
+            ScreenSighting sighting;
 
-        var extras = new List<string>();
-        if (sighting.Wallet is not null) extras.Add("wallet");
-        if (sighting.Contracts is not null) extras.Add("contracts");
-        if (sighting.Reputation is not null) extras.Add("rep");
-        if (sighting.Mining is not null) extras.Add("mining");
-        if (sighting.Refinery is not null) extras.Add("refinery");
-        if (sighting.Kiosk is not null) extras.Add("kiosk");
-        if (sighting.Fleet is not null) extras.Add("fleet");
-        if (sighting.Loadout is not null) extras.Add("loadout");
-        if (sighting.Map is not null) extras.Add("map");
-        if (sighting.Item is not null) extras.Add("item");
+            try
+            {
+                sighting = await insight.ReadShotAsync(file);
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                // Not a measurement: every frame would have come out Unknown.
+                Console.Error.WriteLine($"No frame read: {e.Message} ({e.InnerException?.Message})");
+                return 1;
+            }
 
-        Console.WriteLine($"{Path.GetFileName(file),-44} {sighting.TookMs,6} ms {sighting.Kind,-10} {sighting.Summary}"
-            + (extras.Count > 0 ? $"  [{string.Join(",", extras)}]" : ""));
+            kinds[sighting.Kind.ToString()] = kinds.GetValueOrDefault(sighting.Kind.ToString()) + 1;
+
+            var extras = new List<string>();
+            if (sighting.Wallet is not null) extras.Add("wallet");
+            if (sighting.Contracts is not null) extras.Add("contracts");
+            if (sighting.Reputation is not null) extras.Add("rep");
+            if (sighting.Mining is not null) extras.Add("mining");
+            if (sighting.Refinery is not null) extras.Add("refinery");
+            if (sighting.Kiosk is not null) extras.Add("kiosk");
+            if (sighting.Fleet is not null) extras.Add("fleet");
+            if (sighting.Loadout is not null) extras.Add("loadout");
+            if (sighting.Map is not null) extras.Add("map");
+            if (sighting.Item is not null) extras.Add("item");
+
+            Console.WriteLine($"{Path.GetFileName(file),-44} {sighting.TookMs,6} ms {sighting.Kind,-10} {sighting.Summary}"
+                + (extras.Count > 0 ? $"  [{string.Join(",", extras)}]" : ""));
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Frames by kind");
+        Console.WriteLine("--------------");
+        foreach (var (kind, count) in kinds)
+            Console.WriteLine($"  {count,4}  {kind}");
+
+        return 0;
     }
-
-    Console.WriteLine();
-    Console.WriteLine("Frames by kind");
-    Console.WriteLine("--------------");
-    foreach (var (kind, count) in kinds)
-        Console.WriteLine($"  {count,4}  {kind}");
-
-    Directory.Delete(scratch, recursive: true);
-    return 0;
+    finally
+    {
+        Directory.Delete(scratch, recursive: true);
+    }
 }
 
 static async Task<int> Ocr(string target, string? outDir, bool show, string? recogniser)

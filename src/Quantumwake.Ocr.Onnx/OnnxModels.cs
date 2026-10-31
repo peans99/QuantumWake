@@ -98,39 +98,65 @@ public static class OnnxModels
             if (File.Exists(model.Path0) && new FileInfo(model.Path0).Length == model.Bytes)
                 continue;
 
-            var partial = model.Path0 + ".part";
+            // Its own name per attempt. Two fetches of one file - a second
+            // process, or the test suite beside the app - shared ".part" and
+            // threw on it, or one hashed the other's truncation and deleted it.
+            var partial = $"{model.Path0}.{Guid.NewGuid():N}.part";
 
-            using (var response = await Http.GetAsync(model.Url, HttpCompletionOption.ResponseHeadersRead, token))
+            try
             {
-                response.EnsureSuccessStatusCode();
-
-                await using var body = await response.Content.ReadAsStreamAsync(token);
-                await using var file = File.Create(partial);
-
-                var buffer = new byte[1 << 16];
-                long received = 0;
-                int read;
-
-                while ((read = await body.ReadAsync(buffer, token)) > 0)
+                using (var stall = CancellationTokenSource.CreateLinkedTokenSource(token))
+                using (var response = await Http.GetAsync(model.Url, HttpCompletionOption.ResponseHeadersRead, token))
                 {
-                    await file.WriteAsync(buffer.AsMemory(0, read), token);
-                    received += read;
-                    progress?.Report((model, received));
+                    response.EnsureSuccessStatusCode();
+
+                    await using var body = await response.Content.ReadAsStreamAsync(token);
+                    await using var file = File.Create(partial);
+
+                    var buffer = new byte[1 << 16];
+                    long received = 0;
+
+                    while (true)
+                    {
+                        // HttpClient's timeout ends at the headers. A connection
+                        // that goes quiet mid-body - wifi dropped, the PC slept -
+                        // would otherwise hold every read behind this one until
+                        // the app restarted.
+                        stall.CancelAfter(StallLimit);
+
+                        var read = await body.ReadAsync(buffer, stall.Token);
+                        if (read == 0) break;
+
+                        await file.WriteAsync(buffer.AsMemory(0, read), token);
+                        received += read;
+                        progress?.Report((model, received));
+                    }
+                }
+
+                var hash = await HashAsync(partial, token);
+
+                if (!hash.Equals(model.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException(
+                        $"{model.FileName} downloaded with hash {hash}, expected {model.Sha256}; not kept.");
+                }
+
+                File.Move(partial, model.Path0, overwrite: true);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(partial)) File.Delete(partial);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
                 }
             }
-
-            var hash = await HashAsync(partial, token);
-
-            if (!hash.Equals(model.Sha256, StringComparison.OrdinalIgnoreCase))
-            {
-                File.Delete(partial);
-                throw new InvalidDataException(
-                    $"{model.FileName} downloaded with hash {hash}, expected {model.Sha256}; not kept.");
-            }
-
-            File.Move(partial, model.Path0, overwrite: true);
         }
     }
+
+    private static readonly TimeSpan StallLimit = TimeSpan.FromSeconds(30);
 
     private static async Task<string> HashAsync(string path, CancellationToken token)
     {

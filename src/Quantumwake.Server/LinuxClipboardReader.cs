@@ -26,7 +26,9 @@ internal sealed class LinuxClipboardReader : IClipboardReader
 {
     private static readonly (string Command, string[] Arguments)[] Tools =
     [
-        ("wl-paste", ["--no-newline"]),
+        // Text only: with an image on the clipboard wl-paste would hand over
+        // the picture's bytes.
+        ("wl-paste", ["--no-newline", "--type", "text"]),
         ("xclip", ["-o", "-selection", "clipboard"]),
         ("xsel", ["--output", "--clipboard"]),
     ];
@@ -57,21 +59,51 @@ internal sealed class LinuxClipboardReader : IClipboardReader
         };
         foreach (var argument in tool.Arguments) start.ArgumentList.Add(argument);
 
+        // The tools wait on whoever owns the clipboard, which here is Wine and
+        // the game; one that has stalled would hold the request for ever and
+        // leave a process behind at every press.
+        using var patience = CancellationTokenSource.CreateLinkedTokenSource(token);
+        patience.CancelAfter(Patience);
+
+        Process? process = null;
+
         try
         {
-            using var process = Process.Start(start);
+            process = Process.Start(start);
             if (process is null) return null;
 
-            var output = await process.StandardOutput.ReadToEndAsync(token);
-            await process.WaitForExitAsync(token);
+            var output = await process.StandardOutput.ReadToEndAsync(patience.Token);
+            await process.WaitForExitAsync(patience.Token);
 
             // wl-paste exits 1 with "Nothing is copied" when the clipboard is
             // empty, which is an answer and not a failure.
             return process.ExitCode == 0 && output.Length > 0 ? output : null;
         }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return null;
+        }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException)
         {
             return null;
         }
+        finally
+        {
+            if (process is not null)
+            {
+                try
+                {
+                    if (!process.HasExited) process.Kill(entireProcessTree: true);
+                }
+                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // Gone already.
+                }
+
+                process.Dispose();
+            }
+        }
     }
+
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(2);
 }

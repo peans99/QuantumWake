@@ -89,6 +89,12 @@ jobs:
           # app's own is inside the single file, so this one is just litter.
           Remove-Item dist/app/Quantumwake.Server.runtimeconfig.json -ErrorAction SilentlyContinue
 
+          # The ONNX Runtime and SkiaSharp packages carry their native import
+          # libraries and symbols beside the DLLs. The DLLs go into the single
+          # file; a .lib is for linking C++ against them and a .pdb for
+          # debugging them, and neither is read at run time.
+          Remove-Item dist/app/*.lib, dist/app/*.pdb -ErrorAction SilentlyContinue
+
           $files = Get-ChildItem dist/app -File
           if ($files.Count -ne 1) { throw "expected one file, got: $($files.Name -join ', ')" }
 
@@ -353,7 +359,10 @@ jobs:
           after keeping the profile as it was. The app connects to the internet only where
           you have said it may, from the Settings page - the optional datasets, and the
           two that can go out unattended: the version check and the market-price
-          refresh, both off until you turn them on.
+          refresh, both off until you turn them on. Where Windows OCR is not there to
+          read screenshots - on Linux, or a PC without an English language pack -
+          switching screenshot reading on also fetches the two text-recognition models
+          (14 MB) once.
 
           Star Citizen must run in Borderless Windowed for the overlay to be visible.
           "@

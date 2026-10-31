@@ -176,34 +176,71 @@ public sealed class OnnxScreenReader(OnnxModel? recogniser = null) : IScreenRead
         }
     }
 
+    /// <summary>What a read says while the models cannot be had; the dashboard translates it.</summary>
+    public const string Unavailable =
+        "the screen-reading models could not be downloaded - check the connection; "
+        + "nothing was marked unreadable, and it tries again in a minute";
+
+    private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(1);
+    private long _retryAfterTicks;
+
+    /// <summary>
+    /// Fetches and loads the models now rather than in front of the first
+    /// frame. Through the same lock as a read, so the two never fetch at once.
+    /// </summary>
+    public Task PrepareAsync(CancellationToken token = default) => LoadAsync(token);
+
     private async Task LoadAsync(CancellationToken token)
     {
         if (_recogniser is not null) return;
+        RefuseWhileBackingOff();
 
         await _loading.WaitAsync(token);
         try
         {
             if (_recogniser is not null) return;
+            RefuseWhileBackingOff();
 
-            await OnnxModels.EnsureAsync(Models, Progress, token);
-
-            var options = new SessionOptions
+            try
             {
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                // Half the cores: a read runs while the game does, and the
-                // game is what the cores are for.
-                IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2),
-            };
+                await OnnxModels.EnsureAsync(Models, Progress, token);
 
-            _detectorSession = new InferenceSession(OnnxModels.Detector.Path0, options);
-            _recogniserSession = new InferenceSession(_recogniserModel.Path0, options);
-            _detector = new TextDetector(_detectorSession);
-            _recogniser = new TextRecogniser(_recogniserSession, OnnxModels.Characters(_recogniserModel));
+                var options = new SessionOptions
+                {
+                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+                    // Half the cores: a read runs while the game does, and the
+                    // game is what the cores are for.
+                    IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2),
+                };
+
+                _detectorSession = new InferenceSession(OnnxModels.Detector.Path0, options);
+                _recogniserSession = new InferenceSession(_recogniserModel.Path0, options);
+                _detector = new TextDetector(_detectorSession);
+                _recogniser = new TextRecogniser(_recogniserSession, OnnxModels.Characters(_recogniserModel));
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !token.IsCancellationRequested)
+            {
+                // Said about the engine, not the frame, so nothing is filed
+                // as unreadable (see ScreenEngineUnavailableException).
+                Interlocked.Exchange(ref _retryAfterTicks, (DateTime.UtcNow + RetryAfter).Ticks);
+                throw new ScreenEngineUnavailableException(Unavailable, e);
+            }
         }
         finally
         {
             _loading.Release();
         }
+    }
+
+    /// <summary>
+    /// A fetch that just failed is not tried again for every frame the watch
+    /// offers: it offers five every two seconds, and against a proxy that
+    /// answers with a web page each try was nine megabytes.
+    /// </summary>
+    private void RefuseWhileBackingOff()
+    {
+        if (DateTime.UtcNow.Ticks < Interlocked.Read(ref _retryAfterTicks))
+            throw new ScreenEngineUnavailableException(Unavailable);
     }
 
     public void Dispose()

@@ -3526,14 +3526,16 @@ public static class ServerHost
             if (saved.Mode == ScreenMode.Screenshots && screen is Quantumwake.Ocr.Onnx.OnnxScreenReader { Ready: false } onnx)
                 _ = Task.Run(async () =>
                 {
+                    // Through the reader, not around it: a watch tick or a scan
+                    // fetching at the same moment then waits for this one.
                     try
                     {
-                        await Quantumwake.Ocr.Onnx.OnnxModels.EnsureAsync(onnx.Models);
+                        await onnx.PrepareAsync();
                         DiagnosticTrace.Mark("screen", "OCR models fetched.");
                     }
-                    catch (Exception e)
+                    catch (ScreenEngineUnavailableException e)
                     {
-                        DiagnosticTrace.Mark("screen", $"OCR models could not be fetched ({e.GetType().Name}).");
+                        DiagnosticTrace.Mark("screen", $"OCR models could not be fetched ({e.InnerException?.GetType().Name ?? "backing off"}).");
                     }
                 });
 
@@ -3747,7 +3749,14 @@ public static class ServerHost
             if (ShotPath(request.Shot) is not { } path)
                 return Results.NotFound(new { trouble = "that screenshot is no longer in the game's folder" });
 
-            return Results.Ok(await insight.ReadShotAsync(path, token));
+            try
+            {
+                return Results.Ok(await insight.ReadShotAsync(path, token));
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                return Results.BadRequest(new { trouble = e.Message });
+            }
         });
 
         // The archive, on request. The watch reads nothing from before it
@@ -3768,12 +3777,26 @@ public static class ServerHost
             if (insight.Excuse(install?.RootPath) is { } excuse)
                 return Results.BadRequest(new { trouble = excuse });
 
-            var (read, remaining) = await insight.ReadOlderAsync(install?.RootPath, take is > 0 ? take.Value : 40, token);
-            return Results.Ok(new
+            try
             {
-                read = read.Select(s => new { s.Shot, s.ShotAt, s.Kind, s.Summary }).ToList(),
-                remaining,
-            });
+                var (read, remaining) = await insight.ReadOlderAsync(install?.RootPath, take is > 0 ? take.Value : 40, token);
+                return Results.Ok(new
+                {
+                    read = read.Select(s => new { s.Shot, s.ShotAt, s.Kind, s.Summary }).ToList(),
+                    remaining,
+                });
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                // Whatever was read before the engine gave out is kept; the
+                // rest stays unread for the next press.
+                return Results.Ok(new
+                {
+                    read = Array.Empty<object>(),
+                    remaining = insight.Unread(install?.RootPath).Count,
+                    trouble = e.Message,
+                });
+            }
         });
 
         // The dashboard's language. Kept on the server so the overlay, whose

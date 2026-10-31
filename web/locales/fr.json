@@ -4496,6 +4496,7 @@
   "Which stick?": "Quel manche ?",
   "no such refinery order": "cette commande de raffinage n’existe pas",
   "screenshot analysis is switched off": "l’analyse des captures est désactivée",
+  "the screen-reading models could not be downloaded - check the connection; nothing was marked unreadable, and it tries again in a minute": "les modèles de lecture d’écran n’ont pas pu être téléchargés - vérifiez la connexion ; aucune capture n’a été marquée illisible, nouvel essai dans une minute",
   "that copied location is no longer in the log": "cette position copiée n’est plus dans le journal",
   "that point of interest is already gone": "ce point d’intérêt a déjà disparu",
   "that screenshot is no longer in the game's folder": "cette capture n’est plus dans le dossier du jeu",

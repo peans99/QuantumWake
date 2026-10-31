@@ -9,9 +9,13 @@ namespace Quantumwake.Tests;
 /// The prefixes are built in the temp folder in the shape measured on a LUG
 /// Helper install (docs/linux.md): <c>drive_c/Program Files/Roberts Space
 /// Industries/StarCitizen/LIVE</c>, <c>dosdevices/&lt;letter&gt;:</c> links,
-/// and the launcher's log under <c>drive_c/users</c>. The parts that need a
-/// symbolic link or the XDG config folder run on Linux only; the rest run
-/// everywhere, since the Windows build ships the same code.
+/// and the launcher's log under <c>drive_c/users</c>. The Windows build ships
+/// this code but never calls it - Discover, FromPath and FromLauncherLog take
+/// the Wine branch only off Windows - so a test whose answer turns on how
+/// paths are split or rooted runs on Linux only. On Windows <c>c:</c> is a
+/// drive and <c>\</c> a separator, and such a test would be measuring that.
+/// The ones that need a symbolic link or the XDG config folder are Linux-only
+/// too; the rest run everywhere.
 /// </remarks>
 public sealed class WineInstallTests : IDisposable
 {
@@ -36,6 +40,8 @@ public sealed class WineInstallTests : IDisposable
     [Fact]
     public void Finds_the_channel_under_drive_c()
     {
+        if (OperatingSystem.IsWindows()) return; // the drive comes back with '\' there
+
         var prefix = Prefix("lug");
 
         var found = GameInstallLocator.DiscoverUnderWine([prefix]);
@@ -102,12 +108,11 @@ public sealed class WineInstallTests : IDisposable
     [Fact]
     public void Maps_the_path_the_launcher_wrote()
     {
+        if (OperatingSystem.IsWindows()) return; // "dosdevices\c:" is the real C: drive there
+
         var prefix = Prefix("launcher");
-        if (!OperatingSystem.IsWindows())
-        {
-            Directory.CreateDirectory(Path.Combine(prefix, "dosdevices"));
-            Directory.CreateSymbolicLink(Path.Combine(prefix, "dosdevices", "c:"), Path.Combine(prefix, "drive_c"));
-        }
+        Directory.CreateDirectory(Path.Combine(prefix, "dosdevices"));
+        Directory.CreateSymbolicLink(Path.Combine(prefix, "dosdevices", "c:"), Path.Combine(prefix, "drive_c"));
         var log = Path.Combine(prefix, "drive_c", "users", "pilot", "AppData", "Roaming", "rsilauncher", "logs", "log.log");
         Directory.CreateDirectory(Path.GetDirectoryName(log)!);
         File.WriteAllText(log,
@@ -123,6 +128,8 @@ public sealed class WineInstallTests : IDisposable
     [Fact]
     public void A_windows_path_is_matched_without_regard_to_case()
     {
+        if (OperatingSystem.IsWindows()) return; // "dosdevices\c:" is the real C: drive there
+
         var prefix = Prefix("case");
 
         var mapped = GameInstallLocator.MapWindowsPath(prefix, @"c:\program files\roberts space industries\starcitizen\live");

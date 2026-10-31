@@ -268,6 +268,27 @@ group into lines by row and gap. The models are fetched once into the app's
 folder and cached by CI; a runner with no network stands the reading tests
 down and says why.
 
+**When the models cannot be had** (0.19.15, from the release review). A fetch
+that failed - offline, Hugging Face down, a hash mismatch - used to surface as
+an ordinary read failure, and an ordinary read failure is a verdict on the
+file: "Read older" stored it at once and the watch once the file was a minute
+old, and a stored file is never offered again. A first switch-on while offline
+would have filed the archive as unreadable for good, which Windows OCR, being
+part of the OS, never could. The reader now throws
+`ScreenEngineUnavailableException`, which `ReadShotAsync` lets through and
+nothing stores: the watch stops its batch, "Read older" and a single read say
+why, a scan answers with the reason and no shot. A failure is not retried for
+a minute (the watch offers five frames every two seconds). The settings
+prefetch goes through the reader's own lock rather than beside it, each
+download writes its own `.part`, and a body that goes quiet for 30 s is
+abandoned, since `HttpClient.Timeout` ends at the headers. The clipboard
+tools get two seconds and are killed after, and `wl-paste` is asked for text.
+Still open, as reviewed and not changed: a half-written JPEG decodes with
+blank rows where the Windows decoder throws (`ScreenFolder.Settled` makes it
+rare); crops narrower than two thirds of their height are stretched to 32
+pixels where the reference pads; and `OnnxOcrTests` fetch into the default
+data folder, which on a developer's machine is their real one.
+
 ### 4. Starting and stopping
 
 Done in 0.19.14, measured on the Fedora machine above with the server

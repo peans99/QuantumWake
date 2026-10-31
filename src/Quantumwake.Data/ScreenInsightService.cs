@@ -94,7 +94,15 @@ public sealed class ScreenInsightService(
         if (Screenshots.Newest(installRoot!) is not { } shot)
             return Nothing("", DateTimeOffset.UtcNow, "no screenshots yet - press Print Screen in the game and try again");
 
-        return await ReadShotAsync(shot, token);
+        try
+        {
+            return await ReadShotAsync(shot, token);
+        }
+        catch (ScreenEngineUnavailableException e)
+        {
+            // No shot named, so the page shows why and nothing is kept.
+            return Nothing("", DateTimeOffset.UtcNow, e.Message);
+        }
     }
 
     /// <summary>
@@ -246,7 +254,7 @@ public sealed class ScreenInsightService(
             {
                 sighting = await ReadShotAsync(file.Path, token);
             }
-            catch (Exception e) when (e is not OperationCanceledException)
+            catch (Exception e) when (e is not OperationCanceledException and not ScreenEngineUnavailableException)
             {
                 sighting = Nothing(Path.GetFileName(file.Path), file.LastWrite,
                     $"could not read that screenshot ({e.GetType().Name})");
@@ -282,7 +290,7 @@ public sealed class ScreenInsightService(
         {
             lines = await reader.ReadAsync(path, token);
         }
-        catch (Exception e)
+        catch (Exception e) when (e is not ScreenEngineUnavailableException)
         {
             // A half-written file is the likely one: the game is still saving
             // the shot the pilot took a moment ago.

@@ -8302,6 +8302,14 @@ async function readOlderScreenshots() {
   screenShow(() => {});
 
   const got = await getJson2('/api/screen/readings/older?take=40');
+
+  // The engine could not read at all (its models would not download): say
+  // that rather than "0 read", which reads as a folder with nothing in it.
+  if (got.trouble) {
+    screenSay(screenText(got.trouble));
+    return;
+  }
+
   const read = got.read || [];
   const kinds = new Map();
   for (const s of read) kinds.set(s.kind, (kinds.get(s.kind) || 0) + 1);

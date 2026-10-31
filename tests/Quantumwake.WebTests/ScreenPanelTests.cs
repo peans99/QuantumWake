@@ -121,6 +121,18 @@ public class ScreenPanelTests
         Assert.Contains("2 loadout", status);
         Assert.Contains("5 older still unread", status);
         Assert.Equal("Read 5 older screenshots", page.NodeText("#screen-read-older"));
+
+        // The engine could not read at all - its models would not download -
+        // so the reason, not "0 read", which looks like an empty folder.
+        page.Serve("/api/screen/readings/older?take=40", """
+            {"read":[],"remaining":5,
+             "trouble":"the screen-reading models could not be downloaded - check the connection; nothing was marked unreadable, and it tries again in a minute"}
+            """);
+        page.Do("await readOlderScreenshots();");
+
+        status = page.NodeText("#screen-status");
+        Assert.Contains("could not be downloaded", status);
+        Assert.DoesNotContain("0 read", status);
     }
 
     /// <summary>

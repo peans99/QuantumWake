@@ -89,6 +89,14 @@ public sealed class ScreenWatchService(
                     {
                         throw;
                     }
+                    catch (ScreenEngineUnavailableException e)
+                    {
+                        // Not this file's fault, so nothing is stored and it
+                        // stays unread; the rest of the batch would only be
+                        // told the same.
+                        logger.LogWarning("Screenshots not read: {Why}", e.Message);
+                        break;
+                    }
                     catch (Exception e)
                     {
                         // One bad file must not stop the next good one being read.
@@ -134,6 +142,12 @@ public sealed class ScreenWatchService(
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (ScreenEngineUnavailableException)
+            {
+                // Still worth measuring once the engine can: not counted as tried.
+                _remeasured.Remove(path);
+                break;
             }
             catch (Exception e)
             {

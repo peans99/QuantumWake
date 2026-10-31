@@ -62,6 +62,20 @@ public interface IScreenReader
         Task.FromResult<ColourPatch?>(null);
 }
 
+/// <summary>
+/// The engine cannot read anything at the moment, as opposed to one file
+/// being unreadable.
+/// </summary>
+/// <remarks>
+/// Kept apart because a refusal about a file is stored and the file is not
+/// offered again, and a refusal about the engine must not be. The ONNX
+/// reader fetches its models on first use, so a first switch-on while
+/// offline would otherwise have filed every shot it touched as unreadable
+/// for good.
+/// </remarks>
+public sealed class ScreenEngineUnavailableException(string message, Exception? inner = null)
+    : Exception(message, inner);
+
 /// <summary>A rectangle of the frame, in its pixels.</summary>
 public sealed record ScreenPatch(double Left, double Top, double Width, double Height);
 
