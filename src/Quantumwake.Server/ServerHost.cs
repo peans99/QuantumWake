@@ -1965,13 +1965,30 @@ public static class ServerHost
         // number, which the page says.
         app.MapGet("/api/loot/where", (LogLibrary lib, string item) =>
         {
-            var hits = lib.GameCommodities.Loot.For(item);
+            var loot = lib.GameCommodities.Loot;
+            var hits = loot.For(item);
 
             return new
             {
                 item,
                 name = lib.ItemName(item),
-                tables = lib.GameCommodities.Loot.Rolls.Count,
+                tables = loot.Rolls.Count,
+                loot.PlacesRead,
+                // Each place once, with the best container it holds for the
+                // item: the answer to "where do I go", ahead of the kinds.
+                places = loot.PlacesFor(item).Select(p => new
+                {
+                    p.Name,
+                    p.Body,
+                    p.Id,
+                    p.Spots,
+                    p.Presets,
+                    chance = p.Best.PerRoll * p.Best.Source.SlotChance,
+                    perRoll = p.Best.PerRoll,
+                    label = LootSourceLabel(p.Best.Source),
+                    containerName = lib.ItemName(p.Best.Source.Container),
+                    p.Best.Source.RespawnSeconds
+                }),
                 hits = hits.Select(h => new
                 {
                     h.Source.Kind,
@@ -1985,7 +2002,8 @@ public static class ServerHost
                     h.Source.Table,
                     h.Source.ChanceToGenerate,
                     h.PerRoll,
-                    h.Via
+                    h.Via,
+                    places = h.Source.Kind == "slot" ? loot.PlacesOf(h.Source.Preset).Count : (int?)null
                 })
             };
         });

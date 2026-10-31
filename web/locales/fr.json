@@ -5266,7 +5266,7 @@
   "Open this plan on the Itinerary page, with room to drag its stops and lines about": "Ouvrir ce plan sur la page Feuille de route, avec la place d’en glisser les arrêts et les lignes",
   "Where to find it": "Où le trouver",
   "Any item, by name…": "N’importe quel objet, par son nom…",
-  "Read from the game's own loot tables in this install. The odds are per roll — the chance one draw from that container is this item. A crate draws several times depending on its size, so finding it is likelier than the number says. Each colour of a set is its own item, which is why armour odds look small. Places are kinds of place, not named locations.": "Lu dans les tables de butin du jeu, sur cette installation. Les chances sont par tirage — la probabilité qu’un tirage dans ce conteneur donne cet objet. Une caisse tire plusieurs fois selon sa taille, donc le trouver est plus probable que le chiffre ne le dit. Chaque couleur d’un ensemble est un objet à part, d’où les chances faibles des armures. Les lieux sont des types de lieu, pas des endroits nommés.",
+  "Read from the game's own loot tables in this install. The odds are per roll — the chance one draw from that container is this item. A crate draws several times depending on its size, so finding it is likelier than the number says. Each colour of a set is its own item, which is why armour odds look small. Places are where this build's map files set the crates down, named from the star map; a spot the map does not mark is listed by its planet or moon.": "Lu dans les tables de butin du jeu, sur cette installation. Les chances sont par tirage — la probabilité qu’un tirage dans ce conteneur donne cet objet. Une caisse tire plusieurs fois selon sa taille, donc le trouver est plus probable que le chiffre ne le dit. Chaque couleur d’un ensemble est un objet à part, d’où les chances faibles des armures. Les lieux sont ceux où les fichiers de carte de cette version posent les caisses, nommés d’après la carte stellaire ; un endroit que la carte ne marque pas est indiqué par sa planète ou sa lune.",
   "Best roll": "Meilleur tirage",
   "The best single roll any container or body in the game's tables gives for this item": "Le meilleur tirage unique que donne pour cet objet un conteneur ou un corps des tables du jeu",
   "No container or body in the game’s loot tables rolls this - it was bought, given or carried in.": "Aucun conteneur ni corps des tables de butin du jeu ne donne ceci - il a été acheté, reçu ou apporté.",
@@ -5300,5 +5300,30 @@
   "Through": "Par",
   "The table entry and choice it comes through": "L’entrée de table et le choix par lesquels il arrive",
   "body": "corps",
-  "Nothing the loot tables roll matches “{term}”.": "Rien de ce que donnent les tables de butin ne correspond à « {term} »."
+  "Nothing the loot tables roll matches “{term}”.": "Rien de ce que donnent les tables de butin ne correspond à « {term} ».",
+  "By kind of place": "Par type de lieu",
+  "not placed": "non placé",
+  "No map file on this build sets this kind of place down. A mission may spawn it, or nothing does.": "Aucun fichier de carte de cette version ne pose ce type de lieu. Une mission peut le faire apparaître, sinon rien ne le fait.",
+  "The map files have not been read on this install, so only kinds of place are shown.": "Les fichiers de carte n’ont pas été lus sur cette installation, seuls les types de lieu sont donc affichés.",
+  "No map file on this build sets down a container that rolls this. A mission may spawn one, or it only comes off bodies.": "Aucun fichier de carte de cette version ne pose de conteneur qui donne ceci. Une mission peut en faire apparaître un, sinon il ne vient que des corps.",
+  "{count} named places": {
+    "one": "{count} lieu nommé",
+    "other": "{count} lieux nommés"
+  },
+  "unmarked spots on {count} bodies": {
+    "one": "endroits non marqués sur {count} astre",
+    "other": "endroits non marqués sur {count} astres"
+  },
+  "Planet or moon": "Planète ou lune",
+  "Every planet and moon": "Toutes les planètes et lunes",
+  "Show fewer": "Afficher moins",
+  "Show all {count}": "Tout afficher ({count})",
+  "The star map’s name for it. An unmarked spot is somewhere on that body the map does not show - a cave, mostly.": "Son nom sur la carte stellaire. Un endroit non marqué est un lieu de cet astre que la carte ne montre pas - une grotte, le plus souvent.",
+  "On": "Sur",
+  "Per slot": "Par emplacement",
+  "The chance one crate slot there gets a container that then rolls this item, for the likeliest container there. A crate rolls several times and a place holds several, so finding it is likelier.": "La probabilité qu’un emplacement de caisse y reçoive un conteneur qui donne ensuite cet objet, pour le conteneur le plus probable du lieu. Une caisse tire plusieurs fois et un lieu en compte plusieurs, donc le trouver est plus probable.",
+  "Crate sets": "Lots de caisses",
+  "Placed crate sets there that can hold it, each building counted once however often the place repeats it. A floor.": "Lots de caisses posés là qui peuvent le contenir, chaque bâtiment compté une fois même si le lieu le répète. Un minimum.",
+  "Kind of place": "Type de lieu",
+  "Unmarked spot": "Endroit non marqué"
 }

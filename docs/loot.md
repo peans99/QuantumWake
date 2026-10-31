@@ -71,6 +71,66 @@ V3 boxes name a `HarvestableSetup` instead, and **every one reads
 `despawnTimeSeconds` 1,800, the despawn after a box is touched. The page shows
 a dash and says the files give none rather than borrowing a number.
 
+## Where: named places
+
+Added 2026-10-31 in 0.20.3. The reader is `Core/GameData/GameLootPlaces.cs`;
+its answer is cached inside the loot digest, keyed by preset.
+
+**Placement is per instance, in the map files.** The 9,668 `.socpak` zips
+under `Data\ObjectContainers` (4,844 MB) each hold an XML list of the
+containers they place and an `entdata/*.entxml` per entity that carries
+instance data. An entity that holds loot sets its preset there:
+`HarvestableComponent` → `looseSubConfigBase` → `subConfigRef` or
+`multiConfigRef`. Of 307 entity classes with a `HarvestableParams`, only three
+carry a default preset - the Fleet Week 2022 shipping containers - so instance
+data is the whole picture. 839 entities carry harvestable metadata, every one
+with instance data.
+
+**Names come from the planet's own list.** Hurston's container lists 5,188
+children. The ones the star map shows sit under a `RastarLocationEntity` with
+a `starMapRecord` attribute - the id of a `StarMapObject`, whose name the
+English table gives - so `final_s1_dc_dpre_imf` is Dupree Industrial
+Manufacturing Facility and `ugf_lgcy_structure_002` under `HDRSO-Olliff` is
+that bunker. A module is walked up through whatever places it until it meets
+a marker. One that reaches a body's container (`stanton1.socpak` is
+`StarMapObject.Stanton1`) without meeting one is an **unmarked spot** on that
+body: caves, on this install, nearly all of them. No body's own container
+holds a preset, so nothing is lost by starting the walk one level down.
+
+A multi-slot preset that lends a slot group to another preset by reference
+lends its places too: the borrowed rows on the page are the same crates.
+
+**Fast because of how the zips are stored.** Every socpak is held
+uncompressed in `Data.p4k`. The first probe read each one whole, walking the
+archive's 1.36-million-entry directory for every file, and took 45 minutes.
+Located in one walk and opened as a window onto the archive, so the zip
+reader seeks to the XML and the instance data and leaves the geometry on
+disk, the whole scan takes **1.8 s** here. It runs once per game build with
+the rest of the game data.
+
+| | count |
+| --- | --- |
+| slot presets that roll a table and are placed | **51 of 137** |
+| named places | **529**, plus unmarked spots on **20** bodies |
+| items any table rolls that have a named place | **5,045 of 5,665** |
+| item classes the logs saw in a container that have one | **118 of 130** |
+
+**86 presets are set down by no map file.** The station presets
+(`LootGeneration_SlotPreset_Station_*`), the older distribution-centre
+multi-configs, the occupied-cave presets and the generic V3 ones
+(`V3SlotPreset_Loot_Generic`, `_Criminal`, `_HighTech`, `_LowTech`) among
+them. For 81 of the 86 the preset's id appears nowhere in `Game2.dcb` except
+its own record; the other five are referenced once. They may be spawned by
+missions - nothing read here can see that - or be leftovers. The page marks
+their rows "not placed" rather than dropping them.
+
+The map files also place plants, minerals and rock-cracker nodes through the
+same mechanism - `Cave_Sand_Medium_MultiConfig` (158 instances) is entirely
+FPS mineables, fossils and plants. Those roll no loot table and are not shown.
+
+**Spots are a floor.** "Crate sets" counts the instances in the modules under
+a place, each module once however many times the place repeats it.
+
 ## What is assumed
 
 The files hold weights, not the draw. `LootRoll` reads them as weighted picks
@@ -102,19 +162,21 @@ what found the flat-matching mistake.
 
 All 49 items on the Loot page's first-seen list carry a best roll.
 
+**The places, against where the pilot went.** The logs never say where a
+crate stood, but they do say where a course was last set. Of the container
+pickups that followed a quantum course set within two hours, 117 were of
+items with places. **13 followed a course to a planet or moon - 11 to Pyro I,
+one each to Daymar and microTech - and all 13 are items the map files place
+on that body.** The other 104 followed a course to a rest stop, a city, a
+jump point or a party member's marker, where what gets browsed is the pilot's
+own storage - and the station presets are among those no map file places.
+Thin, and a check on bodies rather than buildings, but nothing contradicts.
+
 ## Not yet
 
-**Named places.** A preset is named for the kind of place that uses it, and
-the page shows it as that - "Distribution Centres · High Security", "Derelict
-Outposts" - never as a location. Which location uses which preset is in the
-object containers: a probe on 2026-10-31 found 9,668 `.socpak` under
-`Data\ObjectContainers` (4,844 MB), each a zip whose `entdata/*.entxml`
-overrides name a `subConfigRef`/`multiConfigRef`. Across 8,292 PU socpaks,
-605 hold 876 such overrides pointing at 73 presets, the commonest
-`cave_sand_medium_multiconfig` (158). Tying a socpak to a name the star map or
-the logs use needs the `ChildObjectContainers` graph walked upward, and the
-scan took 45 minutes single-threaded reading whole files - so it has to be
-digested once per build, in parallel, reading only `entdata`.
+**Ship loot.** Parts tractored off NPC ships come from loadouts, and the
+boarding-mission harvestables (`PU\design\Ships\Mission\ShipBoarded`) sit in
+mission containers no planet places. Neither is read.
 
 **What NPCs wear.** loot-verse also lists NPC outfits; those are loadouts,
 not loot tables, and are not read.

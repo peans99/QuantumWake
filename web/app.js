@@ -4610,9 +4610,11 @@ function lootWhereRows(hits) {
     const key = `${hit.kind}|${hit.label}`;
     const row = byLabel.get(key) || {
       kind: hit.kind, label: hit.label, best: 0, slot: 0, via: hit.via,
-      containers: new Set(), groups: new Set(), respawn: null,
+      containers: new Set(), groups: new Set(), respawn: null, places: null,
     };
 
+    // Null for bodies, which no map file places; a count for slots.
+    if (hit.places != null) row.places = Math.max(row.places ?? 0, hit.places);
     if (hit.perRoll > row.best) { row.best = hit.perRoll; row.via = hit.via; }
     row.slot = Math.max(row.slot, hit.slotChance || 0);
     row.containers.add(hit.containerName || hit.container);
@@ -4649,6 +4651,106 @@ async function showLootWhere(itemClass) {
   panel.scrollIntoView?.({ block: 'nearest' });
 }
 
+const LOOT_PLACES_SHOWN = 12;
+
+/**
+ * The places an item can be rolled at, one row each with its best container:
+ * star-map names first by odds, and the bodies whose spots the map leaves
+ * unmarked - caves, mostly - among them where their odds put them.
+ *
+ * A place is where a map file sets a crate preset down, walked up to the
+ * nearest star-map marker. Twelve rows, then a button, because a common
+ * magazine is placed at four hundred of them; and a body picker, because the
+ * useful question is usually what is near.
+ */
+function renderLootPlaces(panel, data, hasSlots) {
+  if (!hasSlots) return;
+
+  const all = data.places || [];
+  if (!data.placesRead) {
+    panel.append(el('p', 'muted caption', tx('The map files have not been read on this install, so only kinds of place are shown.')));
+    return;
+  }
+  if (!all.length) {
+    panel.append(el('p', 'muted caption', tx('No map file on this build sets down a container that rolls this. A mission may spawn one, or it only comes off bodies.')));
+    return;
+  }
+
+  const section = el('div', 'loot-places');
+  section.append(el('h4', 'loot-where-sub', tx('Places')));
+
+  const named = all.filter((p) => p.name).length;
+  const unmarked = [...new Set(all.filter((p) => !p.name).map((p) => p.body).filter(Boolean))];
+  const caption = [txn(named, '{count} named place', '{count} named places')];
+  if (unmarked.length) caption.push(txn(unmarked.length, 'unmarked spots on {count} body', 'unmarked spots on {count} bodies'));
+  section.append(el('p', 'muted caption', caption.join(' · ')));
+
+  let body = '';
+  let expanded = false;
+
+  const bodies = [...new Set(all.map((p) => p.body).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (bodies.length > 1) {
+    const pick = el('select', 'loot-places-body');
+    pick.setAttribute('aria-label', tx('Planet or moon'));
+    pick.append(new Option(tx('Every planet and moon'), ''));
+    for (const b of bodies) pick.append(new Option(`${b} (${all.filter((p) => p.body === b).length})`, b));
+    pick.addEventListener('change', () => { body = pick.value; expanded = false; draw(); });
+    section.append(pick);
+  }
+
+  const holder = el('div', 'table-wrap');
+  section.append(holder);
+  const more = el('button', 'ghost tiny loot-places-more');
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  section.append(more);
+
+  function draw() {
+    const rows = all.filter((p) => !body || p.body === body);
+    holder.replaceChildren(lootPlacesTable(expanded ? rows : rows.slice(0, LOOT_PLACES_SHOWN)));
+    more.hidden = rows.length <= LOOT_PLACES_SHOWN;
+    more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: rows.length });
+  }
+
+  draw();
+  panel.append(section);
+}
+
+function lootPlacesTable(rows) {
+  const table = el('table', 'loot-where-table loot-places-table');
+  const headRow = el('tr');
+  for (const [label, title] of [
+    [tx('Place'), tx('The star map’s name for it. An unmarked spot is somewhere on that body the map does not show - a cave, mostly.')],
+    [tx('On'), null],
+    [tx('Per slot'), tx('The chance one crate slot there gets a container that then rolls this item, for the likeliest container there. A crate rolls several times and a place holds several, so finding it is likelier.')],
+    [tx('Crate sets'), tx('Placed crate sets there that can hold it, each building counted once however often the place repeats it. A floor.')],
+    [tx('Container'), null],
+    [tx('Kind of place'), null],
+    [tx('Refills'), tx('The crate slot’s own timer. A dash means the files give none.')],
+  ]) {
+    const th = el('th', null, label);
+    if (title) th.title = title;
+    headRow.append(th);
+  }
+  const thead = el('thead');
+  thead.append(headRow);
+  table.append(thead);
+
+  const body = el('tbody');
+  for (const place of rows) {
+    const tr = el('tr');
+    tr.append(place.name ? el('td', null, place.name) : el('td', 'muted', tx('Unmarked spot')));
+    tr.append(el('td', 'muted', place.body || '—'));
+    tr.append(el('td', 'num', lootPercent(place.chance)));
+    tr.append(el('td', 'num muted', String(place.spots)));
+    tr.append(el('td', 'muted', place.containerName || ''));
+    tr.append(el('td', 'muted', place.label));
+    tr.append(el('td', 'num muted', lootRespawn(place.respawnSeconds)));
+    body.append(tr);
+  }
+  table.append(body);
+  return table;
+}
+
 function renderLootWhere(panel, data) {
   panel.textContent = '';
 
@@ -4670,6 +4772,9 @@ function renderLootWhere(panel, data) {
 
   const places = rows.filter((r) => r.kind === 'slot').length;
   const bodies = rows.length - places;
+  renderLootPlaces(panel, data, places > 0);
+
+  if (data.places?.length) panel.append(el('h4', 'loot-where-sub', tx('By kind of place')));
   panel.append(el('p', 'muted caption', [
     txn(places, '{count} kind of place', '{count} kinds of place'),
     txn(bodies, '{count} kind of body', '{count} kinds of body'),
@@ -4698,6 +4803,14 @@ function renderLootWhere(panel, data) {
     const tr = el('tr');
     const where = el('td', null, row.label);
     if (row.kind === 'body') where.append(el('span', 'chip count', tx('body')));
+    if (row.kind === 'slot' && data.placesRead) {
+      const placed = row.places > 0;
+      const note = el('span', 'muted loot-where-placed', placed
+        ? ` · ${txn(row.places, '{count} place', '{count} places')}`
+        : ` · ${tx('not placed')}`);
+      if (!placed) note.title = tx('No map file on this build sets this kind of place down. A mission may spawn it, or nothing does.');
+      where.append(note);
+    }
     if (row.groups.size) where.title = [...row.groups].join(', ');
     tr.append(where);
     // A station preset alone names a dozen containers; listed in full the

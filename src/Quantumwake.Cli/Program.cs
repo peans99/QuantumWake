@@ -405,13 +405,19 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
     var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
     var blob = p4k.TryRead(@"Data\Game2.dcb");
     if (blob is null) { Console.Error.WriteLine("no Game2.dcb"); return 1; }
-    var loot = new GameLoot(new DataCore(blob));
+    var core = new DataCore(blob);
+    var loot = new GameLoot(core);
     var lootClass = args.First(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)).Split('=', 2).ElementAtOrDefault(1);
 
     var tables = loot.Tables().Select(t => loot.Resolve(t)).OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
     var reachable = tables.SelectMany(t => t.Items).Select(i => i.ItemClass).ToHashSet(StringComparer.OrdinalIgnoreCase);
     var sources = loot.Sources().ToList();
     var rolls = sources.GroupBy(s => s.RollKey).ToDictionary(g => g.Key, g => loot.Resolve(g.First()));
+
+    var placesWatch = Stopwatch.StartNew();
+    var english = GameCommodities.EnglishText(System.Text.Encoding.UTF8.GetString(p4k.TryRead(GameCommodities.LocalisationEntry) ?? []));
+    var digest = GameLootData.Read(core, p4k, english);
+    placesWatch.Stop();
 
     if (lootClass is { Length: > 0 })
     {
@@ -422,7 +428,13 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(r => r.Odds * r.Source.SlotChance);
 
         foreach (var (s, odds) in rows)
-            Console.WriteLine($"{odds,9:P3}/roll  slot {s.SlotChance,6:P1}  {(s.RespawnSeconds is { } r ? $"{r / 60}min" : "-"),6}  {s.Kind,-4} {s.Preset} / {s.Group} / {s.Container}  [{s.Table}]");
+            Console.WriteLine($"{odds,9:P3}/roll  slot {s.SlotChance,6:P1}  {(s.RespawnSeconds is { } r ? $"{r / 60}min" : "-"),6}  {s.Kind,-4} {s.Preset} / {s.Group} / {s.Container}  [{s.Table}]"
+                + (s.Kind == "slot" ? $"  {digest.PlacesOf(s.Preset).Count} places" : ""));
+
+        var placed = digest.PlacesFor(lootClass);
+        Console.WriteLine($"\n{placed.Count} places, {placed.Count(p => p.Name is not null)} on the star map:");
+        foreach (var p in placed.Take(40))
+            Console.WriteLine($"  {p.Best.PerRoll * p.Best.Source.SlotChance,9:P3}  {p.Name ?? "(unmarked)",-40} {p.Body,-14} {p.Spots,3} sets  {p.Best.Source.Preset} / {p.Best.Source.Container}  [{p.Id}]");
         return 0;
     }
 
@@ -439,14 +451,67 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
     // and the pilot's own packs mixed together, so a miss is a question to
     // look at rather than an error.
     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    // And the places, against where the pilot had last set course before
+    // opening a container: the logs never say where a crate stood, but a
+    // quantum destination within the last two hours is where he went.
+    var visits = new HashSet<(string File, string Item, string Destination)>();
     foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        (DateTimeOffset At, string Id)? lastCourse = null;
         foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser()))
-            if (ev is InventoryItemEvent { ScopeType: "Container" } item) seen.Add(item.ItemClass);
+        {
+            switch (ev)
+            {
+                case QuantumRouteEvent route: lastCourse = (route.Timestamp, route.Destination); break;
+                case QuantumTargetEvent target: lastCourse = (target.Timestamp, target.Destination); break;
+                case InventoryItemEvent { ScopeType: "Container" } item:
+                    seen.Add(item.ItemClass);
+                    if (lastCourse is { } c && item.Timestamp - c.At < TimeSpan.FromHours(2))
+                        visits.Add((file, item.ItemClass, c.Id));
+                    break;
+            }
+        }
+    }
 
     Console.WriteLine();
     Console.WriteLine($"Seen in a container in these logs: {seen.Count} classes, {seen.Count(reachable.Contains)} reachable from a table");
     foreach (var miss in seen.Where(c => !reachable.Contains(c)).Order(StringComparer.Ordinal))
         Console.WriteLine($"  in no table: {miss}");
+
+    var slotPresets = sources.Where(s => s.Kind == "slot").Select(s => s.Preset).Distinct().ToList();
+    var placeCount = digest.Places.Values.SelectMany(v => v).Select(p => (p.Name, p.Body)).Distinct().ToList();
+    Console.WriteLine();
+    Console.WriteLine($"Map files read in {placesWatch.Elapsed.TotalSeconds:F1}s (with the table read): {slotPresets.Count(digest.Places.ContainsKey)} of {slotPresets.Count} slot presets placed, "
+        + $"in {placeCount.Count(p => p.Name is not null)} named places and unmarked spots on {placeCount.Where(p => p.Name is null).Select(p => p.Body).Distinct().Count()} bodies");
+    Console.WriteLine($"  items with a named place: {reachable.Count(i => digest.PlacesFor(i).Any(p => p.Name is not null))} of {reachable.Count}; "
+        + $"of the logged classes: {seen.Count(i => digest.PlacesFor(i).Any(p => p.Name is not null))} of {seen.Count}");
+    foreach (var p in slotPresets.Where(p => !digest.Places.ContainsKey(p)).Order(StringComparer.Ordinal))
+        Console.WriteLine($"  set down in no map file: {p}");
+
+    // A destination is the place itself, or somewhere on its body: an id
+    // carries its body as a prefix - Stanton1_UGF_HDRSO-Olliff is on Stanton1 -
+    // except the orbital markers, which spell it OOC_Stanton_2b_Daymar.
+    static string BodyOf(string id) =>
+        Regex.Match(id, @"^OOC_([A-Za-z]+)_(\d+[a-z]?)_", RegexOptions.IgnoreCase) is { Success: true } m
+            ? m.Groups[1].Value + m.Groups[2].Value
+            : id.Split('_')[0];
+    int atPlace = 0, onBody = 0, elsewhere = 0;
+    var misses = new List<string>();
+    foreach (var (_, item, destination) in visits.Distinct())
+    {
+        var places = digest.PlacesFor(item);
+        if (places.Count == 0) continue;
+        if (places.Any(p => string.Equals(p.Id, destination, StringComparison.OrdinalIgnoreCase))) atPlace++;
+        else if (places.Any(p => p.Id is { } id && BodyOf(id).Equals(BodyOf(destination), StringComparison.OrdinalIgnoreCase))) onBody++;
+        else { elsewhere++; misses.Add($"{item} after a course to {destination}"); }
+    }
+    Console.WriteLine($"Container pickups with a course set in the two hours before, for items with places: "
+        + $"{atPlace + onBody + elsewhere}; at a listed place {atPlace}, on a listed place's body {onBody}, neither {elsewhere}");
+    foreach (var m in misses) Console.WriteLine($"  neither: {m}");
+    foreach (var g in visits.GroupBy(v => v.Destination).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4} pickups after a course to {g.Key}: "
+            + $"{g.Count(v => digest.PlacesFor(v.Item).Any(p => string.Equals(p.Id, g.Key, StringComparison.OrdinalIgnoreCase)))} listed there");
     return 0;
 }
 

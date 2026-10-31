@@ -31,10 +31,10 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 52;
+    private const int CacheVersion = 53;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
-    private const string LocalisationEntry = @"Data\Localization\english\global.ini";
+    public const string LocalisationEntry = @"Data\Localization\english\global.ini";
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
@@ -209,7 +209,7 @@ public sealed partial class GameCommodities
     /// not. 181 item names carry it; any of them the catalogue holds, an ORC-mkX
     /// helmet among them, came out under its class instead of its name.
     /// </remarks>
-    internal static Dictionary<string, string> EnglishText(string ini)
+    public static Dictionary<string, string> EnglishText(string ini)
     {
         var text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -338,7 +338,7 @@ public sealed partial class GameCommodities
             controls = Quantumwake.Core.Controls.GameControls.Read(p4k, text);
             scenarios = GameScenarios.Read(core, text, facts, paints);
             reputation = GameReputation.Read(core, text, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
-            loot = GameLootData.Read(core);
+            loot = GameLootData.Read(core, p4k, text);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {

@@ -30,6 +30,9 @@ namespace Quantumwake.Core.GameData;
 /// <see cref="TryRead"/>.
 /// </para>
 /// </remarks>
+/// <summary>One entry's place in the archive, as <see cref="P4kArchive.Locate"/> found it.</summary>
+public readonly record struct P4kEntry(string Path, long Size, long LocalOffset, long Compressed, ushort Method);
+
 public sealed class P4kArchive
 {
     private const uint LocalHeaderSignature = 0x04034B50;
@@ -84,9 +87,158 @@ public sealed class P4kArchive
             return null;
 
         var payload = ReadPayload(stream, reader, entry.Value.LocalOffset, entry.Value.Compressed);
+        return Decode(payload, entry.Value.Method);
+    }
 
+    /// <summary>
+    /// Extracts one entry already found by <see cref="Locate"/>, without
+    /// walking the directory again.
+    /// </summary>
+    /// <remarks>
+    /// Each call opens its own handle, so many can run at once. That is the
+    /// point: the directory holds 1.36 million entries, and walking it once for
+    /// each of the 9,668 map files was most of what made the first places scan
+    /// take 45 minutes.
+    /// </remarks>
+    public byte[]? TryRead(P4kEntry entry)
+    {
+        using var stream = File.Open(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new BinaryReader(stream);
+        return Decode(ReadPayload(stream, reader, entry.LocalOffset, entry.Compressed), entry.Method);
+    }
+
+    /// <summary>Every entry under a prefix, located in one walk of the directory.</summary>
+    public IReadOnlyList<P4kEntry> Locate(string prefix)
+    {
+        using var stream = File.Open(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new BinaryReader(stream);
+
+        var (directoryOffset, entryCount) = FindCentralDirectory(stream, reader);
+        stream.Seek(directoryOffset, SeekOrigin.Begin);
+
+        var normalised = prefix.Replace('/', '\\');
+        var found = new List<P4kEntry>();
+
+        for (long i = 0; i < entryCount; i++)
+        {
+            if (reader.ReadUInt32() != CentralHeaderSignature)
+                break;
+
+            stream.Seek(4, SeekOrigin.Current);
+            _ = reader.ReadUInt16();
+            var method = reader.ReadUInt16();
+            stream.Seek(8, SeekOrigin.Current);
+            long compressed = reader.ReadUInt32();
+            long uncompressed = reader.ReadUInt32();
+            var nameLength = reader.ReadUInt16();
+            var extraLength = reader.ReadUInt16();
+            var commentLength = reader.ReadUInt16();
+            stream.Seek(8, SeekOrigin.Current);
+            long localOffset = reader.ReadUInt32();
+
+            var name = Encoding.UTF8.GetString(reader.ReadBytes(nameLength));
+            var extra = reader.ReadBytes(extraLength);
+            stream.Seek(commentLength, SeekOrigin.Current);
+
+            if (!name.Replace('/', '\\').StartsWith(normalised, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            ApplyZip64Extra(extra, ref uncompressed, ref compressed, ref localOffset);
+            found.Add(new P4kEntry(name, uncompressed, localOffset, compressed, method));
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// A read-only window onto a stored entry, or null for a compressed one.
+    /// </summary>
+    /// <remarks>
+    /// The map files are zips held uncompressed in the archive - all 9,668 of
+    /// them, 4.8 GB - and the parts worth reading are a few kilobytes of each.
+    /// Handing <see cref="System.IO.Compression.ZipArchive"/> a window instead
+    /// of the bytes lets it seek to those and leave the geometry on disk.
+    /// The caller disposes the stream, which closes its handle.
+    /// </remarks>
+    public Stream? OpenStored(P4kEntry entry)
+    {
+        if (entry.Method != 0) return null;
+
+        var stream = File.Open(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        try
+        {
+            using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+            stream.Seek(entry.LocalOffset, SeekOrigin.Begin);
+
+            if (reader.ReadUInt32() != LocalHeaderSignature)
+                throw new InvalidDataException("Data.p4k local header is malformed.");
+
+            stream.Seek(22, SeekOrigin.Current);
+            var nameLength = reader.ReadUInt16();
+            var extraLength = reader.ReadUInt16();
+
+            return new Window(stream, stream.Position + nameLength + extraLength, entry.Compressed);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>A seekable slice of the archive file that owns its handle.</summary>
+    private sealed class Window(FileStream file, long start, long length) : Stream
+    {
+        private long _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => length;
+
+        public override long Position
+        {
+            get => _position;
+            set => _position = Math.Clamp(value, 0, length);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            var wanted = (int)Math.Min(buffer.Length, length - _position);
+            if (wanted <= 0) return 0;
+
+            file.Seek(start + _position, SeekOrigin.Begin);
+            var read = file.Read(buffer[..wanted]);
+            _position += read;
+            return read;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            Position = origin switch
+            {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => _position + offset,
+                _ => length + offset,
+            };
+
+        public override void Flush() { }
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) file.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    private static byte[]? Decode(byte[] payload, ushort method)
+    {
         // Stored entries need no decoding.
-        if (entry.Value.Method == 0)
+        if (method == 0)
             return payload;
 
         // A ZStd frame starts 28 B5 2F FD. Anything else here is encrypted.

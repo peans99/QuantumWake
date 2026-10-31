@@ -7051,3 +7051,8 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .loot-where .caption { margin: 6px 0 10px; }
 .loot-where-table .chip { margin-left: 6px; }
 .loot-where-containers { white-space: normal; max-width: 34ch; }
+.loot-where-sub { margin: 14px 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.loot-places-body { margin: 0 0 8px; }
+.loot-places-more { margin-top: 6px; }
+.loot-where-placed { font-size: 12px; }
+.loot-places-table tbody td.muted:first-child { color: var(--muted); font-style: italic; }
