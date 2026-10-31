@@ -4718,7 +4718,6 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 .map-info-notes { border-top: 1px solid var(--rule); margin-top: 9px; padding-top: 8px; }
 .map-note-heading { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
 .map-note { border-left: 2px solid var(--amber, #d8a03d); padding: 4px 0 4px 7px; margin: 5px 0; }
-.map-note::before { content: "✦"; display: inline-block; margin-right: 4px; color: var(--amber); font-size: 8px; vertical-align: 1px; }
 .map-note-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; color: var(--text); font-size: 11px; }
 .map-note-text { color: var(--muted); font-size: 10.5px; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
 .map-note-tags, .map-note-age { color: var(--dim); font-size: 9.5px; margin-top: 2px; }
@@ -7290,6 +7289,11 @@ body:not(.overlay) .view.active::after {
     linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
     linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
 }
+/* The map has its own continuous star field. The flight-deck route geometry
+   is useful around reports, but competing grids turn spatial navigation into
+   decoration, so the map keeps the treatment it had before this layer. */
+body:not(.overlay) #view-map::before,
+body:not(.overlay) #view-map::after { display: none; }
 /* Glass reflections only occupy the empty upper band of a workspace. The
    actual panels remain opaque enough to preserve contrast and legibility. */
 body:not(.overlay) .view.active::before {
