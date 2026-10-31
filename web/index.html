@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.15">
+  <link rel="stylesheet" href="app.css?v=0.20.16">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -33,7 +33,7 @@
     <button data-view="itinerary">Itinerary</button>
     <button data-view="log">Log</button>
     <div class="tab-group">
-      <button type="button" class="group-btn">Operations<span class="caret">▾</span></button>
+      <button type="button" class="group-btn" data-glyph="◈">Operations<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="jobs">Command deck</button>
         <button data-view="routes">Routes</button>
@@ -46,7 +46,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Flight<span class="caret">▾</span></button>
+      <button type="button" class="group-btn" data-glyph="↗">Flight<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="logbook">Logbook</button>
         <button data-view="sessions">Sessions</button>
@@ -58,7 +58,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Economy<span class="caret">▾</span></button>
+      <button type="button" class="group-btn" data-glyph="¤">Economy<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="spending">Spending</button>
         <button data-view="ledger">Ledger</button>
@@ -67,7 +67,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Reference<span class="caret">▾</span></button>
+      <button type="button" class="group-btn" data-glyph="▧">Reference<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="ships">Ships</button>
         <button data-view="parts">Parts</button>
@@ -76,7 +76,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Hangar<span class="caret">▾</span></button>
+      <button type="button" class="group-btn" data-glyph="⌂">Hangar<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="fleet">Fleet</button>
         <button data-view="hangar">Hangar</button>
@@ -88,7 +88,7 @@
       </div>
     </div>
     <div class="tab-group">
-      <button type="button" class="group-btn">Settings<span class="caret">▾</span></button>
+      <button type="button" class="group-btn" data-glyph="✥">Settings<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="settings">General</button>
         <button data-view="overlay">Overlay</button>
@@ -99,7 +99,7 @@
              button[data-view], so this is ignored by the view switcher and
              runs its own click instead; menu-action keeps it out of the
              overlay, whose every button rule is scoped to [data-view]. -->
-        <button type="button" class="menu-action" id="menu-update-check">Check for updates</button>
+        <button type="button" class="menu-action" id="menu-update-check" data-glyph="↻">Check for updates</button>
         <button data-view="about">About</button>
       </div>
     </div>

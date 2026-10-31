@@ -53,7 +53,7 @@ public class NavigationTests
     {
         var match = Regex.Match(
             navigation,
-            $"<div class=\"tab-group\">\\s*<button type=\"button\" class=\"group-btn\">{group}<span.*?</div>\\s*</div>",
+            $"<div class=\"tab-group\">\\s*<button type=\"button\" class=\"group-btn\"[^>]*>{group}<span.*?</div>\\s*</div>",
             RegexOptions.Singleline);
 
         Assert.True(match.Success, $"{group} navigation group is missing.");

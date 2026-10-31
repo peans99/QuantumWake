@@ -7417,6 +7417,7 @@ body.overlay .page-glyph,
 body.overlay .tabs button[data-glyph]::before { display: none; }
 
 @media (max-width: 1320px) {
+  body:not(.overlay) .tabs button { padding-inline: 6px; }
   body:not(.overlay) .tabs button[data-glyph] { gap: 3px; }
   body:not(.overlay) .tabs button[data-glyph]::before { font-size: 9px; }
 }
