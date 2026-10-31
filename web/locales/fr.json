@@ -5325,5 +5325,26 @@
   "Crate sets": "Lots de caisses",
   "Placed crate sets there that can hold it, each building counted once however often the place repeats it. A floor.": "Lots de caisses posés là qui peuvent le contenir, chaque bâtiment compté une fois même si le lieu le répète. Un minimum.",
   "Kind of place": "Type de lieu",
-  "Unmarked spot": "Endroit non marqué"
+  "Unmarked spot": "Endroit non marqué",
+  "On NPC ships": "Sur les vaisseaux PNJ",
+  "{count} NPC variants": {
+    "one": "{count} variante PNJ",
+    "other": "{count} variantes PNJ"
+  },
+  "fitted as standard - what a disabled one carries. How often each is met is not in the files.": "montés d’origine - ce qu’en transporte un exemplaire neutralisé. La fréquence de chaque rencontre n’est pas dans les fichiers.",
+  "Flown by": "Piloté par",
+  "Read from the variant’s own name: CRIM is criminal, UEE the Navy.": "Lu dans le nom même de la variante : CRIM pour criminel, UEE pour la Marine.",
+  "Variants": "Variantes",
+  "NPC versions of this ship that carry it": "Versions PNJ de ce vaisseau qui le portent",
+  "How many the best-armed variant carries": "Combien en porte la variante la mieux équipée",
+  "{count} NPC ships": {
+    "one": "{count} vaisseau PNJ",
+    "other": "{count} vaisseaux PNJ"
+  },
+  "Criminal": "Criminel",
+  "UEE Navy": "Marine de l’UEE",
+  "Security": "Sécurité",
+  "Bounty hunter": "Chasseur de primes",
+  "Elite": "Élite",
+  "NPC": "PNJ"
 }

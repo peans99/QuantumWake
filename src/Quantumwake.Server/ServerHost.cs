@@ -2004,6 +2004,14 @@ public static class ServerHost
                     h.PerRoll,
                     h.Via,
                     places = h.Source.Kind == "slot" ? loot.PlacesOf(h.Source.Preset).Count : (int?)null
+                }),
+                // Every NPC ship that flies with it fitted, by who flies it.
+                ships = loot.ShipsFor(item).Select(s => new
+                {
+                    s.Ship,
+                    name = lib.GameCommodities.Vehicles.TryGetValue(s.Ship, out var v) && v.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
+                    crew = GameShipLoot.Crew(s.Ship),
+                    s.Count
                 })
             };
         });
@@ -2016,8 +2024,12 @@ public static class ServerHost
             var term = (q ?? "").Trim();
             if (term.Length < 2) return Results.Ok(Array.Empty<object>());
 
+            // What the tables roll, and the parts NPC ships fly with: a power
+            // plant comes off a ship, never out of a crate.
             var found = loot.Items
                 .Where(loot.CanRoll)
+                .Concat(loot.Ships.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(c => (Class: c, Name: lib.ItemName(c)))
                 .Where(i => i.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
                     || i.Class.Contains(term, StringComparison.OrdinalIgnoreCase))
@@ -2029,11 +2041,13 @@ public static class ServerHost
                     {
                         itemClass = i.Class,
                         name = i.Name,
-                        bestRoll = hits.Max(h => h.PerRoll),
-                        sources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count()
+                        bestRoll = hits.Count > 0 ? hits.Max(h => h.PerRoll) : (double?)null,
+                        sources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count(),
+                        ships = loot.ShipsFor(i.Class).Count
                     };
                 })
-                .OrderByDescending(i => i.bestRoll)
+                .OrderByDescending(i => i.bestRoll ?? -1)
+                .ThenByDescending(i => i.ships)
                 .Take(60)
                 .ToList();
 

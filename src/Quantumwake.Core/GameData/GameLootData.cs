@@ -49,6 +49,25 @@ public sealed class GameLootData
     /// <summary>Whether the map files were read at all, so an empty answer can say which kind it is.</summary>
     public bool PlacesRead { get; init; }
 
+    /// <summary>
+    /// The NPC ships that carry each part as standard, keyed by the part's
+    /// class. Empty when item types were not known at read time.
+    /// </summary>
+    public Dictionary<string, List<ShipFit>> Ships { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The NPC ships carrying a part, or none.</summary>
+    public IReadOnlyList<ShipFit> ShipsFor(string? itemClass)
+    {
+        if (itemClass is not { Length: > 0 }) return [];
+
+        // The cache hands the dictionary back with an ordinal comparer, and
+        // logs and tables do not always agree on case.
+        _ships ??= new Dictionary<string, List<ShipFit>>(Ships, StringComparer.OrdinalIgnoreCase);
+        return _ships.TryGetValue(itemClass, out var ships) ? ships : [];
+    }
+
+    private Dictionary<string, List<ShipFit>>? _ships;
+
     /// <summary>The places one preset is set down, or none.</summary>
     public IReadOnlyList<LootPlace> PlacesOf(string preset) =>
         Places.TryGetValue(preset, out var places) ? places : [];
@@ -148,8 +167,10 @@ public sealed class GameLootData
     /// <summary>Reads and resolves every roll the install's sources make.</summary>
     /// <param name="p4k">The archive, to read where presets are placed; null leaves places empty.</param>
     /// <param name="text">The English table, for the star map's names.</param>
+    /// <param name="typeOf">An item class's type, to keep the parts worth taking off an NPC ship; null skips ships.</param>
     public static GameLootData Read(
-        DataCore core, P4kArchive? p4k = null, IReadOnlyDictionary<string, string>? text = null)
+        DataCore core, P4kArchive? p4k = null, IReadOnlyDictionary<string, string>? text = null,
+        Func<string, string?>? typeOf = null)
     {
         var loot = new GameLoot(core);
         var sources = loot.Sources().ToList();
@@ -198,6 +219,7 @@ public sealed class GameLootData
         {
             Items = items, Vias = vias, Rolls = rolls, Sources = sources,
             Places = places, PlacesRead = p4k is not null,
+            Ships = typeOf is null ? new(StringComparer.OrdinalIgnoreCase) : GameShipLoot.Read(core, typeOf),
         };
     }
 }

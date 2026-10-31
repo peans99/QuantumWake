@@ -4762,11 +4762,18 @@ function renderLootWhere(panel, data) {
   panel.append(head);
 
   const rows = lootWhereRows(data.hits || []);
+  const ships = data.ships || [];
 
-  if (!rows.length) {
+  if (!rows.length && !ships.length) {
     panel.append(el('p', 'muted', data.tables
       ? tx('No container or body in the game’s loot tables rolls this. It may be sold, crafted, a mission reward or a hangar item.')
       : tx('The loot tables have not been read from this install yet.')));
+    return;
+  }
+
+  // A ship part comes off ships and out of no crate: the ships are the answer.
+  if (!rows.length) {
+    renderLootShips(panel, ships);
     return;
   }
 
@@ -4833,6 +4840,80 @@ function renderLootWhere(panel, data) {
   const wrap = el('div', 'table-wrap');
   wrap.append(table);
   panel.append(wrap);
+
+  if (ships.length) renderLootShips(panel, ships);
+}
+
+/**
+ * The NPC ships that fly with a part fitted, one row per ship model with who
+ * flies it. The files say what each variant carries as standard, not how
+ * often any of them is met, so there are no odds here - only what a disabled
+ * one has aboard.
+ */
+function renderLootShips(panel, ships) {
+  const byModel = new Map();
+  for (const s of ships) {
+    const row = byModel.get(s.name) || { name: s.name, crews: new Set(), variants: [], most: 0 };
+    // The server says who flies it in English words it owns; each is translated.
+    row.crews.add(s.crew.split(' · ').map((w) => tx(w)).join(' · '));
+    row.variants.push(s.ship);
+    row.most = Math.max(row.most, s.count);
+    byModel.set(s.name, row);
+  }
+  const models = [...byModel.values()].sort((a, b) => b.variants.length - a.variants.length || a.name.localeCompare(b.name));
+
+  const section = el('div', 'loot-ships');
+  section.append(el('h4', 'loot-where-sub', tx('On NPC ships')));
+  section.append(el('p', 'muted caption', [
+    txn(models.length, '{count} ship', '{count} ships'),
+    txn(ships.length, '{count} NPC variant', '{count} NPC variants'),
+    tx('fitted as standard - what a disabled one carries. How often each is met is not in the files.'),
+  ].join(' · ')));
+
+  const holder = el('div', 'table-wrap');
+  section.append(holder);
+  const more = el('button', 'ghost tiny loot-ships-more');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  section.append(more);
+
+  function draw() {
+    const shown = expanded ? models : models.slice(0, LOOT_PLACES_SHOWN);
+    const table = el('table', 'loot-where-table loot-ships-table');
+    const headRow = el('tr');
+    for (const [label, title] of [
+      [tx('Ship'), null],
+      [tx('Flown by'), tx('Read from the variant’s own name: CRIM is criminal, UEE the Navy.')],
+      [tx('Variants'), tx('NPC versions of this ship that carry it')],
+      [tx('Fitted'), tx('How many the best-armed variant carries')],
+    ]) {
+      const th = el('th', null, label);
+      if (title) th.title = title;
+      headRow.append(th);
+    }
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const model of shown) {
+      const tr = el('tr');
+      tr.append(el('td', null, model.name));
+      const crews = el('td', 'muted loot-where-containers', [...model.crews].sort((x, y) => x.localeCompare(y)).join(', '));
+      crews.title = model.variants.join(', ');
+      tr.append(crews);
+      tr.append(el('td', 'num muted', String(model.variants.length)));
+      tr.append(el('td', 'num', `×${model.most}`));
+      body.append(tr);
+    }
+    table.append(body);
+    holder.replaceChildren(table);
+    more.hidden = models.length <= LOOT_PLACES_SHOWN;
+    more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: models.length });
+  }
+
+  draw();
+  panel.append(section);
 }
 
 let lootFindTimer = null;
@@ -4865,7 +4946,10 @@ async function findLoot() {
   for (const item of found) {
     const button = el('button', 'loot-find-item');
     button.append(el('span', null, item.name));
-    button.append(el('span', 'muted', `${lootPercent(item.bestRoll)} · ${txn(item.sources, '{count} source', '{count} sources')}`));
+    const said = [];
+    if (item.bestRoll != null) said.push(lootPercent(item.bestRoll), txn(item.sources, '{count} source', '{count} sources'));
+    if (item.ships > 0) said.push(txn(item.ships, '{count} NPC ship', '{count} NPC ships'));
+    button.append(el('span', 'muted', said.join(' · ')));
     button.addEventListener('click', () => showLootWhere(item.itemClass));
     box.append(button);
   }

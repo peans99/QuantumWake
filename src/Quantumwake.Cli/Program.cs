@@ -416,7 +416,8 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
 
     var placesWatch = Stopwatch.StartNew();
     var english = GameCommodities.EnglishText(System.Text.Encoding.UTF8.GetString(p4k.TryRead(GameCommodities.LocalisationEntry) ?? []));
-    var digest = GameLootData.Read(core, p4k, english);
+    var itemFacts = GameItems.Read(core, english);
+    var digest = GameLootData.Read(core, p4k, english, c => itemFacts.TryGetValue(c, out var f) ? f.Type : null);
     placesWatch.Stop();
 
     if (lootClass is { Length: > 0 })
@@ -435,6 +436,11 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
         Console.WriteLine($"\n{placed.Count} places, {placed.Count(p => p.Name is not null)} on the star map:");
         foreach (var p in placed.Take(40))
             Console.WriteLine($"  {p.Best.PerRoll * p.Best.Source.SlotChance,9:P3}  {p.Name ?? "(unmarked)",-40} {p.Body,-14} {p.Spots,3} sets  {p.Best.Source.Preset} / {p.Best.Source.Container}  [{p.Id}]");
+
+        var flown = digest.ShipsFor(lootClass);
+        Console.WriteLine($"\n{flown.Count} NPC ships fly with it fitted:");
+        foreach (var s in flown)
+            Console.WriteLine($"  x{s.Count}  {s.Ship,-50} {GameShipLoot.Crew(s.Ship)}");
         return 0;
     }
 
@@ -456,6 +462,7 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
     // opening a container: the logs never say where a crate stood, but a
     // quantum destination within the last two hours is where he went.
     var visits = new HashSet<(string File, string Item, string Destination)>();
+    var seenAnywhere = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
     {
         (DateTimeOffset At, string Id)? lastCourse = null;
@@ -467,8 +474,12 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
                 case QuantumTargetEvent target: lastCourse = (target.Timestamp, target.Destination); break;
                 case InventoryItemEvent { ScopeType: "Container" } item:
                     seen.Add(item.ItemClass);
+                    seenAnywhere.Add(item.ItemClass);
                     if (lastCourse is { } c && item.Timestamp - c.At < TimeSpan.FromHours(2))
                         visits.Add((file, item.ItemClass, c.Id));
+                    break;
+                case InventoryItemEvent other:
+                    seenAnywhere.Add(other.ItemClass);
                     break;
             }
         }
@@ -509,9 +520,20 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
     Console.WriteLine($"Container pickups with a course set in the two hours before, for items with places: "
         + $"{atPlace + onBody + elsewhere}; at a listed place {atPlace}, on a listed place's body {onBody}, neither {elsewhere}");
     foreach (var m in misses) Console.WriteLine($"  neither: {m}");
+
     foreach (var g in visits.GroupBy(v => v.Destination).OrderByDescending(g => g.Count()))
         Console.WriteLine($"  {g.Count(),4} pickups after a course to {g.Key}: "
             + $"{g.Count(v => digest.PlacesFor(v.Item).Any(p => string.Equals(p.Id, g.Key, StringComparison.OrdinalIgnoreCase)))} listed there");
+    // Ship parts: the loadouts against what the logs listed in any inventory.
+    var npcShips = digest.Ships.Values.SelectMany(v => v).Select(s => s.Ship).Distinct().Count();
+    Console.WriteLine($"\nNPC ships: {npcShips} carry {digest.Ships.Count} kinds of part worth taking "
+        + $"({digest.Ships.Values.Sum(v => v.Count)} ship-and-part pairs)");
+    foreach (var g in digest.Ships.GroupBy(kv => itemFacts.TryGetValue(kv.Key, out var f) ? f.Type : "?").OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),5} {g.Key}");
+    var loggedParts = seenAnywhere.Where(c => itemFacts.TryGetValue(c, out var f) && GameShipLoot.Kept.Contains(f.Type)).ToList();
+    Console.WriteLine($"Ship parts these logs listed in any inventory: {loggedParts.Count}; fitted to some NPC ship: {loggedParts.Count(c => digest.ShipsFor(c).Count > 0)}");
+    foreach (var c in loggedParts.Where(c => digest.ShipsFor(c).Count == 0).Order(StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine($"  on no NPC ship: {c} ({itemFacts[c].Type})");
     return 0;
 }
 

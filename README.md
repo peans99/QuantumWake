@@ -328,15 +328,17 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.3
+### 0.20.4
 
 **Where to find it: loot odds, read from the game.** The Loot page opens with a search over every item the game's own loot tables can produce. Pick one and it lists every kind of place and every kind of body that can drop it: the container it comes in, the chance one roll of that container lands on it, how often a slot of that kind holds that container, the crate's refill timer where the game gives one, and the table entry it comes through. Bodies are corpses, prisoners and named bosses. Nothing is downloaded: it is all read from your install, so it follows each patch. On this install that is 220 tables, 5,665 items and 2,230 containers and bodies. The odds are estimates and the page says so: the game's files give the weights but not how the draw is made, a crate draws several times depending on its size, and each colour of an armour set is its own item, which is why armour odds look small.
 
 **Named places.** Above the kinds of place, the same panel now lists the actual places: the star map's own names, such as Dupree Industrial Manufacturing Facility on Hurston or Onyx Facility S1B1 on Aberdeen, with the planet or moon, the best chance per crate slot there, and how many crate sets the place holds. The best twelve show first, with a button for the rest and a picker to keep to one planet or moon. A spot the star map does not mark, usually a cave, is listed as an unmarked spot on its body. It comes from the game's map files on your install, read once per patch in a couple of seconds. On this install that is 529 named places, and 5,045 of the 5,665 items have at least one. Some kinds of place are in the loot tables but no map file sets them down, including the station crates and the occupied caves. Those rows now say "not placed" rather than suggesting you will find them. Checked against these logs: every crate pickup that followed a course to a planet or moon, 13 of them, was an item the map files place on that body.
 
+**Parts off NPC ships.** Search a ship part, such as a gun, power plant, cooler, shield, quantum drive or missile, and the panel lists the NPC ships that fly with it fitted as standard, one row per ship model, with who flies them (criminals, civilians, the UEE Navy, Nine Tails and so on) and how many the best-armed version carries. It is read from the ships' own loadouts on your install: 614 NPC ships carry 413 kinds of part. It shows what a disabled ship has aboard, not how often you'll meet one; the game's files don't say that, and the page says so. Your logs can't confirm this one either, because the game never logs taking a part off a ship.
+
 **Your pickups beside the odds.** The New items table gains a Best roll column, the best single roll any container or body gives for that item, with where on hover. The item's name opens the same breakdown. Items no table produces, such as hangar decorations and things you bought, show a dash rather than a zero. Checked against these logs: of the 130 item classes seen inside a crate, body or pack, 126 come out of some table, and the other four are a goldfish and three ship models.
 
-**For the command line,** `--loot` prints every table and source with which presets the map files place, and `--loot=<item class>` lists every container, body and named place that can roll one item.
+**For the command line,** `--loot` prints every table and source with which presets the map files place, and `--loot=<item class>` lists every container, body and named place that can roll one item, and every NPC ship that flies with it.
 
 ### 0.20.0
 

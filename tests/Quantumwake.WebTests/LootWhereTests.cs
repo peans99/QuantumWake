@@ -184,6 +184,52 @@ public class LootWhereTests
     }
 
     /// <summary>
+    /// A power plant comes out of no crate; it flies in NPC ships. Rows from
+    /// this install: the Charger is fitted to the criminal and civilian
+    /// Gladius and to a Sabre.
+    /// </summary>
+    private const string Charger = """
+        {"item":"POWR_AEGS_S01_Charger_SCItem","name":"Charger","tables":333,"placesRead":true,"places":[],"hits":[],
+         "ships":[
+          {"ship":"AEGS_Gladius_PU_AI_CRIM","name":"Gladius","crew":"Criminal","count":1},
+          {"ship":"AEGS_Gladius_PU_AI_CIV","name":"Gladius","crew":"Civilian","count":1},
+          {"ship":"AEGS_Sabre_Raven_PU_AI_CRIM","name":"Sabre Raven","crew":"Criminal","count":2}
+         ]}
+        """;
+
+    [Fact]
+    public void A_ship_part_lists_the_npc_ships_that_fly_with_it()
+    {
+        var page = Loaded();
+        page.Serve("/api/loot/where?item=POWR_AEGS_S01_Charger_SCItem", Charger);
+        page.Do("await showLootWhere('POWR_AEGS_S01_Charger_SCItem');");
+
+        var text = page.NodeText("#loot-where");
+        Assert.Contains("On NPC ships", text);
+        Assert.DoesNotContain("No container or body", text);
+        Assert.Contains("2 ships · 3 NPC variants", text);
+
+        // The two Gladius variants are one ship, flown by two kinds of crew.
+        Assert.Equal(2, page.Count($"{PlacesBody}.children.length"));
+        var gladius = page.Text($"{PlacesBody}.children[0].textContent");
+        Assert.Contains("Gladius", gladius);
+        Assert.Contains("Civilian, Criminal", gladius);
+        Assert.Contains("×2", page.Text($"{PlacesBody}.children[1].textContent"));
+    }
+
+    [Fact]
+    public void A_search_hit_only_ships_carry_says_how_many_and_no_odds()
+    {
+        var page = new Page();
+        page.Serve("/api/loot/search?q=charger", """[{"itemClass":"POWR_AEGS_S01_Charger_SCItem","name":"Charger","bestRoll":null,"sources":0,"ships":23}]""");
+        page.Do("__dom.node('#loot-find').value = 'charger'; await findLoot();");
+
+        var text = page.NodeText("#loot-find-results");
+        Assert.Contains("23 NPC ships", text);
+        Assert.DoesNotContain("%", text);
+    }
+
+    /// <summary>
     /// Armour colours sit near a thousandth of a percent. Rounded to whole
     /// percent they would all read "0%".
     /// </summary>

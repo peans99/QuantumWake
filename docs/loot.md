@@ -172,11 +172,71 @@ jump point or a party member's marker, where what gets browsed is the pilot's
 own storage - and the station presets are among those no map file places.
 Thin, and a check on bodies rather than buildings, but nothing contradicts.
 
+## NPC ships
+
+Added 2026-10-31 in 0.20.4. The reader is `Core/GameData/GameShipLoot.cs`; its
+answer is cached in the loot digest, keyed by part.
+
+The ships the game flies as NPCs are their own entity classes, named for who
+flies them - `AEGS_Gladius_PU_AI_CRIM`, `MISC_Starfarer_PU_AI_CIV`,
+`DRAK_Caterpillar_Pirate`. 642 match on this install; 637 carry their
+loadout in the DataCore as port-by-port `SItemPortLoadoutManualParams`
+entries, nested where a gun sits on a mount or a missile in a rack. Leaving
+out Arena Commander's `_EA_` variants, **614 NPC ships carry 413 kinds of
+part** worth taking, in 5,860 ship-and-part pairs:
+
+| part | kinds |
+| --- | --- |
+| missile racks | 101 |
+| guns | 90 |
+| power plants | 49 |
+| coolers, shields | 42 each |
+| quantum drives | 27 |
+| radars | 24 |
+| missiles | 21 |
+| quantum interdiction, EMP | 5 each |
+| mining lasers | 3 |
+| tractor beams, salvage heads | 2 each |
+
+Seats, screens, thrusters, fuel tanks, armour and controllers are part of the
+hull and are left out, as are ship-specific turrets and decoy launchers.
+
+**Who flies it is read from the name**, and only the faction is kept: `CRIM`
+criminal, `CIV` civilian, `UEE` the Navy, `NT` Nine Tails, `PIR` pirate,
+`SEC` security, `HH` Headhunters, `CFP` Citizens for Prosperity, `FF`
+Frontier Fighters, `Super` elite. The rest of a name - `QIG`, `FullFuel`,
+`NoCargoGridMarkup`, `DefendShip` - is how the variant is set up, and listed
+beside the faction it buried it. A template or a name with no faction token
+reads "NPC".
+
+**There are no odds here.** The files say what each variant carries as
+standard; how often each one is spawned is decided by encounter and mission
+data this does not read. The page says so.
+
+**Nothing to check it against in these logs.** Of every item class the logs
+listed in any inventory, of any scope, **none is a ship part**: the game logs
+no inventory listing when a component is taken from a ship. Unlike the crates,
+this is unchecked.
+
+## What NPCs wear: encrypted
+
+loot-verse also lists NPC outfits. The DataCore names them only by
+reference. Of 2,312 actor classes with a default loadout, 1,411 NPC
+archetypes use outfit loadouts and others random assortments
+(`SLoadoutAssortment`, 321 records - a Hurston guard's lists body groups of 90 and 64,
+three armour sets and one weapon kit). Almost every leaf is an
+`SItemPortLoadoutXMLParams` naming a file under `Data\Scripts\Loadouts`:
+73,767 XML leaves against 9,260 items written into the DataCore, and **1,864
+of the 2,312 actor classes name no item in the DataCore at all.**
+
+Those 2,522 files are in the archive, but their payloads are not ZStd - the
+first four bytes are not `28 B5 2F FD` - so they are encrypted, and 400 of
+400 sampled fail to read. `P4kArchive` reports encrypted entries rather than
+decrypting them, so what NPCs wear is not shown. The bodies' rolled loot,
+which is in the DataCore, is.
+
 ## Not yet
 
-**Ship loot.** Parts tractored off NPC ships come from loadouts, and the
-boarding-mission harvestables (`PU\design\Ships\Mission\ShipBoarded`) sit in
-mission containers no planet places. Neither is read.
-
-**What NPCs wear.** loot-verse also lists NPC outfits; those are loadouts,
-not loot tables, and are not read.
+**Boarding-mission loot.** The harvestables in
+`PU\design\Ships\Mission\ShipBoarded` sit in mission containers no planet
+places, so they have no place to name.
