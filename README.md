@@ -328,9 +328,13 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.1
+### 0.20.2
 
-**Loot odds, read from the game.** The command-line tool gains `--loot`: every loot table in the install, resolved down to the items it can roll, and `--loot=<item class>` to list every table that can produce one item and how often per roll. On this install that is 59 tables and 5,609 distinct items. Of the 130 item classes these logs have seen inside a crate, body or pack, 126 come out of some table; the other four are a goldfish and three ship models, which are hangar decorations rather than loot. The odds are estimates and say so: the game files give the weights but not how the draw is made.
+**Where to find it: loot odds, read from the game.** The Loot page opens with a search over every item the game's own loot tables can produce. Pick one and it lists every kind of place and every kind of body that can drop it: the container it comes in, the chance one roll of that container lands on it, how often a slot of that kind holds that container, the crate's refill timer where the game gives one, and the table entry it comes through. Places are kinds of place, named after the game's own slot presets ("Distribution Centres · High Security", "Derelict Outposts", "Colonial Outpost · Outlaw") rather than particular locations, and bodies are corpses, prisoners and named bosses. Nothing is downloaded: it is all read from your install, so it follows each patch. On this install that is 220 tables, 5,665 items and 2,230 containers and bodies. The odds are estimates and the page says so: the game's files give the weights but not how the draw is made, a crate draws several times depending on its size, and each colour of an armour set is its own item, which is why armour odds look small.
+
+**Your pickups beside the odds.** The New items table gains a Best roll column, the best single roll any container or body gives for that item, with where on hover. The item's name opens the same breakdown. Items no table produces, such as hangar decorations and things you bought, show a dash rather than a zero. Checked against these logs: of the 130 item classes seen inside a crate, body or pack, 126 come out of some table, and the other four are a goldfish and three ship models.
+
+**For the command line,** `--loot` prints every table and source, and `--loot=<item class>` lists every container and body that can roll one item.
 
 ### 0.20.0
 

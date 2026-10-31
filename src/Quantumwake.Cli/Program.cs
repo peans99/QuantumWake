@@ -394,10 +394,12 @@ if (args.Contains("--hauling", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
-// Loot tables as the install has them: every V3 table resolved to items,
-// which entries lootClass a mission can fill, and how much of what these logs saw
-// in containers the tables can produce at all. The table behind docs/loot.md.
-// --loot=<class> lists every table that can roll that one item.
+// Loot as the install has it: every table resolved to items, which entries
+// only a mission can fill, everything that rolls a table (slot presets and
+// NPC bodies) and how much of what these logs saw in containers the tables
+// can produce at all. The numbers behind docs/loot.md. --loot=<class> lists
+// every container and body that can roll that one item, through its own
+// constraints.
 if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
 {
     var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
@@ -408,16 +410,26 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
 
     var tables = loot.Tables().Select(t => loot.Resolve(t)).OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
     var reachable = tables.SelectMany(t => t.Items).Select(i => i.ItemClass).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var sources = loot.Sources().ToList();
+    var rolls = sources.GroupBy(s => s.RollKey).ToDictionary(g => g.Key, g => loot.Resolve(g.First()));
 
     if (lootClass is { Length: > 0 })
     {
-        foreach (var t in tables)
-            foreach (var o in t.Items.Where(i => i.ItemClass.Equals(lootClass, StringComparison.OrdinalIgnoreCase)))
-                Console.WriteLine($"{o.PerRoll,9:P3}  {t.Name,-50} {o.Entry} / {o.Choice}");
+        var rows = sources
+            .Select(s => (Source: s, Odds: rolls[s.RollKey]?.Items
+                .Where(i => i.ItemClass.Equals(lootClass, StringComparison.OrdinalIgnoreCase)).Sum(i => i.PerRoll) ?? 0))
+            .Where(r => r.Odds > 0)
+            .OrderByDescending(r => r.Odds * r.Source.SlotChance);
+
+        foreach (var (s, odds) in rows)
+            Console.WriteLine($"{odds,9:P3}/roll  slot {s.SlotChance,6:P1}  {(s.RespawnSeconds is { } r ? $"{r / 60}min" : "-"),6}  {s.Kind,-4} {s.Preset} / {s.Group} / {s.Container}  [{s.Table}]");
         return 0;
     }
 
-    Console.WriteLine($"{tables.Count} V3 loot tables, {reachable.Count} distinct items reachable");
+    Console.WriteLine($"{tables.Count} loot tables, {reachable.Count} distinct items reachable");
+    Console.WriteLine($"{sources.Count} sources: {sources.Count(s => s.Kind == "slot")} container slots in "
+        + $"{sources.Where(s => s.Kind == "slot").Select(s => s.Preset).Distinct().Count()} presets, "
+        + $"{sources.Count(s => s.Kind == "body")} NPC and corpse classes; {rolls.Count} distinct table-and-constraint rolls");
     foreach (var t in tables)
         Console.WriteLine($"  {t.Name,-50} {t.Items.Select(i => i.ItemClass).Distinct().Count(),5} items"
             + (t.Unfilled.Count > 0 ? $"  mission-only or empty: {string.Join("; ", t.Unfilled)}" : ""));

@@ -4520,7 +4520,7 @@ function renderLoot(pickups) {
       ? tx('Nothing matching {filter} in that range.', { filter: [kind, place].filter(Boolean).join(` ${tx('at')} `) })
       : tx('Nothing in that range.'));
 
-    td.colSpan = 5;
+    td.colSpan = 6;
     tr.append(td);
     body.append(tr);
     lastLootRows = pickups;
@@ -4530,9 +4530,22 @@ function renderLoot(pickups) {
   for (const pickup of rows) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
-    tr.append(el('td', null, prettyItem(pickup.item)));
+
+    // The name opens where the tables say it comes from, when they say
+    // anything; an item no table rolls stays plain text, not a dead link.
+    const name = el('td');
+    if (pickup.lootSources > 0) {
+      const open = el('button', 'link', prettyItem(pickup.item));
+      open.addEventListener('click', () => showLootWhere(pickup.itemClass));
+      name.append(open);
+    } else {
+      name.textContent = prettyItem(pickup.item);
+    }
+    tr.append(name);
+
     tr.append(el('td', 'muted', tx(pickup.category)));
     tr.append(lootPriceCell(pickup));
+    tr.append(lootRollCell(pickup));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
@@ -4548,6 +4561,208 @@ onInput('#loot-period', loadLoot);
 // The two filters redraw what is already loaded; only the date window refetches.
 $('#loot-kind')?.addEventListener('change', () => renderLoot(lastLootRows));
 $('#loot-place')?.addEventListener('change', () => renderLoot(lastLootRows));
+
+/* ---------- loot: where the game's tables say an item comes from ---------- */
+
+/**
+ * A per-roll chance as a percentage, with as many places as it takes to say
+ * something. Armour colours sit near a thousandth of a percent, and rounding
+ * those to "0%" would claim they cannot drop.
+ */
+function lootPercent(p) {
+  const value = Number(p) * 100;
+  const places = value >= 10 ? 0 : value >= 1 ? 1 : value >= 0.1 ? 2 : 3;
+  const shown = value.toLocaleString(QW_DATE_LOCALES, { minimumFractionDigits: places, maximumFractionDigits: places });
+  return value > 0 && Number(shown.replace(/[^\d]/g, '')) === 0 ? '<0.001%' : `${shown}%`;
+}
+
+/** The pickups table's odds cell: the best roll, with where it is on hover. */
+function lootRollCell(pickup) {
+  if (!(pickup.bestRoll > 0)) {
+    const td = el('td', 'num muted', '—');
+    td.title = tx('No container or body in the game’s loot tables rolls this - it was bought, given or carried in.');
+    return td;
+  }
+
+  const td = el('td', 'num', lootPercent(pickup.bestRoll));
+  td.title = tx('Best single roll: {where}. {count} kinds of place or body can roll it.', {
+    where: pickup.bestFrom, count: pickup.lootSources,
+  });
+  return td;
+}
+
+function lootRespawn(seconds) {
+  if (!(seconds > 0)) return '—';
+  return seconds >= 3600 ? tx('{hours} h', { hours: Math.round(seconds / 360) / 10 }) : tx('{minutes} min', { minutes: Math.round(seconds / 60) });
+}
+
+/**
+ * Hits rolled up to one row per kind of place or body.
+ *
+ * One preset lists the same crate under Common, Uncommon and Rare groups, and
+ * fourteen prisoner classes share one table; 347 rows for the S-38 read as
+ * noise, the dozen kinds of place they come to read as an answer.
+ */
+function lootWhereRows(hits) {
+  const byLabel = new Map();
+
+  for (const hit of hits) {
+    const key = `${hit.kind}|${hit.label}`;
+    const row = byLabel.get(key) || {
+      kind: hit.kind, label: hit.label, best: 0, slot: 0, via: hit.via,
+      containers: new Set(), groups: new Set(), respawn: null,
+    };
+
+    if (hit.perRoll > row.best) { row.best = hit.perRoll; row.via = hit.via; }
+    row.slot = Math.max(row.slot, hit.slotChance || 0);
+    row.containers.add(hit.containerName || hit.container);
+    if (hit.group) row.groups.add(hit.group);
+    if (hit.respawnSeconds > 0) row.respawn = Math.min(row.respawn ?? Infinity, hit.respawnSeconds);
+    byLabel.set(key, row);
+  }
+
+  return [...byLabel.values()].sort((a, b) => b.best - a.best || a.label.localeCompare(b.label));
+}
+
+let lootWhereItem = null;
+
+async function showLootWhere(itemClass) {
+  const panel = $('#loot-where');
+  if (!panel) return;
+
+  lootWhereItem = itemClass;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.append(el('p', 'muted', tx('Reading the loot tables…')));
+
+  let data;
+  try {
+    data = await getJson(`/api/loot/where?item=${encodeURIComponent(itemClass)}`);
+  } catch {
+    if (lootWhereItem === itemClass) panel.replaceChildren(el('p', 'muted', tx('The loot tables could not be read.')));
+    return;
+  }
+
+  // A second click while the first was in flight wins.
+  if (lootWhereItem !== itemClass) return;
+  renderLootWhere(panel, data);
+  panel.scrollIntoView?.({ block: 'nearest' });
+}
+
+function renderLootWhere(panel, data) {
+  panel.textContent = '';
+
+  const head = el('div', 'loot-where-head');
+  head.append(el('h3', null, data.name || prettyItem(data.item)));
+  const close = el('button', 'ghost tiny', tx('Close'));
+  close.addEventListener('click', () => { panel.hidden = true; lootWhereItem = null; });
+  head.append(close);
+  panel.append(head);
+
+  const rows = lootWhereRows(data.hits || []);
+
+  if (!rows.length) {
+    panel.append(el('p', 'muted', data.tables
+      ? tx('No container or body in the game’s loot tables rolls this. It may be sold, crafted, a mission reward or a hangar item.')
+      : tx('The loot tables have not been read from this install yet.')));
+    return;
+  }
+
+  const places = rows.filter((r) => r.kind === 'slot').length;
+  const bodies = rows.length - places;
+  panel.append(el('p', 'muted caption', [
+    txn(places, '{count} kind of place', '{count} kinds of place'),
+    txn(bodies, '{count} kind of body', '{count} kinds of body'),
+  ].join(' · ')));
+
+  const table = el('table', 'loot-where-table');
+  const headRow = el('tr');
+  for (const [label, title] of [
+    [tx('Where'), tx('The kind of place a slot preset is written for, or who the body was')],
+    [tx('Container'), null],
+    [tx('Per roll'), tx('The chance one draw from this container is this item')],
+    [tx('Slot holds it'), tx('How often a slot of this kind gets this container when the place spawns')],
+    [tx('Refills'), tx('The crate slot’s own timer. A dash means the files give none.')],
+    [tx('Through'), tx('The table entry and choice it comes through')],
+  ]) {
+    const th = el('th', null, label);
+    if (title) th.title = title;
+    headRow.append(th);
+  }
+  const thead = el('thead');
+  thead.append(headRow);
+  table.append(thead);
+
+  const body = el('tbody');
+  for (const row of rows) {
+    const tr = el('tr');
+    const where = el('td', null, row.label);
+    if (row.kind === 'body') where.append(el('span', 'chip count', tx('body')));
+    if (row.groups.size) where.title = [...row.groups].join(', ');
+    tr.append(where);
+    // A station preset alone names a dozen containers; listed in full the
+    // cell pushed the odds off the right edge of the panel.
+    const containers = [...row.containers];
+    const shown = containers.length > 2
+      ? `${containers.slice(0, 2).join(', ')} ${tx('+{count} more', { count: containers.length - 2 })}`
+      : containers.join(', ');
+    const holder = el('td', 'muted loot-where-containers', shown);
+    if (containers.length > 2) holder.title = containers.join(', ');
+    tr.append(holder);
+    tr.append(el('td', 'num', lootPercent(row.best)));
+    tr.append(el('td', 'num muted', row.kind === 'body' ? '—' : lootPercent(row.slot)));
+    tr.append(el('td', 'num muted', lootRespawn(row.respawn)));
+    tr.append(el('td', 'muted', row.via));
+    body.append(tr);
+  }
+  table.append(body);
+
+  const wrap = el('div', 'table-wrap');
+  wrap.append(table);
+  panel.append(wrap);
+}
+
+let lootFindTimer = null;
+let lootFindTerm = '';
+
+async function findLoot() {
+  const term = ($('#loot-find')?.value || '').trim();
+  const box = $('#loot-find-results');
+  if (!box) return;
+
+  lootFindTerm = term;
+  if (term.length < 2) { box.textContent = ''; return; }
+
+  let found;
+  try {
+    found = await getJson(`/api/loot/search?q=${encodeURIComponent(term)}`);
+  } catch {
+    found = null;
+  }
+
+  if (lootFindTerm !== term) return;
+  box.textContent = '';
+
+  if (!found) { box.append(el('p', 'muted', tx('The loot tables could not be read.'))); return; }
+  if (!found.length) {
+    box.append(el('p', 'muted', tx('Nothing the loot tables roll matches “{term}”.', { term })));
+    return;
+  }
+
+  for (const item of found) {
+    const button = el('button', 'loot-find-item');
+    button.append(el('span', null, item.name));
+    button.append(el('span', 'muted', `${lootPercent(item.bestRoll)} · ${txn(item.sources, '{count} source', '{count} sources')}`));
+    button.addEventListener('click', () => showLootWhere(item.itemClass));
+    box.append(button);
+  }
+}
+
+// Typing asks the server once it pauses, not per keystroke.
+$('#loot-find')?.addEventListener('input', () => {
+  clearTimeout(lootFindTimer);
+  lootFindTimer = setTimeout(findLoot, 250);
+});
 
 /* ---------- reference catalogues: ships, parts ---------- */
 

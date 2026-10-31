@@ -20,6 +20,32 @@ public sealed record LootOdds(string ItemClass, double PerRoll, string Entry, st
 /// </param>
 public sealed record LootTable(string Name, IReadOnlyList<LootOdds> Items, IReadOnlyList<string> Unfilled);
 
+/// <summary>One thing in the game that rolls a loot table.</summary>
+/// <param name="Kind"><c>slot</c> for a container a location preset places, <c>body</c> for an NPC or corpse.</param>
+/// <param name="Preset">
+/// The slot preset record a location names (<c>V3SlotPreset_DistributionCentres_HighSecurtiy</c>),
+/// or for a body the NPC's own entity class.
+/// </param>
+/// <param name="Group">The tagged group within a preset - "Weapons Rack LMG Common" - or empty.</param>
+/// <param name="Container">The entity class that holds the loot: the crate, or the body.</param>
+/// <param name="SlotChance">
+/// How often a slot of this group holds this container when the location
+/// spawns: the group's initial-slot probability times this container's share
+/// of the relative weights. 1 for a body.
+/// </param>
+/// <param name="RespawnSeconds">The crate's slot timer with both multipliers applied, or null.</param>
+/// <param name="Table">The table's short name, as <see cref="LootTable.Name"/> has it.</param>
+/// <param name="PoolFilter">The container's pool-filter record, or null.</param>
+/// <param name="SecondaryChoices">The container's secondary-choice record, or null.</param>
+/// <param name="ChanceToGenerate">The chance the container generates loot at all.</param>
+public sealed record LootSource(
+    string Kind, string Preset, string Group, string Container, double SlotChance, int? RespawnSeconds,
+    string Table, string? PoolFilter, string? SecondaryChoices, double ChanceToGenerate)
+{
+    /// <summary>The table and constraints, which is what decides the odds.</summary>
+    public string RollKey => $"{Table}|{PoolFilter}|{SecondaryChoices}";
+}
+
 /// <summary>
 /// The loot tables, read from the install.
 /// </summary>
@@ -94,12 +120,188 @@ public sealed class GameLoot
         return all;
     }
 
-    /// <summary>Every V3 table in the install.</summary>
+    /// <summary>
+    /// Every table in the install, V3 and the older kind alike: 767 of the
+    /// 2,088 loot slots on this install still point at an older table.
+    /// </summary>
     public IEnumerable<DataRecord> Tables() =>
-        _core.Records().Where(r => _core.StructName(r.StructIndex) == "LootTableV3Record");
+        _core.Records().Where(r => _core.StructName(r.StructIndex) is "LootTableV3Record" or "LootTable");
+
+    private Dictionary<string, DataRecord>? _byName;
+    private Dictionary<string, DataRecord>? _tables;
 
     /// <summary>The record a reference names, or null.</summary>
     public DataRecord? Record(Guid id) => _byHash.GetValueOrDefault(id);
+
+    /// <summary>A source's table resolved through its own constraints, or null when the table is gone.</summary>
+    public LootTable? Resolve(LootSource source)
+    {
+        _byName ??= _byHash.Values.GroupBy(r => r.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        _tables ??= Tables().GroupBy(t => Short(t.Name), StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        if (!_tables.TryGetValue(source.Table, out var table)) return null;
+
+        Guid? Named(string? name) => name is not null && _byName.TryGetValue(name, out var r) ? r.Hash : null;
+
+        return Resolve(table, Named(source.PoolFilter), Named(source.SecondaryChoices));
+    }
+
+    /// <summary>
+    /// Everything that rolls a table: every container a slot preset can put
+    /// in a slot, and every NPC or corpse that carries a loot component.
+    /// </summary>
+    /// <remarks>
+    /// A slot's container is a <c>HarvestablePreset</c> - the crate's entity
+    /// class and its <c>respawnInSlotTime</c> (1,200 s on the outpost crates) -
+    /// and the slot adds its own <c>lootConfig</c>, so the same crate rolls
+    /// food in one preset and rifles in another. Slots without a table are
+    /// mineables and plants, which are the item themselves, and are left out.
+    /// </remarks>
+    public IEnumerable<LootSource> Sources()
+    {
+        foreach (var record in _byHash.Values)
+        {
+            var at = _core.InstanceAt(record, record.VariantIndex);
+            var structName = _core.StructName(record.StructIndex);
+
+            if (structName == "SubHarvestableConfigRecord")
+            {
+                var (config, field) = _core.FieldAt(at, record.StructIndex, "subConfig");
+                if (config >= 0 && field is not null)
+                    foreach (var s in SlotSources(Short(record.Name), "", config, field.StructIndex))
+                        yield return s;
+            }
+            else if (structName == "SubHarvestableMultiConfigRecord")
+            {
+                var (multi, field) = _core.FieldAt(at, record.StructIndex, "multiConfig");
+                if (multi < 0 || field is null) continue;
+
+                foreach (var tagged in _core.ClassArrayAt(multi, field.StructIndex, "taggedConfigs"))
+                {
+                    var t = _core.InstanceAt(tagged);
+                    var group = _core.StringAt(t, tagged.StructIndex, "name") ?? "";
+                    if (_core.PointerAt(t, tagged.StructIndex, "subConfig") is not { } sub) continue;
+
+                    var s = _core.InstanceAt(sub);
+                    long config = -1;
+                    int configStruct = -1;
+
+                    if (_core.StructName(sub.StructIndex) == "SubHarvestableConfigSingleManual")
+                    {
+                        var (c, f) = _core.FieldAt(s, sub.StructIndex, "subConfigManual");
+                        if (f is not null) (config, configStruct) = (c, f.StructIndex);
+                    }
+                    else if (_core.ReferenceAt(s, sub.StructIndex, "subConfigRef") is { } id && Record(id) is { } single)
+                    {
+                        var (c, f) = _core.FieldAt(_core.InstanceAt(single, single.VariantIndex), single.StructIndex, "subConfig");
+                        if (f is not null) (config, configStruct) = (c, f.StructIndex);
+                    }
+
+                    if (config >= 0)
+                        foreach (var source in SlotSources(Short(record.Name), group, config, configStruct))
+                            yield return source;
+                }
+            }
+            else if (structName == "EntityClassDefinition")
+            {
+                foreach (var component in _core.PointerArrayAt(at, record.StructIndex, "Components"))
+                {
+                    if (_core.StructName(component.StructIndex) != "LootGenerationComponentParams") continue;
+
+                    var (config, field) = _core.FieldAt(_core.InstanceAt(component), component.StructIndex, "lootConfig");
+                    if (config < 0 || field is null) continue;
+
+                    var name = Short(record.Name);
+                    if (Roll(config, field.StructIndex) is { } roll)
+                        yield return new LootSource("body", name, "", name, 1, null,
+                            roll.Table, roll.Filter, roll.Secondary, roll.Chance);
+                }
+            }
+        }
+    }
+
+    private IEnumerable<LootSource> SlotSources(string preset, string group, long config, int configStruct)
+    {
+        var initial = _core.SingleAt(config, configStruct, "initialSlotsProbability") ?? 1;
+        var configRespawn = _core.SingleAt(config, configStruct, "configRespawnTimeMultiplier") ?? 1;
+        var slots = _core.ClassArrayAt(config, configStruct, "subHarvestables");
+        var total = slots.Sum(s => _core.SingleAt(_core.InstanceAt(s), s.StructIndex, "relativeProbability") ?? 0);
+
+        foreach (var slot in slots)
+        {
+            var at = _core.InstanceAt(slot);
+            if (_core.PointerAt(at, slot.StructIndex, "lootConfig") is not { } loot) continue;
+            if (Roll(_core.InstanceAt(loot), loot.StructIndex) is not { } roll) continue;
+
+            var relative = _core.SingleAt(at, slot.StructIndex, "relativeProbability") ?? 0;
+            var slotRespawn = _core.SingleAt(at, slot.StructIndex, "harvestableRespawnTimeMultiplier") ?? 1;
+
+            string? container = null;
+            int? respawn = null;
+
+            if (_core.ReferenceAt(at, slot.StructIndex, "harvestable") is { } presetId && Record(presetId) is { } p)
+            {
+                var pa = _core.InstanceAt(p, p.VariantIndex);
+                container = _core.ReferenceAt(pa, p.StructIndex, "entityClass") is { } e ? _classByHash.GetValueOrDefault(e) : null;
+                container ??= Short(p.Name);
+
+                if (_core.SingleAt(pa, p.StructIndex, "respawnInSlotTime") is { } seconds and > 0)
+                    respawn = (int)Math.Round(seconds * configRespawn * slotRespawn);
+            }
+            else if (_core.ReferenceAt(at, slot.StructIndex, "harvestableEntityClass") is { } entity)
+            {
+                container = _classByHash.GetValueOrDefault(entity);
+
+                // The V3 boxes name a HarvestableSetup instead of a preset. On
+                // this install every one reads respawnInSlotTime 0 - the "30M"
+                // in V3HarvestableSetup_Lootbox_30M is the despawn after a box
+                // is touched, not a refill - so null is the honest answer.
+                if (_core.ReferenceAt(at, slot.StructIndex, "harvestableSetup") is { } setupId && Record(setupId) is { } setup
+                    && _core.SingleAt(_core.InstanceAt(setup, setup.VariantIndex), setup.StructIndex, "respawnInSlotTime") is { } seconds and > 0)
+                    respawn = (int)Math.Round(seconds * configRespawn * slotRespawn);
+            }
+
+            yield return new LootSource(
+                "slot", preset, group, container ?? "?",
+                total > 0 ? initial * relative / total : 0,
+                respawn, roll.Table, roll.Filter, roll.Secondary, roll.Chance);
+        }
+    }
+
+    /// <summary>
+    /// What a <c>LootConfig</c> rolls: the V3 table when it names one, else the
+    /// older one, and the constraints that go with it.
+    /// </summary>
+    private (string Table, string? Filter, string? Secondary, double Chance)? Roll(long config, int configStruct)
+    {
+        var table = _core.ReferenceAt(config, configStruct, "lootTableV3") is { } v3 && Record(v3) is { } r3 ? r3
+            : _core.ReferenceAt(config, configStruct, "lootTable") is { } old && Record(old) is { } r ? r
+            : null;
+        if (table is null) return null;
+
+        string? filter = null, secondary = null;
+        var chance = 1.0;
+
+        var (constraints, field) = _core.FieldAt(config, configStruct, "lootConstraints");
+        if (constraints >= 0 && field is not null)
+        {
+            var cs = field.StructIndex;
+            chance = _core.SingleAt(constraints, cs, "chanceToGenerate") ?? 1;
+
+            if (_core.ReferenceAt(constraints, cs, "poolFilter") is { } f && Record(f) is { } fr)
+                filter = fr.Name;
+
+            if (_core.PointerAt(constraints, cs, "secondaryChoices") is { } sc)
+            {
+                var sa = _core.InstanceAt(sc);
+                var id = _core.ReferenceAt(sa, sc.StructIndex, "multiLayerRecord")
+                    ?? _core.ReferenceAt(sa, sc.StructIndex, "singleLayerRecord");
+                if (id is { } g && Record(g) is { } sr) secondary = sr.Name;
+            }
+        }
+
+        return (Short(table.Name), filter, secondary, chance);
+    }
 
     /// <summary>A table resolved to items, through a container's constraints when given.</summary>
     public LootTable Resolve(DataRecord table, Guid? poolFilter = null, Guid? secondaryChoices = null)
@@ -116,6 +318,8 @@ public sealed class GameLoot
 
     private List<LootEntry> Entries(DataRecord table)
     {
+        if (_core.StructName(table.StructIndex) == "LootTable") return LegacyEntries(table);
+
         var body = _core.PointerAt(_core.InstanceAt(table, table.VariantIndex), table.StructIndex, "lootTable");
         if (body is not { } b) return [];
 
@@ -128,6 +332,81 @@ public sealed class GameLoot
                 : [];
 
             entries.Add(new LootEntry(name, weight, choices));
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// An older table. Same idea in different fields: weighted references to
+    /// <c>LootArchetype</c> records, whose primary entries each select by one
+    /// tag plus a DNF term, whose <c>excludedTags</c> strike items out for that
+    /// archetype alone, and whose secondary groups ("Rarity") are bands the
+    /// archetype draws itself.
+    /// </summary>
+    private List<LootEntry> LegacyEntries(DataRecord table)
+    {
+        var entries = new List<LootEntry>();
+        var at = _core.InstanceAt(table, table.VariantIndex);
+
+        foreach (var weighted in _core.ClassArrayAt(at, table.StructIndex, "lootArchetypes"))
+        {
+            var w = _core.InstanceAt(weighted);
+            var weight = _core.SingleAt(w, weighted.StructIndex, "weight") ?? 0;
+
+            if (_core.ReferenceAt(w, weighted.StructIndex, "archetype") is not { } id || Record(id) is not { } record)
+            {
+                entries.Add(new LootEntry("(missing archetype)", weight, []));
+                continue;
+            }
+
+            var a = _core.InstanceAt(record, record.VariantIndex);
+            var s = record.StructIndex;
+
+            var (excludedAt, excludedField) = _core.FieldAt(a, s, "excludedTags");
+            var excluded = excludedAt >= 0 && excludedField is not null
+                ? _core.ReferenceArrayAt(excludedAt, excludedField.StructIndex, "tags").ToHashSet()
+                : [];
+
+            var choices = new List<LootChoice>();
+            var (primaryAt, primaryField) = _core.FieldAt(a, s, "primaryOrGroup");
+            if (primaryAt >= 0 && primaryField is not null)
+            {
+                foreach (var entry in _core.ClassArrayAt(primaryAt, primaryField.StructIndex, "entries"))
+                {
+                    var e = _core.InstanceAt(entry);
+                    var extra = TermAt(e, entry.StructIndex, "additionalTags");
+                    var positive = extra.Positive.ToHashSet();
+                    if (_core.ReferenceAt(e, entry.StructIndex, "tag") is { } tag) positive.Add(tag);
+
+                    var term = new LootTerm(positive, extra.Negative);
+                    choices.Add(new LootChoice(
+                        _core.StringAt(e, entry.StructIndex, "name") ?? "",
+                        _core.SingleAt(e, entry.StructIndex, "weight") ?? 0,
+                        positive.Count == 0
+                            ? []
+                            : [.. _entities.Where(c => term.Matches(c.Tags) && !c.Tags.Overlaps(excluded))]));
+                }
+            }
+
+            var layers = new List<IReadOnlyList<LootBand>>();
+            foreach (var group in _core.ClassArrayAt(a, s, "secondaryOrGroups"))
+            {
+                var g = _core.InstanceAt(group);
+                var groupName = _core.StringAt(g, group.StructIndex, "groupName") ?? "";
+
+                layers.Add([.. _core.ClassArrayAt(g, group.StructIndex, "entries").Select(band =>
+                {
+                    var b = _core.InstanceAt(band);
+                    var tag = _core.ReferenceAt(b, band.StructIndex, "tag");
+                    return new LootBand(
+                        groupName,
+                        _core.SingleAt(b, band.StructIndex, "weight") ?? 0,
+                        new LootTerm(tag is { } t ? new HashSet<Guid> { t } : new HashSet<Guid>(), new HashSet<Guid>()));
+                })]);
+            }
+
+            entries.Add(new LootEntry(LootLabels.Preset(Short(record.Name)), weight, choices, layers));
         }
 
         return entries;

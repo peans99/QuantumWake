@@ -5263,5 +5263,42 @@
   "Note, if any": "Note, s’il y en a une",
   "Add stop": "Ajouter l’arrêt",
   "A name the map knows is placed on it; anything else is kept as you typed it.": "Un nom que la carte connaît y est placé ; tout autre est gardé tel que vous l’avez saisi.",
-  "Open this plan on the Itinerary page, with room to drag its stops and lines about": "Ouvrir ce plan sur la page Feuille de route, avec la place d’en glisser les arrêts et les lignes"
+  "Open this plan on the Itinerary page, with room to drag its stops and lines about": "Ouvrir ce plan sur la page Feuille de route, avec la place d’en glisser les arrêts et les lignes",
+  "Where to find it": "Où le trouver",
+  "Any item, by name…": "N’importe quel objet, par son nom…",
+  "Read from the game's own loot tables in this install. The odds are per roll — the chance one draw from that container is this item. A crate draws several times depending on its size, so finding it is likelier than the number says. Each colour of a set is its own item, which is why armour odds look small. Places are kinds of place, not named locations.": "Lu dans les tables de butin du jeu, sur cette installation. Les chances sont par tirage — la probabilité qu’un tirage dans ce conteneur donne cet objet. Une caisse tire plusieurs fois selon sa taille, donc le trouver est plus probable que le chiffre ne le dit. Chaque couleur d’un ensemble est un objet à part, d’où les chances faibles des armures. Les lieux sont des types de lieu, pas des endroits nommés.",
+  "Best roll": "Meilleur tirage",
+  "The best single roll any container or body in the game's tables gives for this item": "Le meilleur tirage unique que donne pour cet objet un conteneur ou un corps des tables du jeu",
+  "No container or body in the game’s loot tables rolls this - it was bought, given or carried in.": "Aucun conteneur ni corps des tables de butin du jeu ne donne ceci - il a été acheté, reçu ou apporté.",
+  "Best single roll: {where}. {count} kinds of place or body can roll it.": "Meilleur tirage : {where}. {count} types de lieu ou de corps peuvent le donner.",
+  "{hours} h": "{hours} h",
+  "{minutes} min": "{minutes} min",
+  "Reading the loot tables…": "Lecture des tables de butin…",
+  "The loot tables could not be read.": "Les tables de butin n’ont pas pu être lues.",
+  "No container or body in the game’s loot tables rolls this. It may be sold, crafted, a mission reward or a hangar item.": "Aucun conteneur ni corps des tables de butin du jeu ne donne ceci. Il est peut-être vendu, fabriqué, gagné en mission ou propre au hangar.",
+  "The loot tables have not been read from this install yet.": "Les tables de butin n’ont pas encore été lues sur cette installation.",
+  "{count} kinds of place": {
+    "one": "{count} type de lieu",
+    "other": "{count} types de lieu"
+  },
+  "{count} kinds of body": {
+    "one": "{count} type de corps",
+    "other": "{count} types de corps"
+  },
+  "{count} sources": {
+    "one": "{count} source",
+    "other": "{count} sources"
+  },
+  "The kind of place a slot preset is written for, or who the body was": "Le type de lieu pour lequel l’emplacement est prévu, ou qui était le corps",
+  "Container": "Conteneur",
+  "Per roll": "Par tirage",
+  "The chance one draw from this container is this item": "La probabilité qu’un tirage dans ce conteneur donne cet objet",
+  "Slot holds it": "Emplacement occupé",
+  "How often a slot of this kind gets this container when the place spawns": "La fréquence à laquelle un emplacement de ce type reçoit ce conteneur quand le lieu apparaît",
+  "Refills": "Réapprovisionnement",
+  "The crate slot’s own timer. A dash means the files give none.": "Le minuteur propre à l’emplacement de la caisse. Un tiret signifie que les fichiers n’en donnent pas.",
+  "Through": "Par",
+  "The table entry and choice it comes through": "L’entrée de table et le choix par lesquels il arrive",
+  "body": "corps",
+  "Nothing the loot tables roll matches “{term}”.": "Rien de ce que donnent les tables de butin ne correspond à « {term} »."
 }

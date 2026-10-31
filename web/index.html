@@ -2628,6 +2628,25 @@
 
   <section id="view-loot" class="view">
     <div class="section-bar">
+      <h2>Where to find it</h2>
+      <div class="controls">
+        <input type="search" id="loot-find" class="search" placeholder="Any item, by name…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <p class="muted caption">
+      Read from the game's own loot tables in this install. The odds are per
+      roll &mdash; the chance one draw from that container is this item. A crate
+      draws several times depending on its size, so finding it is likelier than
+      the number says. Each colour of a set is its own item, which is why armour
+      odds look small. Places are kinds of place, not named locations.
+    </p>
+
+    <div id="loot-find-results" class="loot-find-results"></div>
+    <div id="loot-where" class="loot-where" hidden></div>
+
+    <div class="section-bar">
       <h2>New items</h2>
       <div class="controls">
         <input type="search" id="loot-search" class="search" placeholder="Search items…"
@@ -2658,6 +2677,7 @@
           <tr>
             <th>First seen</th><th>Item</th><th>Kind</th>
             <th title="Median buy price across every terminal stocking it">Typical price</th>
+            <th title="The best single roll any container or body in the game's tables gives for this item">Best roll</th>
             <th>Where you were</th>
           </tr>
         </thead>

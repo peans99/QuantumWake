@@ -19,7 +19,14 @@ public sealed record LootTerm(IReadOnlySet<Guid> Positive, IReadOnlySet<Guid> Ne
 public sealed record LootChoice(string Name, double Weight, IReadOnlyList<LootCandidate> Pool);
 
 /// <summary>A table entry: a weight and its archetype's choices.</summary>
-public sealed record LootEntry(string Name, double Weight, IReadOnlyList<LootChoice> Choices);
+/// <param name="Layers">
+/// Bands the archetype draws itself, before any the container adds. Only the
+/// older tables have these - a "Rarity" group on the archetype - where V3
+/// moved the bands onto the container.
+/// </param>
+public sealed record LootEntry(
+    string Name, double Weight, IReadOnlyList<LootChoice> Choices,
+    IReadOnlyList<IReadOnlyList<LootBand>>? Layers = null);
 
 /// <summary>One band in a secondary-choice layer - "Rare", weight 1.</summary>
 public sealed record LootBand(string Name, double Weight, LootTerm Term);
@@ -92,12 +99,13 @@ public static class LootRoll
         foreach (var (entry, choices) in live)
         {
             var choiceTotal = choices.Sum(c => c.Choice.Weight);
+            IReadOnlyList<IReadOnlyList<LootBand>> bands = entry.Layers is { Count: > 0 } own ? [.. own, .. layers] : layers;
 
             foreach (var (choice, pool) in choices)
             {
                 var share = entry.Weight / total * (choice.Weight / choiceTotal);
 
-                foreach (var (item, p) in Spread(pool, layers, 0))
+                foreach (var (item, p) in Spread(pool, bands, 0))
                 {
                     var key = (item, entry.Name, choice.Name);
                     odds[key] = odds.GetValueOrDefault(key) + share * p;

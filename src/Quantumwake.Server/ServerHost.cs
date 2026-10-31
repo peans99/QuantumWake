@@ -1927,12 +1927,19 @@ public static class ServerHost
         app.MapGet("/api/loot", (LogLibrary lib, UexData uex, int? days) =>
         {
             var receipts = lib.Receipts();
+            var loot = lib.GameCommodities.Loot;
 
             return lib.Pickups(days ?? 0).Select(p =>
             {
                 var uuid = lib.ItemUuid(p.ItemClass);
                 var receipt = receipts.GetValueOrDefault(p.ItemClass);
                 var listed = uex.TypicalItemPrice(uuid);
+
+                // What the game's own tables say beside what was found: the
+                // best single roll anywhere, and how many kinds of place and
+                // body can produce it at all.
+                var hits = loot.For(p.ItemClass);
+                var best = hits.Count > 0 ? hits.MaxBy(h => h.PerRoll) : null;
 
                 return new
                 {
@@ -1943,9 +1950,76 @@ public static class ServerHost
                     p.Category,
                     price = listed ?? receipt?.UnitPrice,
                     pricedFrom = listed is not null ? "market" : receipt is not null ? "receipt" : null,
-                    sold = uex.ItemMarket(uuid).Count > 0 || receipt is not null
+                    sold = uex.ItemMarket(uuid).Count > 0 || receipt is not null,
+                    bestRoll = best?.PerRoll,
+                    bestFrom = best is null ? null : LootSourceLabel(best.Source),
+                    lootSources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count()
                 };
             });
+        });
+
+        // Where an item can be found, from the game's loot tables - the
+        // loot-verse question answered from this install rather than a site.
+        // Every row is a kind of place or body and a per-roll estimate; how
+        // many rolls a container makes depends on its size and is not in the
+        // number, which the page says.
+        app.MapGet("/api/loot/where", (LogLibrary lib, string item) =>
+        {
+            var hits = lib.GameCommodities.Loot.For(item);
+
+            return new
+            {
+                item,
+                name = lib.ItemName(item),
+                tables = lib.GameCommodities.Loot.Rolls.Count,
+                hits = hits.Select(h => new
+                {
+                    h.Source.Kind,
+                    h.Source.Preset,
+                    label = LootSourceLabel(h.Source),
+                    group = h.Source.Group.Length > 0 ? h.Source.Group : null,
+                    h.Source.Container,
+                    containerName = lib.ItemName(h.Source.Container),
+                    h.Source.SlotChance,
+                    h.Source.RespawnSeconds,
+                    h.Source.Table,
+                    h.Source.ChanceToGenerate,
+                    h.PerRoll,
+                    h.Via
+                })
+            };
+        });
+
+        // Every item the tables can produce whose name or class holds the
+        // query, best roll first - the search box on the Loot page.
+        app.MapGet("/api/loot/search", (LogLibrary lib, string q) =>
+        {
+            var loot = lib.GameCommodities.Loot;
+            var term = (q ?? "").Trim();
+            if (term.Length < 2) return Results.Ok(Array.Empty<object>());
+
+            var found = loot.Items
+                .Where(loot.CanRoll)
+                .Select(c => (Class: c, Name: lib.ItemName(c)))
+                .Where(i => i.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || i.Class.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .Take(400)
+                .Select(i =>
+                {
+                    var hits = loot.For(i.Class);
+                    return new
+                    {
+                        itemClass = i.Class,
+                        name = i.Name,
+                        bestRoll = hits.Max(h => h.PerRoll),
+                        sources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count()
+                    };
+                })
+                .OrderByDescending(i => i.bestRoll)
+                .Take(60)
+                .ToList();
+
+            return Results.Ok(found);
         });
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
@@ -5800,6 +5874,10 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
                     here.Count > 0))
         ];
     }
+
+    /// <summary>A kind of place for a crate slot, who it was for a body.</summary>
+    static string LootSourceLabel(LootSource source) =>
+        source.Kind == "body" ? LootLabels.Body(source.Preset) : LootLabels.Preset(source.Preset);
 
     /// <summary>Maps service evidence onto the app's own atlas identifiers.</summary>
     static IReadOnlyList<MapServicePlace> BuildMapServices(LogLibrary lib, UexData uex, UexFeeds feeds)

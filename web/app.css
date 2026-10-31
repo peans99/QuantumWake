@@ -7029,3 +7029,25 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .run-tweak-form { grid-column: 2; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .trade-run-money { margin: 6px 0 8px; padding: 6px 8px; border: 1px solid var(--rule); font-size: 11px; line-height: 1.4; }
 .trade-run-warning { color: var(--amber); }
+
+/* ---------- Loot: where the game's tables say an item comes from ---------- */
+#loot-table button.link {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline dotted;
+  /* An item name, not a control: the global button face would shout it. */
+  text-transform: none; letter-spacing: 0; clip-path: none; text-align: left;
+}
+#loot-table button.link:hover { color: var(--cyan-hot); }
+.loot-find-results { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.loot-find-results:empty { display: none; }
+.loot-find-item {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 10px; text-transform: none; letter-spacing: 0; text-align: left; max-width: 280px;
+}
+.loot-find-item .muted { font-size: 11px; }
+.loot-where { border: 1px solid var(--rule); padding: 10px 12px; margin: 0 0 22px; }
+.loot-where-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.loot-where-head h3 { margin: 0; }
+.loot-where .caption { margin: 6px 0 10px; }
+.loot-where-table .chip { margin-left: 6px; }
+.loot-where-containers { white-space: normal; max-width: 34ch; }

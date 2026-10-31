@@ -119,3 +119,22 @@ public class LootRollTests
         Assert.Equal(1, odds.Single().PerRoll, 6);
     }
 }
+
+/// <summary>Labels for loot sources, from record names read on this install.</summary>
+public class LootLabelTests
+{
+    [Theory]
+    [InlineData("V3SlotPreset_DistributionCentres_HighSecurtiy", "Distribution Centres · High Security")]
+    [InlineData("LootGeneration_MultiSlotPreset_DerelictOutposts", "Derelict Outposts")]
+    [InlineData("LootGeneration_SlotPreset_ColonialOutpost_Outlaw", "Colonial Outpost · Outlaw")]
+    [InlineData("V3SlotPreset_DCDelving", "DC Delving")]
+    [InlineData("LootArchetype_WeaponsCache_Common", "Weapons Cache · Common")]
+    public void A_preset_reads_as_a_kind_of_place(string record, string label) =>
+        Assert.Equal(label, LootLabels.Preset(record));
+
+    [Theory]
+    [InlineData("NPC_Archetypes_Male_Human_Civilians_Prisoner_13", "Prisoner")]
+    [InlineData("Corpse_ShatteredBlade_soldier", "Shattered Blade · soldier")]
+    public void A_body_reads_as_who_it_was(string record, string label) =>
+        Assert.Equal(label, LootLabels.Body(record));
+}
