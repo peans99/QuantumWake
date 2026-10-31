@@ -268,7 +268,7 @@ group into lines by row and gap. The models are fetched once into the app's
 folder and cached by CI; a runner with no network stands the reading tests
 down and says why.
 
-**When the models cannot be had** (0.19.15, from the release review). A fetch
+**When the models cannot be had** (0.20.0, from the release review). A fetch
 that failed - offline, Hugging Face down, a hash mismatch - used to surface as
 an ordinary read failure, and an ordinary read failure is a verdict on the
 file: "Read older" stored it at once and the watch once the file was a minute
