@@ -19674,6 +19674,10 @@ function renderChecklists(lists) {
     if (list.pinned) head.append(el('span', 'job-kind owned', tx('on Now')));
     head.append(el('span', 'spacer'));
 
+    const farm = el('button', checklistFarmOpen.has(list.id) ? 'ghost on checklist-farm-toggle' : 'ghost checklist-farm-toggle', tx('Where to get these'));
+    farm.title = tx('Where each open line can be found, bought or crafted, and the places that yield the most of the list');
+    head.append(farm);
+
     const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? tx('On Now') : tx('Pin to Now'));
     pin.title = tx('Only one checklist is shown on Now and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
@@ -19688,8 +19692,172 @@ function renderChecklists(lists) {
     const items = el('ul', 'checklist-items');
     for (const entry of list.items) items.append(checklistItemRow(list, entry));
     if (!list.items.length) items.append(el('li', 'muted', tx('No tasks yet — add the first thing you want to remember.')));
-    card.append(items, checklistComposer(list));
+
+    // Open across re-renders: ticking a line redraws every card, and a panel
+    // that closed itself each time would have to be asked for again.
+    const panel = el('div', 'checklist-farm');
+    panel.hidden = !checklistFarmOpen.has(list.id);
+    if (!panel.hidden) showChecklistFarm(list, panel);
+    farm.addEventListener('click', () => {
+      if (checklistFarmOpen.has(list.id)) {
+        checklistFarmOpen.delete(list.id);
+        panel.hidden = true;
+        farm.classList.remove('on');
+      } else {
+        checklistFarmOpen.add(list.id);
+        panel.hidden = false;
+        farm.classList.add('on');
+        // Returned so whoever clicked can wait for the answer.
+        return showChecklistFarm(list, panel);
+      }
+    });
+
+    card.append(items, panel, checklistComposer(list));
     host.append(card);
+  }
+}
+
+const checklistFarmOpen = new Set();
+
+/**
+ * What a list's open lines name, as written: the item or commodity a line
+ * links to, or failing that its own text. A ticked line is done with.
+ */
+function checklistFarmNames(list) {
+  const names = [];
+  for (const item of list.items || []) {
+    if (item.done) continue;
+    const linked = (item.attachments || []).find((a) => a.kind === 'item' || a.kind === 'commodity');
+    const name = (linked?.label || item.text || '').trim();
+    if (name && !names.some((n) => n.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names;
+}
+
+async function showChecklistFarm(list, panel) {
+  const names = checklistFarmNames(list);
+  if (!names.length) {
+    panel.replaceChildren(el('p', 'muted', tx('Nothing left to get: every line is ticked.')));
+    return;
+  }
+
+  panel.replaceChildren(el('p', 'muted', tx('Reading the loot tables…')));
+  let data;
+  try {
+    const response = await fetch('/api/loot/farm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names }),
+    });
+    data = await response.json();
+  } catch {
+    panel.replaceChildren(el('p', 'muted', tx('The loot tables could not be read.')));
+    return;
+  }
+
+  renderChecklistFarm(panel, data);
+}
+
+function openLootItem(itemClass) {
+  showView('loot');
+  showLootWhere(itemClass);
+}
+
+/**
+ * A list's answer: the places that yield the most of it, then each line with
+ * where to find, buy or craft it. Lines that match no item say so rather than
+ * vanish - a commodity or a typo is still on the list.
+ */
+function renderChecklistFarm(panel, data) {
+  panel.textContent = '';
+  const items = data.items || [];
+  const places = data.places || [];
+
+  if (places.length) {
+    panel.append(el('h4', 'loot-where-sub', tx('Best places for this list')));
+    panel.append(el('p', 'muted caption', tx('Ranked by how many of the list a place can yield, then by the chances added up. Per crate slot, an estimate like every number on the Loot page.')));
+    if (data.tied > places.length) {
+      panel.append(el('p', 'caption checklist-farm-tied',
+        tx('{count} places tie for the best: these are the first ten, and the rest are just as good.', { count: data.tied })));
+    }
+
+    const table = el('table', 'loot-where-table checklist-farm-places');
+    const headRow = el('tr');
+    for (const label of [tx('Place'), tx('On'), tx('Covers'), tx('Items there')]) headRow.append(el('th', null, label));
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const place of places) {
+      const tr = el('tr');
+      tr.append(place.name ? el('td', null, place.name) : el('td', 'muted', tx('Unmarked spot')));
+      tr.append(el('td', 'muted', place.body || '—'));
+      tr.append(el('td', 'num', tx('{count} of {total}', { count: place.items.length, total: items.length })));
+      tr.append(el('td', 'muted loot-where-containers',
+        place.items.map((i) => `${i.name} ${lootPercent(i.chance)}`).join(', ')));
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    panel.append(wrap);
+  }
+
+  if (items.length) {
+    panel.append(el('h4', 'loot-where-sub', tx('Each line')));
+    const table = el('table', 'loot-where-table checklist-farm-items');
+    const headRow = el('tr');
+    for (const [label, title] of [
+      [tx('Item'), null],
+      [tx('Best place'), tx('The named place with the best per-slot chance, or an unmarked spot when there is none')],
+      [tx('Worn by'), tx('The NPC likeliest to have it on them, and how many kinds of NPC can')],
+      [tx('NPC ships'), null],
+      [tx('Buy'), tx('The cheapest shop the UEX prices list')],
+      [tx('Craft'), tx('Whether the game has a recipe that makes it, and how long it takes')],
+    ]) {
+      const th = el('th', null, label);
+      if (title) th.title = title;
+      headRow.append(th);
+    }
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const item of items) {
+      const tr = el('tr');
+      const cell = el('td');
+      const open = el('button', 'link', item.name);
+      open.title = tx('Open this item on the Loot page');
+      open.addEventListener('click', () => openLootItem(item.itemClass));
+      cell.append(open);
+      tr.append(cell);
+
+      tr.append(el('td', item.best ? null : 'muted', item.best
+        ? `${item.best.name || tx('Unmarked spot')}${item.best.body ? ` · ${item.best.body}` : ''} ${lootPercent(item.best.chance)}`
+        : '—'));
+      tr.append(el('td', item.npc ? null : 'muted', item.npc
+        ? `${item.npc.label} ${item.npc.share >= 0.9995 ? tx('always') : lootPercent(item.npc.share)}${item.npcs > 1 ? ` ${tx('+{count} more', { count: item.npcs - 1 })}` : ''}`
+        : '—'));
+      tr.append(el('td', 'num muted', item.ships > 0 ? String(item.ships) : '—'));
+      tr.append(el('td', item.buy ? null : 'muted', item.buy
+        ? `${item.buy.place} · ${money(item.buy.price)}`
+        : data.uex ? tx('not sold') : tx('prices off')));
+      tr.append(el('td', item.craft ? null : 'muted', item.craft
+        ? tx('{minutes} min', { minutes: Math.max(1, Math.round(item.craft.craftSeconds / 60)) })
+        : '—'));
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    panel.append(wrap);
+  }
+
+  const unmatched = data.unmatched || [];
+  if (unmatched.length) {
+    panel.append(el('p', 'muted caption', tx('Not matched to an item: {names}. A commodity, a typo, or something no table, NPC, ship or recipe has - Shopping can still find where it is sold.', { names: unmatched.join(', ') })));
   }
 }
 

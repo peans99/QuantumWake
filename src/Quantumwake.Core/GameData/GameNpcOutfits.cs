@@ -81,6 +81,7 @@ public static class GameNpcOutfits
             if (!record.FileName.Contains("/actor/actors/", StringComparison.OrdinalIgnoreCase)) continue;
 
             var npc = record.Name["EntityClassDefinition.".Length..];
+            if (IsTestRig(npc)) continue;
             var shares = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             var walker = new Walker(core, byHash, ItemsIn, shares);
 
@@ -105,6 +106,20 @@ public static class GameNpcOutfits
                 .OrderByDescending(n => n.Share).ThenBy(n => n.Npc, StringComparer.Ordinal).ToList(),
             StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Actor classes that are test rigs rather than anybody met in the game:
+    /// <c>DummyPlayer</c>, <c>FeatureTest_Human_Male_Rifle</c>,
+    /// <c>PU_Human-Test-Guild-Criminal</c>, the "Behavior Zoo Testmap"
+    /// vendors. Judged on whole parts of the name, so Contestedzones - which
+    /// has "test" inside it - is kept.
+    /// </summary>
+    public static bool IsTestRig(string actorClass) =>
+        actorClass.Split(['_', '-'], StringSplitOptions.RemoveEmptyEntries).Any(part =>
+            part is "Test" or "DummyPlayer"
+            || part.StartsWith("FeatureTest", StringComparison.Ordinal)
+            || part.EndsWith("Test", StringComparison.Ordinal)
+            || part.EndsWith("Testmap", StringComparison.Ordinal));
 
     /// <summary>Every item a loadout file names, at any depth.</summary>
     internal static List<string>? ItemsOf(byte[] bytes)

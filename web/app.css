@@ -7031,13 +7031,13 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .trade-run-warning { color: var(--amber); }
 
 /* ---------- Loot: where the game's tables say an item comes from ---------- */
-#loot-table button.link {
+#loot-table button.link, .checklist-farm-items button.link {
   background: none; border: 0; padding: 0; margin: 0;
   font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline dotted;
   /* An item name, not a control: the global button face would shout it. */
   text-transform: none; letter-spacing: 0; clip-path: none; text-align: left;
 }
-#loot-table button.link:hover { color: var(--cyan-hot); }
+#loot-table button.link:hover, .checklist-farm-items button.link:hover { color: var(--cyan-hot); }
 .loot-find-results { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
 .loot-find-results:empty { display: none; }
 .loot-find-item {
@@ -7055,4 +7055,6 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .loot-places-body { margin: 0 0 8px; }
 .loot-places-more { margin-top: 6px; }
 .loot-where-placed { font-size: 12px; }
+.checklist-farm { margin: 10px 0 14px; padding: 8px 10px; border: 1px solid var(--rule); }
+.checklist-farm-items .link { white-space: normal; text-align: left; }
 .loot-places-table tbody td.muted:first-child { color: var(--muted); font-style: italic; }

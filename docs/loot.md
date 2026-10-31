@@ -246,8 +246,8 @@ the frame is streamed to the recorded size rather than unwrapped whole.
 | | count |
 | --- | --- |
 | kinds of item worn or carried | **2,571** |
-| NPC classes wearing something | **2,161** - 808 kinds once gender and variant number are dropped |
-| NPC-and-item pairs, cached | 27,595 (adds ~2.3 MB to `commodities.json`) |
+| NPC classes wearing something | **2,129** - 778 kinds once gender and variant number are dropped (32 test rigs left out, see below) |
+| NPC-and-item pairs, cached | 27,286 (adds ~2.3 MB to `commodities.json`) |
 | read time, all 2,522 files | 1.9 s |
 
 Kept: armour, clothing, personal weapons, attachments and magazines,
@@ -269,6 +269,44 @@ are. Nothing the tables could not explain is explained by outfits instead -
 the four from neither are still the goldfish and the three ship models - so
 this adds sources rather than closing gaps. It cannot say which of the 46
 came off a body rather than a crate: the logs do not tell them apart.
+
+## Farm my list
+
+Added 2026-10-31 in 0.20.6. A checklist's **Where to get these** button sends
+the list's open lines to `POST /api/loot/farm`. Each line is asked for by the
+item or commodity it links to, or failing that by its own text, and a ticked
+line not at all.
+
+**A line becomes an item by name.** Every class the loot tables roll, NPCs
+wear, NPC ships carry or a recipe makes is indexed by its display name and its
+class, built once per game-data load. Where two classes share a name, the one
+with a crate behind it wins. A line that matches nothing - a commodity, a typo
+- is listed as unmatched rather than dropped.
+
+**Each line** gets its best named place (or an unmarked spot when no place is
+named), the NPC likeliest to carry it and how many kinds can, the number of NPC
+ships that fly with it, the cheapest seller in the UEX prices when that feed is
+on, and the craft time when the game has a recipe that makes it.
+
+**The basket** (`Core/GameData/LootBasket.cs`) ranks places for the whole list:
+first by how many of the list's items a place can yield, then by their
+per-slot chances added up - the expected number of list items per crate slot
+opened, if each slot is one draw. Unmarked spots that yield the same items at
+the same odds are folded into one row naming their bodies.
+
+**Ties are the norm, and the page says so.** On a five-item test list on this
+install - Gallant rifle, FS-9 magazine, the Hurston Balor helmet, a CF-337 and
+a MedPen - **150 places tie for best**, covering four of the five: the same
+`V3SlotPreset_Loot_Military` crate set stands at every ArcCorp security post
+and processing centre and at unmarked spots on thirteen bodies. The CF-337 is
+on no table at all; it comes off 224 NPC ships. The page shows ten and says
+the rest are as good, rather than letting alphabetical order look like a
+recommendation. The request takes about a quarter of a second.
+
+Actor classes that are test rigs - `DummyPlayer`, `FeatureTest_*`,
+`PU_Human-Test-*`, the "Behavior Zoo Testmap" vendors - were found on this
+list (a "Dummy Player" was the MedPen's likeliest carrier) and are now left
+out of the outfits.
 
 ## Not yet
 

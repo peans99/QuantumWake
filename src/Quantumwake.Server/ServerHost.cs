@@ -2025,6 +2025,97 @@ public static class ServerHost
 
         // Every item the tables can produce whose name or class holds the
         // query, best roll first - the search box on the Loot page.
+        // A whole list at once - the Checklists page's "Where to get these".
+        // For each line, where it can be found, who carries it, where it is
+        // sold and whether it can be crafted; and the places that yield the
+        // most of the list, which is what loot-verse calls the basket.
+        app.MapPost("/api/loot/farm", (LogLibrary lib, UexData uex, FarmRequest body) =>
+        {
+            var loot = lib.GameCommodities.Loot;
+            var index = LootNameIndex(lib);
+
+            var names = (body.Names ?? [])
+                .Select(n => n?.Trim() ?? "")
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(60)
+                .ToList();
+
+            var found = names
+                .Select(n => (Written: n, Class: index.TryGetValue(n, out var c) ? c : null))
+                .ToList();
+
+            var resolved = found.Where(f => f.Class is not null).ToList();
+            var ranked = LootBasket.Rank(
+                [.. resolved.Select(f => (f.Class!, loot.PlacesFor(f.Class)))], take: int.MaxValue);
+            var basket = ranked.Take(10).ToList();
+
+            // One crate set placed at forty security posts makes forty equal
+            // places; the page says so rather than letting the first ten look best.
+            var tied = basket.Count == 0 ? 0 : ranked.Count(p =>
+                p.Items.Count == basket[0].Items.Count && Math.Abs(p.Score - basket[0].Score) < 1e-9);
+
+            var crafted = lib.GameCommodities.Blueprints
+                .Where(b => b.Kind == "creation")
+                .GroupBy(b => b.OutputClass, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            return new
+            {
+                uex = uex.IsEnabled,
+                tied,
+                items = resolved.Select(f =>
+                {
+                    var itemClass = f.Class!;
+                    var places = loot.PlacesFor(itemClass);
+                    var best = places.FirstOrDefault(p => p.Name is not null) ?? places.FirstOrDefault();
+                    var npc = loot.NpcsFor(itemClass)
+                        .GroupBy(n => LootLabels.Npc(n.Npc))
+                        .Select(g => new { label = g.Key, share = g.Max(n => n.Share) })
+                        .OrderByDescending(n => n.share)
+                        .FirstOrDefault();
+                    var uuid = lib.ItemUuid(itemClass);
+                    var cheapest = uuid is null ? null : uex.ItemMarket(uuid)
+                        .Where(r => r.Buy > 0)
+                        .MinBy(r => r.Buy);
+                    var recipe = crafted.GetValueOrDefault(itemClass);
+
+                    return new
+                    {
+                        written = f.Written,
+                        itemClass,
+                        name = lib.ItemName(itemClass),
+                        places = places.Count,
+                        best = best is null ? null : new
+                        {
+                            best.Name,
+                            best.Body,
+                            chance = best.Best.PerRoll * best.Best.Source.SlotChance,
+                        },
+                        npcs = loot.NpcsFor(itemClass).Select(n => LootLabels.Npc(n.Npc)).Distinct().Count(),
+                        npc,
+                        ships = loot.ShipsFor(itemClass).Count,
+                        buy = cheapest is null ? null : new
+                        {
+                            place = lib.Terminals.Resolve(cheapest.Terminal)?.Name ?? cheapest.Terminal,
+                            price = cheapest.Buy,
+                        },
+                        craft = recipe is null ? null : new { recipe.CraftSeconds, recipe.Materials },
+                    };
+                }),
+                places = basket.Select(p => new
+                {
+                    p.Name,
+                    p.Body,
+                    p.Id,
+                    p.Spots,
+                    score = p.Score,
+                    items = p.Items.Select(i => new { itemClass = i.Item, name = lib.ItemName(i.Item), i.Chance }),
+                }),
+                unmatched = found.Where(f => f.Class is null).Select(f => f.Written),
+            };
+        });
+
         app.MapGet("/api/loot/search", (LogLibrary lib, string q) =>
         {
             var loot = lib.GameCommodities.Loot;
@@ -5917,6 +6008,41 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         ];
     }
 
+    private static readonly object LootNamesLock = new();
+    private static (GameLootData For, Dictionary<string, string> Index)? _lootNames;
+
+    /// <summary>
+    /// Every item the loot model or a recipe knows, by its display name and by its class,
+    /// to the class - so a list line written as "Gallant Rifle" finds
+    /// <c>klwe_rifle_energy_01</c>.
+    /// </summary>
+    /// <remarks>
+    /// Built once per game-data load: naming every item the tables, ships and
+    /// outfits mention is several thousand lookups, and a list is asked about
+    /// every time the panel opens. Where two classes share a name - an armour
+    /// colour the game left unnamed - the first one kept is the one with a
+    /// crate behind it.
+    /// </remarks>
+    static Dictionary<string, string> LootNameIndex(LogLibrary lib)
+    {
+        var loot = lib.GameCommodities.Loot;
+        lock (LootNamesLock)
+        {
+            if (_lootNames is { } cached && ReferenceEquals(cached.For, loot)) return cached.Index;
+
+            var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var itemClass in loot.Items.Where(loot.CanRoll).Concat(loot.Npcs.Keys).Concat(loot.Ships.Keys)
+                .Concat(lib.GameCommodities.Blueprints.Select(b => b.OutputClass)))
+            {
+                index.TryAdd(itemClass, itemClass);
+                index.TryAdd(lib.ItemName(itemClass), itemClass);
+            }
+
+            _lootNames = (loot, index);
+            return index;
+        }
+    }
+
     /// <summary>A kind of place for a crate slot, who it was for a body.</summary>
     static string LootSourceLabel(LootSource source) =>
         source.Kind == "body" ? LootLabels.Body(source.Preset) : LootLabels.Preset(source.Preset);
@@ -6238,6 +6364,9 @@ public sealed record ImportRequest(string? Document, string? SourceName = null);
 
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);
+
+/// <summary>Body of POST /api/loot/farm: the names written on a list.</summary>
+public sealed record FarmRequest(List<string?>? Names);
 
 /// <summary>Body of POST /api/checklists/{id}/items.</summary>
 public sealed record ChecklistItemRequest(
