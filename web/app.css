@@ -1,29 +1,29 @@
-/* Quantumwake - a midnight flight deck, not another game database.
+/* Quantumwake - a calm flight deck, not another game database.
  *
- * The interface is deliberately quiet: graphite surfaces, indigo navigation
- * marks and a single warm colour for things that need a decision. It keeps the
- * data dense without borrowing the Star Citizen fan-site visual language.
+ * The familiar cyan palette is kept as a live-state signal, while softer
+ * surfaces and simpler framing keep dense pages readable without borrowing
+ * another fan site's visual language.
  *
  * Fonts are Windows built-ins only - Bahnschrift is the squarish techno face
  * that ships with Windows 10/11 and stands in well for SC's display type. No
  * webfont is loaded, because standalone mode makes no outbound requests. */
 
 :root {
-  --void: #111616;
-  --deep: #171d1d;
-  --panel: #202727;
-  --panel-2: #28302e;
-  --rule: #414b48;
-  --rule-hot: #68766f;
+  --void: #04070c;
+  --deep: #070c14;
+  --panel: #0a121c;
+  --panel-2: #0e1926;
+  --rule: #17293c;
+  --rule-hot: #1e4763;
 
-  --text: #f0ede3;
-  --muted: #b9b8aa;
-  --dim: #7f8981;
+  --text: #cfe4f5;
+  --muted: #7796b0;
+  --dim: #46617a;
 
-  --cyan: #70b8c2;
-  --cyan-hot: #c7e3df;
-  --cyan-deep: #3d777b;
-  --amber: #d79b54;
+  --cyan: #35c8f0;
+  --cyan-hot: #7fe4ff;
+  --cyan-deep: #0d5c78;
+  --amber: #ffab3d;
   --red: #ff5a4d;
   --green: #4fd48a;
   --violet: #b58cf0;
