@@ -335,6 +335,17 @@ let shownView = 'now';
 /** The last answer from /api/activity, so a tab change can redraw without waiting for the next poll. */
 let lastActivity = null;
 
+/* A change of workspace should feel like moving through one instrument panel,
+ * not like a route transition. The sweep is explicitly restarted only here so
+ * background refreshes never turn the dashboard into a looping animation. */
+function playSectorScan() {
+  const scan = $('#sector-scan');
+  if (!scan || isOverlay || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  scan.classList.remove('running');
+  void scan.offsetWidth;
+  scan.classList.add('running');
+}
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
@@ -363,6 +374,8 @@ function showView(name) {
   // The page notice is about this page, so it is redrawn with it rather than
   // on the next poll: Controls should not spend a second saying Ledger is waiting.
   shownView = name;
+  document.body.dataset.view = name;
+  playSectorScan();
   if (lastActivity) paintPageWait(activityJobs(lastActivity));
 
   // A map drawer is useful beside the map, but it is not the cross-page
@@ -1192,6 +1205,25 @@ function renderFlightTelemetry(state) {
   link.textContent = state.connected ? tx('Live') : tx('Standing by');
   ribbon.dataset.link = state.connected ? 'live' : 'idle';
   ribbon.dataset.travel = state.travelling ? 'quantum' : 'local';
+  applyFlightAtmosphere(state);
+}
+
+/* The ambient colour and hull outline follow facts the dashboard already has.
+ * The vocabulary stays intentionally broad: a rare hull is still a ship, not
+ * a missing silhouette, and systems outside the known set keep the cyan base. */
+function applyFlightAtmosphere(state) {
+  const system = (state.locationSystem || '').toLowerCase();
+  document.body.dataset.systemTone = system.includes('pyro') ? 'ember'
+    : system.includes('nyx') ? 'violet'
+      : system.includes('terra') ? 'blue'
+        : 'cyan';
+
+  const ship = (state.ship || '').toLowerCase();
+  document.body.dataset.shipProfile = /hornet|gladius|arrow|sab(re|er)|scorpius|lightning/.test(ship) ? 'fighter'
+    : /mole|prospector|reclaimer|vulture|expanse/.test(ship) ? 'industrial'
+      : /caterpillar|hull|freelancer|max|raft|taurus|starlancer/.test(ship) ? 'hauler'
+        : /carrack|aquila|terr(a|apin)|400i|600i|odyssey/.test(ship) ? 'explorer'
+          : 'ship';
 }
 
 let newestLiveFeedKey = '';
@@ -1277,6 +1309,7 @@ function renderNow(state) {
     for (const [index, entry] of entries.entries()) {
       const li = el('li');
       if (index === 0 && hasNewLiveEvent) li.classList.add('fresh');
+      if (entry.kind === 'contract-done') li.classList.add('mission-complete');
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
       li.append(el('span', 'x', feedText(entry.text)));
@@ -2820,7 +2853,7 @@ async function loadContractList() {
 
   for (const row of rows.slice(0, 400)) {
     const tr = el('tr');
-    tr.append(el('td', null, dateOf(row.at)));
+    tr.append(el('td', 'route-point', dateOf(row.at)));
 
     // The composed name repeats issuer, type and difficulty, so the columns
     // carry those and the full name rides the row's tooltip.
@@ -2831,7 +2864,13 @@ async function loadContractList() {
     tr.title = row.name;
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
-    tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+    const outcome = el('td', cls === 'done' ? 'inward' : cls, label);
+    if (row.outcome === 'Completed') {
+      const patch = el('span', 'mission-patch', '✦');
+      patch.title = tx('Completed contract');
+      outcome.prepend(patch);
+    }
+    tr.append(outcome);
 
     // What the title says it pays, when a text mod has annotated it. Silence
     // is the honest default: most titles say nothing, and a zero would read as

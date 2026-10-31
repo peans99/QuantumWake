@@ -352,7 +352,7 @@ body.overlay .feed .d { display: none; }
    planner, report or table. It stays narrower than a dashboard row. */
 .flight-telemetry {
   position: sticky;
-  top: 62px;
+  top: 58px;
   z-index: 9;
   display: flex;
   min-height: 36px;
@@ -391,7 +391,7 @@ body.overlay .command-palette { display:none; }
    into a second dashboard. The rail exists only after an explicit choice. */
 .context-rail {
   position: sticky;
-  top: 98px;
+  top: 94px;
   z-index: 9;
   background: rgba(7, 15, 24, .96);
   border-bottom: 1px solid rgba(53, 200, 240, .3);
@@ -577,7 +577,7 @@ body.overlay .command-palette { display:none; }
  * leaving every card with a horizontal scrollbar. */
 @media (max-width: 900px) {
   .flight-telemetry { display: none; }
-  .context-rail { top: 62px; }
+  .context-rail { top: 58px; }
   .topbar { gap: 8px; padding-inline: 14px; overflow-x: auto; scrollbar-width: none; }
   .topbar::-webkit-scrollbar { display: none; }
   .topbar .by, .topbar .search-box, .topbar .status { display: none; }
@@ -937,6 +937,7 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 .feed::-webkit-scrollbar-thumb { background: var(--rule-hot); }
 
 .feed li {
+  position: relative;
   display: flex;
   gap: 11px;
   align-items: baseline;
@@ -947,6 +948,12 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 }
 .feed li:last-child { border-bottom: 0; }
 .feed li:hover { background: rgba(53, 200, 240, .04); border-left-color: var(--cyan-deep); }
+
+/* Flight-recorder marks make the chronological feed read as a trace, while
+   preserving each row's ordinary text flow for narrow and assistive layouts. */
+#now-feed { background: linear-gradient(var(--rule-hot), var(--rule-hot)) 5px 13px / 1px calc(100% - 26px) no-repeat; }
+#now-feed li::before { content: ""; position: absolute; left: 1px; top: 12px; width: 7px; height: 7px; box-sizing: border-box; border: 1px solid var(--cyan-deep); border-radius: 50%; background: var(--deep); box-shadow: 0 0 0 3px rgba(4, 11, 18, .82); }
+#now-feed li.mission-complete::before { border-color: var(--amber); background: var(--amber); box-shadow: 0 0 0 3px rgba(4, 11, 18, .82), 0 0 9px rgba(255, 171, 61, .42); }
 
 .feed .t { color: var(--dim); font-family: var(--mono); font-size: 10.5px; flex: 0 0 auto; }
 .feed .k {
@@ -1448,6 +1455,9 @@ td.outward { color: var(--amber); }
 #contracts-table td:nth-child(3), #contracts-table td:nth-child(4), #contracts-table td:nth-child(5),
 #market-table td:nth-child(2) { color: var(--dim); font-size: 11px; }
 #contracts-table tbody tr:hover, #market-table tbody tr:hover { background: rgba(53, 200, 240, .09); }
+#contracts-table .route-point { position: relative; padding-left: 23px; }
+#contracts-table .route-point::before { content: ""; position: absolute; left: 12px; top: 50%; width: 5px; height: 5px; border: 1px solid var(--cyan-deep); border-radius: 50%; background: var(--panel); transform: translateY(-50%); }
+.mission-patch { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: 5px; border: 1px solid rgba(255, 171, 61, .52); border-radius: 50% 50% 50% 3px; color: var(--amber); font-size: 8px; line-height: 1; vertical-align: -1px; transform: rotate(-18deg); }
 
 .session-row { cursor: pointer; }
 .sessions-toolbar { align-items: center; }
@@ -4501,6 +4511,7 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 .itinerary-stop.done { opacity: .6; }
 .itinerary-stop.done > .itinerary-stop-main > .trip-place { text-decoration: line-through; }
 .itinerary-stop .trip-number { width: 26px; height: 26px; font-size: 12px; }
+.itinerary-stop:not(:last-child) .trip-number::after { content: ""; position: absolute; top: 27px; left: 50%; width: 1px; height: 24px; background: repeating-linear-gradient(to bottom, var(--cyan-deep) 0 2px, transparent 2px 5px); transform: translateX(-50%); }
 .itinerary-stop.next .trip-number { border-color: var(--cyan); color: var(--cyan-hot); }
 .itinerary-stop.done .trip-number { color: var(--green); border-color: #1f5c3d; }
 .itinerary-stop .trip-place { font-size: 15px; }
@@ -4706,6 +4717,7 @@ button.briefing-service:hover { border-color: var(--cyan); color: var(--cyan-hot
 .map-info-notes { border-top: 1px solid var(--rule); margin-top: 9px; padding-top: 8px; }
 .map-note-heading { color: var(--dim); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 5px; }
 .map-note { border-left: 2px solid var(--amber, #d8a03d); padding: 4px 0 4px 7px; margin: 5px 0; }
+.map-note::before { content: "✦"; display: inline-block; margin-right: 4px; color: var(--amber); font-size: 8px; vertical-align: 1px; }
 .map-note-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; color: var(--text); font-size: 11px; }
 .map-note-text { color: var(--muted); font-size: 10.5px; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
 .map-note-tags, .map-note-age { color: var(--dim); font-size: 9.5px; margin-top: 2px; }
@@ -7239,6 +7251,22 @@ body:not(.overlay) .tiny {
 
 /* ---------- flight-language details ---------- */
 
+/* A page scan is a single acknowledgement of navigation, never an ambient
+   animation. It has its own fixed layer so it cannot shift or clip the work. */
+.sector-scan { position: fixed; z-index: 8; inset: 58px 0 auto; height: 1px; overflow: hidden; pointer-events: none; }
+.sector-scan::after { content: ""; display: block; width: 22vw; height: 1px; opacity: 0; background: linear-gradient(90deg, transparent, var(--cyan), transparent); box-shadow: 0 0 15px var(--cyan); transform: translateX(-100%); }
+.sector-scan.running::after { animation: sector-scan .62s cubic-bezier(.25,.75,.35,1) both; }
+@keyframes sector-scan { 0% { opacity: 0; transform: translateX(-100%); } 16% { opacity: .78; } 100% { opacity: 0; transform: translateX(470vw); } }
+
+/* The base remains cyan. A current location only warms or cools the small
+   flight-language details, so changing system cannot recolour the whole app. */
+body[data-system-tone="ember"] { --flight-tone: var(--amber); --flight-tone-deep: rgba(255, 171, 61, .48); }
+body[data-system-tone="violet"] { --flight-tone: var(--violet); --flight-tone-deep: rgba(181, 140, 240, .48); }
+body[data-system-tone="blue"], body[data-system-tone="cyan"] { --flight-tone: var(--cyan); --flight-tone-deep: var(--cyan-deep); }
+body:not(.overlay) .flight-telemetry { border-bottom-color: var(--flight-tone-deep, var(--cyan-deep)); }
+body:not(.overlay) #now-feed li::before, body:not(.overlay) #contracts-table .route-point::before { border-color: var(--flight-tone-deep, var(--cyan-deep)); }
+body:not(.overlay) #now-feed { background-image: linear-gradient(var(--flight-tone-deep, var(--rule-hot)), var(--flight-tone-deep, var(--rule-hot))); }
+
 /* A few route points in otherwise empty space give the product its own spatial
    signature. They are deliberately dim and never sit behind a control. */
 body:not(.overlay) .view.active { position: relative; isolation: isolate; }
@@ -7258,6 +7286,18 @@ body:not(.overlay) .view.active::after {
     radial-gradient(circle at 91% 62%, rgba(181, 140, 240, .7) 0 1px, transparent 2px),
     linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
     linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
+}
+/* Glass reflections only occupy the empty upper band of a workspace. The
+   actual panels remain opaque enough to preserve contrast and legibility. */
+body:not(.overlay) .view.active::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 230px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .24;
+  background: linear-gradient(118deg, transparent 0 42%, rgba(152, 224, 255, .055) 43% 46%, transparent 47% 66%, rgba(255, 255, 255, .025) 67% 68%, transparent 69%), repeating-linear-gradient(90deg, rgba(127, 228, 255, .022) 0 1px, transparent 1px 9px);
 }
 body:not(.overlay) .view.active > * { position: relative; z-index: 1; }
 
@@ -7286,9 +7326,13 @@ body:not(.overlay) .data-source-qualifier::before { content: "·"; }
     clip-path: polygon(50% 0, 62% 36%, 100% 72%, 64% 73%, 50% 100%, 36% 73%, 0 72%, 38% 36%);
     background: linear-gradient(90deg, transparent 49.5%, rgba(53, 200, 240, .55) 50%, transparent 50.5%);
   }
+  body:not(.overlay)[data-ship-profile="hauler"] #view-now .now-status-card::after { clip-path: polygon(5% 38%, 30% 25%, 70% 25%, 95% 38%, 82% 72%, 18% 72%); }
+  body:not(.overlay)[data-ship-profile="industrial"] #view-now .now-status-card::after { clip-path: polygon(22% 10%, 78% 10%, 100% 50%, 78% 90%, 22% 90%, 0 50%); }
+  body:not(.overlay)[data-ship-profile="explorer"] #view-now .now-status-card::after { clip-path: polygon(50% 0, 70% 30%, 100% 51%, 70% 70%, 50% 100%, 30% 70%, 0 51%, 30% 30%); }
+  body:not(.overlay)[data-ship-profile="ship"] #view-now .now-status-card::after { clip-path: polygon(50% 2%, 72% 35%, 92% 67%, 61% 72%, 50% 98%, 39% 72%, 8% 67%, 28% 35%); }
 }
 
 /* New log entries are a momentary signal, not a permanent animation. */
 .feed li.fresh { border-left-color: var(--cyan); animation: feed-arrival 1.35s ease-out both; }
 @keyframes feed-arrival { 0% { background: rgba(53, 200, 240, .18); box-shadow: inset 20px 0 18px -22px var(--cyan); } 100% { background: transparent; box-shadow: none; } }
-@media (prefers-reduced-motion: reduce) { .feed li.fresh { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .feed li.fresh, .sector-scan.running::after { animation: none; } .sector-scan.running::after { opacity: 0; } }

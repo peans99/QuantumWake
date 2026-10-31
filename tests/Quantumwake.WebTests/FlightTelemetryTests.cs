@@ -26,6 +26,8 @@ public class FlightTelemetryTests
         Assert.Equal("ANVL Hornet F7CM Mk2", page.NodeText("#telemetry-ship"));
         Assert.Equal("Live", page.NodeText("#telemetry-link"));
         Assert.Equal("live", page.Text("__dom.node('#flight-telemetry').dataset.link"));
+        Assert.Equal("cyan", page.Text("document.body.dataset.systemTone"));
+        Assert.Equal("fighter", page.Text("document.body.dataset.shipProfile"));
     }
 
     [Fact]
@@ -43,5 +45,15 @@ public class FlightTelemetryTests
 
         page.Do($"renderNow({{ connected:true, inGame:true, confidence:'None', recentEvents:[{arrival},{history}] }});");
         Assert.Equal(0, page.Count("__dom.node('#now-feed').querySelectorAll('.fresh').length"));
+    }
+
+    [Fact]
+    public void A_completed_contract_keeps_its_mission_mark_in_the_flight_recorder()
+    {
+        var page = Live();
+
+        page.Do("renderNow({ connected:true, inGame:true, confidence:'None', recentEvents:[{at:'2026-10-03T23:39:33Z',kind:'contract-done',text:'Contract completed'}] });");
+
+        Assert.Equal(1, page.Count("__dom.node('#now-feed').querySelectorAll('.mission-complete').length"));
     }
 }
