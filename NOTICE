@@ -67,3 +67,22 @@ Microsoft.Data.Sqlite   Microsoft                                      MIT
 Microsoft.Web.WebView2  Microsoft                    Proprietary, redistributable
 xUnit.net               xUnit contributors                      Apache-2.0
 coverlet                Toni Solarin-Sodara and contributors            MIT
+Microsoft.ML.OnnxRuntime  Microsoft                                    MIT
+SkiaSharp               Mono Project / .NET Foundation                  MIT
+Jint                    Sebastien Ros and contributors                  BSD-2-Clause
+
+--------------------------------------------------------------------------------
+TEXT-RECOGNITION MODELS
+--------------------------------------------------------------------------------
+
+The screen reader used where Windows OCR is not available runs PaddleOCR's
+PP-OCRv4 text detector and PP-OCRv3 English recogniser, as exported to ONNX by
+the RapidOCR project. Neither model is contained in this repository: the app
+fetches them on first use from RapidOCR's model repository, pinned to a revision
+and checked against a hash (src/Quantumwake.Ocr.Onnx/OnnxModels.cs). The
+character tables the recognisers decode with (en_dict.txt, ppocr_keys_v1.txt)
+are PaddleOCR's and are embedded.
+
+    PaddleOCR - Copyright (c) 2020 PaddlePaddle Authors
+    RapidOCR  - Copyright (c) RapidAI
+    Both licensed under the Apache License, Version 2.0.

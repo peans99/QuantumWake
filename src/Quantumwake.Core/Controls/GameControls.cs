@@ -46,7 +46,7 @@ public static class GameControls
         foreach (var (path, _) in p4k.List(LayoutFolder))
         {
             if (!path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) || p4k.TryRead(path) is not { } bytes) continue;
-            try { layouts.Add(new ReferenceLayout(Path.GetFileName(path), ControlProfile.Parse(bytes))); }
+            try { layouts.Add(new ReferenceLayout(P4kArchive.EntryFileName(path), ControlProfile.Parse(bytes))); }
             catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException) { /* one bad layout does not lose the rest */ }
         }
         layouts.Sort((a, b) => string.Compare(a.File, b.File, StringComparison.OrdinalIgnoreCase));

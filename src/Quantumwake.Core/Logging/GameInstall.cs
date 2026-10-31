@@ -57,6 +57,11 @@ public static partial class GameInstallLocator
     /// </summary>
     public static IReadOnlyList<GameInstall> Discover()
     {
+        // No drive letters to walk: the game is inside a Wine prefix, and the
+        // layout under its drive_c is the one this list describes.
+        if (!OperatingSystem.IsWindows())
+            return DiscoverUnderWine();
+
         var results = new List<GameInstall>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -94,7 +99,15 @@ public static partial class GameInstallLocator
     /// </summary>
     public static GameInstall? FromPath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        // On Linux the folder a pilot pastes may be the prefix, or a C:\ path
+        // read off the launcher; both name the same place as a Linux path.
+        if (!OperatingSystem.IsWindows() && FromWinePath(path) is { } underWine)
+            return underWine;
+
+        if (!Directory.Exists(path))
             return null;
 
         var direct = new GameInstall(Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar)), path);
@@ -136,10 +149,35 @@ public static partial class GameInstallLocator
     /// </remarks>
     public static IReadOnlyList<GameInstall> FromLauncherLog()
     {
-        var log = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "rsilauncher", "logs", "log.log");
+        if (OperatingSystem.IsWindows())
+        {
+            var log = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "rsilauncher", "logs", "log.log");
 
+            return FromLauncherLog(log, path => path);
+        }
+
+        // Under Wine the launcher keeps the same log inside the prefix, and
+        // the C:\ paths in it are folders under that prefix's drives.
+        var found = new List<GameInstall>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var prefix in WinePrefixes())
+            foreach (var log in WineLauncherLogs(prefix))
+                foreach (var install in FromLauncherLog(log, path => MapWindowsPath(prefix, path)))
+                    if (seen.Add(install.RootPath))
+                        found.Add(install);
+
+        return found;
+    }
+
+    /// <summary>
+    /// Installs named in one launcher log. <paramref name="locate"/> turns a
+    /// path as the launcher wrote it into one this process can open, or null.
+    /// </summary>
+    internal static IReadOnlyList<GameInstall> FromLauncherLog(string log, Func<string, string?> locate)
+    {
         if (!File.Exists(log))
             return [];
 
@@ -155,9 +193,14 @@ public static partial class GameInstallLocator
             {
                 foreach (System.Text.RegularExpressions.Match match in LauncherPathRegex().Matches(line))
                 {
-                    var path = match.Groups["path"].Value.Replace(@"\\", @"\");
+                    var written = match.Groups["path"].Value.Replace(@"\\", @"\");
 
-                    if (!seen.Add(path) || !Directory.Exists(path))
+                    if (!seen.Add(written))
+                        continue;
+
+                    var path = locate(written);
+
+                    if (path is null || !Directory.Exists(path))
                         continue;
 
                     var install = new GameInstall(Path.GetFileName(path), path);

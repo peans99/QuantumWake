@@ -101,6 +101,24 @@ affiliated with or endorsed by Cloud Imperium Games.
 | [Microsoft.Web.WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Microsoft | Hosts the web UI inside the overlay window | Proprietary, redistributable |
 | [xUnit.net](https://xunit.net) | xUnit contributors | Test framework | Apache-2.0 |
 | [coverlet](https://github.com/coverlet-coverage/coverlet) | Toni Solarin-Sodara and contributors | Coverage collection | MIT |
+| [Microsoft.ML.OnnxRuntime](https://onnxruntime.ai) | Microsoft | Runs the text-recognition models where Windows OCR is not available: Linux, and a Windows machine with no English language pack | MIT |
+| [SkiaSharp](https://github.com/mono/SkiaSharp) | Mono Project, .NET Foundation | Decoding, cropping and scaling screenshots for that reader; `System.Drawing` has been Windows-only since .NET 6 | MIT |
+| [Jint](https://github.com/sebastienros/jint) | Sebastien Ros and contributors | Runs `web/app.js` under test | BSD-2-Clause |
+
+### Text-recognition models
+
+| Model | Author | Used for | Licence |
+|---|---|---|---|
+| [PP-OCRv4 detector, PP-OCRv3 English recogniser](https://github.com/PaddlePaddle/PaddleOCR) | PaddlePaddle authors | Finding and reading the text on a screenshot, on the ONNX reader above | Apache-2.0 |
+| [RapidOCR ONNX exports](https://github.com/RapidAI/RapidOCR) | RapidAI | The same models in the format ONNX Runtime loads; fetched from [their model repository](https://huggingface.co/SWHL/RapidOCR) on first use, pinned to a revision and checked against a hash | Apache-2.0 |
+
+The models are not in this repository and not in the download; the app fetches
+them (14 MB) when a pilot first asks it to read screenshots on a machine without
+Windows OCR. The code around them - the box reading off the detector's map, the
+CTC decoding, the grouping into lines, the second look - is this project's own,
+written to the same contract as the Windows reader; no community .NET wrapper
+is used, so the only third-party code on the reading path is Microsoft's runtime
+and a model file.
 
 There are no client-side dependencies at all — the dashboard is hand-written
 HTML, CSS and JavaScript with no framework, no bundler and no CDN, which is what

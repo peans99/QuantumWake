@@ -89,6 +89,12 @@ jobs:
           # app's own is inside the single file, so this one is just litter.
           Remove-Item dist/app/Quantumwake.Server.runtimeconfig.json -ErrorAction SilentlyContinue
 
+          # The ONNX Runtime and SkiaSharp packages carry their native import
+          # libraries and symbols beside the DLLs. The DLLs go into the single
+          # file; a .lib is for linking C++ against them and a .pdb for
+          # debugging them, and neither is read at run time.
+          Remove-Item dist/app/*.lib, dist/app/*.pdb -ErrorAction SilentlyContinue
+
           $files = Get-ChildItem dist/app -File
           if ($files.Count -ne 1) { throw "expected one file, got: $($files.Name -join ', ')" }
 
@@ -98,6 +104,38 @@ jobs:
           dotnet publish src/Quantumwake.Cli -c Release -r win-x64 --self-contained false `
             -p:Version=${{ steps.version.outputs.version }} -o dist/cli
           if ($LASTEXITCODE -ne 0) { throw 'cli publish failed' }
+
+      # On Linux the game runs under Wine or Proton and Quantum Wake runs
+      # natively beside it, reading the logs out of the prefix. The overlay shell
+      # is WPF and stays behind, so the Linux app is the bare server published as
+      # one file. Cross-published from this runner rather than an ubuntu one so
+      # the Defender scan below covers these files too: one scan, one promise.
+      - name: Publish for Linux
+        shell: pwsh
+        run: |
+          $shortSha = (git rev-parse --short=7 HEAD).Trim()
+
+          dotnet publish src/Quantumwake.Server -c Release -r linux-x64 `
+            --self-contained true -p:PublishSingleFile=true -p:DebugType=embedded `
+            -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:InformationalVersion="${{ steps.version.outputs.version }}+$shortSha" -o dist/linux-app
+          if ($LASTEXITCODE -ne 0) { throw 'linux publish failed' }
+
+          # A Linux command is lower case with no extension. The bundle finds
+          # its payload through its own path, so renaming it is safe.
+          Move-Item dist/linux-app/Quantumwake.Server dist/linux-app/quantumwake
+
+          # The web SDK writes a static-assets manifest even with no assets in
+          # it. The dashboard is served from the assembly, so it is litter too.
+          Remove-Item dist/linux-app/Quantumwake.Server.staticwebassets.endpoints.json -ErrorAction SilentlyContinue
+
+          $files = Get-ChildItem dist/linux-app -File
+          if ($files.Count -ne 1) { throw "expected one Linux file, got: $($files.Name -join ', ')" }
+
+          dotnet publish src/Quantumwake.Cli -c Release -r linux-x64 --self-contained false `
+            -p:Version=${{ steps.version.outputs.version }} -o dist/linux-cli
+          if ($LASTEXITCODE -ne 0) { throw 'linux cli publish failed' }
 
       - name: Scan release files with Microsoft Defender
         shell: pwsh
@@ -177,6 +215,8 @@ jobs:
           # Archive to create a partial download with no explanation.
           $expected = @('dist/app/QuantumWake.exe')
           $expected += @(Get-ChildItem dist/cli -File | ForEach-Object FullName)
+          $expected += @('dist/linux-app/quantumwake')
+          $expected += @(Get-ChildItem dist/linux-cli -File | ForEach-Object FullName)
           $missing = $expected | Where-Object { -not (Test-Path $_) }
           if ($missing) {
             throw "Microsoft Defender removed a release file: $($missing -join ', ')"
@@ -203,6 +243,41 @@ jobs:
           $zip = "QuantumWake-$version-win-x64.zip"
           Compress-Archive -Path $staging -DestinationPath $zip
           "asset=$zip" | Out-File $env:GITHUB_OUTPUT -Append
+
+          # The tarball is written entry by entry rather than with tar.exe,
+          # because nothing on a Windows disk carries an execute bit and a
+          # tarball built from one would hand the pilot a quantumwake that
+          # refuses to start. TarWriter sets each mode outright.
+          $tarball = "QuantumWake-$version-linux-x64.tar.gz"
+          $out = [IO.File]::Create((Join-Path $PWD $tarball))
+          $gzip = [IO.Compression.GZipStream]::new($out, [IO.Compression.CompressionLevel]::Optimal)
+          $tar = [Formats.Tar.TarWriter]::new($gzip, [Formats.Tar.TarEntryFormat]::Pax, $false)
+
+          $folder = [Formats.Tar.PaxTarEntry]::new([Formats.Tar.TarEntryType]::Directory, 'QuantumWake/')
+          $folder.Mode = [IO.UnixFileMode]0x1ED
+          $tar.WriteEntry($folder)
+
+          $members = @(Get-Item dist/linux-app/quantumwake)
+          $members += @(Get-ChildItem dist/linux-cli -File)
+          $members += @(Get-Item README.md, LICENSE, NOTICE)
+
+          foreach ($file in $members) {
+            $entry = [Formats.Tar.PaxTarEntry]::new([Formats.Tar.TarEntryType]::RegularFile, "QuantumWake/$($file.Name)")
+
+            # Named rather than inferred from a missing extension, which LICENSE
+            # and NOTICE share. Everything else is read, never run.
+            $runs = $file.Name -in 'quantumwake', 'Quantumwake.Cli'
+            $entry.Mode = if ($runs) { [IO.UnixFileMode]0x1ED } else { [IO.UnixFileMode]0x1A4 }
+            $entry.ModificationTime = $file.LastWriteTimeUtc
+            $entry.DataStream = [IO.File]::OpenRead($file.FullName)
+            $tar.WriteEntry($entry)
+            $entry.DataStream.Dispose()
+          }
+
+          $tar.Dispose()
+          $gzip.Dispose()
+          $out.Dispose()
+          "linux=$tarball" | Out-File $env:GITHUB_OUTPUT -Append
 
       - name: Release
         shell: pwsh
@@ -260,6 +335,18 @@ jobs:
           The zip additionally contains the command-line tool, which prints per-event
           match counts and parser health; it needs the .NET 10 runtime.
 
+          ### On Linux
+
+          Download **QuantumWake-${{ steps.version.outputs.version }}-linux-x64.tar.gz**,
+          unpack it and run ``./quantumwake``, then open http://localhost:31337. The game
+          runs under Wine or Proton; Quantum Wake runs natively beside it and reads the
+          logs out of the prefix. It finds the game in a LUG Helper, Lutris, Proton,
+          Bottles or Heroic prefix on its own; if it comes up empty, the dashboard says
+          which prefixes it searched and asks for the folder - the prefix itself, or the
+          ``LIVE`` folder under its ``drive_c`` - and remembers it. Screenshots are read
+          with PaddleOCR's models on ONNX Runtime, fetched (14 MB) the first time you
+          switch screenshots on. The overlay, the MFD and joystick input are Windows-only.
+
           ### What it does not do
 
           Reads your logs and your game's own data files. No memory is touched and
@@ -272,12 +359,15 @@ jobs:
           after keeping the profile as it was. The app connects to the internet only where
           you have said it may, from the Settings page - the optional datasets, and the
           two that can go out unattended: the version check and the market-price
-          refresh, both off until you turn them on.
+          refresh, both off until you turn them on. Where Windows OCR is not there to
+          read screenshots - on Linux, or a PC without an English language pack -
+          switching screenshot reading on also fetches the two text-recognition models
+          (14 MB) once.
 
           Star Citizen must run in Borderless Windowed for the overlay to be visible.
           "@
           gh release create '${{ steps.version.outputs.tag }}' `
-            'QuantumWake.exe' '${{ steps.archive.outputs.asset }}' `
+            'QuantumWake.exe' '${{ steps.archive.outputs.asset }}' '${{ steps.archive.outputs.linux }}' `
             --title 'Quantum Wake ${{ steps.version.outputs.version }}' `
             --notes $notes
 

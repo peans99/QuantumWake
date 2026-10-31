@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0 on purpose: this is the screen reader for the machines
+         Quantumwake.Ocr cannot run on. Windows.Media.Ocr needs the Windows SDK
+         target; this needs a model file and a runtime that ship for Linux and
+         Windows alike. See docs/linux.md. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft's runtime for the models (MIT), with the native library for
+         win-x64 and linux-x64 in the package. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.1" />
+
+    <!-- Decoding, cropping, scaling (MIT, .NET Foundation). The
+         NoDependencies Linux build links no fontconfig, which a server on a
+         bare box may well not have; nothing here draws text. -->
+    <PackageReference Include="SkiaSharp" Version="4.154.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantumwake.Data\Quantumwake.Data.csproj" />
+  </ItemGroup>
+
+  <!-- The character tables the recognisers were trained with, from PaddleOCR
+       (Apache 2.0; see NOTICE). Text, not binaries: the models themselves are
+       fetched on first use and checked against a pinned hash. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Dictionaries\en_dict.txt" LogicalName="ocr/en_dict.txt" />
+    <EmbeddedResource Include="Dictionaries\ppocr_keys_v1.txt" LogicalName="ocr/ppocr_keys_v1.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Quantumwake.OnnxOcrTests" />
+  </ItemGroup>
+
+</Project>

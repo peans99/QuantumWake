@@ -159,7 +159,7 @@ public static class GameReputation
     private static List<GameRepOrganisation> Organisations(
         DataCore core, IReadOnlyDictionary<string, string> text, List<DataRecord> records, IEnumerable<string> logoEntries)
     {
-        var present = new HashSet<string>(logoEntries.Select(Path.GetFileName)!, StringComparer.OrdinalIgnoreCase);
+        var present = new HashSet<string>(logoEntries.Select(P4kArchive.EntryFileName), StringComparer.OrdinalIgnoreCase);
         var read = new List<GameRepOrganisation>();
 
         foreach (var record in records)
@@ -173,7 +173,7 @@ public static class GameReputation
             if (core.StringAt(at, record.StructIndex, "logo") is { Length: > 0 } logo
                 && logo.Contains("ManufacturerLogos", StringComparison.OrdinalIgnoreCase))
             {
-                var file = Path.GetFileNameWithoutExtension(logo) + ".dds";
+                var file = P4kArchive.EntryStem(logo) + ".dds";
                 if (present.Contains(file)) entry = GameMakerLogos.Folder + file;
             }
 

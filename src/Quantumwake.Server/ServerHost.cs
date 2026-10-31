@@ -59,7 +59,19 @@ public static class ServerHost
             Directory.Exists(Core.AppPaths.Root)
             && Directory.EnumerateFileSystemEntries(Core.AppPaths.Root).Any();
 
-        var builder = WebApplication.CreateBuilder(args);
+        // The content root is the executable's folder, not the working directory.
+        // The default configuration watches appsettings*.json for changes, and on
+        // Linux that watch is an inotify walk of the whole content root: started
+        // from `/` on the Fedora test machine it registered 49,829 watches (the
+        // account's limit is 103,570), and a home folder with a Steam library
+        // under it can run out. The folder beside the binary holds a handful of
+        // files, so the walk is nothing, and that is where appsettings.json is
+        // copied to by a development build anyway.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
 
         var install = ResolveInstall(args, builder.Configuration);
         DiagnosticTrace.Mark("server", install is null ? "No game install resolved." : "Game install resolved.");
@@ -124,6 +136,15 @@ public static class ServerHost
         builder.Services.AddSingleton<EventTrackStore>();
         builder.Services.AddSingleton<ScreenSettingsStore>();
         builder.Services.AddSingleton<ScreenReadingStore>();
+
+        // A host that brought no screen reader gets the one that runs anywhere:
+        // the Linux server, and a Windows machine whose OCR has no English.
+        // Its models are fetched on first use, which the screen settings say.
+        screen ??= new Quantumwake.Ocr.Onnx.OnnxScreenReader();
+
+        // The same for the clipboard, where Linux has a command for it.
+        if (clipboard is null && LinuxClipboardReader.Available)
+            clipboard = new LinuxClipboardReader();
 
         // Built by hand rather than resolved, because the two readers come from
         // the host and may not exist at all.
@@ -306,7 +327,12 @@ public static class ServerHost
         {
             saved = InstallPathStore.Load(),
             detected = GameInstallLocator.Discover().Select(i => new { i.Channel, i.RootPath }),
-            fromLauncher = GameInstallLocator.FromLauncherLog().Select(i => new { i.Channel, i.RootPath })
+            fromLauncher = GameInstallLocator.FromLauncherLog().Select(i => new { i.Channel, i.RootPath }),
+
+            // What was searched, so the page can say so instead of claiming
+            // every drive was: on Linux there are no drives, only prefixes.
+            windows = OperatingSystem.IsWindows(),
+            prefixes = OperatingSystem.IsWindows() ? [] : GameInstallLocator.WinePrefixes()
         });
 
         app.MapPost("/api/install/path", (InstallPathRequest body) =>
@@ -322,8 +348,13 @@ public static class ServerHost
             return resolved is null
                 ? Results.BadRequest(new
                 {
-                    message = "No Star Citizen logs there. Pick the folder holding Game.log "
-                        + "or its parent - usually ...\\StarCitizen\\LIVE."
+                    // Two whole sentences rather than a shared stem, so each
+                    // stays one catalogue key the dashboard can translate.
+                    message = OperatingSystem.IsWindows()
+                        ? "No Star Citizen logs there. Pick the folder holding Game.log "
+                            + "or its parent - usually ...\\StarCitizen\\LIVE."
+                        : "No Star Citizen logs there. Pick the folder holding Game.log, its parent, "
+                            + "or the Wine prefix itself - usually something ending in StarCitizen/LIVE under drive_c."
                 })
                 : Results.Ok(new { resolved.Channel, resolved.RootPath, restartNeeded = true });
         });
@@ -3468,6 +3499,13 @@ public static class ServerHost
             canReadScreenshots = insight.CanReadScreenshots,
             canReadClipboard = insight.CanReadClipboard,
 
+            // Which engine reads, and whether its models are on disk yet: the
+            // ONNX one fetches 14 MB on first use, and a first read that takes
+            // a minute should not look like a read that failed.
+            engine = screen is Quantumwake.Ocr.Onnx.OnnxScreenReader onnx
+                ? new { name = "onnx", ready = onnx.Ready }
+                : new { name = "windows", ready = true },
+
             // Where the watch looks, said out loud: the pilot is agreeing to a
             // folder being followed, and should be able to see which.
             folder = install is null ? null : Screenshots.FolderFor(install.RootPath),
@@ -3480,7 +3518,29 @@ public static class ServerHost
 
         app.MapPost("/api/screen/settings", (
             ScreenSettingsStore settings, ScreenMode? mode, bool? watch, bool? watchScreenshots) =>
-            Results.Ok(settings.Save(mode, watch, watchScreenshots)));
+        {
+            var saved = settings.Save(mode, watch, watchScreenshots);
+
+            // Asking for screenshots is the moment to fetch the models, so
+            // they are there before the first frame rather than in front of it.
+            if (saved.Mode == ScreenMode.Screenshots && screen is Quantumwake.Ocr.Onnx.OnnxScreenReader { Ready: false } onnx)
+                _ = Task.Run(async () =>
+                {
+                    // Through the reader, not around it: a watch tick or a scan
+                    // fetching at the same moment then waits for this one.
+                    try
+                    {
+                        await onnx.PrepareAsync();
+                        DiagnosticTrace.Mark("screen", "OCR models fetched.");
+                    }
+                    catch (ScreenEngineUnavailableException e)
+                    {
+                        DiagnosticTrace.Mark("screen", $"OCR models could not be fetched ({e.InnerException?.GetType().Name ?? "backing off"}).");
+                    }
+                });
+
+            return Results.Ok(saved);
+        });
 
         // What the screenshots said, newest first, with what the logs believed
         // beside each. The whole store: it is bounded, and a page that has to
@@ -3689,7 +3749,14 @@ public static class ServerHost
             if (ShotPath(request.Shot) is not { } path)
                 return Results.NotFound(new { trouble = "that screenshot is no longer in the game's folder" });
 
-            return Results.Ok(await insight.ReadShotAsync(path, token));
+            try
+            {
+                return Results.Ok(await insight.ReadShotAsync(path, token));
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                return Results.BadRequest(new { trouble = e.Message });
+            }
         });
 
         // The archive, on request. The watch reads nothing from before it
@@ -3710,12 +3777,26 @@ public static class ServerHost
             if (insight.Excuse(install?.RootPath) is { } excuse)
                 return Results.BadRequest(new { trouble = excuse });
 
-            var (read, remaining) = await insight.ReadOlderAsync(install?.RootPath, take is > 0 ? take.Value : 40, token);
-            return Results.Ok(new
+            try
             {
-                read = read.Select(s => new { s.Shot, s.ShotAt, s.Kind, s.Summary }).ToList(),
-                remaining,
-            });
+                var (read, remaining) = await insight.ReadOlderAsync(install?.RootPath, take is > 0 ? take.Value : 40, token);
+                return Results.Ok(new
+                {
+                    read = read.Select(s => new { s.Shot, s.ShotAt, s.Kind, s.Summary }).ToList(),
+                    remaining,
+                });
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                // Whatever was read before the engine gave out is kept; the
+                // rest stays unread for the next press.
+                return Results.Ok(new
+                {
+                    read = Array.Empty<object>(),
+                    remaining = insight.Unread(install?.RootPath).Count,
+                    trouble = e.Message,
+                });
+            }
         });
 
         // The dashboard's language. Kept on the server so the overlay, whose

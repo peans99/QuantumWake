@@ -22,6 +22,13 @@ using Quantumwake.Data;
 if (GetOption(args, "--garage-check") is { } dumpDir)
     return GarageCheck(dumpDir);
 
+// The screen reader run over a screenshot, or a folder of them, the way the
+// backups are run through the parser: what each frame read, how long it took,
+// and the lines written out so --screen and a diff can be asked about them.
+// Needs no install; needs the models, which it fetches on first use.
+if (GetOption(args, "--ocr") is { } ocrTarget)
+    return await Ocr(ocrTarget, GetOption(args, "--out"), args.Contains("--show"), GetOption(args, "--rec"));
+
 var pathArg = GetOption(args, "--path");
 var install = pathArg is not null
     ? GameInstallLocator.FromPath(pathArg)
@@ -29,7 +36,9 @@ var install = pathArg is not null
 
 if (install is null)
 {
-    Console.Error.WriteLine("No Star Citizen install found. Pass --path <StarCitizen\\LIVE>.");
+    Console.Error.WriteLine(OperatingSystem.IsWindows()
+        ? "No Star Citizen install found. Pass --path <StarCitizen\\LIVE>."
+        : "No Star Citizen install found in any Wine prefix. Pass --path <prefix>, or the LIVE folder under its drive_c.");
     return 1;
 }
 
@@ -63,6 +72,14 @@ if (args.Contains("--maker-logos"))
     return 0;
 }
 
+
+// Every screen reader run over a folder of screenshots, end to end: the same
+// ReadShotAsync the dashboard calls, second looks and all, with the ONNX
+// engine, and one line per frame saying what it was taken for. Run on Windows
+// as well and diffed, this is the measurement docs/linux.md asks for before
+// the engine is trusted with the readers.
+if (GetOption(args, "--ocr-check") is { } checkFolder)
+    return await OcrCheck(checkFolder, install.RootPath, GetOption(args, "--rec"));
 
 // Step 2 of docs/screen-insight.md. Takes the lines an OCR engine returned -
 // a text file, one per line - and says what the catalogue thinks they are.
@@ -669,6 +686,140 @@ static int GarageCheck(string dumpDir)
     // Fixed-vs-turret is the one split the dump itself does not settle - see
     // ShipSheet.IsTurret - so it is reported but does not fail the check.
     return tally.Where(t => t.Key != "fixed dps").All(t => t.Value.Ok == t.Value.Tried) ? 0 : 1;
+}
+
+static async Task<int> OcrCheck(string folder, string installRoot, string? recogniser)
+{
+    var files = Directory.Exists(folder)
+        ? Directory.GetFiles(folder, "*.jpg").Concat(Directory.GetFiles(folder, "*.png")).OrderBy(f => f).ToArray()
+        : File.Exists(folder) ? [folder] : [];
+
+    if (files.Length == 0)
+    {
+        Console.Error.WriteLine($"No screenshot at {folder}");
+        return 1;
+    }
+
+    using var reader = new Quantumwake.Ocr.Onnx.OnnxScreenReader(
+        recogniser == "ch" ? Quantumwake.Ocr.Onnx.OnnxModels.MultilingualRecogniser : null);
+
+    // The install's own names, as the dashboard has them; the readings go to
+    // a folder that is thrown away, so nothing here lands in anyone's history.
+    using var library = new LogLibrary(SessionStore.DatabasePathFor(installRoot));
+    library.LoadNames(installRoot);
+    var scratch = Directory.CreateTempSubdirectory("qw-ocr-check-").FullName;
+    var insight = new ScreenInsightService(library, new ScreenReadingStore(scratch), reader);
+
+    Console.WriteLine($"Models  : {Quantumwake.Ocr.Onnx.OnnxModels.Folder} ({(reader.Ready ? "present" : "to fetch")})");
+    Console.WriteLine($"Frames  : {files.Length}");
+
+    var kinds = new SortedDictionary<string, int>();
+
+    try
+    {
+        foreach (var file in files)
+        {
+            ScreenSighting sighting;
+
+            try
+            {
+                sighting = await insight.ReadShotAsync(file);
+            }
+            catch (ScreenEngineUnavailableException e)
+            {
+                // Not a measurement: every frame would have come out Unknown.
+                Console.Error.WriteLine($"No frame read: {e.Message} ({e.InnerException?.Message})");
+                return 1;
+            }
+
+            kinds[sighting.Kind.ToString()] = kinds.GetValueOrDefault(sighting.Kind.ToString()) + 1;
+
+            var extras = new List<string>();
+            if (sighting.Wallet is not null) extras.Add("wallet");
+            if (sighting.Contracts is not null) extras.Add("contracts");
+            if (sighting.Reputation is not null) extras.Add("rep");
+            if (sighting.Mining is not null) extras.Add("mining");
+            if (sighting.Refinery is not null) extras.Add("refinery");
+            if (sighting.Kiosk is not null) extras.Add("kiosk");
+            if (sighting.Fleet is not null) extras.Add("fleet");
+            if (sighting.Loadout is not null) extras.Add("loadout");
+            if (sighting.Map is not null) extras.Add("map");
+            if (sighting.Item is not null) extras.Add("item");
+
+            Console.WriteLine($"{Path.GetFileName(file),-44} {sighting.TookMs,6} ms {sighting.Kind,-10} {sighting.Summary}"
+                + (extras.Count > 0 ? $"  [{string.Join(",", extras)}]" : ""));
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Frames by kind");
+        Console.WriteLine("--------------");
+        foreach (var (kind, count) in kinds)
+            Console.WriteLine($"  {count,4}  {kind}");
+
+        return 0;
+    }
+    finally
+    {
+        Directory.Delete(scratch, recursive: true);
+    }
+}
+
+static async Task<int> Ocr(string target, string? outDir, bool show, string? recogniser)
+{
+    var files = Directory.Exists(target)
+        ? Directory.GetFiles(target, "*.jpg").Concat(Directory.GetFiles(target, "*.png")).OrderBy(f => f).ToArray()
+        : File.Exists(target) ? [target] : [];
+
+    if (files.Length == 0)
+    {
+        Console.Error.WriteLine($"No screenshot at {target}");
+        return 1;
+    }
+
+    long lastPercent = -1;
+    using var reader = new Quantumwake.Ocr.Onnx.OnnxScreenReader(
+        recogniser == "ch" ? Quantumwake.Ocr.Onnx.OnnxModels.MultilingualRecogniser : null)
+    {
+        Progress = new Progress<(Quantumwake.Ocr.Onnx.OnnxModel Model, long Received)>(p =>
+        {
+            // Once per percent, not once per buffer: a log of this is read, not watched.
+            var percent = p.Received * 100 / p.Model.Bytes;
+            if (percent != lastPercent)
+                Console.Error.WriteLine($"  fetching {p.Model.FileName} {percent,3}%");
+            lastPercent = percent;
+        }),
+    };
+
+    Console.WriteLine($"Models  : {Quantumwake.Ocr.Onnx.OnnxModels.Folder} ({(reader.Ready ? "present" : "to fetch")})");
+    Console.WriteLine($"Frames  : {files.Length}");
+
+    if (outDir is not null) Directory.CreateDirectory(outDir);
+
+    var total = System.Diagnostics.Stopwatch.StartNew();
+    long lineCount = 0;
+
+    foreach (var file in files)
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var lines = await reader.ReadAsync(file);
+        watch.Stop();
+        lineCount += lines.Count;
+
+        Console.WriteLine($"{Path.GetFileName(file),-44} {watch.ElapsedMilliseconds,6} ms {lines.Count,4} lines");
+
+        if (show)
+            foreach (var line in lines)
+                Console.WriteLine($"    {line.Left,6:0} {line.Top,6:0} {line.Height,4:0}  {line.Text}");
+
+        if (outDir is not null)
+            await File.WriteAllLinesAsync(
+                Path.Combine(outDir, Path.GetFileNameWithoutExtension(file) + ".txt"),
+                // The probe's own format, so --screen reads these files back.
+                lines.Select(l => $"[{l.Left,5:0} {l.Top,5:0} h{l.Height:0}]  {l.Text}"));
+    }
+
+    Console.WriteLine($"Total   : {files.Length} frames, {lineCount} lines, {total.Elapsed.TotalSeconds:0.0} s");
+    return 0;
 }
 
 static int Screen(string linesFile, string installRoot, string? catalogueQuery)
