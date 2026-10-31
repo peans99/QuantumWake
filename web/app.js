@@ -37,7 +37,14 @@ const PAGE_GLYPHS = Object.freeze({
   ships: '◁', parts: '⊞', mining: '⬡', crafting: '⌬',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
   settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
+  // Reached from another page rather than the menu, but titled like the rest.
+  commodity: '◩', share: '⇱', help: '◔',
 });
+
+/* Pages whose title the app rewrites wholesale keep their own mark: Mining
+   names the pane it is on and draws that pane's icon beside it, and a glyph
+   prepended here was wiped by the first rewrite. */
+const OWN_TITLE_MARK = new Set(['mining']);
 
 function decorateNavigationGlyphs() {
   for (const button of $$('#tabs button[data-view]')) {
@@ -46,6 +53,7 @@ function decorateNavigationGlyphs() {
   }
 
   for (const [view, glyph] of Object.entries(PAGE_GLYPHS)) {
+    if (OWN_TITLE_MARK.has(view)) continue;
     const panel = $(`#view-${view}`);
     // Now is a live dashboard rather than a titled document, so its current
     // status label carries the same mark without adding a redundant heading.
@@ -2899,7 +2907,7 @@ async function loadContractList() {
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
     const outcome = el('td', cls === 'done' ? 'inward' : cls, label);
     if (row.outcome === 'Completed') {
-      const patch = el('span', 'mission-patch', '✦');
+      const patch = el('span', 'mission-patch', '✓');
       patch.title = tx('Completed contract');
       outcome.prepend(patch);
     }
@@ -4798,7 +4806,7 @@ function renderLootPlaces(panel, data, hasSlots) {
 
   const bodies = [...new Set(all.map((p) => p.body).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (bodies.length > 1) {
-    const pick = el('select', 'loot-places-body');
+    const pick = el('select', 'select loot-places-body');
     pick.setAttribute('aria-label', tx('Planet or moon'));
     pick.append(new Option(tx('Every planet and moon'), ''));
     for (const b of bodies) pick.append(new Option(`${b} (${all.filter((p) => p.body === b).length})`, b));

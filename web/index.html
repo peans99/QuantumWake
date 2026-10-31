@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.16">
+  <link rel="stylesheet" href="app.css?v=0.20.17">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -207,10 +207,11 @@
   <section class="notice-strip" aria-label="Notices">
     <details class="notice" id="stale" hidden>
       <summary class="notice-summary">
-        <div class="notice-body">
+        <span class="notice-body">
           <b>Prices are getting old</b>
           <span class="muted" id="stale-detail"></span>
-        </div>
+        </span>
+        <span class="notice-toggle"><span class="when-closed">Details</span><span class="when-open">Close</span></span>
       </summary>
       <div class="notice-actions">
         <button class="ghost" id="stale-refresh">Refresh now</button>
@@ -220,20 +221,22 @@
 
     <details class="notice" id="update" hidden>
       <summary class="notice-summary">
-        <div class="notice-body">
+        <span class="notice-body">
           <b id="update-title">Look for a newer version?</b>
           <span class="muted" id="update-detail"></span>
-        </div>
+        </span>
+        <span class="notice-toggle"><span class="when-closed">Details</span><span class="when-open">Close</span></span>
       </summary>
       <div class="notice-actions" id="update-actions"></div>
     </details>
 
     <details class="notice" id="patch" hidden>
       <summary class="notice-summary">
-        <div class="notice-body">
+        <span class="notice-body">
           <b id="patch-title">A new patch arrived</b>
           <span class="muted" id="patch-detail"></span>
-        </div>
+        </span>
+        <span class="notice-toggle"><span class="when-closed">Details</span><span class="when-open">Close</span></span>
       </summary>
       <div class="notice-actions">
         <button class="ghost" id="patch-wiped">It wiped — start there</button>
@@ -244,10 +247,11 @@
     <!-- The loose text file the game reads, fallen behind a patch. -->
     <details class="notice" id="text-stale" hidden>
       <summary class="notice-summary">
-        <div class="notice-body">
+        <span class="notice-body">
           <b>Your in-game text file is older than the game</b>
           <span class="muted" id="text-stale-detail"></span>
-        </div>
+        </span>
+        <span class="notice-toggle"><span class="when-closed">Details</span><span class="when-open">Close</span></span>
       </summary>
       <div class="notice-actions">
         <button class="ghost" id="text-stale-open">Fix it</button>
@@ -2025,7 +2029,7 @@
   <!-- Drill-down for one commodity. Opened from Market; no tab of its own. -->
   <section id="view-commodity" class="view">
     <div class="section-bar">
-      <h2 id="commodity-name">Commodity</h2>
+      <h2><span id="commodity-name">Commodity</span></h2>
       <div class="controls">
         <button class="ghost" id="commodity-back">&larr; Market</button>
       </div>
@@ -2664,10 +2668,13 @@
   </section>
 
   <section id="view-loot" class="view">
+    <!-- One bar per page, named for the page: its main question - where an
+         item comes from - is the search it carries. New items is a section
+         of the page with its own filters, as Standing is of Contracts. -->
     <div class="section-bar">
-      <h2>Where to find it</h2>
+      <h2>Loot</h2>
       <div class="controls">
-        <input type="search" id="loot-find" class="search" placeholder="Any item, by name…"
+        <input type="search" id="loot-find" class="search" placeholder="Where to find any item, by name…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
@@ -2685,8 +2692,8 @@
     <div id="loot-find-results" class="loot-find-results"></div>
     <div id="loot-where" class="loot-where" hidden></div>
 
-    <div class="section-bar">
-      <h2>New items</h2>
+    <div class="subsection-head">
+      <h2 class="spaced">New items</h2>
       <div class="controls">
         <input type="search" id="loot-search" class="search" placeholder="Search items…"
                autocomplete="off" spellcheck="false">
@@ -4511,6 +4518,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.16"></script>
+<script src="app.js?v=0.20.17"></script>
 </body>
 </html>

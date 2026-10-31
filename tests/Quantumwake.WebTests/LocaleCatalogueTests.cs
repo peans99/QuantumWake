@@ -192,4 +192,34 @@ public class LocaleCatalogueTests
         Assert.NotEmpty(labels);
         Assert.Empty(labels.Where(label => !french.ContainsKey(label)));
     }
+
+    /// <summary>
+    /// Every literal the script passes to <c>tx</c> has a French entry.
+    /// </summary>
+    /// <remarks>
+    /// The test above walks only the navigation, and the first test only that
+    /// French still has its English - neither notices a new English string
+    /// with no French at all. The flight-deck redesign added four that way
+    /// ("Unknown system", "Standing by"...), and a French pilot met them in
+    /// the telemetry line on every page. Plural keys are the plural English,
+    /// as <c>txn</c> looks them up.
+    /// </remarks>
+    [Fact]
+    public void Every_string_the_script_translates_has_french()
+    {
+        var script = File.ReadAllText(Web("app.js"));
+        var french = Read("fr");
+        static string Unescape(string s) => s.Replace("\\'", "'");
+
+        var keys = Regex.Matches(script, @"\btx\('((?:[^'\\]|\\.)*)'")
+            .Select(m => Unescape(m.Groups[1].Value))
+            .Concat(Regex.Matches(script, @"\btxn\([^,]+,\s*'(?:[^'\\]|\\.)*',\s*'((?:[^'\\]|\\.)*)'")
+                .Select(m => Unescape(m.Groups[1].Value)))
+            .Distinct()
+            .ToList();
+
+        Assert.True(keys.Count > 1000, $"only {keys.Count} literals found - the pattern no longer matches the script");
+        var missing = keys.Where(key => !french.ContainsKey(key)).ToList();
+        Assert.True(missing.Count == 0, "app.js translates English fr.json does not have:\n  " + string.Join("\n  ", missing));
+    }
 }

@@ -4194,16 +4194,19 @@ body:has(#view-map.active) .entity-drawer.map-place-open .entity-actions { displ
 .notice-strip .notice + .notice:not([hidden]) { border-top: 1px solid rgba(53, 200, 240, .17); }
 .notice-strip .notice-summary { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 7px 12px; cursor: pointer; list-style: none; }
 .notice-strip .notice-summary::-webkit-details-marker { display: none; }
-.notice-strip .notice-summary::after { content: "Details"; flex: 0 0 auto; color: var(--dim); font: 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+/* Real text rather than generated content, so a French page says Détails. */
+.notice-strip .notice-toggle { flex: 0 0 auto; color: var(--dim); font: 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.notice-strip .notice .when-open, .notice-strip .notice[open] .when-closed { display: none; }
+.notice-strip .notice[open] .when-open { display: inline; }
 .notice-strip .notice[open] .notice-summary { border-bottom: 1px solid rgba(53, 200, 240, .17); background: rgba(53, 200, 240, .035); }
-.notice-strip .notice[open] .notice-summary::after { content: "Close"; }
+
 .notice-strip .notice-body { display: flex; flex: 1; flex-direction: row; align-items: baseline; gap: 9px; min-width: 0; }
 .notice-strip .notice-body b { color: var(--amber); font-size: 11.5px; }
 .notice-strip .notice-body .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .notice-strip .notice:not([open]) .notice-body .muted { display: none; }
 .notice-strip .notice-actions { padding: 0 12px 9px; flex-wrap: wrap; }
 .notice-strip .notice-actions .ghost { padding: 3px 9px; font-size: 10px; }
-@media (max-width: 620px) { .notice-strip .notice-body { display: block; } .notice-strip .notice-summary::after { display: none; } }
+@media (max-width: 620px) { .notice-strip .notice-body { display: block; } .notice-strip .notice-toggle { display: none; } }
 
 .wipe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .wipe-row input[type="date"] { min-width: 150px; color-scheme: dark; }
@@ -7100,13 +7103,19 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .loot-where .caption { margin: 6px 0 10px; }
 .loot-where-table .chip { margin-left: 6px; }
 .loot-where-containers { white-space: normal; max-width: 34ch; }
-.loot-where-sub { margin: 14px 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+/* A section inside the panel is labelled the way a card is, not shouted:
+   uppercase grey here read as one more table header. */
+.loot-where-sub { margin: 16px 0 2px; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: .02em; }
+/* A page section with filters of its own: the heading of Standing, with the
+   controls a section bar would carry on the same line. */
+.subsection-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; }
+.subsection-head h2.spaced { margin-bottom: 0; }
 .loot-places-body { margin: 0 0 8px; }
 .loot-places-more { margin-top: 6px; }
 .loot-where-placed { font-size: 12px; }
 .checklist-farm { margin: 10px 0 14px; padding: 8px 10px; border: 1px solid var(--rule); }
 .checklist-farm-items .link { white-space: normal; text-align: left; }
-.loot-places-table tbody td.muted:first-child { color: var(--muted); font-style: italic; }
+.loot-places-table tbody td.muted:first-child, .checklist-farm-places tbody td.muted:first-child { color: var(--muted); font-style: italic; }
 
 /* ---------- midnight flight deck ----------
  *
@@ -7375,6 +7384,9 @@ body:not(.overlay) .tabs button[data-glyph] {
   align-items: center;
   gap: 5px;
 }
+/* A label is one line. Without this the glyph took the room French needed and
+   "Feuille de route" broke over three lines, dragging the whole bar down. */
+body:not(.overlay) .tabs button { white-space: nowrap; }
 body:not(.overlay) .tabs button[data-glyph]::before {
   content: attr(data-glyph);
   flex: 0 0 auto;
@@ -7448,4 +7460,33 @@ body.overlay .tabs button[data-glyph]::before { display: none; }
 @media (max-width: 1320px) {
   body:not(.overlay) .tabs button[data-glyph] { gap: 3px; }
   body:not(.overlay) .tabs button[data-glyph]::before { font-size: 9px; }
+}
+
+/* ---------- the flight-deck top bar at laptop widths ----------
+ *
+ * The redesign styles the bar through body:not(.overlay), which outranks the
+ * narrow-window rules near the top of this file, so they stopped applying:
+ * at 1366 px "Settings" fell under the search box in English, and in
+ * French "Hangar" went with it - pages with no way to reach them. These
+ * restate the tightening at the same weight, a step at a time, and give up
+ * the top-level glyphs before any label: the glyphs stay in the menus and
+ * on page titles, where there is room. */
+@media (max-width: 1600px) {
+  body:not(.overlay) .tabs { gap: 1px; }
+  body:not(.overlay) .tabs button { padding-inline: 8px; letter-spacing: .03em; }
+  body:not(.overlay) .brand .by { display: none; }
+  body:not(.overlay) .search-box .search { width: 170px; }
+  html:lang(fr) body:not(.overlay) .tabs button { padding-inline: 7px; letter-spacing: .01em; }
+}
+@media (max-width: 1440px) {
+  body:not(.overlay) .search-box .search { width: 140px; }
+}
+/* Measured: French at 1350 px left 77 px between Settings and the search
+   box without the glyphs, and about 13 with them. */
+@media (max-width: 1380px) {
+  body:not(.overlay) .tabs > button[data-glyph]::before { display: none; }
+}
+@media (max-width: 1320px) {
+  body:not(.overlay) .tabs button { padding-inline: 6px; font-size: 10px; letter-spacing: .02em; }
+  html:lang(fr) body:not(.overlay) .tabs button { padding-inline: 5px; letter-spacing: 0; }
 }

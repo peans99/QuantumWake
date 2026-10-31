@@ -5264,8 +5264,6 @@
   "Add stop": "Ajouter l’arrêt",
   "A name the map knows is placed on it; anything else is kept as you typed it.": "Un nom que la carte connaît y est placé ; tout autre est gardé tel que vous l’avez saisi.",
   "Open this plan on the Itinerary page, with room to drag its stops and lines about": "Ouvrir ce plan sur la page Feuille de route, avec la place d’en glisser les arrêts et les lignes",
-  "Where to find it": "Où le trouver",
-  "Any item, by name…": "N’importe quel objet, par son nom…",
   "Read from the game's own loot tables in this install. The odds are per roll — the chance one draw from that container is this item. A crate draws several times depending on its size, so finding it is likelier than the number says. Each colour of a set is its own item, which is why armour odds look small. Places are where this build's map files set the crates down, named from the star map; a spot the map does not mark is listed by its planet or moon.": "Lu dans les tables de butin du jeu, sur cette installation. Les chances sont par tirage — la probabilité qu’un tirage dans ce conteneur donne cet objet. Une caisse tire plusieurs fois selon sa taille, donc le trouver est plus probable que le chiffre ne le dit. Chaque couleur d’un ensemble est un objet à part, d’où les chances faibles des armures. Les lieux sont ceux où les fichiers de carte de cette version posent les caisses, nommés d’après la carte stellaire ; un endroit que la carte ne marque pas est indiqué par sa planète ou sa lune.",
   "Best roll": "Meilleur tirage",
   "The best single roll any container or body in the game's tables gives for this item": "Le meilleur tirage unique que donne pour cet objet un conteneur ou un corps des tables du jeu",
@@ -5376,5 +5374,16 @@
   "Open this item on the Loot page": "Ouvrir cet objet sur la page Butin",
   "prices off": "prix désactivés",
   "Not matched to an item: {names}. A commodity, a typo, or something no table, NPC, ship or recipe has - Shopping can still find where it is sold.": "Aucun objet ne correspond à : {names}. Une marchandise, une faute de frappe, ou quelque chose qu’aucune table, aucun PNJ, vaisseau ou recette ne donne - les Achats peuvent encore trouver où c’est vendu.",
-  "{count} places tie for the best: these are the first ten, and the rest are just as good.": "{count} lieux sont à égalité pour le meilleur : voici les dix premiers, les autres sont tout aussi bons."
+  "{count} places tie for the best: these are the first ten, and the rest are just as good.": "{count} lieux sont à égalité pour le meilleur : voici les dix premiers, les autres sont tout aussi bons.",
+  "Unknown system": "Système inconnu",
+  "No current fix": "Aucune position actuelle",
+  "Standing by": "En attente",
+  "Completed contract": "Contrat terminé",
+  "Position": "Position",
+  "Link": "Liaison",
+  "Awaiting fix": "En attente de position",
+  "Waiting": "En attente",
+  "Notices": "Avis",
+  "Flight telemetry": "Télémétrie de vol",
+  "Where to find any item, by name…": "Où trouver n’importe quel objet, par son nom…"
 }
