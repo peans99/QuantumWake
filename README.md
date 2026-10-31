@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.14
+### 0.20.15
+
+**A visual index for the logbook.** Every workspace now has its own compact geometric glyph in the menu and beside its page title, making the dashboard easier to scan without borrowing another game's visual language. Everyday actions now share an angular signal-frame button treatment designed for Quantum Wake.
 
 **Bring back the Map's visual split.** The subtle shared flight-deck split is restored behind the Star map, while its neutral star field, original live marker and unadorned saved notes remain unchanged.
 

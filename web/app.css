@@ -7338,3 +7338,85 @@ body:not(.overlay) .data-source-qualifier::before { content: "·"; }
 .feed li.fresh { border-left-color: var(--cyan); animation: feed-arrival 1.35s ease-out both; }
 @keyframes feed-arrival { 0% { background: rgba(53, 200, 240, .18); box-shadow: inset 20px 0 18px -22px var(--cyan); } 100% { background: transparent; box-shadow: none; } }
 @media (prefers-reduced-motion: reduce) { .feed li.fresh, .sector-scan.running::after { animation: none; } .sector-scan.running::after { opacity: 0; } }
+
+/* The visual index belongs to navigation and page titles, not a particular
+   game's fictional interface. Geometric marks stay legible at cockpit scale. */
+body:not(.overlay) .tabs button[data-glyph] {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+body:not(.overlay) .tabs button[data-glyph]::before {
+  content: attr(data-glyph);
+  flex: 0 0 auto;
+  color: var(--cyan);
+  font: 11px/1 var(--mono);
+  opacity: .9;
+}
+body:not(.overlay) .group-menu button[data-glyph] { gap: 8px; }
+body:not(.overlay) .group-menu button[data-glyph]::before {
+  width: 11px;
+  text-align: center;
+  color: var(--cyan-hot);
+}
+body:not(.overlay) h2.page-glyph-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 0;
+}
+body:not(.overlay) h2.page-glyph-title::before { display: none; }
+body:not(.overlay) .card-label.page-glyph-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+body:not(.overlay) .page-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--cyan);
+  font: 15px/1 var(--mono);
+  text-shadow: 0 0 10px rgba(53, 200, 240, .42);
+}
+body:not(.overlay) .page-glyph-label .page-glyph {
+  width: 11px;
+  height: 11px;
+  font-size: 10px;
+}
+
+/* Signal-frame actions use an offset corner and a quiet inset scan line. It
+   gives the ordinary button a distinct Quantum Wake character while keeping
+   labels and focus states conventional. */
+body:not(.overlay) :is(button.primary, button.ghost, button.tiny, a.ghost, a.tiny) {
+  border-radius: 0;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  background-image: linear-gradient(90deg, rgba(53, 200, 240, .12), transparent 26%);
+  box-shadow: inset 0 1px 0 rgba(152, 224, 255, .3), inset 9px 0 0 -8px var(--cyan);
+}
+body:not(.overlay) :is(button.primary, button.ghost, button.tiny, a.ghost, a.tiny)::after {
+  content: "";
+  position: absolute;
+  right: 7px;
+  bottom: 4px;
+  width: 13px;
+  height: 1px;
+  pointer-events: none;
+  background: currentColor;
+  opacity: .3;
+}
+body:not(.overlay) :is(button.primary, button.ghost, button.tiny, a.ghost, a.tiny):hover:not(:disabled) {
+  box-shadow: inset 0 1px 0 rgba(215, 249, 255, .5), inset 9px 0 0 -8px var(--cyan-hot), 0 0 14px rgba(53, 200, 240, .12);
+}
+body:not(.overlay) :is(button.primary, button.ghost, button.tiny, a.ghost, a.tiny):focus-visible {
+  outline: 1px solid var(--cyan-hot);
+  outline-offset: 3px;
+}
+body.overlay .page-glyph,
+body.overlay .tabs button[data-glyph]::before { display: none; }
+
+@media (max-width: 1320px) {
+  body:not(.overlay) .tabs button[data-glyph] { gap: 3px; }
+  body:not(.overlay) .tabs button[data-glyph]::before { font-size: 9px; }
+}

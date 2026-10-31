@@ -26,6 +26,39 @@ const isOverlayGlance = isOverlay && params.has('glance');
  */
 const isSnapshot = params.has('snapshot');
 
+/* The mark is repeated in the menu and its workspace title.  A small visual
+   index makes a long cockpit menu scannable without turning it into a set of
+   branded game-style icons. */
+const PAGE_GLYPHS = Object.freeze({
+  now: '◉', map: '◎', itinerary: '◇', log: '▤',
+  jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
+  logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
+  spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
+  ships: '◁', parts: '⊞', mining: '⬡', crafting: '⌬',
+  fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
+  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
+});
+
+function decorateNavigationGlyphs() {
+  for (const button of $$('#tabs button[data-view]')) {
+    const glyph = PAGE_GLYPHS[button.dataset.view];
+    if (glyph) button.dataset.glyph = glyph;
+  }
+
+  for (const [view, glyph] of Object.entries(PAGE_GLYPHS)) {
+    const panel = $(`#view-${view}`);
+    // Now is a live dashboard rather than a titled document, so its current
+    // status label carries the same mark without adding a redundant heading.
+    const title = panel?.querySelector('h2')
+      || (view === 'now' ? panel?.querySelector('.now-status-card .card-label') : null);
+    if (!title || title.querySelector('.page-glyph')) continue;
+    const mark = el('span', 'page-glyph', glyph);
+    mark.setAttribute('aria-hidden', 'true');
+    title.classList.add(view === 'now' ? 'page-glyph-label' : 'page-glyph-title');
+    title.prepend(mark);
+  }
+}
+
 const KIND_COLOURS = {
   City: '#7fe4ff',
   RestStop: '#4fd48a',
@@ -30347,6 +30380,7 @@ async function maybeShowSetup() {
 }
 
 async function boot() {
+  decorateNavigationGlyphs();
   initNowCardCollapsers();
   initCurrentStatusConfiguration();
   initPageStatsCollapsers();
