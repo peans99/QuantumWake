@@ -7029,23 +7029,23 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
  * in-game overlay retains its deliberately high-contrast HUD styling.
  */
 body:not(.overlay) {
-  --void: #0c0d13;
-  --deep: #12141e;
-  --panel: #191c29;
-  --panel-2: #222637;
-  --rule: #30364b;
-  --rule-hot: #56617d;
-  --text: #f4f6fb;
-  --muted: #b1b8ca;
-  --dim: #7d869f;
-  --cyan: #829cff;
-  --cyan-hot: #dde5ff;
-  --cyan-deep: #536bae;
-  --amber: #e4ad63;
+  --void: #04070c;
+  --deep: #070c14;
+  --panel: #0a121c;
+  --panel-2: #0e1926;
+  --rule: #17293c;
+  --rule-hot: #1e4763;
+  --text: #cfe4f5;
+  --muted: #7796b0;
+  --dim: #46617a;
+  --cyan: #35c8f0;
+  --cyan-hot: #7fe4ff;
+  --cyan-deep: #0d5c78;
+  --amber: #ffab3d;
   --chamfer: none;
   background:
-    radial-gradient(900px 520px at 88% -12%, rgba(104, 112, 255, .17), transparent 60%),
-    radial-gradient(720px 430px at 2% 86%, rgba(95, 70, 160, .09), transparent 68%),
+    radial-gradient(900px 520px at 88% -12%, rgba(53, 200, 240, .13), transparent 60%),
+    radial-gradient(720px 430px at 2% 86%, rgba(13, 92, 120, .10), transparent 68%),
     var(--void);
 }
 
@@ -7053,7 +7053,7 @@ body:not(.overlay) {
    A distant light pool gives the page depth without turning its background
    into another piece of interface. */
 body:not(.overlay)::before {
-  background: radial-gradient(760px 430px at 86% 0%, rgba(130, 156, 255, .08), transparent 68%);
+  background: radial-gradient(760px 430px at 86% 0%, rgba(53, 200, 240, .07), transparent 68%);
 }
 body:not(.overlay) .railmark,
 body:not(.overlay) .brandmark { display: none !important; }
@@ -7066,8 +7066,8 @@ body:not(.overlay) main {
 body:not(.overlay) .topbar {
   height: 58px;
   gap: 16px;
-  background: rgba(12, 13, 19, .88);
-  border-bottom-color: rgba(126, 143, 190, .32);
+  background: rgba(4, 7, 12, .90);
+  border-bottom-color: rgba(53, 200, 240, .30);
   box-shadow: 0 10px 32px rgba(0, 0, 0, .22);
 }
 body:not(.overlay) .brand { gap: 9px; }
@@ -7081,7 +7081,7 @@ body:not(.overlay) .brand .name {
 }
 body:not(.overlay) .brand .name b { color: var(--text); font-weight: 720; }
 body:not(.overlay) .brand .by {
-  border-left-color: rgba(126, 143, 190, .36);
+  border-left-color: rgba(53, 200, 240, .28);
   font-size: 9px;
   letter-spacing: .08em;
 }
@@ -7101,13 +7101,15 @@ body:not(.overlay) .tabs button::after {
   border-radius: 2px;
   background: var(--cyan);
 }
-body:not(.overlay) .tabs button:hover { background: rgba(130, 156, 255, .10); }
-body:not(.overlay) .tabs button.active { color: var(--cyan-hot); background: rgba(130, 156, 255, .10); }
+body:not(.overlay) .tabs button:hover { background: rgba(53, 200, 240, .10); }
+body:not(.overlay) .tabs button.active { color: var(--cyan-hot); background: rgba(53, 200, 240, .10); }
 body:not(.overlay) .group-menu {
-  top: calc(100% + 5px);
-  border-color: rgba(126, 143, 190, .55);
+  /* No gap: the old five-pixel separation dropped :hover while moving from
+     a group label to its menu, so the menu appeared to collapse under cursor. */
+  top: 100%;
+  border-color: rgba(53, 200, 240, .46);
   border-radius: 8px;
-  background: rgba(22, 24, 35, .98);
+  background: rgba(7, 12, 20, .98);
   box-shadow: 0 16px 38px rgba(0, 0, 0, .42);
   overflow: hidden;
 }
@@ -7122,7 +7124,7 @@ body:not(.overlay) h2 {
 body:not(.overlay) h2::before { display: none; }
 body:not(.overlay) .section-bar {
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(126, 143, 190, .28);
+  border-bottom: 1px solid rgba(53, 200, 240, .24);
 }
 
 body:not(.overlay) .card,
@@ -7130,37 +7132,37 @@ body:not(.overlay) .summary-strip .tile,
 body:not(.overlay) .table-wrap {
   border-radius: 10px;
   clip-path: none;
-  border-color: rgba(126, 143, 190, .26);
-  background: linear-gradient(145deg, rgba(31, 34, 48, .96), rgba(18, 20, 30, .98));
+  border-color: rgba(53, 200, 240, .23);
+  background: linear-gradient(145deg, rgba(10, 22, 34, .97), rgba(7, 12, 20, .98));
   box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
 }
 body:not(.overlay) .card::before,
 body:not(.overlay) .summary-strip .tile::before { display: none; }
-body:not(.overlay) .card:hover { border-color: rgba(130, 156, 255, .48); }
+body:not(.overlay) .card:hover { border-color: rgba(53, 200, 240, .48); }
 
 body:not(.overlay) .now-focus {
   border-radius: 12px;
   clip-path: none;
-  border: 1px solid rgba(130, 156, 255, .46);
+  border: 1px solid rgba(53, 200, 240, .46);
   border-left: 4px solid var(--cyan);
-  background: linear-gradient(105deg, rgba(78, 95, 183, .27), rgba(27, 30, 44, .96) 42%, rgba(18, 20, 30, .98));
+  background: linear-gradient(105deg, rgba(13, 92, 120, .34), rgba(10, 22, 34, .96) 42%, rgba(7, 12, 20, .98));
   box-shadow: 0 15px 36px rgba(0, 0, 0, .18);
 }
 body:not(.overlay) .now-focus::after { display: none; }
 body:not(.overlay) .now-focus-mark { color: var(--cyan-hot); font-weight: 650; }
 body:not(.overlay) .now-focus-title { font-family: var(--display); font-size: 21px; font-weight: 670; letter-spacing: -.025em; }
-body:not(.overlay) .now-focus .tiny { border-color: rgba(130, 156, 255, .62); color: var(--cyan-hot); }
+body:not(.overlay) .now-focus .tiny { border-color: rgba(53, 200, 240, .62); color: var(--cyan-hot); }
 
-body:not(.overlay) #view-now .card { background: linear-gradient(145deg, rgba(31, 34, 48, .96), rgba(18, 20, 30, .98)); }
+body:not(.overlay) #view-now .card { background: linear-gradient(145deg, rgba(10, 22, 34, .97), rgba(7, 12, 20, .98)); }
 body:not(.overlay) #view-now .now-status-card {
-  border-color: rgba(130, 156, 255, .36);
-  background: linear-gradient(135deg, rgba(81, 101, 193, .18), transparent 58%), linear-gradient(145deg, rgba(31, 34, 48, .98), rgba(18, 20, 30, .98));
+  border-color: rgba(53, 200, 240, .36);
+  background: linear-gradient(135deg, rgba(13, 92, 120, .20), transparent 58%), linear-gradient(145deg, rgba(10, 22, 34, .98), rgba(7, 12, 20, .98));
 }
 body:not(.overlay) #view-now .now-status-card::before,
 body:not(.overlay) #view-now .card.now-briefing::before { display: none; }
 body:not(.overlay) #view-now .card.now-briefing {
   border-color: rgba(228, 173, 99, .38);
-  background: linear-gradient(112deg, rgba(228, 173, 99, .10), transparent 44%), linear-gradient(145deg, rgba(31, 34, 48, .98), rgba(18, 20, 30, .98));
+  background: linear-gradient(112deg, rgba(255, 171, 61, .10), transparent 44%), linear-gradient(145deg, rgba(10, 22, 34, .98), rgba(7, 12, 20, .98));
 }
 body:not(.overlay) #view-now .card.now-briefing .card-label { color: #f0c587; }
 
@@ -7175,7 +7177,7 @@ body:not(.overlay) button.primary {
   color: #0c1020;
   letter-spacing: .07em;
 }
-body:not(.overlay) button.primary:hover:not(:disabled) { background: #a5b6ff; border-color: #a5b6ff; }
+body:not(.overlay) button.primary:hover:not(:disabled) { background: var(--cyan-hot); border-color: var(--cyan-hot); }
 body:not(.overlay) .ghost,
 body:not(.overlay) .tiny {
   border-radius: 6px;
@@ -7183,7 +7185,7 @@ body:not(.overlay) .tiny {
 }
 
 @media (max-width: 900px) {
-  body:not(.overlay) .topbar { background: rgba(12, 13, 19, .95); }
+  body:not(.overlay) .topbar { background: rgba(4, 7, 12, .95); }
   body:not(.overlay) .tabs { gap: 2px; }
   body:not(.overlay) .tabs button { font-size: 10px; }
 }
