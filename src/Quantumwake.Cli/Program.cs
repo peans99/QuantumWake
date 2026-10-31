@@ -394,6 +394,50 @@ if (args.Contains("--hauling", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Loot tables as the install has them: every V3 table resolved to items,
+// which entries lootClass a mission can fill, and how much of what these logs saw
+// in containers the tables can produce at all. The table behind docs/loot.md.
+// --loot=<class> lists every table that can roll that one item.
+if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
+{
+    var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
+    var blob = p4k.TryRead(@"Data\Game2.dcb");
+    if (blob is null) { Console.Error.WriteLine("no Game2.dcb"); return 1; }
+    var loot = new GameLoot(new DataCore(blob));
+    var lootClass = args.First(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)).Split('=', 2).ElementAtOrDefault(1);
+
+    var tables = loot.Tables().Select(t => loot.Resolve(t)).OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
+    var reachable = tables.SelectMany(t => t.Items).Select(i => i.ItemClass).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    if (lootClass is { Length: > 0 })
+    {
+        foreach (var t in tables)
+            foreach (var o in t.Items.Where(i => i.ItemClass.Equals(lootClass, StringComparison.OrdinalIgnoreCase)))
+                Console.WriteLine($"{o.PerRoll,9:P3}  {t.Name,-50} {o.Entry} / {o.Choice}");
+        return 0;
+    }
+
+    Console.WriteLine($"{tables.Count} V3 loot tables, {reachable.Count} distinct items reachable");
+    foreach (var t in tables)
+        Console.WriteLine($"  {t.Name,-50} {t.Items.Select(i => i.ItemClass).Distinct().Count(),5} items"
+            + (t.Unfilled.Count > 0 ? $"  mission-only or empty: {string.Join("; ", t.Unfilled)}" : ""));
+
+    // Checked against something the resolver never read: every class these
+    // logs listed out of a Container-scope inventory. That is crates, bodies
+    // and the pilot's own packs mixed together, so a miss is a question to
+    // look at rather than an error.
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser()))
+            if (ev is InventoryItemEvent { ScopeType: "Container" } item) seen.Add(item.ItemClass);
+
+    Console.WriteLine();
+    Console.WriteLine($"Seen in a container in these logs: {seen.Count} classes, {seen.Count(reachable.Contains)} reachable from a table");
+    foreach (var miss in seen.Where(c => !reachable.Contains(c)).Order(StringComparer.Ordinal))
+        Console.WriteLine($"  in no table: {miss}");
+    return 0;
+}
+
 if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
 {
     var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);
