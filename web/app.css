@@ -1,7 +1,8 @@
-/* Quantumwake - a pilot's logbook, not another game database.
+/* Quantumwake - a midnight flight deck, not another game database.
  *
- * The interface uses quiet chart paper, warm navigation marks, and one live
- * signal colour. That keeps the game data dense without reading like a HUD.
+ * The interface is deliberately quiet: graphite surfaces, indigo navigation
+ * marks and a single warm colour for things that need a decision. It keeps the
+ * data dense without borrowing the Star Citizen fan-site visual language.
  *
  * Fonts are Windows built-ins only - Bahnschrift is the squarish techno face
  * that ships with Windows 10/11 and stands in well for SC's display type. No
@@ -7018,3 +7019,171 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .run-tweak-form { grid-column: 2; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .trade-run-money { margin: 6px 0 8px; padding: 6px 8px; border: 1px solid var(--rule); font-size: 11px; line-height: 1.4; }
 .trade-run-warning { color: var(--amber); }
+
+/* ---------- midnight flight deck ----------
+ *
+ * A softer, contemporary alternative to the chart-paper treatment above. The
+ * app has a lot of information on every route, so the hierarchy comes from
+ * elevation, type weight and one indigo selection colour rather than from
+ * frames, cut corners or a visible grid. This block is kept at the end so the
+ * in-game overlay retains its deliberately high-contrast HUD styling.
+ */
+body:not(.overlay) {
+  --void: #0c0d13;
+  --deep: #12141e;
+  --panel: #191c29;
+  --panel-2: #222637;
+  --rule: #30364b;
+  --rule-hot: #56617d;
+  --text: #f4f6fb;
+  --muted: #b1b8ca;
+  --dim: #7d869f;
+  --cyan: #829cff;
+  --cyan-hot: #dde5ff;
+  --cyan-deep: #536bae;
+  --amber: #e4ad63;
+  --chamfer: none;
+  background:
+    radial-gradient(900px 520px at 88% -12%, rgba(104, 112, 255, .17), transparent 60%),
+    radial-gradient(720px 430px at 2% 86%, rgba(95, 70, 160, .09), transparent 68%),
+    var(--void);
+}
+
+/* The previous chart grid made this read as a cousin of the reference site.
+   A distant light pool gives the page depth without turning its background
+   into another piece of interface. */
+body:not(.overlay)::before {
+  background: radial-gradient(760px 430px at 86% 0%, rgba(130, 156, 255, .08), transparent 68%);
+}
+body:not(.overlay) .railmark,
+body:not(.overlay) .brandmark { display: none !important; }
+body:not(.overlay) main {
+  border-inline: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+body:not(.overlay) .topbar {
+  height: 58px;
+  gap: 16px;
+  background: rgba(12, 13, 19, .88);
+  border-bottom-color: rgba(126, 143, 190, .32);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .22);
+}
+body:not(.overlay) .brand { gap: 9px; }
+body:not(.overlay) .brand .mark { width: 20px; height: 20px; opacity: .92; }
+body:not(.overlay) .brand .name {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 620;
+  letter-spacing: -.025em;
+  color: var(--text);
+}
+body:not(.overlay) .brand .name b { color: var(--text); font-weight: 720; }
+body:not(.overlay) .brand .by {
+  border-left-color: rgba(126, 143, 190, .36);
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+body:not(.overlay) .tabs { gap: 3px; }
+body:not(.overlay) .tabs button {
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 560;
+  letter-spacing: .055em;
+}
+body:not(.overlay) .tabs button::after {
+  left: 9px;
+  right: 9px;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--cyan);
+}
+body:not(.overlay) .tabs button:hover { background: rgba(130, 156, 255, .10); }
+body:not(.overlay) .tabs button.active { color: var(--cyan-hot); background: rgba(130, 156, 255, .10); }
+body:not(.overlay) .group-menu {
+  top: calc(100% + 5px);
+  border-color: rgba(126, 143, 190, .55);
+  border-radius: 8px;
+  background: rgba(22, 24, 35, .98);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .42);
+  overflow: hidden;
+}
+
+body:not(.overlay) h2 {
+  padding-left: 0;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -.025em;
+}
+body:not(.overlay) h2::before { display: none; }
+body:not(.overlay) .section-bar {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(126, 143, 190, .28);
+}
+
+body:not(.overlay) .card,
+body:not(.overlay) .summary-strip .tile,
+body:not(.overlay) .table-wrap {
+  border-radius: 10px;
+  clip-path: none;
+  border-color: rgba(126, 143, 190, .26);
+  background: linear-gradient(145deg, rgba(31, 34, 48, .96), rgba(18, 20, 30, .98));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+}
+body:not(.overlay) .card::before,
+body:not(.overlay) .summary-strip .tile::before { display: none; }
+body:not(.overlay) .card:hover { border-color: rgba(130, 156, 255, .48); }
+
+body:not(.overlay) .now-focus {
+  border-radius: 12px;
+  clip-path: none;
+  border: 1px solid rgba(130, 156, 255, .46);
+  border-left: 4px solid var(--cyan);
+  background: linear-gradient(105deg, rgba(78, 95, 183, .27), rgba(27, 30, 44, .96) 42%, rgba(18, 20, 30, .98));
+  box-shadow: 0 15px 36px rgba(0, 0, 0, .18);
+}
+body:not(.overlay) .now-focus::after { display: none; }
+body:not(.overlay) .now-focus-mark { color: var(--cyan-hot); font-weight: 650; }
+body:not(.overlay) .now-focus-title { font-family: var(--display); font-size: 21px; font-weight: 670; letter-spacing: -.025em; }
+body:not(.overlay) .now-focus .tiny { border-color: rgba(130, 156, 255, .62); color: var(--cyan-hot); }
+
+body:not(.overlay) #view-now .card { background: linear-gradient(145deg, rgba(31, 34, 48, .96), rgba(18, 20, 30, .98)); }
+body:not(.overlay) #view-now .now-status-card {
+  border-color: rgba(130, 156, 255, .36);
+  background: linear-gradient(135deg, rgba(81, 101, 193, .18), transparent 58%), linear-gradient(145deg, rgba(31, 34, 48, .98), rgba(18, 20, 30, .98));
+}
+body:not(.overlay) #view-now .now-status-card::before,
+body:not(.overlay) #view-now .card.now-briefing::before { display: none; }
+body:not(.overlay) #view-now .card.now-briefing {
+  border-color: rgba(228, 173, 99, .38);
+  background: linear-gradient(112deg, rgba(228, 173, 99, .10), transparent 44%), linear-gradient(145deg, rgba(31, 34, 48, .98), rgba(18, 20, 30, .98));
+}
+body:not(.overlay) #view-now .card.now-briefing .card-label { color: #f0c587; }
+
+body:not(.overlay) .summary-strip .tile { padding: 15px 16px; }
+body:not(.overlay) .summary-strip .tile .n { color: var(--text); font-weight: 650; }
+body:not(.overlay) .summary-strip .tile .l { letter-spacing: .11em; }
+body:not(.overlay) button.primary {
+  clip-path: none;
+  border-radius: 7px;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #0c1020;
+  letter-spacing: .07em;
+}
+body:not(.overlay) button.primary:hover:not(:disabled) { background: #a5b6ff; border-color: #a5b6ff; }
+body:not(.overlay) .ghost,
+body:not(.overlay) .tiny {
+  border-radius: 6px;
+  clip-path: none;
+}
+
+@media (max-width: 900px) {
+  body:not(.overlay) .topbar { background: rgba(12, 13, 19, .95); }
+  body:not(.overlay) .tabs { gap: 2px; }
+  body:not(.overlay) .tabs button { font-size: 10px; }
+}
