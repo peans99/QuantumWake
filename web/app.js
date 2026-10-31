@@ -4763,17 +4763,20 @@ function renderLootWhere(panel, data) {
 
   const rows = lootWhereRows(data.hits || []);
   const ships = data.ships || [];
+  const npcs = data.npcs || [];
 
-  if (!rows.length && !ships.length) {
+  if (!rows.length && !ships.length && !npcs.length) {
     panel.append(el('p', 'muted', data.tables
       ? tx('No container or body in the game’s loot tables rolls this. It may be sold, crafted, a mission reward or a hangar item.')
       : tx('The loot tables have not been read from this install yet.')));
     return;
   }
 
-  // A ship part comes off ships and out of no crate: the ships are the answer.
+  // A ship part comes off ships, and a uniform off whoever wears it, out of
+  // no crate: then those are the answer.
   if (!rows.length) {
-    renderLootShips(panel, ships);
+    if (npcs.length) renderLootNpcs(panel, npcs);
+    if (ships.length) renderLootShips(panel, ships);
     return;
   }
 
@@ -4781,7 +4784,12 @@ function renderLootWhere(panel, data) {
   const bodies = rows.length - places;
   renderLootPlaces(panel, data, places > 0);
 
-  if (data.places?.length) panel.append(el('h4', 'loot-where-sub', tx('By kind of place')));
+  // Who carries it comes before the long breakdown by kind of place: "Hurston
+  // guards always have one" is an answer, and the breakdown is the working.
+  if (npcs.length) renderLootNpcs(panel, npcs);
+  if (ships.length) renderLootShips(panel, ships);
+
+  if (data.places?.length || npcs.length || ships.length) panel.append(el('h4', 'loot-where-sub', tx('By kind of place')));
   panel.append(el('p', 'muted caption', [
     txn(places, '{count} kind of place', '{count} kinds of place'),
     txn(bodies, '{count} kind of body', '{count} kinds of body'),
@@ -4840,8 +4848,64 @@ function renderLootWhere(panel, data) {
   const wrap = el('div', 'table-wrap');
   wrap.append(table);
   panel.append(wrap);
+}
 
-  if (ships.length) renderLootShips(panel, ships);
+/**
+ * The kinds of NPC that wear or carry an item, likeliest first. The share is
+ * the part of that NPC's spawns with it on them if every outfit and kit the
+ * files list is picked evenly - which the files do not say - so the column
+ * says it is an estimate.
+ */
+function renderLootNpcs(panel, npcs) {
+  const section = el('div', 'loot-npcs');
+  section.append(el('h4', 'loot-where-sub', tx('Worn or carried by NPCs')));
+  section.append(el('p', 'muted caption', [
+    txn(npcs.length, '{count} kind of NPC', '{count} kinds of NPC'),
+    tx('what they spawn wearing, so what their bodies hold. The share counts every outfit they can be given as equally likely.'),
+  ].join(' · ')));
+
+  const holder = el('div', 'table-wrap');
+  section.append(holder);
+  const more = el('button', 'ghost tiny loot-npcs-more');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  section.append(more);
+
+  function draw() {
+    const shown = expanded ? npcs : npcs.slice(0, LOOT_PLACES_SHOWN);
+    const table = el('table', 'loot-where-table loot-npcs-table');
+    const headRow = el('tr');
+    for (const [label, title] of [
+      [tx('NPC'), null],
+      [tx('Share (est.)'), tx('How many of these NPCs have it, if each outfit they can be given is equally likely. The files list the outfits, not how a spawner picks one.')],
+      [tx('Variants'), tx('NPC classes of this kind that can have it - male and female versions count separately')],
+    ]) {
+      const th = el('th', null, label);
+      if (title) th.title = title;
+      headRow.append(th);
+    }
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const npc of shown) {
+      const tr = el('tr');
+      const who = el('td', null, npc.label);
+      who.title = (npc.classes || []).join(', ');
+      tr.append(who);
+      tr.append(el('td', 'num', npc.share >= 0.9995 ? tx('always') : lootPercent(npc.share)));
+      tr.append(el('td', 'num muted', String((npc.classes || []).length)));
+      body.append(tr);
+    }
+    table.append(body);
+    holder.replaceChildren(table);
+    more.hidden = npcs.length <= LOOT_PLACES_SHOWN;
+    more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: npcs.length });
+  }
+
+  draw();
+  panel.append(section);
 }
 
 /**
@@ -4948,6 +5012,7 @@ async function findLoot() {
     button.append(el('span', null, item.name));
     const said = [];
     if (item.bestRoll != null) said.push(lootPercent(item.bestRoll), txn(item.sources, '{count} source', '{count} sources'));
+    if (item.npcs > 0) said.push(txn(item.npcs, '{count} kind of NPC', '{count} kinds of NPC'));
     if (item.ships > 0) said.push(txn(item.ships, '{count} NPC ship', '{count} NPC ships'));
     button.append(el('span', 'muted', said.join(' · ')));
     button.addEventListener('click', () => showLootWhere(item.itemClass));

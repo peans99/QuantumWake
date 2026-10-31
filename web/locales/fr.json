@@ -5346,5 +5346,15 @@
   "Security": "Sécurité",
   "Bounty hunter": "Chasseur de primes",
   "Elite": "Élite",
-  "NPC": "PNJ"
+  "NPC": "PNJ",
+  "Worn or carried by NPCs": "Porté par des PNJ",
+  "{count} kinds of NPC": {
+    "one": "{count} type de PNJ",
+    "other": "{count} types de PNJ"
+  },
+  "what they spawn wearing, so what their bodies hold. The share counts every outfit they can be given as equally likely.": "ce qu’ils portent en apparaissant, donc ce que contiennent leurs corps. La part compte chaque tenue possible comme également probable.",
+  "Share (est.)": "Part (est.)",
+  "How many of these NPCs have it, if each outfit they can be given is equally likely. The files list the outfits, not how a spawner picks one.": "Combien de ces PNJ l’ont, si chaque tenue possible est également probable. Les fichiers listent les tenues, pas la façon dont l’apparition en choisit une.",
+  "NPC classes of this kind that can have it - male and female versions count separately": "Classes de PNJ de ce type qui peuvent l’avoir - versions masculine et féminine comptées à part",
+  "always": "toujours"
 }

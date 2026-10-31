@@ -1,7 +1,11 @@
+using System.Security.Cryptography;
 using System.Text;
 using ZstdSharp;
 
 namespace Quantumwake.Core.GameData;
+
+/// <summary>One entry's place in the archive, as <see cref="P4kArchive.Locate"/> found it.</summary>
+public readonly record struct P4kEntry(string Path, long Size, long LocalOffset, long Compressed, ushort Method);
 
 /// <summary>
 /// Reads single files out of Star Citizen's <c>Data.p4k</c>.
@@ -26,13 +30,11 @@ namespace Quantumwake.Core.GameData;
 /// and shared, so it is safe to do while the game is running.
 /// </para>
 /// <para>
-/// Some entries are encrypted. Those are reported rather than guessed at - see
-/// <see cref="TryRead"/>.
+/// Some entries are encrypted. By default those are reported rather than
+/// read. The one exception is opt-in and narrow, see
+/// <see cref="TryReadDecrypting"/>.
 /// </para>
 /// </remarks>
-/// <summary>One entry's place in the archive, as <see cref="P4kArchive.Locate"/> found it.</summary>
-public readonly record struct P4kEntry(string Path, long Size, long LocalOffset, long Compressed, ushort Method);
-
 public sealed class P4kArchive
 {
     private const uint LocalHeaderSignature = 0x04034B50;
@@ -106,6 +108,63 @@ public sealed class P4kArchive
         using var reader = new BinaryReader(stream);
         return Decode(ReadPayload(stream, reader, entry.LocalOffset, entry.Compressed), entry.Method);
     }
+
+    /// <summary>
+    /// Extracts an entry the archive stores encrypted, or null when it is
+    /// neither readable plainly nor with the community's key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Encrypted entries are AES-128 in CBC mode with a zero IV over an
+    /// ordinary ZStd frame, padded to the block size. The key is the one
+    /// published in unp4k (https://github.com/dolkensp/unp4k) and used by
+    /// scdatatools; see docs/credits.md. Checked on this install: the decrypted
+    /// bytes begin with the ZStd magic and inflate to exactly the size the
+    /// directory records.
+    /// </para>
+    /// <para>
+    /// Opt-in, and used for one thing: the NPC loadout files under
+    /// <c>Data\Scripts\Loadouts</c>, which say what NPCs wear. Nicolas
+    /// approved that on 2026-10-31. Everything else keeps
+    /// <see cref="TryRead(P4kEntry)"/>, which reports encrypted entries as
+    /// unreadable. The padding is why the frame is streamed to the recorded
+    /// size rather than unwrapped whole: the bytes after the frame are not
+    /// ZStd, and a one-shot unwrap refuses them.
+    /// </para>
+    /// </remarks>
+    public byte[]? TryReadDecrypting(P4kEntry entry)
+    {
+        using var stream = File.Open(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new BinaryReader(stream);
+        var payload = ReadPayload(stream, reader, entry.LocalOffset, entry.Compressed);
+
+        if (Decode(payload, entry.Method) is { } plain) return plain;
+        if (entry.Method == 0 || payload.Length == 0 || payload.Length % 16 != 0) return null;
+
+        using var aes = Aes.Create();
+        aes.Key = CommunityKey;
+        var decrypted = aes.DecryptCbc(payload, new byte[16], PaddingMode.None);
+        if (!IsZstd(decrypted)) return null;
+
+        var output = new byte[entry.Size];
+        try
+        {
+            using var frame = new DecompressionStream(new MemoryStream(decrypted));
+            frame.ReadExactly(output);
+        }
+        catch (Exception e) when (e is ZstdException or EndOfStreamException)
+        {
+            return null;
+        }
+
+        return output;
+    }
+
+    private static readonly byte[] CommunityKey =
+        [0x5E, 0x7A, 0x20, 0x02, 0x30, 0x2E, 0xEB, 0x1A, 0x3B, 0xB6, 0x17, 0xC3, 0x0F, 0xDE, 0x1E, 0x47];
+
+    private static bool IsZstd(byte[] bytes) =>
+        bytes.Length >= 4 && bytes[0] == 0x28 && bytes[1] == 0xB5 && bytes[2] == 0x2F && bytes[3] == 0xFD;
 
     /// <summary>Every entry under a prefix, located in one walk of the directory.</summary>
     public IReadOnlyList<P4kEntry> Locate(string prefix)
@@ -242,11 +301,8 @@ public sealed class P4kArchive
             return payload;
 
         // A ZStd frame starts 28 B5 2F FD. Anything else here is encrypted.
-        if (payload.Length < 4 || payload[0] != 0x28 || payload[1] != 0xB5
-            || payload[2] != 0x2F || payload[3] != 0xFD)
-        {
+        if (!IsZstd(payload))
             return null;
-        }
 
         using var decompressor = new Decompressor();
         return decompressor.Unwrap(payload).ToArray();

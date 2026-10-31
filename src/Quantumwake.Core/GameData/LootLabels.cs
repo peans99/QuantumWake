@@ -60,6 +60,32 @@ public static partial class LootLabels
         return parts.Count == 0 ? entityClass : string.Join(" · ", parts.Select(Words));
     }
 
+    /// <summary>
+    /// An NPC's kind from its actor class: <c>PU_Human-Hurston-Guard-Male-Heavy_01</c>
+    /// is "Hurston · Guard · Heavy".
+    /// </summary>
+    /// <remarks>
+    /// Gender, species and the variant number go, so the male and female
+    /// versions of one guard - which the files keep as separate classes with
+    /// the same kit - read as one kind of NPC. A word the name repeats is said
+    /// once: <c>Guards-Lorville-Guard_Lorville</c> names Lorville twice.
+    /// </remarks>
+    public static string Npc(string entityClass)
+    {
+        var parts = entityClass.Split(['_', '-'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => !p.All(char.IsDigit) && !NpcNoise.Contains(p))
+            .Select(Words)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return parts.Count == 0 ? entityClass : string.Join(" · ", parts);
+    }
+
+    private static readonly HashSet<string> NpcNoise = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PU", "NPC", "Archetypes", "Human", "Male", "Female", "Template", "Civilians", "Combatants",
+    };
+
     private static string Words(string part) => WordBoundary().Replace(part, " ");
 
     [GeneratedRegex("(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")]

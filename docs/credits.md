@@ -56,6 +56,15 @@ to be read rather than inferred, and it is theirs. As with the archive, no
 third-party extractor is used or shipped: `GameData/DataCore.cs` walks the blob
 itself.
 
+**Encrypted loadout files** — since 0.20.5 what NPCs wear is read from the
+loadout files under `Data\Scripts\Loadouts`, which the archive stores
+encrypted: AES-128-CBC with a zero IV over an ordinary ZStd frame. The key is
+the one published in [unp4k](https://github.com/dolkensp/unp4k) and used by
+[scdatatools](https://github.com/ventorvar/scdatatools); it was not found
+here. `P4kArchive.TryReadDecrypting` uses it for those files only, at
+Nicolas's decision on 2026-10-31; everything else the archive encrypts is
+still reported as unreadable.
+
 **Star Citizen Wiki** ([starcitizen.tools](https://starcitizen.tools)) is
 where the Garage's pictures of parts come from, and the logo of the odd maker
 the game files lack one for: once the community dataset is switched on, the

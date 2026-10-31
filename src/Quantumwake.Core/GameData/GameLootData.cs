@@ -68,6 +68,22 @@ public sealed class GameLootData
 
     private Dictionary<string, List<ShipFit>>? _ships;
 
+    /// <summary>
+    /// The kinds of NPC on foot that wear or carry each item, keyed by the
+    /// item's class. Empty when the archive or item types were not available.
+    /// </summary>
+    public Dictionary<string, List<NpcWear>> Npcs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The NPCs that wear or carry an item, or none.</summary>
+    public IReadOnlyList<NpcWear> NpcsFor(string? itemClass)
+    {
+        if (itemClass is not { Length: > 0 }) return [];
+        _npcs ??= new Dictionary<string, List<NpcWear>>(Npcs, StringComparer.OrdinalIgnoreCase);
+        return _npcs.TryGetValue(itemClass, out var npcs) ? npcs : [];
+    }
+
+    private Dictionary<string, List<NpcWear>>? _npcs;
+
     /// <summary>The places one preset is set down, or none.</summary>
     public IReadOnlyList<LootPlace> PlacesOf(string preset) =>
         Places.TryGetValue(preset, out var places) ? places : [];
@@ -220,6 +236,7 @@ public sealed class GameLootData
             Items = items, Vias = vias, Rolls = rolls, Sources = sources,
             Places = places, PlacesRead = p4k is not null,
             Ships = typeOf is null ? new(StringComparer.OrdinalIgnoreCase) : GameShipLoot.Read(core, typeOf),
+            Npcs = typeOf is null || p4k is null ? new(StringComparer.OrdinalIgnoreCase) : GameNpcOutfits.Read(p4k, core, typeOf),
         };
     }
 }

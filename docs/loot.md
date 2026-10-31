@@ -218,22 +218,57 @@ listed in any inventory, of any scope, **none is a ship part**: the game logs
 no inventory listing when a component is taken from a ship. Unlike the crates,
 this is unchecked.
 
-## What NPCs wear: encrypted
+## What NPCs wear
 
-loot-verse also lists NPC outfits. The DataCore names them only by
-reference. Of 2,312 actor classes with a default loadout, 1,411 NPC
-archetypes use outfit loadouts and others random assortments
-(`SLoadoutAssortment`, 321 records - a Hurston guard's lists body groups of 90 and 64,
-three armour sets and one weapon kit). Almost every leaf is an
+Added 2026-10-31 in 0.20.5. The reader is `Core/GameData/GameNpcOutfits.cs`;
+its answer is cached in the loot digest, keyed by item.
+
+**The DataCore names NPC kit only by reference.** Of 2,312 actor classes with
+a default loadout, 1,411 NPC archetypes use outfit loadouts (a base plus
+alternatives picked by tag) and others random assortments
+(`SLoadoutAssortment`, 321 records - a Hurston guard's lists body groups of 90
+and 64, three armour sets and one weapon kit). Almost every leaf is an
 `SItemPortLoadoutXMLParams` naming a file under `Data\Scripts\Loadouts`:
-73,767 XML leaves against 9,260 items written into the DataCore, and **1,864
-of the 2,312 actor classes name no item in the DataCore at all.**
+73,767 XML leaves against 9,260 items written into the DataCore, and 1,864 of
+the 2,312 actor classes name no item in the DataCore at all.
 
-Those 2,522 files are in the archive, but their payloads are not ZStd - the
-first four bytes are not `28 B5 2F FD` - so they are encrypted, and 400 of
-400 sampled fail to read. `P4kArchive` reports encrypted entries rather than
-decrypting them, so what NPCs wear is not shown. The bodies' rolled loot,
-which is in the DataCore, is.
+**Those files are encrypted, and are now read.** Their payloads do not start
+with the ZStd magic; 400 of 400 sampled failed the ordinary read. They are
+AES-128-CBC with a zero IV over an ordinary ZStd frame padded to the block
+size, under the key unp4k published (see docs/credits.md). Decrypted, the
+first four bytes are `28 B5 2F FD` and the frame inflates to exactly the size
+the directory records - 1,072 bytes for `Lorville_Guard_Heavy.xml`, which is
+a CDS legacy heavy set in Hurston Security colours over a CDS undersuit.
+Decryption is opt-in, through `P4kArchive.TryReadDecrypting`, used for these
+files only; Nicolas decided on 2026-10-31 to read them. The padding is why
+the frame is streamed to the recorded size rather than unwrapped whole.
+
+| | count |
+| --- | --- |
+| kinds of item worn or carried | **2,571** |
+| NPC classes wearing something | **2,161** - 808 kinds once gender and variant number are dropped |
+| NPC-and-item pairs, cached | 27,595 (adds ~2.3 MB to `commodities.json`) |
+| read time, all 2,522 files | 1.9 s |
+
+Kept: armour, clothing, personal weapons, attachments and magazines,
+consumables, backpacks. Bodies, heads, hair and the mobiGlas are the
+character, not loot. 50 item classes the loadouts name have no entry in the
+item catalogue and are dropped with them.
+
+**The share is an estimate.** Each NPC's tree is walked sharing weight evenly:
+every outfit an outfit loadout offers, every assortment, every group sharing a
+slot name (male and female bodies), every loadout in a group. Different
+slots (body, outfit, weapon) all apply. A spawner picks by tag and seed, which the
+files do not show, so "50%" means "one of two outfits it can be given". The
+page heads the column "Share (est.)" and says so.
+
+**Checked against the logs.** A body is a container in the logs, so what NPCs
+wear should turn up in container listings. Of the 130 classes the logs saw in
+a container, **46 are worn by some NPC**, and of the 34 that are armour, 20
+are. Nothing the tables could not explain is explained by outfits instead -
+the four from neither are still the goldfish and the three ship models - so
+this adds sources rather than closing gaps. It cannot say which of the 46
+came off a body rather than a crate: the logs do not tell them apart.
 
 ## Not yet
 

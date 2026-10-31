@@ -230,6 +230,52 @@ public class LootWhereTests
     }
 
     /// <summary>
+    /// The CDS legacy heavy helmet in Hurston Security colours: no crate rolls
+    /// it, but Hurston guards wear it in one of their three outfits. Shares
+    /// from this install.
+    /// </summary>
+    private const string Helmet = """
+        {"item":"cds_legacy_armor_heavy_helmet_01_01_hd_sec","name":"Hurston Security helmet","tables":333,"placesRead":true,"places":[],"hits":[],"ships":[],
+         "npcs":[
+          {"label":"Guards · Lorville · Guard","share":0.5,"classes":["NPC_Archetypes-Male-Human-Guards-Lorville-Guard_Lorville_02"]},
+          {"label":"Hurston · Guard · Heavy","share":0.3333,"classes":["PU_Human-Hurston-Guard-Male-Heavy_01","PU_Human-Hurston-Guard-Female-Heavy_01"]},
+          {"label":"Hurston · Guard · Medium","share":1,"classes":["PU_Human-Hurston-Guard-Male-Medium_01"]}
+         ]}
+        """;
+
+    [Fact]
+    public void Armour_no_crate_rolls_lists_the_npcs_that_wear_it()
+    {
+        var page = Loaded();
+        page.Serve("/api/loot/where?item=cds_legacy_armor_heavy_helmet_01_01_hd_sec", Helmet);
+        page.Do("await showLootWhere('cds_legacy_armor_heavy_helmet_01_01_hd_sec');");
+
+        var text = page.NodeText("#loot-where");
+        Assert.Contains("Worn or carried by NPCs", text);
+        Assert.Contains("3 kinds of NPC", text);
+        Assert.DoesNotContain("No container or body", text);
+
+        Assert.Equal(3, page.Count($"{PlacesBody}.children.length"));
+        var heavy = page.Text($"{PlacesBody}.children[1].textContent");
+        Assert.Contains("Hurston · Guard · Heavy", heavy);
+        Assert.Contains("33%", heavy);
+        Assert.Contains("2", heavy);
+
+        // Every outfit a medium guard can be given has it.
+        Assert.Contains("always", page.Text($"{PlacesBody}.children[2].textContent"));
+    }
+
+    [Fact]
+    public void A_search_hit_npcs_wear_says_how_many_kinds()
+    {
+        var page = new Page();
+        page.Serve("/api/loot/search?q=hurston", """[{"itemClass":"cds_legacy_armor_heavy_helmet_01_01_hd_sec","name":"Hurston Security helmet","sources":0,"ships":0,"npcs":3}]""");
+        page.Do("__dom.node('#loot-find').value = 'hurston'; await findLoot();");
+
+        Assert.Contains("3 kinds of NPC", page.NodeText("#loot-find-results"));
+    }
+
+    /// <summary>
     /// Armour colours sit near a thousandth of a percent. Rounded to whole
     /// percent they would all read "0%".
     /// </summary>

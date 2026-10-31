@@ -22,7 +22,7 @@ public sealed record ShipFit(string Ship, int Count);
 /// <para>
 /// What NPCs on foot wear is a different matter: 1,864 of 2,312 actor classes
 /// name their outfits only through loadout XML under <c>Data\Scripts\Loadouts</c>,
-/// and those entries are encrypted in the archive. See docs/loot.md.
+/// which the archive stores encrypted; <see cref="GameNpcOutfits"/> reads them.
 /// </para>
 /// </remarks>
 public static partial class GameShipLoot

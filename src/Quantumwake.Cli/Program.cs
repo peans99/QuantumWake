@@ -441,6 +441,11 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
         Console.WriteLine($"\n{flown.Count} NPC ships fly with it fitted:");
         foreach (var s in flown)
             Console.WriteLine($"  x{s.Count}  {s.Ship,-50} {GameShipLoot.Crew(s.Ship)}");
+
+        var worn = digest.NpcsFor(lootClass);
+        Console.WriteLine($"\n{worn.Count} NPC classes wear or carry it (share if outfits are picked evenly):");
+        foreach (var n in worn.Take(40))
+            Console.WriteLine($"  {n.Share,7:P1}  {LootLabels.Npc(n.Npc),-50} {n.Npc}");
         return 0;
     }
 
@@ -534,6 +539,21 @@ if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
     Console.WriteLine($"Ship parts these logs listed in any inventory: {loggedParts.Count}; fitted to some NPC ship: {loggedParts.Count(c => digest.ShipsFor(c).Count > 0)}");
     foreach (var c in loggedParts.Where(c => digest.ShipsFor(c).Count == 0).Order(StringComparer.OrdinalIgnoreCase))
         Console.WriteLine($"  on no NPC ship: {c} ({itemFacts[c].Type})");
+
+    // NPC outfits, against the same container listings: a body is a
+    // container in the logs, so what NPCs wear should turn up there - and
+    // explain some of what the tables only give at a thousandth of a percent.
+    var npcKinds = digest.Npcs.Values.SelectMany(v => v).Select(n => n.Npc).Distinct().ToList();
+    Console.WriteLine($"\nNPC outfits: {digest.Npcs.Count} kinds of item worn or carried by {npcKinds.Count} NPC classes "
+        + $"({npcKinds.Select(LootLabels.Npc).Distinct().Count()} kinds once gender and number are dropped); {digest.Npcs.Values.Sum(v => v.Count)} pairs");
+    var wornSeen = seen.Where(c => digest.NpcsFor(c).Count > 0).ToList();
+    Console.WriteLine($"Seen in a container in these logs: {seen.Count}; worn by some NPC {wornSeen.Count}; "
+        + $"from a table {seen.Count(reachable.Contains)}; from either {seen.Count(c => reachable.Contains(c) || digest.NpcsFor(c).Count > 0)}");
+    foreach (var c in seen.Where(c => !reachable.Contains(c) && digest.NpcsFor(c).Count == 0).Order(StringComparer.Ordinal))
+        Console.WriteLine($"  from neither: {c}");
+    var armourSeen = seen.Where(c => itemFacts.TryGetValue(c, out var f) && f.Type.StartsWith("Char_Armor", StringComparison.Ordinal)).ToList();
+    Console.WriteLine($"Armour among them: {armourSeen.Count}; worn by some NPC {armourSeen.Count(c => digest.NpcsFor(c).Count > 0)}; "
+        + $"best table roll under 0.1% for {armourSeen.Count(c => digest.For(c).Select(h => h.PerRoll).DefaultIfEmpty(0).Max() < 0.001)}");
     return 0;
 }
 

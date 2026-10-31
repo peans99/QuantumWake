@@ -2012,7 +2012,14 @@ public static class ServerHost
                     name = lib.GameCommodities.Vehicles.TryGetValue(s.Ship, out var v) && v.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
                     crew = GameShipLoot.Crew(s.Ship),
                     s.Count
-                })
+                }),
+                // NPCs on foot, one row per kind: the male and female classes
+                // of one guard carry the same kit and read as one.
+                npcs = loot.NpcsFor(item)
+                    .GroupBy(n => LootLabels.Npc(n.Npc))
+                    .Select(g => new { label = g.Key, share = g.Max(n => n.Share), classes = g.Select(n => n.Npc).ToList() })
+                    .OrderByDescending(n => n.share)
+                    .ThenBy(n => n.label, StringComparer.Ordinal)
             };
         });
 
@@ -2029,6 +2036,7 @@ public static class ServerHost
             var found = loot.Items
                 .Where(loot.CanRoll)
                 .Concat(loot.Ships.Keys)
+                .Concat(loot.Npcs.Keys)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(c => (Class: c, Name: lib.ItemName(c)))
                 .Where(i => i.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
@@ -2043,11 +2051,13 @@ public static class ServerHost
                         name = i.Name,
                         bestRoll = hits.Count > 0 ? hits.Max(h => h.PerRoll) : (double?)null,
                         sources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count(),
-                        ships = loot.ShipsFor(i.Class).Count
+                        ships = loot.ShipsFor(i.Class).Count,
+                        npcs = loot.NpcsFor(i.Class).Select(n => LootLabels.Npc(n.Npc)).Distinct().Count()
                     };
                 })
                 .OrderByDescending(i => i.bestRoll ?? -1)
                 .ThenByDescending(i => i.ships)
+                .ThenByDescending(i => i.npcs)
                 .Take(60)
                 .ToList();
 

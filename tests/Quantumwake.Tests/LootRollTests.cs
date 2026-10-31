@@ -137,4 +137,12 @@ public class LootLabelTests
     [InlineData("Corpse_ShatteredBlade_soldier", "Shattered Blade · soldier")]
     public void A_body_reads_as_who_it_was(string record, string label) =>
         Assert.Equal(label, LootLabels.Body(record));
+
+    [Theory]
+    [InlineData("PU_Human-Hurston-Guard-Male-Heavy_01", "Hurston · Guard · Heavy")]
+    [InlineData("PU_Human-Hurston-Guard-Female-Heavy_01", "Hurston · Guard · Heavy")]
+    [InlineData("NPC_Archetypes-Male-Human-Guards-Lorville-Guard_Lorville_02", "Guards · Lorville · Guard")]
+    [InlineData("NPC_Archetypes-Male-Human-Engineers-GrimHex-Engineer_GrimHex_09", "Engineers · Grim Hex · Engineer")]
+    public void An_npc_reads_as_its_kind_whatever_its_gender(string record, string label) =>
+        Assert.Equal(label, LootLabels.Npc(record));
 }
