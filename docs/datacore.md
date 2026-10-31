@@ -467,6 +467,20 @@ places, and its sum equals the dump's own capacity on all 149 hulls that
 have one - the count the blob withholds. `docs/cargo-fit.md` is what was
 built on it.
 
+**Corrected on 2026-10-31: the blob did not withhold it.** The count is in
+each hull's own `SEntityComponentDefaultLoadoutParams`, which names a port
+per grid - the Freelancer places `MISC_Freelancer_CargoGrid_Mid` on
+`hardpoint_cargogrid_mid_left` and `_mid_right`, the C1 its one grid on a
+left and a right port - and a lift or rack keeps its grid in its own
+loadout (the 400i's `ORIG_400i_Lift_Cargo` places `ORIG_400i_CargoGrid`).
+Read that way (`GameCargoGrids`), **145 of the 149** hulls the dump credits
+with cargo sum to its figure exactly. The encrypted vehicle definitions,
+once opened, turned out not to place grids at all - they declare ports
+(the 890 Jump's six `hardpoint_cargogrid_hangar_*` of type `CargoGrid`),
+not what sits in them. The four the install does not answer - the
+Hammerhead, the Nomad, the 135c and the rest of the 890 Jump's hold - have
+no grid in any loadout or vehicle file; the dump stays their source.
+
 ## What came of it
 
 All of the following now comes out of this file instead of a 110 MB download,

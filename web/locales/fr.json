@@ -4487,7 +4487,6 @@
   "The game has not written a keybinding profile yet.": "Le jeu n’a pas encore écrit de profil d’assignations.",
   "The game's keybinding profile has not been read yet.": "Le profil d’assignations du jeu n’a pas encore été lu.",
   "The keybinding profile could not be read.": "Le profil d’assignations n’a pas pu être lu.",
-  "The reference data predates cargo grids; refresh it in Settings.": "Les données de référence sont antérieures aux grilles de soute ; actualisez-les dans les Réglages.",
   "The reference data predates the garage. Refresh the community dataset in Settings.": "Les données de référence sont antérieures au Garage. Actualisez les données communautaires dans les Réglages.",
   "The reference does not know this mining ship.": "La référence ne connaît pas ce vaisseau de minage.",
   "The run changed since this was shown - here it is again, have another look.": "La sortie a changé depuis cet affichage - la voici à nouveau, regardez encore.",
@@ -5392,5 +5391,10 @@
   "Bought {count} times, last on {date}; the median per unit": {
     "one": "Acheté {count} fois, le {date}",
     "other": "Acheté {count} fois, la dernière le {date} ; la médiane par unité"
-  }
+  },
+  "{count} grids, {scu} SCU as your install’s loadout places them: {sizes}.": {
+    "one": "{count} grille, {scu} SCU telle que la placent les équipements de votre installation : {sizes}.",
+    "other": "{count} grilles, {scu} SCU telles que les placent les équipements de votre installation : {sizes}."
+  },
+  "No hull's cargo grids are known yet: the install has not been read.": "Aucune grille de cargaison n’est encore connue : l’installation n’a pas été lue."
 }

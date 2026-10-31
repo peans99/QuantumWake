@@ -20,7 +20,7 @@ namespace Quantumwake.Server;
 /// the whole application ship as a single executable rather than one binary
 /// launching another.
 /// </remarks>
-public static class ServerHost
+public static partial class ServerHost
 {
     /// <summary>
     /// Configures the server without starting it. Call <c>Run</c> to block, or
@@ -1557,13 +1557,14 @@ public static class ServerHost
         // within the volume is not proof, and the answer says which.
         app.MapGet("/api/cargo/{className}", (string className, LogLibrary lib) =>
         {
-            var ship = lib.Community.GarageShip(className);
+            var ship = CargoHull(lib, className);
             if (ship is null) return Results.NotFound(new { message = "No such ship in the reference." });
             return Results.Ok(new
             {
                 ship.Class, ship.Name, ship.CargoScu,
-                gridsKnown = lib.Community.HasCargoGrids,
-                grids = ship.CargoGrids ?? [],
+                gridsKnown = ship.Source is not null,
+                gridsFrom = ship.Source,
+                grids = ship.Grids,
                 crates = Crates(lib),
                 cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
             });
@@ -1571,17 +1572,18 @@ public static class ServerHost
 
         app.MapPost("/api/cargo/fit", (CargoFitRequest request, LogLibrary lib) =>
         {
-            if (!lib.Community.HasCargoGrids)
-                return Results.BadRequest(new { message = "The reference data predates cargo grids; refresh it in Settings." });
+            var hulls = CargoHulls(lib);
+            if (hulls.Count == 0)
+                return Results.BadRequest(new { message = "No hull's cargo grids are known yet: the install has not been read." });
 
             var load = new CargoLoad((request.Crates ?? new Dictionary<int, int>()).Where(c => c.Value > 0).ToDictionary(c => c.Key, c => c.Value));
             var crates = Crates(lib);
 
             // The asked ship in full, with every crate's place.
             object? ship = null;
-            if (request.Ship is { Length: > 0 } && lib.Community.GarageShip(request.Ship) is { } asked)
+            if (request.Ship is { Length: > 0 } && CargoHull(lib, request.Ship) is { } asked)
             {
-                var fit = CargoFit.Pack(asked.CargoGrids ?? [], load, crates);
+                var fit = CargoFit.Pack(asked.Grids, load, crates);
                 ship = new
                 {
                     asked.Class, asked.Name, asked.CargoScu,
@@ -1596,11 +1598,11 @@ public static class ServerHost
             var flown = lib.Stats().Ships
                 .Where(s => s.ClassName is not null)
                 .ToDictionary(s => s.ClassName!, s => s, StringComparer.OrdinalIgnoreCase);
-            var others = lib.Community.GarageShips.Values
-                .Where(s => s.CargoGrids is { Count: > 0 } && s.IsSpaceship)
+            var others = hulls
+                .Where(s => s.Grids.Count > 0 && s.Spaceship)
                 .Select(s =>
                 {
-                    var fit = CargoFit.Pack(s.CargoGrids!, load, crates);
+                    var fit = CargoFit.Pack(s.Grids, load, crates);
                     flown.TryGetValue(s.Class, out var mine);
                     return new
                     {
@@ -6035,6 +6037,56 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             ? new { price = r.UnitPrice, r.Times, r.Last, shop = r.Shop is { Length: > 0 } shop ? lib.ShopLabel(shop) : null }
             : null;
 
+    /// <summary>
+    /// One hull for Cargo fit, from the install first and the community dump
+    /// only where the install places no grid.
+    /// </summary>
+    /// <remarks>
+    /// The install answers 145 of the 149 hulls the dump credits with cargo,
+    /// to the SCU, from each hull's default loadout (docs/cargo-fit.md). It is
+    /// this patch's and needs no download. The dump stays as the fallback for
+    /// the four it does not place: the Hammerhead, the Nomad, the 135c, and the
+    /// rest of the 890 Jump's hold.
+    /// </remarks>
+    static CargoHullView? CargoHull(LogLibrary lib, string className)
+    {
+        var name = lib.GameCommodities.Vehicles.TryGetValue(className, out var vehicle) && vehicle.Name is { Length: > 0 } vn ? vn : null;
+        var community = lib.Community.GarageShip(className);
+
+        if (lib.GameCommodities.CargoHulls.TryGetValue(className, out var hull) && hull.Grids.Count > 0
+            && !(community?.CargoGrids is { Count: > 0 } dump && dump.Sum(g => g.Scu) > hull.Scu))
+            return new CargoHullView(className, name ?? community?.Name ?? className, hull.Scu, hull.Grids, hull.Spaceship, "install");
+
+        if (community is null)
+            return name is null ? null : new CargoHullView(className, name, 0, [], true, null);
+
+        var grids = community.CargoGrids ?? [];
+        return new CargoHullView(community.Class, community.Name, community.CargoScu, grids, community.IsSpaceship,
+            grids.Count > 0 ? "community" : lib.Community.HasCargoGrids ? "community" : null);
+    }
+
+    /// <summary>
+    /// Every flyable hull with grids, install and dump together, one per name:
+    /// NPC variants, Teach copies and collector editions are the same hold.
+    /// </summary>
+    static List<CargoHullView> CargoHulls(LogLibrary lib)
+    {
+        var classes = lib.GameCommodities.CargoHulls.Keys
+            .Where(c => !GameShipLoot.IsNpcShip(c) && !NotAHull().IsMatch(c))
+            .Concat(lib.Community.GarageShips.Values.Where(s => s.CargoGrids is { Count: > 0 }).Select(s => s.Class))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return [.. classes
+            .Select(c => CargoHull(lib, c))
+            .OfType<CargoHullView>()
+            .Where(h => h.Grids.Count > 0)
+            .GroupBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderBy(h => h.Class.Length).First())];
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"_Teach|_Collector|_Boarded|_TEMP|_Template|_Unmanned|_Test|_EA_|_Dummy", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex NotAHull();
+
     private static readonly object LootNamesLock = new();
     private static (GameLootData For, Dictionary<string, string> Index)? _lootNames;
 
@@ -6391,6 +6443,10 @@ public sealed record ImportRequest(string? Document, string? SourceName = null);
 
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);
+
+/// <summary>A hull as Cargo fit packs it, wherever its grids were read.</summary>
+/// <param name="Source">"install", "community", or null when no grid is known for it.</param>
+public sealed record CargoHullView(string Class, string Name, double CargoScu, IReadOnlyList<CargoGrid> Grids, bool Spaceship, string? Source);
 
 /// <summary>Body of POST /api/loot/farm: the names written on a list.</summary>
 public sealed record FarmRequest(List<string?>? Names);

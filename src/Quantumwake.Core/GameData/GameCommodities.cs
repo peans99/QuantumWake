@@ -31,7 +31,7 @@ namespace Quantumwake.Core.GameData;
 public sealed partial class GameCommodities
 {
     /// <summary>Bumped when the cached shape changes.</summary>
-    private const int CacheVersion = 56;
+    private const int CacheVersion = 57;
 
     private const string DataCoreEntry = @"Data\Game2.dcb";
     public const string LocalisationEntry = @"Data\Localization\english\global.ini";
@@ -51,6 +51,7 @@ public sealed partial class GameCommodities
     private readonly GameMiningData _mining;
     private readonly GameArmouryData _armoury;
     private readonly List<CargoCrate> _crates;
+    private readonly Dictionary<string, InstallCargoHull> _cargoHulls;
     private readonly GameSalvageData _salvage;
     private readonly Quantumwake.Core.Controls.GameControlsData _controls;
     private readonly GameScenarioCatalogue _scenarios;
@@ -75,10 +76,12 @@ public sealed partial class GameCommodities
         Quantumwake.Core.Controls.GameControlsData? controls = null,
         GameScenarioCatalogue? scenarios = null,
         GameReputationCatalogue? reputation = null,
-        GameLootData? loot = null)
+        GameLootData? loot = null,
+        Dictionary<string, InstallCargoHull>? cargoHulls = null)
     {
         _reputation = reputation ?? GameReputationCatalogue.Empty;
         _loot = loot ?? GameLootData.Empty;
+        _cargoHulls = cargoHulls ?? new Dictionary<string, InstallCargoHull>(StringComparer.OrdinalIgnoreCase);
         _scenarios = scenarios ?? GameScenarioCatalogue.Empty;
         _controls = controls ?? Quantumwake.Core.Controls.GameControlsData.Empty;
         _paints = paints ?? [];
@@ -141,6 +144,9 @@ public sealed partial class GameCommodities
 
     /// <summary>The standard cargo crates - 1 to 32 SCU - as the install sizes them; empty until read.</summary>
     public IReadOnlyList<CargoCrate> Crates => _crates;
+
+    /// <summary>Every hull's cargo grids, as its own default loadout places them; see <see cref="GameCargoGrids"/>.</summary>
+    public IReadOnlyDictionary<string, InstallCargoHull> CargoHulls => _cargoHulls;
 
     /// <summary>Salvage as the install has it: the modules, the heads, each hull's controller and the constants.</summary>
     public GameSalvageData Salvage => _salvage;
@@ -245,16 +251,16 @@ public sealed partial class GameCommodities
 
         if (TryLoadCache(cachePath, stamp) is { } cached) return cached;
 
-        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot) = Read(archive);
+        var (commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls) = Read(archive);
         if (commodities.Count > 0 || items.Count > 0)
-            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot);
+            SaveCache(cachePath, stamp, commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
 
-        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot);
+        return new GameCommodities(commodities, items, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
     }
 
     private static (Dictionary<string, string> Commodities, Dictionary<string, string> Items,
         Dictionary<string, GameItem> Facts, List<GameBlueprint> Blueprints,
-        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos, GameMiningData Mining, GameArmouryData Armoury, List<CargoCrate> Crates, GameSalvageData Salvage, Quantumwake.Core.Controls.GameControlsData Controls, GameScenarioCatalogue Scenarios, GameReputationCatalogue Reputation, GameLootData Loot) Read(string archivePath)
+        List<GameSpawn> Spawns, Dictionary<string, GamePlace> Places, GameWikeloCatalogue Wikelo, Dictionary<string, GameVehicle> Vehicles, List<GamePaint> Paints, Dictionary<string, string> MakerLogos, GameMiningData Mining, GameArmouryData Armoury, List<CargoCrate> Crates, GameSalvageData Salvage, Quantumwake.Core.Controls.GameControlsData Controls, GameScenarioCatalogue Scenarios, GameReputationCatalogue Reputation, GameLootData Loot, Dictionary<string, InstallCargoHull> CargoHulls) Read(string archivePath)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var itemUuids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -274,6 +280,7 @@ public sealed partial class GameCommodities
         var scenarios = GameScenarioCatalogue.Empty;
         var reputation = GameReputationCatalogue.Empty;
         var loot = GameLootData.Empty;
+        var cargoHulls = new Dictionary<string, InstallCargoHull>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -283,7 +290,7 @@ public sealed partial class GameCommodities
             var ini = p4k.TryRead(LocalisationEntry);
 
             if (blob is null || ini is null)
-                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot);
+                return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
 
             var text = EnglishText(Encoding.UTF8.GetString(ini));
 
@@ -338,15 +345,16 @@ public sealed partial class GameCommodities
             controls = Quantumwake.Core.Controls.GameControls.Read(p4k, text);
             scenarios = GameScenarios.Read(core, text, facts, paints);
             reputation = GameReputation.Read(core, text, p4k.List(GameMakerLogos.Folder).Select(e => e.Path));
+            cargoHulls = GameCargoGrids.Read(core);
             loot = GameLootData.Read(core, p4k, text, c => facts.TryGetValue(c, out var fact) ? fact.Type : null);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // A missing or unreadable archive degrades naming, never the app.
-            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot);
+            return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
         }
 
-        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot);
+        return (result, itemUuids, facts, blueprints, spawns, places, wikelo, vehicles, paints, makerLogos, mining, armoury, crates, salvage, controls, scenarios, reputation, loot, cargoHulls);
     }
 
     /// <summary>
@@ -401,7 +409,8 @@ public sealed partial class GameCommodities
                 cache.Controls,
                 cache.Scenarios,
                 cache.Reputation,
-                cache.Loot);
+                cache.Loot,
+                cache.CargoHulls);
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
@@ -414,7 +423,7 @@ public sealed partial class GameCommodities
         Dictionary<string, string> items, Dictionary<string, GameItem> facts,
         List<GameBlueprint> blueprints, List<GameSpawn> spawns,
         Dictionary<string, GamePlace> places, GameWikeloCatalogue wikelo,
-        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos, GameMiningData mining, GameArmouryData armoury, List<CargoCrate> crates, GameSalvageData salvage, Quantumwake.Core.Controls.GameControlsData controls, GameScenarioCatalogue scenarios, GameReputationCatalogue reputation, GameLootData loot)
+        Dictionary<string, GameVehicle> vehicles, List<GamePaint> paints, Dictionary<string, string> makerLogos, GameMiningData mining, GameArmouryData armoury, List<CargoCrate> crates, GameSalvageData salvage, Quantumwake.Core.Controls.GameControlsData controls, GameScenarioCatalogue scenarios, GameReputationCatalogue reputation, GameLootData loot, Dictionary<string, InstallCargoHull> cargoHulls)
     {
         try
         {
@@ -425,7 +434,7 @@ public sealed partial class GameCommodities
                     {
                         Stamp = stamp, Commodities = names, Items = items,
                         Facts = facts, Blueprints = blueprints, Spawns = spawns, Places = places,
-                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos, Mining = mining, Armoury = armoury, Crates = crates, Salvage = salvage, Controls = controls, Scenarios = scenarios, Reputation = reputation, Loot = loot
+                        Wikelo = wikelo, Vehicles = vehicles, Paints = paints, MakerLogos = makerLogos, Mining = mining, Armoury = armoury, Crates = crates, Salvage = salvage, Controls = controls, Scenarios = scenarios, Reputation = reputation, Loot = loot, CargoHulls = cargoHulls
                     },
                     Json));
         }
@@ -454,6 +463,7 @@ public sealed partial class GameCommodities
         public GameMiningData? Mining { get; set; }
         public GameArmouryData? Armoury { get; set; }
         public List<CargoCrate>? Crates { get; set; }
+        public Dictionary<string, InstallCargoHull>? CargoHulls { get; set; }
         public GameSalvageData? Salvage { get; set; }
         public Quantumwake.Core.Controls.GameControlsData? Controls { get; set; }
         public GameScenarioCatalogue? Scenarios { get; set; }

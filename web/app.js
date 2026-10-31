@@ -16469,8 +16469,13 @@ async function loadGarageCargo(cls) {
     const kinds = new Map();
     for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
     const sizes = [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ');
-    sub.textContent = `${txn(grids.length, '{count} grid, {scu} SCU by the dataset’s own placement: {sizes}.', '{count} grids, {scu} SCU by the dataset’s own placement: {sizes}.',
-      { scu: fmt1(grids.reduce((a, g) => a + g.scu, 0)), sizes })} ${tx('Type a load and see where each crate would go.')}`;
+    // Said where the grids came from: the install's own loadout for nearly
+    // every hull, the community dump for the few it does not place.
+    const values = { scu: fmt1(grids.reduce((a, g) => a + g.scu, 0)), sizes };
+    const placement = garageCargo.gridsFrom === 'install'
+      ? txn(grids.length, '{count} grid, {scu} SCU as your install’s loadout places it: {sizes}.', '{count} grids, {scu} SCU as your install’s loadout places them: {sizes}.', values)
+      : txn(grids.length, '{count} grid, {scu} SCU by the dataset’s own placement: {sizes}.', '{count} grids, {scu} SCU by the dataset’s own placement: {sizes}.', values);
+    sub.textContent = `${placement} ${tx('Type a load and see where each crate would go.')}`;
   }
 
   renderCargoLoadInputs();

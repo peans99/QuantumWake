@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.19
+### 0.20.20
 
 **A new look for the logbook.** The dashboard has its own flight-deck style: calmer panels, angular buttons, and a small geometric glyph for every workspace, in the menu and beside its page title. A telemetry line keeps your system, location, ship and connection in view, and the current system and ship tint the quiet details around the page. Completed contracts earn small mission patches, and the live feed reads as a flight recorder. Update, patch and data notices now share one compact strip, with their detail and choices one click away instead of a full row each above your work. The Star map keeps its own star field and markers. Page changes make one short scan, and the reduced-motion setting is respected. The menu fits a laptop-width window down to 1280 pixels, in English and in French, and the new labels, from the telemetry line to the notices, are translated.
 
@@ -343,6 +343,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 **Farm my list.** Every checklist has a **Where to get these** button. For each open line it shows the best place to find the item, the NPC likeliest to carry it, how many NPC ships fly with it, the cheapest shop when UEX prices are on, and how long it takes to craft if the game has a recipe. Above that is a ranking of the places that yield the most of your list at once. When many places are equally good, which is common because the same crate set stands at dozens of outposts, the panel says how many tie rather than pretending the first ten are better. Lines it can't match to an item, such as a commodity, are named, not dropped. The item names open their full breakdown on the Loot page.
 
 **Where to buy it, too.** An item's panel on the Loot page, and each line of a checklist's "Where to get these", now say where to buy it: the cheapest shop in the UEX prices when that feed is on, and what you paid the last time you bought one, at which shop, from your own purchases, which needs no feed at all. The game's own shop price files were checked and are years out of date, so they are not used.
+
+**Cargo fit without the download.** The Garage's cargo fit now reads each ship's cargo grids from your own install: how many grids the ship carries, their size, and the largest box each takes. It no longer needs the community dataset, and on an install whose dataset predates cargo grids it no longer asks you to refresh. Checked against that dataset, 145 of the 149 ships it gives a cargo figure for match to the SCU. The four the install doesn't cover, the Hammerhead, the Nomad, the 135c and part of the 890 Jump's hold, still come from the dataset when you have it, and the page says which source drew the hold.
 
 **Your pickups beside the odds.** The New items table gains a Best roll column, the best single roll any container or body gives for that item, with where on hover. The item's name opens the same breakdown. Items no table produces, such as hangar decorations and things you bought, show a dash rather than a zero. Checked against these logs: of the 130 item classes seen inside a crate, body or pack, 126 come out of some table, and the other four are a goldfish and three ship models.
 
