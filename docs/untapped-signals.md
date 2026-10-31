@@ -315,6 +315,39 @@ with a version stamp — and the honest prior is that keybinding profiles are
 shared as screenshots, forum posts and Discord attachments, none of which a
 parser can use.
 
+## 9. Encrypted shop inventories — opened, and stale
+
+Asked for 2026-10-31: offline shop prices, from the shop stock files the
+archive stores encrypted, once Nicolas approved reading encrypted entries.
+Opened the same day; **they are not what the game sells today**, and nothing
+was built on them.
+
+What is there: 120 files under `Data\Scripts\ShopInventories`, decrypted
+through `P4kArchive.TryReadDecrypting`. Two layouts - `{ShopID, Collection:
+{Inventory}}` and a bare `{Inventory}` - and one empty file. 6,749 entries,
+each an item id with `BuyPrice`, `SellPrice` and stock; 6,296 of the ids are
+`EntityClassDefinition` records. The shop ids (465) match no record.
+
+Why they are stale, before any number: Port Olisar, removed from the game
+in 2022, has nine inventories; anniversary sales from 2018 and 2019 have
+nineteen; Pyro, Orison and Seraphim have none.
+
+Checked against what the logs say was paid. Of the **404** buy requests in
+these logs, **72** were at a shop with a file (Centermass and Omega Pro at
+New Babbage, Shubin, Tammany and Sons). The item bought appeared in that
+shop's file **twice** - for the other 70 the file does not list it at all.
+The two it did list were missiles at Centermass New Babbage: paid 735 and
+678 aUEC, file 76 and 55, about **ten to twelve times** off. And none of the
+13 commodity ids these logs trade by is among the files' 1,923 ids, which
+also closes the guess in [commodity-names.md](commodity-names.md).
+
+The DataCore has no per-item price to fall back on: its only price fields
+are global shop settings, error strings and land claims. Shop stock and
+prices come from the server.
+
+**Do not re-open this for prices.** The live answers are UEX (opt-in) and
+what the logs record as paid.
+
 ## A caution
 
 All of these are subject to the same erosion as combat logging. Quantum travel
