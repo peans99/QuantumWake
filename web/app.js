@@ -4867,6 +4867,33 @@ function lootPlacesTable(rows) {
   return table;
 }
 
+/**
+ * Where to buy an item, from the two sources there are: the cheapest counter
+ * in the UEX prices, and what this install was charged - per unit, the median
+ * over its purchases, with the shop of the latest. The game files hold no
+ * price that matches what shops charge today (docs/untapped-signals.md, 9),
+ * so a receipt is the answer that needs no feed. Empty when neither knows.
+ */
+function lootPriceLines(buy, paid) {
+  const lines = [];
+  if (buy) {
+    const line = el('span', 'loot-price');
+    line.append(el('span', null, `${buy.place} · ${money(buy.price)}`));
+    line.append(el('span', 'muted', ` ${tx('(UEX)')}`));
+    lines.push(line);
+  }
+  if (paid) {
+    const line = el('span', 'loot-price muted');
+    line.textContent = paid.shop
+      ? tx('you paid {price} at {shop}', { price: money(paid.price), shop: paid.shop })
+      : tx('you paid {price}', { price: money(paid.price) });
+    line.title = txn(paid.times, 'Bought once, last on {date}', 'Bought {count} times, last on {date}; the median per unit',
+      { date: dayOf(paid.last) });
+    lines.push(line);
+  }
+  return lines;
+}
+
 function renderLootWhere(panel, data) {
   panel.textContent = '';
 
@@ -4876,6 +4903,16 @@ function renderLootWhere(panel, data) {
   close.addEventListener('click', () => { panel.hidden = true; lootWhereItem = null; });
   head.append(close);
   panel.append(head);
+
+  // Finding one is not the only way to get one: the shops come first when
+  // either price source has something to say.
+  const prices = lootPriceLines(data.buy, data.paid);
+  if (prices.length) {
+    const buy = el('p', 'loot-where-buy');
+    buy.append(el('span', 'muted', `${tx('Buy')} · `));
+    buy.append(...prices);
+    panel.append(buy);
+  }
 
   const rows = lootWhereRows(data.hits || []);
   const ships = data.ships || [];
@@ -19929,7 +19966,7 @@ function renderChecklistFarm(panel, data) {
       [tx('Best place'), tx('The named place with the best per-slot chance, or an unmarked spot when there is none')],
       [tx('Worn by'), tx('The NPC likeliest to have it on them, and how many kinds of NPC can')],
       [tx('NPC ships'), null],
-      [tx('Buy'), tx('The cheapest shop the UEX prices list')],
+      [tx('Buy'), tx('The cheapest shop in the UEX prices, and what you paid the last time you bought one')],
       [tx('Craft'), tx('Whether the game has a recipe that makes it, and how long it takes')],
     ]) {
       const th = el('th', null, label);
@@ -19957,9 +19994,11 @@ function renderChecklistFarm(panel, data) {
         ? `${item.npc.label} ${item.npc.share >= 0.9995 ? tx('always') : lootPercent(item.npc.share)}${item.npcs > 1 ? ` ${tx('+{count} more', { count: item.npcs - 1 })}` : ''}`
         : '—'));
       tr.append(el('td', 'num muted', item.ships > 0 ? String(item.ships) : '—'));
-      tr.append(el('td', item.buy ? null : 'muted', item.buy
-        ? `${item.buy.place} · ${money(item.buy.price)}`
-        : data.uex ? tx('not sold') : tx('prices off')));
+      const prices = lootPriceLines(item.buy, item.paid);
+      const buy = el('td', prices.length ? 'checklist-farm-buy' : 'muted');
+      if (prices.length) buy.append(...prices);
+      else buy.textContent = data.uex ? tx('not sold') : tx('prices off');
+      tr.append(buy);
       tr.append(el('td', item.craft ? null : 'muted', item.craft
         ? tx('{minutes} min', { minutes: Math.max(1, Math.round(item.craft.craftSeconds / 60)) })
         : '—'));

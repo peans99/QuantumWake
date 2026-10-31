@@ -276,6 +276,37 @@ public class LootWhereTests
     }
 
     /// <summary>
+    /// Finding one is not the only way: under the name, the cheapest counter
+    /// UEX lists and what this install paid, when either knows.
+    /// </summary>
+    [Fact]
+    public void An_item_says_where_to_buy_it_beside_where_to_find_it()
+    {
+        var page = Loaded();
+        page.Serve("/api/loot/where?item=KLWE_LaserRepeater_S3", """
+            {"item":"KLWE_LaserRepeater_S3","name":"CF-337 Panther Repeater","tables":333,"placesRead":true,"places":[],"hits":[],
+             "uex":true,"buy":{"place":"Area18","price":36308},
+             "paid":{"price":35000,"times":1,"last":"2026-10-21T00:00:00Z","shop":"Centermass, New Babbage"},
+             "ships":[{"ship":"AEGS_Gladius_PU_AI_CRIM","name":"Gladius","crew":"Criminal","count":2}]}
+            """);
+        page.Do("await showLootWhere('KLWE_LaserRepeater_S3');");
+
+        var text = page.NodeText("#loot-where");
+        Assert.Contains("Buy", text);
+        Assert.Contains("Area18", text);
+        Assert.Contains("(UEX)", text);
+        Assert.Contains("you paid", text);
+        Assert.Contains("at Centermass, New Babbage", text);
+    }
+
+    [Fact]
+    public void An_item_nobody_prices_has_no_buy_line()
+    {
+        var page = Opened(Placed());
+        Assert.Equal(0, page.Count("__dom.node('#loot-where').querySelectorAll('.loot-where-buy').length"));
+    }
+
+    /// <summary>
     /// Armour colours sit near a thousandth of a percent. Rounded to whole
     /// percent they would all read "0%".
     /// </summary>

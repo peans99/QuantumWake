@@ -14,7 +14,8 @@ public class ChecklistFarmTests
           {"written":"Gallant Rifle","itemClass":"klwe_rifle_energy_01","name":"Gallant Rifle","places":476,
            "best":{"name":"Dupree Industrial Manufacturing Facility","body":"Hurston","chance":0.0025},
            "npcs":42,"npc":{"label":"Hurston · Guard · Heavy","share":1},"ships":0,
-           "buy":{"place":"Center Mass","price":4120},"craft":null},
+           "buy":{"place":"Center Mass","price":4120},
+           "paid":{"price":4500,"times":3,"last":"2026-10-21T00:00:00Z","shop":"Centermass, New Babbage"},"craft":null},
           {"written":"FS-9 Magazine (75 cap)","itemClass":"behr_lmg_ballistic_01_mag","name":"FS-9 Magazine (75 cap)","places":456,
            "best":{"name":"Dupree Industrial Manufacturing Facility","body":"Hurston","chance":0.1598},
            "npcs":0,"npc":null,"ships":0,"buy":null,"craft":{"craftSeconds":180,"materials":["Iron"]}}
@@ -95,6 +96,11 @@ public class ChecklistFarmTests
         Assert.Contains("Hurston · Guard · Heavy always", rifle);
         Assert.Contains("+41 more", rifle);
         Assert.Contains("Center Mass", rifle);
+        // What this install was charged, under the UEX price: the one price
+        // that needs no feed.
+        Assert.Contains("(UEX)", rifle);
+        Assert.Contains("you paid", rifle);
+        Assert.Contains("at Centermass, New Babbage", rifle);
 
         var magazine = page.Text($"{body}.children[1].textContent");
         Assert.Contains("16%", magazine);

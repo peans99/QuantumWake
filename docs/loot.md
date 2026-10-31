@@ -308,6 +308,21 @@ Actor classes that are test rigs - `DummyPlayer`, `FeatureTest_*`,
 list (a "Dummy Player" was the MedPen's likeliest carrier) and are now left
 out of the outfits.
 
+## Where to buy it instead
+
+Added 2026-10-31 in 0.20.19. The item panel and the checklist answer carry
+two prices beside the places, when they know one. The cheapest counter in
+the UEX prices, when that feed is on. And what this install was charged:
+`LogLibrary.Receipts()`, the median per unit over confirmed purchases since
+the last money wipe, with the shop of the latest. On this install the
+P4-AR magazine reads 171 aUEC at Pyro Gateway from UEX, and 198 paid at
+Casaba Outlet.
+
+The game files were tried for a third, feed-free price and do not have one:
+the encrypted shop tables are a 2018 economy (section 9 of
+[untapped-signals.md](untapped-signals.md)), and the DataCore holds no
+per-item price.
+
 ## Not yet
 
 **Boarding-mission loot.** The harvestables in

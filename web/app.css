@@ -7113,6 +7113,14 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .loot-places-body { margin: 0 0 8px; }
 .loot-places-more { margin-top: 6px; }
 .loot-where-placed { font-size: 12px; }
+/* Buying beside finding: one line under the item name on the Loot page, one
+   stacked cell in a checklist. */
+/* The page's main question is typed here; at the bar's default width its own
+   placeholder was cut off mid-word. */
+#loot-find { width: min(320px, 60vw); }
+.loot-where-buy { margin: 4px 0 0; font-size: 12px; }
+.loot-where-buy .loot-price + .loot-price::before { content: " · "; color: var(--dim); }
+.checklist-farm-buy .loot-price { display: block; }
 .checklist-farm { margin: 10px 0 14px; padding: 8px 10px; border: 1px solid var(--rule); }
 .checklist-farm-items .link { white-space: normal; text-align: left; }
 .loot-places-table tbody td.muted:first-child, .checklist-farm-places tbody td.muted:first-child { color: var(--muted); font-style: italic; }

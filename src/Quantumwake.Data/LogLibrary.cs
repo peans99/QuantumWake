@@ -135,7 +135,8 @@ public sealed record PickupRecord(
 /// <param name="UnitPrice">Median of what the game quoted per unit.</param>
 /// <param name="Times">How many confirmed purchases stand behind it.</param>
 /// <param name="Last">When it was last bought.</param>
-public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset Last);
+/// <param name="Shop">The shop id of the latest purchase, for saying where it was bought.</param>
+public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset Last, string? Shop = null);
 
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
@@ -1093,24 +1094,6 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>
-    /// Every item class this install has been charged for, with what the game
-    /// quoted per unit.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// First-party and exact: the price comes off the kiosk line the game wrote,
-    /// so unlike a crowd-sourced table it cannot be wrong about whether the thing
-    /// is sold at all. Its weakness is the opposite one - it only ever covers
-    /// what this player personally bought, which is a floor and nothing more.
-    /// </para>
-    /// <para>
-    /// Per unit, not per line. The logged price is the whole transaction, so a
-    /// stack of 41 MedPens reads as 10,865 rather than 265, and taking it as a
-    /// unit price puts an item forty times over its worth. The median across
-    /// purchases absorbs a one-off discount without being dragged by it.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// What has been bought and when, by the name a person would write down.
     /// </summary>
     /// <remarks>
@@ -1159,6 +1142,24 @@ public sealed class LogLibrary : IDisposable
         return latest;
     }
 
+    /// <summary>
+    /// Every item class this install has been charged for, with what the game
+    /// quoted per unit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// First-party and exact: the price comes off the kiosk line the game wrote,
+    /// so unlike a crowd-sourced table it cannot be wrong about whether the thing
+    /// is sold at all. Its weakness is the opposite one - it only ever covers
+    /// what this player personally bought, which is a floor and nothing more.
+    /// </para>
+    /// <para>
+    /// Per unit, not per line. The logged price is the whole transaction, so a
+    /// stack of 41 MedPens reads as 10,865 rather than 265, and taking it as a
+    /// unit price puts an item forty times over its worth. The median across
+    /// purchases absorbs a one-off discount without being dragged by it.
+    /// </para>
+    /// </remarks>
     public IReadOnlyDictionary<string, ReceiptPrice> Receipts()
     {
         var byClass = new Dictionary<string, List<PurchaseRecord>>(StringComparer.OrdinalIgnoreCase);
@@ -1190,7 +1191,8 @@ public sealed class LogLibrary : IDisposable
             result[item] = new ReceiptPrice(
                 units.Length % 2 == 1 ? units[middle] : (units[middle - 1] + units[middle]) / 2,
                 records.Count,
-                records.Max(r => r.At));
+                records.Max(r => r.At),
+                records.MaxBy(r => r.At)!.Shop);
         }
 
         return result;

@@ -5368,7 +5368,6 @@
   "Worn by": "Porté par",
   "The NPC likeliest to have it on them, and how many kinds of NPC can": "Le PNJ le plus susceptible de l’avoir sur lui, et combien de types de PNJ peuvent l’avoir",
   "NPC ships": "Vaisseaux PNJ",
-  "The cheapest shop the UEX prices list": "La boutique la moins chère selon les prix UEX",
   "Craft": "Fabrication",
   "Whether the game has a recipe that makes it, and how long it takes": "Si le jeu a une recette qui le fabrique, et combien de temps elle prend",
   "Open this item on the Loot page": "Ouvrir cet objet sur la page Butin",
@@ -5385,5 +5384,13 @@
   "Waiting": "En attente",
   "Notices": "Avis",
   "Flight telemetry": "Télémétrie de vol",
-  "Where to find any item, by name…": "Où trouver n’importe quel objet, par son nom…"
+  "Where to find any item, by name…": "Où trouver n’importe quel objet, par son nom…",
+  "The cheapest shop in the UEX prices, and what you paid the last time you bought one": "La boutique la moins chère selon les prix UEX, et ce que vous avez payé la dernière fois que vous en avez acheté un",
+  "(UEX)": "(UEX)",
+  "you paid {price} at {shop}": "vous avez payé {price} chez {shop}",
+  "you paid {price}": "vous avez payé {price}",
+  "Bought {count} times, last on {date}; the median per unit": {
+    "one": "Acheté {count} fois, le {date}",
+    "other": "Acheté {count} fois, la dernière le {date} ; la médiane par unité"
+  }
 }

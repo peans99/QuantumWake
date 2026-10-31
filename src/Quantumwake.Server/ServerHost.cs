@@ -1963,7 +1963,7 @@ public static class ServerHost
         // Every row is a kind of place or body and a per-roll estimate; how
         // many rolls a container makes depends on its size and is not in the
         // number, which the page says.
-        app.MapGet("/api/loot/where", (LogLibrary lib, string item) =>
+        app.MapGet("/api/loot/where", (LogLibrary lib, UexData uex, string item) =>
         {
             var loot = lib.GameCommodities.Loot;
             var hits = loot.For(item);
@@ -1974,6 +1974,12 @@ public static class ServerHost
                 name = lib.ItemName(item),
                 tables = loot.Rolls.Count,
                 loot.PlacesRead,
+                // Where to buy it instead: the cheapest counter in the UEX
+                // prices when that feed is on, and what this install has
+                // itself been charged - first-party, but only for what was bought.
+                uex = uex.IsEnabled,
+                buy = CheapestSeller(lib, uex, item),
+                paid = WhatYouPaid(lib, lib.Receipts(), item),
                 // Each place once, with the best container it holds for the
                 // item: the answer to "where do I go", ahead of the kinds.
                 places = loot.PlacesFor(item).Select(p => new
@@ -2033,6 +2039,7 @@ public static class ServerHost
         {
             var loot = lib.GameCommodities.Loot;
             var index = LootNameIndex(lib);
+            var receipts = lib.Receipts();
 
             var names = (body.Names ?? [])
                 .Select(n => n?.Trim() ?? "")
@@ -2074,10 +2081,6 @@ public static class ServerHost
                         .Select(g => new { label = g.Key, share = g.Max(n => n.Share) })
                         .OrderByDescending(n => n.share)
                         .FirstOrDefault();
-                    var uuid = lib.ItemUuid(itemClass);
-                    var cheapest = uuid is null ? null : uex.ItemMarket(uuid)
-                        .Where(r => r.Buy > 0)
-                        .MinBy(r => r.Buy);
                     var recipe = crafted.GetValueOrDefault(itemClass);
 
                     return new
@@ -2095,11 +2098,8 @@ public static class ServerHost
                         npcs = loot.NpcsFor(itemClass).Select(n => LootLabels.Npc(n.Npc)).Distinct().Count(),
                         npc,
                         ships = loot.ShipsFor(itemClass).Count,
-                        buy = cheapest is null ? null : new
-                        {
-                            place = lib.Terminals.Resolve(cheapest.Terminal)?.Name ?? cheapest.Terminal,
-                            price = cheapest.Buy,
-                        },
+                        buy = CheapestSeller(lib, uex, itemClass),
+                        paid = WhatYouPaid(lib, receipts, itemClass),
                         craft = recipe is null ? null : new { recipe.CraftSeconds, recipe.Materials },
                     };
                 }),
@@ -6007,6 +6007,33 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
                     here.Count > 0))
         ];
     }
+
+    /// <summary>The cheapest counter the UEX prices list for an item, or null.</summary>
+    static object? CheapestSeller(LogLibrary lib, UexData uex, string itemClass)
+    {
+        var uuid = lib.ItemUuid(itemClass);
+        var cheapest = uuid is null ? null : uex.ItemMarket(uuid).Where(r => r.Buy > 0).MinBy(r => r.Buy);
+
+        return cheapest is null ? null : new
+        {
+            place = lib.Terminals.Resolve(cheapest.Terminal)?.Name ?? cheapest.Terminal,
+            price = cheapest.Buy,
+        };
+    }
+
+    /// <summary>
+    /// What this install has been charged for an item, per unit, and where it
+    /// was last bought - or null when it never has been.
+    /// </summary>
+    /// <remarks>
+    /// The one price that needs no feed. The game files carry none that holds:
+    /// the encrypted shop tables are a 2018 economy (docs/untapped-signals.md,
+    /// section 9), so a receipt is the offline answer, for what was bought.
+    /// </remarks>
+    static object? WhatYouPaid(LogLibrary lib, IReadOnlyDictionary<string, ReceiptPrice> receipts, string itemClass) =>
+        receipts.TryGetValue(itemClass, out var r)
+            ? new { price = r.UnitPrice, r.Times, r.Last, shop = r.Shop is { Length: > 0 } shop ? lib.ShopLabel(shop) : null }
+            : null;
 
     private static readonly object LootNamesLock = new();
     private static (GameLootData For, Dictionary<string, string> Index)? _lootNames;
