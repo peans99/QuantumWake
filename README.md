@@ -70,6 +70,9 @@ Quantum Wake starts in the notification area. Right-click its tray icon to open
 the dashboard or overlay. The dashboard is also available at
 <http://127.0.0.1:31337> while the app is running.
 
+On Linux there is a separate download and no tray icon; see [Linux](#linux)
+below.
+
 <details>
 <summary>Windows shows an unknown-publisher warning</summary>
 
@@ -130,6 +133,117 @@ kiosk balance, fitted ship parts, your rank with an organisation in the Rep
 app, or the pickups and SCU on a hauling contract in the Contracts app. It reads
 the saved file locally; it never captures your screen or reads game memory.
 
+## Linux
+
+Quantum Wake runs on Linux for pilots who play Star Citizen under Wine or
+Proton. The dashboard, the log and game-data readers, screenshots and copied
+locations all work there. The overlay, the cockpit HUD and joystick input stay
+on Windows: all three are built on Windows desktop components, and they are
+not what a Linux pilot is missing.
+
+### Before you start
+
+- **A working Star Citizen install under Wine.** Quantum Wake reads the game's
+  own files, so the game has to be installed and started at least once. The
+  Linux Users Group is the reference for that: its
+  [LUG Helper](https://github.com/starcitizen-lug/lug-helper) installs the
+  game, and its wiki's
+  [recommended distributions](https://wiki.starcitizen-lug.org/Tips-and-Tricks#recommended-distros)
+  are Fedora, Arch, EndeavourOS, openSUSE Tumbleweed, Bazzite, the latest
+  Ubuntu release, Debian Testing and Gentoo; it advises against LTS releases
+  such as Debian Stable, Ubuntu LTS, Mint, Pop!_OS, Zorin, openSUSE Leap and
+  Manjaro. Its preflight check raises `vm.max_map_count` to 16777216 and the
+  open-file hard limit to 524288, which the game needs and Quantum Wake does
+  not touch. Quantum Wake was built and measured against an install the LUG
+  Helper made on Fedora 44.
+- **An x86-64 distribution with glibc 2.27 or later**, which is every
+  distribution above. The Linux download carries its own copy of .NET, so
+  nothing is installed for the dashboard; it needs `libicu` (the dashboard's
+  French and date formats come from it) and `libstdc++` (the screenshot
+  reader), both present on a desktop install. Microsoft lists Fedora 43 and
+  44, Ubuntu 22.04 to 26.04, Debian 13, openSUSE Leap 16 and RHEL 8 to 10 as
+  [supported by .NET 10](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md);
+  Arch is not on the list and runs it.
+- **For copied `/showlocation` results:** `wl-clipboard` on Wayland (Fedora KDE
+  ships it as `wl-paste`), or `xclip` or `xsel` on X11. Without one the
+  dashboard says the clipboard cannot be read; screenshots still can.
+- **The command-line tool** in the same archive is not self-contained: it needs
+  the .NET 10 runtime (`dotnet-runtime-10.0` on Fedora and Ubuntu). The
+  dashboard does not.
+
+### Start
+
+Download `QuantumWake-<version>-linux-x64.tar.gz` from the
+[release page](https://github.com/peans99/QuantumWake/releases/latest), then:
+
+```bash
+tar xzf QuantumWake-*-linux-x64.tar.gz
+cd QuantumWake
+./quantumwake
+```
+
+Open <http://127.0.0.1:31337> once the terminal prints `Now listening on` and
+`Application started. Press Ctrl+C to shut down`. Nothing opens a browser for
+you and there is no tray icon. It finds the game inside the Wine prefix on its
+own: a LUG Helper install is read from the helper's settings, and otherwise it
+looks in `$WINEPREFIX`, `~/Games`, `~/.wine`, Steam's Proton prefixes, Bottles
+and Heroic. If it comes up empty, the dashboard says which prefixes it searched
+and asks for the folder, which can be the prefix itself, the `LIVE` folder
+under its `drive_c`, or the `C:\...` path copied from the RSI launcher.
+
+```bash
+./quantumwake --path ~/Games/star-citizen     # the prefix, or .../StarCitizen/LIVE
+./quantumwake --Port 31395                    # another port
+./quantumwake --Lan true                      # reachable from another device
+```
+
+Its data lives in `~/.local/share/Quantumwake` (or under `$XDG_DATA_HOME`), and
+the .NET host unpacks its native libraries to `~/.net/quantumwake/` (42 MB) on
+the first start. The first time you switch screenshot reading on it fetches
+the two text-recognition models (14 MB) into that data folder.
+
+On the machine this was built on, a Fedora 44 virtual machine, the start took
+anywhere from 2 to 90 seconds before the ready line, all of it inside .NET's
+own host start-up: an empty ASP.NET application shows the same spread there.
+Wait for the ready line rather than reloading the page.
+
+### Stop
+
+`Ctrl+C` in the terminal stops it, within two seconds in every measurement;
+closing the terminal stops it too. From anywhere else, `pkill quantumwake`. A
+second `./quantumwake` while one is running prints
+`Quantum Wake is already running at http://127.0.0.1:31337` and exits.
+
+To have it start with your session and run in the background, a systemd user
+service does it:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/quantumwake.service <<'EOF'
+[Unit]
+Description=Quantum Wake dashboard
+
+[Service]
+ExecStart=%h/QuantumWake/quantumwake
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user enable --now quantumwake      # start now and at every login
+systemctl --user stop quantumwake              # stop; journalctl --user -u quantumwake shows its log
+```
+
+Adjust `ExecStart` to wherever you unpacked it.
+
+### Update and remove
+
+The dashboard still checks for new versions and tells you, but it does not
+replace itself on Linux; unpack the new archive over the old folder. To remove
+Quantum Wake, delete the unpacked folder, `~/.local/share/Quantumwake` and
+`~/.net/quantumwake`, and disable the user service if you created one.
+
+
 ## What Quantum Wake reads
 
 | Source | What it can add |
@@ -162,7 +276,7 @@ restarts the app. Some updates re-read your history; release notes call that out
 
 To remove Quantum Wake, delete `QuantumWake.exe` and
 `%LOCALAPPDATA%\Quantumwake`. Remove item labels from the app first if you
-installed them.
+installed them. Linux removal is under [Linux](#linux).
 
 **Settings → Report a problem** makes a small diagnostic file. It contains
 parser counts, game builds and integration state, but not logs, account
@@ -171,7 +285,9 @@ attaching it to an issue.
 
 ## For contributors
 
-The app runs on Windows 10 or 11. WebView2 is required for the overlay and is
+The desktop app runs on Windows 10 or 11, and the dashboard and command-line
+tool also run on Linux (see [Linux](#linux)). WebView2 is required for the
+overlay and is
 included with Windows 11; Windows 10 users can install it from
 [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
 
@@ -212,9 +328,11 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.19.13
+### 0.19.14
 
-**A first Linux download.** Nothing changes on Windows. Alongside `QuantumWake.exe` the release now carries `QuantumWake-0.19.13-linux-x64.tar.gz`: the dashboard and the command-line tool, for pilots who run Star Citizen under Wine or Proton. Unpack it, run `./quantumwake` and open http://localhost:31337. It finds the game inside a Wine prefix on its own: a LUG Helper install is read from the helper's own settings, and otherwise it looks in `$WINEPREFIX`, `~/Games`, `~/.wine`, Steam's Proton prefixes, Bottles and Heroic, in the RSI launcher's log inside each prefix, and on any drive letter the prefix maps. If it still comes up empty the dashboard says which prefixes it searched and asks for the folder, which can be the prefix itself, the `LIVE` folder under its `drive_c`, or the `C:\...` path copied from the launcher; it remembers the answer. Reading screenshots works on Linux too: where Windows OCR is not available, Quantum Wake reads them with PaddleOCR's text models on Microsoft's ONNX Runtime, fetching the two model files (14 MB) the first time you switch screenshots on. Run over this install's 146 saved screenshots on Linux, the same readers named contracts on 37 frames, loadouts on 20, reputation on 21, maps on 7 and the wallet on 103; a 3440×1440 frame takes about a second and a half on four cores. The same engine steps in on a Windows PC whose OCR has no English language pack, which until now left the screenshots mode dark. The clipboard is read on Linux as well, through wl-paste or xclip, where one is installed. The overlay, the MFD HUD and joystick input stay Windows-only. Two things that would have gone wrong there are fixed: ship paints and weapon-attachment icons went missing, and on a fresh Linux account the app kept a separate history in every folder it was started from.
+**Linux, start to finish, in the README.** A new [Linux](#linux) section says what the game install needs first, which distributions .NET 10 and the Linux Users Group recommend, how to start and stop the dashboard from a terminal or as a systemd user service, where its data goes and how to remove it. Running the Linux build from a terminal also turned up three things, all fixed: it could crash at start with a floating-point exception, a divide by zero inside .NET 10's server garbage collector that struck four times in about twenty-five starts on the test machine, and the dashboard now uses the workstation collector the Windows app always had, with no crash since; a second copy started while one is running says so in one line instead of printing a stack trace; and the server no longer registers a file watch on every folder beneath wherever it was started from, which from `/` was 49,829 watches and from a home folder with a game library under it could reach the account's limit.
+
+**A first Linux download.** Nothing changes on Windows. Alongside `QuantumWake.exe` the release now carries `QuantumWake-0.19.14-linux-x64.tar.gz`: the dashboard and the command-line tool, for pilots who run Star Citizen under Wine or Proton. Unpack it, run `./quantumwake` and open http://localhost:31337. It finds the game inside a Wine prefix on its own: a LUG Helper install is read from the helper's own settings, and otherwise it looks in `$WINEPREFIX`, `~/Games`, `~/.wine`, Steam's Proton prefixes, Bottles and Heroic, in the RSI launcher's log inside each prefix, and on any drive letter the prefix maps. If it still comes up empty the dashboard says which prefixes it searched and asks for the folder, which can be the prefix itself, the `LIVE` folder under its `drive_c`, or the `C:\...` path copied from the launcher; it remembers the answer. Reading screenshots works on Linux too: where Windows OCR is not available, Quantum Wake reads them with PaddleOCR's text models on Microsoft's ONNX Runtime, fetching the two model files (14 MB) the first time you switch screenshots on. Run over this install's 146 saved screenshots on Linux, the same readers named contracts on 37 frames, loadouts on 20, reputation on 21, maps on 7 and the wallet on 103; a 3440×1440 frame takes about a second and a half on four cores. The same engine steps in on a Windows PC whose OCR has no English language pack, which until now left the screenshots mode dark. The clipboard is read on Linux as well, through wl-paste or xclip, where one is installed. The overlay, the MFD HUD and joystick input stay Windows-only. Two things that would have gone wrong there are fixed: ship paints and weapon-attachment icons went missing, and on a fresh Linux account the app kept a separate history in every folder it was started from.
 
 ### 0.19.9
 

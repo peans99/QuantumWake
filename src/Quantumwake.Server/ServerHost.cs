@@ -59,7 +59,19 @@ public static class ServerHost
             Directory.Exists(Core.AppPaths.Root)
             && Directory.EnumerateFileSystemEntries(Core.AppPaths.Root).Any();
 
-        var builder = WebApplication.CreateBuilder(args);
+        // The content root is the executable's folder, not the working directory.
+        // The default configuration watches appsettings*.json for changes, and on
+        // Linux that watch is an inotify walk of the whole content root: started
+        // from `/` on the Fedora test machine it registered 49,829 watches (the
+        // account's limit is 103,570), and a home folder with a Steam library
+        // under it can run out. The folder beside the binary holds a handful of
+        // files, so the walk is nothing, and that is where appsettings.json is
+        // copied to by a development build anyway.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
 
         var install = ResolveInstall(args, builder.Configuration);
         DiagnosticTrace.Mark("server", install is null ? "No game install resolved." : "Game install resolved.");

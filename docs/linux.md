@@ -268,9 +268,110 @@ group into lines by row and gap. The models are fetched once into the app's
 folder and cached by CI; a runner with no network stands the reading tests
 down and says why.
 
+### 4. Starting and stopping
+
+Done in 0.19.14, measured on the Fedora machine above with the server
+published the way `release.yml` publishes it (self-contained single file,
+renamed `quantumwake`, 164.8 MB uncompressed) and started from a terminal, a
+script and a systemd user unit. What a Linux pilot does is in the README's
+[Linux](../README.md#linux) section; this is the evidence behind it.
+
+- **Start.** `./quantumwake` from the unpacked folder. The first log line is
+  `Quantum Wake by nekron - http://127.0.0.1:31337`, then Kestrel's
+  `Now listening on` and `Application started. Press Ctrl+C to shut down`.
+  Nothing opens a browser; there is no tray. The process name in `ps` is
+  `quantumwake`. The .NET host unpacks the four native libraries
+  (`libonnxruntime.so`, `libonnxruntime_providers_shared.so`, `libSkiaSharp.so`,
+  `libe_sqlite3.so`) to `~/.net/quantumwake/<id>/` on the first start, 42 MB,
+  which is why the removal instructions name that folder. Each of them links
+  only `libstdc++` beyond glibc (`ldd`), hence the one named prerequisite. The
+  data folder is `~/.local/share/Quantumwake`, confirmed by a start with
+  `QUANTUMWAKE_DATA` unset.
+- **Stop.** Measured from the signal to the process being gone: `SIGINT`
+  (Ctrl+C) 1.6 s, with `Application is shutting down...` logged; `SIGTERM`
+  (`pkill quantumwake`, `systemctl --user stop`) 0.2 s and 1.5 s; `SIGHUP`
+  (the terminal closed) 3.0 s. A systemd user unit with `ExecStart` pointing at
+  the binary starts, serves and stops as expected; the README's unit is the one
+  tested, minus a test name and port.
+- **A second copy** used to print Kestrel's `AddressInUseException` with its
+  stack trace and abort (exit 134). `Program.cs` now probes the port first and
+  prints one line, `Quantum Wake is already running at http://127.0.0.1:31337 -
+  open that one, or start this copy with another --Port.`, exit 1; the catch
+  around `Run()` covers the race. Verified against a running copy.
+- **A trap in the test harness, recorded so it is not found twice:** a
+  non-interactive bash ignores `SIGINT` for a command it starts with `&`, and
+  .NET keeps an inherited ignore, so the first measurement looked as if Ctrl+C
+  did nothing at all. `set -m` in the script (job control) is what makes the
+  background copy receive the signal like a terminal's.
+
+**The crash on start, and the fix.** Four starts in about twenty-five died
+with `Floating point exception (core dumped)`. `coredumpctl` kept the cores;
+with the host's symbols fetched by `dotnet-symbol` (the single-file host is
+stripped), gdb reads the faulting instruction as `div %esi` with `esi` zero in
+
+```
+SVR::gc_heap::dynamic_heap_count_data_t::get_hc_change_freq_factors
+SVR::gc_heap::dynamic_heap_count_data_t::should_change_hc
+SVR::gc_heap::calculate_new_heap_count   gc.cpp:26164
+SVR::gc_heap::process_datas_sample       gc.cpp:27006
+SVR::gc_heap::gc1                        gc.cpp:23283   (.NET 10.0.13)
+```
+
+on a GC thread: the server collector's dynamic heap-count adaptation (DATAS),
+a runtime bug, not ours, and nothing on GitHub names it yet. The web SDK
+turns the server collector on by default; the overlay never had it, because
+WPF hosts the same server under the workstation collector. `ServerGarbageCollector`
+is now `false` in the server project, which is the right collector for one
+pilot's PC anyway, and 23 starts with it have not crashed. `DOTNET_GCDynamicAdaptationMode=0`
+alone would also avoid the faulting code, but keeps four heaps that nothing
+here needs.
+
+**The file watch, and the fix.** `WebApplication.CreateBuilder(args)` takes
+the working directory as content root and watches `appsettings*.json` under
+it for changes; on Linux that watch is an inotify walk of the whole content
+root. Started from `/` the server held 49,829 inotify watches when it became
+ready, against this account's limit of 103,570 (`fs.inotify.max_user_watches`),
+and from the home folder 3,199; a home with a Steam library beneath it could
+reach the limit and the watch would silently fail. The content root is now
+`AppContext.BaseDirectory`, the folder beside the binary, and the count is 1
+from any working directory. The walk was not the slow start below: it was the
+first suspect because a stack sampled nine seconds in sat in
+`FileSystemWatcher.AddDirectoryWatchUnlocked`, but starts from the app's own
+folder with one watch were just as slow.
+
+**The slow start on this machine, unresolved and not ours.** Between the
+process starting and `Now listening on`, this machine takes anywhere from
+2 to 104 s, varying run to run with nothing changed, all of it CPU time on the
+main thread (`ready 66.5 s, cpu 63.5 s` is a typical pair; user time, not
+system). It is not the JIT: a ReadyToRun publish took 52, 67 and 94 s on
+three starts. It is not the game or the data folder: the gap is between
+`DiagnosticTrace.Start` and `ResolveInstall`, before either is touched. It is
+not the collector, tiering, PGO, W^X, spin-wait or diagnostics settings: each
+was switched off in turn with no change in the spread (`DOTNET_EnableDiagnostics=0`
+looked like the answer at three starts of 4 to 6 s, and gave 17 to 128 s at the
+next five, which is the sample size this needs). Native stacks sampled through the
+stall (gdb, every 2 s) show the main thread in the runtime's thread-static
+slow path and class-initialisation lock - `GetThreadLocalStaticBase`,
+`MethodTable::DoRunClassInitThrowing`, `DeadlockAwareLock::TryBeginEnterLock`,
+`sched_getcpu` - and the managed profile puts 92% under
+`StaticsHelpers.GetNonGCThreadStaticsByIndexSlow` beneath
+`SharedArrayPool<char>.Return`. The decisive measurement is that **an empty
+`dotnet new web` application shows the same spread here**: five starts of a
+host that does nothing but `CreateBuilder` and `Build` took 57.0, 54.9, 23.1,
+2.0 and 20.8 s. So it is the .NET 10.0.13 runtime on this host (Fedora 44,
+kernel 7.2, a KVM guest with four vCPUs, `[Firmware Bug]: TSC doesn't count
+with P0 frequency!` in its boot log), and nothing in Quantum Wake. The CLI and
+the test host, which build the same server in under a second in
+`ServerUnderTest`, do not show it, which is also why no test caught it. What a
+real Linux PC does is unmeasured; the README says to wait for the ready line
+and gives the range, no more. The repro is two files in
+`scratchpad/repro/web/` on this machine: `dotnet new web`, and a `Stopwatch`
+around `CreateBuilder` and `Build`.
+
+
 ## Four tests that fail on this machine, and not because of Linux
 
-Measured 2026-10-30 on the Fedora VirtualBox guest above, on `main` with no
+Measured 2026-10-30 on the Fedora virtual machine above, on `main` with no
 change applied, three runs each: `MiningLogStoreTests.The_newest_run_is_first`,
 `ChangeStampTests.Editing_one_record_does_not_stamp_its_neighbours` and the two
 `ControlsStoreTests` snapshot tests fail in three, four, three of three runs.

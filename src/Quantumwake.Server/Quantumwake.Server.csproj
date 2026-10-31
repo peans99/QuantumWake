@@ -13,6 +13,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Workstation GC, not the web SDK's server GC. This serves one pilot on
+         their own PC, next to a game that wants the memory, so one heap is the
+         right size. It is also what the desktop app already runs: the overlay
+         hosts this server in-process under WPF's workstation collector, so
+         Linux now matches Windows. And the server collector's dynamic heap
+         sizing crashed the Linux build on start - SIGFPE, a division by zero
+         in SVR::gc_heap::dynamic_heap_count_data_t::get_hc_change_freq_factors
+         (gc.cpp, .NET 10.0.13), four times in about twenty-five starts on the
+         Fedora test machine, never with this setting. -->
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <!-- The live snapshot is assembled by private methods on a background
