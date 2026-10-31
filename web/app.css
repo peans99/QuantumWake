@@ -1514,13 +1514,6 @@ td.outward { color: var(--amber); }
 
 .map-head { margin-bottom: 13px; }
 .map-head p { margin: 0; font-size: 11.5px; max-width: 74ch; line-height: 1.6; padding-left: 11px; }
-.system-tone-key { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 8px 0 0 11px; }
-.system-tone { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font: 8px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.system-tone::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 7px currentColor; }
-.system-tone.stanton { color: var(--cyan); }
-.system-tone.pyro { color: var(--amber); }
-.system-tone.nyx { color: var(--violet); }
-.system-tone.terra { color: #78bfff; }
 
 .map-wrap {
   position: relative;
@@ -7276,13 +7269,6 @@ body:not(.overlay) #telemetry-system { color: var(--flight-tone, var(--cyan)); t
 body:not(.overlay) .telemetry-field:first-child::after { content: ""; width: 4px; height: 4px; margin-left: 1px; border-radius: 50%; background: var(--flight-tone, var(--cyan)); box-shadow: 0 0 8px var(--flight-tone, var(--cyan)); }
 body:not(.overlay) #now-feed li::before, body:not(.overlay) #contracts-table .route-point::before { border-color: var(--flight-tone-deep, var(--cyan-deep)); }
 body:not(.overlay) #now-feed { background-image: linear-gradient(var(--flight-tone-deep, var(--rule-hot)), var(--flight-tone-deep, var(--rule-hot))); }
-/* Only the live marker and its immediate map surface inherit the system tone;
-   routes and other systems keep their stable colours as navigation reference. */
-body:not(.overlay) #view-map .map-wrap::before { background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--flight-tone, var(--cyan)) 12%, transparent) 0 1px, transparent 1px 44px), repeating-linear-gradient(90deg, color-mix(in srgb, var(--flight-tone, var(--cyan)) 12%, transparent) 0 1px, transparent 1px 44px); }
-body:not(.overlay) #view-map .map-here .here-ring, body:not(.overlay) #view-map .map-here .here-pulse { stroke: var(--flight-tone, var(--cyan)); }
-body:not(.overlay) #view-map .map-here .here-dot { fill: var(--flight-tone, var(--cyan)); stroke: #07131b; }
-body:not(.overlay) #view-map .map-here :is(.here-tick, .here-leader) { stroke: var(--flight-tone, var(--cyan)); }
-body:not(.overlay) #view-map .map-here .here-label { fill: var(--flight-tone, var(--cyan)); }
 
 /* A few route points in otherwise empty space give the product its own spatial
    signature. They are deliberately dim and never sit behind a control. */
