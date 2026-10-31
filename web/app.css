@@ -7265,8 +7265,17 @@ body[data-system-tone="ember"] { --flight-tone: var(--amber); --flight-tone-deep
 body[data-system-tone="violet"] { --flight-tone: var(--violet); --flight-tone-deep: rgba(181, 140, 240, .48); }
 body[data-system-tone="blue"], body[data-system-tone="cyan"] { --flight-tone: var(--cyan); --flight-tone-deep: var(--cyan-deep); }
 body:not(.overlay) .flight-telemetry { border-bottom-color: var(--flight-tone-deep, var(--cyan-deep)); }
+body:not(.overlay) #telemetry-system { color: var(--flight-tone, var(--cyan)); text-shadow: 0 0 10px color-mix(in srgb, var(--flight-tone, var(--cyan)) 35%, transparent); }
+body:not(.overlay) .telemetry-field:first-child::after { content: ""; width: 4px; height: 4px; margin-left: 1px; border-radius: 50%; background: var(--flight-tone, var(--cyan)); box-shadow: 0 0 8px var(--flight-tone, var(--cyan)); }
 body:not(.overlay) #now-feed li::before, body:not(.overlay) #contracts-table .route-point::before { border-color: var(--flight-tone-deep, var(--cyan-deep)); }
 body:not(.overlay) #now-feed { background-image: linear-gradient(var(--flight-tone-deep, var(--rule-hot)), var(--flight-tone-deep, var(--rule-hot))); }
+/* Only the live marker and its immediate map surface inherit the system tone;
+   routes and other systems keep their stable colours as navigation reference. */
+body:not(.overlay) #view-map .map-wrap::before { background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--flight-tone, var(--cyan)) 12%, transparent) 0 1px, transparent 1px 44px), repeating-linear-gradient(90deg, color-mix(in srgb, var(--flight-tone, var(--cyan)) 12%, transparent) 0 1px, transparent 1px 44px); }
+body:not(.overlay) #view-map .map-here .here-ring, body:not(.overlay) #view-map .map-here .here-pulse { stroke: var(--flight-tone, var(--cyan)); }
+body:not(.overlay) #view-map .map-here .here-dot { fill: var(--flight-tone, var(--cyan)); stroke: #07131b; }
+body:not(.overlay) #view-map .map-here :is(.here-tick, .here-leader) { stroke: var(--flight-tone, var(--cyan)); }
+body:not(.overlay) #view-map .map-here .here-label { fill: var(--flight-tone, var(--cyan)); }
 
 /* A few route points in otherwise empty space give the product its own spatial
    signature. They are deliberately dim and never sit behind a control. */
