@@ -7466,6 +7466,7 @@ body.overlay .page-glyph,
 body.overlay .tabs button[data-glyph]::before { display: none; }
 
 @media (max-width: 1320px) {
+  body:not(.overlay) .tabs button { padding-inline: 6px; }
   body:not(.overlay) .tabs button[data-glyph] { gap: 3px; }
   body:not(.overlay) .tabs button[data-glyph]::before { font-size: 9px; }
 }
@@ -7489,10 +7490,14 @@ body.overlay .tabs button[data-glyph]::before { display: none; }
 @media (max-width: 1440px) {
   body:not(.overlay) .search-box .search { width: 140px; }
 }
-/* Measured: French at 1350 px left 77 px between Settings and the search
-   box without the glyphs, and about 13 with them. */
-@media (max-width: 1380px) {
-  body:not(.overlay) .tabs > button[data-glyph]::before { display: none; }
+/* Measured on the buttons themselves, in French, the longer of the two:
+   with the ten top-level glyphs (four pages, six menu groups) the bar is
+   about 160 px wider, and at 1440 px Settings ran 4 px under the search
+   box. Below 1480 px the top level gives them up; the menus and page titles
+   keep theirs. */
+@media (max-width: 1480px) {
+  body:not(.overlay) .tabs > button[data-glyph]::before,
+  body:not(.overlay) .tabs > .tab-group > .group-btn[data-glyph]::before { display: none; }
 }
 @media (max-width: 1320px) {
   body:not(.overlay) .tabs button { padding-inline: 6px; font-size: 10px; letter-spacing: .02em; }
