@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="app.css?v=0.10.29">
+  <link rel="stylesheet" href="app.css?v=0.20.16">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -132,6 +132,31 @@
   </div>
 </header>
 
+<!-- A glanceable flight line: the current fix, hull and connection state stay
+     visible while the pilot works elsewhere, without turning the header into
+     another full dashboard. Values come from the same live state as Now. -->
+<section class="flight-telemetry" id="flight-telemetry" aria-label="Flight telemetry">
+  <div class="telemetry-field">
+    <span class="telemetry-label">System</span>
+    <b id="telemetry-system">Awaiting fix</b>
+  </div>
+  <div class="telemetry-field">
+    <span class="telemetry-label">Position</span>
+    <b id="telemetry-location">—</b>
+  </div>
+  <div class="telemetry-field">
+    <span class="telemetry-label">Ship</span>
+    <b id="telemetry-ship">—</b>
+  </div>
+  <div class="telemetry-field telemetry-link">
+    <span class="telemetry-label">Link</span>
+    <b id="telemetry-link">Waiting</b>
+  </div>
+</section>
+<!-- A page change gets one quiet sweep: it supplies a sense of moving between
+     stations without keeping an animation alive behind the work. -->
+<div class="sector-scan" id="sector-scan" aria-hidden="true"></div>
+
 <section id="command-palette" class="command-palette" hidden aria-label="Command palette" role="dialog" aria-modal="true">
   <div class="command-panel">
     <div class="command-head"><span>Command</span><kbd>Esc</kbd></div>
@@ -177,47 +202,59 @@
 
   <div class="render-errors" id="render-errors" hidden></div>
 
-  <div class="notice" id="stale" hidden>
-    <div class="notice-body">
-      <b>Prices are getting old</b>
-      <span class="muted" id="stale-detail"></span>
-    </div>
-    <div class="notice-actions">
-      <button class="ghost" id="stale-refresh">Refresh now</button>
-      <button class="ghost" id="stale-dismiss">Not now</button>
-    </div>
-  </div>
+  <!-- Notices share one quiet strip. Their detail and choices stay one click
+       away, so important work remains available without displacing the page. -->
+  <section class="notice-strip" aria-label="Notices">
+    <details class="notice" id="stale" hidden>
+      <summary class="notice-summary">
+        <div class="notice-body">
+          <b>Prices are getting old</b>
+          <span class="muted" id="stale-detail"></span>
+        </div>
+      </summary>
+      <div class="notice-actions">
+        <button class="ghost" id="stale-refresh">Refresh now</button>
+        <button class="ghost" id="stale-dismiss">Not now</button>
+      </div>
+    </details>
 
-  <div class="notice" id="update" hidden>
-    <div class="notice-body">
-      <b id="update-title">Look for a newer version?</b>
-      <span class="muted" id="update-detail"></span>
-    </div>
-    <div class="notice-actions" id="update-actions"></div>
-  </div>
+    <details class="notice" id="update" hidden>
+      <summary class="notice-summary">
+        <div class="notice-body">
+          <b id="update-title">Look for a newer version?</b>
+          <span class="muted" id="update-detail"></span>
+        </div>
+      </summary>
+      <div class="notice-actions" id="update-actions"></div>
+    </details>
 
-  <div class="notice" id="patch" hidden>
-    <div class="notice-body">
-      <b id="patch-title">A new patch arrived</b>
-      <span class="muted" id="patch-detail"></span>
-    </div>
-    <div class="notice-actions">
-      <button class="ghost" id="patch-wiped">It wiped — start there</button>
-      <button class="ghost" id="patch-kept">It did not wipe</button>
-    </div>
-  </div>
+    <details class="notice" id="patch" hidden>
+      <summary class="notice-summary">
+        <div class="notice-body">
+          <b id="patch-title">A new patch arrived</b>
+          <span class="muted" id="patch-detail"></span>
+        </div>
+      </summary>
+      <div class="notice-actions">
+        <button class="ghost" id="patch-wiped">It wiped — start there</button>
+        <button class="ghost" id="patch-kept">It did not wipe</button>
+      </div>
+    </details>
 
-  <!-- The loose text file the game reads, fallen behind a patch. -->
-  <div class="notice" id="text-stale" hidden>
-    <div class="notice-body">
-      <b>Your in-game text file is older than the game</b>
-      <span class="muted" id="text-stale-detail"></span>
-    </div>
-    <div class="notice-actions">
-      <button class="ghost" id="text-stale-open">Fix it</button>
-      <button class="ghost" id="text-stale-dismiss">Not now</button>
-    </div>
-  </div>
+    <!-- The loose text file the game reads, fallen behind a patch. -->
+    <details class="notice" id="text-stale" hidden>
+      <summary class="notice-summary">
+        <div class="notice-body">
+          <b>Your in-game text file is older than the game</b>
+          <span class="muted" id="text-stale-detail"></span>
+        </div>
+      </summary>
+      <div class="notice-actions">
+        <button class="ghost" id="text-stale-open">Fix it</button>
+        <button class="ghost" id="text-stale-dismiss">Not now</button>
+      </div>
+    </details>
+  </section>
 
   <div class="scan" id="scan" hidden>
     <div class="scan-head">
@@ -4474,6 +4511,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.10.29"></script>
+<script src="app.js?v=0.20.16"></script>
 </body>
 </html>

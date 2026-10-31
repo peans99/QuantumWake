@@ -26,6 +26,29 @@ public class NavigationTests
         AssertViews(navigation, "Settings", "settings", "overlay", "controls", "labels", "imports", "about");
     }
 
+    [Fact]
+    public void Every_navigation_destination_has_a_matching_geometric_glyph()
+    {
+        var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html"));
+        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "app.js"));
+        var navigation = markup[markup.IndexOf("<nav class=\"tabs\"", StringComparison.Ordinal)..];
+        navigation = navigation[..navigation.IndexOf("</nav>", StringComparison.Ordinal)];
+        var registry = Regex.Match(
+            source,
+            "const PAGE_GLYPHS = Object\\.freeze\\(\\{(?<glyphs>.*?)\\}\\);",
+            RegexOptions.Singleline).Groups["glyphs"].Value;
+        var glyphs = Regex.Matches(registry, "(?<view>[a-z]+)\\s*:\\s*'(?<glyph>[^']+)'")
+            .ToDictionary(match => match.Groups["view"].Value, match => match.Groups["glyph"].Value);
+
+        foreach (Match view in Regex.Matches(navigation, "data-view=\"([^\"]+)\""))
+        {
+            var viewName = view.Groups[1].Value;
+            Assert.True(glyphs.ContainsKey(viewName), $"{viewName} has no page glyph.");
+        }
+
+        Assert.Equal(glyphs.Count, glyphs.Values.Distinct().Count());
+    }
+
     private static void AssertViews(string navigation, string group, params string[] views)
     {
         var match = Regex.Match(

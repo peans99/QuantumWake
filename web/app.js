@@ -26,6 +26,39 @@ const isOverlayGlance = isOverlay && params.has('glance');
  */
 const isSnapshot = params.has('snapshot');
 
+/* The mark is repeated in the menu and its workspace title.  A small visual
+   index makes a long cockpit menu scannable without turning it into a set of
+   branded game-style icons. */
+const PAGE_GLYPHS = Object.freeze({
+  now: '◉', map: '◎', itinerary: '◇', log: '▤',
+  jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
+  logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
+  spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
+  ships: '◁', parts: '⊞', mining: '⬡', crafting: '⌬',
+  fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
+  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
+});
+
+function decorateNavigationGlyphs() {
+  for (const button of $$('#tabs button[data-view]')) {
+    const glyph = PAGE_GLYPHS[button.dataset.view];
+    if (glyph) button.dataset.glyph = glyph;
+  }
+
+  for (const [view, glyph] of Object.entries(PAGE_GLYPHS)) {
+    const panel = $(`#view-${view}`);
+    // Now is a live dashboard rather than a titled document, so its current
+    // status label carries the same mark without adding a redundant heading.
+    const title = panel?.querySelector('h2')
+      || (view === 'now' ? panel?.querySelector('.now-status-card .card-label') : null);
+    if (!title || title.querySelector('.page-glyph')) continue;
+    const mark = el('span', 'page-glyph', glyph);
+    mark.setAttribute('aria-hidden', 'true');
+    title.classList.add(view === 'now' ? 'page-glyph-label' : 'page-glyph-title');
+    title.prepend(mark);
+  }
+}
+
 const KIND_COLOURS = {
   City: '#7fe4ff',
   RestStop: '#4fd48a',
@@ -335,6 +368,17 @@ let shownView = 'now';
 /** The last answer from /api/activity, so a tab change can redraw without waiting for the next poll. */
 let lastActivity = null;
 
+/* A change of workspace should feel like moving through one instrument panel,
+ * not like a route transition. The sweep is explicitly restarted only here so
+ * background refreshes never turn the dashboard into a looping animation. */
+function playSectorScan() {
+  const scan = $('#sector-scan');
+  if (!scan || isOverlay || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  scan.classList.remove('running');
+  void scan.offsetWidth;
+  scan.classList.add('running');
+}
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
@@ -363,6 +407,8 @@ function showView(name) {
   // The page notice is about this page, so it is redrawn with it rather than
   // on the next poll: Controls should not spend a second saying Ledger is waiting.
   shownView = name;
+  document.body.dataset.view = name;
+  playSectorScan();
   if (lastActivity) paintPageWait(activityJobs(lastActivity));
 
   // A map drawer is useful beside the map, but it is not the cross-page
@@ -1170,10 +1216,57 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   open.onclick = () => { jobsLandOn = focus.anchor || null; showView(focus.view); };
 }
 
+/* The shared flight line is deliberately a summary, not a second copy of the
+ * Now card. It keeps orientation while the pilot works in a deep table, and
+ * every value comes from the same live state rather than a second request. */
+function renderFlightTelemetry(state) {
+  const ribbon = $('#flight-telemetry');
+  const system = $('#telemetry-system');
+  const location = $('#telemetry-location');
+  const ship = $('#telemetry-ship');
+  const link = $('#telemetry-link');
+  // The overlay and focused WebTest documents intentionally omit this shared
+  // chrome; leave their smaller DOMs alone instead of requiring every view to
+  // carry invisible telemetry fields.
+  if (!ribbon || !system || !location || !ship || !link) return;
+
+  system.textContent = state.locationSystem || (state.inGame ? tx('Unknown system') : tx('In menus'));
+  location.textContent = state.travelling
+    ? (state.travellingTo || tx('In quantum'))
+    : (state.location || tx('No current fix'));
+  ship.textContent = state.ship || '—';
+  link.textContent = state.connected ? tx('Live') : tx('Standing by');
+  ribbon.dataset.link = state.connected ? 'live' : 'idle';
+  ribbon.dataset.travel = state.travelling ? 'quantum' : 'local';
+  applyFlightAtmosphere(state);
+}
+
+/* The ambient colour and hull outline follow facts the dashboard already has.
+ * The vocabulary stays intentionally broad: a rare hull is still a ship, not
+ * a missing silhouette, and systems outside the known set keep the cyan base. */
+function applyFlightAtmosphere(state) {
+  const system = (state.locationSystem || '').toLowerCase();
+  document.body.dataset.systemTone = system.includes('pyro') ? 'ember'
+    : system.includes('nyx') ? 'violet'
+      : system.includes('terra') ? 'blue'
+        : 'cyan';
+
+  const ship = (state.ship || '').toLowerCase();
+  document.body.dataset.shipProfile = /hornet|gladius|arrow|sab(re|er)|scorpius|lightning/.test(ship) ? 'fighter'
+    : /mole|prospector|reclaimer|vulture|expanse/.test(ship) ? 'industrial'
+      : /caterpillar|hull|freelancer|max|raft|taurus|starlancer/.test(ship) ? 'hauler'
+        : /carrack|aquila|terr(a|apin)|400i|600i|odyssey/.test(ship) ? 'explorer'
+          : 'ship';
+}
+
+let newestLiveFeedKey = '';
+let liveFeedPrimed = false;
+
 function renderNow(state) {
   nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
   $('#link').title = state.connected ? tx('live') : tx('disconnected');
+  renderFlightTelemetry(state);
 
   $('#now-location').textContent = state.location || (state.inGame ? tx('Unknown') : tx('In menus'));
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
@@ -1232,6 +1325,13 @@ function renderNow(state) {
 
   const feed = $('#now-feed');
   feed.textContent = '';
+  const newest = state.recentEvents?.[0];
+  const newestKey = newest ? `${newest.at || ''}|${newest.kind || ''}|${newest.text || ''}` : '';
+  // The opening frame is a history tail, not an arrival. Once it is anchored,
+  // only a changed head earns the brief visual acknowledgement.
+  const hasNewLiveEvent = liveFeedPrimed && Boolean(newestKey && newestKey !== newestLiveFeedKey);
+  if (newestKey) newestLiveFeedKey = newestKey;
+  liveFeedPrimed = true;
 
   if (!state.recentEvents || state.recentEvents.length === 0) {
     feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
@@ -1239,8 +1339,10 @@ function renderNow(state) {
     // The widget shows a short tail; the full feed belongs on the page.
     const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
 
-    for (const entry of entries) {
+    for (const [index, entry] of entries.entries()) {
       const li = el('li');
+      if (index === 0 && hasNewLiveEvent) li.classList.add('fresh');
+      if (entry.kind === 'contract-done') li.classList.add('mission-complete');
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
       li.append(el('span', 'x', feedText(entry.text)));
@@ -2784,7 +2886,7 @@ async function loadContractList() {
 
   for (const row of rows.slice(0, 400)) {
     const tr = el('tr');
-    tr.append(el('td', null, dateOf(row.at)));
+    tr.append(el('td', 'route-point', dateOf(row.at)));
 
     // The composed name repeats issuer, type and difficulty, so the columns
     // carry those and the full name rides the row's tooltip.
@@ -2795,7 +2897,13 @@ async function loadContractList() {
     tr.title = row.name;
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
-    tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+    const outcome = el('td', cls === 'done' ? 'inward' : cls, label);
+    if (row.outcome === 'Completed') {
+      const patch = el('span', 'mission-patch', '✦');
+      patch.title = tx('Completed contract');
+      outcome.prepend(patch);
+    }
+    tr.append(outcome);
 
     // What the title says it pays, when a text mod has annotated it. Silence
     // is the honest default: most titles say nothing, and a zero would read as
@@ -30917,6 +31025,7 @@ async function maybeShowSetup() {
 }
 
 async function boot() {
+  decorateNavigationGlyphs();
   initNowCardCollapsers();
   initCurrentStatusConfiguration();
   initPageStatsCollapsers();
