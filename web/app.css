@@ -7289,11 +7289,6 @@ body:not(.overlay) .view.active::after {
     linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
     linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
 }
-/* The map has its own continuous star field. The flight-deck route geometry
-   is useful around reports, but competing grids turn spatial navigation into
-   decoration, so the map keeps the treatment it had before this layer. */
-body:not(.overlay) #view-map::before,
-body:not(.overlay) #view-map::after { display: none; }
 /* Glass reflections only occupy the empty upper band of a workspace. The
    actual panels remain opaque enough to preserve contrast and legibility. */
 body:not(.overlay) .view.active::before {
