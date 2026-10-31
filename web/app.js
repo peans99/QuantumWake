@@ -1170,10 +1170,38 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   open.onclick = () => { jobsLandOn = focus.anchor || null; showView(focus.view); };
 }
 
+/* The shared flight line is deliberately a summary, not a second copy of the
+ * Now card. It keeps orientation while the pilot works in a deep table, and
+ * every value comes from the same live state rather than a second request. */
+function renderFlightTelemetry(state) {
+  const ribbon = $('#flight-telemetry');
+  const system = $('#telemetry-system');
+  const location = $('#telemetry-location');
+  const ship = $('#telemetry-ship');
+  const link = $('#telemetry-link');
+  // The overlay and focused WebTest documents intentionally omit this shared
+  // chrome; leave their smaller DOMs alone instead of requiring every view to
+  // carry invisible telemetry fields.
+  if (!ribbon || !system || !location || !ship || !link) return;
+
+  system.textContent = state.locationSystem || (state.inGame ? tx('Unknown system') : tx('In menus'));
+  location.textContent = state.travelling
+    ? (state.travellingTo || tx('In quantum'))
+    : (state.location || tx('No current fix'));
+  ship.textContent = state.ship || '—';
+  link.textContent = state.connected ? tx('Live') : tx('Standing by');
+  ribbon.dataset.link = state.connected ? 'live' : 'idle';
+  ribbon.dataset.travel = state.travelling ? 'quantum' : 'local';
+}
+
+let newestLiveFeedKey = '';
+let liveFeedPrimed = false;
+
 function renderNow(state) {
   nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
   $('#link').title = state.connected ? tx('live') : tx('disconnected');
+  renderFlightTelemetry(state);
 
   $('#now-location').textContent = state.location || (state.inGame ? tx('Unknown') : tx('In menus'));
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
@@ -1232,6 +1260,13 @@ function renderNow(state) {
 
   const feed = $('#now-feed');
   feed.textContent = '';
+  const newest = state.recentEvents?.[0];
+  const newestKey = newest ? `${newest.at || ''}|${newest.kind || ''}|${newest.text || ''}` : '';
+  // The opening frame is a history tail, not an arrival. Once it is anchored,
+  // only a changed head earns the brief visual acknowledgement.
+  const hasNewLiveEvent = liveFeedPrimed && Boolean(newestKey && newestKey !== newestLiveFeedKey);
+  if (newestKey) newestLiveFeedKey = newestKey;
+  liveFeedPrimed = true;
 
   if (!state.recentEvents || state.recentEvents.length === 0) {
     feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
@@ -1239,8 +1274,9 @@ function renderNow(state) {
     // The widget shows a short tail; the full feed belongs on the page.
     const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
 
-    for (const entry of entries) {
+    for (const [index, entry] of entries.entries()) {
       const li = el('li');
+      if (index === 0 && hasNewLiveEvent) li.classList.add('fresh');
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
       li.append(el('span', 'x', feedText(entry.text)));

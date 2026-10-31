@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="app.css?v=0.20.6">
+<link rel="stylesheet" href="app.css?v=0.20.7">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -131,6 +131,28 @@
     <span id="link" class="dot" title="disconnected"></span>
   </div>
 </header>
+
+<!-- A glanceable flight line: the current fix, hull and connection state stay
+     visible while the pilot works elsewhere, without turning the header into
+     another full dashboard. Values come from the same live state as Now. -->
+<section class="flight-telemetry" id="flight-telemetry" aria-label="Flight telemetry">
+  <div class="telemetry-field">
+    <span class="telemetry-label">System</span>
+    <b id="telemetry-system">Awaiting fix</b>
+  </div>
+  <div class="telemetry-field">
+    <span class="telemetry-label">Position</span>
+    <b id="telemetry-location">—</b>
+  </div>
+  <div class="telemetry-field">
+    <span class="telemetry-label">Ship</span>
+    <b id="telemetry-ship">—</b>
+  </div>
+  <div class="telemetry-field telemetry-link">
+    <span class="telemetry-label">Link</span>
+    <b id="telemetry-link">Waiting</b>
+  </div>
+</section>
 
 <section id="command-palette" class="command-palette" hidden aria-label="Command palette" role="dialog" aria-modal="true">
   <div class="command-panel">

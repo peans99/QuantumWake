@@ -347,6 +347,29 @@ body.overlay .feed .d { display: none; }
   backdrop-filter: blur(14px);
 }
 
+/* The flight line is the app's persistent bit of space: a small answer to
+   “where am I and what am I in?” while the rest of the screen is a deep
+   planner, report or table. It stays narrower than a dashboard row. */
+.flight-telemetry {
+  position: sticky;
+  top: 62px;
+  z-index: 9;
+  display: flex;
+  min-height: 36px;
+  padding-inline: max(22px, calc((100vw - var(--page)) / 2));
+  background: rgba(4, 10, 17, .93);
+  border-bottom: 1px solid rgba(53, 200, 240, .22);
+  backdrop-filter: blur(12px);
+}
+.telemetry-field { display: flex; align-items: baseline; gap: 7px; min-width: 0; padding: 0 16px; border-left: 1px solid rgba(53, 200, 240, .15); }
+.telemetry-field:first-child { padding-left: 0; border-left: 0; }
+.telemetry-field b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font: 600 11px var(--display); }
+.telemetry-label { color: var(--dim); font: 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.telemetry-link { margin-left: auto; padding-right: 0; }
+.flight-telemetry[data-link="live"] #telemetry-link { color: var(--green); }
+.flight-telemetry[data-travel="quantum"] #telemetry-location { color: var(--violet); }
+body.overlay .flight-telemetry { display: none; }
+
 .command-palette { position: fixed; inset: 0; z-index: 80; display: grid; place-items: start center; padding-top: min(18vh, 150px); background: rgba(2, 7, 12, .68); backdrop-filter: blur(5px); }
 /* The rule above sets display, which outranks the hidden attribute: without this the palette covers the page on every load. */
 .command-palette[hidden] { display: none; }
@@ -368,7 +391,7 @@ body.overlay .command-palette { display:none; }
    into a second dashboard. The rail exists only after an explicit choice. */
 .context-rail {
   position: sticky;
-  top: 56px;
+  top: 98px;
   z-index: 9;
   background: rgba(7, 15, 24, .96);
   border-bottom: 1px solid rgba(53, 200, 240, .3);
@@ -553,6 +576,8 @@ body.overlay .command-palette { display:none; }
  * index can scroll inside its own rail instead of widening the document and
  * leaving every card with a horizontal scrollbar. */
 @media (max-width: 900px) {
+  .flight-telemetry { display: none; }
+  .context-rail { top: 62px; }
   .topbar { gap: 8px; padding-inline: 14px; overflow-x: auto; scrollbar-width: none; }
   .topbar::-webkit-scrollbar { display: none; }
   .topbar .by, .topbar .search-box, .topbar .status { display: none; }
@@ -7211,3 +7236,59 @@ body:not(.overlay) .tiny {
   body:not(.overlay) .tabs { gap: 2px; }
   body:not(.overlay) .tabs button { font-size: 10px; }
 }
+
+/* ---------- flight-language details ---------- */
+
+/* A few route points in otherwise empty space give the product its own spatial
+   signature. They are deliberately dim and never sit behind a control. */
+body:not(.overlay) .view.active { position: relative; isolation: isolate; }
+body:not(.overlay) .view.active::after {
+  content: "";
+  position: absolute;
+  top: 34px;
+  right: 18px;
+  width: min(300px, 26vw);
+  height: 174px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .48;
+  background:
+    radial-gradient(circle at 8% 77%, rgba(127, 228, 255, .72) 0 1px, transparent 2px),
+    radial-gradient(circle at 47% 31%, rgba(127, 228, 255, .58) 0 1px, transparent 2px),
+    radial-gradient(circle at 91% 62%, rgba(181, 140, 240, .7) 0 1px, transparent 2px),
+    linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
+    linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
+}
+body:not(.overlay) .view.active > * { position: relative; z-index: 1; }
+
+/* Source labels carry a small shape as well as words and colour, so provenance
+   scans quickly without making the card heading louder. */
+body:not(.overlay) .data-source::before { display: inline-block; margin-right: 4px; color: currentColor; font-size: 7px; vertical-align: 1px; }
+body:not(.overlay) .data-source.game-log::before { content: "◈"; }
+body:not(.overlay) .data-source.game-install::before { content: "▣"; }
+body:not(.overlay) .data-source.screenshot-ocr::before { content: "◌"; }
+body:not(.overlay) .data-source.community-data::before { content: "✦"; }
+body:not(.overlay) .data-source-qualifier::before { content: "·"; }
+
+/* A quiet wireframe gives the large status surface a flight-deck reference
+   without asking the pilot to read another decoration. */
+@media (min-width: 1100px) {
+  body:not(.overlay) #view-now .now-status-card::after {
+    content: "";
+    position: absolute;
+    right: 30px;
+    bottom: 16px;
+    width: 170px;
+    height: 78px;
+    pointer-events: none;
+    opacity: .26;
+    border: 1px solid rgba(53, 200, 240, .55);
+    clip-path: polygon(50% 0, 62% 36%, 100% 72%, 64% 73%, 50% 100%, 36% 73%, 0 72%, 38% 36%);
+    background: linear-gradient(90deg, transparent 49.5%, rgba(53, 200, 240, .55) 50%, transparent 50.5%);
+  }
+}
+
+/* New log entries are a momentary signal, not a permanent animation. */
+.feed li.fresh { border-left-color: var(--cyan); animation: feed-arrival 1.35s ease-out both; }
+@keyframes feed-arrival { 0% { background: rgba(53, 200, 240, .18); box-shadow: inset 20px 0 18px -22px var(--cyan); } 100% { background: transparent; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .feed li.fresh { animation: none; } }
