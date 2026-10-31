@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.21
+### 0.20.22
 
 **A new look for the logbook.** The dashboard has its own flight-deck style: calmer panels, angular buttons, and a small geometric glyph for every workspace and menu group, in the menu and beside its page title, and a refresh mark on Check for updates. A telemetry line keeps your system, location, ship and connection in view, and the current system and ship tint the quiet details around the page. Completed contracts earn small mission patches, and the live feed reads as a flight recorder. Update, patch and data notices now share one compact strip, with their detail and choices one click away instead of a full row each above your work. The Star map keeps its own star field and markers. Page changes make one short scan, and the reduced-motion setting is respected. The menu fits a laptop-width window down to 1280 pixels, in English and in French, and the new labels, from the telemetry line to the notices, are translated.
 
@@ -345,6 +345,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 **Where to buy it, too.** An item's panel on the Loot page, and each line of a checklist's "Where to get these", now say where to buy it: the cheapest shop in the UEX prices when that feed is on, and what you paid the last time you bought one, at which shop, from your own purchases, which needs no feed at all. The game's own shop price files were checked and are years out of date, so they are not used.
 
 **Cargo fit without the download.** The Garage's cargo fit now reads each ship's cargo grids from your own install: how many grids the ship carries, their size, and the largest box each takes. It no longer needs the community dataset, and on an install whose dataset predates cargo grids it no longer asks you to refresh. Checked against that dataset, 145 of the 149 ships it gives a cargo figure for match to the SCU. The four the install doesn't cover, the Hammerhead, the Nomad, the 135c and part of the 890 Jump's hold, still come from the dataset when you have it, and the page says which source drew the hold.
+
+**Track what you're hunting.** An item's panel on the Loot page has a **Track it** button that puts the item on a checklist, your pinned one by default or a new "Looking for" list, linked so the list's "Where to get these" can find it. It won't add an item that's already an open line on that list. A checklist line now also notes when the item shows up in your inventory after you wrote it, in amber, without crossing the line off, because the game's inventory listing doesn't say whether you looted, bought or were given it. If it had shown up before you wrote the line, the hover says it may be one you already had.
 
 **Your pickups beside the odds.** The New items table gains a Best roll column, the best single roll any container or body gives for that item, with where on hover. The item's name opens the same breakdown. Items no table produces, such as hangar decorations and things you bought, show a dash rather than a zero. Checked against these logs: of the 130 item classes seen inside a crate, body or pack, 126 come out of some table, and the other four are a goldfish and three ship models.
 

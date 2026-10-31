@@ -5396,5 +5396,16 @@
     "one": "{count} grille, {scu} SCU telle que la placent les équipements de votre installation : {sizes}.",
     "other": "{count} grilles, {scu} SCU telles que les placent les équipements de votre installation : {sizes}."
   },
-  "No hull's cargo grids are known yet: the install has not been read.": "Aucune grille de cargaison n’est encore connue : l’installation n’a pas été lue."
+  "No hull's cargo grids are known yet: the install has not been read.": "Aucune grille de cargaison n’est encore connue : l’installation n’a pas été lue.",
+  "in your inventory {date}": "dans votre inventaire le {date}",
+  "Your logs list this in your inventory since you wrote this line: looted, bought or given, which they do not tell apart.": "Vos journaux le listent dans votre inventaire depuis que vous avez écrit cette ligne : pillé, acheté ou reçu, ils ne font pas la différence.",
+  "It was listed before you wrote the line too, so it may be one you already had.": "Il était déjà listé avant la ligne, c’est peut-être un exemplaire que vous aviez déjà.",
+  "Checklist to track it on": "Liste où le suivre",
+  "Track it": "Le suivre",
+  "Add this item to a checklist, linked, so the list can say where to get it and when it turns up": "Ajouter cet objet à une liste, lié, pour que la liste dise où l’obtenir et quand il apparaît",
+  "New list: Looking for": "Nouvelle liste : Recherché",
+  "Already on {list}": "Déjà sur {list}",
+  "Looking for": "Recherché",
+  "The list could not be made.": "La liste n’a pas pu être créée.",
+  "Added to {list}": "Ajouté à {list}"
 }

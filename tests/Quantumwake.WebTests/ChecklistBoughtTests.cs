@@ -63,4 +63,23 @@ public class ChecklistBoughtTests
 
         Assert.DoesNotContain("bought", page.NodeText("#checklists-list"));
     }
+
+    /// <summary>
+    /// An item that turned up in an inventory since the line was written is
+    /// noted - not struck, because a listing is not a receipt.
+    /// </summary>
+    [Fact]
+    public void A_line_whose_item_turned_up_says_so_without_striking_it()
+    {
+        var page = Loaded("""
+            [{"id":"i1","text":"Gallant Rifle","dueAt":null,"note":null,
+              "attachments":[{"kind":"item","label":"Gallant Rifle","target":"Gallant Rifle"}],
+              "done":false,"doneAt":null,"bought":null,"found":"2026-10-29T10:00:00Z","foundBefore":true}]
+            """);
+
+        var list = page.NodeText("#checklists-list");
+        Assert.Contains("in your inventory", list);
+        Assert.Equal(0, page.Count("__dom.node('#checklists-list').querySelectorAll('.bought').length"));
+        Assert.Contains("already had", page.Text("__dom.node('#checklists-list').querySelectorAll('.checklist-found')[0].title"));
+    }
 }

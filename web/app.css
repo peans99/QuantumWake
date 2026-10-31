@@ -5073,6 +5073,8 @@ body.overlay .advice li { font-size: 10.5px; padding: 3px 0; }
    list is the pilot's, and this is an observation about it. */
 .checklist-item.bought .checklist-item-text { opacity: .55; text-decoration: line-through; }
 .checklist-bought { font-size: 11px; color: var(--cyan); }
+/* Seen in an inventory, not a receipt: amber, and the line is not struck. */
+.checklist-found { font-size: 11px; color: var(--amber); }
 /* ---------- live toasts ----------
  *
  * Bottom-right so they sit clear of the tab strip at the top and of the
@@ -7100,6 +7102,9 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .loot-where { border: 1px solid var(--rule); padding: 10px 12px; margin: 0 0 22px; }
 .loot-where-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .loot-where-head h3 { margin: 0; }
+.loot-where-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.loot-track { display: inline-flex; align-items: center; gap: 6px; }
+.loot-track-said { font-size: 11px; }
 .loot-where .caption { margin: 6px 0 10px; }
 .loot-where-table .chip { margin-left: 6px; }
 .loot-where-containers { white-space: normal; max-width: 34ch; }

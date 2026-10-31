@@ -3181,11 +3181,12 @@ public static partial class ServerHost
             // Matched on the name the app itself put on the line, which means
             // going through the display name: purchases are logged by class.
             var bought = lib.Bought();
+            var sighted = lib.Sighted();
 
-            return checklists.All().Select(list => Draw(list, null, bought))
+            return checklists.All().Select(list => Draw(list, null, bought, sighted))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Checklists ?? [])
-                        .Select(list => Draw(list, batch, bought))));
+                        .Select(list => Draw(list, batch, bought, sighted))));
         });
 
         app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
@@ -5272,7 +5273,8 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     static object Draw(
         Checklist list,
         ImportBatch? from,
-        IReadOnlyDictionary<string, DateTimeOffset>? bought = null) => new
+        IReadOnlyDictionary<string, DateTimeOffset>? bought = null,
+        IReadOnlyDictionary<string, IReadOnlyList<DateTimeOffset>>? sighted = null) => new
     {
         Id = from is null ? list.Id : SharedId(from, list.Id),
         list.Title,
@@ -5291,6 +5293,11 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             // than written back: the list is the pilot's, and a name match is an
             // observation about it, not permission to edit it.
             Bought = BoughtSince(i, list.CreatedAt, bought),
+            // In the inventory listings since the line was written, and
+            // whether it had been listed before - in which case it may be one
+            // already owned, which the page says rather than claiming a find.
+            Found = SeenSince(i, list.CreatedAt, sighted) is { } seen ? seen.At : (DateTimeOffset?)null,
+            FoundBefore = SeenSince(i, list.CreatedAt, sighted)?.Before ?? false,
         }),
         imported = from is null ? null : Marker(from),
     };
@@ -5320,6 +5327,29 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             .Where(at => at >= since)
             .OrderByDescending(at => at)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// The latest time a line's item was listed in an inventory since the
+    /// line was written, and whether it had been listed before that.
+    /// </summary>
+    static (DateTimeOffset At, bool Before)? SeenSince(
+        ChecklistItem item,
+        DateTimeOffset listCreated,
+        IReadOnlyDictionary<string, IReadOnlyList<DateTimeOffset>>? sighted)
+    {
+        if (sighted is null || sighted.Count == 0) return null;
+
+        var since = item.AddedAt ?? listCreated;
+        var times = item.Attachments
+            .Where(a => a.Kind == "item")
+            .Select(a => a.Target ?? a.Label)
+            .Where(name => name is { Length: > 0 })
+            .SelectMany(name => sighted.TryGetValue(name!, out var at) ? at : [])
+            .ToList();
+
+        var after = times.Where(t => t >= since).ToList();
+        return after.Count == 0 ? null : (after.Max(), times.Any(t => t < since));
     }
 
     /// <summary>A flight plan as a page sees it.</summary>

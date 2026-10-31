@@ -2107,6 +2107,43 @@ public sealed class LogLibrary : IDisposable
         ];
     }
 
+    /// <summary>
+    /// When each item was seen in the player's inventories, by the name a
+    /// person writes and by its class, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// One sighting per item per session: the first time that session's
+    /// inventory listings showed it. It is what lets a checklist line say an
+    /// item turned up after it was written - looted, bought or given, which
+    /// the listing does not tell apart, and a stash that already held one
+    /// lists it again when browsed, so a line also learns whether the item
+    /// had been seen before it was written.
+    /// </remarks>
+    public IReadOnlyDictionary<string, IReadOnlyList<DateTimeOffset>> Sighted()
+    {
+        var byKey = new Dictionary<string, List<DateTimeOffset>>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string key, DateTimeOffset at)
+        {
+            if (!byKey.TryGetValue(key, out var list)) byKey[key] = list = [];
+            list.Add(at);
+        }
+
+        foreach (var session in Counted(WipeScope.Inventory))
+            foreach (var pickup in session.Pickups)
+            {
+                Add(pickup.ItemClass, pickup.At);
+                if (ItemName(pickup.ItemClass) is { Length: > 0 } name
+                    && !name.Equals(pickup.ItemClass, StringComparison.OrdinalIgnoreCase))
+                    Add(name, pickup.At);
+            }
+
+        return byKey.ToDictionary(
+            k => k.Key,
+            k => (IReadOnlyList<DateTimeOffset>)[.. k.Value.Order()],
+            StringComparer.OrdinalIgnoreCase);
+    }
+
     public IReadOnlyList<PickupRecord> Pickups(int days = 0)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

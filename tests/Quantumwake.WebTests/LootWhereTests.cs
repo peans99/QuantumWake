@@ -306,6 +306,62 @@ public class LootWhereTests
         Assert.Equal(0, page.Count("__dom.node('#loot-where').querySelectorAll('.loot-where-buy').length"));
     }
 
+    private const string Lists = """
+        [{"id":"l1","title":"Pyro run","createdAt":"2026-10-01T00:00:00Z","pinned":false,"imported":null,"items":[]},
+         {"id":"l2","title":"Gear","createdAt":"2026-10-01T00:00:00Z","pinned":true,"imported":null,
+          "items":[{"id":"i1","text":"FS-9","attachments":[{"kind":"item","label":"FS-9 Magazine (75 cap)","target":"FS-9 Magazine (75 cap)"}],"done":false}]}]
+        """;
+
+    private static Page Tracking(string where)
+    {
+        var page = Loaded();
+        page.Serve("/api/checklists", Lists);
+        page.Serve("/api/loot/where?item=behr_lmg_ballistic_01_mag", where);
+        page.Do("await showLootWhere('behr_lmg_ballistic_01_mag');");
+        return page;
+    }
+
+    private const string TrackButton = "__dom.node('#loot-where').querySelectorAll('.loot-track-add')[0]";
+
+    /// <summary>
+    /// Found an item worth hunting: one click puts it on the pinned list,
+    /// linked by name, so the list can say where to get it and notice it.
+    /// </summary>
+    [Fact]
+    public void Track_it_adds_the_item_to_the_pinned_list_linked()
+    {
+        var page = Tracking(Placed().Replace("\"name\":\"LMG magazine\"", "\"name\":\"Gallant Rifle\""));
+        page.Do($"await {TrackButton}.fire('click');");
+
+        var sent = page.BodyOf("/api/checklists/l2/items");
+        Assert.Contains("\"text\":\"Gallant Rifle\"", sent);
+        Assert.Contains("\"kind\":\"item\"", sent);
+        Assert.Contains("\"target\":\"Gallant Rifle\"", sent);
+        Assert.Contains("Added to Gear", page.NodeText("#loot-where"));
+    }
+
+    [Fact]
+    public void An_item_already_on_the_list_is_not_added_twice()
+    {
+        var page = Tracking(Placed().Replace("\"name\":\"LMG magazine\"", "\"name\":\"FS-9 Magazine (75 cap)\""));
+        page.Do($"await {TrackButton}.fire('click');");
+
+        Assert.Equal("", page.BodyOf("/api/checklists/l2/items"));
+        Assert.Contains("Already on Gear", page.NodeText("#loot-where"));
+    }
+
+    [Fact]
+    public void With_no_list_yet_one_is_made_for_it()
+    {
+        var page = Loaded();
+        page.Serve("/api/checklists", "[]");
+        page.Serve("/api/loot/where?item=behr_lmg_ballistic_01_mag", Placed());
+        page.Do("await showLootWhere('behr_lmg_ballistic_01_mag');");
+        page.Do($"await {TrackButton}.fire('click');");
+
+        Assert.Contains("\"title\":\"Looking for\"", page.BodyOf("/api/checklists"));
+    }
+
     /// <summary>
     /// Armour colours sit near a thousandth of a percent. Rounded to whole
     /// percent they would all read "0%".

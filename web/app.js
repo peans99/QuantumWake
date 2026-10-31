@@ -4894,14 +4894,83 @@ function lootPriceLines(buy, paid) {
   return lines;
 }
 
+/**
+ * "Track it": put the item on a checklist from where it was looked up, so
+ * what is being hunted is written down once and followed from then on - the
+ * list's "Where to get these", Now, the overlay, and the line noting when
+ * the item turns up. The line is linked to the item by name, the same link
+ * the Checklists composer makes, which is what the bought and found notes
+ * match on. A list already holding it as an open line is not given a second.
+ */
+function lootTrackControl(name) {
+  const box = el('span', 'loot-track');
+  const pick = el('select', 'select tiny loot-track-list');
+  pick.setAttribute('aria-label', tx('Checklist to track it on'));
+  const add = el('button', 'ghost tiny loot-track-add', tx('Track it'));
+  add.title = tx('Add this item to a checklist, linked, so the list can say where to get it and when it turns up');
+  const said = el('span', 'muted loot-track-said');
+  box.append(pick, add, said);
+
+  let lists = [];
+  const fill = (async () => {
+    try {
+      lists = (await getJson('/api/checklists')).filter((l) => !l.imported);
+    } catch {
+      lists = [];
+    }
+    pick.replaceChildren();
+    for (const list of lists) pick.append(new Option(list.title, list.id));
+    pick.append(new Option(tx('New list: Looking for'), ''));
+    const pinned = lists.find((l) => l.pinned);
+    pick.value = pinned ? pinned.id : (lists[0]?.id ?? '');
+  })();
+
+  // Returned so whoever clicked can wait for the answer.
+  add.addEventListener('click', async () => {
+    await fill;
+    let id = pick.value;
+    let title = lists.find((l) => l.id === id)?.title;
+
+    const already = lists.find((l) => l.id === id)?.items?.some((item) => !item.done
+      && (item.attachments || []).some((a) => a.kind === 'item' && (a.target || a.label) === name));
+    if (already) { said.textContent = tx('Already on {list}', { list: title }); return; }
+
+    add.disabled = true;
+    try {
+      if (!id) {
+        title = tx('Looking for');
+        const made = await fetch('/api/checklists', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+        }).then((r) => r.json()).catch(() => null);
+        id = made?.id;
+        if (!id) { said.textContent = tx('The list could not be made.'); return; }
+      }
+      await fetch(`/api/checklists/${id}/items`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: name, attachments: [{ kind: 'item', label: name, target: name }] }),
+      });
+      said.textContent = tx('Added to {list}', { list: title });
+      // Now and the overlay show the pinned list; keep them current.
+      if (typeof loadChecklists === 'function') loadChecklists().catch(() => {});
+    } finally {
+      add.disabled = false;
+    }
+  });
+
+  return box;
+}
+
 function renderLootWhere(panel, data) {
   panel.textContent = '';
 
   const head = el('div', 'loot-where-head');
   head.append(el('h3', null, data.name || prettyItem(data.item)));
+  const tools = el('div', 'loot-where-tools');
+  tools.append(lootTrackControl(data.name || prettyItem(data.item)));
   const close = el('button', 'ghost tiny', tx('Close'));
   close.addEventListener('click', () => { panel.hidden = true; lootWhereItem = null; });
-  head.append(close);
+  tools.append(close);
+  head.append(tools);
   panel.append(head);
 
   // Finding one is not the only way to get one: the shops come first when
@@ -19655,6 +19724,17 @@ function checklistItemRow(list, item, compact = false) {
   if (bought) {
     const note = el('div', 'checklist-bought', tx('bought {date}', { date: dayOf(item.bought) }));
     note.title = tx('Your logs show this was bought after you wrote this line. Tick it to take it off for good.');
+    main.append(note);
+  }
+
+  // In an inventory since the line was written - looted, bought or given;
+  // the listing does not say which. Weaker than a receipt, so it is a note,
+  // not a strike-through, and the line stays the reader's to tick.
+  if (!item.done && !bought && item.found) {
+    const note = el('div', 'checklist-found', tx('in your inventory {date}', { date: dayOf(item.found) }));
+    note.title = item.foundBefore
+      ? `${tx('Your logs list this in your inventory since you wrote this line: looted, bought or given, which they do not tell apart.')} ${tx('It was listed before you wrote the line too, so it may be one you already had.')}`
+      : tx('Your logs list this in your inventory since you wrote this line: looted, bought or given, which they do not tell apart.');
     main.append(note);
   }
 
