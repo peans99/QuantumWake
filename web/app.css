@@ -768,10 +768,14 @@ body:not(.overlay) #view-now #now-feed { max-height: clamp(240px, 35vh, 420px); 
   letter-spacing: .08em;
   white-space: nowrap;
 }
-.data-source.game-log { color: var(--cyan-hot); border-color: var(--cyan-deep); }
-.data-source.game-install { color: var(--green); border-color: rgba(79, 212, 138, .34); }
-.data-source.screenshot-ocr { color: var(--amber); border-color: rgba(255, 171, 61, .36); }
-.data-source.community-data { color: var(--violet); border-color: rgba(181, 140, 240, .36); }
+/* Whose data it is (0.20.30): yours in gold - a screenshot dashed, since it
+   is read rather than written - the game's files cyan, the community green,
+   UEX violet. The variables are with the rest of the identity at the end. */
+.data-source.game-log, .data-source.screenshot-ocr { color: var(--own); border-color: rgba(233, 194, 125, .4); }
+.data-source.screenshot-ocr { border-style: dashed; }
+.data-source.game-install { color: var(--src-files); border-color: rgba(53, 200, 240, .4); }
+.data-source.community-data { color: var(--src-community); border-color: rgba(95, 211, 154, .4); }
+.data-source.uex-prices { color: var(--src-uex); border-color: rgba(181, 140, 240, .4); }
 .data-source-qualifier { color: var(--amber); border-color: rgba(255, 171, 61, .36); }
 body.overlay .card-source { margin: -2px 0 4px; min-height: 11px; }
 body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
@@ -7333,6 +7337,7 @@ body:not(.overlay) .data-source.game-log::before { content: "◈"; }
 body:not(.overlay) .data-source.game-install::before { content: "▣"; }
 body:not(.overlay) .data-source.screenshot-ocr::before { content: "◌"; }
 body:not(.overlay) .data-source.community-data::before { content: "✦"; }
+body:not(.overlay) .data-source.uex-prices::before { content: "◇"; }
 body:not(.overlay) .data-source-qualifier::before { content: "·"; }
 
 /* A quiet wireframe gives the large status surface a flight-deck reference
@@ -7564,10 +7569,10 @@ body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
    control nobody finds (CLAUDE.md). Quiet now, so it can simply stay. */
 
 /* ======================================================================
-   Identity trial (0.20.25): on Sessions, Fleet and Market only, by the
-   .qw-identity class, so it can be judged before it spreads or is dropped.
+   Identity (0.20.25 trial on three pages, every page since 0.20.30).
    Three ideas: a colour for whose data it is, a wake drawn from your own
-   sessions under each header, and a title face of our own.
+   sessions under each header, and a title face of our own. Not in the
+   overlay, where a header is a nine-pixel label over a glance.
    ====================================================================== */
 @font-face {
   font-family: 'Big Shoulders Display';
@@ -7592,49 +7597,52 @@ body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
 }
 
 /* The title face: condensed, the way a hull carries its name. */
-.qw-identity > .section-bar h2 {
+body:not(.overlay) .view > .section-bar h2 {
   font-family: var(--title-face);
   font-size: 31px; font-weight: 780; letter-spacing: .015em; line-height: 1;
   text-transform: uppercase;
 }
-.qw-identity > .section-bar h2 .page-glyph { font-family: var(--display); font-size: 15px; vertical-align: .32em; }
+body:not(.overlay) .view > .section-bar h2 .page-glyph { font-family: var(--display); font-size: 15px; vertical-align: .32em; }
 
 /* A page about your own history says so in its label. */
-.qw-identity[data-voice='own'] > .section-bar .page-kicker { color: var(--own); }
+body:not(.overlay) .view[data-voice='own'] > .section-bar .page-kicker { color: var(--own); }
 
-/* The wake: your last sixty days of play along the foot of the header. */
-.qw-identity > .section-bar { position: relative; overflow: hidden; }
-.qw-identity > .section-bar > :not(.wake):not(.wake-mark) { position: relative; z-index: 1; }
-.wake { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; width: 100%; pointer-events: none; z-index: 0; }
+/* The wake: your last sixty days of play along the foot of the header.
+   Painted beneath the header's contents by a negative z-index inside an
+   isolated header, rather than by lifting every child above it: on three
+   pages lifting was harmless, on forty it would have overridden whatever
+   positioning a header's own controls rely on. No overflow:hidden either,
+   which would clip a menu that opens out of a header. */
+body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate; }
+.wake { position: absolute; left: 0; bottom: 0; height: 18px; width: 100%; pointer-events: none; z-index: -1; }
 .wake-mark {
-  position: absolute; right: 10px; bottom: 5px; width: 7px; height: 7px; z-index: 1;
-  border: 1px solid var(--own); transform: rotate(45deg); pointer-events: none;
+  position: absolute; right: 10px; bottom: 5px; width: 7px; height: 7px; z-index: 0;
+  border: 1px solid var(--own); transform: rotate(45deg); cursor: help;
 }
+/* A wider target than the seven-pixel diamond, for the hover text. */
+.wake-mark::after { content: ""; position: absolute; inset: -6px; }
 .wake-mark.today { background: var(--own); box-shadow: 0 0 9px rgba(233, 194, 125, .75); }
+body.overlay :is(.wake, .wake-mark) { display: none; }
 
-/* Source colours, as the badge and as a thin rule on the values it covers. */
-.qw-identity .data-source.game-log, .qw-identity .data-source.screenshot-ocr { color: var(--own); border-color: rgba(233, 194, 125, .4); }
-.qw-identity .data-source.screenshot-ocr { border-style: dashed; }
-.qw-identity .data-source.game-install { color: var(--src-files); border-color: rgba(53, 200, 240, .4); }
-.qw-identity .data-source.community-data { color: var(--src-community); border-color: rgba(95, 211, 154, .4); }
-.qw-identity .data-source.uex-prices { color: var(--src-uex); border-color: rgba(181, 140, 240, .4); }
-
-.qw-identity th.src-own, .qw-identity td.src-own { color: var(--own); }
-.qw-identity th.src-community { color: var(--src-community); }
-.qw-identity th.src-uex { color: var(--src-uex); }
-.qw-identity th.src-own, .qw-identity th.src-community, .qw-identity th.src-uex { box-shadow: inset 0 -2px 0 currentColor; }
-.qw-identity td.src-uex .inward:first-child { color: var(--src-uex); }
+/* Source colours on a column heading, as a thin rule under the values it
+   covers. A cell is gold only when it holds something of yours. */
+th.src-own, td.src-own { color: var(--own); }
+th.src-files { color: var(--src-files); }
+th.src-community { color: var(--src-community); }
+th.src-uex { color: var(--src-uex); }
+body:not(.overlay) :is(th.src-own, th.src-files, th.src-community, th.src-uex) { box-shadow: inset 0 -2px 0 currentColor; }
+td.src-uex .inward:first-child { color: var(--src-uex); }
 
 /* Fleet cards: your flights in gold, the community's spec in green, UEX's price in violet. */
-.qw-identity .ship-stats b, .qw-identity .ship-seen { color: var(--own); }
-.qw-identity .ship-readiness.active { border-color: rgba(233, 194, 125, .55); }
-.qw-identity .ship-status-mark.recent { color: var(--own); }
-.qw-identity .ship-ref:not(.muted) { color: var(--src-community); }
-.qw-identity .ship-price:not(.muted) { color: var(--src-uex); }
+#view-fleet .ship-stats b, #view-fleet .ship-seen { color: var(--own); }
+#view-fleet .ship-readiness.active { border-color: rgba(233, 194, 125, .55); }
+#view-fleet .ship-status-mark.recent { color: var(--own); }
+#view-fleet .ship-ref:not(.muted) { color: var(--src-community); }
+#view-fleet .ship-price:not(.muted) { color: var(--src-uex); }
 
 /* Sessions: the debrief cards are your record. */
-.qw-identity .sessions-brief-card .economy-kicker,
-.qw-identity .sessions-brief-card [class*='kicker'] { color: var(--own); }
+#view-sessions .sessions-brief-card .economy-kicker,
+#view-sessions .sessions-brief-card [class*='kicker'] { color: var(--own); }
 
 /* ---- Symbol buttons (0.20.27): ×, ↑, ↓, + on their own. The framed button -
    cut corner, inset edge, corner tick - drew an empty box at this size with

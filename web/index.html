@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.29">
+  <link rel="stylesheet" href="app.css?v=0.20.30">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -870,7 +870,7 @@
   </section>
 
   <!-- CASUALTIES -->
-  <section id="view-crew" class="view">
+  <section id="view-crew" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Flight</span>
@@ -924,7 +924,7 @@
     </div>
   </section>
 
-  <section id="view-servers" class="view">
+  <section id="view-servers" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Flight</span>
@@ -983,7 +983,7 @@
     </p>
   </section>
 
-  <section id="view-casualties" class="view">
+  <section id="view-casualties" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Flight</span>
@@ -1307,7 +1307,7 @@
   </section>
 
   <!-- LOGBOOK -->
-  <section id="view-logbook" class="view">
+  <section id="view-logbook" class="view" data-voice="own">
     <div class="section-bar logbook-toolbar">
       <div>
         <span class="page-kicker">Flight</span>
@@ -1353,7 +1353,7 @@
   </section>
 
   <!-- SESSIONS -->
-  <section id="view-sessions" class="view qw-identity" data-voice="own">
+  <section id="view-sessions" class="view" data-voice="own">
     <div class="section-bar sessions-toolbar">
       <div>
         <span class="page-kicker">Flight</span>
@@ -1414,7 +1414,7 @@
 
   <!-- SHIPS -->
   <!-- FLEET -->
-  <section id="view-fleet" class="view qw-identity" data-voice="own">
+  <section id="view-fleet" class="view" data-voice="own">
     <div class="section-bar fleet-roster-bar">
       <div>
         <span class="page-kicker">Hangar</span>
@@ -1502,7 +1502,7 @@
   </section>
 
   <!-- SPENDING -->
-  <section id="view-spending" class="view">
+  <section id="view-spending" class="view" data-voice="own">
     <div class="section-bar economy-toolbar">
       <div>
         <span class="page-kicker">Economy</span>
@@ -1562,7 +1562,7 @@
   </section>
 
   <!-- LEDGER -->
-  <section id="view-ledger" class="view">
+  <section id="view-ledger" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Economy</span>
@@ -1601,7 +1601,7 @@
   </section>
 
   <!-- COMMODITIES -->
-  <section id="view-commodities" class="view">
+  <section id="view-commodities" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Economy</span>
@@ -1660,7 +1660,7 @@
   </section>
 
   <!-- LOADOUT -->
-  <section id="view-loadout" class="view">
+  <section id="view-loadout" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Hangar</span>
@@ -1736,7 +1736,7 @@
   </section>
 
   <!-- STASH -->
-  <section id="view-stash" class="view">
+  <section id="view-stash" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Hangar</span>
@@ -1776,7 +1776,7 @@
   </section>
 
   <!-- PLACES -->
-  <section id="view-places" class="view">
+  <section id="view-places" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Flight</span>
@@ -1796,7 +1796,7 @@
 
   <!-- HANGAR: the fleet drawn to one scale, from the install's own vehicle
        silhouettes and bounding boxes. Nothing here is downloaded. -->
-  <section id="view-hangar" class="view">
+  <section id="view-hangar" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Hangar</span>
@@ -1864,7 +1864,7 @@
        The logs carry none (docs/findings.md); the rank is read off the card's
        bar and turned into reputation with the installed ladder, so every figure
        is an estimate and every organisation says when it was last seen. -->
-  <section id="view-reputation" class="view">
+  <section id="view-reputation" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Operations</span>
@@ -1952,7 +1952,7 @@
 
   <!-- POINTS OF INTEREST: the coordinates the pilot chose to keep, with the
        reason. Places is what the logs saw; this is what the pilot marked. -->
-  <section id="view-points" class="view">
+  <section id="view-points" class="view" data-voice="own">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Flight</span>
@@ -2050,7 +2050,7 @@
     </div>
   </section>
 
-  <section id="view-market" class="view qw-identity">
+  <section id="view-market" class="view">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Economy</span>
@@ -2876,10 +2876,10 @@
       <table id="loot-table">
         <thead>
           <tr>
-            <th>First seen</th><th>Item</th><th>Kind</th>
-            <th title="Median buy price across every terminal stocking it">Typical price</th>
-            <th title="The best single roll any container or body in the game's tables gives for this item">Best roll</th>
-            <th>Where you were</th>
+            <th class="src-own">First seen</th><th>Item</th><th>Kind</th>
+            <th class="src-uex" title="Median buy price across every terminal stocking it">Typical price</th>
+            <th class="src-files" title="The best single roll any container or body in the game's tables gives for this item">Best roll</th>
+            <th class="src-own">Where you were</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -4705,6 +4705,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.29"></script>
+<script src="app.js?v=0.20.30"></script>
 </body>
 </html>

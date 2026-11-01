@@ -5429,9 +5429,11 @@ function drawWakes() {
   const upper = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid - half(i)).toFixed(2)}`);
   const lower = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid + half(i)).toFixed(2)}`).reverse();
 
-  for (const section of $$('.qw-identity')) {
+  // Every page's own header: the bar that opens a view, not one nested
+  // further down (Now, Help and About open on something else entirely).
+  for (const section of $$('.view')) {
     const bar = section.querySelector('.section-bar');
-    if (!bar) continue;
+    if (!bar || bar.parentElement !== section) continue;
     bar.querySelector('.wake')?.remove();
     bar.querySelector('.wake-mark')?.remove();
     if (!sessions) continue;
@@ -5453,8 +5455,10 @@ function drawWakes() {
 
     const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
     bar.append(mark);
-    // Said in words for whoever points at it: the shape is the summary.
-    bar.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
+    // Said in words for whoever points at the mark. On the header itself it
+    // would surface over every control there without hover text of its own,
+    // on forty pages.
+    mark.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
       sessions, hours: duration(total * 60), days: WAKE_DAYS,
     });
   }
@@ -22490,7 +22494,7 @@ function shareReportDocument() {
 }
 
 function shareReportCss() {
-  return 'body{margin:0;background:#070c14;color:#dcebf7;font:14px/1.5 system-ui,Segoe UI,sans-serif}.share-report{max-width:960px;margin:32px auto;padding:28px;background:linear-gradient(150deg,#101d2c,#070c14);border:1px solid #2c526d}.share-report-head,.share-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.share-kicker{color:#8be7ff;font:700 11px ui-monospace,Consolas,monospace;letter-spacing:2px}.share-report h2{margin:4px 0;font-size:30px}.share-report h3{margin:0;color:#8be7ff;font-size:18px}.share-report h4{margin:20px 0 7px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#7691a8}.muted,.share-section-detail{color:#9ab0c3}.data-sources{display:flex;gap:4px;flex-wrap:wrap}.data-source{border:1px solid #2c526d;padding:2px 5px;font:10px ui-monospace,Consolas,monospace;letter-spacing:.7px;color:#8be7ff}.game-install{color:#7ee3a5}.screenshot-ocr,.data-source-qualifier{color:#ffbc66}.community-data{color:#c59cff}.share-section{margin-top:22px;padding-top:18px;border-top:1px solid #24445b}.share-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:14px}.share-metric{padding:10px;background:#0a1420;border-left:2px solid #35c8f0}.share-metric-value{font-size:16px;font-weight:700}.share-metric-label{font-size:10px;color:#9ab0c3;text-transform:uppercase;letter-spacing:.8px}.share-list{list-style:none;padding:0;margin:0}.share-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:6px 0;border-bottom:1px solid #172b3b}.share-list b{white-space:nowrap}.inward{color:#7ee3a5}.share-limits{margin:25px 0 0;color:#9ab0c3;font-size:12px}@media print{body{background:#fff;color:#14202b}.share-report{margin:0;max-width:none;border:0;background:#fff}.share-report h3,.share-kicker{color:#126b91}.share-section{border-color:#b8cbd6}.share-metric{background:#eef5f8;border-color:#126b91}.muted,.share-section-detail,.share-metric-label,.share-limits{color:#50616c}.data-source{color:#126b91;border-color:#8ca6b4}.share-list li{border-color:#d6e1e7}}';
+  return 'body{margin:0;background:#070c14;color:#dcebf7;font:14px/1.5 system-ui,Segoe UI,sans-serif}.share-report{max-width:960px;margin:32px auto;padding:28px;background:linear-gradient(150deg,#101d2c,#070c14);border:1px solid #2c526d}.share-report-head,.share-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.share-kicker{color:#8be7ff;font:700 11px ui-monospace,Consolas,monospace;letter-spacing:2px}.share-report h2{margin:4px 0;font-size:30px}.share-report h3{margin:0;color:#8be7ff;font-size:18px}.share-report h4{margin:20px 0 7px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#7691a8}.muted,.share-section-detail{color:#9ab0c3}.data-sources{display:flex;gap:4px;flex-wrap:wrap}.data-source{border:1px solid #2c526d;padding:2px 5px;font:10px ui-monospace,Consolas,monospace;letter-spacing:.7px;color:#8be7ff}.game-log,.screenshot-ocr{color:#e9c27d}.screenshot-ocr{border-style:dashed}.game-install{color:#35c8f0}.data-source-qualifier{color:#ffbc66}.community-data{color:#5fd39a}.uex-prices{color:#b58cf0}.share-section{margin-top:22px;padding-top:18px;border-top:1px solid #24445b}.share-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:14px}.share-metric{padding:10px;background:#0a1420;border-left:2px solid #35c8f0}.share-metric-value{font-size:16px;font-weight:700}.share-metric-label{font-size:10px;color:#9ab0c3;text-transform:uppercase;letter-spacing:.8px}.share-list{list-style:none;padding:0;margin:0}.share-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:6px 0;border-bottom:1px solid #172b3b}.share-list b{white-space:nowrap}.inward{color:#7ee3a5}.share-limits{margin:25px 0 0;color:#9ab0c3;font-size:12px}@media print{body{background:#fff;color:#14202b}.share-report{margin:0;max-width:none;border:0;background:#fff}.share-report h3,.share-kicker{color:#126b91}.share-section{border-color:#b8cbd6}.share-metric{background:#eef5f8;border-color:#126b91}.muted,.share-section-detail,.share-metric-label,.share-limits{color:#50616c}.data-source{color:#126b91;border-color:#8ca6b4}.share-list li{border-color:#d6e1e7}}';
 }
 
 async function openShareReport() {

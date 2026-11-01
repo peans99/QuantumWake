@@ -280,8 +280,6 @@ const GROUPS = {
   '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining', '#test-tab-jobs', '#test-tab-itinerary'],
   '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs', '#view-itinerary'],
   '#tabs .tab-group': [],
-  // The 0.20.25 identity trial's pages, which carry the wake under their header.
-  '.qw-identity': ['#view-sessions', '#view-fleet', '#view-market'],
   '#view-now .card[data-card]': [
     '#now-status-card', '#now-briefing-card', '#now-feed-card',
     '#now-job-card', '#now-checklist-card', '#now-trip-card', '#trade-advice-card',

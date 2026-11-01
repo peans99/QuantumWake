@@ -69,23 +69,38 @@ such a box. Give an icon button a `title`, which is its only words.
 `openEntity('part' | 'ship', …)` sends items and ships to the window, so the
 two can never describe one gun two ways again.
 
-## Identity trial (0.20.25)
+## Identity
 
-Sessions, Fleet and Market carry `class="qw-identity"`, and everything below is
-scoped to it, so it can spread to more pages or be dropped in one place.
+Trialled on Sessions, Fleet and Market in 0.20.25, on every page since
+0.20.30. It applies to each `.view` whose first child is its `.section-bar`,
+and not in the overlay, where a header is a small label over a glance.
+`IdentityTests` holds it.
 
 - **Whose number it is.** Gold (`--own`) is the pilot's own record: logs and
   screenshots. It is not `--amber`, which warns that a price is stale. Cyan
   (`--src-files`) is the game's files, green (`--src-community`) the community
-  dataset, and violet (`--src-uex`) UEX. The colours appear on the source badges
-  and as an underline on the column headings each source covers. A value is
-  gold only when there is one: an empty cell stays plain.
+  dataset, and violet (`--src-uex`) UEX. The colours are on the source badges
+  everywhere, in the shared report, and as an underline on a column heading
+  carrying `src-own`, `src-files`, `src-community` or `src-uex`. Mark the
+  headings on a table that mixes sources (Market, Loot); a page that is all one
+  source says so with its badge instead. A value is gold only when there is
+  one: an empty cell stays plain.
+- **Own pages say so.** `data-voice="own"` on the section turns the kicker
+  gold. It is on the pages that are the pilot's own history: Logbook,
+  Sessions, Servers, Places, Points, Crew, Casualties, Spending, Ledger,
+  Commodities, Fleet, Hangar, Loadout, Stash and Reputation. Not on reference
+  pages, nor on planning pages (the Jobs command deck, Itinerary, Checklists),
+  nor on pages that set the game's figures beside yours (Events, Market,
+  Loot), where the column headings carry the distinction.
 - **The wake.** `drawWakes()` draws the last 60 days of `allSessions` under
-  each trial page's header. It is smoothed over three days, as wide as the
-  time spent in game, and fades to the left. The mark at today's end fills in
-  once the pilot has flown today. Its numbers are in the header's hover text.
+  every page header. It is smoothed over three days, as wide as the time spent
+  in game, and fades to the left. The mark at today's end fills in once the
+  pilot has flown today, and its hover text has the numbers. The header has
+  none of its own: there it surfaced over every control in the header. The
+  wake goes under the header's contents by `z-index: -1` inside an isolated
+  header rather than by lifting the contents, which would override how a
+  header's own controls are positioned, and without `overflow: hidden`, which
+  would clip a menu opening out of a header.
 - **Title face.** Big Shoulders Display (SIL OFL 1.1), bundled in
   `web/assets/fonts/` and credited in `docs/credits.md`. It is used for page
   titles only; mono stays for numbers.
-- **Own pages say so.** `data-voice="own"` turns the kicker gold on pages that
-  are the pilot's own history (Sessions, Fleet).
