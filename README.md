@@ -48,7 +48,7 @@ there is no account and no required online service.
   <tr>
     <td><a href="docs/images/garage.png"><img src="docs/images/garage.png" alt="The Garage"></a><br><sub><b>Garage</b><br>A ship's fitted parts and the figures they add up to.</sub></td>
     <td><a href="docs/images/armoury.png"><img src="docs/images/armoury.png" alt="The Armoury"></a><br><sub><b>Armoury</b><br>Guns, armour and attachments from your installed game files.</sub></td>
-    <td></td>
+    <td><a href="docs/images/loot.png"><img src="docs/images/loot.png" alt="The Loot page"></a><br><sub><b>Loot</b><br>Where any item drops, read from the game's own loot tables, beside what you have found.</sub></td>
   </tr>
 </table>
 </details>
@@ -103,11 +103,11 @@ QuantumWake.exe --path "D:\...\StarCitizen\LIVE"
 | Find a station, city, outpost or nearby service | **Map** |
 | Lay out a flight plan, or merge a hauling run into one | **Itinerary** |
 | Read the live feed, or a screenshot you just took | **Log** |
-| Find a cargo or rep run, follow contracts, reputation or an event | **Operations** |
-| Review a flight, session, place or server | **Flight** |
-| Follow money in and out, or commodity prices | **Economy** |
-| Look up ships, parts, mining or crafting | **Reference** |
-| See your ships, fittings, stash and gear | **Hangar** |
+| Plan the work: the Command deck, a cargo or rep run, contracts, reputation, checklists, blueprints, Wikelo trades or an event | **Operations** |
+| Review a flight, session, place, server, crewmate or death | **Flight** |
+| Follow money in and out, your cargo, or commodity prices | **Economy** |
+| Look up ships, components, items, loot odds, mining or crafting | **Reference** |
+| See your ships, fittings, loadout and stash, bench a part in the Garage, or compare guns in the Armoury | **Hangar** |
 | Keep a small answer visible in Star Citizen | **Overlay** |
 
 ## Optional extras
