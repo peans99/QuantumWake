@@ -323,6 +323,42 @@ the encrypted shop tables are a 2018 economy (section 9 of
 [untapped-signals.md](untapped-signals.md)), and the DataCore holds no
 per-item price.
 
+## Reference: one card per item and per ship
+
+The Reference menu holds Ships, Items, Loot, Mining and Crafting. Any item or
+ship opens in a modal (`/api/reference/item?id=`, `/api/reference/ship?id=`)
+that joins every answer above. The item card reuses the Loot panel's own
+answer, `LootWhere` in ServerHost, so the two cannot disagree. Every part and
+ship in a card opens its own card, and Back walks the trail.
+
+**Stock loadouts.** `GameShipLoot.ReadAll` walks every hull's default
+loadout in the same pass as the NPC ships. It keeps the same part kinds:
+guns, shields, coolers, power plants, quantum drives, radars, missiles and
+their racks, mining and salvage heads, tractor beams, QIGs and EMPs. A player
+hull's default loadout is the fit it is sold with. On this install the Aegis
+Gladius comes with 11 kinds of part, and the CF-337 Panther Repeater comes
+fitted to 68 distinct hulls, once Arena Commander copies, Teach and collector
+editions are folded into their base hull by name. CacheVersion 58.
+
+**NPC versions.** These are the NPC ship classes that extend the hull's class.
+The longest hull wins, so `AEGS_Gladius_Valiant_PU_AI_UEE` is the Valiant's
+and not the Gladius's. The Gladius has 12, including two Criminal ones,
+`PU_AI_CRIM` and `PU_AI_CRIM_IK`; the card shows the rest of the class so
+they read as two.
+
+**Ships from the install.** The catalogue lists the community dataset's 288
+hulls plus the install's vehicles it does not describe. There were 21 such
+vehicles. 10 of them are props or mission hulks and are left out: probes,
+orbital sentries, Arena Commander objectives, salvage wrecks, and the hijacked
+Reclaimers and Caterpillar. That leaves 11, among them the four Constellation
+Mk IV variants and the Skylark. Their spec sheet is blank, because only the
+community dataset carries one.
+
+**Drops column.** 5,840 of the 26,531 items the install describes can be found
+somewhere: 5,304 in a crate or on a body, 2,571 on an NPC, and 413 on an NPC
+ship. An item can be in more than one of these. The column shows the best
+single roll, else the NPC count, else the NPC ship count.
+
 ## Not yet
 
 **Boarding-mission loot.** The harvestables in

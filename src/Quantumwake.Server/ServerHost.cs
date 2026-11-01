@@ -1965,71 +1965,7 @@ public static partial class ServerHost
         // Every row is a kind of place or body and a per-roll estimate; how
         // many rolls a container makes depends on its size and is not in the
         // number, which the page says.
-        app.MapGet("/api/loot/where", (LogLibrary lib, UexData uex, string item) =>
-        {
-            var loot = lib.GameCommodities.Loot;
-            var hits = loot.For(item);
-
-            return new
-            {
-                item,
-                name = lib.ItemName(item),
-                tables = loot.Rolls.Count,
-                loot.PlacesRead,
-                // Where to buy it instead: the cheapest counter in the UEX
-                // prices when that feed is on, and what this install has
-                // itself been charged - first-party, but only for what was bought.
-                uex = uex.IsEnabled,
-                buy = CheapestSeller(lib, uex, item),
-                paid = WhatYouPaid(lib, lib.Receipts(), item),
-                // Each place once, with the best container it holds for the
-                // item: the answer to "where do I go", ahead of the kinds.
-                places = loot.PlacesFor(item).Select(p => new
-                {
-                    p.Name,
-                    p.Body,
-                    p.Id,
-                    p.Spots,
-                    p.Presets,
-                    chance = p.Best.PerRoll * p.Best.Source.SlotChance,
-                    perRoll = p.Best.PerRoll,
-                    label = LootSourceLabel(p.Best.Source),
-                    containerName = lib.ItemName(p.Best.Source.Container),
-                    p.Best.Source.RespawnSeconds
-                }),
-                hits = hits.Select(h => new
-                {
-                    h.Source.Kind,
-                    h.Source.Preset,
-                    label = LootSourceLabel(h.Source),
-                    group = h.Source.Group.Length > 0 ? h.Source.Group : null,
-                    h.Source.Container,
-                    containerName = lib.ItemName(h.Source.Container),
-                    h.Source.SlotChance,
-                    h.Source.RespawnSeconds,
-                    h.Source.Table,
-                    h.Source.ChanceToGenerate,
-                    h.PerRoll,
-                    h.Via,
-                    places = h.Source.Kind == "slot" ? loot.PlacesOf(h.Source.Preset).Count : (int?)null
-                }),
-                // Every NPC ship that flies with it fitted, by who flies it.
-                ships = loot.ShipsFor(item).Select(s => new
-                {
-                    s.Ship,
-                    name = lib.GameCommodities.Vehicles.TryGetValue(s.Ship, out var v) && v.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
-                    crew = GameShipLoot.Crew(s.Ship),
-                    s.Count
-                }),
-                // NPCs on foot, one row per kind: the male and female classes
-                // of one guard carry the same kit and read as one.
-                npcs = loot.NpcsFor(item)
-                    .GroupBy(n => LootLabels.Npc(n.Npc))
-                    .Select(g => new { label = g.Key, share = g.Max(n => n.Share), classes = g.Select(n => n.Npc).ToList() })
-                    .OrderByDescending(n => n.share)
-                    .ThenBy(n => n.label, StringComparer.Ordinal)
-            };
-        });
+        app.MapGet("/api/loot/where", (LogLibrary lib, UexData uex, string item) => LootWhere(lib, uex, item));
 
         // Every item the tables can produce whose name or class holds the
         // query, best roll first - the search box on the Loot page.
@@ -2321,33 +2257,7 @@ public static partial class ServerHost
         // ---- reference catalogues: pure information display, no player ----
         // ---- data - what the community digest describes, priced by UEX ----
 
-        app.MapGet("/api/reference/ships", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
-            lib.Community.Ships.Values
-                .GroupBy(s => s.Name)
-                .Select(g => g.First())
-                .Select(s => new
-                {
-                    rental = feeds.CheapestRental(s.Name),
-                    // Every shop and every rental desk, cheapest first, for
-                    // the row to show on hover: the cheapest is not always
-                    // the nearest.
-                    shops = uex.VehicleShops(s.Name),
-                    rentals = feeds.RentalDesks(s.Name),
-                    s.Name,
-                    s.Career,
-                    s.Role,
-                    s.Crew,
-                    s.IsSpaceship,
-                    s.ExpeditedCost,
-                    s.StandardClaimTime,
-                    s.CargoScu,
-                    s.ScmSpeed,
-                    s.MaxSpeed,
-                    s.ShieldHp,
-                    s.Health,
-                    price = uex.VehiclePrice(s.Name)
-                })
-                .OrderBy(s => s.Name));
+        MapReference(app);
 
         // Manufacturer codes to full names, for every page that shows a maker.
         app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);
@@ -2503,6 +2413,8 @@ public static partial class ServerHost
                 .Select(item =>
                 {
                     var stock = uex.ItemMarket(item.Uuid);
+                    var loot = lib.GameCommodities.Loot;
+                    var rolls = loot.For(item.ClassName);
                     var cheapest = stock.Count > 0 ? stock.MinBy(r => r.Buy) : null;
 
                     return new
@@ -2523,7 +2435,12 @@ public static partial class ServerHost
                         cheapestAt = cheapest?.Terminal,
                         terminals = stock.Count > 0
                             ? stock.OrderBy(r => r.Buy).Select(r => $"{r.Terminal} — {r.Buy:N0} aUEC")
-                            : null
+                            : null,
+                        // Whether the game's own files put it anywhere to be found:
+                        // the best single roll, and who wears or flies with it.
+                        bestRoll = rolls.Count > 0 ? rolls.Max(h => h.PerRoll) : (double?)null,
+                        npcs = loot.NpcsFor(item.ClassName).Count,
+                        ships = loot.ShipsFor(item.ClassName).Count
                     };
                 }));
 
@@ -6038,6 +5955,77 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
                     p.Best.FirstOrDefault()?.Resource,
                     here.Count > 0))
         ];
+    }
+
+    /// <summary>
+    /// Where one item comes from - crates, places, NPC ships, NPCs on foot -
+    /// and where to buy it instead: the Loot page's panel and the Reference
+    /// modal's, one answer for both.
+    /// </summary>
+    static object LootWhere(LogLibrary lib, UexData uex, string item)
+    {
+        var loot = lib.GameCommodities.Loot;
+        var hits = loot.For(item);
+
+        return new
+        {
+            item,
+            name = lib.ItemName(item),
+            tables = loot.Rolls.Count,
+            loot.PlacesRead,
+            // Where to buy it instead: the cheapest counter in the UEX
+            // prices when that feed is on, and what this install has
+            // itself been charged - first-party, but only for what was bought.
+            uex = uex.IsEnabled,
+            buy = CheapestSeller(lib, uex, item),
+            paid = WhatYouPaid(lib, lib.Receipts(), item),
+            // Each place once, with the best container it holds for the
+            // item: the answer to "where do I go", ahead of the kinds.
+            places = loot.PlacesFor(item).Select(p => new
+            {
+                p.Name,
+                p.Body,
+                p.Id,
+                p.Spots,
+                p.Presets,
+                chance = p.Best.PerRoll * p.Best.Source.SlotChance,
+                perRoll = p.Best.PerRoll,
+                label = LootSourceLabel(p.Best.Source),
+                containerName = lib.ItemName(p.Best.Source.Container),
+                p.Best.Source.RespawnSeconds
+            }),
+            hits = hits.Select(h => new
+            {
+                h.Source.Kind,
+                h.Source.Preset,
+                label = LootSourceLabel(h.Source),
+                group = h.Source.Group.Length > 0 ? h.Source.Group : null,
+                h.Source.Container,
+                containerName = lib.ItemName(h.Source.Container),
+                h.Source.SlotChance,
+                h.Source.RespawnSeconds,
+                h.Source.Table,
+                h.Source.ChanceToGenerate,
+                h.PerRoll,
+                h.Via,
+                places = h.Source.Kind == "slot" ? loot.PlacesOf(h.Source.Preset).Count : (int?)null
+            }),
+            // Every NPC ship that flies with it fitted, by who flies it.
+            ships = loot.ShipsFor(item).Select(s => new
+            {
+                s.Ship,
+                name = lib.GameCommodities.Vehicles.TryGetValue(s.Ship, out var v) && v.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
+                crew = GameShipLoot.Crew(s.Ship),
+                s.Count
+            }),
+            // NPCs on foot, one row per kind: the male and female classes
+            // of one guard carry the same kit and read as one.
+            npcs = loot.NpcsFor(item)
+                .GroupBy(n => LootLabels.Npc(n.Npc))
+                .Select(g => new { label = g.Key, share = g.Max(n => n.Share), classes = g.Select(n => n.Npc).ToList() })
+                .OrderByDescending(n => n.share)
+                .ThenBy(n => n.label, StringComparer.Ordinal)
+        };
     }
 
     /// <summary>The cheapest counter the UEX prices list for an item, or null.</summary>

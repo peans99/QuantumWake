@@ -20,9 +20,9 @@ public class NavigationTests
 
         AssertViews(navigation, "Operations", "jobs", "routes", "contracts", "checklists", "blueprints", "wikelo");
         AssertViews(navigation, "Flight", "logbook", "sessions", "servers", "places", "points", "crew", "casualties");
-        AssertViews(navigation, "Hangar", "fleet", "hangar", "loadout", "stash", "loot", "garage", "armoury");
+        AssertViews(navigation, "Hangar", "fleet", "hangar", "loadout", "stash", "garage", "armoury");
         AssertViews(navigation, "Economy", "spending", "ledger", "commodities", "market");
-        AssertViews(navigation, "Reference", "ships", "parts", "mining", "crafting");
+        AssertViews(navigation, "Reference", "ships", "parts", "loot", "mining", "crafting");
         AssertViews(navigation, "Settings", "settings", "overlay", "controls", "labels", "imports", "about");
     }
 

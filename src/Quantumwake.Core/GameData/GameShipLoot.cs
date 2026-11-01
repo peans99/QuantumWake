@@ -7,6 +7,11 @@ namespace Quantumwake.Core.GameData;
 /// <param name="Count">How many it carries: two coolers, four of a missile.</param>
 public sealed record ShipFit(string Ship, int Count);
 
+/// <summary>One part a hull carries as standard, from the hull's side.</summary>
+/// <param name="Part">The part's entity class.</param>
+/// <param name="Count">How many of it the hull fits.</param>
+public sealed record PartFit(string Part, int Count);
+
 /// <summary>
 /// The parts NPC ships are built with, from their default loadouts.
 /// </summary>
@@ -50,8 +55,22 @@ public static partial class GameShipLoot
     /// Every kept part on every NPC ship, by the part's class.
     /// </summary>
     /// <param name="typeOf">The item type for a class - <see cref="GameItem.Type"/> - or null when unknown.</param>
-    public static Dictionary<string, List<ShipFit>> Read(DataCore core, Func<string, string?> typeOf)
+    public static Dictionary<string, List<ShipFit>> Read(DataCore core, Func<string, string?> typeOf) =>
+        ReadAll(core, typeOf).Npc;
+
+    /// <summary>
+    /// The NPC ships by part, as <see cref="Read"/>, and every other hull's own
+    /// stock parts by hull - what one comes out of the shop with.
+    /// </summary>
+    /// <remarks>
+    /// The same loadout walk serves both: a player hull's default loadout is
+    /// the fit it is sold with, and the Reference page's ship card lists it so
+    /// a part can be followed from the ship it ships on to where else it drops.
+    /// </remarks>
+    public static (Dictionary<string, List<ShipFit>> Npc, Dictionary<string, List<PartFit>> Stock) ReadAll(
+        DataCore core, Func<string, string?> typeOf)
     {
+        var stock = new Dictionary<string, List<PartFit>>(StringComparer.OrdinalIgnoreCase);
         var byHash = new Dictionary<Guid, DataRecord>();
         foreach (var record in core.Records()) byHash.TryAdd(record.Hash, record);
 
@@ -65,7 +84,8 @@ public static partial class GameShipLoot
                 && !record.FileName.Contains("/entities/groundvehicles/", StringComparison.OrdinalIgnoreCase)) continue;
 
             var ship = record.Name["EntityClassDefinition.".Length..];
-            if (!IsNpcShip(ship)) continue;
+            if (ship.EndsWith("_Template", StringComparison.OrdinalIgnoreCase)) continue;
+            var npc = IsNpcShip(ship);
 
             var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (var component in core.PointerArray(record, "Components"))
@@ -73,6 +93,17 @@ public static partial class GameShipLoot
                 if (component.StructIndex != loadoutComponent) continue;
                 if (core.PointerAt(core.InstanceAt(component), component.StructIndex, "loadout") is { } loadout)
                     Walk(core, byHash, loadout, counts, 0);
+            }
+
+            if (!npc)
+            {
+                var parts = counts
+                    .Where(c => typeOf(c.Key) is { } t && Kept.Contains(t))
+                    .Select(c => new PartFit(c.Key, c.Value))
+                    .OrderBy(p => p.Part, StringComparer.Ordinal)
+                    .ToList();
+                if (parts.Count > 0) stock[ship] = parts;
+                continue;
             }
 
             foreach (var (item, count) in counts)
@@ -83,10 +114,10 @@ public static partial class GameShipLoot
             }
         }
 
-        return found.ToDictionary(
+        return (found.ToDictionary(
             f => f.Key,
             f => f.Value.Select(s => new ShipFit(s.Key, s.Value)).OrderBy(s => s.Ship, StringComparer.Ordinal).ToList(),
-            StringComparer.OrdinalIgnoreCase);
+            StringComparer.OrdinalIgnoreCase), stock);
     }
 
     /// <summary>Counts every class a manual loadout fits, through nested ports - a gun on its mount.</summary>

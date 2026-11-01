@@ -43,4 +43,45 @@ public class ShipLootTests
     {
         Assert.Equal(crew, GameShipLoot.Crew(entityClass));
     }
+
+    private static GameLootData Fitted() => new()
+    {
+        Stock = new()
+        {
+            ["AEGS_Gladius"] = [new PartFit("KLWE_LaserRepeater_S3", 2), new PartFit("COOL_Bracer", 2)],
+            ["AEGS_Gladius_Valiant"] = [new PartFit("KLWE_LaserRepeater_S3", 2)],
+        },
+        Ships = new()
+        {
+            ["KLWE_LaserRepeater_S3"] = [new ShipFit("AEGS_Gladius_PU_AI_CRIM", 2), new ShipFit("AEGS_Gladius_Valiant_PU_AI_UEE", 2)],
+            ["BEHR_Missile_S2"] = [new ShipFit("AEGS_Gladius_PU_AI_CRIM", 4)],
+        },
+    };
+
+    /// <summary>
+    /// A part is followed both ways: from the hull to what it comes with, and
+    /// from the part to the hulls that come with it.
+    /// </summary>
+    [Fact]
+    public void Stock_parts_read_from_the_hull_and_from_the_part()
+    {
+        var loot = Fitted();
+
+        Assert.Equal(["COOL_Bracer", "KLWE_LaserRepeater_S3"], loot.PartsOf("aegs_gladius").Select(p => p.Part).Order());
+        Assert.Equal(["AEGS_Gladius", "AEGS_Gladius_Valiant"], loot.StockOn("KLWE_LaserRepeater_S3").Select(s => s.Ship));
+        Assert.Equal(4, loot.PartsOf("AEGS_Gladius_PU_AI_CRIM").Single(p => p.Part == "BEHR_Missile_S2").Count);
+    }
+
+    /// <summary>
+    /// The Valiant's NPC version is the Valiant's, not the Gladius's, though
+    /// its class starts with AEGS_Gladius_ too.
+    /// </summary>
+    [Fact]
+    public void An_npc_version_belongs_to_the_longest_hull_its_class_extends()
+    {
+        var loot = Fitted();
+
+        Assert.Equal(["AEGS_Gladius_PU_AI_CRIM"], loot.NpcVersionsOf("AEGS_Gladius"));
+        Assert.Equal(["AEGS_Gladius_Valiant_PU_AI_UEE"], loot.NpcVersionsOf("AEGS_Gladius_Valiant"));
+    }
 }

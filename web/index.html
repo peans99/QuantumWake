@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.22">
+  <link rel="stylesheet" href="app.css?v=0.20.23">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -70,7 +70,8 @@
       <button type="button" class="group-btn" data-glyph="▧">Reference<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="ships">Ships</button>
-        <button data-view="parts">Parts</button>
+        <button data-view="parts">Items</button>
+        <button data-view="loot">Loot</button>
         <button data-view="mining">Mining</button>
         <button data-view="crafting">Crafting</button>
       </div>
@@ -82,7 +83,6 @@
         <button data-view="hangar">Hangar</button>
         <button data-view="loadout">Loadout</button>
         <button data-view="stash">Stash</button>
-        <button data-view="loot">Loot</button>
         <button data-view="garage">Garage</button>
         <button data-view="armoury">Armoury</button>
       </div>
@@ -2139,10 +2139,11 @@
     <details class="reference-note">
       <summary>About this catalogue</summary>
       <p>Every flyable the community dataset describes — career, crew and what an
-        insurance claim costs — priced at UEX in-game purchase prices where a
-        shop sells one. Hover a price for every shop and rental desk, cheapest
-        first. Your own hangar lives on the Fleet page. Needs the community dataset
-        and UEX for prices in Settings.</p>
+        insurance claim costs — and every other hull your game install names,
+        priced at UEX in-game purchase prices where a shop sells one. Open a ship
+        for what it comes with, who flies one as an NPC, and where each part
+        drops or is sold. Your own hangar lives on the Fleet page. The spec sheet
+        needs the community dataset and prices need UEX, both in Settings.</p>
     </details>
     <div class="reference-results">
       <div class="reference-results-head">
@@ -2175,11 +2176,15 @@
     <div class="section-bar reference-toolbar-bar">
       <div class="reference-title">
         <span class="reference-kicker">Reference library</span>
-        <h2>Parts &amp; gear catalogue</h2>
+        <h2>Item catalogue</h2>
       </div>
       <div class="controls reference-toolbar">
         <select id="parts-type" class="select" title="Filter by type"></select>
-        <input type="search" id="parts-search" class="search" placeholder="Search parts and gear…"
+        <label class="toggle" title="Only items the game's own files put in a crate, on an NPC or on an NPC ship">
+          <input type="checkbox" id="parts-found">
+          <span>Can be found</span>
+        </label>
+        <input type="search" id="parts-search" class="search" placeholder="Search items…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
@@ -2202,6 +2207,7 @@
             <th class="num" title="A is best, D is worst — the game's own scale">Grade</th>
             <th>Maker</th><th class="num">Price</th>
             <th class="num">Stocked at</th><th>Cheapest at</th>
+            <th title="Where the game's own files say it can be found">Drops</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -4514,10 +4520,28 @@
     </div>
     <div class="entity-actions" id="entity-actions"></div>
   </aside>
+  <!-- The Reference detail: one item or one ship, opened from a catalogue
+       row, a loot panel or a drawer, and every part and ship in it opens in
+       turn - Back walks the trail. -->
+  <div class="ref-modal" id="ref-modal" hidden>
+    <div class="ref-modal-backdrop" id="ref-modal-backdrop"></div>
+    <div class="ref-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ref-modal-title">
+      <div class="ref-modal-head">
+        <button type="button" class="ghost tiny" id="ref-modal-back" hidden>&larr; Back</button>
+        <div class="ref-modal-titles">
+          <span class="reference-kicker" id="ref-modal-kicker"></span>
+          <h2 id="ref-modal-title"></h2>
+          <div class="muted" id="ref-modal-sub"></div>
+        </div>
+        <button type="button" class="ghost tiny" id="ref-modal-close">Close</button>
+      </div>
+      <div class="ref-modal-body" id="ref-modal-body"></div>
+    </div>
+  </div>
   <!-- Live toasts. Outside every view because they fire whatever page is open,
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.22"></script>
+<script src="app.js?v=0.20.23"></script>
 </body>
 </html>

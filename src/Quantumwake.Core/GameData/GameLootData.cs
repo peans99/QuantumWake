@@ -69,6 +69,65 @@ public sealed class GameLootData
     private Dictionary<string, List<ShipFit>>? _ships;
 
     /// <summary>
+    /// Every player hull's stock parts, keyed by the hull's class: what it
+    /// comes out of the shop with. Empty when item types were not known.
+    /// </summary>
+    public Dictionary<string, List<PartFit>> Stock { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The parts a hull carries as standard - a player hull's stock fit, or
+    /// what an NPC ship flies with - or none.
+    /// </summary>
+    public IReadOnlyList<PartFit> PartsOf(string? hull)
+    {
+        if (hull is not { Length: > 0 }) return [];
+        IndexHulls();
+        return _stock!.TryGetValue(hull, out var stock) ? stock
+            : _npcParts!.TryGetValue(hull, out var npc) ? npc : [];
+    }
+
+    /// <summary>The player hulls that carry a part as standard, or none.</summary>
+    public IReadOnlyList<ShipFit> StockOn(string? itemClass)
+    {
+        if (itemClass is not { Length: > 0 }) return [];
+        IndexHulls();
+        return _stockOn!.TryGetValue(itemClass, out var hulls) ? hulls : [];
+    }
+
+    /// <summary>
+    /// The NPC ships built on a hull - <c>AEGS_Gladius_PU_AI_CRIM_IK</c> on
+    /// <c>AEGS_Gladius</c> - shortest class first.
+    /// </summary>
+    public IReadOnlyList<string> NpcVersionsOf(string? hull)
+    {
+        if (hull is not { Length: > 0 }) return [];
+        IndexHulls();
+        return [.. _npcParts!.Keys
+            .Where(k => k.StartsWith(hull + "_", StringComparison.OrdinalIgnoreCase)
+                // AEGS_Gladius_Valiant is its own hull, not an NPC Gladius.
+                && !_stock!.Keys.Any(h => h.Length > hull.Length && k.StartsWith(h + "_", StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(k => k.Length).ThenBy(k => k, StringComparer.Ordinal)];
+    }
+
+    private Dictionary<string, List<PartFit>>? _stock;
+    private Dictionary<string, List<PartFit>>? _npcParts;
+    private Dictionary<string, List<ShipFit>>? _stockOn;
+
+    private void IndexHulls()
+    {
+        if (_stockOn is not null) return;
+        _stock = new Dictionary<string, List<PartFit>>(Stock, StringComparer.OrdinalIgnoreCase);
+        _npcParts = Ships
+            .SelectMany(p => p.Value.Select(s => (s.Ship, Fit: new PartFit(p.Key, s.Count))))
+            .GroupBy(x => x.Ship, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Fit).OrderBy(f => f.Part, StringComparer.Ordinal).ToList(), StringComparer.OrdinalIgnoreCase);
+        _stockOn = Stock
+            .SelectMany(h => h.Value.Select(p => (p.Part, Fit: new ShipFit(h.Key, p.Count))))
+            .GroupBy(x => x.Part, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Fit).OrderBy(f => f.Ship, StringComparer.Ordinal).ToList(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// The kinds of NPC on foot that wear or carry each item, keyed by the
     /// item's class. Empty when the archive or item types were not available.
     /// </summary>
@@ -231,11 +290,16 @@ public sealed class GameLootData
                 if (shown.Contains(preset)) places[preset] = list;
         }
 
+        var (npcShips, stock) = typeOf is null
+            ? (new Dictionary<string, List<ShipFit>>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, List<PartFit>>(StringComparer.OrdinalIgnoreCase))
+            : GameShipLoot.ReadAll(core, typeOf);
+
         return new GameLootData
         {
             Items = items, Vias = vias, Rolls = rolls, Sources = sources,
             Places = places, PlacesRead = p4k is not null,
-            Ships = typeOf is null ? new(StringComparer.OrdinalIgnoreCase) : GameShipLoot.Read(core, typeOf),
+            Ships = npcShips,
+            Stock = stock,
             Npcs = typeOf is null || p4k is null ? new(StringComparer.OrdinalIgnoreCase) : GameNpcOutfits.Read(p4k, core, typeOf),
         };
     }

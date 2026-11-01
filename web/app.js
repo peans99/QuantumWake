@@ -2604,8 +2604,8 @@ async function runEntityAction(action, card, button) {
 /** The full page for this kind, which the drawer summarises rather than replaces. */
 function openEntityDetails(card) {
   if (card.kind === 'commodity') return openCommodity(card.name);
-  if (card.kind === 'ship') return showView('fleet');
-  if (card.kind === 'part') return showView('parts');
+  if (card.kind === 'ship') return openRefDetail('ship', card.id);
+  if (card.kind === 'part') return openRefDetail('item', card.id);
   return entityMap(card.id, card.name);
 }
 
@@ -4960,22 +4960,30 @@ function lootTrackControl(name) {
   return box;
 }
 
-function renderLootWhere(panel, data) {
+function renderLootWhere(panel, data, { embedded = false } = {}) {
   panel.textContent = '';
 
-  const head = el('div', 'loot-where-head');
-  head.append(el('h3', null, data.name || prettyItem(data.item)));
-  const tools = el('div', 'loot-where-tools');
-  tools.append(lootTrackControl(data.name || prettyItem(data.item)));
-  const close = el('button', 'ghost tiny', tx('Close'));
-  close.addEventListener('click', () => { panel.hidden = true; lootWhereItem = null; });
-  tools.append(close);
-  head.append(tools);
-  panel.append(head);
+  // In the Reference modal the modal's own head names it and carries Track it.
+  if (!embedded) {
+    const head = el('div', 'loot-where-head');
+    head.append(el('h3', null, data.name || prettyItem(data.item)));
+    const tools = el('div', 'loot-where-tools');
+    tools.append(lootTrackControl(data.name || prettyItem(data.item)));
+    const more = el('button', 'ghost tiny loot-where-more', tx('Details'));
+    more.title = tx('Open it in Reference: what it is, every shop, what it is fitted to');
+    more.addEventListener('click', () => openRefDetail('item', data.item));
+    tools.append(more);
+    const close = el('button', 'ghost tiny', tx('Close'));
+    close.addEventListener('click', () => { panel.hidden = true; lootWhereItem = null; });
+    tools.append(close);
+    head.append(tools);
+    panel.append(head);
+  }
 
   // Finding one is not the only way to get one: the shops come first when
   // either price source has something to say.
-  const prices = lootPriceLines(data.buy, data.paid);
+  // The modal lists every shop above this, so it leaves the line out.
+  const prices = embedded ? [] : lootPriceLines(data.buy, data.paid);
   if (prices.length) {
     const buy = el('p', 'loot-where-buy');
     buy.append(el('span', 'muted', `${tx('Buy')} · `));
@@ -5139,7 +5147,8 @@ function renderLootNpcs(panel, npcs) {
 function renderLootShips(panel, ships) {
   const byModel = new Map();
   for (const s of ships) {
-    const row = byModel.get(s.name) || { name: s.name, crews: new Set(), variants: [], most: 0 };
+    const row = byModel.get(s.name) || { name: s.name, crews: new Set(), variants: [], most: 0, first: s.ship };
+    if (s.ship.length < row.first.length) row.first = s.ship;
     // The server says who flies it in English words it owns; each is translated.
     row.crews.add(s.crew.split(' · ').map((w) => tx(w)).join(' · '));
     row.variants.push(s.ship);
@@ -5184,7 +5193,9 @@ function renderLootShips(panel, ships) {
     const body = el('tbody');
     for (const model of shown) {
       const tr = el('tr');
-      tr.append(el('td', null, model.name));
+      const ship = el('td');
+      ship.append(refLink('ship', model.first, model.name));
+      tr.append(ship);
       const crews = el('td', 'muted loot-where-containers', [...model.crews].sort((x, y) => x.localeCompare(y)).join(', '));
       crews.title = model.variants.join(', ');
       tr.append(crews);
@@ -5303,8 +5314,16 @@ function renderShipsRef() {
 
   for (const ship of rows) {
     const tr = el('tr');
-    const name = el('td', null, ship.name);
-    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ` · ${tx('ground')}`));
+    const name = el('td');
+    name.append(refLink('ship', ship.className || ship.name, ship.name));
+    // Unknown is not "ground": the install says which folder a hull is in
+    // only when it places a cargo grid.
+    if (ship.isSpaceship === false) name.append(el('span', 'note-inline', ` · ${tx('ground')}`));
+    if (ship.source === 'install') {
+      const from = el('span', 'note-inline', ` · ${tx('install')}`);
+      from.title = tx('Named by your game install and not described by the community dataset, so the spec sheet is blank.');
+      name.append(from);
+    }
     tr.append(name);
 
     tr.append(el('td', 'muted', ship.career ?? '—'));
@@ -5348,6 +5367,349 @@ function renderShipsRef() {
 /** A hover list of places and prices, one a line, cheapest first as given. */
 function placeList(heading, places) {
   return `${heading} (${places.length}):\n${places.map((p) => `${p.terminal} — ${money(p.price)}`).join('\n')}`;
+}
+
+/* ---------- reference detail: one item or one ship, and every link out of it ---------- */
+
+/*
+ * The catalogues said what there is, and the Loot page where something comes
+ * from, but nothing joined them: a part seen on a ship could not be followed
+ * to where else it drops, nor a crate find to the ships it comes fitted to.
+ * The modal is the join. Every part and every ship in it opens in turn, and
+ * Back walks the trail, so a hunt can go ship → gun → the NPCs who carry it
+ * → back to the ship without losing its place.
+ */
+
+let refTrail = [];
+let refTicket = 0;
+
+/** A name that opens its own Reference card. */
+function refLink(kind, id, label) {
+  const link = el('button', 'place-link ref-link', label || prettyItem(id || ''));
+  link.type = 'button';
+  link.title = kind === 'ship' ? tx('Open this ship') : tx('Open this item');
+  link.addEventListener('click', () => openRefDetail(kind, id));
+  return link;
+}
+
+async function openRefDetail(kind, id, { push = true } = {}) {
+  if (!kind || !id) return false;
+  const modal = $('#ref-modal');
+  if (!modal) return false;
+
+  if (push) {
+    if (modal.hidden) refTrail = [];
+    const last = refTrail[refTrail.length - 1];
+    if (!last || last.kind !== kind || last.id !== id) refTrail.push({ kind, id });
+  }
+
+  const ticket = ++refTicket;
+  modal.hidden = false;
+  document.body.classList.add('ref-modal-open');
+  $('#ref-modal-back').hidden = refTrail.length < 2;
+  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : tx('Item');
+  $('#ref-modal-title').textContent = prettyItem(id);
+  $('#ref-modal-sub').textContent = '';
+  const body = $('#ref-modal-body');
+  body.replaceChildren(el('p', 'muted', tx('Reading what is known…')));
+
+  let data;
+  try {
+    data = await getJson(`/api/reference/${kind === 'ship' ? 'ship' : 'item'}?id=${encodeURIComponent(id)}`);
+  } catch {
+    if (ticket === refTicket) body.replaceChildren(el('p', 'muted', tx('Nothing is known about that.')));
+    return false;
+  }
+
+  // A second click while the first was in flight wins.
+  if (ticket !== refTicket) return false;
+  if (kind === 'ship') renderShipDetail(body, data);
+  else renderItemDetail(body, data);
+  body.scrollTop = 0;
+  return true;
+}
+
+function closeRefDetail() {
+  refTicket++;
+  const modal = $('#ref-modal');
+  if (modal) modal.hidden = true;
+  document.body.classList.remove('ref-modal-open');
+  refTrail = [];
+}
+
+function backRefDetail() {
+  if (refTrail.length < 2) return Promise.resolve(false);
+  refTrail.pop();
+  const previous = refTrail[refTrail.length - 1];
+  return openRefDetail(previous.kind, previous.id, { push: false });
+}
+
+$('#ref-modal-close')?.addEventListener('click', closeRefDetail);
+$('#ref-modal-backdrop')?.addEventListener('click', closeRefDetail);
+$('#ref-modal-back')?.addEventListener('click', () => backRefDetail());
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && $('#ref-modal') && !$('#ref-modal').hidden) closeRefDetail();
+});
+
+/** One section of the modal: a heading, an optional caption, then its content. */
+function refSection(title, caption) {
+  const section = el('section', 'ref-section');
+  section.append(el('h3', 'loot-where-sub', title));
+  if (caption) section.append(el('p', 'muted caption', caption));
+  return section;
+}
+
+/** Label, value and who says so, in the drawer's own voice. */
+function refFacts(rows) {
+  const list = el('dl', 'ref-facts');
+  for (const [label, value, source] of rows) {
+    if (value === null || value === undefined || value === '') continue;
+    list.append(el('dt', null, label));
+    const dd = el('dd', null, value);
+    if (source) dd.append(el('span', 'ref-source', ` · ${source}`));
+    list.append(dd);
+  }
+  return list;
+}
+
+/** A place-and-price table, cheapest first as given, eight rows then a button. */
+function refPriceTable(rows, placeLabel) {
+  const holder = el('div');
+  const more = el('button', 'ghost tiny');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+
+  function draw() {
+    const table = el('table', 'loot-where-table ref-price-table');
+    const head = el('tr');
+    head.append(el('th', null, placeLabel), el('th', 'num', tx('Price')));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const body = el('tbody');
+    for (const row of expanded ? rows : rows.slice(0, 8)) {
+      const tr = el('tr');
+      tr.append(el('td', null, row.place), el('td', 'num', money(row.price)));
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    holder.replaceChildren(wrap);
+    if (rows.length > 8) {
+      more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: rows.length });
+      holder.append(more);
+    }
+  }
+
+  draw();
+  return holder;
+}
+
+function renderItemDetail(body, data) {
+  const card = data.card;
+  const name = card?.name || data.where?.name || prettyItem(data.className);
+  $('#ref-modal-title').textContent = name;
+  $('#ref-modal-sub').textContent = serverText(card?.subtitle) || '';
+  body.textContent = '';
+
+  const top = el('div', 'ref-top');
+  if (card?.holding) {
+    const holding = el('p', 'ref-holding');
+    holding.append(el('strong', null, serverText(card.holding.status)));
+    if (card.holding.detail) holding.append(el('span', 'muted', ` · ${serverText(card.holding.detail)}`));
+    top.append(holding);
+  }
+  top.append(lootTrackControl(name));
+  body.append(top);
+
+  // The text table stores line breaks as a backslash and an n.
+  if (card?.blurb) body.append(el('p', 'ref-blurb', card.blurb.replace(/\\n/g, '\n')));
+  if (card?.facts?.length) {
+    body.append(refFacts(card.facts.map((f) => [tx(f.label), serverText(f.value), tx(f.source)])));
+  }
+
+  // Buying is the first way to get one, so it leads.
+  const buy = refSection(tx('Where to buy it'));
+  const shops = data.shops || [];
+  if (shops.length) {
+    buy.append(el('p', 'muted caption', tx('{count} shops in the UEX prices, cheapest first.', { count: shops.length })));
+    buy.append(refPriceTable(shops, tx('Shop')));
+  } else {
+    buy.append(el('p', 'muted caption', data.uex
+      ? tx('No shop in the UEX prices stocks it.')
+      : tx('Turn on UEX prices in Settings to see which shops stock it.')));
+  }
+  const paid = data.where?.paid;
+  if (paid) {
+    const line = el('p', 'loot-where-buy');
+    line.append(...lootPriceLines(null, paid));
+    buy.append(line);
+  }
+  body.append(buy);
+
+  if (data.craft) {
+    const craft = refSection(tx('Crafting'));
+    craft.append(el('p', null, tx('Crafted in {time} from {materials}.', {
+      time: craftTime(data.craft.craftSeconds),
+      materials: (data.craft.materials || []).join(', ') || tx('nothing listed'),
+    })));
+    craft.append(el('p', 'muted caption', data.craft.byDefault
+      ? tx('Every crafter knows this blueprint from the start.')
+      : tx('The blueprint is a reward; the Crafting page says which.')));
+    body.append(craft);
+  }
+
+  const stockOn = data.stockOn || [];
+  if (stockOn.length) {
+    const fitted = refSection(tx('Comes fitted to'),
+      txn(stockOn.length, 'One ship comes out of the shop with it.', '{count} ships come out of the shop with it.'));
+    fitted.append(refLinkList(stockOn, (ship, li) => {
+      li.append(refLink('ship', ship.className, ship.name));
+      if (ship.count > 1) li.append(el('span', 'muted', ` ×${ship.count}`));
+    }));
+    body.append(fitted);
+  }
+
+  const spawns = refSection(tx('Where it spawns'));
+  const panel = el('div', 'ref-loot');
+  if (data.where) renderLootWhere(panel, data.where, { embedded: true });
+  spawns.append(panel);
+  body.append(spawns);
+}
+
+/** A list of links, two dozen then a button: a common gun comes fitted to 150 hulls. */
+function refLinkList(rows, fill) {
+  const holder = el('div');
+  const more = el('button', 'ghost tiny');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  function draw() {
+    const list = el('ul', 'ref-links');
+    for (const row of expanded ? rows : rows.slice(0, 24)) {
+      const li = el('li');
+      fill(row, li);
+      list.append(li);
+    }
+    holder.replaceChildren(list);
+    if (rows.length > 24) {
+      more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: rows.length });
+      holder.append(more);
+    }
+  }
+  draw();
+  return holder;
+}
+
+/** A part list: name opening its own card, type, size, grade and count. */
+function refPartsTable(parts) {
+  const table = el('table', 'loot-where-table ref-parts-table');
+  const head = el('tr');
+  head.append(el('th', null, tx('Part')), el('th', null, tx('Type')),
+    el('th', 'num', tx('Size')), el('th', 'num', tx('Grade')), el('th', 'num', tx('Fitted')));
+  const thead = el('thead');
+  thead.append(head);
+  table.append(thead);
+  const body = el('tbody');
+  const sorted = [...parts].sort((a, b) => (a.type || '').localeCompare(b.type || '') || (b.size || 0) - (a.size || 0)
+    || (a.name || '').localeCompare(b.name || ''));
+  for (const part of sorted) {
+    const tr = el('tr');
+    const name = el('td');
+    name.append(refLink('item', part.className, part.name));
+    tr.append(name);
+    tr.append(el('td', 'muted', prettyType(part.type)));
+    tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
+    tr.append(el('td', 'num', gradeLetter(part.grade)));
+    tr.append(el('td', 'num', `×${part.count}`));
+    body.append(tr);
+  }
+  table.append(body);
+  const wrap = el('div', 'table-wrap');
+  wrap.append(table);
+  return wrap;
+}
+
+function renderShipDetail(body, data) {
+  const c = data.community;
+  $('#ref-modal-title').textContent = data.name;
+  $('#ref-modal-sub').textContent = data.npc
+    ? `${tx('NPC ship')} · ${data.crew.split(' · ').map((w) => tx(w)).join(' · ')}`
+    : [c?.career, c?.role].filter(Boolean).join(' · ');
+  body.textContent = '';
+
+  if (data.baseHull) {
+    const line = el('p', 'ref-holding');
+    line.append(el('span', 'muted', `${tx('Built on')} `), refLink('ship', data.baseHull.className, data.baseHull.name));
+    body.append(line);
+  }
+  if (!data.npc) {
+    const flown = el('p', 'ref-holding');
+    flown.append(el('strong', null, data.flown
+      ? txn(data.flown.sorties, 'flown once', 'flown {count} times')
+      : tx('not flown here')));
+    flown.append(el('span', 'muted', data.flown
+      ? ` · ${tx('last {date}', { date: dayOf(data.flown.lastFlown) })}`
+      : ` · ${tx('no sortie in these logs')}`));
+    body.append(flown);
+  }
+
+  const community = tx('the community dataset');
+  const install = tx('the game files');
+  const size = data.size
+    ? `${data.size.length.toLocaleString()} × ${data.size.beam.toLocaleString()} × ${data.size.height.toLocaleString()} m`
+    : null;
+  body.append(refFacts([
+    [tx('Crew'), c?.crew > 0 ? String(c.crew) : null, community],
+    [tx('Cargo'), data.cargo ? `${data.cargo.scu.toLocaleString()} SCU` : null,
+      data.cargo?.from === 'install' ? install : community],
+    [tx('Speed'), c?.scmSpeed > 0 ? `${Math.round(c.scmSpeed)} / ${Math.round(c.maxSpeed)} m/s` : null, community],
+    [tx('Shields'), c?.shieldHp > 0 ? c.shieldHp.toLocaleString() : null, community],
+    [tx('Hull'), c?.health > 0 ? c.health.toLocaleString() : null, community],
+    [tx('Length × beam × height'), size, install],
+    [tx('Claim'), c?.expeditedCost > 0 ? tx('{fee} to expedite', { fee: money(c.expeditedCost) }) : null, community],
+  ]));
+
+  if (!data.npc) {
+    const buy = refSection(tx('Where to buy it'));
+    const shops = (data.shops || []).map((s) => ({ place: s.terminal, price: s.price }));
+    const rentals = (data.rentals || []).map((s) => ({ place: s.terminal, price: s.price }));
+    if (shops.length) buy.append(refPriceTable(shops, tx('Shop')));
+    else buy.append(el('p', 'muted caption', data.uex
+      ? tx('No shop in the UEX prices sells it in game.')
+      : tx('Turn on UEX prices in Settings to see which shops sell it.')));
+    if (rentals.length) {
+      buy.append(el('h4', 'loot-where-sub', tx('Rent')));
+      buy.append(refPriceTable(rentals, tx('Rental desk')));
+    }
+    body.append(buy);
+  }
+
+  const parts = data.parts || [];
+  const fitted = refSection(data.npc ? tx('Flies with') : tx('Comes with'),
+    parts.length
+      ? (data.npc
+        ? tx('Its default loadout, from the game files: what a disabled one carries. Open a part for where else it drops.')
+        : tx('Its default loadout, from the game files: what it comes out of the shop with. Open a part for where else it drops or is sold.'))
+      : tx('The game files give it no default loadout of weapons or components.'));
+  if (parts.length) fitted.append(refPartsTable(parts));
+  body.append(fitted);
+
+  const versions = data.npcVersions || [];
+  if (versions.length) {
+    const npcs = refSection(tx('Flown by NPCs'),
+      txn(versions.length, 'One NPC version, named for who flies it. Open it for its parts.',
+        '{count} NPC versions, named for who flies them. Open one for its parts.'));
+    npcs.append(refLinkList(versions, (v, li) => {
+      li.append(refLink('ship', v.className, v.crew.split(' · ').map((w) => tx(w)).join(' · ')));
+      // Two Criminal Gladiuses are different ships - _PU_AI_CRIM and
+      // _PU_AI_CRIM_IK - so the rest of the class tells them apart.
+      const tail = v.className.startsWith(`${data.className}_`) ? v.className.slice(data.className.length + 1) : v.className;
+      const count = (v.parts || []).reduce((n, p) => n + p.count, 0);
+      li.append(el('span', 'muted', ` · ${tail} · ${txn(count, '{count} part', '{count} parts')}`));
+    }));
+    body.append(npcs);
+  }
 }
 
 async function loadPartsRef() {
@@ -5412,8 +5774,10 @@ function renderPartsRef() {
   const body = $('#parts-table tbody');
   body.textContent = '';
 
+  const foundOnly = Boolean($('#parts-found')?.checked);
   const rows = partCatalogue.filter((p) =>
     (!type || p.type === type)
+    && (!foundOnly || partDrops(p))
     && (!term
       || p.className.toLowerCase().includes(term)
       || (p.name || '').toLowerCase().includes(term)
@@ -5437,7 +5801,7 @@ function renderPartsRef() {
     const td = el('td', 'muted', partCatalogue.length
       ? tx('Nothing matches that filter.')
       : gameDataExcuse() || tx('No parts were found in your game files.'));
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -5456,8 +5820,8 @@ function renderPartsRef() {
     // it costs and where - so the name always opens one, where it used to open
     // only for the items the game happened to write a paragraph about.
     const open = el('button', 'place-link commodity-open', shown);
-    open.title = tx('What Quantum Wake knows about this');
-    open.addEventListener('click', () => openEntity('part', part.className));
+    open.title = tx('Everything known about it: where it drops, who sells it, what it is fitted to');
+    open.addEventListener('click', () => openRefDetail('item', part.className));
     label.append(open);
 
     label.append(trackButton(shown));
@@ -5477,9 +5841,22 @@ function renderPartsRef() {
     if (part.terminals?.length) stocked.title = part.terminals.join('\n');
     tr.append(stocked);
     tr.append(el('td', 'muted', part.cheapestAt ?? '—'));
+    const drops = partDrops(part);
+    tr.append(el('td', drops ? null : 'muted', drops || '—'));
 
     body.append(tr);
   }
+}
+
+/**
+ * Where the files put an item to be found, in a word: the best roll from a
+ * crate, else who wears it, else the NPC ships that fly with it.
+ */
+function partDrops(part) {
+  if (part.bestRoll > 0) return tx('{odds} a roll', { odds: lootPercent(part.bestRoll) });
+  if (part.npcs > 0) return txn(part.npcs, 'on {count} NPC', 'on {count} NPCs');
+  if (part.ships > 0) return txn(part.ships, 'on {count} NPC ship', 'on {count} NPC ships');
+  return '';
 }
 
 /**
@@ -5506,6 +5883,7 @@ onInput('#ships-search', renderShipsRef);
 $('#ships-career')?.addEventListener('change', renderShipsRef);
 onInput('#parts-search', renderPartsRef);
 $('#parts-type')?.addEventListener('change', renderPartsRef);
+$('#parts-found')?.addEventListener('change', renderPartsRef);
 
 /* ---------- mining and salvage spawns ---------- */
 

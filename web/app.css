@@ -7508,3 +7508,39 @@ body.overlay .tabs button[data-glyph]::before { display: none; }
   body:not(.overlay) .tabs button { padding-inline: 6px; font-size: 10px; letter-spacing: .02em; }
   html:lang(fr) body:not(.overlay) .tabs button { padding-inline: 5px; letter-spacing: 0; }
 }
+
+/* ---- Reference detail modal: one item or ship, every part and hull in it a link ---- */
+.ref-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 56px 16px 24px; }
+.ref-modal[hidden] { display: none; }
+.ref-modal-backdrop { position: absolute; inset: 0; background: rgba(2, 6, 12, .72); }
+.ref-modal-panel {
+  position: relative;
+  width: min(980px, 100%);
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, rgba(10, 20, 32, .99), rgba(6, 12, 20, .98));
+  border: 1px solid var(--rule-hot);
+  clip-path: var(--chamfer);
+}
+.ref-modal-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px 10px; border-bottom: 1px solid var(--rule); }
+.ref-modal-titles { flex: 1 1 auto; min-width: 0; }
+.ref-modal-titles h2 { margin: 2px 0 2px; }
+.ref-modal-body { overflow-y: auto; padding: 12px 18px 18px; font-size: 12.5px; line-height: 1.55; }
+body.ref-modal-open { overflow: hidden; }
+.ref-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 6px; }
+.ref-holding { margin: 0 0 6px; }
+.ref-blurb { max-width: 82ch; color: var(--muted); white-space: pre-line; }
+.ref-facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 8px 0 4px; }
+.ref-facts dt { color: var(--dim); font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding-top: 2px; }
+.ref-facts dd { margin: 0; }
+.ref-source { color: var(--dim); font-size: 11px; }
+.ref-section { margin-top: 16px; padding-top: 6px; border-top: 1px solid var(--rule); }
+.ref-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 16px; margin: 4px 0 6px; padding: 0; list-style: none; }
+.ref-link { text-align: left; color: var(--cyan); }
+.ref-price-table, .ref-parts-table { max-width: 640px; }
+@media (max-width: 640px) {
+  .ref-modal { padding: 0; }
+  .ref-modal-panel { max-height: 100vh; height: 100vh; }
+  .ref-facts { grid-template-columns: 1fr; }
+}
