@@ -36,7 +36,7 @@ const PAGE_GLYPHS = Object.freeze({
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
   ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
-  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
+  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', data: '⊟', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
   commodity: '◩', share: '⇱', help: '◔',
 });
@@ -478,6 +478,8 @@ function showView(name) {
   if (name === 'jobs' || name === 'blueprints') loadJobs().catch(() => {});
   if (name === 'checklists') loadChecklists().catch(() => {});
   if (name === 'imports') loadImports().catch(() => {});
+  // Every store as it is now: the page is a reading, not a cache.
+  if (name === 'data') loadDataPage().catch(() => {});
   if (name === 'loadout') loadKits().catch(() => {});
   if (name === 'commodities') renderSharedReceipts().catch(() => {});
   if (name === 'blueprints') renderSharedBlueprints().catch(() => {});
@@ -21760,7 +21762,6 @@ async function renderSettings() {
 
   await renderUexAuto();
   await renderUexFeeds();
-  await renderSignals();
   await renderExportPreview();
   await renderBackupPreview();
   await renderDiagnostics();
@@ -22780,6 +22781,230 @@ $('#export-save')?.addEventListener('click', () => saveExport().catch(() => {}))
  * today: someone coming back after a month away should not be told that
  * everything broke while they were gone.
  */
+/* ---------- what was read ---------- */
+
+/*
+ * Settings → What was read (0.20.36). Every place the app reads from, one
+ * card each, in the order the app trusts them: the logs, the game files, the
+ * two downloads, the screenshots, then what the pilot wrote. The pieces all
+ * existed - the Log page knew which files were read, Settings whether the
+ * dataset was on, Diagnostics the session count - but "what does this app
+ * know about me, and from where" took five pages to answer.
+ */
+async function loadDataPage() {
+  const host = $('#data-sections');
+  if (!host) return;
+  const status = $('#data-status');
+  if (!host.childElementCount) status.textContent = tx('Reading every store…');
+
+  let data;
+  try {
+    data = await getJson('/api/data');
+  } catch {
+    status.textContent = tx('The stores could not be read. Refresh after the local server reconnects.');
+    return;
+  }
+
+  status.textContent = '';
+  renderDataPage(data);
+  await renderSignals();
+}
+
+function renderDataPage(data) {
+  const host = $('#data-sections');
+  host.textContent = '';
+  const taken = $('#data-taken');
+  if (taken) taken.textContent = tx('read {when}', { when: stampOf(data.takenAt) });
+
+  host.append(
+    dataLogsCard(data.logs || {}),
+    dataGameFilesCard(data.gameFiles || {}),
+    dataCommunityCard(data.community || {}),
+    dataUexCard(data.uex || {}),
+    dataScreensCard(data.screens || {}),
+    dataYoursCard(data.yours || {}),
+  );
+  renderDataFolder(data.folder || {});
+}
+
+/** One source: its name and badge, a one-line verdict, the facts, a way on. */
+function dataCard(title, source, verdict, rows, onward = null) {
+  const card = el('section', 'card data-card');
+  const head = el('div', 'data-card-head');
+  head.append(el('h3', null, title));
+  if (source) head.append(el('span', `data-source ${source.kind}`, source.label));
+  if (onward) {
+    const go = el('button', 'ghost tiny', onward.label);
+    go.type = 'button';
+    go.addEventListener('click', onward.open);
+    head.append(go);
+  }
+  card.append(head);
+  if (verdict) card.append(el('p', verdict.ok ? 'data-verdict' : 'data-verdict muted', verdict.text));
+  card.append(refFacts(rows));
+  return card;
+}
+
+const tally = (n) => (n > 0 ? Number(n).toLocaleString() : '—');
+
+function dataLogsCard(logs) {
+  const files = logs.files || {};
+  const sessions = logs.sessions || {};
+  const verdict = !logs.found
+    ? { ok: false, text: tx('No Star Citizen install was found, so no log has been read.') }
+    : files.current > 0
+      ? { ok: true, text: tx('{sessions} sessions read from {files} log files', { sessions: tally(sessions.total), files: tally(files.current) }) }
+      : { ok: false, text: tx('Nothing read yet.') };
+
+  const states = [
+    files.changed > 0 ? txn(files.changed, '{count} changed since it was read', '{count} changed since they were read') : null,
+    files.unread > 0 ? txn(files.unread, '{count} never read', '{count} never read') : null,
+    files.gone > 0 ? txn(files.gone, '{count} read, since deleted by the game', '{count} read, since deleted by the game') : null,
+  ].filter(Boolean).join(' · ');
+
+  const wipe = logs.wipe && logs.wipe.hidden > 0
+    ? tx('{count} before your wipe of {date} are kept but not counted', { count: logs.wipe.hidden, date: dateOf(logs.wipe.at) })
+    : null;
+
+  return dataCard(tx('Your game logs'), { kind: 'game-log', label: tx('Game log') }, verdict, [
+    [tx('Game install'), logs.found ? `${logs.channel || ''} · ${logs.root || ''}` : null],
+    [tx('Log files'), logs.found ? `${tally(files.onDisk)} · ${megabytes(files.bytes || 0)}` : null],
+    [tx('State'), states || (files.current > 0 ? tx('all read, all current') : null)],
+    [tx('Sessions'), sessions.total > 0 ? `${tally(sessions.total)} · ${tx('{first} to {last}', { first: dateOf(sessions.first), last: dateOf(sessions.last) })}` : null],
+    // The five most played; a long history runs to eighteen builds, and the
+    // full list read as a wall of numbers.
+    [tx('Game builds'), (sessions.builds || []).length
+      ? [sessions.builds.slice(0, 5).map((b) => `${b.build} ×${b.sessions}`).join(', '),
+        sessions.builds.length > 5 ? tx('{count} more', { count: sessions.builds.length - 5 }) : null].filter(Boolean).join(' · ')
+      : null],
+    [tx('Wipe'), wipe],
+    [tx('Last scan'), logs.lastScan
+      ? `${stampOf(logs.lastScan.finishedAt)} · ${txn(logs.lastScan.files, '{count} file', '{count} files')}, ${txn(logs.lastScan.parsed, '{count} re-read', '{count} re-read')}${logs.lastScan.forced ? ` · ${tx('forced')}` : ''}`
+      : null],
+  ], { label: tx('Every file, on the Log page'), open: () => showView('log') });
+}
+
+function dataGameFilesCard(game) {
+  const status = game.status || {};
+  const c = game.catalogues || {};
+  const names = game.names || {};
+  const verdict = status.state === 'ready'
+    ? { ok: true, text: tx('Read in {seconds} s, {when}', { seconds: status.seconds ?? '?', when: stampOf(status.finishedAt) }) }
+    : status.state === 'reading'
+      ? { ok: false, text: tx('Reading now…') }
+      : { ok: false, text: status.problem || tx('Not read.') };
+
+  return dataCard(tx('Your game files'), { kind: 'game-install', label: tx('Game files') }, verdict, [
+    [tx('Game install'), game.root || null],
+    [tx('Names'), names.loaded ? tx('{items} items, {vehicles} vehicles, {places} places', { items: tally(names.items), vehicles: tally(names.vehicles), places: tally(names.places) }) : null],
+    [tx('Items described'), tally(c.items)],
+    [tx('Commodities'), tally(c.commodities)],
+    [tx('Vehicles'), tally(c.vehicles)],
+    [tx('Places'), tally(c.places)],
+    [tx('Recipes'), tally(c.recipes)],
+    [tx('Mineral deposits'), tally(c.deposits)],
+    [tx('Paints'), tally(c.paints)],
+    [tx('Cargo grids'), tally(c.cargoHulls)],
+    [tx('Cargo crates'), tally(c.crates)],
+    [tx('Wikelo trades'), tally(c.wikeloTrades)],
+    [tx('Guns'), tally(c.weapons)],
+    [tx('Armour pieces'), tally(c.armour)],
+  ]);
+}
+
+function dataCommunityCard(community) {
+  const verdict = community.enabled
+    ? { ok: true, text: tx('Dump {dump} · fetched {when}', { dump: community.dump || '?', when: stampOf(community.fetchedAt) }) }
+    : { ok: false, text: tx('Off. It is a download you turn on in Settings → General.') };
+
+  return dataCard(tx('Community dataset'), { kind: 'community-data', label: tx('Community data') }, verdict, community.enabled ? [
+    [tx('Commodities'), tally(community.commodities)],
+    [tx('Ships'), tally(community.ships)],
+    [tx('Items'), tally(community.items)],
+    [tx('Blueprints'), tally(community.blueprints)],
+  ] : [], { label: tx('Settings'), open: () => showView('settings') });
+}
+
+function dataUexCard(uex) {
+  const verdict = uex.enabled
+    ? { ok: true, text: txn(uex.prices, '{count} commodity price', '{count} commodity prices') }
+    : { ok: false, text: tx('Off. Prices need UEX, in Settings.') };
+
+  return dataCard(tx('UEX'), { kind: 'uex-prices', label: tx('UEX') }, verdict, [
+    [tx('Keys'), uex.hasCredentials ? tx('saved') : tx('none saved')],
+    ...(uex.feeds || []).map((f) => [tx(f.title), f.enabled
+      ? (f.fetchedAt ? tx('on · fetched {when}', { when: stampOf(f.fetchedAt) }) : tx('on'))
+      : tx('off')]),
+  ], { label: tx('Settings'), open: () => showView('settings') });
+}
+
+/* The screenshot kinds, in the page's words; the server's enum names are keys. */
+const SCREEN_KIND_WORDS = Object.freeze({
+  Tooltip: 'Item tooltips', Loadout: 'Ship loadouts', Map: 'Map footers', MobiGlas: 'mobiGlas',
+  Contracts: 'Contracts app', Fleet: 'Fleet Manager', Reputation: 'Rep app', Kiosk: 'Kiosks',
+  Mining: 'Mining scans', Refinery: 'Refinery orders', Unknown: 'Unrecognised',
+});
+
+function dataScreensCard(screens) {
+  const verdict = !screens.canRead
+    ? { ok: false, text: tx('No text reader on this machine, so screenshots cannot be read.') }
+    : screens.watching
+      ? { ok: true, text: tx('Watching your screenshot folder') }
+      : { ok: true, text: tx('Reading on request') };
+
+  return dataCard(tx('Your screenshots'), { kind: 'screenshot-ocr', label: tx('Screenshots') }, verdict, [
+    [tx('Readings'), screens.readings > 0 ? `${tally(screens.readings)} · ${tx('latest {when}', { when: stampOf(screens.latest) })}` : tx('none yet')],
+    ...(screens.byKind || []).map((k) => [SCREEN_KIND_WORDS[k.kind] ? tx(SCREEN_KIND_WORDS[k.kind]) : k.kind, `${tally(k.count)} · ${dateOf(k.last)}`]),
+    [tx('Rep readings'), tally(screens.reputation)],
+    [tx('Copied locations'), tally(screens.clipboards)],
+    [tx('Pinned'), tally(screens.pinned)],
+  ], { label: tx('Log'), open: () => showView('log') });
+}
+
+function dataYoursCard(yours) {
+  return dataCard(tx('What you wrote'), null, { ok: true, text: tx('Yours alone: nothing here is read from the game, and nothing leaves this machine.') }, [
+    [tx('Shopping lists and projects'), yours.lists > 0 ? `${tally(yours.lists)} · ${txn(yours.listsOpen, '{count} open', '{count} open')}` : '—'],
+    [tx('Checklists'), tally(yours.checklists)],
+    [tx('Flight plans'), yours.plans > 0 ? `${tally(yours.plans)} · ${txn(yours.plansFlying, '{count} flying', '{count} flying')}` : '—'],
+    [tx('Map notes'), tally(yours.mapNotes)],
+    [tx('Server notes'), tally(yours.shardNotes)],
+    [tx('Saved builds'), tally(yours.builds)],
+    [tx('Kits'), tally(yours.kits)],
+    [tx('Shared files'), tally(yours.imports)],
+    [tx('Keybinding versions'), tally(yours.keybindingVersions)],
+    [tx('Item labels'), yours.itemLabels ? tx('installed') : tx('not installed')],
+  ]);
+}
+
+/** Bytes as a reader sees them: kilobytes under a megabyte, megabytes above. */
+function fileSize(bytes) {
+  if (bytes == null) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${Math.round(bytes / 1024).toLocaleString()} KB`;
+  return megabytes(bytes);
+}
+
+function renderDataFolder(folder) {
+  const line = $('#data-folder');
+  const body = $('#data-folder-table tbody');
+  if (!line || !body) return;
+  line.textContent = folder.path
+    ? `${folder.path} · ${fileSize(folder.bytes)}${folder.relocated ? ` · ${tx('moved by --data')}` : ''}`
+    : tx('No data folder yet.');
+  body.textContent = '';
+  for (const entry of folder.entries || []) {
+    const tr = el('tr');
+    tr.append(el('td', null, entry.name));
+    tr.append(el('td', 'kind', entry.kind === 'folder' ? txn(entry.files, '{count} file', '{count} files') : tx('file')));
+    tr.append(el('td', 'num', fileSize(entry.bytes)));
+    tr.append(el('td', 'muted', stampOf(entry.modified)));
+    body.append(tr);
+  }
+}
+
+$('#data-refresh')?.addEventListener('click', () => loadDataPage().catch(() => {}));
+$('#settings-open-data')?.addEventListener('click', () => showView('data'));
+
 async function renderSignals() {
   const table = $('#signals-table');
   if (!table) return;

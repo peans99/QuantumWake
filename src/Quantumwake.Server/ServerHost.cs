@@ -744,6 +744,7 @@ public static partial class ServerHost
         app.MapGet("/api/scan/history", (LogLibrary lib) => ScanHistory.Build(install, lib.Store));
 
         ControlsEndpoints.Map(app, install);
+        MapDataRead(app, install);
 
         app.MapGet("/api/now", (LiveSessionService live) => live.Current);
 

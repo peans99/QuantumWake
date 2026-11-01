@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.35">
+  <link rel="stylesheet" href="app.css?v=0.20.36">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -96,6 +96,7 @@
         <button data-view="controls">Controls</button>
         <button data-view="labels">Item labels</button>
         <button data-view="imports">Shared files</button>
+        <button data-view="data">What was read</button>
         <!-- An action, not a view. The strip's handler binds only
              button[data-view], so this is ignored by the view switcher and
              runs its own click instead; menu-action keeps it out of the
@@ -855,6 +856,74 @@
     <div class="export-row" id="imports-filter"></div>
     <span class="muted" id="imports-status"></span>
     <div id="imports-list"></div>
+  </section>
+
+  <!-- Every place the app reads from, what it found there, and where that
+       sits on disk. The pieces lived on five pages before this. -->
+  <section id="view-data" class="view">
+    <div class="section-bar">
+      <div class="page-title">
+        <span class="page-kicker">Settings</span>
+        <h2>What was read</h2>
+      </div>
+      <span class="spacer"></span>
+      <span class="muted" id="data-taken"></span>
+      <button class="ghost" id="data-refresh">Read again</button>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Each block is one place this app reads from: your game logs, your game
+        files, the optional downloads, your screenshots and what you wrote
+        yourself. It says what was found there and when, so an empty page
+        elsewhere can be traced to its source. The folder at the end is where
+        all of it is kept; nothing leaves this machine unless you turn a feed on.
+      </p>
+    </details>
+    <p class="muted" id="data-status"></p>
+    <div class="data-sections" id="data-sections"></div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>What the logs still carry</h3>
+      </div>
+      <p class="muted">
+        Star Citizen has been logging less with every patch &mdash; quantum
+        detail went in 4.0.1, inter-system jumps in 4.1.0, combat entirely by
+        4.9 &mdash; and from inside this app each removal looks exactly like a
+        quiet evening. So here is when each thing last arrived. A row that has
+        gone quiet for weeks is worth a look; a row at zero may simply be
+        something you do not do.
+      </p>
+      <div class="table-wrap">
+        <table id="signals-table">
+          <thead>
+            <tr>
+              <th>Signal</th><th class="num">Total</th>
+              <th class="num">Sessions</th><th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="option-block">
+      <div class="option-head">
+        <h3>Where it is kept</h3>
+      </div>
+      <p class="muted" id="data-folder"></p>
+      <div class="table-wrap">
+        <table id="data-folder-table">
+          <thead>
+            <tr>
+              <th>Entry</th><th>Holds</th><th class="num">Size</th><th>Last written</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section id="view-checklists" class="view">
@@ -4214,7 +4283,7 @@
     <details class="settings-group">
       <summary>
         <span class="settings-group-index">03</span>
-        <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history and see which game signals remain available.</span></span>
+        <span class="settings-group-copy"><strong>Log maintenance</strong><span>Re-read history, and see what was read from where.</span></span>
       </summary>
       <div class="settings-group-content">
     <div class="option-block">
@@ -4231,27 +4300,13 @@
 
     <div class="option-block">
       <div class="option-head">
-        <h3>What the logs still carry</h3>
+        <h3>What was read</h3>
+        <button class="ghost" id="settings-open-data">Open</button>
       </div>
       <p class="muted">
-        Star Citizen has been logging less with every patch &mdash; quantum
-        detail went in 4.0.1, inter-system jumps in 4.1.0, combat entirely by
-        4.9 &mdash; and from inside this app each removal looks exactly like a
-        quiet evening. So here is when each thing last arrived. A row that has
-        gone quiet for weeks is worth a look; a row at zero may simply be
-        something you do not do.
+        Every place this app reads from, what it found there and when, which
+        game signals still arrive, and where all of it is kept on this machine.
       </p>
-      <div class="table-wrap">
-        <table id="signals-table">
-          <thead>
-            <tr>
-              <th>Signal</th><th class="num">Total</th>
-              <th class="num">Sessions</th><th>Last seen</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
     </div>
       </div>
     </details>
@@ -4715,6 +4770,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.35"></script>
+<script src="app.js?v=0.20.36"></script>
 </body>
 </html>

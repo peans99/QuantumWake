@@ -278,7 +278,7 @@ const GROUPS = {
   '#map-side button': ['#side-sell', '#side-buy'],
   '[data-stats-toggle]': ['#contracts-stats-toggle'],
   '#tabs button': ['#test-tab-now', '#test-tab-about', '#test-tab-fleet', '#test-tab-garage', '#test-tab-mining', '#test-tab-jobs', '#test-tab-itinerary'],
-  '.view': ['#view-now', '#view-about', '#view-help', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs', '#view-itinerary'],
+  '.view': ['#view-now', '#view-about', '#view-help', '#view-data', '#view-fleet', '#view-garage', '#view-mining', '#view-jobs', '#view-itinerary'],
   '#tabs .tab-group': [],
   '#view-now .card[data-card]': [
     '#now-status-card', '#now-briefing-card', '#now-feed-card',

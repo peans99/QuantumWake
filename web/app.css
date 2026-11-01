@@ -7712,3 +7712,18 @@ body:not(.overlay) :is(input, select, textarea) { color-scheme: dark; }
 .ref-pool { margin: 10px 0 0; }
 .ref-pool-head { margin: 0 0 4px; }
 .ref-ways-table { max-width: 860px; }
+
+/* ---- Settings → What was read (0.20.36). One card per source the app reads
+   from, in the order it trusts them; the facts are the same dl the Reference
+   window uses, so a count reads the same way everywhere. ---- */
+.data-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin: 10px 0 18px; }
+.data-card { padding: 12px 14px 10px; min-width: 0; }
+.data-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.data-card-head h3 { margin: 0; flex: 1 1 auto; }
+.data-verdict { margin: 6px 0 2px; font-size: 12.5px; }
+.data-card .ref-facts { font-size: 12px; }
+.data-card .ref-facts dt { color: var(--muted); }
+.data-card .ref-facts dd { margin: 0; overflow-wrap: anywhere; }
+#data-folder { overflow-wrap: anywhere; }
+#data-folder-table td.kind { color: var(--muted); }
+body.overlay #view-data .data-sections { grid-template-columns: 1fr; }
