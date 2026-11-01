@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.24">
+  <link rel="stylesheet" href="app.css?v=0.20.25">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -1352,7 +1352,7 @@
   </section>
 
   <!-- SESSIONS -->
-  <section id="view-sessions" class="view">
+  <section id="view-sessions" class="view qw-identity" data-voice="own">
     <div class="section-bar sessions-toolbar">
       <div>
         <span class="page-kicker">Flight</span>
@@ -1413,7 +1413,7 @@
 
   <!-- SHIPS -->
   <!-- FLEET -->
-  <section id="view-fleet" class="view">
+  <section id="view-fleet" class="view qw-identity" data-voice="own">
     <div class="section-bar fleet-roster-bar">
       <div>
         <span class="page-kicker">Hangar</span>
@@ -2049,7 +2049,7 @@
     </div>
   </section>
 
-  <section id="view-market" class="view">
+  <section id="view-market" class="view qw-identity">
     <div class="section-bar">
       <div class="page-title">
         <span class="page-kicker">Economy</span>
@@ -2092,9 +2092,9 @@
         <thead>
           <tr>
             <th>Commodity</th><th>Groups</th>
-            <th class="num">Sellable at</th><th class="num">Stocked at</th>
-            <th class="num">Your SCU sold</th><th class="num">Your revenue</th>
-            <th class="num uex-col" hidden>UEX best sell</th>
+            <th class="num market-ref-col">Sellable at</th><th class="num market-ref-col">Stocked at</th>
+            <th class="num src-own">Your SCU sold</th><th class="num src-own">Your revenue</th>
+            <th class="num uex-col src-uex" hidden>UEX best sell</th>
             <th></th>
           </tr>
         </thead>
@@ -4664,6 +4664,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.24"></script>
+<script src="app.js?v=0.20.25"></script>
 </body>
 </html>

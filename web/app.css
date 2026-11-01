@@ -7553,3 +7553,76 @@ body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
 }
 /* The Items table's + list used to appear only on hover, which is the
    control nobody finds (CLAUDE.md). Quiet now, so it can simply stay. */
+
+/* ======================================================================
+   Identity trial (0.20.25): on Sessions, Fleet and Market only, by the
+   .qw-identity class, so it can be judged before it spreads or is dropped.
+   Three ideas: a colour for whose data it is, a wake drawn from your own
+   sessions under each header, and a title face of our own.
+   ====================================================================== */
+@font-face {
+  font-family: 'Big Shoulders Display';
+  font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(assets/fonts/big-shoulders-display-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Big Shoulders Display';
+  font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(assets/fonts/big-shoulders-display-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+:root {
+  /* Whose number it is. Gold is yours - what your logs and screenshots
+     recorded - and is not the orange that warns a price is stale. */
+  --own: #e9c27d;
+  --src-files: var(--cyan);
+  --src-community: #5fd39a;
+  --src-uex: #b58cf0;
+  --title-face: 'Big Shoulders Display', var(--display);
+}
+
+/* The title face: condensed, the way a hull carries its name. */
+.qw-identity > .section-bar h2 {
+  font-family: var(--title-face);
+  font-size: 31px; font-weight: 780; letter-spacing: .015em; line-height: 1;
+  text-transform: uppercase;
+}
+.qw-identity > .section-bar h2 .page-glyph { font-family: var(--display); font-size: 15px; vertical-align: .32em; }
+
+/* A page about your own history says so in its label. */
+.qw-identity[data-voice='own'] > .section-bar .page-kicker { color: var(--own); }
+
+/* The wake: your last sixty days of play along the foot of the header. */
+.qw-identity > .section-bar { position: relative; overflow: hidden; }
+.qw-identity > .section-bar > :not(.wake):not(.wake-mark) { position: relative; z-index: 1; }
+.wake { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; width: 100%; pointer-events: none; z-index: 0; }
+.wake-mark {
+  position: absolute; right: 10px; bottom: 5px; width: 7px; height: 7px; z-index: 1;
+  border: 1px solid var(--own); transform: rotate(45deg); pointer-events: none;
+}
+.wake-mark.today { background: var(--own); box-shadow: 0 0 9px rgba(233, 194, 125, .75); }
+
+/* Source colours, as the badge and as a thin rule on the values it covers. */
+.qw-identity .data-source.game-log, .qw-identity .data-source.screenshot-ocr { color: var(--own); border-color: rgba(233, 194, 125, .4); }
+.qw-identity .data-source.screenshot-ocr { border-style: dashed; }
+.qw-identity .data-source.game-install { color: var(--src-files); border-color: rgba(53, 200, 240, .4); }
+.qw-identity .data-source.community-data { color: var(--src-community); border-color: rgba(95, 211, 154, .4); }
+.qw-identity .data-source.uex-prices { color: var(--src-uex); border-color: rgba(181, 140, 240, .4); }
+
+.qw-identity th.src-own, .qw-identity td.src-own { color: var(--own); }
+.qw-identity th.src-community { color: var(--src-community); }
+.qw-identity th.src-uex { color: var(--src-uex); }
+.qw-identity th.src-own, .qw-identity th.src-community, .qw-identity th.src-uex { box-shadow: inset 0 -2px 0 currentColor; }
+.qw-identity td.src-uex .inward:first-child { color: var(--src-uex); }
+
+/* Fleet cards: your flights in gold, the community's spec in green, UEX's price in violet. */
+.qw-identity .ship-stats b, .qw-identity .ship-seen { color: var(--own); }
+.qw-identity .ship-readiness.active { border-color: rgba(233, 194, 125, .55); }
+.qw-identity .ship-status-mark.recent { color: var(--own); }
+.qw-identity .ship-ref:not(.muted) { color: var(--src-community); }
+.qw-identity .ship-price:not(.muted) { color: var(--src-uex); }
+
+/* Sessions: the debrief cards are your record. */
+.qw-identity .sessions-brief-card .economy-kicker,
+.qw-identity .sessions-brief-card [class*='kicker'] { color: var(--own); }

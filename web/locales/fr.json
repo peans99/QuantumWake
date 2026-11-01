@@ -5441,5 +5441,9 @@
   "Reference": "Référence",
   "Wikelo": "Wikelo",
   "Where to find it, buy it or craft it": "Où le trouver, l’acheter ou le fabriquer",
-  "About this table": "À propos de ce tableau"
+  "About this table": "À propos de ce tableau",
+  "UEX PRICES": "PRIX UEX",
+  "UEX price reports": "les relevés de prix UEX",
+  "Prices other pilots report to UEX, fetched only when you turn that feed on in Settings.": "Les prix que d’autres pilotes signalent à UEX, récupérés seulement si vous activez ce flux dans Réglages.",
+  "Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.": "Votre sillage : {sessions} sessions et {hours} en jeu sur les {days} derniers jours, d’après vos journaux."
 }

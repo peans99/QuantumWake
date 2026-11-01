@@ -201,6 +201,11 @@ const DATA_SOURCES = {
     name: 'optional community data',
     detail: 'The optional community dataset you chose to download; it is not a live game feed.',
   },
+  uex: {
+    label: 'UEX PRICES',
+    name: 'UEX price reports',
+    detail: 'Prices other pilots report to UEX, fetched only when you turn that feed on in Settings.',
+  },
 };
 
 // The dashboard's markup is also represented by a deliberately small test
@@ -2702,6 +2707,7 @@ async function loadHistory() {
 
   allSessions = sessions;
   sessionPage = 0;
+  safeRender('Wake', () => drawWakes());
 
   // A Points page opened straight from the URL drew its cards before the
   // sessions were known, and said no session spanned any of them.
@@ -4335,9 +4341,16 @@ function renderMarket() {
   // Market deliberately combines the reference catalogue with what the pilot
   // actually sold. The chips make that join visible before a price-like count
   // is mistaken for an event the log recorded.
+  const priced = marketEntries.some((e) => e.uex) ? ['uex'] : [];
   setSourceMarks($('#market-data-sources'), source === 'install'
-    ? ['install', 'logs']
-    : source === 'dataset' ? ['community', 'logs'] : []);
+    ? ['install', 'logs', ...priced]
+    : source === 'dataset' ? ['community', 'logs', ...priced] : priced);
+  // The two reference columns are the install's or the community's, as the
+  // badge above says; their heading carries the same colour.
+  for (const th of $$('#market-table th.market-ref-col')) {
+    th.classList.toggle('src-files', source === 'install');
+    th.classList.toggle('src-community', source === 'dataset');
+  }
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
   const group = $('#market-group').value;
@@ -4397,11 +4410,13 @@ function renderMarket() {
     tr.append(el('td', 'muted', entry.groups.join(', ')));
     tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
     tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
-    tr.append(el('td', 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
-    tr.append(el('td', 'num inward', entry.myRevenue ? money(entry.myRevenue) : '—'));
+    // Gold only where there is something of yours to show: a column of gold
+    // dashes shouted about trading that never happened.
+    tr.append(el('td', entry.myScuSold ? 'num src-own' : 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
+    tr.append(el('td', entry.myRevenue ? 'num inward src-own' : 'num', entry.myRevenue ? money(entry.myRevenue) : '—'));
 
     if (anyUex) {
-      const cell = el('td', 'num');
+      const cell = el('td', 'num src-uex');
       if (entry.uex?.bestSell > 0) {
         cell.append(el('span', 'inward', money(entry.uex.bestSell)));
 
@@ -5370,6 +5385,77 @@ function renderShipsRef() {
     tr.append(rent);
 
     body.append(tr);
+  }
+}
+
+/* ---------- the wake: your own sessions along the foot of a page header ----------
+
+   A ship's wake is where it has been, widest where it worked hardest and
+   fading behind it. This one is drawn from the sessions in your logs: sixty
+   days, oldest on the left, each day as wide as the time you spent in game
+   that day, and a mark at today's end - filled if you have flown today. It
+   is the one piece of these pages that could not belong to any other tool,
+   because nobody else has your logs. */
+
+const WAKE_DAYS = 60;
+
+function drawWakes() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 86400000;
+  const minutes = new Array(WAKE_DAYS).fill(0);
+  let sessions = 0;
+  for (const session of allSessions || []) {
+    const at = new Date(session.startedAt);
+    const start = new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+    const index = WAKE_DAYS - 1 - Math.round((today - start) / day);
+    if (index < 0 || index >= WAKE_DAYS) continue;
+    minutes[index] += (Number(session.inGame) || 0) / 60;
+    sessions++;
+  }
+
+  // Smoothed over three days, so a wake rather than a bar chart.
+  const smooth = minutes.map((_, i) => {
+    const near = minutes.slice(Math.max(0, i - 1), i + 2);
+    return near.reduce((a, b) => a + b, 0) / near.length;
+  });
+  const top = Math.max(...smooth, 1);
+  const total = minutes.reduce((a, b) => a + b, 0);
+  const width = 600;
+  const mid = 11;
+  const x = (i) => (i / (WAKE_DAYS - 1)) * width;
+  const half = (i) => 0.6 + (smooth[i] / top) * 6.5;
+  const upper = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid - half(i)).toFixed(2)}`);
+  const lower = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid + half(i)).toFixed(2)}`).reverse();
+
+  for (const section of $$('.qw-identity')) {
+    const bar = section.querySelector('.section-bar');
+    if (!bar) continue;
+    bar.querySelector('.wake')?.remove();
+    bar.querySelector('.wake-mark')?.remove();
+    if (!sessions) continue;
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'wake');
+    svg.setAttribute('viewBox', `0 0 ${width} 18`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('aria-hidden', 'true');
+    const id = `wake-fade-${section.id}`;
+    svg.innerHTML = `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">`
+      + '<stop offset="0" stop-color="#e9c27d" stop-opacity="0"/>'
+      + '<stop offset=".55" stop-color="#e9c27d" stop-opacity=".22"/>'
+      + '<stop offset="1" stop-color="#e9c27d" stop-opacity=".7"/></linearGradient></defs>'
+      + `<polygon points="${[...upper, ...lower].join(' ')}" fill="url(#${id})"/>`
+      + `<line x1="0" y1="${mid}" x2="${width}" y2="${mid}" stroke="url(#${id})" stroke-width=".6"/>`;
+    bar.append(svg);
+
+    const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
+    bar.append(mark);
+    // Said in words for whoever points at it: the shape is the summary.
+    bar.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
+      sessions, hours: duration(total * 60), days: WAKE_DAYS,
+    });
   }
 }
 

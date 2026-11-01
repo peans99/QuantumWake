@@ -101,6 +101,16 @@ Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
 trademarks of Cloud Imperium Rights LLC. This is an unofficial fan tool, not
 affiliated with or endorsed by Cloud Imperium Games.
 
+## Typeface
+
+Page titles on the pages trying the 0.20.25 identity are set in **Big Shoulders
+Display**, copyright 2019 the Big Shoulders Project Authors
+(<https://github.com/xotypeco/big_shoulders>). It is licensed under the SIL Open
+Font License 1.1, and the licence ships beside the font files in
+`web/assets/fonts/OFL-BigShouldersDisplay.txt`. The files are Google Fonts' Latin
+and Latin-extended subsets, unmodified and bundled, so the app still makes no
+outside request to draw them.
+
 ## Packages
 
 | Package | Author | Used for | Licence |

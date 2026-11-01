@@ -59,3 +59,24 @@ where the number is read.
 
 `openEntity('part' | 'ship', …)` sends items and ships to the window, so the
 two can never describe one gun two ways again.
+
+## Identity trial (0.20.25)
+
+Sessions, Fleet and Market carry `class="qw-identity"`, and everything below is
+scoped to it, so it can spread to more pages or be dropped in one place.
+
+- **Whose number it is.** Gold (`--own`) is the pilot's own record: logs and
+  screenshots. It is not `--amber`, which warns that a price is stale. Cyan
+  (`--src-files`) is the game's files, green (`--src-community`) the community
+  dataset, and violet (`--src-uex`) UEX. The colours appear on the source badges
+  and as an underline on the column headings each source covers. A value is
+  gold only when there is one: an empty cell stays plain.
+- **The wake.** `drawWakes()` draws the last 60 days of `allSessions` under
+  each trial page's header. It is smoothed over three days, as wide as the
+  time spent in game, and fades to the left. The mark at today's end fills in
+  once the pilot has flown today. Its numbers are in the header's hover text.
+- **Title face.** Big Shoulders Display (SIL OFL 1.1), bundled in
+  `web/assets/fonts/` and credited in `docs/credits.md`. It is used for page
+  titles only; mono stays for numbers.
+- **Own pages say so.** `data-voice="own"` turns the kicker gold on pages that
+  are the pilot's own history (Sessions, Fleet).
