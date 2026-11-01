@@ -137,12 +137,13 @@ public class GlobalSearchTests
                 {"kind":"part","id":"behr_rifle_ballistic_01","name":"P4-AR Rifle",
                  "why":"weapon the catalogue knows"}]}]}
             """, "p4-ar");
-        page.Serve("/api/entity?kind=part&id=behr_rifle_ballistic_01",
-            """{"kind":"part","name":"P4-AR Rifle","facts":[]}""");
+        page.Serve("/api/reference/item?id=behr_rifle_ballistic_01",
+            """{"className":"behr_rifle_ballistic_01","card":{"kind":"part","name":"P4-AR Rifle","facts":[]},"shops":[],"stockOn":[]}""");
 
         page.Do("__dom.node('#global-results').byClass('search-hit')[0].click();");
 
-        Assert.Contains("GET /api/entity?kind=part&id=behr_rifle_ballistic_01", page.Fetched());
+        // An item opens the Reference window (0.20.24), still by its class.
+        Assert.Contains("GET /api/reference/item?id=behr_rifle_ballistic_01", page.Fetched());
     }
 
     /// <summary>

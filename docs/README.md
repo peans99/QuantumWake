@@ -12,6 +12,7 @@ Compiled 2026-08-20 against a real install: **SC 4.9.188.23497**, handle `nekron
 | [findings.md](findings.md) | **Read this first.** The kill-event problem, with evidence. The app stopped showing a kill counter in 0.6.8; the events are still absent and the parser still dormant. |
 | [log-format-reference.md](log-format-reference.md) | Line formats verified present in the local logs, plus the removed ones. |
 | [architecture.md](architecture.md) | Runtime design decisions: dashboard, overlay, paired MFD HUD, local screen reading, storage and the boundaries between them. |
+| [interface.md](interface.md) | The dashboard's layout rules from the 0.20.24 consistency pass: one page header (the menu group over the menu's own word), explanations folded under About this page except a floor, cyan only for what can be clicked, and one detail view per kind of thing. |
 | [phase-1-core.md](phase-1-core.md) | Build log: the Core parser, what it verified, and the quirks it uncovered. |
 | [phases-2-5.md](phases-2-5.md) | Build log: server, dashboard, map, overlay, and the dormant combat parser. |
 | [mfd-mode.md](mfd-mode.md) | Cougar MFD HUD: pages, paired-display setup, USB profile, the screen-reading summaries it can use and verification. |

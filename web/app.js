@@ -2279,6 +2279,15 @@ const ENTITY_KICKER = {
 async function openEntity(kind, id) {
   if (!kind || !id) return false;
 
+  // One detail pattern per kind of thing (0.20.24). Items and ships open the
+  // Reference window, where every part and hull links on and Back walks the
+  // trail; the drawer is for places and commodities, which are read beside
+  // the map. Two panels describing one gun two ways was the inconsistency.
+  if (kind === 'part' || kind === 'ship') {
+    if (!$('#entity-drawer').hidden) closeEntity();
+    return openRefDetail(kind === 'part' ? 'item' : 'ship', id);
+  }
+
   // Forgotten here rather than left pointing at whoever was open before: a note
   // typed into a place reached from search would otherwise be filed against the
   // last place opened from the map.
@@ -5523,8 +5532,20 @@ function renderItemDetail(body, data) {
   top.append(lootTrackControl(name));
   body.append(top);
 
-  // The text table stores line breaks as a backslash and an n.
-  if (card?.blurb) body.append(el('p', 'ref-blurb', card.blurb.replace(/\\n/g, '\n')));
+  // The game's paragraph a line at a time - its header lines are joined by a
+  // literal backslash-n - and its own labels, as the drawer used to show them.
+  if (card?.blurb) {
+    const blurb = el('div', 'ref-blurb');
+    for (const line of card.blurb.split(RegExp('\\\\n|\n'))) {
+      if (line.trim()) blurb.append(el('p', 'part-blurb', line.trim()));
+    }
+    body.append(blurb);
+  }
+  if (card?.tags?.length) {
+    const tags = el('div', 'part-tags');
+    for (const tag of card.tags) tags.append(el('span', 'tag', tag));
+    body.append(tags);
+  }
   if (card?.facts?.length) {
     body.append(refFacts(card.facts.map((f) => [tx(f.label), serverText(f.value), tx(f.source)])));
   }
@@ -20042,29 +20063,33 @@ async function checklistCall(url, method = 'POST', body = null) {
   await loadChecklists();
 }
 
-function showChecklistAttachment(attachment) {
+/**
+ * One attachment as a chip - or, given the line's own words, as those words:
+ * "Get Gallant Rifle" over a chip reading GALLANT RIFLE said the name twice,
+ * so a line that already names what it links to becomes the link itself.
+ */
+function showChecklistAttachment(attachment, words) {
+  const chip = words ? 'link checklist-item-link' : 'checklist-attachment';
   if (attachment.kind === 'location') {
-    const button = el('button', 'checklist-attachment place-link', `⌖ ${attachment.label}`);
+    const button = el('button', words ? `${chip} place-link` : 'checklist-attachment place-link', words || `⌖ ${attachment.label}`);
     button.title = tx('Show this place on the map');
     button.addEventListener('click', () => briefingMap(attachment.placeId, attachment.target || attachment.label));
     return button;
   }
 
   if (attachment.kind === 'commodity') {
-    const button = el('button', 'checklist-attachment', `◇ ${attachment.label}`);
+    const button = el('button', chip, words || `◇ ${attachment.label}`);
     button.title = tx('Open this commodity');
     button.addEventListener('click', () => openCommodity(attachment.target || attachment.label));
     return button;
   }
 
+  // An item opens its Reference card: where it drops, who sells it, what it
+  // is fitted to - the question a line on a shopping list is asking.
   if (attachment.kind === 'item') {
-    const button = el('button', 'checklist-attachment', `▦ ${attachment.label}`);
-    button.title = tx('Find this item in Parts');
-    button.addEventListener('click', () => {
-      showView('parts');
-      $('#parts-search').value = attachment.target || attachment.label;
-      renderPartsRef();
-    });
+    const button = el('button', chip, words || `▦ ${attachment.label}`);
+    button.title = tx('Where to find it, buy it or craft it');
+    button.addEventListener('click', () => openRefDetail('item', attachment.target || attachment.label));
     return button;
   }
 
@@ -20095,7 +20120,14 @@ function checklistItemRow(list, item, compact = false) {
   row.append(check);
 
   const main = el('div', 'checklist-item-main');
-  main.append(el('div', 'checklist-item-text', item.text));
+  const attachments = item.attachments || [];
+  const said = (item.text || '').toLowerCase();
+  const named = attachments.find((a) => ['location', 'commodity', 'item'].includes(a.kind)
+    && a.label && said.includes(a.label.toLowerCase()));
+  const text = el('div', 'checklist-item-text');
+  if (named) text.append(showChecklistAttachment(named, item.text));
+  else text.textContent = item.text;
+  main.append(text);
   if (!compact && item.note) main.append(el('div', 'muted checklist-note', item.note));
   if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
 
@@ -20116,10 +20148,10 @@ function checklistItemRow(list, item, compact = false) {
     main.append(note);
   }
 
-  const attachments = item.attachments || [];
-  if (attachments.length) {
+  const others = attachments.filter((a) => a !== named);
+  if (others.length) {
     const links = el('div', 'checklist-attachments');
-    for (const attachment of attachments) links.append(showChecklistAttachment(attachment));
+    for (const attachment of others) links.append(showChecklistAttachment(attachment));
     main.append(links);
   }
   row.append(main);

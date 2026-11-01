@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.23">
+  <link rel="stylesheet" href="app.css?v=0.20.24">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -646,7 +646,6 @@
   <section id="view-itinerary" class="view">
     <div class="section-bar">
       <div>
-        <span class="operations-kicker">Flight plan</span>
         <h2>Itinerary</h2>
       </div>
       <div class="controls">
@@ -654,11 +653,14 @@
         <a class="ghost" href="#routes" title="Find a trade run or a rep run to start a plan from">Find a run</a>
       </div>
     </div>
-    <p class="muted caption">
-      The same plans as the map's flight-plan panel, with room to work on them. Drag a stop by its
-      handle to change the order, and drag a run-sheet line onto another stop to move it there.
-      Whatever you change here is what the map, the Now page and the overlay follow.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        The same plans as the map's flight-plan panel, with room to work on them. Drag a stop by its
+        handle to change the order, and drag a run-sheet line onto another stop to move it there.
+        Whatever you change here is what the map, the Now page and the overlay follow.
+      </p>
+    </details>
     <div id="itinerary-error" class="itinerary-error" role="alert" hidden></div>
     <div class="itinerary">
       <aside class="itinerary-plans" id="itinerary-plans" aria-label="Plans"></aside>
@@ -670,9 +672,9 @@
   <section id="view-routes" class="view">
     <div class="section-bar flight-toolbar">
       <div>
-        <span class="operations-kicker">Flight</span>
+        <span class="page-kicker">Operations</span>
         <div class="route-heading">
-          <h2>Flight plan</h2>
+          <h2>Routes</h2>
           <div class="route-header-status" aria-live="polite">
             <span id="route-ship-context">No ship selected · SCU unknown · no source</span>
             <span class="route-readiness needs-cargo" id="route-readiness">Needs cargo SCU</span>
@@ -822,16 +824,22 @@
   <!-- CHECKLISTS -->
   <section id="view-imports" class="view">
     <div class="section-bar">
-      <h2>Shared files</h2>
+      <div class="page-title">
+        <span class="page-kicker">Settings</span>
+        <h2>Shared files</h2>
+      </div>
       <span class="spacer"></span>
       <button class="ghost" id="imports-pick">Open a file</button>
       <button class="ghost danger" id="imports-clear">Remove all</button>
     </div>
-    <p class="muted caption">
-      Files other pilots have shared with you. Nothing here is mixed into your
-      own jobs, checklists or history &mdash; it is kept separately so removing
-      an import takes it away completely and leaves your work untouched.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Files other pilots have shared with you. Nothing here is mixed into your
+        own jobs, checklists or history &mdash; it is kept separately so removing
+        an import takes it away completely and leaves your work untouched.
+      </p>
+    </details>
     <input type="file" id="imports-file" accept="application/json,.json" hidden>
     <div class="export-row" id="imports-filter"></div>
     <span class="muted" id="imports-status"></span>
@@ -840,12 +848,18 @@
 
   <section id="view-checklists" class="view">
     <div class="section-bar">
-      <h2>Checklists</h2>
+      <div class="page-title">
+        <span class="page-kicker">Operations</span>
+        <h2>Checklists</h2>
+      </div>
     </div>
-    <p class="muted caption">
-      Your own preparation notes, not game telemetry. Pin one list to Now and
-      the overlay; locations, items and links stay as references you can open.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Your own preparation notes, not game telemetry. Pin one list to Now and
+        the overlay; locations, items and links stay as references you can open.
+      </p>
+    </details>
     <div class="checklist-new">
       <input type="text" id="checklist-title" class="search" placeholder="New checklist, e.g. Pyro departure" autocomplete="off">
       <button class="ghost" id="checklist-create">Create checklist</button>
@@ -857,7 +871,10 @@
   <!-- CASUALTIES -->
   <section id="view-crew" class="view">
     <div class="section-bar">
-      <h2>Crew</h2>
+      <div class="page-title">
+        <span class="page-kicker">Flight</span>
+        <h2>Crew</h2>
+      </div>
       <div class="controls">
         <select id="crew-period" class="select period" title="Filter by date"></select>
       </div>
@@ -908,7 +925,10 @@
 
   <section id="view-servers" class="view">
     <div class="section-bar">
-      <h2>Servers</h2>
+      <div class="page-title">
+        <span class="page-kicker">Flight</span>
+        <h2>Servers</h2>
+      </div>
       <div class="controls">
         <input id="servers-search" class="search" type="search" placeholder="Search shard or note…" />
         <select id="servers-region" class="select" title="Region">
@@ -919,16 +939,19 @@
         <label class="toggle"><input type="checkbox" id="servers-troubled" /> <span>Back-end failures seen</span></label>
       </div>
     </div>
-    <p class="muted caption">
-      Every shard the matchmaker has placed you on, read from the one line that
-      names it &mdash; <code>&lt;Join PU&gt; &hellip; shard[pub_use1b_12545750_150]</code>.
-      The game picks the server; this page cannot. What it can do is tell you
-      which one you landed on and what you wrote about it last time, so
-      relogging is a decision rather than a guess.
-      <b>A shard lives only as long as its deployment</b> &mdash; the middle
-      number &mdash; and a new deployment retires every shard of the old one.
-      Those stay listed as history, greyed, because the note is still yours.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Every shard the matchmaker has placed you on, read from the one line that
+        names it &mdash; <code>&lt;Join PU&gt; &hellip; shard[pub_use1b_12545750_150]</code>.
+        The game picks the server; this page cannot. What it can do is tell you
+        which one you landed on and what you wrote about it last time, so
+        relogging is a decision rather than a guess.
+        <b>A shard lives only as long as its deployment</b> &mdash; the middle
+        number &mdash; and a new deployment retires every shard of the old one.
+        Those stay listed as history, greyed, because the note is still yours.
+      </p>
+    </details>
 
     <div class="summary-strip" id="servers-summary"></div>
 
@@ -961,18 +984,24 @@
 
   <section id="view-casualties" class="view">
     <div class="section-bar">
-      <h2>Casualties</h2>
+      <div class="page-title">
+        <span class="page-kicker">Flight</span>
+        <h2>Casualties</h2>
+      </div>
       <div class="controls">
         <select id="casualties-period" class="select period" title="Filter by date"></select>
       </div>
     </div>
-    <p class="muted caption">
-      What dying has cost you. Star Citizen 4.9 and 4.10 log no death event, so these
-      are counted from the corpse item-recovery bursts the game still writes,
-      and a session's last known place is the closest the logs come to naming
-      where it happened. Claim fees are the real expedite costs of the ships
-      you fly.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        What dying has cost you. Star Citizen 4.9 and 4.10 log no death event, so these
+        are counted from the corpse item-recovery bursts the game still writes,
+        and a session's last known place is the closest the logs come to naming
+        where it happened. Claim fees are the real expedite costs of the ships
+        you fly.
+      </p>
+    </details>
 
     <div class="summary-strip" id="casualties-summary"></div>
 
@@ -1017,7 +1046,7 @@
   <section id="view-jobs" class="view">
     <div class="section-bar operations-toolbar">
       <div>
-        <span class="operations-kicker">Operations</span>
+        <span class="page-kicker">Operations</span>
         <h2>Command deck</h2>
       </div>
       <div class="controls">
@@ -1107,18 +1136,24 @@
   <!-- BLUEPRINTS -->
   <section id="view-blueprints" class="view">
     <div class="section-bar">
-      <h2>Blueprints</h2>
+      <div class="page-title">
+        <span class="page-kicker">Operations</span>
+        <h2>Blueprints</h2>
+      </div>
       <div class="controls">
         <select id="jobs-blueprint" class="select" title="Blueprints you have been given"></select>
         <button class="ghost" id="jobs-plan">Set as goal</button>
       </div>
     </div>
-    <p class="muted caption">
-      What you can craft, and what it still needs. Pick a blueprint — yours are
-      listed first, since the game tells the logs which ones you have been
-      given — and it becomes a tracked build with its materials checked against
-      your stashes. The full catalogue lives under Reference → Crafting.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        What you can craft, and what it still needs. Pick a blueprint — yours are
+        listed first, since the game tells the logs which ones you have been
+        given — and it becomes a tracked build with its materials checked against
+        your stashes. The full catalogue lives under Reference → Crafting.
+      </p>
+    </details>
     <div id="blueprints-shared"></div>
 
     <div id="blueprint-jobs"></div>
@@ -1274,8 +1309,8 @@
   <section id="view-logbook" class="view">
     <div class="section-bar logbook-toolbar">
       <div>
-        <span class="operations-kicker">Flight</span>
-        <h2>After-action log</h2>
+        <span class="page-kicker">Flight</span>
+        <h2>Logbook</h2>
       </div>
       <div class="controls">
         <label class="logbook-period-picker">
@@ -1320,8 +1355,8 @@
   <section id="view-sessions" class="view">
     <div class="section-bar sessions-toolbar">
       <div>
-        <span class="operations-kicker">Flight</span>
-        <h2>Session debriefs</h2>
+        <span class="page-kicker">Flight</span>
+        <h2>Sessions</h2>
       </div>
       <div class="controls">
         <input type="search" id="sessions-search" class="search" placeholder="Search ship or place…"
@@ -1379,27 +1414,10 @@
   <!-- SHIPS -->
   <!-- FLEET -->
   <section id="view-fleet" class="view">
-    <div class="summary-strip" id="fleet-summary"></div>
-
-    <details class="fleet-history">
-      <summary>
-        <span>Fleet history</span>
-        <span class="fleet-history-hint">Entitlement count over time</span>
-      </summary>
-      <p class="muted caption">
-        Owned-vehicle count reported by the game's entitlement query each
-        session — ships <em>and</em> ground vehicles together, which is why it can
-        sit above the ticked roster below. Names are not logged, only the total.
-      </p>
-      <div class="map-wrap fleet-chart-wrap">
-        <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
-      </div>
-    </details>
-
     <div class="section-bar fleet-roster-bar">
       <div>
-        <p class="fleet-kicker">Operational roster</p>
-        <h2>Ships</h2>
+        <span class="page-kicker">Hangar</span>
+        <h2>Fleet</h2>
         <p class="fleet-roster-status" id="fleet-roster-status"></p>
       </div>
       <div class="controls">
@@ -1420,12 +1438,33 @@
         <span id="fleet-compare" class="fleet-compare"></span>
       </div>
     </div>
-    <p class="muted caption">
-      Counted from control-token releases — flight counts are exact, times
-      aboard (~) estimated from the last known stop. The roster comes from the
-      logs, so rentals and ships since sold appear too: untick them and they
-      leave every total. Prices are UEX in-game purchase prices, when enabled.
-    </p>
+
+    <div class="summary-strip" id="fleet-summary"></div>
+
+    <details class="fleet-history">
+      <summary>
+        <span>Fleet history</span>
+        <span class="fleet-history-hint">Entitlement count over time</span>
+      </summary>
+      <p class="muted caption">
+        Owned-vehicle count reported by the game's entitlement query each
+        session — ships <em>and</em> ground vehicles together, which is why it can
+        sit above the ticked roster below. Names are not logged, only the total.
+      </p>
+      <div class="map-wrap fleet-chart-wrap">
+        <svg id="fleet-chart" viewBox="0 0 1000 220" preserveAspectRatio="none"></svg>
+      </div>
+    </details>
+
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Counted from control-token releases — flight counts are exact, times
+        aboard (~) estimated from the last known stop. The roster comes from the
+        logs, so rentals and ships since sold appear too: untick them and they
+        leave every total. Prices are UEX in-game purchase prices, when enabled.
+      </p>
+    </details>
     <div id="fleet-ships" class="ship-grid"></div>
 
     <h2 class="spaced" id="fleet-fittings-title" hidden>Fitted, as last photographed</h2>
@@ -1465,8 +1504,8 @@
   <section id="view-spending" class="view">
     <div class="section-bar economy-toolbar">
       <div>
-        <p class="economy-kicker">Flight ledger</p>
-        <h2>Economy</h2>
+        <span class="page-kicker">Economy</span>
+        <h2>Spending</h2>
         <p class="economy-status">Income, purchases and cargo movement from your recorded sessions.</p>
       </div>
       <div class="controls">
@@ -1524,7 +1563,10 @@
   <!-- LEDGER -->
   <section id="view-ledger" class="view">
     <div class="section-bar">
-      <h2>Money in and out</h2>
+      <div class="page-title">
+        <span class="page-kicker">Economy</span>
+        <h2>Ledger</h2>
+      </div>
       <div class="controls">
         <select id="ledger-period" class="select period" title="Filter by date"></select>
       </div>
@@ -1560,7 +1602,10 @@
   <!-- COMMODITIES -->
   <section id="view-commodities" class="view">
     <div class="section-bar">
-      <h2>Cargo trading</h2>
+      <div class="page-title">
+        <span class="page-kicker">Economy</span>
+        <h2>Cargo</h2>
+      </div>
       <div class="controls">
         <select id="commodities-period" class="select period" title="Filter by date"></select>
       </div>
@@ -1616,18 +1661,24 @@
   <!-- LOADOUT -->
   <section id="view-loadout" class="view">
     <div class="section-bar">
-      <h2>Armoury</h2>
+      <div class="page-title">
+        <span class="page-kicker">Hangar</span>
+        <h2>Loadout</h2>
+      </div>
       <div class="controls">
         <input type="search" id="loadout-search" class="search" placeholder="Search items or slots…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      Your most recently observed kit, arranged around a character frame. Numbered
-      siblings are merged — nine magazine ports read as one card with counts — and
-      this stays honest about the source: it is what the log saw equipped, not a
-      live in-game inventory.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Your most recently observed kit, arranged around a character frame. Numbered
+        siblings are merged — nine magazine ports read as one card with counts — and
+        this stays honest about the source: it is what the log saw equipped, not a
+        live in-game inventory.
+      </p>
+    </details>
     <div id="loadout-grid" class="loadout-grid"></div>
 
     <div id="outfitting" hidden>
@@ -1686,7 +1737,10 @@
   <!-- STASH -->
   <section id="view-stash" class="view">
     <div class="section-bar">
-      <h2>Items seen by location</h2>
+      <div class="page-title">
+        <span class="page-kicker">Hangar</span>
+        <h2>Stash</h2>
+      </div>
       <div class="controls">
         <input type="search" id="stash-search" class="search" placeholder="Search items or places…"
                autocomplete="off" spellcheck="false">
@@ -1701,11 +1755,14 @@
         </label>
       </div>
     </div>
-    <p class="muted caption">
-      Built by binding each location's inventory query to the place you opened it
-      at. Removals are never logged, so this is what has been <em>seen</em> stored
-      somewhere, not a live stock level.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Built by binding each location's inventory query to the place you opened it
+        at. Removals are never logged, so this is what has been <em>seen</em> stored
+        somewhere, not a live stock level.
+      </p>
+    </details>
     <p class="muted caption">
       <b>Pledged items will not be here</b> until you touch them. Nothing arrives
       in your account through <code>Game.log</code> — a ship, a suit or a weapon
@@ -1720,7 +1777,10 @@
   <!-- PLACES -->
   <section id="view-places" class="view">
     <div class="section-bar">
-      <h2>Places</h2>
+      <div class="page-title">
+        <span class="page-kicker">Flight</span>
+        <h2>Places</h2>
+      </div>
       <div class="controls">
         <input type="search" id="places-search" class="search" placeholder="Search places…"
                autocomplete="off" spellcheck="false">
@@ -1737,7 +1797,10 @@
        silhouettes and bounding boxes. Nothing here is downloaded. -->
   <section id="view-hangar" class="view">
     <div class="section-bar">
-      <h2>Hangar</h2>
+      <div class="page-title">
+        <span class="page-kicker">Hangar</span>
+        <h2>Hangar</h2>
+      </div>
       <div class="controls">
         <select id="hangar-mode" class="select" title="How to show the fleet">
           <option value="gallery">Gallery</option>
@@ -1802,39 +1865,51 @@
        is an estimate and every organisation says when it was last seen. -->
   <section id="view-reputation" class="view">
     <div class="section-bar">
-      <h2>Reputation</h2>
+      <div class="page-title">
+        <span class="page-kicker">Operations</span>
+        <h2>Reputation</h2>
+      </div>
       <div class="controls">
         <span class="muted" id="reputation-count"></span>
       </div>
     </div>
-    <p class="muted caption">
-      Your standing as the mobiGlas Rep app showed it, one screenshot at a time. The game
-      never writes reputation to its logs, so each point here is a screenshot you took:
-      open an organisation in the Rep app and press Print Screen. The rank is read off the
-      card's bar, and the bar's share of the rank is turned into reputation with the
-      thresholds in your installed game files — an <b>estimate</b>, which assumes the bar
-      fills evenly. Contracts come from your logs.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Your standing as the mobiGlas Rep app showed it, one screenshot at a time. The game
+        never writes reputation to its logs, so each point here is a screenshot you took:
+        open an organisation in the Rep app and press Print Screen. The rank is read off the
+        card's bar, and the bar's share of the rank is turned into reputation with the
+        thresholds in your installed game files — an <b>estimate</b>, which assumes the bar
+        fills evenly. Contracts come from your logs.
+      </p>
+    </details>
     <div id="reputation-notice" class="muted" hidden></div>
     <div id="reputation-list" class="points-list"></div>
   </section>
 
   <section id="view-wikelo" class="view">
     <div class="section-bar">
-      <h2>Wikelo's emporium</h2>
+      <div class="page-title">
+        <span class="page-kicker">Operations</span>
+        <h2>Wikelo</h2>
+      </div>
       <div class="controls">
         <input type="search" id="wikelo-search" class="search" placeholder="Search trades or items…"
                autocomplete="off" spellcheck="false">
         <span class="muted" id="wikelo-count"></span>
       </div>
     </div>
-    <p class="muted caption">
-      What Wikelo will build, and what he wants for it — read from your installed game
-      files, so the numbers are this patch's. Ranks are in the file; your own standing is
-      not, so a gated trade is marked rather than hidden. <b>Track</b> turns a trade's
-      requirements into a shopping list on the Operations command deck, where what you hold is ticked off from
-      stash sightings — presence, never a count, because removals are not logged.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        What Wikelo will build, and what he wants for it — read from your installed game
+        files, so the numbers are this patch's. Ranks are in the file; your own standing is
+        not, so a gated trade is marked rather than hidden. <b>Track</b> turns a trade's
+        requirements into a shopping list on the Operations command deck, where what you hold is ticked off from
+        stash sightings — presence, never a count, because removals are not logged.
+      </p>
+    </details>
     <div class="export-row" id="wikelo-groups"></div>
     <div id="wikelo-goal" class="wikelo-goal" hidden></div>
     <div id="wikelo-list" class="points-list"></div>
@@ -1846,7 +1921,10 @@
        finished. Totals are floors - the page says why. -->
   <section id="view-events" class="view">
     <div class="section-bar">
-      <h2>Events</h2>
+      <div class="page-title">
+        <span class="page-kicker">Operations</span>
+        <h2>Events</h2>
+      </div>
       <div class="controls">
         <span class="muted" id="events-count"></span>
       </div>
@@ -1875,18 +1953,24 @@
        reason. Places is what the logs saw; this is what the pilot marked. -->
   <section id="view-points" class="view">
     <div class="section-bar">
-      <h2>Points of interest</h2>
+      <div class="page-title">
+        <span class="page-kicker">Flight</span>
+        <h2>Points</h2>
+      </div>
       <div class="controls">
         <input type="search" id="points-search" class="search" placeholder="Search points…"
                autocomplete="off" spellcheck="false">
         <span class="muted" id="points-count"></span>
       </div>
     </div>
-    <p class="muted caption">
-      Every point here is a <code>/showlocation</code> you copied in game and pinned from the
-      Log — exact coordinates the game never names. The name, category and the note are
-      yours: write down why you were there, because nothing in the logs ever will.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Every point here is a <code>/showlocation</code> you copied in game and pinned from the
+        Log — exact coordinates the game never names. The name, category and the note are
+        yours: write down why you were there, because nothing in the logs ever will.
+      </p>
+    </details>
     <div class="export-row" id="points-categories"></div>
     <p class="muted caption" id="points-from" hidden></p>
     <div id="points-list" class="points-list"></div>
@@ -1898,7 +1982,10 @@
   <!-- CONTRACTS -->
   <section id="view-contracts" class="view">
     <div class="section-bar">
-      <h2>Contracts</h2>
+      <div class="page-title">
+        <span class="page-kicker">Operations</span>
+        <h2>Contracts</h2>
+      </div>
       <div class="controls">
         <button class="ghost stats-toggle" data-stats-toggle="contracts"
                 title="Hide the summary and go straight to the contracts"></button>
@@ -1964,7 +2051,10 @@
 
   <section id="view-market" class="view">
     <div class="section-bar">
-      <h2>Commodity market</h2>
+      <div class="page-title">
+        <span class="page-kicker">Economy</span>
+        <h2>Market</h2>
+      </div>
       <div class="controls">
         <span class="muted" id="market-count"></span>
         <span class="muted" id="market-age" title="When the UEX snapshot was fetched"></span>
@@ -1978,12 +2068,15 @@
 
     <div class="view-sources" id="market-data-sources" hidden></div>
 
-    <p class="muted caption" id="market-caption">
-      Every commodity the community dataset knows, with your own trading record
-      against each. "Sellable at" counts facilities in the game's economy
-      simulation, and <em>show on map</em> lights the ones the star map can
-      place. Static availability, not live prices.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption" id="market-caption">
+        Every commodity the community dataset knows, with your own trading record
+        against each. "Sellable at" counts facilities in the game's economy
+        simulation, and <em>show on map</em> lights the ones the star map can
+        place. Static availability, not live prices.
+      </p>
+    </details>
 
     <div class="community-offer" id="market-offer" hidden>
       <div>
@@ -2127,8 +2220,8 @@
   <section id="view-ships" class="view">
     <div class="section-bar reference-toolbar-bar">
       <div class="reference-title">
-        <span class="reference-kicker">Reference library</span>
-        <h2>Ship catalogue</h2>
+        <span class="page-kicker">Reference</span>
+        <h2>Ships</h2>
       </div>
       <div class="controls reference-toolbar">
         <select id="ships-career" class="select" title="Filter by career"></select>
@@ -2136,8 +2229,8 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <details class="reference-note">
-      <summary>About this catalogue</summary>
+    <details class="page-note">
+      <summary>About this page</summary>
       <p>Every flyable the community dataset describes — career, crew and what an
         insurance claim costs — and every other hull your game install names,
         priced at UEX in-game purchase prices where a shop sells one. Open a ship
@@ -2175,8 +2268,8 @@
   <section id="view-parts" class="view">
     <div class="section-bar reference-toolbar-bar">
       <div class="reference-title">
-        <span class="reference-kicker">Reference library</span>
-        <h2>Item catalogue</h2>
+        <span class="page-kicker">Reference</span>
+        <h2>Items</h2>
       </div>
       <div class="controls reference-toolbar">
         <select id="parts-type" class="select" title="Filter by type"></select>
@@ -2188,8 +2281,8 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <details class="reference-note">
-      <summary>About this catalogue</summary>
+    <details class="page-note">
+      <summary>About this page</summary>
       <p class="muted caption" id="parts-caption">Every ship component and piece of personal gear — type,
         size, grade and maker — with UEX in-game prices joined where a shop stocks one.</p>
     </details>
@@ -2220,7 +2313,7 @@
   <section id="view-mining" class="view mining-view">
     <div class="section-bar" data-workspace="PROSPECTING">
       <div class="mining-title">
-        <span class="mining-kicker">Resource operations</span>
+        <span class="page-kicker">Reference</span>
         <div class="mining-heading-line">
           <span class="mining-workspace-icon" id="mining-workspace-icon" aria-hidden="true"></span>
           <h2 id="mining-workspace-title">Prospecting</h2>
@@ -2638,7 +2731,10 @@
   <!-- REFERENCE: crafting blueprints -->
   <section id="view-crafting" class="view">
     <div class="section-bar">
-      <h2>Crafting</h2>
+      <div class="page-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Crafting</h2>
+      </div>
       <div class="controls">
         <select id="crafting-type" class="select" title="Filter by output type"></select>
         <select id="crafting-obtained" class="select" title="Filter by how the blueprint is obtained">
@@ -2651,12 +2747,15 @@
                autocomplete="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted caption">
-      <span id="crafting-source"></span>Every crafting blueprint in the game data: what it makes, the first-tier
-      craft time and materials, and how the blueprint is obtained. "Buy
-      instead" joins the crafted item's UEX shop price, so a recipe can be
-      weighed against a shopping trip.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        <span id="crafting-source"></span>Every crafting blueprint in the game data: what it makes, the first-tier
+        craft time and materials, and how the blueprint is obtained. "Buy
+        instead" joins the crafted item's UEX shop price, so a recipe can be
+        weighed against a shopping trip.
+      </p>
+    </details>
     <div class="table-wrap">
       <table id="crafting-table">
         <thead>
@@ -2678,22 +2777,28 @@
          item comes from - is the search it carries. New items is a section
          of the page with its own filters, as Standing is of Contracts. -->
     <div class="section-bar">
-      <h2>Loot</h2>
+      <div class="page-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Loot</h2>
+      </div>
       <div class="controls">
         <input type="search" id="loot-find" class="search" placeholder="Where to find any item, by name…"
                autocomplete="off" spellcheck="false">
       </div>
     </div>
 
-    <p class="muted caption">
-      Read from the game's own loot tables in this install. The odds are per
-      roll &mdash; the chance one draw from that container is this item. A crate
-      draws several times depending on its size, so finding it is likelier than
-      the number says. Each colour of a set is its own item, which is why armour
-      odds look small. Places are where this build's map files set the crates
-      down, named from the star map; a spot the map does not mark is listed by
-      its planet or moon.
-    </p>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">
+        Read from the game's own loot tables in this install. The odds are per
+        roll &mdash; the chance one draw from that container is this item. A crate
+        draws several times depending on its size, so finding it is likelier than
+        the number says. Each colour of a set is its own item, which is why armour
+        odds look small. Places are where this build's map files set the crates
+        down, named from the star map; a spot the map does not mark is listed by
+        its planet or moon.
+      </p>
+    </details>
 
     <div id="loot-find-results" class="loot-find-results"></div>
     <div id="loot-where" class="loot-where" hidden></div>
@@ -2709,17 +2814,20 @@
       </div>
     </div>
 
-    <p class="muted caption">
-      When an item was first seen in your inventories — a signal for looting,
-      buying and receiving alike, since the game logs inventory listings rather
-      than pickups. An item counts once, at its first ever appearance.
-    </p>
+    <details class="page-note">
+      <summary>About this table</summary>
+      <p class="muted caption">
+        When an item was first seen in your inventories — a signal for looting,
+        buying and receiving alike, since the game logs inventory listings rather
+        than pickups. An item counts once, at its first ever appearance.
+      </p>
 
-    <p class="muted caption">
-      Typical price is the median across every terminal UEX reports stocking the
-      item &mdash; what it usually goes for, not the cheapest run to make. Items
-      UEX does not stock show no price rather than a zero.
-    </p>
+      <p class="muted caption">
+        Typical price is the median across every terminal UEX reports stocking the
+        item &mdash; what it usually goes for, not the cheapest run to make. Items
+        UEX does not stock show no price rather than a zero.
+      </p>
+    </details>
 
     <div class="summary-strip" id="loot-summary"></div>
 
@@ -2740,7 +2848,10 @@
 
   <section id="view-garage" class="view">
     <div class="section-bar garage-toolbar">
-      <h2>Garage</h2>
+      <div class="page-title">
+        <span class="page-kicker">Hangar</span>
+        <h2>Garage</h2>
+      </div>
       <div class="controls garage-pickers">
         <label class="garage-picker">
           <span>Flight log</span>
@@ -2923,7 +3034,7 @@
   <section id="view-armoury" class="view">
     <div class="section-bar">
       <div>
-        <div class="armoury-eyebrow">Hangar / personal equipment</div>
+        <span class="page-kicker">Hangar</span>
         <h2>Armoury</h2>
       </div>
       <div class="controls">
@@ -3164,6 +3275,7 @@
   <section id="view-controls" class="view">
     <div class="section-bar">
       <div>
+        <span class="page-kicker">Settings</span>
         <h2>Controls</h2>
         <p class="muted caption">Your sticks and what is bound to them, read from the game's own keybinding
           profile; every version of it kept as the game rewrites it.</p>
@@ -3378,7 +3490,12 @@
 
   <!-- OVERLAY -->
   <section id="view-overlay" class="view">
-    <h2>Overlay</h2>
+    <div class="section-bar">
+      <div class="page-title">
+        <span class="page-kicker">Settings</span>
+        <h2>Overlay</h2>
+      </div>
+    </div>
 
     <div class="option-block" id="option-overlay">
       <div class="option-head">
@@ -3495,7 +3612,12 @@
   </section>
 
   <section id="view-labels" class="view">
-    <h2 class="section-title">Item labels</h2>
+    <div class="section-bar">
+      <div class="page-title">
+        <span class="page-kicker">Settings</span>
+        <h2>Item labels</h2>
+      </div>
+    </div>
     <p class="muted caption">
       Star Citizen reads its English text from one file at startup, so replacing
       that file changes what the game calls things. It is text only &mdash; no
@@ -3640,10 +3762,10 @@
   </section>
 
   <section id="view-settings" class="view">
-    <div class="settings-workspace-head">
+    <div class="section-bar settings-workspace-head">
       <div>
-        <span class="settings-eyebrow">CONTROL ROOM</span>
-        <h2>Settings</h2>
+        <span class="page-kicker">Settings</span>
+        <h2>General</h2>
       </div>
       <p class="muted">Choose what stays current, protect the history your totals use, and make a recap when you want to share one.</p>
     </div>
@@ -4542,6 +4664,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.23"></script>
+<script src="app.js?v=0.20.24"></script>
 </body>
 </html>

@@ -162,9 +162,10 @@ public class ReferenceDetailTests
     [Fact]
     public void The_games_paragraph_breaks_its_lines()
     {
-        var text = Opened().Text("__dom.node('#ref-modal-body').querySelectorAll('.ref-blurb')[0].textContent");
+        var page = Opened();
 
-        Assert.Equal("Size: 3\nThe Panther", text);
+        Assert.Equal(2, page.Count("__dom.node('#ref-modal-body').byClass('part-blurb').length"));
+        Assert.DoesNotContain("nThe Panther", page.NodeText("#ref-modal-body"));
     }
 
     [Fact]
@@ -201,6 +202,31 @@ public class ReferenceDetailTests
         page.Do("await __dom.node('#ships-table tbody').querySelectorAll('.ref-link')[0].fire('click');");
         Assert.Contains("GET /api/reference/ship?id=AEGS_Gladius", page.Fetched());
         Assert.Equal("Aegis Gladius", page.NodeText("#ref-modal-title"));
+    }
+
+    /// <summary>
+    /// "Get CF-337 Panther Repeater" over a chip reading the same name said
+    /// it twice; the line's own words are the link now, and they open the
+    /// item's card rather than a search on the Items page.
+    /// </summary>
+    [Fact]
+    public void A_checklist_line_that_names_its_item_is_the_link()
+    {
+        var page = Loaded();
+        page.Serve("/api/checklists", """
+            [{"id":"l1","title":"Hunt","createdAt":"2026-08-01T00:00:00Z","pinned":false,"imported":null,
+              "items":[{"id":"i1","text":"Get CF-337 Panther Repeater","done":false,
+                "attachments":[{"kind":"item","label":"CF-337 Panther Repeater","target":"KLWE_LaserRepeater_S3"},
+                               {"kind":"location","label":"Area18","target":"Area18"}]}]}]
+            """);
+        page.Do("await loadChecklists();");
+
+        var list = "__dom.node('#checklists-list')";
+        Assert.Equal(1, page.Count($"{list}.byClass('checklist-attachment').length"));
+        Assert.DoesNotContain("▦", page.NodeText("#checklists-list"));
+
+        page.Do($"await {list}.byClass('checklist-item-link')[0].fire('click');");
+        Assert.Equal("CF-337 Panther Repeater", page.NodeText("#ref-modal-title"));
     }
 
     /// <summary>The Loot page's panel leads into the same card.</summary>

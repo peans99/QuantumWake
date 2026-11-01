@@ -1061,8 +1061,6 @@ body.overlay .data-source { padding: 1px 3px; font-size: 7px; }
 
 /* ---------- a commodity's counters ---------- */
 
-.commodity-open { color: var(--cyan); }
-.commodity-open:hover { color: var(--cyan-hot); }
 
 #market-table tr.expanded > td { border-bottom: 0; }
 #market-table tr.market-detail > td {
@@ -1445,7 +1443,10 @@ thead th {
 tbody td { padding: 9px 15px; border-top: 1px solid rgba(23, 41, 60, .55); white-space: nowrap; }
 tbody tr:nth-child(even) { background: rgba(14, 30, 44, .26); }
 tbody tr:hover { background: rgba(53, 200, 240, .05); }
-tbody td:first-child { color: var(--cyan); font-family: var(--mono); font-size: 12px; }
+/* A row's first cell is its name, not a link: it used to be cyan mono in
+   every table, which made dates and names read as clickable. Cyan is kept
+   for what opens something (0.20.24). */
+tbody td:first-child { color: var(--text); }
 .num, td.num { text-align: right; font-family: var(--mono); font-size: 12px; }
 td.inward { color: var(--green); }
 td.outward { color: var(--amber); }
@@ -1797,7 +1798,6 @@ body:has(#view-map.active)::before { opacity: .2; }
 .fleet-history .fleet-chart-wrap { margin: 0 13px 13px; }
 .fleet-history-hint { color: var(--dim); font-weight: 400; letter-spacing: .06em; }
 .fleet-roster-bar { align-items: center; }
-.fleet-kicker { margin: 0 0 3px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 .fleet-roster-status { margin: 5px 0 0; color: var(--muted); font: 10.5px var(--mono); }
 
 .ship-grid {
@@ -2180,11 +2180,6 @@ body.overlay .activity-panel { width: min(300px, calc(100vw - 16px)); }
 .reference-kicker { display: block; color: var(--cyan); font: 9px var(--mono); letter-spacing: .17em; text-transform: uppercase; }
 .reference-toolbar { flex: 1 1 360px; justify-content: flex-end; align-content: center; padding: 10px 12px; border-left: 1px solid var(--rule); background: rgba(3, 13, 22, .42); }
 .reference-toolbar .search { min-width: min(250px, 100%); }
-.reference-note { margin: -4px 0 12px; border-bottom: 1px solid var(--rule); color: var(--dim); font-size: 11px; }
-.reference-note summary { padding: 7px 2px; color: var(--muted); font: 10px var(--mono); letter-spacing: .09em; text-transform: uppercase; cursor: pointer; }
-.reference-note summary::marker { color: var(--cyan); }
-.reference-note p { max-width: 82ch; margin: 0 0 10px; line-height: 1.55; }
-.reference-note .caption { padding: 0; }
 .reference-results { margin-top: 2px; }
 .reference-results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 0 1px 7px; color: var(--text); font: 10px var(--mono); letter-spacing: .13em; text-transform: uppercase; }
 .reference-results-head .muted { font-size: 10px; letter-spacing: .06em; text-align: right; text-transform: none; }
@@ -2610,10 +2605,7 @@ body.overlay .foot { display: none; }
   justify-content: space-between;
   gap: 24px;
   margin: 0 0 16px;
-  padding: 0 12px 13px;
-  border-bottom: 1px solid var(--rule);
 }
-.settings-eyebrow { display: block; margin-bottom: 4px; color: var(--cyan); font: 10px var(--mono); letter-spacing: .16em; }
 .settings-workspace-head h2 { padding-left: 0; }
 .settings-workspace-head h2::before { display: none; }
 .settings-workspace-head p { max-width: 52ch; margin: 0; font-size: 12px; line-height: 1.55; text-align: right; }
@@ -3376,13 +3368,9 @@ td.map-links .ghost + .ghost { margin-left: 5px; }
 .ghost.track { font-size: 10.5px; padding: 2px 7px; }
 .ghost.track:disabled { color: var(--green); border-color: var(--green); opacity: 1; }
 
-/* Where the button shares a cell with the name, it hides until the row is
-   hovered - eleven columns is enough to read without a button in every line. */
+/* Where the button shares a cell with the name. It hid until the row was
+   hovered; row buttons are quiet text now (0.20.24), so it stays on screen. */
 td.with-track { display: flex; align-items: center; gap: 9px; }
-td.with-track .track { opacity: 0; transition: opacity .12s; }
-tr:hover td.with-track .track,
-td.with-track .track:disabled,
-td.with-track .track:focus-visible { opacity: 1; }
 
 /* ---------- market: price ages ---------- */
 
@@ -3442,16 +3430,6 @@ td.with-track .track:focus-visible { opacity: 1; }
 
 /* ---------- place links: any location jumps to the map ---------- */
 
-.place-link {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.place-link:hover { color: var(--cyan-hot, #7fe4ff); text-decoration: underline; }
 
 .now-jump { cursor: pointer; }
 .now-jump:hover { color: var(--cyan-hot, #7fe4ff); }
@@ -5833,13 +5811,6 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .point-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; line-height: 1.5; }
 .point-facts .mono { font-family: var(--mono); }
 .point-when { font-size: 11.5px; }
-.point-when button.link {
-  background: none; border: 0; padding: 0; margin: 0;
-  font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline dotted;
-  /* A sentence, not a control: the global button face would shout it. */
-  text-transform: none; letter-spacing: 0; clip-path: none;
-}
-.point-when button.link:hover { color: var(--cyan-hot); }
 .point-note {
   background: rgba(8, 18, 30, .9);
   border: 1px solid var(--rule);
@@ -6497,7 +6468,7 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 /* ---------- mining workstation ---------- */
 .mining-view { --mining-glow: rgba(53, 200, 240, .12); }
 .mining-title { display: grid; gap: 2px; }
-.mining-kicker, .mining-overline { font: 9.5px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--cyan); }
+.mining-overline { font: 9.5px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--cyan); }
 .mining-heading-line { display: flex; align-items: center; gap: 8px; }
 .mining-title h2 { font-size: clamp(21px, 2vw, 28px); }
 .mining-workspace-status { margin: 1px 0 0; color: var(--muted); font: 10px var(--mono); letter-spacing: .04em; }
@@ -6676,7 +6647,6 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
 .ship-card.unflown .ship-name::after { content: " · never flown"; font-size: 10px; color: var(--muted); font-weight: 400; }
 
 /* ---------- armoury ---------- */
-.armoury-eyebrow { margin-bottom: 3px; color: var(--cyan); font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 /* The shared section-heading tick belongs to a lone heading. These titles
    already have a kicker or a workspace icon, so a second marker only repeats
    the same cue and reads as a stray diamond beside the title. */
@@ -7085,13 +7055,6 @@ body.overlay.high-contrast .now-status-label, body.overlay.high-contrast .card-l
 .trade-run-warning { color: var(--amber); }
 
 /* ---------- Loot: where the game's tables say an item comes from ---------- */
-#loot-table button.link, .checklist-farm-items button.link {
-  background: none; border: 0; padding: 0; margin: 0;
-  font: inherit; color: var(--cyan); cursor: pointer; text-decoration: underline dotted;
-  /* An item name, not a control: the global button face would shout it. */
-  text-transform: none; letter-spacing: 0; clip-path: none; text-align: left;
-}
-#loot-table button.link:hover, .checklist-farm-items button.link:hover { color: var(--cyan-hot); }
 .loot-find-results { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
 .loot-find-results:empty { display: none; }
 .loot-find-item {
@@ -7537,10 +7500,56 @@ body.ref-modal-open { overflow: hidden; }
 .ref-source { color: var(--dim); font-size: 11px; }
 .ref-section { margin-top: 16px; padding-top: 6px; border-top: 1px solid var(--rule); }
 .ref-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 16px; margin: 4px 0 6px; padding: 0; list-style: none; }
-.ref-link { text-align: left; color: var(--cyan); }
 .ref-price-table, .ref-parts-table { max-width: 640px; }
 @media (max-width: 640px) {
   .ref-modal { padding: 0; }
   .ref-modal-panel { max-height: 100vh; height: 100vh; }
   .ref-facts { grid-template-columns: 1fr; }
 }
+
+/* ---- One page header (0.20.24): where the page sits in the menu, above the
+   page's menu name. The nine kicker styles this replaced each said something
+   different - CONTROL ROOM, Operational roster, Flight ledger - so a page's
+   label told you nothing about where you were. ---- */
+.page-title { min-width: 0; }
+.page-kicker { display: block; margin: 0 0 2px; color: var(--cyan); font: 9.5px var(--mono); letter-spacing: .17em; text-transform: uppercase; }
+.page-title h2, .section-bar .page-kicker + h2 { padding-left: 0; }
+.page-title h2::before, .section-bar .page-kicker + h2::before { display: none; }
+/* What a page is and how its numbers are made: folded, so the first screen
+   is the page. Crew and Events keep theirs open - they lead with a floor. */
+.page-note { margin: -4px 0 12px; border-bottom: 1px solid var(--rule); color: var(--dim); font-size: 11px; }
+.page-note summary { padding: 7px 2px; color: var(--muted); font: 10px var(--mono); letter-spacing: .09em; text-transform: uppercase; cursor: pointer; }
+.page-note summary::marker { color: var(--cyan); }
+.page-note p { max-width: 82ch; margin: 0 0 10px; line-height: 1.55; }
+.page-note .caption { padding: 0; }
+
+/* ---- Cyan means you can click it (0.20.24). Four link classes had grown
+   three looks - cyan mono in the Ships table, dotted underline on Loot, plain
+   white in the Reference lists - so what opened something could not be told
+   from what did not. One face for all of them: the text's own font, cyan,
+   a dotted underline that goes solid on hover. ---- */
+button.place-link, button.ref-link, button.commodity-open, button.link {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: var(--cyan); cursor: pointer; text-align: left;
+  text-transform: none; letter-spacing: 0; clip-path: none;
+  text-decoration: underline dotted rgba(53, 200, 240, .45); text-underline-offset: 3px;
+}
+button.place-link:hover:not(:disabled), button.ref-link:hover:not(:disabled),
+button.commodity-open:hover:not(:disabled), button.link:hover:not(:disabled) {
+  background: none; border: 0; color: var(--cyan-hot); text-decoration: underline solid;
+}
+
+/* ---- Row actions are quiet (0.20.24). A Market screen carried some three
+   hundred bordered buttons, three a row, and the table's numbers drowned.
+   They stay on screen - an action that appears only on hover is one nobody
+   finds - but as words until pointed at. ---- */
+body:not(.overlay) tbody td :is(button.ghost, a.ghost) {
+  padding: 2px 6px; border-color: transparent; background: none; box-shadow: none;
+  color: var(--cyan); font-size: 10px; letter-spacing: .08em;
+}
+body:not(.overlay) tbody td :is(button.ghost, a.ghost)::after { display: none; }
+body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
+  border-color: var(--cyan-deep); background: rgba(53, 200, 240, .08); box-shadow: none;
+}
+/* The Items table's + list used to appear only on hover, which is the
+   control nobody finds (CLAUDE.md). Quiet now, so it can simply stay. */

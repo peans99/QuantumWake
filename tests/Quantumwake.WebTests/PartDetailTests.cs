@@ -1,7 +1,7 @@
 namespace Quantumwake.WebTests;
 
 /// <summary>
-/// Opening an item from the parts table, which now opens the shared drawer.
+/// Opening an item from the Items table, which opens the Reference window.
 /// </summary>
 /// <remarks>
 /// 9,401 of the install's 26,028 items carry a description, and they run to
@@ -9,7 +9,9 @@ namespace Quantumwake.WebTests;
 /// nobody could read at that width. The tags beside it are the game's own
 /// labels — flightReady is how it marks what has actually shipped. What used to
 /// be an expanding row inside this one table is now the panel every other view
-/// opens, so the item also arrives with whether it is already yours.
+/// opens, so the item also arrives with whether it is already yours. Since
+/// 0.20.24 that panel is the Reference window rather than the side drawer:
+/// one description of a gun, wherever it was clicked.
 /// </remarks>
 public class PartDetailTests
 {
@@ -37,6 +39,11 @@ public class PartDetailTests
          "tags":["gimbalMount","flightReady"]}
         """;
 
+    private static string Detail(string card) =>
+        $$"""{"className":"varipuck_s5","uex":false,"shops":[],"stockOn":[],"card":{{card}}}""";
+
+    private const string Modal = "__dom.node('#ref-modal-body')";
+
     private static Page Loaded(string body)
     {
         var page = new Page();
@@ -48,7 +55,7 @@ public class PartDetailTests
     private static Page Opened()
     {
         var page = Loaded(WithBlurb);
-        page.Serve("/api/entity?kind=part&id=varipuck_s5", VariPuckCard);
+        page.Serve("/api/reference/item?id=varipuck_s5", Detail(VariPuckCard));
         page.Do("await openEntity('part', 'varipuck_s5');");
         return page;
     }
@@ -66,9 +73,10 @@ public class PartDetailTests
     {
         var page = Opened();
 
-        Assert.False(page.Truth("__dom.node('#entity-drawer').hidden"));
-        Assert.Contains("The VariPuck holds one gun", page.NodeText("#entity-blurb"));
-        Assert.Contains("flightReady", page.NodeText("#entity-tags"));
+        Assert.False(page.Truth("__dom.node('#ref-modal').hidden"));
+        Assert.True(page.Truth("__dom.node('#entity-drawer').hidden"));
+        Assert.Contains("The VariPuck holds one gun", page.NodeText("#ref-modal-body"));
+        Assert.Contains("flightReady", page.Text($"{Modal}.byClass('part-tags')[0].textContent"));
     }
 
     /// <summary>
@@ -80,8 +88,8 @@ public class PartDetailTests
     {
         var page = Opened();
 
-        Assert.DoesNotContain("nThe VariPuck", page.NodeText("#entity-blurb"));
-        Assert.Equal(2, page.Count("__dom.node('#entity-blurb').byClass('part-blurb').length"));
+        Assert.DoesNotContain("nThe VariPuck", page.NodeText("#ref-modal-body"));
+        Assert.Equal(2, page.Count($"{Modal}.byClass('part-blurb').length"));
     }
 
     /// <summary>
@@ -93,7 +101,7 @@ public class PartDetailTests
     [Fact]
     public void Volume_reads_in_a_unit_that_suits_the_size()
     {
-        Assert.Contains("8.4 centiSCU", Opened().NodeText("#entity-facts"));
+        Assert.Contains("8.4 centiSCU", Opened().NodeText("#ref-modal-body"));
     }
 
     /// <summary>
@@ -117,15 +125,15 @@ public class PartDetailTests
     public void A_card_without_a_paragraph_hides_the_section()
     {
         var page = Opened();
-        Assert.False(page.Truth("__dom.node('#entity-blurb').hidden"));
+        Assert.Equal(1, page.Count($"{Modal}.byClass('ref-blurb').length"));
 
-        page.Serve("/api/entity?kind=part&id=plain_01", """
+        page.Serve("/api/reference/item?id=plain_01", Detail("""
             {"kind":"part","id":"plain_01","name":"Plain Thing","subtitle":"Misc",
              "facts":[],"holding":null,"price":null,"places":[],"actions":["details"]}
-            """);
+            """));
         page.Do("await openEntity('part', 'plain_01');");
 
-        Assert.True(page.Truth("__dom.node('#entity-blurb').hidden"));
-        Assert.True(page.Truth("__dom.node('#entity-tags').hidden"));
+        Assert.Equal(0, page.Count($"{Modal}.byClass('ref-blurb').length"));
+        Assert.Equal(0, page.Count($"{Modal}.byClass('part-tags').length"));
     }
 }
