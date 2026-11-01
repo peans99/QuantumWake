@@ -11525,7 +11525,9 @@ function wikeloName(entry) {
     const link = el('button', 'place-link ref-link', entry.name);
     link.type = 'button';
     link.title = tx('Open this commodity');
-    link.addEventListener('click', () => openCommodity(entry.name));
+    // By the Market's name for it, which the server sends: the trade file's
+    // own spelling ("Quantainium") is not the one the drawer is keyed on.
+    link.addEventListener('click', () => openCommodity(entry.commodity || entry.name));
     return link;
   }
   return document.createTextNode(entry.name);

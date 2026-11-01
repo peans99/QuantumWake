@@ -3015,11 +3015,26 @@ public static partial class ServerHost
             // name as words rather than send one in three to the wrong window.
             // Null for a class none of the catalogues knows.
             var items = lib.Items().Select(i => i.ClassName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // The trade file writes an ore as its name ("Quantanium"), not as
+            // the lower-case resource id the logs carry, so both spellings of
+            // both catalogues are accepted. Checked on this install: 5 of 442
+            // things are ores, and none of them resolved by id alone.
+            // The value is the name the Market page lists it under, which is
+            // what opens the commodity drawer; the file's own spelling can
+            // differ ("Quantainium"). The dataset's name first, since the
+            // Market is built from it.
+            var commodities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (id, info) in lib.Community.All) { commodities.TryAdd(id, info.Name); commodities.TryAdd(info.Name, info.Name); }
+            foreach (var (id, name) in lib.GameCommodities.All) { commodities.TryAdd(id, name); commodities.TryAdd(name, name); }
             string? KindOf(string cls) =>
                 lib.GameCommodities.Vehicles.ContainsKey(cls) || lib.Community.Ships.ContainsKey(cls) ? "ship"
-                : lib.CommodityName(cls) is not null ? "commodity"
+                : commodities.ContainsKey(cls) ? "commodity"
                 : items.Contains(cls) ? "item"
                 : null;
+            // A catalogue that knows only the id answers with the id; that is
+            // no name for the drawer, so the page keeps the trade's own words.
+            string? CommodityOf(string cls) =>
+                commodities.TryGetValue(cls, out var name) && !string.Equals(name, cls, StringComparison.OrdinalIgnoreCase) ? name : null;
 
             return Results.Ok(new
             {
@@ -3028,11 +3043,11 @@ public static partial class ServerHost
                 trades = catalogue.Trades.Select(t => new
                 {
                     t.Id, t.Title, t.Description, t.Group, t.Reputation, t.MinStanding, t.Retired,
-                    rewards = t.Rewards.Select(r => new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class) }),
+                    rewards = t.Rewards.Select(r => new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class), commodity = CommodityOf(r.Class) }),
                     requirements = t.Requirements.Select(r =>
                     {
                         var where = HeldWhere(held, r.Name);
-                        return new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class), have = where.Count > 0, where };
+                        return new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class), commodity = CommodityOf(r.Class), have = where.Count > 0, where };
                     }),
                     trackedJobId = tracked.TryGetValue(t.Id, out var job) && !job.Done ? job.Id : null,
                     trackedDone = tracked.TryGetValue(t.Id, out var done) && done.Done,

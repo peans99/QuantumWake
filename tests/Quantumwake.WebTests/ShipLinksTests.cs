@@ -115,7 +115,7 @@ public class ShipLinksTests
              "trades":[{"id":"t1","title":"Fortune ship for you","description":"","group":"vehicles","reputation":0,"minStanding":null,"retired":false,
                "rewards":[{"class":"MISC_Fortune_Collector_Industrial","name":"MISC Fortune Wikelo Special","count":1,"unit":"","kind":"ship"}],
                "requirements":[{"class":"banu_favour","name":"Wikelo Favor","count":3,"unit":"","kind":"item","have":false,"where":[]},
-                               {"class":"Quantanium","name":"Quantainium","count":24,"unit":"SCU","kind":"commodity","have":false,"where":[]},
+                               {"class":"Quantanium","name":"Quantainium","count":24,"unit":"SCU","kind":"commodity","commodity":"Quantanium","have":false,"where":[]},
                                {"class":"mystery","name":"Mystery Part","count":1,"unit":"","kind":null,"have":false,"where":[]}],
                "trackedJobId":null,"trackedDone":false}]}
             """);
@@ -130,6 +130,10 @@ public class ShipLinksTests
 
         page.Do($"{Links("#wikelo-list")}[1].click();");
         Assert.Equal("Item", page.NodeText("#ref-modal-kicker"));
+
+        // The ore opens the drawer under the Market's spelling, not the file's.
+        page.Do($"await {Links("#wikelo-list")}[2].fire('click');");
+        Assert.Equal("Quantanium", page.NodeText("#commodity-name"));
     }
 
     /// <summary>
