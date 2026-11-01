@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.25
+### 0.20.26
 
 **A new look for the logbook.** The dashboard has its own flight-deck style: calmer panels, angular buttons, and a small geometric glyph for every workspace and menu group, in the menu and beside its page title, and a refresh mark on Check for updates. A telemetry line keeps your system, location, ship and connection in view, and the current system and ship tint the quiet details around the page. Completed contracts earn small mission patches, and the live feed reads as a flight recorder. Update, patch and data notices now share one compact strip, with their detail and choices one click away instead of a full row each above your work. The Star map keeps its own star field and markers. Page changes make one short scan, and the reduced-motion setting is respected. The menu fits a laptop-width window down to 1280 pixels, in English and in French, and the new labels, from the telemetry line to the notices, are translated.
 
@@ -357,6 +357,8 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 **Your pickups beside the odds.** The New items table gains a Best roll column, the best single roll any container or body gives for that item, with where on hover. The item's name opens the same breakdown. Items no table produces, such as hangar decorations and things you bought, show a dash rather than a zero. Checked against these logs: of the 130 item classes seen inside a crate, body or pack, 126 come out of some table, and the other four are a goldfish and three ship models.
 
 **For the command line,** `--loot` prints every table and source with which presets the map files place, and `--loot=<item class>` lists every container, body and named place that can roll one item, every NPC ship that flies with it and every NPC that wears it.
+
+**Fixes.** The favourite star on the Now page's Server card no longer spills the word "Favourite" out under an empty box: it is the star alone, as on the Servers page, with the words on hover.
 
 ### 0.20.0
 

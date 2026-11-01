@@ -16816,8 +16816,13 @@ function renderNowServer(state) {
   note.textContent = parts.join(' ');
   note.className = `note${state.shardNote || state.shardDisposition === 'avoid' ? ' warn' : ''}`;
 
+  // The glyph alone, as on the Servers table and a Fleet card: the card's
+  // stylesheet draws this as a 24px star, and the word "Favourite" beside it
+  // spilled out under the box. The words are the hover and the label.
   const star = $('#now-server-star');
-  star.textContent = state.shardFavorite ? tx('★ Favourite') : tx('☆ Favourite');
+  star.textContent = state.shardFavorite ? '★' : '☆';
+  star.title = state.shardFavorite ? tx('Remove from favourites') : tx('Add to favourites');
+  star.setAttribute('aria-label', star.title);
   star.className = `ghost tiny${state.shardFavorite ? ' on' : ''}`;
   star.onclick = () => setServerFavorite(state.shard, !state.shardFavorite).catch(() => {});
 

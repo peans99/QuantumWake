@@ -5868,7 +5868,16 @@ body.overlay.glance #now-event-list li { padding: 0; border: 0; }
   font-size: 16px;
   line-height: 1;
   color: var(--dim);
+  box-shadow: none;
 }
+/* The redesign's framed-button shading - an inset edge and a corner tick -
+   drew an empty box around the bare star; a glyph wears neither. */
+body:not(.overlay) #servers-table .star,
+body:not(.overlay) #now-server-star,
+body:not(.overlay) #servers-table .star:hover:not(:disabled),
+body:not(.overlay) #now-server-star:hover:not(:disabled) { box-shadow: none; background-image: none; }
+body:not(.overlay) #servers-table .star::after,
+body:not(.overlay) #now-server-star::after { display: none; }
 #servers-table .star:hover:not(:disabled),
 #now-server-star:hover:not(:disabled) { color: var(--cyan-hot); background: none; }
 #servers-table .star.on,
