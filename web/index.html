@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.30">
+  <link rel="stylesheet" href="app.css?v=0.20.31">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -274,6 +274,16 @@
 
   <!-- NOW -->
   <section id="view-now" class="view active">
+    <!-- When the game is closed. Game.log keeps the last session until the
+         next launch, so without this the page reads days-old state as live. -->
+    <section class="now-focus now-closed" id="now-closed" hidden>
+      <div class="now-focus-mark">Game closed</div>
+      <div class="now-focus-copy">
+        <div class="now-focus-title" id="now-closed-title"></div>
+        <div class="muted" id="now-closed-detail"></div>
+      </div>
+      <button class="ghost tiny" id="now-closed-open">Open in Sessions</button>
+    </section>
     <section class="now-focus" id="now-focus" hidden aria-live="polite">
       <div class="now-focus-mark">Focus</div>
       <div class="now-focus-copy">
@@ -295,7 +305,7 @@
                 aria-expanded="false" aria-controls="now-status-options">⚙</button>
         <div class="now-status-readings">
           <section class="now-status-field now-status-location" data-status-field="location">
-            <div class="now-status-label">Location</div>
+            <div class="now-status-label" id="now-location-label">Location</div>
             <div class="card-source source-slot" id="now-location-source" data-sources="logs"></div>
             <div class="hero-value" id="now-location">—</div>
             <div class="hero-sub" id="now-location-sub"></div>
@@ -314,7 +324,7 @@
             </div>
           </section>
           <section class="now-status-field" data-status-field="session">
-            <div class="now-status-label">Session</div>
+            <div class="now-status-label" id="now-session-label">Session</div>
             <div class="card-source source-slot" id="now-session-source" data-sources="logs"></div>
             <div class="value" id="now-clock">—</div>
             <div class="sub" id="now-mode"></div>
@@ -325,7 +335,7 @@
             <div class="sub" id="now-version"></div>
           </section>
           <section class="now-status-field now-status-health" data-status-field="health">
-            <div class="now-status-label">This session</div>
+            <div class="now-status-label" id="now-health-label">This session</div>
             <div class="card-source source-slot" id="now-stats-source" data-sources="logs" data-source-qualifier="INFERRED"></div>
             <div class="statline"><span>Deaths</span><b id="now-deaths">0</b></div>
             <div class="statline"><span>Incapacitations</span><b id="now-incaps">0</b></div>
@@ -406,7 +416,7 @@
       </article>
 
       <article class="card span2" data-card="feed">
-        <div class="card-label">Live feed</div>
+        <div class="card-label" id="now-feed-label">Live feed</div>
         <div class="card-source source-slot" id="now-feed-source" data-sources="logs"></div>
         <ul class="feed" id="now-feed">
           <li class="empty">Waiting for the game…</li>
@@ -4705,6 +4715,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.30"></script>
+<script src="app.js?v=0.20.31"></script>
 </body>
 </html>

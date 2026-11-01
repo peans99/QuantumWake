@@ -5517,5 +5517,20 @@
   "{count} version": "{count} version",
   "{count} versions": "{count} versions",
   "tier reward": "récompense de palier",
-  "The chance the contract pays from this pool when it completes": "La chance que le contrat verse ce lot à la fin"
+  "The chance the contract pays from this pool when it completes": "La chance que le contrat verse ce lot à la fin",
+  "Game closed": "Jeu fermé",
+  "game closed": "jeu fermé",
+  "Where you left off": "Là où vous en étiez",
+  "Last session": "Dernière session",
+  "The game is closed": "Le jeu est fermé",
+  "Nothing in Game.log yet; the cards go live when the game starts.": "Rien dans Game.log pour l’instant ; les cartes passent en direct au lancement du jeu.",
+  "Your last session ended {when}": "Votre dernière session s’est terminée {when}",
+  "{date} at {time}": "{date} à {time}",
+  "{length} long": "durée {length}",
+  "last at {place}": "en dernier à {place}",
+  "aboard {ship}": "à bord du {ship}",
+  "The cards below are where it left off; they go live when the game starts.": "Les cartes ci-dessous montrent où elle s’est arrêtée ; elles passent en direct au lancement du jeu.",
+  "Open in Sessions": "Ouvrir dans Sessions",
+  "That session": "Pendant cette session",
+  "Feed from the last session": "Fil de la dernière session"
 }

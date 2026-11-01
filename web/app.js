@@ -117,9 +117,11 @@ function duration(seconds) {
   return `${h}h ${pad(m)}m`;
 }
 
-function clock(fromIso) {
+/** From a start to now, or to an end when the thing has ended. */
+function clock(fromIso, toIso = null) {
   if (!fromIso) return '—';
-  const secs = Math.max(0, (Date.now() - new Date(fromIso).getTime()) / 1000);
+  const to = toIso ? new Date(toIso).getTime() : Date.now();
+  const secs = Math.max(0, (to - new Date(fromIso).getTime()) / 1000);
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = Math.floor(secs % 60);
@@ -1248,8 +1250,10 @@ function renderFlightTelemetry(state) {
     ? (state.travellingTo || tx('In quantum'))
     : (state.location || tx('No current fix'));
   ship.textContent = state.ship || '—';
-  link.textContent = state.connected ? tx('Live') : tx('Standing by');
-  ribbon.dataset.link = state.connected ? 'live' : 'idle';
+  // Following a log is not the same as the game running: the log outlives it.
+  const closed = gameClosed(state);
+  link.textContent = closed ? tx('Game closed') : state.connected ? tx('Live') : tx('Standing by');
+  ribbon.dataset.link = state.connected && !closed ? 'live' : 'idle';
   ribbon.dataset.travel = state.travelling ? 'quantum' : 'local';
   applyFlightAtmosphere(state);
 }
@@ -1300,14 +1304,19 @@ function renderNow(state) {
   confidence.textContent = state.location ? (CONFIDENCE[level] || `${level} confidence`) : '';
   confidence.className = `confidence ${(state.confidence || '').toLowerCase()}`;
 
+  // A log that ended mid-jump is not a pilot in quantum now.
+  const closed = gameClosed(state);
   const travel = $('#now-travel');
-  travel.hidden = !state.travelling;
+  travel.hidden = !state.travelling || closed;
   if (state.travelling) $('#now-travel-to').textContent = state.travellingTo || '';
 
   renderNowShip(state.ship);
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
-  $('#now-mode').textContent = state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
+  $('#now-mode').textContent = closed ? tx('game closed')
+    : state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
+  $('#now-clock').textContent = nowClock(state);
+  renderNowClosed(state);
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
 
@@ -2214,7 +2223,56 @@ function renderPilotBriefing(briefing) {
   renderNowFocus(nowState, briefing);
 }
 
-setInterval(() => { $('#now-clock').textContent = clock(sessionStarted); }, 1000);
+setInterval(() => { $('#now-clock').textContent = nowClock(nowState); }, 1000);
+
+/**
+ * True only when the server says the game is closed. An older server, or one
+ * with no Game.log to follow, says nothing, and nothing is not closed.
+ */
+function gameClosed(state) { return state?.gameRunning === false; }
+
+/** The session's length: still counting while it is flown, stopped at its last line once the game closes. */
+function nowClock(state) {
+  if (!state?.sessionStarted) return '—';
+  return clock(state.sessionStarted, gameClosed(state) ? state.lastSeen : null);
+}
+
+/**
+ * The page with the game closed. Game.log keeps the last session until the
+ * next launch, so the cards still describe it; this strip says that they are
+ * a record now, not a reading, and the labels follow.
+ */
+function renderNowClosed(state) {
+  const closed = gameClosed(state);
+  const strip = $('#now-closed');
+  strip.hidden = !closed;
+  $('#view-now').classList.toggle('game-closed', closed);
+
+  $('#now-location-label').textContent = closed ? tx('Where you left off') : tx('Location');
+  $('#now-session-label').textContent = closed ? tx('Last session') : tx('Session');
+  $('#now-health-label').textContent = closed ? tx('That session') : tx('This session');
+  $('#now-feed-label').textContent = closed ? tx('Feed from the last session') : tx('Live feed');
+  if (!closed) return;
+
+  if (!state.lastSeen) {
+    $('#now-closed-title').textContent = tx('The game is closed');
+    $('#now-closed-detail').textContent = tx('Nothing in Game.log yet; the cards go live when the game starts.');
+    return;
+  }
+
+  $('#now-closed-title').textContent = tx('Your last session ended {when}', { when: ago(state.lastSeen) });
+  const length = state.sessionStarted
+    ? (new Date(state.lastSeen).getTime() - new Date(state.sessionStarted).getTime()) / 1000
+    : 0;
+  $('#now-closed-detail').textContent = [
+    tx('{date} at {time}', { date: dateOf(state.lastSeen), time: shortTimeOf(state.lastSeen) }),
+    length > 0 ? tx('{length} long', { length: duration(length) }) : null,
+    state.location ? tx('last at {place}', { place: state.location }) : null,
+    state.ship ? tx('aboard {ship}', { ship: state.ship }) : null,
+  ].filter(Boolean).join(' · ') + '. ' + tx('The cards below are where it left off; they go live when the game starts.');
+}
+
+$('#now-closed-open')?.addEventListener('click', () => showView('sessions'));
 
 function connectStream() {
   const source = new EventSource('/api/stream');
@@ -5431,9 +5489,18 @@ function drawWakes() {
 
   // Every page's own header: the bar that opens a view, not one nested
   // further down (Now, Help and About open on something else entirely).
-  for (const section of $$('.view')) {
-    const bar = section.querySelector('.section-bar');
-    if (!bar || bar.parentElement !== section) continue;
+  // And the Now page's strip for a closed game, which is about your sessions
+  // more than anything else on that page.
+  const hosts = [...$$('.view')]
+    .map((section) => {
+      const bar = section.querySelector('.section-bar');
+      return bar && bar.parentElement === section ? bar : null;
+    })
+    .filter(Boolean);
+  const closedStrip = $('#now-closed');
+  if (closedStrip) hosts.push(closedStrip);
+
+  for (const [index, bar] of hosts.entries()) {
     bar.querySelector('.wake')?.remove();
     bar.querySelector('.wake-mark')?.remove();
     if (!sessions) continue;
@@ -5444,7 +5511,7 @@ function drawWakes() {
     svg.setAttribute('viewBox', `0 0 ${width} 18`);
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
-    const id = `wake-fade-${section.id}`;
+    const id = `wake-fade-${index}`;
     svg.innerHTML = `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">`
       + '<stop offset="0" stop-color="#e9c27d" stop-opacity="0"/>'
       + '<stop offset=".55" stop-color="#e9c27d" stop-opacity=".22"/>'

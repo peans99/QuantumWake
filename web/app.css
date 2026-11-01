@@ -7640,6 +7640,22 @@ td.src-uex .inward:first-child { color: var(--src-uex); }
 #view-fleet .ship-ref:not(.muted) { color: var(--src-community); }
 #view-fleet .ship-price:not(.muted) { color: var(--src-uex); }
 
+/* Now with the game closed (0.20.31): the focus strip's shape, in your gold,
+   because what it describes is your last session rather than a reading. The
+   wake runs along its foot as it does under a page header. */
+body:not(.overlay) .now-focus.now-closed {
+  isolation: isolate;
+  border-color: rgba(233, 194, 125, .45);
+  border-left-color: var(--own);
+  background: linear-gradient(90deg, rgba(233, 194, 125, .09), var(--panel));
+}
+body:not(.overlay) .now-closed .now-focus-mark { color: var(--own); }
+#now-closed-detail { margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
+body.overlay #now-closed { display: none !important; }
+/* The cards below are a record now: the live accents quieten. */
+body:not(.overlay) #view-now.game-closed .now-status-card .hero-value { color: var(--text); }
+body:not(.overlay) #view-now.game-closed .confidence { opacity: .6; }
+
 /* Sessions: the debrief cards are your record. */
 #view-sessions .sessions-brief-card .economy-kicker,
 #view-sessions .sessions-brief-card [class*='kicker'] { color: var(--own); }

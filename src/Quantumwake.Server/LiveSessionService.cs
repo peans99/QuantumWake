@@ -95,6 +95,21 @@ public sealed record NowState
 
     /// <summary>How many times this install has been placed here before this stay.</summary>
     public int ShardVisitsBefore { get; init; }
+
+    /// <summary>
+    /// Whether the game is running, or null where nothing was asked (no
+    /// Game.log to follow).
+    /// </summary>
+    /// <remarks>
+    /// Game.log outlives the game: it keeps the last session until the next
+    /// launch rotates it, so a snapshot of it looks live for days. Before
+    /// 0.20.31 the Now page's session clock counted up from that session's
+    /// start for as long as the app ran.
+    /// </remarks>
+    public bool? GameRunning { get; init; }
+
+    /// <summary>The newest line Game.log holds, so a closed session can say when it ended.</summary>
+    public DateTimeOffset? LastSeen { get; init; }
 }
 
 /// <summary>One contract this session opened and has not closed.</summary>
@@ -317,6 +332,29 @@ public sealed partial class LiveSessionService : BackgroundService
     /// a saved session's history.
     /// </remarks>
     private readonly List<TimelineEntry> _screenNotes = [];
+
+    /// <summary>
+    /// The process check, replaceable so a test does not depend on whether
+    /// the machine running it has the game open.
+    /// </summary>
+    internal Func<bool> GameProcessRunning { get; init; } = GameProcess.IsRunning;
+
+    /// <summary>
+    /// How recently the log must have been written to for the game to count
+    /// as running whatever the process check says. The check is unmeasured
+    /// under Wine (docs/linux.md), and a pilot mid-flight told the game is
+    /// closed is worse than a closed game shown live for two more minutes.
+    /// </summary>
+    private static readonly TimeSpan FreshLog = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// The process list is asked at most this often. A snapshot is built per
+    /// event, and the opening read of a long Game.log is thousands of events.
+    /// </summary>
+    private const long ProcessCheckMs = 5000;
+
+    private long? _processCheckedAt;
+    private bool _processSeen;
 
     /// <param name="install">
     /// Defaulted so the container can still build this service on a machine
@@ -603,8 +641,24 @@ public sealed partial class LiveSessionService : BackgroundService
             Cargo = NowCargo.From(summary, _library.CommodityName),
             Party = ReadParty(summary.PartyNotes),
             PartyDisbanded = summary.PartyNotes.Count > 0
-                && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded
+                && summary.PartyNotes[^1].Moment == PartyMoment.Disbanded,
+            GameRunning = GameRunningNow(summary.EndedAt),
+            LastSeen = summary.EndedAt == default ? null : summary.EndedAt
         };
+    }
+
+    /// <summary>The game's process, or a log written to in the last two minutes.</summary>
+    private bool GameRunningNow(DateTimeOffset lastSeen)
+    {
+        var now = Environment.TickCount64;
+        if (_processCheckedAt is not { } checkedAt || now - checkedAt >= ProcessCheckMs)
+        {
+            _processSeen = GameProcessRunning();
+            _processCheckedAt = now;
+        }
+
+        return _processSeen
+            || (lastSeen != default && DateTimeOffset.UtcNow - lastSeen < FreshLog);
     }
 
     /// <summary>
