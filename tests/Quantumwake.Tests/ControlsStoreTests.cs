@@ -195,7 +195,13 @@ public sealed class ControlsStoreTests : IDisposable
         Assert.False(_store.Keep(bytes, DateTimeOffset.UtcNow).Taken);
         // But seen on disk by the watch, it is the game going back: kept again.
         Assert.True(_store.Keep(bytes, DateTimeOffset.UtcNow, againstLatestOnly: true).Taken);
-        Assert.Equal(3, _store.Backups().Count);
+
+        // Kept within one millisecond of each other on a fast machine, and
+        // still in the order they were kept: the id, which is what "latest"
+        // reads, must never tie.
+        var kept = _store.Backups();
+        Assert.Equal(3, kept.Count);
+        Assert.True(kept[0].TakenAt > kept[1].TakenAt && kept[1].TakenAt > kept[2].TakenAt);
     }
 
     /// <summary>

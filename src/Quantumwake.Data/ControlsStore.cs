@@ -85,7 +85,17 @@ public sealed class ControlsStore
             var same = againstLatestOnly ? kept.FirstOrDefault() : kept.FirstOrDefault(b => b.Hash == hash);
             if (same is not null && same.Hash == hash) return (same, false);
 
+            // Ids sort as text, and two copies kept in one millisecond would
+            // sort by hash rather than by order - so "the latest" could name
+            // the older one, and the watch would refuse a version the game had
+            // genuinely gone back to. A fast machine keeps three in 2 ms; the
+            // Linux runner did. The clock is nudged past the latest id instead.
             var takenAt = DateTimeOffset.UtcNow;
+            // At the id's own precision, or a clock a few ticks past the
+            // latest millisecond still formats to the same one.
+            takenAt = takenAt.AddTicks(-(takenAt.Ticks % TimeSpan.TicksPerMillisecond));
+            var latest = kept.FirstOrDefault();
+            if (latest is not null && takenAt <= latest.TakenAt) takenAt = latest.TakenAt.AddMilliseconds(1);
             var id = $"{takenAt:yyyyMMdd-HHmmss-fff}-{hash}";
             System.IO.Directory.CreateDirectory(_directory);
             var path = Path.Combine(_directory, id + ".xml");
