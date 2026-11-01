@@ -80,15 +80,25 @@ beside the words where the words alone could not say which item they meant:
 `LedgerEntry.Item`, `LogbookLine.Subject`, `TimelineEntry.Subject`.
 `ItemLinksTests` holds one test per page.
 
-Two kinds of name are not linked, on purpose. A Wikelo requirement or reward
-can be an item, a commodity or a ship, and the row does not say which, so a
-link would open the wrong window one time in three. A name read off a
-screenshot (Fleet fittings) has no class and may not match any item.
+**Every ship name is `refLink('ship', class-or-name, label)`** too (0.20.33):
+Fleet cards, the unflown berths, the screen-read fittings, Crew's table, the
+Casualties bars, the Sessions table, the Hangar comparison and the Now page's
+ship card. The server resolves a ship by class or by name (`ShipDetail`).
+`ShipLinksTests` holds one test per page.
 
-A name inside a table row that itself toggles (the Armoury) stops its click
-from reaching the row: `armouryItemLink`. A name inside a `<button>` (the
-Garage rig's fitted part) is not linked, since a button cannot hold one; the
-Bench's candidate list beside it links every part.
+A Wikelo requirement or reward can be an item, a commodity or a ship, and the
+trade file does not say which, so the server says (`kind` on each row, from
+the vehicle, commodity and item catalogues) and `wikeloName` opens the window
+for that kind: the ship card, the commodity drawer or the item card. A class
+none of the catalogues knows stays words rather than opening on nothing.
+
+One kind of name is not linked, on purpose: a fitting read off a screenshot
+(Fleet fittings) has no class and may not match any item.
+
+A name inside a row that itself opens something (an Armoury row its figures,
+a Sessions row its debrief, a Garage rig slot its bench) goes through
+`rowRefLink`, which stops the click reaching the row. The Garage rig slot is
+a `div[role=button]` for that reason: a `<button>` cannot hold a link.
 
 ## Identity
 

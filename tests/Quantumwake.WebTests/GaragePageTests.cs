@@ -6,14 +6,14 @@ namespace Quantumwake.WebTests;
 /// </summary>
 public class GaragePageTests
 {
-    private const string Garage = """
+    internal const string Garage = """
         {"known":true,"dump":"4.10.0-LIVE.12519617",
          "mine":[{"class":"AEGS_Gladius","name":"Aegis Gladius","sorties":12,"lastFlown":"2026-09-13T00:00:00+00:00"}],
          "all":[{"class":"AEGS_Gladius","name":"Aegis Gladius","manufacturer":"Aegis Dynamics","role":"Light Fighter","size":2},
                 {"class":"DRAK_Cutlass_Black","name":"Drake Cutlass Black","manufacturer":"Drake Interplanetary","role":"Medium Fighter","size":3}]}
         """;
 
-    private const string Gladius = """
+    internal const string Gladius = """
         {"known":true,"dump":"4.10.0-LIVE.12519617",
          "ship":{"class":"AEGS_Gladius","name":"Aegis Gladius","manufacturer":"Aegis Dynamics","role":"Light Fighter","career":"Combat",
                  "size":2,"crew":1,"hullMass":48552,"health":6110,"cargoScu":0,"quantumFuel":600,"hydrogenFuel":1600,
@@ -85,7 +85,7 @@ public class GaragePageTests
             renderGarage(garageStock);
             """);
         Assert.Contains("Pitman", page.NodeText("#garage-rig-right"));
-        Assert.True(page.Truth("__dom.node('#garage-rig-right').descendants().find(n => n.classList.contains('garage-rig-slot')).disabled"));
+        Assert.Equal("true", page.Text("__dom.node('#garage-rig-right').descendants().find(n => n.classList.contains('garage-rig-slot')).getAttribute('aria-disabled')"));
         page.Do("await selectBenchPort('fixed');");
         Assert.DoesNotContain("GET /api/garage/AEGS_Gladius/options?port=fixed", page.Fetched());
     }

@@ -158,8 +158,10 @@ public class ItemLinksTests
             await toggleSessionDebrief('s1');
             """);
 
-        Assert.Equal("crlf consumable healing 01 ×2", page.Text($"{Links("#sessions-table tbody")}[0].textContent"));
-        Click(page, "#sessions-table tbody");
+        // The row's own ship is a link too (0.20.33); the purchase is the one in the debrief.
+        var link = $"{Links("#sessions-table tbody")}.find(n => n.textContent.startsWith('crlf consumable'))";
+        Assert.Equal("crlf consumable healing 01 ×2", page.Text($"{link}.textContent"));
+        page.Do($"{link}.click();");
         Assert.Contains("GET /api/reference/item?id=crlf_consumable_healing_01", page.Fetched());
     }
 

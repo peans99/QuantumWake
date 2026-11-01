@@ -3455,18 +3455,19 @@ function renderSessions() {
         toggleSessionDebrief(session.id);
       }
     });
-    const cells = [
-      duration(session.inGame),
-      duration(session.menu),
-      session.primaryShip || '—',
-      session.lastLocation || '—',
-      sessionShardLabel(session),
-    ];
     const date = el('td');
     date.append(el('span', 'session-row-toggle', open ? '⌄' : '›'));
     date.append(el('span', null, dateOf(session.startedAt)));
     tr.append(date);
-    cells.forEach((text) => tr.append(el('td', null, text)));
+    tr.append(el('td', null, duration(session.inGame)));
+    tr.append(el('td', null, duration(session.menu)));
+    // The ship opens its Reference card; the row around it opens the debrief.
+    const ship = el('td');
+    if (session.primaryShip) ship.append(rowRefLink('ship', session.primaryShip, session.primaryShip));
+    else ship.textContent = '—';
+    tr.append(ship);
+    tr.append(el('td', null, session.lastLocation || '—'));
+    tr.append(el('td', null, sessionShardLabel(session)));
     [session.jumps, session.contracts, session.deaths ?? 0, session.incapacitations]
       .forEach((n) => tr.append(el('td', 'num', String(n))));
     body.append(tr);
@@ -5869,6 +5870,18 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   else renderItemDetail(body, data);
   body.scrollTop = 0;
   return true;
+}
+
+/**
+ * A name inside a row that itself opens something - an Armoury row its
+ * figures, a Sessions row its debrief, a Garage slot its bench. The name's
+ * click stays on the name: it opens the Reference card without also
+ * toggling the row under it.
+ */
+function rowRefLink(kind, id, label) {
+  const link = refLink(kind, id, label);
+  link.addEventListener('click', (event) => event.stopPropagation());
+  return link;
 }
 
 function closeRefDetail() {
@@ -8430,7 +8443,7 @@ function renderArmouryKit() {
   };
   const named = (item, sub) => {
     const td = el('td');
-    td.append(item.class ? armouryItemLink(item.class, item.name) : document.createTextNode(item.name));
+    td.append(item.class ? rowRefLink('item', item.class, item.name) : document.createTextNode(item.name));
     if (sub) td.append(el('div', 'armoury-kind', sub));
     return td;
   };
@@ -8726,17 +8739,6 @@ function armouryGunsFiltered() {
   return rows;
 }
 
-/**
- * A name in an Armoury table. The row opens its figures when clicked, so the
- * name's own click stays on the name: it opens the item's Reference card -
- * shops, drops, who carries it - without also toggling the row under it.
- */
-function armouryItemLink(cls, name) {
-  const link = refLink('item', cls, name);
-  link.addEventListener('click', (event) => event.stopPropagation());
-  return link;
-}
-
 function renderArmouryGuns() {
   const body = $('#armoury-guns tbody');
   if (!body || !armouryModel?.ready) return;
@@ -8756,7 +8758,7 @@ function renderArmouryGuns() {
     tr.dataset.class = w.class;
     if (armouryOpenGun === w.class) tr.classList.add('open');
     const name = el('td');
-    name.append(armouryItemLink(w.class, w.name));
+    name.append(rowRefLink('item', w.class, w.name));
     if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
     tr.append(name);
     const kind = el('td', null, w.kind);
@@ -8941,7 +8943,7 @@ function renderArmouryArmour() {
     // name opens the first of them, which is the plain edition.
     const name = el('td');
     const piece = a.pieces?.[0]?.class;
-    name.append(piece ? armouryItemLink(piece, a.family) : document.createTextNode(a.family));
+    name.append(piece ? rowRefLink('item', piece, a.family) : document.createTextNode(a.family));
     if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
     tr.append(name);
     tr.append(el('td', null, a.slot));
@@ -10627,7 +10629,11 @@ async function renderHangarComparison() {
   head.textContent = '';
   const hr = el('tr');
   hr.append(el('th', null, ''));
-  for (const side of sides) hr.append(el('th', 'num', side.ship.name));
+  for (const side of sides) {
+    const th = el('th', 'num');
+    th.append(refLink('ship', side.ship.className || side.ship.name, side.ship.name));
+    hr.append(th);
+  }
   hr.append(el('th', 'num', tx('Difference')));
   head.append(hr);
 
@@ -11507,6 +11513,24 @@ function renderWikelo() {
   for (const trade of shown) list.append(wikeloCard(trade));
 }
 
+/**
+ * A thing a trade wants or gives, opening the window for what it is: the
+ * ship card for a hull, the commodity drawer for an ore, the item card for
+ * gear. The server says which (0.20.33); a class it cannot place stays words
+ * rather than becoming a link that opens on nothing.
+ */
+function wikeloName(entry) {
+  if (entry.kind === 'item' || entry.kind === 'ship') return refLink(entry.kind, entry.class, entry.name);
+  if (entry.kind === 'commodity') {
+    const link = el('button', 'place-link ref-link', entry.name);
+    link.type = 'button';
+    link.title = tx('Open this commodity');
+    link.addEventListener('click', () => openCommodity(entry.name));
+    return link;
+  }
+  return document.createTextNode(entry.name);
+}
+
 /** The rank a trade needs, in the file's own words with its threshold. */
 function wikeloGate(trade) {
   if (!trade.minStanding) return null;
@@ -11540,7 +11564,13 @@ function wikeloCard(trade, into = null) {
 
   const gives = el('div', 'wikelo-gives');
   if (trade.rewards.length) {
-    gives.append(el('span', 'strong', trade.rewards.map((r) => `${r.count > 1 ? `${r.count}× ` : ''}${r.name}`).join(', ')));
+    const names = el('span', 'strong');
+    trade.rewards.forEach((r, index) => {
+      if (index) names.append(document.createTextNode(', '));
+      if (r.count > 1) names.append(document.createTextNode(`${r.count}× `));
+      names.append(wikeloName(r));
+    });
+    gives.append(names);
   } else {
     gives.append(el('span', 'muted', tx('a reward the file does not name — a blueprint or food pool')));
   }
@@ -11554,7 +11584,9 @@ function wikeloCard(trade, into = null) {
   for (const r of trade.requirements) {
     const li = el('li', r.have ? 'have' : 'lack');
     li.append(el('span', 'mark', r.have ? '✓' : '○'));
-    li.append(el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} ${r.name}`));
+    const what = el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} `);
+    what.append(wikeloName(r));
+    li.append(what);
     if (r.have) li.append(el('span', 'muted', ` · ${tx('seen at {places}', { places: r.where.join(', ') })}`));
     wants.append(li);
   }
@@ -12744,7 +12776,9 @@ async function renderFleetFittings() {
 
   for (const s of ships) {
     const card = el('article', 'ship-card');
-    card.append(el('div', 'strong', s.ship));
+    const title = el('div', 'strong');
+    title.append(refLink('ship', s.ship, s.ship));
+    card.append(title);
     card.append(el('div', 'muted', tx('as photographed {when}', { when: new Date(s.shotAt).toLocaleString(QW_DATE_LOCALES) })));
     if (s.scope) card.append(el('div', 'muted', screenText(s.scope)));
 
@@ -12814,7 +12848,9 @@ async function renderFleetBerths() {
     const maker = makerOf(row.ship);
     if (row.className) card.append(shipPicture({ name: row.ship, className: row.className }, maker));
     const body = el('div', 'ship-body');
-    body.append(el('div', 'ship-name', row.ship));
+    const title = el('div', 'ship-name');
+    title.append(refLink('ship', row.className || row.ship, row.ship));
+    body.append(title);
     const facts = [row.location ? tx('at {place}', { place: row.location }) : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
     body.append(el('div', 'ship-ref muted', facts.join(' · ') || tx('no berth read')));
     body.append(el('div', 'ship-ref muted', tx('never flown in the logs')));
@@ -16575,7 +16611,12 @@ async function loadCasualties() {
     (v) => `${v}`);
 
   bars('#casualties-ships',
-    data.byShip.map((s) => ({ label: s.ship, value: s.deaths })),
+    data.byShip.map((s) => ({
+      label: s.ship,
+      value: s.deaths,
+      onClick: () => openRefDetail('ship', s.ship),
+      title: tx('Open this ship'),
+    })),
     (v) => `${v}`);
 
   bars('#casualties-woke',
@@ -16681,7 +16722,9 @@ async function renderSharedShips(days) {
   for (const ship of ships) {
     const tr = el('tr');
     tr.append(el('td', null, ship.handle));
-    tr.append(el('td', null, ship.ship));
+    const hull = el('td');
+    hull.append(refLink('ship', ship.ship, ship.ship));
+    tr.append(hull);
 
     // Whose ship it was is the interesting half: crewing for somebody is a
     // different evening from having them aboard yours.
@@ -18160,20 +18203,28 @@ function renderGarageRig(data) {
 
 function garageRigSlot(port, ship) {
   const selected = port.portIds.includes(garageSelectedPort);
-  const button = el('button', `garage-rig-slot${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
-  button.type = 'button';
+  const fixed = Boolean(port.fixedReason);
+  // A frame with a button's role rather than a <button>: the fitted part's
+  // name inside it opens the part's Reference card, and a button cannot
+  // hold a link. Enter and Space select the port as the click does.
+  const button = el('div', `garage-rig-slot${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}${fixed ? ' fixed' : ''}`);
+  button.setAttribute('role', 'button');
+  button.tabIndex = fixed ? -1 : 0;
   button.dataset.port = port.portIds[0];
   button.setAttribute('aria-pressed', String(selected));
+  if (fixed) button.setAttribute('aria-disabled', 'true');
   const many = port.portIds.length > 1;
   const name = port.name || port.class || tx('Empty port');
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
-  button.disabled = !!port.fixedReason;
-  if (port.fixedReason) button.title = port.fixedReason;
+  if (fixed) button.title = port.fixedReason;
   button.append(partMark(port.fitted, true));
 
   const body = el('span', 'garage-rig-slot-body');
   body.append(el('span', 'garage-rig-slot-kind', garageWord(port.group)));
-  const part = el('span', 'garage-rig-slot-name', name);
+  const part = el('span', 'garage-rig-slot-name');
+  const fittedClass = port.fitted?.class || port.class;
+  if (fittedClass) part.append(rowRefLink('item', fittedClass, name));
+  else part.textContent = name;
   if (port.fitted) part.append(partChip(port.fitted));
   if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
   body.append(part);
@@ -18181,7 +18232,13 @@ function garageRigSlot(port, ship) {
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
   button.append(body);
-  button.addEventListener('click', () => selectBenchPort(port.portIds[0], true).catch(() => {}));
+  const select = () => { if (!fixed) selectBenchPort(port.portIds[0], true).catch(() => {}); };
+  button.addEventListener('click', select);
+  button.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    select();
+  });
   return button;
 }
 
@@ -23609,7 +23666,11 @@ function makerOf(shipName) {
 
 /** The active ship deserves the same manufacturer mark as the Fleet page. */
 function renderNowShip(shipName) {
-  $('#now-ship').textContent = shipName || '—';
+  // The hero value opens the ship's Reference card, as every ship name does.
+  const value = $('#now-ship');
+  value.textContent = '';
+  if (shipName) value.append(refLink('ship', shipName, shipName));
+  else value.textContent = '—';
 
   const badge = $('#now-ship-logo');
   badge.textContent = '';
@@ -23875,7 +23936,11 @@ function renderFleetShips() {
     if (ship.className) card.append(shipPicture(ship, maker, { onPreview: () => toggleShipPreview(ship, card) }));
 
     const body = el('div', 'ship-body');
-    body.append(el('div', 'ship-name', maker.model));
+    // The name opens the ship's Reference card - spec sheet, shops, stock
+    // parts, NPC versions - as a ship's name does on the Reference pages.
+    const title = el('div', 'ship-name');
+    title.append(refLink('ship', ship.className || ship.name, maker.model));
+    body.append(title);
     body.append(el('div', 'ship-maker', maker.name));
 
     const stat = el('div', 'ship-stats');

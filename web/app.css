@@ -6090,8 +6090,9 @@ body:not(.overlay) #now-server-star::after { display: none; }
 }
 .garage-rig-left .garage-rig-slot::after { right: -14px; }
 .garage-rig-right .garage-rig-slot::after { left: -14px; }
-.garage-rig-slot:hover, .garage-rig-slot.selected { border-color: var(--cyan); background: rgba(20, 55, 71, .72); }
-.garage-rig-slot:hover::after, .garage-rig-slot.selected::after { background: var(--cyan-hot); }
+.garage-rig-slot:not(.fixed):hover, .garage-rig-slot.selected { border-color: var(--cyan); background: rgba(20, 55, 71, .72); }
+.garage-rig-slot:not(.fixed):hover::after, .garage-rig-slot.selected::after { background: var(--cyan-hot); }
+.garage-rig-slot.fixed { cursor: default; }
 .garage-rig-slot.changed { border-color: var(--cyan-deep); }
 .garage-rig-slot .part-mark { width: 38px; height: 34px; border-radius: 4px; }
 .garage-rig-slot .part-mark .mono-mark { font-size: 8px; }
@@ -6594,7 +6595,7 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .crack-head { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 12px; border: 1px solid var(--rule); background: rgba(0, 0, 0, .22); }
 .crack-head-label, .crack-head .crack-laser, .crack-head-note { grid-column: 1 / -1; }
 .crack-head-note { color: var(--muted); font-size: 11px; line-height: 1.5; }
-.crack-laser:disabled, .garage-rig-slot:disabled { opacity: 1; cursor: default; }
+.crack-laser:disabled { opacity: 1; cursor: default; }
 .crack-head-label { font-family: var(--mono); font-size: 10.5px; color: var(--cyan); min-width: 9ch; }
 .crack-head .crack-laser { flex: 1 1 26ch; min-width: 0; }
 .crack-head .crack-module { flex: 1 1 18ch; min-width: 0; }

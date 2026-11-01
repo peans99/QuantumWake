@@ -3008,6 +3008,19 @@ public static partial class ServerHost
                 .Where(j => j.Source is { } s && s.StartsWith("wikelo:", StringComparison.Ordinal))
                 .ToDictionary(j => j.Source!["wikelo:".Length..], j => j, StringComparer.OrdinalIgnoreCase);
 
+            // What a class is, so the page can open the right window for it:
+            // a hull the ship card, an ore the commodity drawer, a gun the
+            // item card. The trade file mixes all three in one list and says
+            // nothing about which is which, so until this the page left every
+            // name as words rather than send one in three to the wrong window.
+            // Null for a class none of the catalogues knows.
+            var items = lib.Items().Select(i => i.ClassName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            string? KindOf(string cls) =>
+                lib.GameCommodities.Vehicles.ContainsKey(cls) || lib.Community.Ships.ContainsKey(cls) ? "ship"
+                : lib.CommodityName(cls) is not null ? "commodity"
+                : items.Contains(cls) ? "item"
+                : null;
+
             return Results.Ok(new
             {
                 available = catalogue.Trades.Count > 0,
@@ -3015,11 +3028,11 @@ public static partial class ServerHost
                 trades = catalogue.Trades.Select(t => new
                 {
                     t.Id, t.Title, t.Description, t.Group, t.Reputation, t.MinStanding, t.Retired,
-                    rewards = t.Rewards,
+                    rewards = t.Rewards.Select(r => new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class) }),
                     requirements = t.Requirements.Select(r =>
                     {
                         var where = HeldWhere(held, r.Name);
-                        return new { r.Class, r.Name, r.Count, r.Unit, have = where.Count > 0, where };
+                        return new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class), have = where.Count > 0, where };
                     }),
                     trackedJobId = tracked.TryGetValue(t.Id, out var job) && !job.Done ? job.Id : null,
                     trackedDone = tracked.TryGetValue(t.Id, out var done) && done.Done,
