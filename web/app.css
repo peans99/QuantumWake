@@ -7635,3 +7635,41 @@ body:not(.overlay) tbody td :is(button.ghost, a.ghost):hover:not(:disabled) {
 /* Sessions: the debrief cards are your record. */
 .qw-identity .sessions-brief-card .economy-kicker,
 .qw-identity .sessions-brief-card [class*='kicker'] { color: var(--own); }
+
+/* ---- Symbol buttons (0.20.27): ×, ↑, ↓, + on their own. The framed button -
+   cut corner, inset edge, corner tick - drew an empty box at this size with
+   the symbol lost in it, the same fault as the Now page's star. A bare symbol
+   now, outlined only when pointed at; a delete warms to red. ---- */
+body:not(.overlay) :is(button.ghost, button.tiny).icon {
+  display: inline-grid; place-items: center;
+  width: 24px; height: 24px; min-width: 24px; padding: 0;
+  border: 1px solid transparent; border-radius: 6px;
+  background: none; background-image: none; box-shadow: none; clip-path: none;
+  color: var(--dim); font: 15px/1 var(--display); letter-spacing: 0; text-transform: none;
+}
+body:not(.overlay) :is(button.ghost, button.tiny).icon::after { display: none; }
+body:not(.overlay) :is(button.ghost, button.tiny).icon:hover:not(:disabled) {
+  border-color: var(--cyan-deep); background: rgba(53, 200, 240, .08); box-shadow: none; color: var(--cyan-hot);
+}
+body:not(.overlay) :is(button.ghost, button.tiny).icon.danger:hover:not(:disabled),
+body:not(.overlay) .checklist-item :is(button.ghost, button.tiny).icon:hover:not(:disabled) {
+  border-color: rgba(255, 90, 77, .5); background: rgba(255, 90, 77, .08); color: var(--red, #ff5a4d);
+}
+
+/* ---- Reference: components, a tab per kind (0.20.27) ---- */
+.components-tabs { flex-wrap: wrap; }
+.components-tabs button { clip-path: none; box-shadow: none; background-image: none; }
+.components-tabs button::after { display: none; }
+.components-tab-count { color: var(--dim); font: 10px var(--mono); letter-spacing: 0; }
+#components-table { min-width: 1080px; }
+#components-table th.sortable { cursor: pointer; user-select: none; }
+#components-table th.sortable:hover { color: var(--text); }
+#components-table th.sorted { color: var(--cyan-hot); }
+#components-table .sort-mark { font-size: 9px; }
+/* The figures each kind is chosen on read first. */
+#components-table th.figure { color: var(--text); }
+#components-table th.figure.sorted { color: var(--cyan-hot); }
+#components-table td.figure { color: var(--text); font-weight: 600; }
+#components-table td .note-inline { margin-left: 6px; color: var(--dim); font-size: 10.5px; }
+#components-table th:first-child, #components-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); background: var(--deep); }
+#components-table th:first-child { z-index: 2; background: var(--panel-2); }

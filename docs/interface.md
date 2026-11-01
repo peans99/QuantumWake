@@ -50,6 +50,15 @@ where the number is read.
   on hover. They stay on screen: a control that appears only on hover is one
   nobody finds.
 
+## Symbol buttons
+
+A button whose label is a lone symbol (×, ↑, ↓, +, ★) carries the class
+`icon` (0.20.27). It is drawn as the bare symbol, 24 px square, and outlined
+only on hover. A delete warms to red. The framed button style, with its cut
+corner, inset edge and corner tick, drew an empty box at that size with the
+symbol lost in it: the Now page's server star once spilled its word out under
+such a box. Give an icon button a `title`, which is its only words.
+
 ## One detail view for each kind of thing
 
 - **Items and ships** open the Reference window (`openRefDetail`), from any

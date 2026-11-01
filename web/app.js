@@ -34,7 +34,7 @@ const PAGE_GLYPHS = Object.freeze({
   jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
   logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
   spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
-  ships: '◁', parts: '⊞', mining: '⬡', crafting: '⌬',
+  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬',
   fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
   settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
   // Reached from another page rather than the menu, but titled like the rest.
@@ -2736,6 +2736,7 @@ async function loadHistory() {
   await loadGameData().catch(() => {});
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
+  loadComponentsRef().catch((e) => console.error('components', e));
   loadMiningRef().catch((e) => console.error('mining', e));
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
@@ -5458,6 +5459,255 @@ function drawWakes() {
     });
   }
 }
+
+/* ---------- reference: ship components, by what they do ----------
+
+   The Items page lists everything the install names - 26,531 things, most of
+   them seats and doors - and one table cannot show a gun's DPS beside a
+   shield's regeneration. Here each kind of part gets its own tab with the
+   figures it is chosen on, sorted by the one that matters most, and every
+   name opens the part's Reference card. */
+
+let componentsData = { parts: [], source: null, uex: false };
+let componentsKind = 'weapons';
+let componentsSort = null;
+
+const n0 = (v) => (v > 0 ? Math.round(v).toLocaleString() : '—');
+const n1 = (v) => (v > 0 ? (Math.round(v * 10) / 10).toLocaleString() : '—');
+const secs = (v) => (v > 0 ? `${(Math.round(v * 10) / 10).toLocaleString()} s` : '—');
+const metres = (v) => (v > 0 ? `${Math.round(v).toLocaleString()} m` : '—');
+
+/**
+ * Each tab: which part types it holds and the columns it shows. A column is
+ * [heading, value for sorting, text, hover]. The first figure column is the
+ * default sort, largest first.
+ */
+const COMPONENT_KINDS = [
+  {
+    key: 'weapons', label: 'Weapons', types: ['WeaponGun'],
+    cols: [
+      ['DPS', (p) => p.stats?.weapon?.dps, (p) => n0(p.stats?.weapon?.dps), 'Damage per second while firing'],
+      ['Alpha', (p) => p.stats?.weapon?.alpha, (p) => n0(p.stats?.weapon?.alpha), 'Damage of one shot'],
+      ['Rate', (p) => p.stats?.weapon?.rateOfFire, (p) => n0(p.stats?.weapon?.rateOfFire), 'Rounds per minute'],
+      ['Range', (p) => p.stats?.weapon?.range, (p) => metres(p.stats?.weapon?.range), null],
+      ['Speed', (p) => p.stats?.weapon?.ammoSpeed, (p) => n0(p.stats?.weapon?.ammoSpeed), 'Projectile speed, m/s'],
+    ],
+  },
+  {
+    key: 'missiles', label: 'Missiles', types: ['Missile'],
+    cols: [
+      ['Damage', (p) => p.stats?.missile?.damage, (p) => n0(p.stats?.missile?.damage), null],
+      ['Speed', (p) => p.stats?.missile?.speed, (p) => n0(p.stats?.missile?.speed), 'm/s'],
+      ['Lock', (p) => -(p.stats?.missile?.lockTime || 0), (p) => secs(p.stats?.missile?.lockTime), 'Time to lock'],
+      ['Range', (p) => p.stats?.missile?.range, (p) => metres(p.stats?.missile?.range), null],
+      ['Tracks', (p) => p.stats?.missile?.trackingSignal || '', (p) => p.stats?.missile?.trackingSignal || '—', 'The signature it locks on to'],
+    ],
+  },
+  { key: 'racks', label: 'Missile racks', types: ['MissileLauncher'], cols: [] },
+  {
+    key: 'shields', label: 'Shields', types: ['Shield'],
+    cols: [
+      ['HP', (p) => p.stats?.shield?.hp, (p) => n0(p.stats?.shield?.hp), 'Shield points at full charge'],
+      ['Regen', (p) => p.stats?.shield?.regen, (p) => n0(p.stats?.shield?.regen), 'Points restored per second'],
+      ['Downed delay', (p) => -(p.stats?.shield?.downedDelay || 0), (p) => secs(p.stats?.shield?.downedDelay), 'How long a dropped shield waits before it regenerates'],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+      ['EM', (p) => -(p.stats?.em || 0), (p) => n0(p.stats?.em), 'Electromagnetic signature at full output'],
+    ],
+  },
+  {
+    key: 'power', label: 'Power plants', types: ['PowerPlant'],
+    cols: [
+      ['Power', (p) => p.stats?.powerGen, (p) => n0(p.stats?.powerGen), 'Power segments generated'],
+      ['EM', (p) => -(p.stats?.em || 0), (p) => n0(p.stats?.em), 'Electromagnetic signature at full output'],
+      ['Health', (p) => p.stats?.health, (p) => n0(p.stats?.health), null],
+    ],
+  },
+  {
+    key: 'coolers', label: 'Coolers', types: ['Cooler'],
+    cols: [
+      ['Coolant', (p) => p.stats?.coolantGen, (p) => n0(p.stats?.coolantGen), 'Coolant generated'],
+      ['IR', (p) => -(p.stats?.ir || 0), (p) => n0(p.stats?.ir), 'Infrared signature'],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+      ['Health', (p) => p.stats?.health, (p) => n0(p.stats?.health), null],
+    ],
+  },
+  {
+    key: 'quantum', label: 'Quantum drives', types: ['QuantumDrive'],
+    cols: [
+      ['Speed', (p) => p.stats?.quantum?.speed, (p) => (p.stats?.quantum?.speed > 0 ? `${n0(p.stats.quantum.speed / 1000)} km/s` : '—'), null],
+      ['Spool', (p) => -(p.stats?.quantum?.spoolTime || 0), (p) => secs(p.stats?.quantum?.spoolTime), 'Time to spool before a jump'],
+      ['Cooldown', (p) => -(p.stats?.quantum?.cooldown || 0), (p) => secs(p.stats?.quantum?.cooldown), null],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+    ],
+  },
+  {
+    key: 'radar', label: 'Radars', types: ['Radar'],
+    cols: [
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+      ['EM', (p) => -(p.stats?.em || 0), (p) => n0(p.stats?.em), 'Electromagnetic signature'],
+    ],
+  },
+  {
+    key: 'utility', label: 'Mining & utility', types: ['WeaponMining', 'TractorBeam', 'SalvageHead', 'QuantumInterdictionGenerator', 'EMP'],
+    cols: [
+      ['Kind', (p) => p.type, (p) => tx(COMPONENT_TYPE_WORDS[p.type] || p.type), null],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+    ],
+  },
+];
+
+/* Written out so each English word is a literal the catalogue check can find. */
+const COMPONENT_TYPE_WORDS = {
+  WeaponMining: 'Mining laser',
+  TractorBeam: 'Tractor beam',
+  SalvageHead: 'Salvage head',
+  QuantumInterdictionGenerator: 'Interdiction',
+  EMP: 'EMP',
+};
+
+async function loadComponentsRef() {
+  try {
+    componentsData = await getJson('/api/reference/components');
+  } catch {
+    componentsData = { parts: [], source: null, uex: false };
+  }
+  renderComponentTabs();
+  renderComponentsRef();
+}
+
+function componentKind() {
+  return COMPONENT_KINDS.find((k) => k.key === componentsKind) || COMPONENT_KINDS[0];
+}
+
+function renderComponentTabs() {
+  const tabs = $('#components-tabs');
+  if (!tabs) return;
+  tabs.textContent = '';
+  for (const kind of COMPONENT_KINDS) {
+    const count = componentsData.parts.filter((p) => kind.types.includes(p.type)).length;
+    const button = el('button', kind.key === componentsKind ? 'active' : null);
+    button.type = 'button';
+    button.dataset.kind = kind.key;
+    button.append(el('span', null, tx(kind.label)), el('span', 'components-tab-count', ` ${count}`));
+    button.addEventListener('click', () => {
+      componentsKind = kind.key;
+      componentsSort = null;
+      $('#components-size').value = '';
+      renderComponentTabs();
+      renderComponentsRef();
+    });
+    tabs.append(button);
+  }
+}
+
+function renderComponentsRef() {
+  const kind = componentKind();
+  const term = ($('#components-search')?.value || '').trim().toLowerCase();
+  const all = componentsData.parts.filter((p) => kind.types.includes(p.type));
+
+  // Sizes offered are the ones this kind has.
+  const sizeSelect = $('#components-size');
+  const wanted = sizeSelect.value;
+  const sizes = [...new Set(all.map((p) => p.size).filter((s) => s > 0))].sort((a, b) => a - b);
+  sizeSelect.textContent = '';
+  sizeSelect.append(new Option(tx('Any size'), ''));
+  for (const size of sizes) sizeSelect.append(new Option(tx('Size {size}', { size }), String(size)));
+  sizeSelect.value = sizes.map(String).includes(wanted) ? wanted : '';
+
+  const rows = all.filter((p) => (!sizeSelect.value || String(p.size) === sizeSelect.value)
+    && (!term || p.name.toLowerCase().includes(term) || (p.maker || '').toLowerCase().includes(term)
+      || p.className.toLowerCase().includes(term)));
+
+  // Columns: name, size, grade, maker, this kind's figures, then where to get it.
+  const cols = [
+    [tx('Size'), (p) => p.size, (p) => (p.size > 0 ? String(p.size) : '—'), null],
+    [tx('Grade'), (p) => -(p.grade || 9), (p) => gradeLetter(p.grade), tx('A is best, D is worst — the game’s own scale')],
+    [tx('Maker'), (p) => p.maker || '', (p) => p.maker || '—', null],
+    ...kind.cols.map(([h, sort, text, title]) => [tx(h), sort, text, title ? tx(title) : null, 'figure']),
+    [tx('Price'), (p) => -(p.price || Infinity), (p) => (p.price ? money(p.price) : '—'), tx('The cheapest shop in the UEX prices')],
+    [tx('Drops'), (p) => p.bestRoll || (p.npcShips ? p.npcShips / 1e6 : 0), (p) => componentDrops(p), tx('Where the game’s own files put it to be found')],
+    [tx('Fitted to'), (p) => p.fittedTo, (p) => (p.fittedTo > 0 ? txn(p.fittedTo, '{count} ship', '{count} ships') : '—'), tx('Ships that come out of the shop with it')],
+  ];
+
+  // Sorted by the column picked, else by this kind's first figure, largest first.
+  const firstFigure = cols.findIndex((c) => c[4] === 'figure');
+  const sortIndex = componentsSort?.index ?? (firstFigure >= 0 ? firstFigure : 0);
+  const descending = componentsSort?.descending ?? true;
+  const key = cols[sortIndex][1];
+  rows.sort((a, b) => {
+    const x = key(a) ?? -Infinity;
+    const y = key(b) ?? -Infinity;
+    const order = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y;
+    return (descending ? -order : order) || a.name.localeCompare(b.name);
+  });
+
+  const table = $('#components-table');
+  const head = table.querySelector('thead');
+  head.textContent = '';
+  const headRow = el('tr');
+  headRow.append(el('th', null, tx('Component')));
+  cols.forEach(([label, , , title, figure], index) => {
+    const th = el('th', `${index === 2 ? '' : 'num '}sortable${figure ? ' figure' : ''}${index === sortIndex ? ' sorted' : ''}`, label);
+    if (index === sortIndex) th.append(el('span', 'sort-mark', descending ? ' ▾' : ' ▴'));
+    if (title) th.title = title;
+    th.addEventListener('click', () => {
+      componentsSort = { index, descending: index === sortIndex ? !descending : true };
+      renderComponentsRef();
+    });
+    headRow.append(th);
+  });
+  head.append(headRow);
+
+  const body = table.querySelector('tbody');
+  body.textContent = '';
+  $('#components-count').textContent = rows.length
+    ? txn(rows.length, '{count} part', '{count} parts', { count: rows.length.toLocaleString() })
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', componentsData.parts.length
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No ship components were found in your game files.'));
+    td.colSpan = cols.length + 1;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const part of rows) {
+    const tr = el('tr');
+    const name = el('td', 'with-track');
+    const open = el('button', 'commodity-open', part.name);
+    open.title = tx('Everything known about it: where it drops, who sells it, what it is fitted to');
+    open.addEventListener('click', () => openRefDetail('item', part.className));
+    name.append(open);
+    if (part.subType && !['UNDEFINED', 'Gun', 'Missile', 'Power', 'MissileRack', 'MidRangeRadar'].includes(part.subType)) {
+      name.append(el('span', 'note-inline', part.subType));
+    }
+    name.append(trackButton(part.name));
+    tr.append(name);
+    cols.forEach(([, , text, , figure], index) => {
+      tr.append(el('td', `${index === 2 ? 'muted' : 'num'}${figure ? ' figure' : ''}`, text(part)));
+    });
+    body.append(tr);
+  }
+
+  // Without the community download there are no figures to show, and the
+  // page says so rather than printing a column of dashes as if they were zero.
+  const caption = $('#components-figures-note');
+  if (caption) caption.hidden = componentsData.source !== 'install';
+}
+
+/** The drops cell: the best crate roll, else how many NPC ships fly with it. */
+function componentDrops(part) {
+  if (part.bestRoll > 0) return tx('{odds} a roll', { odds: lootPercent(part.bestRoll) });
+  if (part.npcShips > 0) return txn(part.npcShips, 'on {count} NPC ship', 'on {count} NPC ships');
+  return '—';
+}
+
+onInput('#components-search', renderComponentsRef);
+$('#components-size')?.addEventListener('change', renderComponentsRef);
 
 /** A hover list of places and prices, one a line, cheapest first as given. */
 function placeList(heading, places) {
@@ -20248,7 +20498,7 @@ function checklistItemRow(list, item, compact = false) {
   row.append(main);
 
   if (!compact) {
-    const remove = el('button', 'ghost tiny', '×');
+    const remove = el('button', 'ghost tiny icon', '×');
     remove.title = tx('Remove task');
     remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}`, 'DELETE'));
     row.append(remove);
@@ -24360,6 +24610,7 @@ async function loadGameData() {
   // moment there is something to fetch.
   if (state?.state === 'ready' && was && was !== 'ready') {
     loadPartsRef().catch((e) => console.error('parts refill', e));
+    loadComponentsRef().catch((e) => console.error('components refill', e));
     loadMiningRef().catch((e) => console.error('mining refill', e));
     loadCraftingRef().catch((e) => console.error('crafting refill', e));
     loadMiningPlaces().catch(() => {});
@@ -26397,7 +26648,7 @@ function runActionRow(trip, stop, action, editable = false) {
   }
 
   if (editable) {
-    const remove = el('button', 'ghost tiny', '×');
+    const remove = el('button', 'ghost tiny icon', '×');
     remove.title = tx('Remove this action');
     remove.addEventListener('click', () =>
       runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
@@ -26842,26 +27093,26 @@ function renderTripPanel() {
     // The panel is where a plan is edited; the Now card only reads it.
     const tools = el('div', 'trip-tools');
 
-    const up = el('button', 'ghost tiny', '↑');
+    const up = el('button', 'ghost tiny icon', '↑');
     up.title = tx('Earlier in the run');
     up.disabled = index === 0;
     up.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=-1`));
 
-    const down = el('button', 'ghost tiny', '↓');
+    const down = el('button', 'ghost tiny icon', '↓');
     down.title = tx('Later in the run');
     down.disabled = index === trip.stops.length - 1;
     down.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=1`));
 
-    const drop = el('button', 'ghost tiny', '×');
+    const drop = el('button', 'ghost tiny icon', '×');
     drop.title = tx('Drop this stop');
     drop.addEventListener('click', () => {
       if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
         return tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE');
     });
 
-    const addAction = el('button', 'ghost tiny', '+');
+    const addAction = el('button', 'ghost tiny icon', '+');
     addAction.title = tx('Add a run-sheet action at this stop');
     addAction.addEventListener('click', () => {
       const existing = row.querySelector('.run-action-form');
@@ -27525,7 +27776,7 @@ function itineraryStop(trip, stop, index, isNext) {
     else main.append(runActionForm(trip, stop));
   });
 
-  const drop = el('button', 'ghost tiny', '×');
+  const drop = el('button', 'ghost tiny icon', '×');
   drop.title = tx('Drop this stop');
   drop.addEventListener('click', () => {
     if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
@@ -28024,7 +28275,7 @@ function renderKits() {
     prepare.addEventListener('click', () => prepareKit(kit.id).catch(() => {}));
     row.append(prepare);
 
-    const drop = el('button', 'ghost tiny danger', '×');
+    const drop = el('button', 'ghost tiny icon danger', '×');
     drop.title = tx('Delete this kit');
     drop.addEventListener('click', async () => {
       await fetch(`/api/kits/${encodeURIComponent(kit.id)}`, { method: 'DELETE' });
@@ -28942,7 +29193,7 @@ function renderMapInfoNotes(location) {
     const card = el('div', 'map-note');
     const top = el('div', 'map-note-top');
     top.append(el('b', null, note.title));
-    const remove = el('button', 'ghost tiny', '×');
+    const remove = el('button', 'ghost tiny icon', '×');
     remove.title = tx('Remove this map note');
     remove.addEventListener('click', () => removeMapNote(note.id));
     top.append(remove);
@@ -31181,9 +31432,9 @@ const VIEW_SOURCES = {
   logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
     'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
     'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
-  gamedata: new Set(['map', 'ships', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
-  uex: new Set(['market', 'commodity', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
-  community: new Set(['market', 'commodity', 'commodities', 'parts', 'mining']),
+  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
+  uex: new Set(['market', 'commodity', 'components', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
+  community: new Set(['market', 'commodity', 'commodities', 'components', 'parts', 'mining']),
 };
 
 const SEES_ALL_ACTIVITY = new Set(['settings', 'overlay', 'log']);

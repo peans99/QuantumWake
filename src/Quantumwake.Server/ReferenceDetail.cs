@@ -31,6 +31,102 @@ public static partial class ServerHost
 
         app.MapGet("/api/reference/ship", (string? id, LogLibrary lib, UexData uex, UexFeeds feeds) =>
             ShipDetail(id?.Trim(), lib, uex, feeds) is { } ship ? Results.Ok(ship) : Results.NotFound());
+
+        // Ship components by what they do - guns, shields, power, coolers,
+        // quantum drives - with the figures each kind is chosen on.
+        app.MapGet("/api/reference/components", (LogLibrary lib, UexData uex) => ReferenceComponents(lib, uex));
+    }
+
+    /// <summary>The component kinds the page lists, in the order its tabs show them.</summary>
+    static readonly string[] ComponentTypes =
+    [
+        "WeaponGun", "Missile", "MissileLauncher", "Shield", "PowerPlant", "Cooler", "QuantumDrive", "Radar",
+        "WeaponMining", "TractorBeam", "SalvageHead", "QuantumInterdictionGenerator", "EMP",
+    ];
+
+    /// <summary>
+    /// Every ship component a pilot could fit, one row per name and size, with
+    /// the community dataset's performance figures where it has them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The figures - a gun's DPS, a shield's HP and regeneration, a plant's
+    /// power - are the community dump's reduction of the game's own records,
+    /// the same ones the Garage sheet computes with (docs/garage.md). Without
+    /// that download the list still comes from the install, by type, size,
+    /// grade and maker, and the page says the figures need it.
+    /// </para>
+    /// <para>
+    /// The files carry NPC, Arena Commander and test copies of many parts under
+    /// the same display name, so a name and size is one row: the copy that a
+    /// shop stocks wins, then the shortest class.
+    /// </para>
+    /// </remarks>
+    static object ReferenceComponents(LogLibrary lib, UexData uex)
+    {
+        var loot = lib.GameCommodities.Loot;
+        var types = ComponentTypes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var community = lib.Community.Parts;
+
+        var rows = new List<(string Class, string Name, string Type, string? SubType, int Size, int Grade, string? Maker, string? Uuid, PartStats? Stats)>();
+        if (community.Count > 0)
+        {
+            foreach (var p in community.Values)
+                if (types.Contains(p.Type) && Named(p.Name, p.Class))
+                    rows.Add((p.Class, p.Name, p.Type, p.SubType, p.Size, p.Grade, p.Manufacturer, p.Uuid ?? lib.ItemUuid(p.Class), p));
+        }
+        else
+        {
+            foreach (var i in lib.Items())
+                if (i.Type is { } t && types.Contains(t) && i.Name is { } n && Named(n, i.ClassName))
+                    rows.Add((i.ClassName, n, t, i.SubType, i.Size, i.Grade, i.Manufacturer, i.Uuid, null));
+        }
+
+        var parts = rows
+            .Select(r =>
+            {
+                var stock = uex.ItemMarket(r.Uuid);
+                var cheapest = stock.Count > 0 ? stock.MinBy(s => s.Buy) : null;
+                var rolls = loot.For(r.Class);
+                return new
+                {
+                    className = r.Class,
+                    name = r.Name,
+                    type = r.Type,
+                    subType = r.SubType,
+                    size = r.Size,
+                    grade = r.Grade,
+                    maker = r.Maker,
+                    price = cheapest?.Buy,
+                    cheapestAt = cheapest?.Terminal,
+                    stockedAt = stock.Count,
+                    bestRoll = rolls.Count > 0 ? rolls.Max(h => h.PerRoll) : (double?)null,
+                    npcShips = loot.ShipsFor(r.Class).Count,
+                    // The player hulls that come with it, one per name.
+                    fittedTo = loot.StockOn(r.Class).Where(s => IsShipForSale(s.Ship))
+                        .Select(s => ShipName(lib, s.Ship)).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    stats = r.Stats is { } s ? new
+                    {
+                        s.Health, s.PowerGen, s.CoolantGen, s.Em, s.Ir, s.PowerUseMax,
+                        weapon = s.Weapon is { } w ? new { w.Dps, w.SustainedDps, w.Alpha, w.RateOfFire, w.Range, w.AmmoSpeed } : null,
+                        shield = s.Shield is { } sh ? new { sh.Hp, sh.Regen, sh.DownedDelay, sh.DamagedDelay } : null,
+                        quantum = s.Quantum is { } q ? new { q.Speed, q.SpoolTime, q.Cooldown, q.FuelRate } : null,
+                        missile = s.Missile is { } m ? new { m.Damage, m.Speed, m.LockTime, m.Range, m.TrackingSignal } : null,
+                    } : null,
+                };
+            })
+            .GroupBy(p => (p.name.ToLowerInvariant(), p.size, p.type))
+            .Select(g => g.OrderByDescending(p => p.stockedAt > 0).ThenByDescending(p => p.fittedTo)
+                .ThenBy(p => p.className.Length).First())
+            .OrderBy(p => p.name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new { source = community.Count > 0 ? "community" : "install", uex = uex.IsEnabled, parts };
+
+        // A part the text table never named is a test or a template.
+        static bool Named(string name, string cls) =>
+            name.Length > 0 && !name.StartsWith('@') && !string.Equals(name, cls, StringComparison.OrdinalIgnoreCase)
+            && !name.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase);
     }
 
     static List<object> ReferenceShips(LogLibrary lib, UexData uex, UexFeeds feeds)

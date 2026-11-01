@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.26">
+  <link rel="stylesheet" href="app.css?v=0.20.27">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -70,6 +70,7 @@
       <button type="button" class="group-btn" data-glyph="▧">Reference<span class="caret">▾</span></button>
       <div class="group-menu">
         <button data-view="ships">Ships</button>
+        <button data-view="components">Components</button>
         <button data-view="parts">Items</button>
         <button data-view="loot">Loot</button>
         <button data-view="mining">Mining</button>
@@ -2261,6 +2262,46 @@
         <tbody></tbody>
       </table>
     </div>
+    </div>
+  </section>
+
+  <!-- REFERENCE: ship components, a tab per kind with the figures each is chosen on -->
+  <section id="view-components" class="view">
+    <div class="section-bar reference-toolbar-bar">
+      <div class="reference-title">
+        <span class="page-kicker">Reference</span>
+        <h2>Components</h2>
+      </div>
+      <div class="controls reference-toolbar">
+        <select id="components-size" class="select" title="Filter by size"></select>
+        <input type="search" id="components-search" class="search" placeholder="Search components or makers…"
+               autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <details class="page-note">
+      <summary>About this page</summary>
+      <p class="muted caption">Every ship component a pilot can fit, a tab for each kind,
+        with the figures that kind is chosen on. The figures are the community
+        dataset's reduction of the game's own records, the same ones the Garage
+        computes with; prices are UEX's; where it drops and which ships come with
+        it are read from your game install. Click a heading to sort by it, and a
+        name for where it drops, who sells it and what it comes fitted to.</p>
+    </details>
+    <p class="muted caption" id="components-figures-note" hidden>Turn on the community
+      dataset in Settings for the performance figures: without it this lists the
+      parts your install names, with size, grade and maker only.</p>
+    <nav class="subtabs components-tabs" id="components-tabs" aria-label="Component kinds"></nav>
+    <div class="reference-results">
+      <div class="reference-results-head">
+        <span>Matching parts</span>
+        <span class="muted" id="components-count" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap reference-table-wrap">
+        <table id="components-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -4664,6 +4705,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.26"></script>
+<script src="app.js?v=0.20.27"></script>
 </body>
 </html>
