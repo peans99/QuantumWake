@@ -359,6 +359,33 @@ somewhere: 5,304 in a crate or on a body, 2,571 on an NPC, and 413 on an NPC
 ship. An item can be in more than one of these. The column shows the best
 single roll, else the NPC count, else the NPC ship count.
 
+## Where a blueprint comes from
+
+A `BlueprintPoolRecord` lists the blueprints it can give, each with a weight.
+Nothing in the pool says who gives it; the payers point at the pool from the
+other side. `GameScenarios.BlueprintSources` collects them in the same walk of
+the contract generators the Events page uses. Measured on 4.10.2:
+
+- **Contracts:** a contract's `contractResults` can hold a `BlueprintRewards`,
+  which names the pool and the `chance` that it pays at all. 1,037 of them reach
+  111 of the 160 pools. Sub-contracts carry their own results, so the walk goes
+  down into them.
+- **Event tiers:** an event's `STierReward` lists pools. The Xenothreat event's
+  tiers name 25.
+- **The starting list:** `CraftingGlobalParams.defaultBlueprintSelection` is a
+  whitelist of 9 blueprints; 8 of them make something, and the ninth is the
+  generic dismantle recipe. Before 0.20.29 the page took every blueprint in no
+  pool to be known from the start, which was 879 of them. Most of those 879 are
+  in no pool and on no list: the page says nothing on this build was found to
+  give them.
+
+A blueprint's share of a pool is its weight over the pool's total, which is the
+chance a payout from the pool is this blueprint. The CF-337 Panther is 1 in 7
+(14.3%) of `NyxFoxwellHard`, which Foxwell Enforcement's Orange and Red level
+contracts in Nyx pay out. A contract written once per system and difficulty,
+like Shubin's purchase orders, is folded into one line. Its systems are read
+from the contract's debug name, and its versions are counted.
+
 ## Not yet
 
 **Boarding-mission loot.** The harvestables in

@@ -2292,12 +2292,14 @@ public static partial class ServerHost
                     return (object)new
                     {
                         b.Output,
+                        outputClass = b.OutputClass,
                         Type = facts?.Type,
                         Grade = facts?.Grade ?? 0,
                         b.Kind,
                         b.CraftSeconds,
                         b.Materials,
-                        @default = false,
+                        // The crafting settings' starting whitelist: nine on 4.10.2.
+                        @default = b.Default,
                         b.RewardPools,
                         shopPrice = uex.ItemPrice(lib.ItemUuid(b.OutputClass)),
                         owned = mine is not null,

@@ -6,13 +6,24 @@ namespace Quantumwake.Core.GameData;
 /// <param name="CraftSeconds">How long the first tier takes.</param>
 /// <param name="Materials">What it consumes, already worded for display.</param>
 /// <param name="RewardPools">The reward pools it can drop from.</param>
+/// <param name="Default">
+/// On the crafting settings' starting whitelist, so every crafter has it. Nine
+/// on 4.10.2 - the S-38, the P4-AR, a light armour set - not every blueprint
+/// that is in no reward pool, which is what the page once assumed.
+/// </param>
+/// <param name="PoolShares">
+/// Beside each of <see cref="RewardPools"/>, this blueprint's share of that
+/// pool's weight: the chance a payout from the pool is this one.
+/// </param>
 public sealed record GameBlueprint(
     string Output,
     string OutputClass,
     string Kind,
     int CraftSeconds,
     IReadOnlyList<string> Materials,
-    IReadOnlyList<string> RewardPools);
+    IReadOnlyList<string> RewardPools,
+    bool Default = false,
+    IReadOnlyList<double>? PoolShares = null);
 
 /// <summary>
 /// Crafting recipes read from the install rather than downloaded.
@@ -55,6 +66,7 @@ public static class GameBlueprints
         foreach (var record in core.Records()) byId.TryAdd(record.Hash, record);
 
         var pools = Pools(core, byId);
+        var defaults = Defaults(core);
 
         foreach (var record in core.Records())
         {
@@ -86,7 +98,9 @@ public static class GameBlueprints
                 Kind(process is null ? string.Empty : core.StructName(process.Value.StructIndex)),
                 Seconds(core, costs),
                 materials,
-                pools.GetValueOrDefault(record.Hash) ?? []));
+                [.. (pools.GetValueOrDefault(record.Hash) ?? []).Select(p => p.Name)],
+                defaults.Contains(record.Hash),
+                [.. (pools.GetValueOrDefault(record.Hash) ?? []).Select(p => p.Share)]));
         }
 
         return found;
@@ -102,10 +116,10 @@ public static class GameBlueprints
     /// is tidied rather than invented - <c>BP_MISSIONREWARD_InterSec_ResourceGathering</c>
     /// becomes <c>InterSec ResourceGathering</c>.
     /// </remarks>
-    private static Dictionary<Guid, List<string>> Pools(
+    private static Dictionary<Guid, List<(string Name, double Share)>> Pools(
         DataCore core, Dictionary<Guid, DataRecord> byId)
     {
-        var pools = new Dictionary<Guid, List<string>>();
+        var pools = new Dictionary<Guid, List<(string Name, double Share)>>();
 
         foreach (var record in core.Records())
         {
@@ -113,22 +127,49 @@ public static class GameBlueprints
                 continue;
 
             var at = core.InstanceAt(record, record.VariantIndex);
-            var name = Tidied(Bare(record.Name));
+            var name = PoolName(record.Name);
 
+            // A pool pays one of its blueprints by weight, so each one's chance
+            // is its weight over the pool's. A pool with no weights is even.
+            var entries = new List<(Guid Id, double Weight)>();
             foreach (var reward in core.ClassArrayAt(at, record.StructIndex, "blueprintRewards"))
             {
-                var id = core.ReferenceAt(
-                    core.InstanceAt(reward), reward.StructIndex, "blueprintRecord");
-
+                var rewardAt = core.InstanceAt(reward);
+                var id = core.ReferenceAt(rewardAt, reward.StructIndex, "blueprintRecord");
                 if (id is null || !byId.ContainsKey(id.Value)) continue;
+                entries.Add((id.Value, core.SingleAt(rewardAt, reward.StructIndex, "weight") ?? 0));
+            }
 
-                if (!pools.TryGetValue(id.Value, out var named)) pools[id.Value] = named = [];
-                if (!named.Contains(name)) named.Add(name);
+            var total = entries.Sum(e => e.Weight);
+            foreach (var (id, weight) in entries)
+            {
+                var share = total > 0 ? weight / total : 1.0 / entries.Count;
+                if (!pools.TryGetValue(id, out var named)) pools[id] = named = [];
+                if (named.FindIndex(p => p.Name == name) is var i and >= 0) named[i] = (name, named[i].Share + share);
+                else named.Add((name, share));
             }
         }
 
         return pools;
     }
+
+    /// <summary>The blueprints every crafter starts with: the crafting settings' whitelist.</summary>
+    private static HashSet<Guid> Defaults(DataCore core)
+    {
+        var found = new HashSet<Guid>();
+        foreach (var record in core.Records())
+        {
+            if (core.StructName(record.StructIndex) != "CraftingGlobalParams") continue;
+            var at = core.InstanceAt(record, record.VariantIndex);
+            if (core.PointerAt(at, record.StructIndex, "defaultBlueprintSelection") is not { } selection) continue;
+            foreach (var id in core.ReferenceArrayAt(core.InstanceAt(selection), selection.StructIndex, "blueprintRecords"))
+                found.Add(id);
+        }
+        return found;
+    }
+
+    /// <summary>A pool's name as the page shows it, shared with whoever names the pool from the other side.</summary>
+    internal static string PoolName(string recordName) => Tidied(Bare(recordName));
 
     /// <summary><c>BP_MISSIONREWARD_InterSec_Gathering</c> reads as words.</summary>
     private static string Tidied(string name)

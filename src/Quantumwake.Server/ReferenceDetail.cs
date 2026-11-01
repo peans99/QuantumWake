@@ -1,4 +1,5 @@
 using Quantumwake.Core.GameData;
+using Quantumwake.Core.State;
 using Quantumwake.Data;
 
 namespace Quantumwake.Server;
@@ -32,9 +33,96 @@ public static partial class ServerHost
         app.MapGet("/api/reference/ship", (string? id, LogLibrary lib, UexData uex, UexFeeds feeds) =>
             ShipDetail(id?.Trim(), lib, uex, feeds) is { } ship ? Results.Ok(ship) : Results.NotFound());
 
+        // One blueprint: what it makes, the recipe, whether the logs show it
+        // was given to you, and every contract and event tier that pays it.
+        app.MapGet("/api/reference/blueprint", (string? id, LogLibrary lib, UexData uex) =>
+            BlueprintDetail(id?.Trim(), lib, uex) is { } blueprint ? Results.Ok(blueprint) : Results.NotFound());
+
         // Ship components by what they do - guns, shields, power, coolers,
         // quantum drives - with the figures each kind is chosen on.
         app.MapGet("/api/reference/components", (LogLibrary lib, UexData uex) => ReferenceComponents(lib, uex));
+    }
+
+    /// <summary>
+    /// The blueprint the logs say was given to you, by name. The toast names it
+    /// loosely ("Defiant") and the recipe fully ("Defiant Ballistic Repeater"),
+    /// so the match is a contains either way round, as on the Crafting page.
+    /// </summary>
+    static BlueprintReceipt? BlueprintReceived(LogLibrary lib, string output) =>
+        lib.Blueprints().FirstOrDefault(r =>
+            output.Contains(r.Name, StringComparison.OrdinalIgnoreCase)
+            || r.Name.Contains(output, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>One way to get a blueprint, the variants of one contract folded together.</summary>
+    sealed record BlueprintWay(string Kind, string Issuer, string Title, IReadOnlyList<string> Systems, int Variants, double Chance, int Points);
+
+    /// <summary>
+    /// Each pool a blueprint is in, with this blueprint's share of it and who
+    /// pays the pool out.
+    /// </summary>
+    /// <remarks>
+    /// One contract is often written once per system and difficulty - Shubin's
+    /// mining discovery has a Stanton, a Pyro and a Nyx copy of each - so the
+    /// copies fold into one line that names the systems, read from the
+    /// contract's debug name.
+    /// </remarks>
+    static List<(string Pool, double Share, List<BlueprintWay> Sources)> BlueprintSourcesOf(LogLibrary lib, GameBlueprint blueprint)
+    {
+        var all = lib.GameCommodities.Scenarios.BlueprintSources;
+        var result = new List<(string, double, List<BlueprintWay>)>();
+        for (var i = 0; i < blueprint.RewardPools.Count; i++)
+        {
+            var pool = blueprint.RewardPools[i];
+            var share = blueprint.PoolShares is { } shares && i < shares.Count ? shares[i] : 0;
+            var ways = (all.TryGetValue(pool, out var sources) ? sources : [])
+                .GroupBy(s => (s.Kind, s.Issuer, s.Title))
+                .Select(g => new BlueprintWay(
+                    g.Key.Kind, g.Key.Issuer, g.Key.Title,
+                    [.. g.SelectMany(s => Systems(s.Id)).Distinct().OrderBy(s => s)],
+                    g.Count(),
+                    g.Max(s => s.Chance),
+                    g.Key.Kind == "event" ? g.Min(s => s.Points) : 0))
+                .OrderBy(w => w.Kind).ThenBy(w => w.Issuer, StringComparer.OrdinalIgnoreCase).ThenBy(w => w.Title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            result.Add((pool, share, ways));
+        }
+        return result;
+
+        static IEnumerable<string> Systems(string id)
+        {
+            foreach (var system in new[] { "Stanton", "Pyro", "Nyx" })
+                if (id.Contains(system, StringComparison.OrdinalIgnoreCase)) yield return system;
+        }
+    }
+
+    static object? BlueprintDetail(string? id, LogLibrary lib, UexData uex)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        var all = lib.GameCommodities.Blueprints;
+        var blueprint = all.Where(b => b.Kind == "creation").FirstOrDefault(b => string.Equals(b.OutputClass, id, StringComparison.OrdinalIgnoreCase))
+            ?? all.Where(b => b.Kind == "creation").FirstOrDefault(b => string.Equals(b.Output, id, StringComparison.OrdinalIgnoreCase))
+            ?? all.FirstOrDefault(b => string.Equals(b.OutputClass, id, StringComparison.OrdinalIgnoreCase));
+        if (blueprint is null) return null;
+
+        var received = BlueprintReceived(lib, blueprint.Output);
+        return new
+        {
+            blueprint.Output,
+            outputClass = blueprint.OutputClass,
+            blueprint.Kind,
+            blueprint.CraftSeconds,
+            blueprint.Materials,
+            byDefault = blueprint.Default,
+            owned = received is not null,
+            receivedAt = received?.At,
+            shopPrice = uex.ItemPrice(lib.ItemUuid(blueprint.OutputClass)),
+            pools = BlueprintSourcesOf(lib, blueprint).Select(p => new
+            {
+                name = p.Pool,
+                share = p.Share,
+                sources = p.Sources.Select(w => new { w.Kind, w.Issuer, w.Title, w.Systems, w.Variants, w.Chance, w.Points }),
+            }),
+        };
     }
 
     /// <summary>The component kinds the page lists, in the order its tabs show them.</summary>
@@ -251,13 +339,17 @@ public static partial class ServerHost
             card,
             uex = uex.IsEnabled,
             shops,
+            // The recipe, and the way to its blueprint card: where the
+            // blueprint itself comes from is the next question.
             craft = recipe is null ? null : new
             {
                 recipe.Output,
+                outputClass = recipe.OutputClass,
                 recipe.CraftSeconds,
                 recipe.Materials,
-                // No reward pool is a recipe every crafter starts with.
-                byDefault = recipe.RewardPools.Count == 0
+                byDefault = recipe.Default,
+                owned = BlueprintReceived(lib, recipe.Output) is not null,
+                sources = BlueprintSourcesOf(lib, recipe).Sum(p => p.Sources.Count),
             },
             // The player hulls that come out of the shop with it fitted.
             // Arena Commander copies, Teach and collector editions are the same

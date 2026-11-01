@@ -7679,3 +7679,11 @@ body:not(.overlay) .checklist-item :is(button.ghost, button.tiny).icon:hover:not
    light theme, a white block on a dark card. Set on the controls rather than
    the page, so the overlay's transparent page is left alone. ---- */
 body:not(.overlay) :is(input, select, textarea) { color-scheme: dark; }
+
+/* ---- Blueprint card (0.20.29) ---- */
+.ref-owned { color: var(--green); }
+.ref-materials { margin: 4px 0 0; padding-left: 18px; }
+.ref-materials li { margin: 2px 0; }
+.ref-pool { margin: 10px 0 0; }
+.ref-pool-head { margin: 0 0 4px; }
+.ref-ways-table { max-width: 860px; }

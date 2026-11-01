@@ -64,6 +64,9 @@ public class ReferenceDetailTests
 
     private const string Links = "__dom.node('#ref-modal-body').querySelectorAll('.ref-link')";
 
+    // The first ship in "Comes fitted to": the Blueprint link now comes before it.
+    private const string ShipLink = "__dom.node('#ref-modal-body').byClass('ref-links')[0].byClass('ref-link')[0]";
+
     [Fact]
     public void The_items_table_says_where_a_thing_drops()
     {
@@ -126,7 +129,7 @@ public class ReferenceDetailTests
     {
         var page = Opened();
 
-        page.Do($"await {Links}[0].fire('click');");
+        page.Do($"await {ShipLink}.fire('click');");
         Assert.Equal("Aegis Gladius", page.NodeText("#ref-modal-title"));
         Assert.Contains("Light Fighter", page.NodeText("#ref-modal-sub"));
         Assert.False(page.Truth("__dom.node('#ref-modal-back').hidden"));
@@ -150,7 +153,7 @@ public class ReferenceDetailTests
     public void Npc_versions_are_told_apart_by_the_rest_of_their_class()
     {
         var page = Opened();
-        page.Do($"await {Links}[0].fire('click');");
+        page.Do($"await {ShipLink}.fire('click');");
 
         var text = page.NodeText("#ref-modal-body");
         Assert.Contains("Flown by NPCs", text);
@@ -172,7 +175,7 @@ public class ReferenceDetailTests
     public void Close_hides_the_modal_and_forgets_the_trail()
     {
         var page = Opened();
-        page.Do($"await {Links}[0].fire('click');");
+        page.Do($"await {ShipLink}.fire('click');");
         page.Do("__dom.node('#ref-modal-close').fire('click');");
 
         Assert.True(page.Truth("__dom.node('#ref-modal').hidden"));

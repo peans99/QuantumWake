@@ -92,6 +92,13 @@ public sealed record GameScenarioCatalogue(
     IReadOnlyList<GameScenarioContract> Contracts)
 {
     public static GameScenarioCatalogue Empty { get; } = new([], []);
+
+    /// <summary>
+    /// What pays out each blueprint reward pool, keyed by the pool's name as
+    /// <see cref="GameBlueprint.RewardPools"/> spells it: the contracts whose
+    /// results include it, and the event tiers that award it.
+    /// </summary>
+    public Dictionary<string, List<GameBlueprintSource>> BlueprintSources { get; init; } = [];
 }
 
 /// <summary>
@@ -147,7 +154,8 @@ public static partial class GameScenarios
             else if (record.Name.StartsWith("ContractGenerator.", StringComparison.Ordinal)) generators.Add(record);
         }
 
-        if (progressRecords.Count == 0) return GameScenarioCatalogue.Empty;
+        var sources = BlueprintSources(core, text, generators, progressRecords, journals);
+        if (progressRecords.Count == 0) return GameScenarioCatalogue.Empty with { BlueprintSources = sources };
 
         var byHash = progressRecords.ToDictionary(r => r.Hash);
         var headings = Headings(core, text, journals, byHash);
@@ -182,7 +190,10 @@ public static partial class GameScenarios
 
         return new GameScenarioCatalogue(
             scenarios.OrderBy(s => s.Title, StringComparer.OrdinalIgnoreCase).ToList(),
-            contracts.OrderBy(c => c.Scenario).ThenBy(c => c.Id, StringComparer.OrdinalIgnoreCase).ToList());
+            contracts.OrderBy(c => c.Scenario).ThenBy(c => c.Id, StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            BlueprintSources = sources,
+        };
     }
 
     /// <summary>

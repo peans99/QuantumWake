@@ -5732,7 +5732,7 @@ let refTicket = 0;
 function refLink(kind, id, label) {
   const link = el('button', 'place-link ref-link', label || prettyItem(id || ''));
   link.type = 'button';
-  link.title = kind === 'ship' ? tx('Open this ship') : tx('Open this item');
+  link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint') : tx('Open this item');
   link.addEventListener('click', () => openRefDetail(kind, id));
   return link;
 }
@@ -5752,7 +5752,7 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   modal.hidden = false;
   document.body.classList.add('ref-modal-open');
   $('#ref-modal-back').hidden = refTrail.length < 2;
-  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : tx('Item');
+  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : kind === 'blueprint' ? tx('Blueprint') : tx('Item');
   $('#ref-modal-title').textContent = prettyItem(id);
   $('#ref-modal-sub').textContent = '';
   const body = $('#ref-modal-body');
@@ -5760,7 +5760,7 @@ async function openRefDetail(kind, id, { push = true } = {}) {
 
   let data;
   try {
-    data = await getJson(`/api/reference/${kind === 'ship' ? 'ship' : 'item'}?id=${encodeURIComponent(id)}`);
+    data = await getJson(`/api/reference/${kind === 'ship' || kind === 'blueprint' ? kind : 'item'}?id=${encodeURIComponent(id)}`);
   } catch {
     if (ticket === refTicket) body.replaceChildren(el('p', 'muted', tx('Nothing is known about that.')));
     return false;
@@ -5769,6 +5769,7 @@ async function openRefDetail(kind, id, { push = true } = {}) {
   // A second click while the first was in flight wins.
   if (ticket !== refTicket) return false;
   if (kind === 'ship') renderShipDetail(body, data);
+  else if (kind === 'blueprint') renderBlueprintDetail(body, data);
   else renderItemDetail(body, data);
   body.scrollTop = 0;
   return true;
@@ -5905,15 +5906,26 @@ function renderItemDetail(body, data) {
   }
   body.append(buy);
 
+  // Crafting is the third way to get one, and the blueprint is a thing to
+  // get in its own right: the line says whether you have it, and the link
+  // opens where it comes from.
   if (data.craft) {
-    const craft = refSection(tx('Crafting'));
+    const craft = refSection(tx('Blueprint'));
     craft.append(el('p', null, tx('Crafted in {time} from {materials}.', {
       time: craftTime(data.craft.craftSeconds),
       materials: (data.craft.materials || []).join(', ') || tx('nothing listed'),
     })));
-    craft.append(el('p', 'muted caption', data.craft.byDefault
-      ? tx('Every crafter knows this blueprint from the start.')
-      : tx('The blueprint is a reward; the Crafting page says which.')));
+    const line = el('p', 'ref-holding');
+    line.append(el('strong', data.craft.owned ? 'ref-owned' : null, data.craft.owned
+      ? tx('in your blueprint library')
+      : data.craft.byDefault ? tx('every crafter starts with it') : tx('not in your library')));
+    if (!data.craft.owned && !data.craft.byDefault) {
+      line.append(el('span', 'muted', ` · ${data.craft.sources
+        ? txn(data.craft.sources, '{count} way to get it', '{count} ways to get it')
+        : tx('nothing on this build was found to give it')}`));
+    }
+    craft.append(line);
+    craft.append(refLink('blueprint', data.craft.outputClass, tx('Where to get the blueprint')));
     body.append(craft);
   }
 
@@ -5956,6 +5968,93 @@ function refLinkList(rows, fill) {
   }
   draw();
   return holder;
+}
+
+/**
+ * One blueprint: what it makes, the recipe, whether your logs show it was
+ * given to you, and every way to get it - the contracts that pay out its
+ * reward pools, by who offers them and in which systems, and the event tiers
+ * that award it - with this blueprint's share of each pool, since a pool
+ * pays one of its blueprints, not all of them.
+ */
+function renderBlueprintDetail(body, data) {
+  $('#ref-modal-title').textContent = tx('{item} blueprint', { item: data.output });
+  $('#ref-modal-sub').textContent = tx('Crafted in {time}', { time: craftTime(data.craftSeconds) });
+  body.textContent = '';
+
+  const top = el('div', 'ref-top');
+  const holding = el('p', 'ref-holding');
+  holding.append(el('strong', data.owned ? 'ref-owned' : null, data.owned
+    ? tx('in your blueprint library')
+    : data.byDefault ? tx('every crafter starts with it') : tx('not in your library')));
+  if (data.owned && data.receivedAt) holding.append(el('span', 'muted', ` · ${tx('received {when}', { when: dayOf(data.receivedAt) })}`));
+  top.append(holding);
+  body.append(top);
+
+  const makes = el('p', 'ref-holding');
+  makes.append(el('span', 'muted', `${tx('Makes')} `), refLink('item', data.outputClass, data.output));
+  if (data.shopPrice) makes.append(el('span', 'muted', ` · ${tx('or buy one for {price}', { price: money(data.shopPrice) })}`));
+  body.append(makes);
+
+  const recipe = refSection(tx('Recipe'));
+  const list = el('ul', 'ref-materials');
+  for (const material of data.materials || []) list.append(el('li', null, serverText(material)));
+  if (!(data.materials || []).length) list.append(el('li', 'muted', tx('nothing listed')));
+  recipe.append(list);
+  body.append(recipe);
+
+  const where = refSection(tx('Where to get the blueprint'));
+  const pools = data.pools || [];
+  if (data.byDefault) {
+    where.append(el('p', null, tx('Every crafter starts with it: it is on the game’s starting list.')));
+  } else if (!pools.length) {
+    where.append(el('p', 'muted', tx('No contract, event tier or starting list on this build gives it. It may come from somewhere the game files do not say, or not be obtainable yet.')));
+  }
+
+  for (const pool of pools) {
+    const block = el('div', 'ref-pool');
+    const head = el('p', 'ref-pool-head');
+    head.append(el('strong', null, tx('Reward pool {name}', { name: pool.name })));
+    if (pool.share > 0 && pool.share < 1) {
+      const odds = el('span', 'muted', ` · ${tx('{odds} of what it pays is this one', { odds: lootPercent(pool.share) })}`);
+      odds.title = tx('A pool pays one of its blueprints, by weight; this is this blueprint’s share.');
+      head.append(odds);
+    }
+    block.append(head);
+
+    const sources = pool.sources || [];
+    if (!sources.length) {
+      block.append(el('p', 'muted caption', tx('No contract or event tier on this build pays from this pool.')));
+    } else {
+      const table = el('table', 'loot-where-table ref-ways-table');
+      const headRow = el('tr');
+      headRow.append(el('th', null, tx('From')), el('th', null, tx('Contract')), el('th', null, tx('Systems')), el('th', 'num', tx('Chance')));
+      const thead = el('thead');
+      thead.append(headRow);
+      table.append(thead);
+      const tbody = el('tbody');
+      for (const way of sources) {
+        const tr = el('tr');
+        tr.append(el('td', null, way.issuer || '—'));
+        const title = el('td', null, way.kind === 'event'
+          ? tx('{bar}, at {points} points', { bar: way.title, points: way.points.toLocaleString() })
+          : way.title);
+        if (way.variants > 1) title.append(el('span', 'muted', ` · ${txn(way.variants, '{count} version', '{count} versions')}`));
+        tr.append(title);
+        tr.append(el('td', 'muted', (way.systems || []).join(', ') || '—'));
+        const chance = el('td', 'num', way.kind === 'event' ? tx('tier reward') : lootPercent(way.chance));
+        if (way.kind !== 'event') chance.title = tx('The chance the contract pays from this pool when it completes');
+        tr.append(chance);
+        tbody.append(tr);
+      }
+      table.append(tbody);
+      const wrap = el('div', 'table-wrap');
+      wrap.append(table);
+      block.append(wrap);
+    }
+    where.append(block);
+  }
+  body.append(where);
 }
 
 /** A part list: name opening its own card, type, size, grade and count. */
@@ -8887,7 +8986,9 @@ function renderCraftingRef() {
     const tr = el('tr');
 
     const makes = el('td');
-    makes.append(el('span', null, bp.output));
+    // The name opens the blueprint's card: what it makes and where to get it.
+    if (bp.outputClass) makes.append(refLink('blueprint', bp.outputClass, bp.output));
+    else makes.append(el('span', null, bp.output));
 
     if (bp.owned) {
       const badge = el('span', 'job-kind owned', tx('yours'));
