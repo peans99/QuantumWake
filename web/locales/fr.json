@@ -5347,7 +5347,6 @@
   "NPC ships": "Vaisseaux PNJ",
   "Craft": "Fabrication",
   "Whether the game has a recipe that makes it, and how long it takes": "Si le jeu a une recette qui le fabrique, et combien de temps elle prend",
-  "Open this item on the Loot page": "Ouvrir cet objet sur la page Butin",
   "prices off": "prix désactivés",
   "Not matched to an item: {names}. A commodity, a typo, or something no table, NPC, ship or recipe has - Shopping can still find where it is sold.": "Aucun objet ne correspond à : {names}. Une marchandise, une faute de frappe, ou quelque chose qu’aucune table, aucun PNJ, vaisseau ou recette ne donne - les Achats peuvent encore trouver où c’est vendu.",
   "{count} places tie for the best: these are the first ten, and the rest are just as good.": "{count} lieux sont à égalité pour le meilleur : voici les dix premiers, les autres sont tout aussi bons.",

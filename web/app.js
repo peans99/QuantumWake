@@ -1367,7 +1367,12 @@ function renderNow(state) {
       if (entry.kind === 'contract-done') li.classList.add('mission-complete');
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
-      li.append(el('span', 'x', feedText(entry.text)));
+      // A line about one item - "Bought P4-AR Rifle" - opens its Reference
+      // card, by the class the parser kept beside the sentence.
+      const text = el('span', 'x');
+      if (entry.subject) text.append(refLink('item', entry.subject, feedText(entry.text)));
+      else text.textContent = feedText(entry.text);
+      li.append(text);
       if (entry.detail) li.append(el('span', 'd', feedText(withoutMarkup(entry.detail))));
       feed.append(li);
     }
@@ -2704,7 +2709,7 @@ function bars(container, rows, format) {
       const label = el('div', 'label');
       const link = el('button', 'place-link', row.label);
       link.type = 'button';
-      link.title = tx('Show on the map');
+      link.title = row.title || tx('Show on the map');
       link.addEventListener('click', row.onClick);
       label.append(link);
       wrapper.append(label);
@@ -3339,6 +3344,7 @@ function renderSessionDebrief(summary) {
   const commerce = [
     ...(detail.purchases || []).map((purchase) => ({
       at: purchase.at,
+      item: purchase.item,
       label: `${prettyItem(purchase.item)}${purchase.quantity > 1 ? ` ×${purchase.quantity}` : ''}`,
       amount: -Number(purchase.total ?? purchase.price ?? 0),
       approximate: !purchase.confirmed,
@@ -3354,7 +3360,9 @@ function renderSessionDebrief(summary) {
   commerce.slice(-8).forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, entry.label));
+    // A purchase names an item, which opens its Reference card; a cargo trade
+    // names a quantity, which has none.
+    item.append(entry.item ? refLink('item', entry.item, entry.label) : el('span', null, entry.label));
     item.append(el('span', entry.amount >= 0 ? 'inward' : 'outward',
       `${entry.amount >= 0 ? '+' : '−'}${entry.approximate ? '~' : ''}${money(Math.abs(entry.amount))}`));
     commerceList.append(item);
@@ -3389,7 +3397,9 @@ function renderSessionDebrief(summary) {
   highlights.forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, feedText(withoutMarkup(entry.text))));
+    item.append(entry.subject
+      ? refLink('item', entry.subject, feedText(withoutMarkup(entry.text)))
+      : el('span', null, feedText(withoutMarkup(entry.text))));
     if (entry.detail) item.append(el('span', 'muted', feedText(withoutMarkup(entry.detail))));
     highlightList.append(item);
   });
@@ -3707,7 +3717,14 @@ function renderLedger() {
 
     tr.append(el('td', null, dateOf(entry.at)));
     tr.append(el('td', null, tx(entry.kind)));
-    tr.append(el('td', null, entry.what === 'Contract payout' ? tx('Contract payout') : prettyItem(entry.what)));
+
+    // An item's name opens its Reference card, as it does in every other
+    // table. A cargo row names a commodity and a payout names a contract,
+    // and neither has a card to open.
+    const what = el('td');
+    if (entry.kind === 'Item bought' || entry.item) what.append(refLink('item', entry.item || entry.what, prettyItem(entry.what)));
+    else what.textContent = entry.what === 'Contract payout' ? tx('Contract payout') : prettyItem(entry.what);
+    tr.append(what);
     tr.append(tdPlace(entry.where));
     tr.append(el('td', 'muted', entry.shop));
 
@@ -4730,16 +4747,12 @@ function renderLoot(pickups) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
 
-    // The name opens where the tables say it comes from, when they say
-    // anything; an item no table rolls stays plain text, not a dead link.
+    // The name opens the item's Reference card, as it does on every other
+    // page (0.20.32); it used to open this page's own where-panel, and only
+    // for items a table rolls. That panel is still one click away: the roll
+    // cell opens it when there is a roll to show.
     const name = el('td');
-    if (pickup.lootSources > 0) {
-      const open = el('button', 'link', prettyItem(pickup.item));
-      open.addEventListener('click', () => showLootWhere(pickup.itemClass));
-      name.append(open);
-    } else {
-      name.textContent = prettyItem(pickup.item);
-    }
+    name.append(refLink('item', pickup.itemClass || pickup.item, prettyItem(pickup.item)));
     tr.append(name);
 
     tr.append(el('td', 'muted', tx(pickup.category)));
@@ -4783,7 +4796,14 @@ function lootRollCell(pickup) {
     return td;
   }
 
-  const td = el('td', 'num', lootPercent(pickup.bestRoll));
+  // The odds open where they come from, on this page: every kind of place
+  // and body, with the named places. The item's name beside it opens the
+  // Reference card instead, as names do everywhere.
+  const td = el('td', 'num');
+  const open = el('button', 'link', lootPercent(pickup.bestRoll));
+  open.type = 'button';
+  open.addEventListener('click', () => showLootWhere(pickup.itemClass));
+  td.append(open);
   td.title = tx('Best single roll: {where}. {count} kinds of place or body can roll it.', {
     where: pickup.bestFrom, count: pickup.lootSources,
   });
@@ -5799,9 +5819,14 @@ function placeList(heading, places) {
 let refTrail = [];
 let refTicket = 0;
 
-/** A name that opens its own Reference card. */
-function refLink(kind, id, label) {
-  const link = el('button', 'place-link ref-link', label || prettyItem(id || ''));
+/**
+ * A name that opens its own Reference card. Every item, component and ship
+ * name on every page goes through here (0.20.32), so one gun looks and opens
+ * the same way whether it is met in a stash, a ledger row, a feed line or a
+ * catalogue; `extraClass` keeps the layout class a cell already had.
+ */
+function refLink(kind, id, label, extraClass = '') {
+  const link = el('button', `place-link ref-link${extraClass ? ` ${extraClass}` : ''}`, label || prettyItem(id || ''));
   link.type = 'button';
   link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint') : tx('Open this item');
   link.addEventListener('click', () => openRefDetail(kind, id));
@@ -8404,7 +8429,8 @@ function renderArmouryKit() {
     return armouryOpenKit === key ? armouryExpansion(detail(), columns) : null;
   };
   const named = (item, sub) => {
-    const td = el('td', null, item.name);
+    const td = el('td');
+    td.append(item.class ? armouryItemLink(item.class, item.name) : document.createTextNode(item.name));
     if (sub) td.append(el('div', 'armoury-kind', sub));
     return td;
   };
@@ -8700,6 +8726,17 @@ function armouryGunsFiltered() {
   return rows;
 }
 
+/**
+ * A name in an Armoury table. The row opens its figures when clicked, so the
+ * name's own click stays on the name: it opens the item's Reference card -
+ * shops, drops, who carries it - without also toggling the row under it.
+ */
+function armouryItemLink(cls, name) {
+  const link = refLink('item', cls, name);
+  link.addEventListener('click', (event) => event.stopPropagation());
+  return link;
+}
+
 function renderArmouryGuns() {
   const body = $('#armoury-guns tbody');
   if (!body || !armouryModel?.ready) return;
@@ -8718,7 +8755,8 @@ function renderArmouryGuns() {
     const tr = el('tr');
     tr.dataset.class = w.class;
     if (armouryOpenGun === w.class) tr.classList.add('open');
-    const name = el('td', null, w.name);
+    const name = el('td');
+    name.append(armouryItemLink(w.class, w.name));
     if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
     tr.append(name);
     const kind = el('td', null, w.kind);
@@ -8899,7 +8937,11 @@ function renderArmouryArmour() {
     const key = `${a.slot}|${a.name}`;
     tr.dataset.key = key;
     if (armouryOpenSet === key) tr.classList.add('open');
-    const name = el('td', null, a.family);
+    // A row is one slot of one family, its colourways folded together; the
+    // name opens the first of them, which is the plain edition.
+    const name = el('td');
+    const piece = a.pieces?.[0]?.class;
+    name.append(piece ? armouryItemLink(piece, a.family) : document.createTextNode(a.family));
     if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
     tr.append(name);
     tr.append(el('td', null, a.slot));
@@ -11856,7 +11898,12 @@ function eventRewardItems(items) {
     }
 
     const text = el('div', 'event-reward-text');
-    text.append(el('div', 'event-reward-name', item.oneOf ? tx('One of: {name}', { name: item.name }) : item.name));
+    // A reward the catalogue matched opens its Reference card. "One of"
+    // names a pool the class is only one member of, so it stays words.
+    const name = el('div', 'event-reward-name');
+    if (item.class && !item.oneOf) name.append(refLink('item', item.class, item.name));
+    else name.textContent = item.oneOf ? tx('One of: {name}', { name: item.name }) : item.name;
+    text.append(name);
     text.append(el('div', 'muted event-reward-kind', item.class
       ? rewardKindLine(item, facts)
       : tx('not in the installed game’s catalogue under this name')));
@@ -18655,7 +18702,10 @@ function renderBenchPanel() {
     rowEl.append(partMark(part));
 
     const mid = el('div');
-    const name = el('div', 'c-name', part.name);
+    // The name opens the part's Reference card - its shops, what drops it,
+    // which ships carry it - the way a component's name does everywhere.
+    const name = el('div', 'c-name');
+    name.append(refLink('item', part.class, part.name));
     name.append(partChip(part));
     const componentClass = componentClassChip(option.componentClass);
     if (componentClass) name.append(componentClass);
@@ -20919,11 +20969,6 @@ async function showChecklistFarm(list, panel) {
   renderChecklistFarm(panel, data);
 }
 
-function openLootItem(itemClass) {
-  showView('loot');
-  showLootWhere(itemClass);
-}
-
 /**
  * A list's answer: the places that yield the most of it, then each line with
  * where to find, buy or craft it. Lines that match no item say so rather than
@@ -20988,11 +21033,10 @@ function renderChecklistFarm(panel, data) {
     const body = el('tbody');
     for (const item of items) {
       const tr = el('tr');
+      // The Reference card, as from every other table: it carries the same
+      // where-it-drops panel the Loot page shows, and the shops besides.
       const cell = el('td');
-      const open = el('button', 'link', item.name);
-      open.title = tx('Open this item on the Loot page');
-      open.addEventListener('click', () => openLootItem(item.itemClass));
-      cell.append(open);
+      cell.append(refLink('item', item.itemClass, item.name));
       tr.append(cell);
 
       tr.append(el('td', item.best ? null : 'muted', item.best
@@ -21485,8 +21529,13 @@ async function loadLogbook() {
 
     li.append(el('span', `k ${row.kind}`, logbookKind(row.kind)));
 
-    // Item-ish lines pretty their class names; a session line is prose.
-    li.append(el('span', 'd what', logbookWhat(row)));
+    // Item-ish lines pretty their class names; a session line is prose. A
+    // line about one item - a purchase, a first sighting - opens its
+    // Reference card, by the class the server sends beside the words.
+    const what = el('span', 'd what');
+    if (row.subject) what.append(refLink('item', row.subject, logbookWhat(row)));
+    else what.textContent = logbookWhat(row);
+    li.append(what);
 
     if (row.place) {
       const place = el('span', 'd');
@@ -24033,10 +24082,14 @@ function renderSpending(stats) {
     bars('#shops-more-chart', shopRows.slice(7), shopFormat);
   }
 
+  // The bar's name opens the item's Reference card. The totals are by display
+  // name rather than class, which the card resolves just as readily.
   const itemRows = stats.items.slice(0, 20).map((i) => ({
       label: i.name,
       value: Number(i.total),
       note: i.quantity > 1 ? `×${i.quantity}` : null,
+      onClick: () => openRefDetail('item', i.name),
+      title: tx('Open this item'),
     }));
   bars('#items-chart', itemRows.slice(0, 9), money);
   const moreItems = $('#items-more');
@@ -24223,7 +24276,9 @@ function loadoutSlotContents(slot, compact = false) {
 
   for (const item of slot.items) {
     const line = el('div', 'slot-current');
-    line.append(el('span', null, loadoutItemName(item)));
+    // The name opens the item's Reference card, as it does in a stash or a
+    // table; the card resolves the display name the port lines record.
+    line.append(refLink('item', item.name, loadoutItemName(item)));
     if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
     body.append(line);
 
@@ -24584,7 +24639,7 @@ async function renderStash(stats) {
 
       expandableList(card, group.items, 8, (item) => {
         const li = el('li');
-        li.append(el('span', 'slot-item', prettyItem(item.name)));
+        li.append(refLink('item', item.itemClass || item.name, prettyItem(item.name), 'slot-item'));
         li.append(el('span', 'slot-count', relative(item.lastSeen)));
         return li;
       }, Boolean(term));

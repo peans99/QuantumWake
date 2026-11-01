@@ -69,6 +69,27 @@ such a box. Give an icon button a `title`, which is its only words.
 `openEntity('part' | 'ship', …)` sends items and ships to the window, so the
 two can never describe one gun two ways again.
 
+**Every item name is `refLink('item', class, label)`** (0.20.32), and it is
+never plain text. Before this a gun was a link in the Items table and in a
+checklist, words in the Loadout, the Stash, the Ledger and the Logbook, a link
+to the Loot page's own panel in a farm list, and a row toggle in the Armoury.
+Where a row carries only a display name (the Ledger, Spending, the Loadout),
+pass the name: the server resolves a name as readily as a class. Where the
+row has both, pass the class and show the name. The server sends the class
+beside the words where the words alone could not say which item they meant:
+`LedgerEntry.Item`, `LogbookLine.Subject`, `TimelineEntry.Subject`.
+`ItemLinksTests` holds one test per page.
+
+Two kinds of name are not linked, on purpose. A Wikelo requirement or reward
+can be an item, a commodity or a ship, and the row does not say which, so a
+link would open the wrong window one time in three. A name read off a
+screenshot (Fleet fittings) has no class and may not match any item.
+
+A name inside a table row that itself toggles (the Armoury) stops its click
+from reaching the row: `armouryItemLink`. A name inside a `<button>` (the
+Garage rig's fitted part) is not linked, since a button cannot hold one; the
+Bench's candidate list beside it links every part.
+
 ## Identity
 
 Trialled on Sessions, Fleet and Market in 0.20.25, on every page since

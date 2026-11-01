@@ -889,11 +889,11 @@ public static partial class ServerHost
                 entries.Add(new LogbookLine(
                     l.At,
                     l.Amount > 0 ? "sold" : "bought",
-                    what, l.Where, l.Shop, l.Amount));
+                    what, l.Where, l.Shop, l.Amount, l.Item));
             }
 
             foreach (var p in lib.Pickups(days ?? 0))
-                entries.Add(new LogbookLine(p.At, "loot", p.Item, p.Place, "first seen", null));
+                entries.Add(new LogbookLine(p.At, "loot", p.Item, p.Place, "first seen", null, p.ItemClass));
 
             return entries
                 .OrderByDescending(e => e.At)
@@ -6479,8 +6479,13 @@ public sealed record ChecklistItemRequest(
     List<ChecklistAttachment>? Attachments);
 
 /// <summary>One line of the merged logbook timeline.</summary>
+/// <param name="Subject">
+/// The engine class the line is about, when it is about one item - a purchase
+/// or a first sighting - so the page can open its Reference card. Null for a
+/// session, a cargo trade or a contract, which have no card to open.
+/// </param>
 public sealed record LogbookLine(
-    DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount);
+    DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount, string? Subject = null);
 
 /// <summary>What a mining-run form posts.</summary>
 public sealed record MiningRunEntry(

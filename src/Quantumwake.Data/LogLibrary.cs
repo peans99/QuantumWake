@@ -373,7 +373,8 @@ public sealed record LedgerEntry(
     decimal Amount,
     int Quantity,
     bool Confirmed,
-    decimal Running);
+    decimal Running,
+    string? Item = null);
 
 public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 
@@ -1216,7 +1217,10 @@ public sealed class LogLibrary : IDisposable
             sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
         }
 
-        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, string Shop, decimal Amount, int Quantity, bool Confirmed)>();
+        // Item is the engine class behind an "Item bought" row, so the page can
+        // open the item's Reference card from the ledger as it does from every
+        // other table; What stays the display name the row reads as.
+        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, string Shop, decimal Amount, int Quantity, bool Confirmed, string? Item)>();
 
         foreach (var session in sessions)
         {
@@ -1224,7 +1228,7 @@ public sealed class LogLibrary : IDisposable
             {
                 movements.Add((purchase.At, "Item bought", ItemName(purchase.Item),
                     PlaceAt(session, purchase.At), ShopLabel(purchase.Shop),
-                    -purchase.Total, purchase.Quantity, purchase.Confirmed));
+                    -purchase.Total, purchase.Quantity, purchase.Confirmed, purchase.Item));
             }
 
             foreach (var payout in session.Payouts)
@@ -1242,7 +1246,7 @@ public sealed class LogLibrary : IDisposable
                     payout.Amount, 0,
 
                     // The game stated the sum outright; nothing needs confirming.
-                    true));
+                    true, null));
             }
 
             foreach (var trade in session.Trades)
@@ -1262,7 +1266,7 @@ public sealed class LogLibrary : IDisposable
                     trade.Quantity,
 
                     // Commodity trades carry no server confirmation.
-                    false));
+                    false, null));
             }
         }
 
@@ -1276,7 +1280,7 @@ public sealed class LogLibrary : IDisposable
         {
             running += m.Amount;
             entries.Add(new LedgerEntry(
-                m.At, m.Kind, m.What, m.Where, m.Shop, m.Amount, m.Quantity, m.Confirmed, running));
+                m.At, m.Kind, m.What, m.Where, m.Shop, m.Amount, m.Quantity, m.Confirmed, running, m.Item));
         }
 
         entries.Reverse();
