@@ -271,6 +271,23 @@ public class ServersPageTests
         Assert.StartsWith("☆", page.NodeText("#now-server-star"));
     }
 
+    /// <summary>
+    /// The star is styled as a bare 24px glyph, so "☆ Favourite" spilled the
+    /// word out under the box. The glyph alone, with the words on the hover and
+    /// the label, as on the Servers table.
+    /// </summary>
+    [Fact]
+    public void The_star_is_the_glyph_alone_with_its_words_on_the_hover()
+    {
+        var off = Now("shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardFavorite:false");
+        var on = Now("shard:'pub_use1b_12545750_150', shardShort:'US East 150', shardFavorite:true");
+
+        Assert.Equal("☆", off.NodeText("#now-server-star"));
+        Assert.Equal("Add to favourites", off.Text("__dom.node('#now-server-star').title"));
+        Assert.Equal("★", on.NodeText("#now-server-star"));
+        Assert.Equal("Remove from favourites", on.Text("__dom.node('#now-server-star').getAttribute('aria-label')"));
+    }
+
     // ---- where you went ----
 
     [Fact]

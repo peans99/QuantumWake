@@ -62,6 +62,22 @@ public class CargoFitPanelTests
         Assert.Contains("a fit not found is not proof", page.NodeText("#garage-cargo-note"));
     }
 
+    /// <summary>
+    /// Grids read from the install say so: the hull's own loadout places
+    /// them, not a downloaded dataset.
+    /// </summary>
+    [Fact]
+    public void Grids_read_from_the_install_are_credited_to_it()
+    {
+        var page = new Page();
+        page.Serve("/api/cargo/RSI_Hermes", Hermes.Replace("\"gridsKnown\":true", "\"gridsKnown\":true,\"gridsFrom\":\"install\""));
+        page.Do("garageCargoLoad = {}; await loadGarageCargo('RSI_Hermes');");
+
+        var sub = page.NodeText("#garage-cargo-sub");
+        Assert.Contains("2 grids, 288 SCU as your install’s loadout places them", sub);
+        Assert.DoesNotContain("dataset", sub);
+    }
+
     [Fact]
     public void Typing_a_load_and_fitting_it_posts_the_crates_and_draws_where_each_went()
     {

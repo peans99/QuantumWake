@@ -56,6 +56,15 @@ to be read rather than inferred, and it is theirs. As with the archive, no
 third-party extractor is used or shipped: `GameData/DataCore.cs` walks the blob
 itself.
 
+**Encrypted loadout files** — since 0.20.5 what NPCs wear is read from the
+loadout files under `Data\Scripts\Loadouts`, which the archive stores
+encrypted: AES-128-CBC with a zero IV over an ordinary ZStd frame. The key is
+the one published in [unp4k](https://github.com/dolkensp/unp4k) and used by
+[scdatatools](https://github.com/ventorvar/scdatatools); it was not found
+here. `P4kArchive.TryReadDecrypting` uses it for those files only, at
+Nicolas's decision on 2026-10-31; everything else the archive encrypts is
+still reported as unreadable.
+
 **Star Citizen Wiki** ([starcitizen.tools](https://starcitizen.tools)) is
 where the Garage's pictures of parts come from, and the logo of the odd maker
 the game files lack one for: once the community dataset is switched on, the
@@ -91,6 +100,16 @@ property, not ours, and are included unmodified.
 Star Citizen®, Roberts Space Industries® and Cloud Imperium® are registered
 trademarks of Cloud Imperium Rights LLC. This is an unofficial fan tool, not
 affiliated with or endorsed by Cloud Imperium Games.
+
+## Typeface
+
+Page titles on the pages trying the 0.20.25 identity are set in **Big Shoulders
+Display**, copyright 2019 the Big Shoulders Project Authors
+(<https://github.com/xotypeco/big_shoulders>). It is licensed under the SIL Open
+Font License 1.1, and the licence ships beside the font files in
+`web/assets/fonts/OFL-BigShouldersDisplay.txt`. The files are Google Fonts' Latin
+and Latin-extended subsets, unmodified and bundled, so the app still makes no
+outside request to draw them.
 
 ## Packages
 

@@ -50,12 +50,15 @@ All thirteen log ids were searched through the entire file three ways:
 Zero hits on any id in any form. The ids in the log therefore belong to a
 different numbering from the DataCore's record guids.
 
-## Where it probably does live
+## Not in the shop stock tables either
 
-`Data\ShopInventories\*.json` inside the p4k — the shop stock tables. Those
-ship deliberately encrypted, which is the item already parked as "come back for
-encrypted shop later". Until that is opened, the commodity name is out of
-reach, and no amount of DataCore parsing changes that.
+This page used to end on a guess: that the ids lived in
+`Data\Scripts\ShopInventories\*.json`, the shop stock tables, which ship
+encrypted. They were opened on 2026-10-31. Of the 13 `resourceGUID`s these
+logs trade by, **none** is among the 1,923 ids in those 120 files - and the
+files turn out to be legacy tables besides (Port Olisar, 2018 sales; see
+section 9 of [untapped-signals.md](untapped-signals.md)). The commodity name
+is not offline anywhere this has looked.
 
 ## What the app shows instead
 

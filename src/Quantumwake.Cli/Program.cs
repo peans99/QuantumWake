@@ -394,6 +394,169 @@ if (args.Contains("--hauling", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Loot as the install has it: every table resolved to items, which entries
+// only a mission can fill, everything that rolls a table (slot presets and
+// NPC bodies) and how much of what these logs saw in containers the tables
+// can produce at all. The numbers behind docs/loot.md. --loot=<class> lists
+// every container and body that can roll that one item, through its own
+// constraints.
+if (args.Any(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)))
+{
+    var p4k = new P4kArchive(P4kArchive.PathFor(install.RootPath));
+    var blob = p4k.TryRead(@"Data\Game2.dcb");
+    if (blob is null) { Console.Error.WriteLine("no Game2.dcb"); return 1; }
+    var core = new DataCore(blob);
+    var loot = new GameLoot(core);
+    var lootClass = args.First(a => a.StartsWith("--loot", StringComparison.OrdinalIgnoreCase)).Split('=', 2).ElementAtOrDefault(1);
+
+    var tables = loot.Tables().Select(t => loot.Resolve(t)).OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
+    var reachable = tables.SelectMany(t => t.Items).Select(i => i.ItemClass).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var sources = loot.Sources().ToList();
+    var rolls = sources.GroupBy(s => s.RollKey).ToDictionary(g => g.Key, g => loot.Resolve(g.First()));
+
+    var placesWatch = Stopwatch.StartNew();
+    var english = GameCommodities.EnglishText(System.Text.Encoding.UTF8.GetString(p4k.TryRead(GameCommodities.LocalisationEntry) ?? []));
+    var itemFacts = GameItems.Read(core, english);
+    var digest = GameLootData.Read(core, p4k, english, c => itemFacts.TryGetValue(c, out var f) ? f.Type : null);
+    placesWatch.Stop();
+
+    if (lootClass is { Length: > 0 })
+    {
+        var rows = sources
+            .Select(s => (Source: s, Odds: rolls[s.RollKey]?.Items
+                .Where(i => i.ItemClass.Equals(lootClass, StringComparison.OrdinalIgnoreCase)).Sum(i => i.PerRoll) ?? 0))
+            .Where(r => r.Odds > 0)
+            .OrderByDescending(r => r.Odds * r.Source.SlotChance);
+
+        foreach (var (s, odds) in rows)
+            Console.WriteLine($"{odds,9:P3}/roll  slot {s.SlotChance,6:P1}  {(s.RespawnSeconds is { } r ? $"{r / 60}min" : "-"),6}  {s.Kind,-4} {s.Preset} / {s.Group} / {s.Container}  [{s.Table}]"
+                + (s.Kind == "slot" ? $"  {digest.PlacesOf(s.Preset).Count} places" : ""));
+
+        var placed = digest.PlacesFor(lootClass);
+        Console.WriteLine($"\n{placed.Count} places, {placed.Count(p => p.Name is not null)} on the star map:");
+        foreach (var p in placed.Take(40))
+            Console.WriteLine($"  {p.Best.PerRoll * p.Best.Source.SlotChance,9:P3}  {p.Name ?? "(unmarked)",-40} {p.Body,-14} {p.Spots,3} sets  {p.Best.Source.Preset} / {p.Best.Source.Container}  [{p.Id}]");
+
+        var flown = digest.ShipsFor(lootClass);
+        Console.WriteLine($"\n{flown.Count} NPC ships fly with it fitted:");
+        foreach (var s in flown)
+            Console.WriteLine($"  x{s.Count}  {s.Ship,-50} {GameShipLoot.Crew(s.Ship)}");
+
+        var worn = digest.NpcsFor(lootClass);
+        Console.WriteLine($"\n{worn.Count} NPC classes wear or carry it (share if outfits are picked evenly):");
+        foreach (var n in worn.Take(40))
+            Console.WriteLine($"  {n.Share,7:P1}  {LootLabels.Npc(n.Npc),-50} {n.Npc}");
+        return 0;
+    }
+
+    Console.WriteLine($"{tables.Count} loot tables, {reachable.Count} distinct items reachable");
+    Console.WriteLine($"{sources.Count} sources: {sources.Count(s => s.Kind == "slot")} container slots in "
+        + $"{sources.Where(s => s.Kind == "slot").Select(s => s.Preset).Distinct().Count()} presets, "
+        + $"{sources.Count(s => s.Kind == "body")} NPC and corpse classes; {rolls.Count} distinct table-and-constraint rolls");
+    foreach (var t in tables)
+        Console.WriteLine($"  {t.Name,-50} {t.Items.Select(i => i.ItemClass).Distinct().Count(),5} items"
+            + (t.Unfilled.Count > 0 ? $"  mission-only or empty: {string.Join("; ", t.Unfilled)}" : ""));
+
+    // Checked against something the resolver never read: every class these
+    // logs listed out of a Container-scope inventory. That is crates, bodies
+    // and the pilot's own packs mixed together, so a miss is a question to
+    // look at rather than an error.
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    // And the places, against where the pilot had last set course before
+    // opening a container: the logs never say where a crate stood, but a
+    // quantum destination within the last two hours is where he went.
+    var visits = new HashSet<(string File, string Item, string Destination)>();
+    var seenAnywhere = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        (DateTimeOffset At, string Id)? lastCourse = null;
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser()))
+        {
+            switch (ev)
+            {
+                case QuantumRouteEvent route: lastCourse = (route.Timestamp, route.Destination); break;
+                case QuantumTargetEvent target: lastCourse = (target.Timestamp, target.Destination); break;
+                case InventoryItemEvent { ScopeType: "Container" } item:
+                    seen.Add(item.ItemClass);
+                    seenAnywhere.Add(item.ItemClass);
+                    if (lastCourse is { } c && item.Timestamp - c.At < TimeSpan.FromHours(2))
+                        visits.Add((file, item.ItemClass, c.Id));
+                    break;
+                case InventoryItemEvent other:
+                    seenAnywhere.Add(other.ItemClass);
+                    break;
+            }
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"Seen in a container in these logs: {seen.Count} classes, {seen.Count(reachable.Contains)} reachable from a table");
+    foreach (var miss in seen.Where(c => !reachable.Contains(c)).Order(StringComparer.Ordinal))
+        Console.WriteLine($"  in no table: {miss}");
+
+    var slotPresets = sources.Where(s => s.Kind == "slot").Select(s => s.Preset).Distinct().ToList();
+    var placeCount = digest.Places.Values.SelectMany(v => v).Select(p => (p.Name, p.Body)).Distinct().ToList();
+    Console.WriteLine();
+    Console.WriteLine($"Map files read in {placesWatch.Elapsed.TotalSeconds:F1}s (with the table read): {slotPresets.Count(digest.Places.ContainsKey)} of {slotPresets.Count} slot presets placed, "
+        + $"in {placeCount.Count(p => p.Name is not null)} named places and unmarked spots on {placeCount.Where(p => p.Name is null).Select(p => p.Body).Distinct().Count()} bodies");
+    Console.WriteLine($"  items with a named place: {reachable.Count(i => digest.PlacesFor(i).Any(p => p.Name is not null))} of {reachable.Count}; "
+        + $"of the logged classes: {seen.Count(i => digest.PlacesFor(i).Any(p => p.Name is not null))} of {seen.Count}");
+    foreach (var p in slotPresets.Where(p => !digest.Places.ContainsKey(p)).Order(StringComparer.Ordinal))
+        Console.WriteLine($"  set down in no map file: {p}");
+
+    // A destination is the place itself, or somewhere on its body: an id
+    // carries its body as a prefix - Stanton1_UGF_HDRSO-Olliff is on Stanton1 -
+    // except the orbital markers, which spell it OOC_Stanton_2b_Daymar.
+    static string BodyOf(string id) =>
+        Regex.Match(id, @"^OOC_([A-Za-z]+)_(\d+[a-z]?)_", RegexOptions.IgnoreCase) is { Success: true } m
+            ? m.Groups[1].Value + m.Groups[2].Value
+            : id.Split('_')[0];
+    int atPlace = 0, onBody = 0, elsewhere = 0;
+    var misses = new List<string>();
+    foreach (var (_, item, destination) in visits.Distinct())
+    {
+        var places = digest.PlacesFor(item);
+        if (places.Count == 0) continue;
+        if (places.Any(p => string.Equals(p.Id, destination, StringComparison.OrdinalIgnoreCase))) atPlace++;
+        else if (places.Any(p => p.Id is { } id && BodyOf(id).Equals(BodyOf(destination), StringComparison.OrdinalIgnoreCase))) onBody++;
+        else { elsewhere++; misses.Add($"{item} after a course to {destination}"); }
+    }
+    Console.WriteLine($"Container pickups with a course set in the two hours before, for items with places: "
+        + $"{atPlace + onBody + elsewhere}; at a listed place {atPlace}, on a listed place's body {onBody}, neither {elsewhere}");
+    foreach (var m in misses) Console.WriteLine($"  neither: {m}");
+
+    foreach (var g in visits.GroupBy(v => v.Destination).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4} pickups after a course to {g.Key}: "
+            + $"{g.Count(v => digest.PlacesFor(v.Item).Any(p => string.Equals(p.Id, g.Key, StringComparison.OrdinalIgnoreCase)))} listed there");
+    // Ship parts: the loadouts against what the logs listed in any inventory.
+    var npcShips = digest.Ships.Values.SelectMany(v => v).Select(s => s.Ship).Distinct().Count();
+    Console.WriteLine($"\nNPC ships: {npcShips} carry {digest.Ships.Count} kinds of part worth taking "
+        + $"({digest.Ships.Values.Sum(v => v.Count)} ship-and-part pairs)");
+    foreach (var g in digest.Ships.GroupBy(kv => itemFacts.TryGetValue(kv.Key, out var f) ? f.Type : "?").OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),5} {g.Key}");
+    var loggedParts = seenAnywhere.Where(c => itemFacts.TryGetValue(c, out var f) && GameShipLoot.Kept.Contains(f.Type)).ToList();
+    Console.WriteLine($"Ship parts these logs listed in any inventory: {loggedParts.Count}; fitted to some NPC ship: {loggedParts.Count(c => digest.ShipsFor(c).Count > 0)}");
+    foreach (var c in loggedParts.Where(c => digest.ShipsFor(c).Count == 0).Order(StringComparer.OrdinalIgnoreCase))
+        Console.WriteLine($"  on no NPC ship: {c} ({itemFacts[c].Type})");
+
+    // NPC outfits, against the same container listings: a body is a
+    // container in the logs, so what NPCs wear should turn up there - and
+    // explain some of what the tables only give at a thousandth of a percent.
+    var npcKinds = digest.Npcs.Values.SelectMany(v => v).Select(n => n.Npc).Distinct().ToList();
+    Console.WriteLine($"\nNPC outfits: {digest.Npcs.Count} kinds of item worn or carried by {npcKinds.Count} NPC classes "
+        + $"({npcKinds.Select(LootLabels.Npc).Distinct().Count()} kinds once gender and number are dropped); {digest.Npcs.Values.Sum(v => v.Count)} pairs");
+    var wornSeen = seen.Where(c => digest.NpcsFor(c).Count > 0).ToList();
+    Console.WriteLine($"Seen in a container in these logs: {seen.Count}; worn by some NPC {wornSeen.Count}; "
+        + $"from a table {seen.Count(reachable.Contains)}; from either {seen.Count(c => reachable.Contains(c) || digest.NpcsFor(c).Count > 0)}");
+    foreach (var c in seen.Where(c => !reachable.Contains(c) && digest.NpcsFor(c).Count == 0).Order(StringComparer.Ordinal))
+        Console.WriteLine($"  from neither: {c}");
+    var armourSeen = seen.Where(c => itemFacts.TryGetValue(c, out var f) && f.Type.StartsWith("Char_Armor", StringComparison.Ordinal)).ToList();
+    Console.WriteLine($"Armour among them: {armourSeen.Count}; worn by some NPC {armourSeen.Count(c => digest.NpcsFor(c).Count > 0)}; "
+        + $"best table roll under 0.1% for {armourSeen.Count(c => digest.For(c).Select(h => h.PerRoll).DefaultIfEmpty(0).Max() < 0.001)}");
+    return 0;
+}
+
 if (args.Any(a => a.StartsWith("--armoury", StringComparison.OrdinalIgnoreCase)))
 {
     var all = args.Contains("--armoury=all", StringComparer.OrdinalIgnoreCase);

@@ -135,7 +135,8 @@ public sealed record PickupRecord(
 /// <param name="UnitPrice">Median of what the game quoted per unit.</param>
 /// <param name="Times">How many confirmed purchases stand behind it.</param>
 /// <param name="Last">When it was last bought.</param>
-public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset Last);
+/// <param name="Shop">The shop id of the latest purchase, for saying where it was bought.</param>
+public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset Last, string? Shop = null);
 
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
@@ -372,7 +373,8 @@ public sealed record LedgerEntry(
     decimal Amount,
     int Quantity,
     bool Confirmed,
-    decimal Running);
+    decimal Running,
+    string? Item = null);
 
 public sealed record FleetPoint(DateTimeOffset At, int Vehicles);
 
@@ -1093,24 +1095,6 @@ public sealed class LogLibrary : IDisposable
     }
 
     /// <summary>
-    /// Every item class this install has been charged for, with what the game
-    /// quoted per unit.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// First-party and exact: the price comes off the kiosk line the game wrote,
-    /// so unlike a crowd-sourced table it cannot be wrong about whether the thing
-    /// is sold at all. Its weakness is the opposite one - it only ever covers
-    /// what this player personally bought, which is a floor and nothing more.
-    /// </para>
-    /// <para>
-    /// Per unit, not per line. The logged price is the whole transaction, so a
-    /// stack of 41 MedPens reads as 10,865 rather than 265, and taking it as a
-    /// unit price puts an item forty times over its worth. The median across
-    /// purchases absorbs a one-off discount without being dragged by it.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// What has been bought and when, by the name a person would write down.
     /// </summary>
     /// <remarks>
@@ -1159,6 +1143,24 @@ public sealed class LogLibrary : IDisposable
         return latest;
     }
 
+    /// <summary>
+    /// Every item class this install has been charged for, with what the game
+    /// quoted per unit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// First-party and exact: the price comes off the kiosk line the game wrote,
+    /// so unlike a crowd-sourced table it cannot be wrong about whether the thing
+    /// is sold at all. Its weakness is the opposite one - it only ever covers
+    /// what this player personally bought, which is a floor and nothing more.
+    /// </para>
+    /// <para>
+    /// Per unit, not per line. The logged price is the whole transaction, so a
+    /// stack of 41 MedPens reads as 10,865 rather than 265, and taking it as a
+    /// unit price puts an item forty times over its worth. The median across
+    /// purchases absorbs a one-off discount without being dragged by it.
+    /// </para>
+    /// </remarks>
     public IReadOnlyDictionary<string, ReceiptPrice> Receipts()
     {
         var byClass = new Dictionary<string, List<PurchaseRecord>>(StringComparer.OrdinalIgnoreCase);
@@ -1190,7 +1192,8 @@ public sealed class LogLibrary : IDisposable
             result[item] = new ReceiptPrice(
                 units.Length % 2 == 1 ? units[middle] : (units[middle - 1] + units[middle]) / 2,
                 records.Count,
-                records.Max(r => r.At));
+                records.Max(r => r.At),
+                records.MaxBy(r => r.At)!.Shop);
         }
 
         return result;
@@ -1214,7 +1217,10 @@ public sealed class LogLibrary : IDisposable
             sessions = [.. sessions.Where(s => s.StartedAt >= cutoff)];
         }
 
-        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, string Shop, decimal Amount, int Quantity, bool Confirmed)>();
+        // Item is the engine class behind an "Item bought" row, so the page can
+        // open the item's Reference card from the ledger as it does from every
+        // other table; What stays the display name the row reads as.
+        var movements = new List<(DateTimeOffset At, string Kind, string What, string Where, string Shop, decimal Amount, int Quantity, bool Confirmed, string? Item)>();
 
         foreach (var session in sessions)
         {
@@ -1222,7 +1228,7 @@ public sealed class LogLibrary : IDisposable
             {
                 movements.Add((purchase.At, "Item bought", ItemName(purchase.Item),
                     PlaceAt(session, purchase.At), ShopLabel(purchase.Shop),
-                    -purchase.Total, purchase.Quantity, purchase.Confirmed));
+                    -purchase.Total, purchase.Quantity, purchase.Confirmed, purchase.Item));
             }
 
             foreach (var payout in session.Payouts)
@@ -1240,7 +1246,7 @@ public sealed class LogLibrary : IDisposable
                     payout.Amount, 0,
 
                     // The game stated the sum outright; nothing needs confirming.
-                    true));
+                    true, null));
             }
 
             foreach (var trade in session.Trades)
@@ -1260,7 +1266,7 @@ public sealed class LogLibrary : IDisposable
                     trade.Quantity,
 
                     // Commodity trades carry no server confirmation.
-                    false));
+                    false, null));
             }
         }
 
@@ -1274,7 +1280,7 @@ public sealed class LogLibrary : IDisposable
         {
             running += m.Amount;
             entries.Add(new LedgerEntry(
-                m.At, m.Kind, m.What, m.Where, m.Shop, m.Amount, m.Quantity, m.Confirmed, running));
+                m.At, m.Kind, m.What, m.Where, m.Shop, m.Amount, m.Quantity, m.Confirmed, running, m.Item));
         }
 
         entries.Reverse();
@@ -2103,6 +2109,43 @@ public sealed class LogLibrary : IDisposable
                 .Where(r => r.At >= cutoff)
                 .OrderByDescending(r => r.At)
         ];
+    }
+
+    /// <summary>
+    /// When each item was seen in the player's inventories, by the name a
+    /// person writes and by its class, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// One sighting per item per session: the first time that session's
+    /// inventory listings showed it. It is what lets a checklist line say an
+    /// item turned up after it was written - looted, bought or given, which
+    /// the listing does not tell apart, and a stash that already held one
+    /// lists it again when browsed, so a line also learns whether the item
+    /// had been seen before it was written.
+    /// </remarks>
+    public IReadOnlyDictionary<string, IReadOnlyList<DateTimeOffset>> Sighted()
+    {
+        var byKey = new Dictionary<string, List<DateTimeOffset>>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string key, DateTimeOffset at)
+        {
+            if (!byKey.TryGetValue(key, out var list)) byKey[key] = list = [];
+            list.Add(at);
+        }
+
+        foreach (var session in Counted(WipeScope.Inventory))
+            foreach (var pickup in session.Pickups)
+            {
+                Add(pickup.ItemClass, pickup.At);
+                if (ItemName(pickup.ItemClass) is { Length: > 0 } name
+                    && !name.Equals(pickup.ItemClass, StringComparison.OrdinalIgnoreCase))
+                    Add(name, pickup.At);
+            }
+
+        return byKey.ToDictionary(
+            k => k.Key,
+            k => (IReadOnlyList<DateTimeOffset>)[.. k.Value.Order()],
+            StringComparer.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<PickupRecord> Pickups(int days = 0)

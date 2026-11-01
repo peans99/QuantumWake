@@ -20,7 +20,7 @@ namespace Quantumwake.Server;
 /// the whole application ship as a single executable rather than one binary
 /// launching another.
 /// </remarks>
-public static class ServerHost
+public static partial class ServerHost
 {
     /// <summary>
     /// Configures the server without starting it. Call <c>Run</c> to block, or
@@ -889,11 +889,11 @@ public static class ServerHost
                 entries.Add(new LogbookLine(
                     l.At,
                     l.Amount > 0 ? "sold" : "bought",
-                    what, l.Where, l.Shop, l.Amount));
+                    what, l.Where, l.Shop, l.Amount, l.Item));
             }
 
             foreach (var p in lib.Pickups(days ?? 0))
-                entries.Add(new LogbookLine(p.At, "loot", p.Item, p.Place, "first seen", null));
+                entries.Add(new LogbookLine(p.At, "loot", p.Item, p.Place, "first seen", null, p.ItemClass));
 
             return entries
                 .OrderByDescending(e => e.At)
@@ -1557,13 +1557,14 @@ public static class ServerHost
         // within the volume is not proof, and the answer says which.
         app.MapGet("/api/cargo/{className}", (string className, LogLibrary lib) =>
         {
-            var ship = lib.Community.GarageShip(className);
+            var ship = CargoHull(lib, className);
             if (ship is null) return Results.NotFound(new { message = "No such ship in the reference." });
             return Results.Ok(new
             {
                 ship.Class, ship.Name, ship.CargoScu,
-                gridsKnown = lib.Community.HasCargoGrids,
-                grids = ship.CargoGrids ?? [],
+                gridsKnown = ship.Source is not null,
+                gridsFrom = ship.Source,
+                grids = ship.Grids,
                 crates = Crates(lib),
                 cratesFromInstall = lib.GameCommodities.Crates.Count > 0,
             });
@@ -1571,17 +1572,18 @@ public static class ServerHost
 
         app.MapPost("/api/cargo/fit", (CargoFitRequest request, LogLibrary lib) =>
         {
-            if (!lib.Community.HasCargoGrids)
-                return Results.BadRequest(new { message = "The reference data predates cargo grids; refresh it in Settings." });
+            var hulls = CargoHulls(lib);
+            if (hulls.Count == 0)
+                return Results.BadRequest(new { message = "No hull's cargo grids are known yet: the install has not been read." });
 
             var load = new CargoLoad((request.Crates ?? new Dictionary<int, int>()).Where(c => c.Value > 0).ToDictionary(c => c.Key, c => c.Value));
             var crates = Crates(lib);
 
             // The asked ship in full, with every crate's place.
             object? ship = null;
-            if (request.Ship is { Length: > 0 } && lib.Community.GarageShip(request.Ship) is { } asked)
+            if (request.Ship is { Length: > 0 } && CargoHull(lib, request.Ship) is { } asked)
             {
-                var fit = CargoFit.Pack(asked.CargoGrids ?? [], load, crates);
+                var fit = CargoFit.Pack(asked.Grids, load, crates);
                 ship = new
                 {
                     asked.Class, asked.Name, asked.CargoScu,
@@ -1596,11 +1598,11 @@ public static class ServerHost
             var flown = lib.Stats().Ships
                 .Where(s => s.ClassName is not null)
                 .ToDictionary(s => s.ClassName!, s => s, StringComparer.OrdinalIgnoreCase);
-            var others = lib.Community.GarageShips.Values
-                .Where(s => s.CargoGrids is { Count: > 0 } && s.IsSpaceship)
+            var others = hulls
+                .Where(s => s.Grids.Count > 0 && s.Spaceship)
                 .Select(s =>
                 {
-                    var fit = CargoFit.Pack(s.CargoGrids!, load, crates);
+                    var fit = CargoFit.Pack(s.Grids, load, crates);
                     flown.TryGetValue(s.Class, out var mine);
                     return new
                     {
@@ -1927,12 +1929,19 @@ public static class ServerHost
         app.MapGet("/api/loot", (LogLibrary lib, UexData uex, int? days) =>
         {
             var receipts = lib.Receipts();
+            var loot = lib.GameCommodities.Loot;
 
             return lib.Pickups(days ?? 0).Select(p =>
             {
                 var uuid = lib.ItemUuid(p.ItemClass);
                 var receipt = receipts.GetValueOrDefault(p.ItemClass);
                 var listed = uex.TypicalItemPrice(uuid);
+
+                // What the game's own tables say beside what was found: the
+                // best single roll anywhere, and how many kinds of place and
+                // body can produce it at all.
+                var hits = loot.For(p.ItemClass);
+                var best = hits.Count > 0 ? hits.MaxBy(h => h.PerRoll) : null;
 
                 return new
                 {
@@ -1943,9 +1952,145 @@ public static class ServerHost
                     p.Category,
                     price = listed ?? receipt?.UnitPrice,
                     pricedFrom = listed is not null ? "market" : receipt is not null ? "receipt" : null,
-                    sold = uex.ItemMarket(uuid).Count > 0 || receipt is not null
+                    sold = uex.ItemMarket(uuid).Count > 0 || receipt is not null,
+                    bestRoll = best?.PerRoll,
+                    bestFrom = best is null ? null : LootSourceLabel(best.Source),
+                    lootSources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count()
                 };
             });
+        });
+
+        // Where an item can be found, from the game's loot tables - the
+        // loot-verse question answered from this install rather than a site.
+        // Every row is a kind of place or body and a per-roll estimate; how
+        // many rolls a container makes depends on its size and is not in the
+        // number, which the page says.
+        app.MapGet("/api/loot/where", (LogLibrary lib, UexData uex, string item) => LootWhere(lib, uex, item));
+
+        // Every item the tables can produce whose name or class holds the
+        // query, best roll first - the search box on the Loot page.
+        // A whole list at once - the Checklists page's "Where to get these".
+        // For each line, where it can be found, who carries it, where it is
+        // sold and whether it can be crafted; and the places that yield the
+        // most of the list, which is what loot-verse calls the basket.
+        app.MapPost("/api/loot/farm", (LogLibrary lib, UexData uex, FarmRequest body) =>
+        {
+            var loot = lib.GameCommodities.Loot;
+            var index = LootNameIndex(lib);
+            var receipts = lib.Receipts();
+
+            var names = (body.Names ?? [])
+                .Select(n => n?.Trim() ?? "")
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(60)
+                .ToList();
+
+            var found = names
+                .Select(n => (Written: n, Class: index.TryGetValue(n, out var c) ? c : null))
+                .ToList();
+
+            var resolved = found.Where(f => f.Class is not null).ToList();
+            var ranked = LootBasket.Rank(
+                [.. resolved.Select(f => (f.Class!, loot.PlacesFor(f.Class)))], take: int.MaxValue);
+            var basket = ranked.Take(10).ToList();
+
+            // One crate set placed at forty security posts makes forty equal
+            // places; the page says so rather than letting the first ten look best.
+            var tied = basket.Count == 0 ? 0 : ranked.Count(p =>
+                p.Items.Count == basket[0].Items.Count && Math.Abs(p.Score - basket[0].Score) < 1e-9);
+
+            var crafted = lib.GameCommodities.Blueprints
+                .Where(b => b.Kind == "creation")
+                .GroupBy(b => b.OutputClass, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            return new
+            {
+                uex = uex.IsEnabled,
+                tied,
+                items = resolved.Select(f =>
+                {
+                    var itemClass = f.Class!;
+                    var places = loot.PlacesFor(itemClass);
+                    var best = places.FirstOrDefault(p => p.Name is not null) ?? places.FirstOrDefault();
+                    var npc = loot.NpcsFor(itemClass)
+                        .GroupBy(n => LootLabels.Npc(n.Npc))
+                        .Select(g => new { label = g.Key, share = g.Max(n => n.Share) })
+                        .OrderByDescending(n => n.share)
+                        .FirstOrDefault();
+                    var recipe = crafted.GetValueOrDefault(itemClass);
+
+                    return new
+                    {
+                        written = f.Written,
+                        itemClass,
+                        name = lib.ItemName(itemClass),
+                        places = places.Count,
+                        best = best is null ? null : new
+                        {
+                            best.Name,
+                            best.Body,
+                            chance = best.Best.PerRoll * best.Best.Source.SlotChance,
+                        },
+                        npcs = loot.NpcsFor(itemClass).Select(n => LootLabels.Npc(n.Npc)).Distinct().Count(),
+                        npc,
+                        ships = loot.ShipsFor(itemClass).Count,
+                        buy = CheapestSeller(lib, uex, itemClass),
+                        paid = WhatYouPaid(lib, receipts, itemClass),
+                        craft = recipe is null ? null : new { recipe.CraftSeconds, recipe.Materials },
+                    };
+                }),
+                places = basket.Select(p => new
+                {
+                    p.Name,
+                    p.Body,
+                    p.Id,
+                    p.Spots,
+                    score = p.Score,
+                    items = p.Items.Select(i => new { itemClass = i.Item, name = lib.ItemName(i.Item), i.Chance }),
+                }),
+                unmatched = found.Where(f => f.Class is null).Select(f => f.Written),
+            };
+        });
+
+        app.MapGet("/api/loot/search", (LogLibrary lib, string q) =>
+        {
+            var loot = lib.GameCommodities.Loot;
+            var term = (q ?? "").Trim();
+            if (term.Length < 2) return Results.Ok(Array.Empty<object>());
+
+            // What the tables roll, and the parts NPC ships fly with: a power
+            // plant comes off a ship, never out of a crate.
+            var found = loot.Items
+                .Where(loot.CanRoll)
+                .Concat(loot.Ships.Keys)
+                .Concat(loot.Npcs.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c => (Class: c, Name: lib.ItemName(c)))
+                .Where(i => i.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || i.Class.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .Take(400)
+                .Select(i =>
+                {
+                    var hits = loot.For(i.Class);
+                    return new
+                    {
+                        itemClass = i.Class,
+                        name = i.Name,
+                        bestRoll = hits.Count > 0 ? hits.Max(h => h.PerRoll) : (double?)null,
+                        sources = hits.Select(h => (h.Source.Kind, h.Source.Preset)).Distinct().Count(),
+                        ships = loot.ShipsFor(i.Class).Count,
+                        npcs = loot.NpcsFor(i.Class).Select(n => LootLabels.Npc(n.Npc)).Distinct().Count()
+                    };
+                })
+                .OrderByDescending(i => i.bestRoll ?? -1)
+                .ThenByDescending(i => i.ships)
+                .ThenByDescending(i => i.npcs)
+                .Take(60)
+                .ToList();
+
+            return Results.Ok(found);
         });
         app.MapGet("/api/contracts", (LogLibrary lib, int? days) => lib.Contracts(days ?? 0));
 
@@ -2112,33 +2257,7 @@ public static class ServerHost
         // ---- reference catalogues: pure information display, no player ----
         // ---- data - what the community digest describes, priced by UEX ----
 
-        app.MapGet("/api/reference/ships", (LogLibrary lib, UexData uex, UexFeeds feeds) =>
-            lib.Community.Ships.Values
-                .GroupBy(s => s.Name)
-                .Select(g => g.First())
-                .Select(s => new
-                {
-                    rental = feeds.CheapestRental(s.Name),
-                    // Every shop and every rental desk, cheapest first, for
-                    // the row to show on hover: the cheapest is not always
-                    // the nearest.
-                    shops = uex.VehicleShops(s.Name),
-                    rentals = feeds.RentalDesks(s.Name),
-                    s.Name,
-                    s.Career,
-                    s.Role,
-                    s.Crew,
-                    s.IsSpaceship,
-                    s.ExpeditedCost,
-                    s.StandardClaimTime,
-                    s.CargoScu,
-                    s.ScmSpeed,
-                    s.MaxSpeed,
-                    s.ShieldHp,
-                    s.Health,
-                    price = uex.VehiclePrice(s.Name)
-                })
-                .OrderBy(s => s.Name));
+        MapReference(app);
 
         // Manufacturer codes to full names, for every page that shows a maker.
         app.MapGet("/api/manufacturers", (LogLibrary lib) => lib.Community.Manufacturers);
@@ -2173,12 +2292,14 @@ public static class ServerHost
                     return (object)new
                     {
                         b.Output,
+                        outputClass = b.OutputClass,
                         Type = facts?.Type,
                         Grade = facts?.Grade ?? 0,
                         b.Kind,
                         b.CraftSeconds,
                         b.Materials,
-                        @default = false,
+                        // The crafting settings' starting whitelist: nine on 4.10.2.
+                        @default = b.Default,
                         b.RewardPools,
                         shopPrice = uex.ItemPrice(lib.ItemUuid(b.OutputClass)),
                         owned = mine is not null,
@@ -2294,6 +2415,8 @@ public static class ServerHost
                 .Select(item =>
                 {
                     var stock = uex.ItemMarket(item.Uuid);
+                    var loot = lib.GameCommodities.Loot;
+                    var rolls = loot.For(item.ClassName);
                     var cheapest = stock.Count > 0 ? stock.MinBy(r => r.Buy) : null;
 
                     return new
@@ -2314,7 +2437,12 @@ public static class ServerHost
                         cheapestAt = cheapest?.Terminal,
                         terminals = stock.Count > 0
                             ? stock.OrderBy(r => r.Buy).Select(r => $"{r.Terminal} — {r.Buy:N0} aUEC")
-                            : null
+                            : null,
+                        // Whether the game's own files put it anywhere to be found:
+                        // the best single roll, and who wears or flies with it.
+                        bestRoll = rolls.Count > 0 ? rolls.Max(h => h.PerRoll) : (double?)null,
+                        npcs = loot.NpcsFor(item.ClassName).Count,
+                        ships = loot.ShipsFor(item.ClassName).Count
                     };
                 }));
 
@@ -2880,6 +3008,34 @@ public static class ServerHost
                 .Where(j => j.Source is { } s && s.StartsWith("wikelo:", StringComparison.Ordinal))
                 .ToDictionary(j => j.Source!["wikelo:".Length..], j => j, StringComparer.OrdinalIgnoreCase);
 
+            // What a class is, so the page can open the right window for it:
+            // a hull the ship card, an ore the commodity drawer, a gun the
+            // item card. The trade file mixes all three in one list and says
+            // nothing about which is which, so until this the page left every
+            // name as words rather than send one in three to the wrong window.
+            // Null for a class none of the catalogues knows.
+            var items = lib.Items().Select(i => i.ClassName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // The trade file writes an ore as its name ("Quantanium"), not as
+            // the lower-case resource id the logs carry, so both spellings of
+            // both catalogues are accepted. Checked on this install: 5 of 442
+            // things are ores, and none of them resolved by id alone.
+            // The value is the name the Market page lists it under, which is
+            // what opens the commodity drawer; the file's own spelling can
+            // differ ("Quantainium"). The dataset's name first, since the
+            // Market is built from it.
+            var commodities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (id, info) in lib.Community.All) { commodities.TryAdd(id, info.Name); commodities.TryAdd(info.Name, info.Name); }
+            foreach (var (id, name) in lib.GameCommodities.All) { commodities.TryAdd(id, name); commodities.TryAdd(name, name); }
+            string? KindOf(string cls) =>
+                lib.GameCommodities.Vehicles.ContainsKey(cls) || lib.Community.Ships.ContainsKey(cls) ? "ship"
+                : commodities.ContainsKey(cls) ? "commodity"
+                : items.Contains(cls) ? "item"
+                : null;
+            // A catalogue that knows only the id answers with the id; that is
+            // no name for the drawer, so the page keeps the trade's own words.
+            string? CommodityOf(string cls) =>
+                commodities.TryGetValue(cls, out var name) && !string.Equals(name, cls, StringComparison.OrdinalIgnoreCase) ? name : null;
+
             return Results.Ok(new
             {
                 available = catalogue.Trades.Count > 0,
@@ -2887,11 +3043,11 @@ public static class ServerHost
                 trades = catalogue.Trades.Select(t => new
                 {
                     t.Id, t.Title, t.Description, t.Group, t.Reputation, t.MinStanding, t.Retired,
-                    rewards = t.Rewards,
+                    rewards = t.Rewards.Select(r => new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class), commodity = CommodityOf(r.Class) }),
                     requirements = t.Requirements.Select(r =>
                     {
                         var where = HeldWhere(held, r.Name);
-                        return new { r.Class, r.Name, r.Count, r.Unit, have = where.Count > 0, where };
+                        return new { r.Class, r.Name, r.Count, r.Unit, kind = KindOf(r.Class), commodity = CommodityOf(r.Class), have = where.Count > 0, where };
                     }),
                     trackedJobId = tracked.TryGetValue(t.Id, out var job) && !job.Done ? job.Id : null,
                     trackedDone = tracked.TryGetValue(t.Id, out var done) && done.Done,
@@ -2972,11 +3128,12 @@ public static class ServerHost
             // Matched on the name the app itself put on the line, which means
             // going through the display name: purchases are logged by class.
             var bought = lib.Bought();
+            var sighted = lib.Sighted();
 
-            return checklists.All().Select(list => Draw(list, null, bought))
+            return checklists.All().Select(list => Draw(list, null, bought, sighted))
                 .Concat(Shared(imports, imported)
                     .SelectMany(batch => (batch.Authored?.Checklists ?? [])
-                        .Select(list => Draw(list, batch, bought))));
+                        .Select(list => Draw(list, batch, bought, sighted))));
         });
 
         app.MapPost("/api/checklists", (ChecklistStore checklists, ChecklistRequest body) =>
@@ -5063,7 +5220,8 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
     static object Draw(
         Checklist list,
         ImportBatch? from,
-        IReadOnlyDictionary<string, DateTimeOffset>? bought = null) => new
+        IReadOnlyDictionary<string, DateTimeOffset>? bought = null,
+        IReadOnlyDictionary<string, IReadOnlyList<DateTimeOffset>>? sighted = null) => new
     {
         Id = from is null ? list.Id : SharedId(from, list.Id),
         list.Title,
@@ -5082,6 +5240,11 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             // than written back: the list is the pilot's, and a name match is an
             // observation about it, not permission to edit it.
             Bought = BoughtSince(i, list.CreatedAt, bought),
+            // In the inventory listings since the line was written, and
+            // whether it had been listed before - in which case it may be one
+            // already owned, which the page says rather than claiming a find.
+            Found = SeenSince(i, list.CreatedAt, sighted) is { } seen ? seen.At : (DateTimeOffset?)null,
+            FoundBefore = SeenSince(i, list.CreatedAt, sighted)?.Before ?? false,
         }),
         imported = from is null ? null : Marker(from),
     };
@@ -5111,6 +5274,29 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
             .Where(at => at >= since)
             .OrderByDescending(at => at)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// The latest time a line's item was listed in an inventory since the
+    /// line was written, and whether it had been listed before that.
+    /// </summary>
+    static (DateTimeOffset At, bool Before)? SeenSince(
+        ChecklistItem item,
+        DateTimeOffset listCreated,
+        IReadOnlyDictionary<string, IReadOnlyList<DateTimeOffset>>? sighted)
+    {
+        if (sighted is null || sighted.Count == 0) return null;
+
+        var since = item.AddedAt ?? listCreated;
+        var times = item.Attachments
+            .Where(a => a.Kind == "item")
+            .Select(a => a.Target ?? a.Label)
+            .Where(name => name is { Length: > 0 })
+            .SelectMany(name => sighted.TryGetValue(name!, out var at) ? at : [])
+            .ToList();
+
+        var after = times.Where(t => t >= since).ToList();
+        return after.Count == 0 ? null : (after.Max(), times.Any(t => t < since));
     }
 
     /// <summary>A flight plan as a page sees it.</summary>
@@ -5801,6 +5987,193 @@ static ItemInfo? MatchItem(LogLibrary lib, string written)
         ];
     }
 
+    /// <summary>
+    /// Where one item comes from - crates, places, NPC ships, NPCs on foot -
+    /// and where to buy it instead: the Loot page's panel and the Reference
+    /// modal's, one answer for both.
+    /// </summary>
+    static object LootWhere(LogLibrary lib, UexData uex, string item)
+    {
+        var loot = lib.GameCommodities.Loot;
+        var hits = loot.For(item);
+
+        return new
+        {
+            item,
+            name = lib.ItemName(item),
+            tables = loot.Rolls.Count,
+            loot.PlacesRead,
+            // Where to buy it instead: the cheapest counter in the UEX
+            // prices when that feed is on, and what this install has
+            // itself been charged - first-party, but only for what was bought.
+            uex = uex.IsEnabled,
+            buy = CheapestSeller(lib, uex, item),
+            paid = WhatYouPaid(lib, lib.Receipts(), item),
+            // Each place once, with the best container it holds for the
+            // item: the answer to "where do I go", ahead of the kinds.
+            places = loot.PlacesFor(item).Select(p => new
+            {
+                p.Name,
+                p.Body,
+                p.Id,
+                p.Spots,
+                p.Presets,
+                chance = p.Best.PerRoll * p.Best.Source.SlotChance,
+                perRoll = p.Best.PerRoll,
+                label = LootSourceLabel(p.Best.Source),
+                containerName = lib.ItemName(p.Best.Source.Container),
+                p.Best.Source.RespawnSeconds
+            }),
+            hits = hits.Select(h => new
+            {
+                h.Source.Kind,
+                h.Source.Preset,
+                label = LootSourceLabel(h.Source),
+                group = h.Source.Group.Length > 0 ? h.Source.Group : null,
+                h.Source.Container,
+                containerName = lib.ItemName(h.Source.Container),
+                h.Source.SlotChance,
+                h.Source.RespawnSeconds,
+                h.Source.Table,
+                h.Source.ChanceToGenerate,
+                h.PerRoll,
+                h.Via,
+                places = h.Source.Kind == "slot" ? loot.PlacesOf(h.Source.Preset).Count : (int?)null
+            }),
+            // Every NPC ship that flies with it fitted, by who flies it.
+            ships = loot.ShipsFor(item).Select(s => new
+            {
+                s.Ship,
+                name = lib.GameCommodities.Vehicles.TryGetValue(s.Ship, out var v) && v.Name is { Length: > 0 } vn ? vn : lib.ItemName(s.Ship),
+                crew = GameShipLoot.Crew(s.Ship),
+                s.Count
+            }),
+            // NPCs on foot, one row per kind: the male and female classes
+            // of one guard carry the same kit and read as one.
+            npcs = loot.NpcsFor(item)
+                .GroupBy(n => LootLabels.Npc(n.Npc))
+                .Select(g => new { label = g.Key, share = g.Max(n => n.Share), classes = g.Select(n => n.Npc).ToList() })
+                .OrderByDescending(n => n.share)
+                .ThenBy(n => n.label, StringComparer.Ordinal)
+        };
+    }
+
+    /// <summary>The cheapest counter the UEX prices list for an item, or null.</summary>
+    static object? CheapestSeller(LogLibrary lib, UexData uex, string itemClass)
+    {
+        var uuid = lib.ItemUuid(itemClass);
+        var cheapest = uuid is null ? null : uex.ItemMarket(uuid).Where(r => r.Buy > 0).MinBy(r => r.Buy);
+
+        return cheapest is null ? null : new
+        {
+            place = lib.Terminals.Resolve(cheapest.Terminal)?.Name ?? cheapest.Terminal,
+            price = cheapest.Buy,
+        };
+    }
+
+    /// <summary>
+    /// What this install has been charged for an item, per unit, and where it
+    /// was last bought - or null when it never has been.
+    /// </summary>
+    /// <remarks>
+    /// The one price that needs no feed. The game files carry none that holds:
+    /// the encrypted shop tables are a 2018 economy (docs/untapped-signals.md,
+    /// section 9), so a receipt is the offline answer, for what was bought.
+    /// </remarks>
+    static object? WhatYouPaid(LogLibrary lib, IReadOnlyDictionary<string, ReceiptPrice> receipts, string itemClass) =>
+        receipts.TryGetValue(itemClass, out var r)
+            ? new { price = r.UnitPrice, r.Times, r.Last, shop = r.Shop is { Length: > 0 } shop ? lib.ShopLabel(shop) : null }
+            : null;
+
+    /// <summary>
+    /// One hull for Cargo fit, from the install first and the community dump
+    /// only where the install places no grid.
+    /// </summary>
+    /// <remarks>
+    /// The install answers 145 of the 149 hulls the dump credits with cargo,
+    /// to the SCU, from each hull's default loadout (docs/cargo-fit.md). It is
+    /// this patch's and needs no download. The dump stays as the fallback for
+    /// the four it does not place: the Hammerhead, the Nomad, the 135c, and the
+    /// rest of the 890 Jump's hold.
+    /// </remarks>
+    static CargoHullView? CargoHull(LogLibrary lib, string className)
+    {
+        var name = lib.GameCommodities.Vehicles.TryGetValue(className, out var vehicle) && vehicle.Name is { Length: > 0 } vn ? vn : null;
+        var community = lib.Community.GarageShip(className);
+
+        if (lib.GameCommodities.CargoHulls.TryGetValue(className, out var hull) && hull.Grids.Count > 0
+            && !(community?.CargoGrids is { Count: > 0 } dump && dump.Sum(g => g.Scu) > hull.Scu))
+            return new CargoHullView(className, name ?? community?.Name ?? className, hull.Scu, hull.Grids, hull.Spaceship, "install");
+
+        if (community is null)
+            return name is null ? null : new CargoHullView(className, name, 0, [], true, null);
+
+        var grids = community.CargoGrids ?? [];
+        return new CargoHullView(community.Class, community.Name, community.CargoScu, grids, community.IsSpaceship,
+            grids.Count > 0 ? "community" : lib.Community.HasCargoGrids ? "community" : null);
+    }
+
+    /// <summary>
+    /// Every flyable hull with grids, install and dump together, one per name:
+    /// NPC variants, Teach copies and collector editions are the same hold.
+    /// </summary>
+    static List<CargoHullView> CargoHulls(LogLibrary lib)
+    {
+        var classes = lib.GameCommodities.CargoHulls.Keys
+            .Where(c => !GameShipLoot.IsNpcShip(c) && !NotAHull().IsMatch(c))
+            .Concat(lib.Community.GarageShips.Values.Where(s => s.CargoGrids is { Count: > 0 }).Select(s => s.Class))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return [.. classes
+            .Select(c => CargoHull(lib, c))
+            .OfType<CargoHullView>()
+            .Where(h => h.Grids.Count > 0)
+            .GroupBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderBy(h => h.Class.Length).First())];
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"_Teach|_Collector|_Boarded|_TEMP|_Template|_Unmanned|_Test|_EA_|_Dummy", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex NotAHull();
+
+    private static readonly object LootNamesLock = new();
+    private static (GameLootData For, Dictionary<string, string> Index)? _lootNames;
+
+    /// <summary>
+    /// Every item the loot model or a recipe knows, by its display name and by its class,
+    /// to the class - so a list line written as "Gallant Rifle" finds
+    /// <c>klwe_rifle_energy_01</c>.
+    /// </summary>
+    /// <remarks>
+    /// Built once per game-data load: naming every item the tables, ships and
+    /// outfits mention is several thousand lookups, and a list is asked about
+    /// every time the panel opens. Where two classes share a name - an armour
+    /// colour the game left unnamed - the first one kept is the one with a
+    /// crate behind it.
+    /// </remarks>
+    static Dictionary<string, string> LootNameIndex(LogLibrary lib)
+    {
+        var loot = lib.GameCommodities.Loot;
+        lock (LootNamesLock)
+        {
+            if (_lootNames is { } cached && ReferenceEquals(cached.For, loot)) return cached.Index;
+
+            var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var itemClass in loot.Items.Where(loot.CanRoll).Concat(loot.Npcs.Keys).Concat(loot.Ships.Keys)
+                .Concat(lib.GameCommodities.Blueprints.Select(b => b.OutputClass)))
+            {
+                index.TryAdd(itemClass, itemClass);
+                index.TryAdd(lib.ItemName(itemClass), itemClass);
+            }
+
+            _lootNames = (loot, index);
+            return index;
+        }
+    }
+
+    /// <summary>A kind of place for a crate slot, who it was for a body.</summary>
+    static string LootSourceLabel(LootSource source) =>
+        source.Kind == "body" ? LootLabels.Body(source.Preset) : LootLabels.Preset(source.Preset);
+
     /// <summary>Maps service evidence onto the app's own atlas identifiers.</summary>
     static IReadOnlyList<MapServicePlace> BuildMapServices(LogLibrary lib, UexData uex, UexFeeds feeds)
     {
@@ -6119,6 +6492,13 @@ public sealed record ImportRequest(string? Document, string? SourceName = null);
 /// <summary>Body of POST /api/checklists.</summary>
 public sealed record ChecklistRequest(string? Title);
 
+/// <summary>A hull as Cargo fit packs it, wherever its grids were read.</summary>
+/// <param name="Source">"install", "community", or null when no grid is known for it.</param>
+public sealed record CargoHullView(string Class, string Name, double CargoScu, IReadOnlyList<CargoGrid> Grids, bool Spaceship, string? Source);
+
+/// <summary>Body of POST /api/loot/farm: the names written on a list.</summary>
+public sealed record FarmRequest(List<string?>? Names);
+
 /// <summary>Body of POST /api/checklists/{id}/items.</summary>
 public sealed record ChecklistItemRequest(
     string? Text,
@@ -6127,8 +6507,13 @@ public sealed record ChecklistItemRequest(
     List<ChecklistAttachment>? Attachments);
 
 /// <summary>One line of the merged logbook timeline.</summary>
+/// <param name="Subject">
+/// The engine class the line is about, when it is about one item - a purchase
+/// or a first sighting - so the page can open its Reference card. Null for a
+/// session, a cargo trade or a contract, which have no card to open.
+/// </param>
 public sealed record LogbookLine(
-    DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount);
+    DateTimeOffset At, string Kind, string What, string Place, string Detail, decimal? Amount, string? Subject = null);
 
 /// <summary>What a mining-run form posts.</summary>
 public sealed record MiningRunEntry(

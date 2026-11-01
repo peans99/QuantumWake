@@ -26,6 +26,47 @@ const isOverlayGlance = isOverlay && params.has('glance');
  */
 const isSnapshot = params.has('snapshot');
 
+/* The mark is repeated in the menu and its workspace title.  A small visual
+   index makes a long cockpit menu scannable without turning it into a set of
+   branded game-style icons. */
+const PAGE_GLYPHS = Object.freeze({
+  now: '◉', map: '◎', itinerary: '◇', log: '▤',
+  jobs: '◆', routes: '↝', contracts: '◈', reputation: '▲', checklists: '☑', blueprints: '▧', wikelo: '✦', events: '✧',
+  logbook: '≡', sessions: '◷', servers: '⌘', places: '⌖', points: '✣', crew: '◌', casualties: '╳',
+  spending: '¤', ledger: '▥', commodities: '▰', market: '◫',
+  ships: '◁', components: '⊛', parts: '⊞', mining: '⬡', crafting: '⌬',
+  fleet: '◍', hangar: '⌂', loadout: '⊠', stash: '▣', loot: '✪', garage: '⌁', armoury: '✛',
+  settings: '✥', overlay: '◱', controls: '⊹', labels: '▦', imports: '↥', about: 'ⓘ',
+  // Reached from another page rather than the menu, but titled like the rest.
+  commodity: '◩', share: '⇱', help: '◔',
+});
+
+/* Pages whose title the app rewrites wholesale keep their own mark: Mining
+   names the pane it is on and draws that pane's icon beside it, and a glyph
+   prepended here was wiped by the first rewrite. */
+const OWN_TITLE_MARK = new Set(['mining']);
+
+function decorateNavigationGlyphs() {
+  for (const button of $$('#tabs button[data-view]')) {
+    const glyph = PAGE_GLYPHS[button.dataset.view];
+    if (glyph) button.dataset.glyph = glyph;
+  }
+
+  for (const [view, glyph] of Object.entries(PAGE_GLYPHS)) {
+    if (OWN_TITLE_MARK.has(view)) continue;
+    const panel = $(`#view-${view}`);
+    // Now is a live dashboard rather than a titled document, so its current
+    // status label carries the same mark without adding a redundant heading.
+    const title = panel?.querySelector('h2')
+      || (view === 'now' ? panel?.querySelector('.now-status-card .card-label') : null);
+    if (!title || title.querySelector('.page-glyph')) continue;
+    const mark = el('span', 'page-glyph', glyph);
+    mark.setAttribute('aria-hidden', 'true');
+    title.classList.add(view === 'now' ? 'page-glyph-label' : 'page-glyph-title');
+    title.prepend(mark);
+  }
+}
+
 const KIND_COLOURS = {
   City: '#7fe4ff',
   RestStop: '#4fd48a',
@@ -76,9 +117,11 @@ function duration(seconds) {
   return `${h}h ${pad(m)}m`;
 }
 
-function clock(fromIso) {
+/** From a start to now, or to an end when the thing has ended. */
+function clock(fromIso, toIso = null) {
   if (!fromIso) return '—';
-  const secs = Math.max(0, (Date.now() - new Date(fromIso).getTime()) / 1000);
+  const to = toIso ? new Date(toIso).getTime() : Date.now();
+  const secs = Math.max(0, (to - new Date(fromIso).getTime()) / 1000);
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = Math.floor(secs % 60);
@@ -159,6 +202,11 @@ const DATA_SOURCES = {
     label: 'COMMUNITY DATA',
     name: 'optional community data',
     detail: 'The optional community dataset you chose to download; it is not a live game feed.',
+  },
+  uex: {
+    label: 'UEX PRICES',
+    name: 'UEX price reports',
+    detail: 'Prices other pilots report to UEX, fetched only when you turn that feed on in Settings.',
   },
 };
 
@@ -335,6 +383,17 @@ let shownView = 'now';
 /** The last answer from /api/activity, so a tab change can redraw without waiting for the next poll. */
 let lastActivity = null;
 
+/* A change of workspace should feel like moving through one instrument panel,
+ * not like a route transition. The sweep is explicitly restarted only here so
+ * background refreshes never turn the dashboard into a looping animation. */
+function playSectorScan() {
+  const scan = $('#sector-scan');
+  if (!scan || isOverlay || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  scan.classList.remove('running');
+  void scan.offsetWidth;
+  scan.classList.add('running');
+}
+
 function showView(name) {
   // Assets merged into Fleet; old #assets links and habits still land somewhere.
   if (name === 'assets') name = 'fleet';
@@ -363,6 +422,8 @@ function showView(name) {
   // The page notice is about this page, so it is redrawn with it rather than
   // on the next poll: Controls should not spend a second saying Ledger is waiting.
   shownView = name;
+  document.body.dataset.view = name;
+  playSectorScan();
   if (lastActivity) paintPageWait(activityJobs(lastActivity));
 
   // A map drawer is useful beside the map, but it is not the cross-page
@@ -1170,10 +1231,59 @@ function renderNowFocus(state, briefing = pilotBriefing) {
   open.onclick = () => { jobsLandOn = focus.anchor || null; showView(focus.view); };
 }
 
+/* The shared flight line is deliberately a summary, not a second copy of the
+ * Now card. It keeps orientation while the pilot works in a deep table, and
+ * every value comes from the same live state rather than a second request. */
+function renderFlightTelemetry(state) {
+  const ribbon = $('#flight-telemetry');
+  const system = $('#telemetry-system');
+  const location = $('#telemetry-location');
+  const ship = $('#telemetry-ship');
+  const link = $('#telemetry-link');
+  // The overlay and focused WebTest documents intentionally omit this shared
+  // chrome; leave their smaller DOMs alone instead of requiring every view to
+  // carry invisible telemetry fields.
+  if (!ribbon || !system || !location || !ship || !link) return;
+
+  system.textContent = state.locationSystem || (state.inGame ? tx('Unknown system') : tx('In menus'));
+  location.textContent = state.travelling
+    ? (state.travellingTo || tx('In quantum'))
+    : (state.location || tx('No current fix'));
+  ship.textContent = state.ship || '—';
+  // Following a log is not the same as the game running: the log outlives it.
+  const closed = gameClosed(state);
+  link.textContent = closed ? tx('Game closed') : state.connected ? tx('Live') : tx('Standing by');
+  ribbon.dataset.link = state.connected && !closed ? 'live' : 'idle';
+  ribbon.dataset.travel = state.travelling ? 'quantum' : 'local';
+  applyFlightAtmosphere(state);
+}
+
+/* The ambient colour and hull outline follow facts the dashboard already has.
+ * The vocabulary stays intentionally broad: a rare hull is still a ship, not
+ * a missing silhouette, and systems outside the known set keep the cyan base. */
+function applyFlightAtmosphere(state) {
+  const system = (state.locationSystem || '').toLowerCase();
+  document.body.dataset.systemTone = system.includes('pyro') ? 'ember'
+    : system.includes('nyx') ? 'violet'
+      : system.includes('terra') ? 'blue'
+        : 'cyan';
+
+  const ship = (state.ship || '').toLowerCase();
+  document.body.dataset.shipProfile = /hornet|gladius|arrow|sab(re|er)|scorpius|lightning/.test(ship) ? 'fighter'
+    : /mole|prospector|reclaimer|vulture|expanse/.test(ship) ? 'industrial'
+      : /caterpillar|hull|freelancer|max|raft|taurus|starlancer/.test(ship) ? 'hauler'
+        : /carrack|aquila|terr(a|apin)|400i|600i|odyssey/.test(ship) ? 'explorer'
+          : 'ship';
+}
+
+let newestLiveFeedKey = '';
+let liveFeedPrimed = false;
+
 function renderNow(state) {
   nowState = state;
   $('#link').classList.toggle('live', !!state.connected);
   $('#link').title = state.connected ? tx('live') : tx('disconnected');
+  renderFlightTelemetry(state);
 
   $('#now-location').textContent = state.location || (state.inGame ? tx('Unknown') : tx('In menus'));
   $('#now-location-sub').textContent = [state.locationBody, state.locationSystem].filter(Boolean).join(' · ');
@@ -1194,14 +1304,19 @@ function renderNow(state) {
   confidence.textContent = state.location ? (CONFIDENCE[level] || `${level} confidence`) : '';
   confidence.className = `confidence ${(state.confidence || '').toLowerCase()}`;
 
+  // A log that ended mid-jump is not a pilot in quantum now.
+  const closed = gameClosed(state);
   const travel = $('#now-travel');
-  travel.hidden = !state.travelling;
+  travel.hidden = !state.travelling || closed;
   if (state.travelling) $('#now-travel-to').textContent = state.travellingTo || '';
 
   renderNowShip(state.ship);
   $('#now-handle').textContent = state.handle || '—';
   $('#now-version').textContent = state.gameVersion || '';
-  $('#now-mode').textContent = state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
+  $('#now-mode').textContent = closed ? tx('game closed')
+    : state.inGame ? (state.gameRules || tx('in game')) : tx('frontend / menus');
+  $('#now-clock').textContent = nowClock(state);
+  renderNowClosed(state);
   $('#now-deaths').textContent = state.deaths ?? 0;
   $('#now-incaps').textContent = state.incapacitations ?? 0;
 
@@ -1232,6 +1347,13 @@ function renderNow(state) {
 
   const feed = $('#now-feed');
   feed.textContent = '';
+  const newest = state.recentEvents?.[0];
+  const newestKey = newest ? `${newest.at || ''}|${newest.kind || ''}|${newest.text || ''}` : '';
+  // The opening frame is a history tail, not an arrival. Once it is anchored,
+  // only a changed head earns the brief visual acknowledgement.
+  const hasNewLiveEvent = liveFeedPrimed && Boolean(newestKey && newestKey !== newestLiveFeedKey);
+  if (newestKey) newestLiveFeedKey = newestKey;
+  liveFeedPrimed = true;
 
   if (!state.recentEvents || state.recentEvents.length === 0) {
     feed.append(el('li', 'empty', state.connected ? tx('Nothing yet this session.') : tx('Waiting for the game…')));
@@ -1239,11 +1361,18 @@ function renderNow(state) {
     // The widget shows a short tail; the full feed belongs on the page.
     const entries = isOverlay ? state.recentEvents.slice(0, 12) : state.recentEvents;
 
-    for (const entry of entries) {
+    for (const [index, entry] of entries.entries()) {
       const li = el('li');
+      if (index === 0 && hasNewLiveEvent) li.classList.add('fresh');
+      if (entry.kind === 'contract-done') li.classList.add('mission-complete');
       li.append(el('span', 't', timeOf(entry.at)));
       li.append(el('span', `k ${entry.kind}`, feedKind(entry.kind)));
-      li.append(el('span', 'x', feedText(entry.text)));
+      // A line about one item - "Bought P4-AR Rifle" - opens its Reference
+      // card, by the class the parser kept beside the sentence.
+      const text = el('span', 'x');
+      if (entry.subject) text.append(refLink('item', entry.subject, feedText(entry.text)));
+      else text.textContent = feedText(entry.text);
+      li.append(text);
       if (entry.detail) li.append(el('span', 'd', feedText(withoutMarkup(entry.detail))));
       feed.append(li);
     }
@@ -2099,7 +2228,56 @@ function renderPilotBriefing(briefing) {
   renderNowFocus(nowState, briefing);
 }
 
-setInterval(() => { $('#now-clock').textContent = clock(sessionStarted); }, 1000);
+setInterval(() => { $('#now-clock').textContent = nowClock(nowState); }, 1000);
+
+/**
+ * True only when the server says the game is closed. An older server, or one
+ * with no Game.log to follow, says nothing, and nothing is not closed.
+ */
+function gameClosed(state) { return state?.gameRunning === false; }
+
+/** The session's length: still counting while it is flown, stopped at its last line once the game closes. */
+function nowClock(state) {
+  if (!state?.sessionStarted) return '—';
+  return clock(state.sessionStarted, gameClosed(state) ? state.lastSeen : null);
+}
+
+/**
+ * The page with the game closed. Game.log keeps the last session until the
+ * next launch, so the cards still describe it; this strip says that they are
+ * a record now, not a reading, and the labels follow.
+ */
+function renderNowClosed(state) {
+  const closed = gameClosed(state);
+  const strip = $('#now-closed');
+  strip.hidden = !closed;
+  $('#view-now').classList.toggle('game-closed', closed);
+
+  $('#now-location-label').textContent = closed ? tx('Where you left off') : tx('Location');
+  $('#now-session-label').textContent = closed ? tx('Last session') : tx('Session');
+  $('#now-health-label').textContent = closed ? tx('That session') : tx('This session');
+  $('#now-feed-label').textContent = closed ? tx('Feed from the last session') : tx('Live feed');
+  if (!closed) return;
+
+  if (!state.lastSeen) {
+    $('#now-closed-title').textContent = tx('The game is closed');
+    $('#now-closed-detail').textContent = tx('Nothing in Game.log yet; the cards go live when the game starts.');
+    return;
+  }
+
+  $('#now-closed-title').textContent = tx('Your last session ended {when}', { when: ago(state.lastSeen) });
+  const length = state.sessionStarted
+    ? (new Date(state.lastSeen).getTime() - new Date(state.sessionStarted).getTime()) / 1000
+    : 0;
+  $('#now-closed-detail').textContent = [
+    tx('{date} at {time}', { date: dateOf(state.lastSeen), time: shortTimeOf(state.lastSeen) }),
+    length > 0 ? tx('{length} long', { length: duration(length) }) : null,
+    state.location ? tx('last at {place}', { place: state.location }) : null,
+    state.ship ? tx('aboard {ship}', { ship: state.ship }) : null,
+  ].filter(Boolean).join(' · ') + '. ' + tx('The cards below are where it left off; they go live when the game starts.');
+}
+
+$('#now-closed-open')?.addEventListener('click', () => showView('sessions'));
 
 function connectStream() {
   const source = new EventSource('/api/stream');
@@ -2168,6 +2346,15 @@ const ENTITY_KICKER = {
 
 async function openEntity(kind, id) {
   if (!kind || !id) return false;
+
+  // One detail pattern per kind of thing (0.20.24). Items and ships open the
+  // Reference window, where every part and hull links on and Back walks the
+  // trail; the drawer is for places and commodities, which are read beside
+  // the map. Two panels describing one gun two ways was the inconsistency.
+  if (kind === 'part' || kind === 'ship') {
+    if (!$('#entity-drawer').hidden) closeEntity();
+    return openRefDetail(kind === 'part' ? 'item' : 'ship', id);
+  }
 
   // Forgotten here rather than left pointing at whoever was open before: a note
   // typed into a place reached from search would otherwise be filed against the
@@ -2494,8 +2681,8 @@ async function runEntityAction(action, card, button) {
 /** The full page for this kind, which the drawer summarises rather than replaces. */
 function openEntityDetails(card) {
   if (card.kind === 'commodity') return openCommodity(card.name);
-  if (card.kind === 'ship') return showView('fleet');
-  if (card.kind === 'part') return showView('parts');
+  if (card.kind === 'ship') return openRefDetail('ship', card.id);
+  if (card.kind === 'part') return openRefDetail('item', card.id);
   return entityMap(card.id, card.name);
 }
 
@@ -2522,7 +2709,7 @@ function bars(container, rows, format) {
       const label = el('div', 'label');
       const link = el('button', 'place-link', row.label);
       link.type = 'button';
-      link.title = tx('Show on the map');
+      link.title = row.title || tx('Show on the map');
       link.addEventListener('click', row.onClick);
       label.append(link);
       wrapper.append(label);
@@ -2583,6 +2770,7 @@ async function loadHistory() {
 
   allSessions = sessions;
   sessionPage = 0;
+  safeRender('Wake', () => drawWakes());
 
   // A Points page opened straight from the URL drew its cards before the
   // sessions were known, and said no session spanned any of them.
@@ -2611,6 +2799,7 @@ async function loadHistory() {
   await loadGameData().catch(() => {});
   loadShipsRef().catch((e) => console.error('ships', e));
   loadPartsRef().catch((e) => console.error('parts', e));
+  loadComponentsRef().catch((e) => console.error('components', e));
   loadMiningRef().catch((e) => console.error('mining', e));
   loadCraftingRef().catch((e) => console.error('crafting', e));
   loadJobs().catch((e) => console.error('jobs', e));
@@ -2784,7 +2973,7 @@ async function loadContractList() {
 
   for (const row of rows.slice(0, 400)) {
     const tr = el('tr');
-    tr.append(el('td', null, dateOf(row.at)));
+    tr.append(el('td', 'route-point', dateOf(row.at)));
 
     // The composed name repeats issuer, type and difficulty, so the columns
     // carry those and the full name rides the row's tooltip.
@@ -2795,7 +2984,13 @@ async function loadContractList() {
     tr.title = row.name;
 
     const [cls, label] = OUTCOMES[row.outcome] || OUTCOMES.Unknown;
-    tr.append(el('td', cls === 'done' ? 'inward' : cls, label));
+    const outcome = el('td', cls === 'done' ? 'inward' : cls, label);
+    if (row.outcome === 'Completed') {
+      const patch = el('span', 'mission-patch', '✓');
+      patch.title = tx('Completed contract');
+      outcome.prepend(patch);
+    }
+    tr.append(outcome);
 
     // What the title says it pays, when a text mod has annotated it. Silence
     // is the honest default: most titles say nothing, and a zero would read as
@@ -3149,6 +3344,7 @@ function renderSessionDebrief(summary) {
   const commerce = [
     ...(detail.purchases || []).map((purchase) => ({
       at: purchase.at,
+      item: purchase.item,
       label: `${prettyItem(purchase.item)}${purchase.quantity > 1 ? ` ×${purchase.quantity}` : ''}`,
       amount: -Number(purchase.total ?? purchase.price ?? 0),
       approximate: !purchase.confirmed,
@@ -3164,7 +3360,9 @@ function renderSessionDebrief(summary) {
   commerce.slice(-8).forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, entry.label));
+    // A purchase names an item, which opens its Reference card; a cargo trade
+    // names a quantity, which has none.
+    item.append(entry.item ? refLink('item', entry.item, entry.label) : el('span', null, entry.label));
     item.append(el('span', entry.amount >= 0 ? 'inward' : 'outward',
       `${entry.amount >= 0 ? '+' : '−'}${entry.approximate ? '~' : ''}${money(Math.abs(entry.amount))}`));
     commerceList.append(item);
@@ -3199,7 +3397,9 @@ function renderSessionDebrief(summary) {
   highlights.forEach((entry) => {
     const item = el('li');
     item.append(el('span', 'muted', shortTimeOf(entry.at)));
-    item.append(el('span', null, feedText(withoutMarkup(entry.text))));
+    item.append(entry.subject
+      ? refLink('item', entry.subject, feedText(withoutMarkup(entry.text)))
+      : el('span', null, feedText(withoutMarkup(entry.text))));
     if (entry.detail) item.append(el('span', 'muted', feedText(withoutMarkup(entry.detail))));
     highlightList.append(item);
   });
@@ -3255,18 +3455,19 @@ function renderSessions() {
         toggleSessionDebrief(session.id);
       }
     });
-    const cells = [
-      duration(session.inGame),
-      duration(session.menu),
-      session.primaryShip || '—',
-      session.lastLocation || '—',
-      sessionShardLabel(session),
-    ];
     const date = el('td');
     date.append(el('span', 'session-row-toggle', open ? '⌄' : '›'));
     date.append(el('span', null, dateOf(session.startedAt)));
     tr.append(date);
-    cells.forEach((text) => tr.append(el('td', null, text)));
+    tr.append(el('td', null, duration(session.inGame)));
+    tr.append(el('td', null, duration(session.menu)));
+    // The ship opens its Reference card; the row around it opens the debrief.
+    const ship = el('td');
+    if (session.primaryShip) ship.append(rowRefLink('ship', session.primaryShip, session.primaryShip));
+    else ship.textContent = '—';
+    tr.append(ship);
+    tr.append(el('td', null, session.lastLocation || '—'));
+    tr.append(el('td', null, sessionShardLabel(session)));
     [session.jumps, session.contracts, session.deaths ?? 0, session.incapacitations]
       .forEach((n) => tr.append(el('td', 'num', String(n))));
     body.append(tr);
@@ -3517,7 +3718,14 @@ function renderLedger() {
 
     tr.append(el('td', null, dateOf(entry.at)));
     tr.append(el('td', null, tx(entry.kind)));
-    tr.append(el('td', null, entry.what === 'Contract payout' ? tx('Contract payout') : prettyItem(entry.what)));
+
+    // An item's name opens its Reference card, as it does in every other
+    // table. A cargo row names a commodity and a payout names a contract,
+    // and neither has a card to open.
+    const what = el('td');
+    if (entry.kind === 'Item bought' || entry.item) what.append(refLink('item', entry.item || entry.what, prettyItem(entry.what)));
+    else what.textContent = entry.what === 'Contract payout' ? tx('Contract payout') : prettyItem(entry.what);
+    tr.append(what);
     tr.append(tdPlace(entry.where));
     tr.append(el('td', 'muted', entry.shop));
 
@@ -4210,9 +4418,16 @@ function renderMarket() {
   // Market deliberately combines the reference catalogue with what the pilot
   // actually sold. The chips make that join visible before a price-like count
   // is mistaken for an event the log recorded.
+  const priced = marketEntries.some((e) => e.uex) ? ['uex'] : [];
   setSourceMarks($('#market-data-sources'), source === 'install'
-    ? ['install', 'logs']
-    : source === 'dataset' ? ['community', 'logs'] : []);
+    ? ['install', 'logs', ...priced]
+    : source === 'dataset' ? ['community', 'logs', ...priced] : priced);
+  // The two reference columns are the install's or the community's, as the
+  // badge above says; their heading carries the same colour.
+  for (const th of $$('#market-table th.market-ref-col')) {
+    th.classList.toggle('src-files', source === 'install');
+    th.classList.toggle('src-community', source === 'dataset');
+  }
 
   const term = ($('#market-search').value || '').trim().toLowerCase();
   const group = $('#market-group').value;
@@ -4272,11 +4487,13 @@ function renderMarket() {
     tr.append(el('td', 'muted', entry.groups.join(', ')));
     tr.append(el('td', 'num', entry.sold.length ? String(entry.sold.length) : '—'));
     tr.append(el('td', 'num', entry.bought.length ? String(entry.bought.length) : '—'));
-    tr.append(el('td', 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
-    tr.append(el('td', 'num inward', entry.myRevenue ? money(entry.myRevenue) : '—'));
+    // Gold only where there is something of yours to show: a column of gold
+    // dashes shouted about trading that never happened.
+    tr.append(el('td', entry.myScuSold ? 'num src-own' : 'num', entry.myScuSold ? entry.myScuSold.toLocaleString() : '—'));
+    tr.append(el('td', entry.myRevenue ? 'num inward src-own' : 'num', entry.myRevenue ? money(entry.myRevenue) : '—'));
 
     if (anyUex) {
-      const cell = el('td', 'num');
+      const cell = el('td', 'num src-uex');
       if (entry.uex?.bestSell > 0) {
         cell.append(el('span', 'inward', money(entry.uex.bestSell)));
 
@@ -4520,7 +4737,7 @@ function renderLoot(pickups) {
       ? tx('Nothing matching {filter} in that range.', { filter: [kind, place].filter(Boolean).join(` ${tx('at')} `) })
       : tx('Nothing in that range.'));
 
-    td.colSpan = 5;
+    td.colSpan = 6;
     tr.append(td);
     body.append(tr);
     lastLootRows = pickups;
@@ -4530,9 +4747,18 @@ function renderLoot(pickups) {
   for (const pickup of rows) {
     const tr = el('tr');
     tr.append(el('td', null, dateOf(pickup.at)));
-    tr.append(el('td', null, prettyItem(pickup.item)));
+
+    // The name opens the item's Reference card, as it does on every other
+    // page (0.20.32); it used to open this page's own where-panel, and only
+    // for items a table rolls. That panel is still one click away: the roll
+    // cell opens it when there is a roll to show.
+    const name = el('td');
+    name.append(refLink('item', pickup.itemClass || pickup.item, prettyItem(pickup.item)));
+    tr.append(name);
+
     tr.append(el('td', 'muted', tx(pickup.category)));
     tr.append(lootPriceCell(pickup));
+    tr.append(lootRollCell(pickup));
     tr.append(tdPlace(pickup.place, 'muted'));
     body.append(tr);
   }
@@ -4548,6 +4774,594 @@ onInput('#loot-period', loadLoot);
 // The two filters redraw what is already loaded; only the date window refetches.
 $('#loot-kind')?.addEventListener('change', () => renderLoot(lastLootRows));
 $('#loot-place')?.addEventListener('change', () => renderLoot(lastLootRows));
+
+/* ---------- loot: where the game's tables say an item comes from ---------- */
+
+/**
+ * A per-roll chance as a percentage, with as many places as it takes to say
+ * something. Armour colours sit near a thousandth of a percent, and rounding
+ * those to "0%" would claim they cannot drop.
+ */
+function lootPercent(p) {
+  const value = Number(p) * 100;
+  const places = value >= 10 ? 0 : value >= 1 ? 1 : value >= 0.1 ? 2 : 3;
+  const shown = value.toLocaleString(QW_DATE_LOCALES, { minimumFractionDigits: places, maximumFractionDigits: places });
+  return value > 0 && Number(shown.replace(/[^\d]/g, '')) === 0 ? '<0.001%' : `${shown}%`;
+}
+
+/** The pickups table's odds cell: the best roll, with where it is on hover. */
+function lootRollCell(pickup) {
+  if (!(pickup.bestRoll > 0)) {
+    const td = el('td', 'num muted', '—');
+    td.title = tx('No container or body in the game’s loot tables rolls this - it was bought, given or carried in.');
+    return td;
+  }
+
+  // The odds open where they come from, on this page: every kind of place
+  // and body, with the named places. The item's name beside it opens the
+  // Reference card instead, as names do everywhere.
+  const td = el('td', 'num');
+  const open = el('button', 'link', lootPercent(pickup.bestRoll));
+  open.type = 'button';
+  open.addEventListener('click', () => showLootWhere(pickup.itemClass));
+  td.append(open);
+  td.title = tx('Best single roll: {where}. {count} kinds of place or body can roll it.', {
+    where: pickup.bestFrom, count: pickup.lootSources,
+  });
+  return td;
+}
+
+function lootRespawn(seconds) {
+  if (!(seconds > 0)) return '—';
+  return seconds >= 3600 ? tx('{hours} h', { hours: Math.round(seconds / 360) / 10 }) : tx('{minutes} min', { minutes: Math.round(seconds / 60) });
+}
+
+/**
+ * Hits rolled up to one row per kind of place or body.
+ *
+ * One preset lists the same crate under Common, Uncommon and Rare groups, and
+ * fourteen prisoner classes share one table; 347 rows for the S-38 read as
+ * noise, the dozen kinds of place they come to read as an answer.
+ */
+function lootWhereRows(hits) {
+  const byLabel = new Map();
+
+  for (const hit of hits) {
+    const key = `${hit.kind}|${hit.label}`;
+    const row = byLabel.get(key) || {
+      kind: hit.kind, label: hit.label, best: 0, slot: 0, via: hit.via,
+      containers: new Set(), groups: new Set(), respawn: null, places: null,
+    };
+
+    // Null for bodies, which no map file places; a count for slots.
+    if (hit.places != null) row.places = Math.max(row.places ?? 0, hit.places);
+    if (hit.perRoll > row.best) { row.best = hit.perRoll; row.via = hit.via; }
+    row.slot = Math.max(row.slot, hit.slotChance || 0);
+    row.containers.add(hit.containerName || hit.container);
+    if (hit.group) row.groups.add(hit.group);
+    if (hit.respawnSeconds > 0) row.respawn = Math.min(row.respawn ?? Infinity, hit.respawnSeconds);
+    byLabel.set(key, row);
+  }
+
+  return [...byLabel.values()].sort((a, b) => b.best - a.best || a.label.localeCompare(b.label));
+}
+
+let lootWhereItem = null;
+
+async function showLootWhere(itemClass) {
+  const panel = $('#loot-where');
+  if (!panel) return;
+
+  lootWhereItem = itemClass;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.append(el('p', 'muted', tx('Reading the loot tables…')));
+
+  let data;
+  try {
+    data = await getJson(`/api/loot/where?item=${encodeURIComponent(itemClass)}`);
+  } catch {
+    if (lootWhereItem === itemClass) panel.replaceChildren(el('p', 'muted', tx('The loot tables could not be read.')));
+    return;
+  }
+
+  // A second click while the first was in flight wins.
+  if (lootWhereItem !== itemClass) return;
+  renderLootWhere(panel, data);
+  panel.scrollIntoView?.({ block: 'nearest' });
+}
+
+const LOOT_PLACES_SHOWN = 12;
+
+/**
+ * The places an item can be rolled at, one row each with its best container:
+ * star-map names first by odds, and the bodies whose spots the map leaves
+ * unmarked - caves, mostly - among them where their odds put them.
+ *
+ * A place is where a map file sets a crate preset down, walked up to the
+ * nearest star-map marker. Twelve rows, then a button, because a common
+ * magazine is placed at four hundred of them; and a body picker, because the
+ * useful question is usually what is near.
+ */
+function renderLootPlaces(panel, data, hasSlots) {
+  if (!hasSlots) return;
+
+  const all = data.places || [];
+  if (!data.placesRead) {
+    panel.append(el('p', 'muted caption', tx('The map files have not been read on this install, so only kinds of place are shown.')));
+    return;
+  }
+  if (!all.length) {
+    panel.append(el('p', 'muted caption', tx('No map file on this build sets down a container that rolls this. A mission may spawn one, or it only comes off bodies.')));
+    return;
+  }
+
+  const section = el('div', 'loot-places');
+  section.append(el('h4', 'loot-where-sub', tx('Places')));
+
+  const named = all.filter((p) => p.name).length;
+  const unmarked = [...new Set(all.filter((p) => !p.name).map((p) => p.body).filter(Boolean))];
+  const caption = [txn(named, '{count} named place', '{count} named places')];
+  if (unmarked.length) caption.push(txn(unmarked.length, 'unmarked spots on {count} body', 'unmarked spots on {count} bodies'));
+  section.append(el('p', 'muted caption', caption.join(' · ')));
+
+  let body = '';
+  let expanded = false;
+
+  const bodies = [...new Set(all.map((p) => p.body).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (bodies.length > 1) {
+    const pick = el('select', 'select loot-places-body');
+    pick.setAttribute('aria-label', tx('Planet or moon'));
+    pick.append(new Option(tx('Every planet and moon'), ''));
+    for (const b of bodies) pick.append(new Option(`${b} (${all.filter((p) => p.body === b).length})`, b));
+    pick.addEventListener('change', () => { body = pick.value; expanded = false; draw(); });
+    section.append(pick);
+  }
+
+  const holder = el('div', 'table-wrap');
+  section.append(holder);
+  const more = el('button', 'ghost tiny loot-places-more');
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  section.append(more);
+
+  function draw() {
+    const rows = all.filter((p) => !body || p.body === body);
+    holder.replaceChildren(lootPlacesTable(expanded ? rows : rows.slice(0, LOOT_PLACES_SHOWN)));
+    more.hidden = rows.length <= LOOT_PLACES_SHOWN;
+    more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: rows.length });
+  }
+
+  draw();
+  panel.append(section);
+}
+
+function lootPlacesTable(rows) {
+  const table = el('table', 'loot-where-table loot-places-table');
+  const headRow = el('tr');
+  for (const [label, title] of [
+    [tx('Place'), tx('The star map’s name for it. An unmarked spot is somewhere on that body the map does not show - a cave, mostly.')],
+    [tx('On'), null],
+    [tx('Per slot'), tx('The chance one crate slot there gets a container that then rolls this item, for the likeliest container there. A crate rolls several times and a place holds several, so finding it is likelier.')],
+    [tx('Crate sets'), tx('Placed crate sets there that can hold it, each building counted once however often the place repeats it. A floor.')],
+    [tx('Container'), null],
+    [tx('Kind of place'), null],
+    [tx('Refills'), tx('The crate slot’s own timer. A dash means the files give none.')],
+  ]) {
+    const th = el('th', null, label);
+    if (title) th.title = title;
+    headRow.append(th);
+  }
+  const thead = el('thead');
+  thead.append(headRow);
+  table.append(thead);
+
+  const body = el('tbody');
+  for (const place of rows) {
+    const tr = el('tr');
+    tr.append(place.name ? el('td', null, place.name) : el('td', 'muted', tx('Unmarked spot')));
+    tr.append(el('td', 'muted', place.body || '—'));
+    tr.append(el('td', 'num', lootPercent(place.chance)));
+    tr.append(el('td', 'num muted', String(place.spots)));
+    tr.append(el('td', 'muted', place.containerName || ''));
+    tr.append(el('td', 'muted', place.label));
+    tr.append(el('td', 'num muted', lootRespawn(place.respawnSeconds)));
+    body.append(tr);
+  }
+  table.append(body);
+  return table;
+}
+
+/**
+ * Where to buy an item, from the two sources there are: the cheapest counter
+ * in the UEX prices, and what this install was charged - per unit, the median
+ * over its purchases, with the shop of the latest. The game files hold no
+ * price that matches what shops charge today (docs/untapped-signals.md, 9),
+ * so a receipt is the answer that needs no feed. Empty when neither knows.
+ */
+function lootPriceLines(buy, paid) {
+  const lines = [];
+  if (buy) {
+    const line = el('span', 'loot-price');
+    line.append(el('span', null, `${buy.place} · ${money(buy.price)}`));
+    line.append(el('span', 'muted', ` ${tx('(UEX)')}`));
+    lines.push(line);
+  }
+  if (paid) {
+    const line = el('span', 'loot-price muted');
+    line.textContent = paid.shop
+      ? tx('you paid {price} at {shop}', { price: money(paid.price), shop: paid.shop })
+      : tx('you paid {price}', { price: money(paid.price) });
+    line.title = txn(paid.times, 'Bought once, last on {date}', 'Bought {count} times, last on {date}; the median per unit',
+      { date: dayOf(paid.last) });
+    lines.push(line);
+  }
+  return lines;
+}
+
+/**
+ * "Track it": put the item on a checklist from where it was looked up, so
+ * what is being hunted is written down once and followed from then on - the
+ * list's "Where to get these", Now, the overlay, and the line noting when
+ * the item turns up. The line is linked to the item by name, the same link
+ * the Checklists composer makes, which is what the bought and found notes
+ * match on. A list already holding it as an open line is not given a second.
+ */
+function lootTrackControl(name) {
+  const box = el('span', 'loot-track');
+  const pick = el('select', 'select tiny loot-track-list');
+  pick.setAttribute('aria-label', tx('Checklist to track it on'));
+  const add = el('button', 'ghost tiny loot-track-add', tx('Track it'));
+  add.title = tx('Add this item to a checklist, linked, so the list can say where to get it and when it turns up');
+  const said = el('span', 'muted loot-track-said');
+  box.append(pick, add, said);
+
+  let lists = [];
+  const fill = (async () => {
+    try {
+      lists = (await getJson('/api/checklists')).filter((l) => !l.imported);
+    } catch {
+      lists = [];
+    }
+    pick.replaceChildren();
+    for (const list of lists) pick.append(new Option(list.title, list.id));
+    pick.append(new Option(tx('New list: Looking for'), ''));
+    const pinned = lists.find((l) => l.pinned);
+    pick.value = pinned ? pinned.id : (lists[0]?.id ?? '');
+  })();
+
+  // Returned so whoever clicked can wait for the answer.
+  add.addEventListener('click', async () => {
+    await fill;
+    let id = pick.value;
+    let title = lists.find((l) => l.id === id)?.title;
+
+    const already = lists.find((l) => l.id === id)?.items?.some((item) => !item.done
+      && (item.attachments || []).some((a) => a.kind === 'item' && (a.target || a.label) === name));
+    if (already) { said.textContent = tx('Already on {list}', { list: title }); return; }
+
+    add.disabled = true;
+    try {
+      if (!id) {
+        title = tx('Looking for');
+        const made = await fetch('/api/checklists', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+        }).then((r) => r.json()).catch(() => null);
+        id = made?.id;
+        if (!id) { said.textContent = tx('The list could not be made.'); return; }
+      }
+      await fetch(`/api/checklists/${id}/items`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: name, attachments: [{ kind: 'item', label: name, target: name }] }),
+      });
+      said.textContent = tx('Added to {list}', { list: title });
+      // Now and the overlay show the pinned list; keep them current.
+      if (typeof loadChecklists === 'function') loadChecklists().catch(() => {});
+    } finally {
+      add.disabled = false;
+    }
+  });
+
+  return box;
+}
+
+function renderLootWhere(panel, data, { embedded = false } = {}) {
+  panel.textContent = '';
+
+  // In the Reference modal the modal's own head names it and carries Track it.
+  if (!embedded) {
+    const head = el('div', 'loot-where-head');
+    head.append(el('h3', null, data.name || prettyItem(data.item)));
+    const tools = el('div', 'loot-where-tools');
+    tools.append(lootTrackControl(data.name || prettyItem(data.item)));
+    const more = el('button', 'ghost tiny loot-where-more', tx('Details'));
+    more.title = tx('Open it in Reference: what it is, every shop, what it is fitted to');
+    more.addEventListener('click', () => openRefDetail('item', data.item));
+    tools.append(more);
+    const close = el('button', 'ghost tiny', tx('Close'));
+    close.addEventListener('click', () => { panel.hidden = true; lootWhereItem = null; });
+    tools.append(close);
+    head.append(tools);
+    panel.append(head);
+  }
+
+  // Finding one is not the only way to get one: the shops come first when
+  // either price source has something to say.
+  // The modal lists every shop above this, so it leaves the line out.
+  const prices = embedded ? [] : lootPriceLines(data.buy, data.paid);
+  if (prices.length) {
+    const buy = el('p', 'loot-where-buy');
+    buy.append(el('span', 'muted', `${tx('Buy')} · `));
+    buy.append(...prices);
+    panel.append(buy);
+  }
+
+  const rows = lootWhereRows(data.hits || []);
+  const ships = data.ships || [];
+  const npcs = data.npcs || [];
+
+  if (!rows.length && !ships.length && !npcs.length) {
+    panel.append(el('p', 'muted', data.tables
+      ? tx('No container or body in the game’s loot tables rolls this. It may be sold, crafted, a mission reward or a hangar item.')
+      : tx('The loot tables have not been read from this install yet.')));
+    return;
+  }
+
+  // A ship part comes off ships, and a uniform off whoever wears it, out of
+  // no crate: then those are the answer.
+  if (!rows.length) {
+    if (npcs.length) renderLootNpcs(panel, npcs);
+    if (ships.length) renderLootShips(panel, ships);
+    return;
+  }
+
+  const places = rows.filter((r) => r.kind === 'slot').length;
+  const bodies = rows.length - places;
+  renderLootPlaces(panel, data, places > 0);
+
+  // Who carries it comes before the long breakdown by kind of place: "Hurston
+  // guards always have one" is an answer, and the breakdown is the working.
+  if (npcs.length) renderLootNpcs(panel, npcs);
+  if (ships.length) renderLootShips(panel, ships);
+
+  if (data.places?.length || npcs.length || ships.length) panel.append(el('h4', 'loot-where-sub', tx('By kind of place')));
+  panel.append(el('p', 'muted caption', [
+    txn(places, '{count} kind of place', '{count} kinds of place'),
+    txn(bodies, '{count} kind of body', '{count} kinds of body'),
+  ].join(' · ')));
+
+  const table = el('table', 'loot-where-table');
+  const headRow = el('tr');
+  for (const [label, title] of [
+    [tx('Where'), tx('The kind of place a slot preset is written for, or who the body was')],
+    [tx('Container'), null],
+    [tx('Per roll'), tx('The chance one draw from this container is this item')],
+    [tx('Slot holds it'), tx('How often a slot of this kind gets this container when the place spawns')],
+    [tx('Refills'), tx('The crate slot’s own timer. A dash means the files give none.')],
+    [tx('Through'), tx('The table entry and choice it comes through')],
+  ]) {
+    const th = el('th', null, label);
+    if (title) th.title = title;
+    headRow.append(th);
+  }
+  const thead = el('thead');
+  thead.append(headRow);
+  table.append(thead);
+
+  const body = el('tbody');
+  for (const row of rows) {
+    const tr = el('tr');
+    const where = el('td', null, row.label);
+    if (row.kind === 'body') where.append(el('span', 'chip count', tx('body')));
+    if (row.kind === 'slot' && data.placesRead) {
+      const placed = row.places > 0;
+      const note = el('span', 'muted loot-where-placed', placed
+        ? ` · ${txn(row.places, '{count} place', '{count} places')}`
+        : ` · ${tx('not placed')}`);
+      if (!placed) note.title = tx('No map file on this build sets this kind of place down. A mission may spawn it, or nothing does.');
+      where.append(note);
+    }
+    if (row.groups.size) where.title = [...row.groups].join(', ');
+    tr.append(where);
+    // A station preset alone names a dozen containers; listed in full the
+    // cell pushed the odds off the right edge of the panel.
+    const containers = [...row.containers];
+    const shown = containers.length > 2
+      ? `${containers.slice(0, 2).join(', ')} ${tx('+{count} more', { count: containers.length - 2 })}`
+      : containers.join(', ');
+    const holder = el('td', 'muted loot-where-containers', shown);
+    if (containers.length > 2) holder.title = containers.join(', ');
+    tr.append(holder);
+    tr.append(el('td', 'num', lootPercent(row.best)));
+    tr.append(el('td', 'num muted', row.kind === 'body' ? '—' : lootPercent(row.slot)));
+    tr.append(el('td', 'num muted', lootRespawn(row.respawn)));
+    tr.append(el('td', 'muted', row.via));
+    body.append(tr);
+  }
+  table.append(body);
+
+  const wrap = el('div', 'table-wrap');
+  wrap.append(table);
+  panel.append(wrap);
+}
+
+/**
+ * The kinds of NPC that wear or carry an item, likeliest first. The share is
+ * the part of that NPC's spawns with it on them if every outfit and kit the
+ * files list is picked evenly - which the files do not say - so the column
+ * says it is an estimate.
+ */
+function renderLootNpcs(panel, npcs) {
+  const section = el('div', 'loot-npcs');
+  section.append(el('h4', 'loot-where-sub', tx('Worn or carried by NPCs')));
+  section.append(el('p', 'muted caption', [
+    txn(npcs.length, '{count} kind of NPC', '{count} kinds of NPC'),
+    tx('what they spawn wearing, so what their bodies hold. The share counts every outfit they can be given as equally likely.'),
+  ].join(' · ')));
+
+  const holder = el('div', 'table-wrap');
+  section.append(holder);
+  const more = el('button', 'ghost tiny loot-npcs-more');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  section.append(more);
+
+  function draw() {
+    const shown = expanded ? npcs : npcs.slice(0, LOOT_PLACES_SHOWN);
+    const table = el('table', 'loot-where-table loot-npcs-table');
+    const headRow = el('tr');
+    for (const [label, title] of [
+      [tx('NPC'), null],
+      [tx('Share (est.)'), tx('How many of these NPCs have it, if each outfit they can be given is equally likely. The files list the outfits, not how a spawner picks one.')],
+      [tx('Variants'), tx('NPC classes of this kind that can have it - male and female versions count separately')],
+    ]) {
+      const th = el('th', null, label);
+      if (title) th.title = title;
+      headRow.append(th);
+    }
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const npc of shown) {
+      const tr = el('tr');
+      const who = el('td', null, npc.label);
+      who.title = (npc.classes || []).join(', ');
+      tr.append(who);
+      tr.append(el('td', 'num', npc.share >= 0.9995 ? tx('always') : lootPercent(npc.share)));
+      tr.append(el('td', 'num muted', String((npc.classes || []).length)));
+      body.append(tr);
+    }
+    table.append(body);
+    holder.replaceChildren(table);
+    more.hidden = npcs.length <= LOOT_PLACES_SHOWN;
+    more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: npcs.length });
+  }
+
+  draw();
+  panel.append(section);
+}
+
+/**
+ * The NPC ships that fly with a part fitted, one row per ship model with who
+ * flies it. The files say what each variant carries as standard, not how
+ * often any of them is met, so there are no odds here - only what a disabled
+ * one has aboard.
+ */
+function renderLootShips(panel, ships) {
+  const byModel = new Map();
+  for (const s of ships) {
+    const row = byModel.get(s.name) || { name: s.name, crews: new Set(), variants: [], most: 0, first: s.ship };
+    if (s.ship.length < row.first.length) row.first = s.ship;
+    // The server says who flies it in English words it owns; each is translated.
+    row.crews.add(s.crew.split(' · ').map((w) => tx(w)).join(' · '));
+    row.variants.push(s.ship);
+    row.most = Math.max(row.most, s.count);
+    byModel.set(s.name, row);
+  }
+  const models = [...byModel.values()].sort((a, b) => b.variants.length - a.variants.length || a.name.localeCompare(b.name));
+
+  const section = el('div', 'loot-ships');
+  section.append(el('h4', 'loot-where-sub', tx('On NPC ships')));
+  section.append(el('p', 'muted caption', [
+    txn(models.length, '{count} ship', '{count} ships'),
+    txn(ships.length, '{count} NPC variant', '{count} NPC variants'),
+    tx('fitted as standard - what a disabled one carries. How often each is met is not in the files.'),
+  ].join(' · ')));
+
+  const holder = el('div', 'table-wrap');
+  section.append(holder);
+  const more = el('button', 'ghost tiny loot-ships-more');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  section.append(more);
+
+  function draw() {
+    const shown = expanded ? models : models.slice(0, LOOT_PLACES_SHOWN);
+    const table = el('table', 'loot-where-table loot-ships-table');
+    const headRow = el('tr');
+    for (const [label, title] of [
+      [tx('Ship'), null],
+      [tx('Flown by'), tx('Read from the variant’s own name: CRIM is criminal, UEE the Navy.')],
+      [tx('Variants'), tx('NPC versions of this ship that carry it')],
+      [tx('Fitted'), tx('How many the best-armed variant carries')],
+    ]) {
+      const th = el('th', null, label);
+      if (title) th.title = title;
+      headRow.append(th);
+    }
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const model of shown) {
+      const tr = el('tr');
+      const ship = el('td');
+      ship.append(refLink('ship', model.first, model.name));
+      tr.append(ship);
+      const crews = el('td', 'muted loot-where-containers', [...model.crews].sort((x, y) => x.localeCompare(y)).join(', '));
+      crews.title = model.variants.join(', ');
+      tr.append(crews);
+      tr.append(el('td', 'num muted', String(model.variants.length)));
+      tr.append(el('td', 'num', `×${model.most}`));
+      body.append(tr);
+    }
+    table.append(body);
+    holder.replaceChildren(table);
+    more.hidden = models.length <= LOOT_PLACES_SHOWN;
+    more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: models.length });
+  }
+
+  draw();
+  panel.append(section);
+}
+
+let lootFindTimer = null;
+let lootFindTerm = '';
+
+async function findLoot() {
+  const term = ($('#loot-find')?.value || '').trim();
+  const box = $('#loot-find-results');
+  if (!box) return;
+
+  lootFindTerm = term;
+  if (term.length < 2) { box.textContent = ''; return; }
+
+  let found;
+  try {
+    found = await getJson(`/api/loot/search?q=${encodeURIComponent(term)}`);
+  } catch {
+    found = null;
+  }
+
+  if (lootFindTerm !== term) return;
+  box.textContent = '';
+
+  if (!found) { box.append(el('p', 'muted', tx('The loot tables could not be read.'))); return; }
+  if (!found.length) {
+    box.append(el('p', 'muted', tx('Nothing the loot tables roll matches “{term}”.', { term })));
+    return;
+  }
+
+  for (const item of found) {
+    const button = el('button', 'loot-find-item');
+    button.append(el('span', null, item.name));
+    const said = [];
+    if (item.bestRoll != null) said.push(lootPercent(item.bestRoll), txn(item.sources, '{count} source', '{count} sources'));
+    if (item.npcs > 0) said.push(txn(item.npcs, '{count} kind of NPC', '{count} kinds of NPC'));
+    if (item.ships > 0) said.push(txn(item.ships, '{count} NPC ship', '{count} NPC ships'));
+    button.append(el('span', 'muted', said.join(' · ')));
+    button.addEventListener('click', () => showLootWhere(item.itemClass));
+    box.append(button);
+  }
+}
+
+// Typing asks the server once it pauses, not per keystroke.
+$('#loot-find')?.addEventListener('input', () => {
+  clearTimeout(lootFindTimer);
+  lootFindTimer = setTimeout(findLoot, 250);
+});
 
 /* ---------- reference catalogues: ships, parts ---------- */
 
@@ -4604,8 +5418,16 @@ function renderShipsRef() {
 
   for (const ship of rows) {
     const tr = el('tr');
-    const name = el('td', null, ship.name);
-    if (!ship.isSpaceship) name.append(el('span', 'note-inline', ` · ${tx('ground')}`));
+    const name = el('td');
+    name.append(refLink('ship', ship.className || ship.name, ship.name));
+    // Unknown is not "ground": the install says which folder a hull is in
+    // only when it places a cargo grid.
+    if (ship.isSpaceship === false) name.append(el('span', 'note-inline', ` · ${tx('ground')}`));
+    if (ship.source === 'install') {
+      const from = el('span', 'note-inline', ` · ${tx('install')}`);
+      from.title = tx('Named by your game install and not described by the community dataset, so the spec sheet is blank.');
+      name.append(from);
+    }
     tr.append(name);
 
     tr.append(el('td', 'muted', ship.career ?? '—'));
@@ -4646,9 +5468,813 @@ function renderShipsRef() {
   }
 }
 
+/* ---------- the wake: your own sessions along the foot of a page header ----------
+
+   A ship's wake is where it has been, widest where it worked hardest and
+   fading behind it. This one is drawn from the sessions in your logs: sixty
+   days, oldest on the left, each day as wide as the time you spent in game
+   that day, and a mark at today's end - filled if you have flown today. It
+   is the one piece of these pages that could not belong to any other tool,
+   because nobody else has your logs. */
+
+const WAKE_DAYS = 60;
+
+function drawWakes() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 86400000;
+  const minutes = new Array(WAKE_DAYS).fill(0);
+  let sessions = 0;
+  for (const session of allSessions || []) {
+    const at = new Date(session.startedAt);
+    const start = new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+    const index = WAKE_DAYS - 1 - Math.round((today - start) / day);
+    if (index < 0 || index >= WAKE_DAYS) continue;
+    minutes[index] += (Number(session.inGame) || 0) / 60;
+    sessions++;
+  }
+
+  // Smoothed over three days, so a wake rather than a bar chart.
+  const smooth = minutes.map((_, i) => {
+    const near = minutes.slice(Math.max(0, i - 1), i + 2);
+    return near.reduce((a, b) => a + b, 0) / near.length;
+  });
+  const top = Math.max(...smooth, 1);
+  const total = minutes.reduce((a, b) => a + b, 0);
+  const width = 600;
+  const mid = 11;
+  const x = (i) => (i / (WAKE_DAYS - 1)) * width;
+  const half = (i) => 0.6 + (smooth[i] / top) * 6.5;
+  const upper = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid - half(i)).toFixed(2)}`);
+  const lower = smooth.map((_, i) => `${x(i).toFixed(1)},${(mid + half(i)).toFixed(2)}`).reverse();
+
+  // Every page's own header: the bar that opens a view, not one nested
+  // further down (Now, Help and About open on something else entirely).
+  // And the Now page's strip for a closed game, which is about your sessions
+  // more than anything else on that page.
+  const hosts = [...$$('.view')]
+    .map((section) => {
+      const bar = section.querySelector('.section-bar');
+      return bar && bar.parentElement === section ? bar : null;
+    })
+    .filter(Boolean);
+  const closedStrip = $('#now-closed');
+  if (closedStrip) hosts.push(closedStrip);
+
+  for (const [index, bar] of hosts.entries()) {
+    bar.querySelector('.wake')?.remove();
+    bar.querySelector('.wake-mark')?.remove();
+    if (!sessions) continue;
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'wake');
+    svg.setAttribute('viewBox', `0 0 ${width} 18`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('aria-hidden', 'true');
+    const id = `wake-fade-${index}`;
+    svg.innerHTML = `<defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">`
+      + '<stop offset="0" stop-color="#e9c27d" stop-opacity="0"/>'
+      + '<stop offset=".55" stop-color="#e9c27d" stop-opacity=".22"/>'
+      + '<stop offset="1" stop-color="#e9c27d" stop-opacity=".7"/></linearGradient></defs>'
+      + `<polygon points="${[...upper, ...lower].join(' ')}" fill="url(#${id})"/>`
+      + `<line x1="0" y1="${mid}" x2="${width}" y2="${mid}" stroke="url(#${id})" stroke-width=".6"/>`;
+    bar.append(svg);
+
+    const mark = el('span', minutes[WAKE_DAYS - 1] > 0 ? 'wake-mark today' : 'wake-mark');
+    bar.append(mark);
+    // Said in words for whoever points at the mark. On the header itself it
+    // would surface over every control there without hover text of its own,
+    // on forty pages.
+    mark.title = tx('Your wake: {sessions} sessions and {hours} in game over the last {days} days, from your logs.', {
+      sessions, hours: duration(total * 60), days: WAKE_DAYS,
+    });
+  }
+}
+
+/* ---------- reference: ship components, by what they do ----------
+
+   The Items page lists everything the install names - 26,531 things, most of
+   them seats and doors - and one table cannot show a gun's DPS beside a
+   shield's regeneration. Here each kind of part gets its own tab with the
+   figures it is chosen on, sorted by the one that matters most, and every
+   name opens the part's Reference card. */
+
+let componentsData = { parts: [], source: null, uex: false };
+let componentsKind = 'weapons';
+let componentsSort = null;
+
+const n0 = (v) => (v > 0 ? Math.round(v).toLocaleString() : '—');
+const n1 = (v) => (v > 0 ? (Math.round(v * 10) / 10).toLocaleString() : '—');
+const secs = (v) => (v > 0 ? `${(Math.round(v * 10) / 10).toLocaleString()} s` : '—');
+const metres = (v) => (v > 0 ? `${Math.round(v).toLocaleString()} m` : '—');
+
+/**
+ * Each tab: which part types it holds and the columns it shows. A column is
+ * [heading, value for sorting, text, hover]. The first figure column is the
+ * default sort, largest first.
+ */
+const COMPONENT_KINDS = [
+  {
+    key: 'weapons', label: 'Weapons', types: ['WeaponGun'],
+    cols: [
+      ['DPS', (p) => p.stats?.weapon?.dps, (p) => n0(p.stats?.weapon?.dps), 'Damage per second while firing'],
+      ['Alpha', (p) => p.stats?.weapon?.alpha, (p) => n0(p.stats?.weapon?.alpha), 'Damage of one shot'],
+      ['Rate', (p) => p.stats?.weapon?.rateOfFire, (p) => n0(p.stats?.weapon?.rateOfFire), 'Rounds per minute'],
+      ['Range', (p) => p.stats?.weapon?.range, (p) => metres(p.stats?.weapon?.range), null],
+      ['Speed', (p) => p.stats?.weapon?.ammoSpeed, (p) => n0(p.stats?.weapon?.ammoSpeed), 'Projectile speed, m/s'],
+    ],
+  },
+  {
+    key: 'missiles', label: 'Missiles', types: ['Missile'],
+    cols: [
+      ['Damage', (p) => p.stats?.missile?.damage, (p) => n0(p.stats?.missile?.damage), null],
+      ['Speed', (p) => p.stats?.missile?.speed, (p) => n0(p.stats?.missile?.speed), 'm/s'],
+      ['Lock', (p) => -(p.stats?.missile?.lockTime || 0), (p) => secs(p.stats?.missile?.lockTime), 'Time to lock'],
+      ['Range', (p) => p.stats?.missile?.range, (p) => metres(p.stats?.missile?.range), null],
+      ['Tracks', (p) => p.stats?.missile?.trackingSignal || '', (p) => p.stats?.missile?.trackingSignal || '—', 'The signature it locks on to'],
+    ],
+  },
+  { key: 'racks', label: 'Missile racks', types: ['MissileLauncher'], cols: [] },
+  {
+    key: 'shields', label: 'Shields', types: ['Shield'],
+    cols: [
+      ['HP', (p) => p.stats?.shield?.hp, (p) => n0(p.stats?.shield?.hp), 'Shield points at full charge'],
+      ['Regen', (p) => p.stats?.shield?.regen, (p) => n0(p.stats?.shield?.regen), 'Points restored per second'],
+      ['Downed delay', (p) => -(p.stats?.shield?.downedDelay || 0), (p) => secs(p.stats?.shield?.downedDelay), 'How long a dropped shield waits before it regenerates'],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+      ['EM', (p) => -(p.stats?.em || 0), (p) => n0(p.stats?.em), 'Electromagnetic signature at full output'],
+    ],
+  },
+  {
+    key: 'power', label: 'Power plants', types: ['PowerPlant'],
+    cols: [
+      ['Power', (p) => p.stats?.powerGen, (p) => n0(p.stats?.powerGen), 'Power segments generated'],
+      ['EM', (p) => -(p.stats?.em || 0), (p) => n0(p.stats?.em), 'Electromagnetic signature at full output'],
+      ['Health', (p) => p.stats?.health, (p) => n0(p.stats?.health), null],
+    ],
+  },
+  {
+    key: 'coolers', label: 'Coolers', types: ['Cooler'],
+    cols: [
+      ['Coolant', (p) => p.stats?.coolantGen, (p) => n0(p.stats?.coolantGen), 'Coolant generated'],
+      ['IR', (p) => -(p.stats?.ir || 0), (p) => n0(p.stats?.ir), 'Infrared signature'],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+      ['Health', (p) => p.stats?.health, (p) => n0(p.stats?.health), null],
+    ],
+  },
+  {
+    key: 'quantum', label: 'Quantum drives', types: ['QuantumDrive'],
+    cols: [
+      ['Speed', (p) => p.stats?.quantum?.speed, (p) => (p.stats?.quantum?.speed > 0 ? `${n0(p.stats.quantum.speed / 1000)} km/s` : '—'), null],
+      ['Spool', (p) => -(p.stats?.quantum?.spoolTime || 0), (p) => secs(p.stats?.quantum?.spoolTime), 'Time to spool before a jump'],
+      ['Cooldown', (p) => -(p.stats?.quantum?.cooldown || 0), (p) => secs(p.stats?.quantum?.cooldown), null],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+    ],
+  },
+  {
+    key: 'radar', label: 'Radars', types: ['Radar'],
+    cols: [
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+      ['EM', (p) => -(p.stats?.em || 0), (p) => n0(p.stats?.em), 'Electromagnetic signature'],
+    ],
+  },
+  {
+    key: 'utility', label: 'Mining & utility', types: ['WeaponMining', 'TractorBeam', 'SalvageHead', 'QuantumInterdictionGenerator', 'EMP'],
+    cols: [
+      ['Kind', (p) => p.type, (p) => tx(COMPONENT_TYPE_WORDS[p.type] || p.type), null],
+      ['Power', (p) => -(p.stats?.powerUseMax || 0), (p) => n1(p.stats?.powerUseMax), 'Power segments drawn at full output'],
+    ],
+  },
+];
+
+/* Written out so each English word is a literal the catalogue check can find. */
+const COMPONENT_TYPE_WORDS = {
+  WeaponMining: 'Mining laser',
+  TractorBeam: 'Tractor beam',
+  SalvageHead: 'Salvage head',
+  QuantumInterdictionGenerator: 'Interdiction',
+  EMP: 'EMP',
+};
+
+async function loadComponentsRef() {
+  try {
+    componentsData = await getJson('/api/reference/components');
+  } catch {
+    componentsData = { parts: [], source: null, uex: false };
+  }
+  renderComponentTabs();
+  renderComponentsRef();
+}
+
+function componentKind() {
+  return COMPONENT_KINDS.find((k) => k.key === componentsKind) || COMPONENT_KINDS[0];
+}
+
+function renderComponentTabs() {
+  const tabs = $('#components-tabs');
+  if (!tabs) return;
+  tabs.textContent = '';
+  for (const kind of COMPONENT_KINDS) {
+    const count = componentsData.parts.filter((p) => kind.types.includes(p.type)).length;
+    const button = el('button', kind.key === componentsKind ? 'active' : null);
+    button.type = 'button';
+    button.dataset.kind = kind.key;
+    button.append(el('span', null, tx(kind.label)), el('span', 'components-tab-count', ` ${count}`));
+    button.addEventListener('click', () => {
+      componentsKind = kind.key;
+      componentsSort = null;
+      $('#components-size').value = '';
+      renderComponentTabs();
+      renderComponentsRef();
+    });
+    tabs.append(button);
+  }
+}
+
+function renderComponentsRef() {
+  const kind = componentKind();
+  const term = ($('#components-search')?.value || '').trim().toLowerCase();
+  const all = componentsData.parts.filter((p) => kind.types.includes(p.type));
+
+  // Sizes offered are the ones this kind has.
+  const sizeSelect = $('#components-size');
+  const wanted = sizeSelect.value;
+  const sizes = [...new Set(all.map((p) => p.size).filter((s) => s > 0))].sort((a, b) => a - b);
+  sizeSelect.textContent = '';
+  sizeSelect.append(new Option(tx('Any size'), ''));
+  for (const size of sizes) sizeSelect.append(new Option(tx('Size {size}', { size }), String(size)));
+  sizeSelect.value = sizes.map(String).includes(wanted) ? wanted : '';
+
+  const rows = all.filter((p) => (!sizeSelect.value || String(p.size) === sizeSelect.value)
+    && (!term || p.name.toLowerCase().includes(term) || (p.maker || '').toLowerCase().includes(term)
+      || p.className.toLowerCase().includes(term)));
+
+  // Columns: name, size, grade, maker, this kind's figures, then where to get it.
+  const cols = [
+    [tx('Size'), (p) => p.size, (p) => (p.size > 0 ? String(p.size) : '—'), null],
+    [tx('Grade'), (p) => -(p.grade || 9), (p) => gradeLetter(p.grade), tx('A is best, D is worst — the game’s own scale')],
+    [tx('Maker'), (p) => p.maker || '', (p) => p.maker || '—', null],
+    ...kind.cols.map(([h, sort, text, title]) => [tx(h), sort, text, title ? tx(title) : null, 'figure']),
+    [tx('Price'), (p) => -(p.price || Infinity), (p) => (p.price ? money(p.price) : '—'), tx('The cheapest shop in the UEX prices')],
+    [tx('Drops'), (p) => p.bestRoll || (p.npcShips ? p.npcShips / 1e6 : 0), (p) => componentDrops(p), tx('Where the game’s own files put it to be found')],
+    [tx('Fitted to'), (p) => p.fittedTo, (p) => (p.fittedTo > 0 ? txn(p.fittedTo, '{count} ship', '{count} ships') : '—'), tx('Ships that come out of the shop with it')],
+  ];
+
+  // Sorted by the column picked, else by this kind's first figure, largest first.
+  const firstFigure = cols.findIndex((c) => c[4] === 'figure');
+  const sortIndex = componentsSort?.index ?? (firstFigure >= 0 ? firstFigure : 0);
+  const descending = componentsSort?.descending ?? true;
+  const key = cols[sortIndex][1];
+  rows.sort((a, b) => {
+    const x = key(a) ?? -Infinity;
+    const y = key(b) ?? -Infinity;
+    const order = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y;
+    return (descending ? -order : order) || a.name.localeCompare(b.name);
+  });
+
+  const table = $('#components-table');
+  const head = table.querySelector('thead');
+  head.textContent = '';
+  const headRow = el('tr');
+  headRow.append(el('th', null, tx('Component')));
+  cols.forEach(([label, , , title, figure], index) => {
+    const th = el('th', `${index === 2 ? '' : 'num '}sortable${figure ? ' figure' : ''}${index === sortIndex ? ' sorted' : ''}`, label);
+    if (index === sortIndex) th.append(el('span', 'sort-mark', descending ? ' ▾' : ' ▴'));
+    if (title) th.title = title;
+    th.addEventListener('click', () => {
+      componentsSort = { index, descending: index === sortIndex ? !descending : true };
+      renderComponentsRef();
+    });
+    headRow.append(th);
+  });
+  head.append(headRow);
+
+  const body = table.querySelector('tbody');
+  body.textContent = '';
+  $('#components-count').textContent = rows.length
+    ? txn(rows.length, '{count} part', '{count} parts', { count: rows.length.toLocaleString() })
+    : '';
+
+  if (!rows.length) {
+    const tr = el('tr');
+    const td = el('td', 'muted', componentsData.parts.length
+      ? tx('Nothing matches that filter.')
+      : gameDataExcuse() || tx('No ship components were found in your game files.'));
+    td.colSpan = cols.length + 1;
+    tr.append(td);
+    body.append(tr);
+    return;
+  }
+
+  for (const part of rows) {
+    const tr = el('tr');
+    const name = el('td', 'with-track');
+    const open = el('button', 'commodity-open', part.name);
+    open.title = tx('Everything known about it: where it drops, who sells it, what it is fitted to');
+    open.addEventListener('click', () => openRefDetail('item', part.className));
+    name.append(open);
+    if (part.subType && !['UNDEFINED', 'Gun', 'Missile', 'Power', 'MissileRack', 'MidRangeRadar'].includes(part.subType)) {
+      name.append(el('span', 'note-inline', part.subType));
+    }
+    name.append(trackButton(part.name));
+    tr.append(name);
+    cols.forEach(([, , text, , figure], index) => {
+      tr.append(el('td', `${index === 2 ? 'muted' : 'num'}${figure ? ' figure' : ''}`, text(part)));
+    });
+    body.append(tr);
+  }
+
+  // Without the community download there are no figures to show, and the
+  // page says so rather than printing a column of dashes as if they were zero.
+  const caption = $('#components-figures-note');
+  if (caption) caption.hidden = componentsData.source !== 'install';
+}
+
+/** The drops cell: the best crate roll, else how many NPC ships fly with it. */
+function componentDrops(part) {
+  if (part.bestRoll > 0) return tx('{odds} a roll', { odds: lootPercent(part.bestRoll) });
+  if (part.npcShips > 0) return txn(part.npcShips, 'on {count} NPC ship', 'on {count} NPC ships');
+  return '—';
+}
+
+onInput('#components-search', renderComponentsRef);
+$('#components-size')?.addEventListener('change', renderComponentsRef);
+
 /** A hover list of places and prices, one a line, cheapest first as given. */
 function placeList(heading, places) {
   return `${heading} (${places.length}):\n${places.map((p) => `${p.terminal} — ${money(p.price)}`).join('\n')}`;
+}
+
+/* ---------- reference detail: one item or one ship, and every link out of it ---------- */
+
+/*
+ * The catalogues said what there is, and the Loot page where something comes
+ * from, but nothing joined them: a part seen on a ship could not be followed
+ * to where else it drops, nor a crate find to the ships it comes fitted to.
+ * The modal is the join. Every part and every ship in it opens in turn, and
+ * Back walks the trail, so a hunt can go ship → gun → the NPCs who carry it
+ * → back to the ship without losing its place.
+ */
+
+let refTrail = [];
+let refTicket = 0;
+
+/**
+ * A name that opens its own Reference card. Every item, component and ship
+ * name on every page goes through here (0.20.32), so one gun looks and opens
+ * the same way whether it is met in a stash, a ledger row, a feed line or a
+ * catalogue; `extraClass` keeps the layout class a cell already had.
+ */
+function refLink(kind, id, label, extraClass = '') {
+  const link = el('button', `place-link ref-link${extraClass ? ` ${extraClass}` : ''}`, label || prettyItem(id || ''));
+  link.type = 'button';
+  link.title = kind === 'ship' ? tx('Open this ship') : kind === 'blueprint' ? tx('Open this blueprint') : tx('Open this item');
+  link.addEventListener('click', () => openRefDetail(kind, id));
+  return link;
+}
+
+async function openRefDetail(kind, id, { push = true } = {}) {
+  if (!kind || !id) return false;
+  const modal = $('#ref-modal');
+  if (!modal) return false;
+
+  if (push) {
+    if (modal.hidden) refTrail = [];
+    const last = refTrail[refTrail.length - 1];
+    if (!last || last.kind !== kind || last.id !== id) refTrail.push({ kind, id });
+  }
+
+  const ticket = ++refTicket;
+  modal.hidden = false;
+  document.body.classList.add('ref-modal-open');
+  $('#ref-modal-back').hidden = refTrail.length < 2;
+  $('#ref-modal-kicker').textContent = kind === 'ship' ? tx('Ship') : kind === 'blueprint' ? tx('Blueprint') : tx('Item');
+  $('#ref-modal-title').textContent = prettyItem(id);
+  $('#ref-modal-sub').textContent = '';
+  const body = $('#ref-modal-body');
+  body.replaceChildren(el('p', 'muted', tx('Reading what is known…')));
+
+  let data;
+  try {
+    data = await getJson(`/api/reference/${kind === 'ship' || kind === 'blueprint' ? kind : 'item'}?id=${encodeURIComponent(id)}`);
+  } catch {
+    if (ticket === refTicket) body.replaceChildren(el('p', 'muted', tx('Nothing is known about that.')));
+    return false;
+  }
+
+  // A second click while the first was in flight wins.
+  if (ticket !== refTicket) return false;
+  if (kind === 'ship') renderShipDetail(body, data);
+  else if (kind === 'blueprint') renderBlueprintDetail(body, data);
+  else renderItemDetail(body, data);
+  body.scrollTop = 0;
+  return true;
+}
+
+/**
+ * A name inside a row that itself opens something - an Armoury row its
+ * figures, a Sessions row its debrief, a Garage slot its bench. The name's
+ * click stays on the name: it opens the Reference card without also
+ * toggling the row under it.
+ */
+function rowRefLink(kind, id, label) {
+  const link = refLink(kind, id, label);
+  link.addEventListener('click', (event) => event.stopPropagation());
+  return link;
+}
+
+function closeRefDetail() {
+  refTicket++;
+  const modal = $('#ref-modal');
+  if (modal) modal.hidden = true;
+  document.body.classList.remove('ref-modal-open');
+  refTrail = [];
+}
+
+function backRefDetail() {
+  if (refTrail.length < 2) return Promise.resolve(false);
+  refTrail.pop();
+  const previous = refTrail[refTrail.length - 1];
+  return openRefDetail(previous.kind, previous.id, { push: false });
+}
+
+$('#ref-modal-close')?.addEventListener('click', closeRefDetail);
+$('#ref-modal-backdrop')?.addEventListener('click', closeRefDetail);
+$('#ref-modal-back')?.addEventListener('click', () => backRefDetail());
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && $('#ref-modal') && !$('#ref-modal').hidden) closeRefDetail();
+});
+
+/** One section of the modal: a heading, an optional caption, then its content. */
+function refSection(title, caption) {
+  const section = el('section', 'ref-section');
+  section.append(el('h3', 'loot-where-sub', title));
+  if (caption) section.append(el('p', 'muted caption', caption));
+  return section;
+}
+
+/** Label, value and who says so, in the drawer's own voice. */
+function refFacts(rows) {
+  const list = el('dl', 'ref-facts');
+  for (const [label, value, source] of rows) {
+    if (value === null || value === undefined || value === '') continue;
+    list.append(el('dt', null, label));
+    const dd = el('dd', null, value);
+    if (source) dd.append(el('span', 'ref-source', ` · ${source}`));
+    list.append(dd);
+  }
+  return list;
+}
+
+/** A place-and-price table, cheapest first as given, eight rows then a button. */
+function refPriceTable(rows, placeLabel) {
+  const holder = el('div');
+  const more = el('button', 'ghost tiny');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+
+  function draw() {
+    const table = el('table', 'loot-where-table ref-price-table');
+    const head = el('tr');
+    head.append(el('th', null, placeLabel), el('th', 'num', tx('Price')));
+    const thead = el('thead');
+    thead.append(head);
+    table.append(thead);
+    const body = el('tbody');
+    for (const row of expanded ? rows : rows.slice(0, 8)) {
+      const tr = el('tr');
+      tr.append(el('td', null, row.place), el('td', 'num', money(row.price)));
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    holder.replaceChildren(wrap);
+    if (rows.length > 8) {
+      more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: rows.length });
+      holder.append(more);
+    }
+  }
+
+  draw();
+  return holder;
+}
+
+function renderItemDetail(body, data) {
+  const card = data.card;
+  const name = card?.name || data.where?.name || prettyItem(data.className);
+  $('#ref-modal-title').textContent = name;
+  $('#ref-modal-sub').textContent = serverText(card?.subtitle) || '';
+  body.textContent = '';
+
+  const top = el('div', 'ref-top');
+  if (card?.holding) {
+    const holding = el('p', 'ref-holding');
+    holding.append(el('strong', null, serverText(card.holding.status)));
+    if (card.holding.detail) holding.append(el('span', 'muted', ` · ${serverText(card.holding.detail)}`));
+    top.append(holding);
+  }
+  top.append(lootTrackControl(name));
+  body.append(top);
+
+  // The game's paragraph a line at a time - its header lines are joined by a
+  // literal backslash-n - and its own labels, as the drawer used to show them.
+  if (card?.blurb) {
+    const blurb = el('div', 'ref-blurb');
+    for (const line of card.blurb.split(RegExp('\\\\n|\n'))) {
+      if (line.trim()) blurb.append(el('p', 'part-blurb', line.trim()));
+    }
+    body.append(blurb);
+  }
+  if (card?.tags?.length) {
+    const tags = el('div', 'part-tags');
+    for (const tag of card.tags) tags.append(el('span', 'tag', tag));
+    body.append(tags);
+  }
+  if (card?.facts?.length) {
+    body.append(refFacts(card.facts.map((f) => [tx(f.label), serverText(f.value), tx(f.source)])));
+  }
+
+  // Buying is the first way to get one, so it leads.
+  const buy = refSection(tx('Where to buy it'));
+  const shops = data.shops || [];
+  if (shops.length) {
+    buy.append(el('p', 'muted caption', tx('{count} shops in the UEX prices, cheapest first.', { count: shops.length })));
+    buy.append(refPriceTable(shops, tx('Shop')));
+  } else {
+    buy.append(el('p', 'muted caption', data.uex
+      ? tx('No shop in the UEX prices stocks it.')
+      : tx('Turn on UEX prices in Settings to see which shops stock it.')));
+  }
+  const paid = data.where?.paid;
+  if (paid) {
+    const line = el('p', 'loot-where-buy');
+    line.append(...lootPriceLines(null, paid));
+    buy.append(line);
+  }
+  body.append(buy);
+
+  // Crafting is the third way to get one, and the blueprint is a thing to
+  // get in its own right: the line says whether you have it, and the link
+  // opens where it comes from.
+  if (data.craft) {
+    const craft = refSection(tx('Blueprint'));
+    craft.append(el('p', null, tx('Crafted in {time} from {materials}.', {
+      time: craftTime(data.craft.craftSeconds),
+      materials: (data.craft.materials || []).join(', ') || tx('nothing listed'),
+    })));
+    const line = el('p', 'ref-holding');
+    line.append(el('strong', data.craft.owned ? 'ref-owned' : null, data.craft.owned
+      ? tx('in your blueprint library')
+      : data.craft.byDefault ? tx('every crafter starts with it') : tx('not in your library')));
+    if (!data.craft.owned && !data.craft.byDefault) {
+      line.append(el('span', 'muted', ` · ${data.craft.sources
+        ? txn(data.craft.sources, '{count} way to get it', '{count} ways to get it')
+        : tx('nothing on this build was found to give it')}`));
+    }
+    craft.append(line);
+    craft.append(refLink('blueprint', data.craft.outputClass, tx('Where to get the blueprint')));
+    body.append(craft);
+  }
+
+  const stockOn = data.stockOn || [];
+  if (stockOn.length) {
+    const fitted = refSection(tx('Comes fitted to'),
+      txn(stockOn.length, 'One ship comes out of the shop with it.', '{count} ships come out of the shop with it.'));
+    fitted.append(refLinkList(stockOn, (ship, li) => {
+      li.append(refLink('ship', ship.className, ship.name));
+      if (ship.count > 1) li.append(el('span', 'muted', ` ×${ship.count}`));
+    }));
+    body.append(fitted);
+  }
+
+  const spawns = refSection(tx('Where it spawns'));
+  const panel = el('div', 'ref-loot');
+  if (data.where) renderLootWhere(panel, data.where, { embedded: true });
+  spawns.append(panel);
+  body.append(spawns);
+}
+
+/** A list of links, two dozen then a button: a common gun comes fitted to 150 hulls. */
+function refLinkList(rows, fill) {
+  const holder = el('div');
+  const more = el('button', 'ghost tiny');
+  let expanded = false;
+  more.addEventListener('click', () => { expanded = !expanded; draw(); });
+  function draw() {
+    const list = el('ul', 'ref-links');
+    for (const row of expanded ? rows : rows.slice(0, 24)) {
+      const li = el('li');
+      fill(row, li);
+      list.append(li);
+    }
+    holder.replaceChildren(list);
+    if (rows.length > 24) {
+      more.textContent = expanded ? tx('Show fewer') : tx('Show all {count}', { count: rows.length });
+      holder.append(more);
+    }
+  }
+  draw();
+  return holder;
+}
+
+/**
+ * One blueprint: what it makes, the recipe, whether your logs show it was
+ * given to you, and every way to get it - the contracts that pay out its
+ * reward pools, by who offers them and in which systems, and the event tiers
+ * that award it - with this blueprint's share of each pool, since a pool
+ * pays one of its blueprints, not all of them.
+ */
+function renderBlueprintDetail(body, data) {
+  $('#ref-modal-title').textContent = tx('{item} blueprint', { item: data.output });
+  $('#ref-modal-sub').textContent = tx('Crafted in {time}', { time: craftTime(data.craftSeconds) });
+  body.textContent = '';
+
+  const top = el('div', 'ref-top');
+  const holding = el('p', 'ref-holding');
+  holding.append(el('strong', data.owned ? 'ref-owned' : null, data.owned
+    ? tx('in your blueprint library')
+    : data.byDefault ? tx('every crafter starts with it') : tx('not in your library')));
+  if (data.owned && data.receivedAt) holding.append(el('span', 'muted', ` · ${tx('received {when}', { when: dayOf(data.receivedAt) })}`));
+  top.append(holding);
+  body.append(top);
+
+  const makes = el('p', 'ref-holding');
+  makes.append(el('span', 'muted', `${tx('Makes')} `), refLink('item', data.outputClass, data.output));
+  if (data.shopPrice) makes.append(el('span', 'muted', ` · ${tx('or buy one for {price}', { price: money(data.shopPrice) })}`));
+  body.append(makes);
+
+  const recipe = refSection(tx('Recipe'));
+  const list = el('ul', 'ref-materials');
+  for (const material of data.materials || []) list.append(el('li', null, serverText(material)));
+  if (!(data.materials || []).length) list.append(el('li', 'muted', tx('nothing listed')));
+  recipe.append(list);
+  body.append(recipe);
+
+  const where = refSection(tx('Where to get the blueprint'));
+  const pools = data.pools || [];
+  if (data.byDefault) {
+    where.append(el('p', null, tx('Every crafter starts with it: it is on the game’s starting list.')));
+  } else if (!pools.length) {
+    where.append(el('p', 'muted', tx('No contract, event tier or starting list on this build gives it. It may come from somewhere the game files do not say, or not be obtainable yet.')));
+  }
+
+  for (const pool of pools) {
+    const block = el('div', 'ref-pool');
+    const head = el('p', 'ref-pool-head');
+    head.append(el('strong', null, tx('Reward pool {name}', { name: pool.name })));
+    if (pool.share > 0 && pool.share < 1) {
+      const odds = el('span', 'muted', ` · ${tx('{odds} of what it pays is this one', { odds: lootPercent(pool.share) })}`);
+      odds.title = tx('A pool pays one of its blueprints, by weight; this is this blueprint’s share.');
+      head.append(odds);
+    }
+    block.append(head);
+
+    const sources = pool.sources || [];
+    if (!sources.length) {
+      block.append(el('p', 'muted caption', tx('No contract or event tier on this build pays from this pool.')));
+    } else {
+      const table = el('table', 'loot-where-table ref-ways-table');
+      const headRow = el('tr');
+      headRow.append(el('th', null, tx('From')), el('th', null, tx('Contract')), el('th', null, tx('Systems')), el('th', 'num', tx('Chance')));
+      const thead = el('thead');
+      thead.append(headRow);
+      table.append(thead);
+      const tbody = el('tbody');
+      for (const way of sources) {
+        const tr = el('tr');
+        tr.append(el('td', null, way.issuer || '—'));
+        const title = el('td', null, way.kind === 'event'
+          ? tx('{bar}, at {points} points', { bar: way.title, points: way.points.toLocaleString() })
+          : way.title);
+        if (way.variants > 1) title.append(el('span', 'muted', ` · ${txn(way.variants, '{count} version', '{count} versions')}`));
+        tr.append(title);
+        tr.append(el('td', 'muted', (way.systems || []).join(', ') || '—'));
+        const chance = el('td', 'num', way.kind === 'event' ? tx('tier reward') : lootPercent(way.chance));
+        if (way.kind !== 'event') chance.title = tx('The chance the contract pays from this pool when it completes');
+        tr.append(chance);
+        tbody.append(tr);
+      }
+      table.append(tbody);
+      const wrap = el('div', 'table-wrap');
+      wrap.append(table);
+      block.append(wrap);
+    }
+    where.append(block);
+  }
+  body.append(where);
+}
+
+/** A part list: name opening its own card, type, size, grade and count. */
+function refPartsTable(parts) {
+  const table = el('table', 'loot-where-table ref-parts-table');
+  const head = el('tr');
+  head.append(el('th', null, tx('Part')), el('th', null, tx('Type')),
+    el('th', 'num', tx('Size')), el('th', 'num', tx('Grade')), el('th', 'num', tx('Fitted')));
+  const thead = el('thead');
+  thead.append(head);
+  table.append(thead);
+  const body = el('tbody');
+  const sorted = [...parts].sort((a, b) => (a.type || '').localeCompare(b.type || '') || (b.size || 0) - (a.size || 0)
+    || (a.name || '').localeCompare(b.name || ''));
+  for (const part of sorted) {
+    const tr = el('tr');
+    const name = el('td');
+    name.append(refLink('item', part.className, part.name));
+    tr.append(name);
+    tr.append(el('td', 'muted', prettyType(part.type)));
+    tr.append(el('td', 'num', part.size > 0 ? String(part.size) : '—'));
+    tr.append(el('td', 'num', gradeLetter(part.grade)));
+    tr.append(el('td', 'num', `×${part.count}`));
+    body.append(tr);
+  }
+  table.append(body);
+  const wrap = el('div', 'table-wrap');
+  wrap.append(table);
+  return wrap;
+}
+
+function renderShipDetail(body, data) {
+  const c = data.community;
+  $('#ref-modal-title').textContent = data.name;
+  $('#ref-modal-sub').textContent = data.npc
+    ? `${tx('NPC ship')} · ${data.crew.split(' · ').map((w) => tx(w)).join(' · ')}`
+    : [c?.career, c?.role].filter(Boolean).join(' · ');
+  body.textContent = '';
+
+  if (data.baseHull) {
+    const line = el('p', 'ref-holding');
+    line.append(el('span', 'muted', `${tx('Built on')} `), refLink('ship', data.baseHull.className, data.baseHull.name));
+    body.append(line);
+  }
+  if (!data.npc) {
+    const flown = el('p', 'ref-holding');
+    flown.append(el('strong', null, data.flown
+      ? txn(data.flown.sorties, 'flown once', 'flown {count} times')
+      : tx('not flown here')));
+    flown.append(el('span', 'muted', data.flown
+      ? ` · ${tx('last {date}', { date: dayOf(data.flown.lastFlown) })}`
+      : ` · ${tx('no sortie in these logs')}`));
+    body.append(flown);
+  }
+
+  const community = tx('the community dataset');
+  const install = tx('the game files');
+  const size = data.size
+    ? `${data.size.length.toLocaleString()} × ${data.size.beam.toLocaleString()} × ${data.size.height.toLocaleString()} m`
+    : null;
+  body.append(refFacts([
+    [tx('Crew'), c?.crew > 0 ? String(c.crew) : null, community],
+    [tx('Cargo'), data.cargo ? `${data.cargo.scu.toLocaleString()} SCU` : null,
+      data.cargo?.from === 'install' ? install : community],
+    [tx('Speed'), c?.scmSpeed > 0 ? `${Math.round(c.scmSpeed)} / ${Math.round(c.maxSpeed)} m/s` : null, community],
+    [tx('Shields'), c?.shieldHp > 0 ? c.shieldHp.toLocaleString() : null, community],
+    [tx('Hull'), c?.health > 0 ? c.health.toLocaleString() : null, community],
+    [tx('Length × beam × height'), size, install],
+    [tx('Claim'), c?.expeditedCost > 0 ? tx('{fee} to expedite', { fee: money(c.expeditedCost) }) : null, community],
+  ]));
+
+  if (!data.npc) {
+    const buy = refSection(tx('Where to buy it'));
+    const shops = (data.shops || []).map((s) => ({ place: s.terminal, price: s.price }));
+    const rentals = (data.rentals || []).map((s) => ({ place: s.terminal, price: s.price }));
+    if (shops.length) buy.append(refPriceTable(shops, tx('Shop')));
+    else buy.append(el('p', 'muted caption', data.uex
+      ? tx('No shop in the UEX prices sells it in game.')
+      : tx('Turn on UEX prices in Settings to see which shops sell it.')));
+    if (rentals.length) {
+      buy.append(el('h4', 'loot-where-sub', tx('Rent')));
+      buy.append(refPriceTable(rentals, tx('Rental desk')));
+    }
+    body.append(buy);
+  }
+
+  const parts = data.parts || [];
+  const fitted = refSection(data.npc ? tx('Flies with') : tx('Comes with'),
+    parts.length
+      ? (data.npc
+        ? tx('Its default loadout, from the game files: what a disabled one carries. Open a part for where else it drops.')
+        : tx('Its default loadout, from the game files: what it comes out of the shop with. Open a part for where else it drops or is sold.'))
+      : tx('The game files give it no default loadout of weapons or components.'));
+  if (parts.length) fitted.append(refPartsTable(parts));
+  body.append(fitted);
+
+  const versions = data.npcVersions || [];
+  if (versions.length) {
+    const npcs = refSection(tx('Flown by NPCs'),
+      txn(versions.length, 'One NPC version, named for who flies it. Open it for its parts.',
+        '{count} NPC versions, named for who flies them. Open one for its parts.'));
+    npcs.append(refLinkList(versions, (v, li) => {
+      li.append(refLink('ship', v.className, v.crew.split(' · ').map((w) => tx(w)).join(' · ')));
+      // Two Criminal Gladiuses are different ships - _PU_AI_CRIM and
+      // _PU_AI_CRIM_IK - so the rest of the class tells them apart.
+      const tail = v.className.startsWith(`${data.className}_`) ? v.className.slice(data.className.length + 1) : v.className;
+      const count = (v.parts || []).reduce((n, p) => n + p.count, 0);
+      li.append(el('span', 'muted', ` · ${tail} · ${txn(count, '{count} part', '{count} parts')}`));
+    }));
+    body.append(npcs);
+  }
 }
 
 async function loadPartsRef() {
@@ -4713,8 +6339,10 @@ function renderPartsRef() {
   const body = $('#parts-table tbody');
   body.textContent = '';
 
+  const foundOnly = Boolean($('#parts-found')?.checked);
   const rows = partCatalogue.filter((p) =>
     (!type || p.type === type)
+    && (!foundOnly || partDrops(p))
     && (!term
       || p.className.toLowerCase().includes(term)
       || (p.name || '').toLowerCase().includes(term)
@@ -4738,7 +6366,7 @@ function renderPartsRef() {
     const td = el('td', 'muted', partCatalogue.length
       ? tx('Nothing matches that filter.')
       : gameDataExcuse() || tx('No parts were found in your game files.'));
-    td.colSpan = 9;
+    td.colSpan = 10;
     tr.append(td);
     body.append(tr);
     return;
@@ -4757,8 +6385,8 @@ function renderPartsRef() {
     // it costs and where - so the name always opens one, where it used to open
     // only for the items the game happened to write a paragraph about.
     const open = el('button', 'place-link commodity-open', shown);
-    open.title = tx('What Quantum Wake knows about this');
-    open.addEventListener('click', () => openEntity('part', part.className));
+    open.title = tx('Everything known about it: where it drops, who sells it, what it is fitted to');
+    open.addEventListener('click', () => openRefDetail('item', part.className));
     label.append(open);
 
     label.append(trackButton(shown));
@@ -4778,9 +6406,22 @@ function renderPartsRef() {
     if (part.terminals?.length) stocked.title = part.terminals.join('\n');
     tr.append(stocked);
     tr.append(el('td', 'muted', part.cheapestAt ?? '—'));
+    const drops = partDrops(part);
+    tr.append(el('td', drops ? null : 'muted', drops || '—'));
 
     body.append(tr);
   }
+}
+
+/**
+ * Where the files put an item to be found, in a word: the best roll from a
+ * crate, else who wears it, else the NPC ships that fly with it.
+ */
+function partDrops(part) {
+  if (part.bestRoll > 0) return tx('{odds} a roll', { odds: lootPercent(part.bestRoll) });
+  if (part.npcs > 0) return txn(part.npcs, 'on {count} NPC', 'on {count} NPCs');
+  if (part.ships > 0) return txn(part.ships, 'on {count} NPC ship', 'on {count} NPC ships');
+  return '';
 }
 
 /**
@@ -4807,6 +6448,7 @@ onInput('#ships-search', renderShipsRef);
 $('#ships-career')?.addEventListener('change', renderShipsRef);
 onInput('#parts-search', renderPartsRef);
 $('#parts-type')?.addEventListener('change', renderPartsRef);
+$('#parts-found')?.addEventListener('change', renderPartsRef);
 
 /* ---------- mining and salvage spawns ---------- */
 
@@ -6800,7 +8442,8 @@ function renderArmouryKit() {
     return armouryOpenKit === key ? armouryExpansion(detail(), columns) : null;
   };
   const named = (item, sub) => {
-    const td = el('td', null, item.name);
+    const td = el('td');
+    td.append(item.class ? rowRefLink('item', item.class, item.name) : document.createTextNode(item.name));
     if (sub) td.append(el('div', 'armoury-kind', sub));
     return td;
   };
@@ -7114,7 +8757,8 @@ function renderArmouryGuns() {
     const tr = el('tr');
     tr.dataset.class = w.class;
     if (armouryOpenGun === w.class) tr.classList.add('open');
-    const name = el('td', null, w.name);
+    const name = el('td');
+    name.append(rowRefLink('item', w.class, w.name));
     if (w.manufacturer) name.append(el('div', 'armoury-kind', w.manufacturer));
     tr.append(name);
     const kind = el('td', null, w.kind);
@@ -7295,7 +8939,11 @@ function renderArmouryArmour() {
     const key = `${a.slot}|${a.name}`;
     tr.dataset.key = key;
     if (armouryOpenSet === key) tr.classList.add('open');
-    const name = el('td', null, a.family);
+    // A row is one slot of one family, its colourways folded together; the
+    // name opens the first of them, which is the plain edition.
+    const name = el('td');
+    const piece = a.pieces?.[0]?.class;
+    name.append(piece ? rowRefLink('item', piece, a.family) : document.createTextNode(a.family));
     if (a.manufacturer) name.append(el('div', 'armoury-kind', a.manufacturer));
     tr.append(name);
     tr.append(el('td', null, a.slot));
@@ -7453,7 +9101,9 @@ function renderCraftingRef() {
     const tr = el('tr');
 
     const makes = el('td');
-    makes.append(el('span', null, bp.output));
+    // The name opens the blueprint's card: what it makes and where to get it.
+    if (bp.outputClass) makes.append(refLink('blueprint', bp.outputClass, bp.output));
+    else makes.append(el('span', null, bp.output));
 
     if (bp.owned) {
       const badge = el('span', 'job-kind owned', tx('yours'));
@@ -8979,7 +10629,11 @@ async function renderHangarComparison() {
   head.textContent = '';
   const hr = el('tr');
   hr.append(el('th', null, ''));
-  for (const side of sides) hr.append(el('th', 'num', side.ship.name));
+  for (const side of sides) {
+    const th = el('th', 'num');
+    th.append(refLink('ship', side.ship.className || side.ship.name, side.ship.name));
+    hr.append(th);
+  }
   hr.append(el('th', 'num', tx('Difference')));
   head.append(hr);
 
@@ -9859,6 +11513,26 @@ function renderWikelo() {
   for (const trade of shown) list.append(wikeloCard(trade));
 }
 
+/**
+ * A thing a trade wants or gives, opening the window for what it is: the
+ * ship card for a hull, the commodity drawer for an ore, the item card for
+ * gear. The server says which (0.20.33); a class it cannot place stays words
+ * rather than becoming a link that opens on nothing.
+ */
+function wikeloName(entry) {
+  if (entry.kind === 'item' || entry.kind === 'ship') return refLink(entry.kind, entry.class, entry.name);
+  if (entry.kind === 'commodity') {
+    const link = el('button', 'place-link ref-link', entry.name);
+    link.type = 'button';
+    link.title = tx('Open this commodity');
+    // By the Market's name for it, which the server sends: the trade file's
+    // own spelling ("Quantainium") is not the one the drawer is keyed on.
+    link.addEventListener('click', () => openCommodity(entry.commodity || entry.name));
+    return link;
+  }
+  return document.createTextNode(entry.name);
+}
+
 /** The rank a trade needs, in the file's own words with its threshold. */
 function wikeloGate(trade) {
   if (!trade.minStanding) return null;
@@ -9892,7 +11566,13 @@ function wikeloCard(trade, into = null) {
 
   const gives = el('div', 'wikelo-gives');
   if (trade.rewards.length) {
-    gives.append(el('span', 'strong', trade.rewards.map((r) => `${r.count > 1 ? `${r.count}× ` : ''}${r.name}`).join(', ')));
+    const names = el('span', 'strong');
+    trade.rewards.forEach((r, index) => {
+      if (index) names.append(document.createTextNode(', '));
+      if (r.count > 1) names.append(document.createTextNode(`${r.count}× `));
+      names.append(wikeloName(r));
+    });
+    gives.append(names);
   } else {
     gives.append(el('span', 'muted', tx('a reward the file does not name — a blueprint or food pool')));
   }
@@ -9906,7 +11586,9 @@ function wikeloCard(trade, into = null) {
   for (const r of trade.requirements) {
     const li = el('li', r.have ? 'have' : 'lack');
     li.append(el('span', 'mark', r.have ? '✓' : '○'));
-    li.append(el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} ${r.name}`));
+    const what = el('span', 'what', `${r.unit === 'SCU' ? `${r.count} SCU` : `${r.count}×`} `);
+    what.append(wikeloName(r));
+    li.append(what);
     if (r.have) li.append(el('span', 'muted', ` · ${tx('seen at {places}', { places: r.where.join(', ') })}`));
     wants.append(li);
   }
@@ -10250,7 +11932,12 @@ function eventRewardItems(items) {
     }
 
     const text = el('div', 'event-reward-text');
-    text.append(el('div', 'event-reward-name', item.oneOf ? tx('One of: {name}', { name: item.name }) : item.name));
+    // A reward the catalogue matched opens its Reference card. "One of"
+    // names a pool the class is only one member of, so it stays words.
+    const name = el('div', 'event-reward-name');
+    if (item.class && !item.oneOf) name.append(refLink('item', item.class, item.name));
+    else name.textContent = item.oneOf ? tx('One of: {name}', { name: item.name }) : item.name;
+    text.append(name);
     text.append(el('div', 'muted event-reward-kind', item.class
       ? rewardKindLine(item, facts)
       : tx('not in the installed game’s catalogue under this name')));
@@ -11091,7 +12778,9 @@ async function renderFleetFittings() {
 
   for (const s of ships) {
     const card = el('article', 'ship-card');
-    card.append(el('div', 'strong', s.ship));
+    const title = el('div', 'strong');
+    title.append(refLink('ship', s.ship, s.ship));
+    card.append(title);
     card.append(el('div', 'muted', tx('as photographed {when}', { when: new Date(s.shotAt).toLocaleString(QW_DATE_LOCALES) })));
     if (s.scope) card.append(el('div', 'muted', screenText(s.scope)));
 
@@ -11161,7 +12850,9 @@ async function renderFleetBerths() {
     const maker = makerOf(row.ship);
     if (row.className) card.append(shipPicture({ name: row.ship, className: row.className }, maker));
     const body = el('div', 'ship-body');
-    body.append(el('div', 'ship-name', row.ship));
+    const title = el('div', 'ship-name');
+    title.append(refLink('ship', row.className || row.ship, row.ship));
+    body.append(title);
     const facts = [row.location ? tx('at {place}', { place: row.location }) : null, row.state ? row.state.toLowerCase() : null, row.focus, row.cargo != null ? `${row.cargo} SCU` : null].filter(Boolean);
     body.append(el('div', 'ship-ref muted', facts.join(' · ') || tx('no berth read')));
     body.append(el('div', 'ship-ref muted', tx('never flown in the logs')));
@@ -14922,7 +16613,12 @@ async function loadCasualties() {
     (v) => `${v}`);
 
   bars('#casualties-ships',
-    data.byShip.map((s) => ({ label: s.ship, value: s.deaths })),
+    data.byShip.map((s) => ({
+      label: s.ship,
+      value: s.deaths,
+      onClick: () => openRefDetail('ship', s.ship),
+      title: tx('Open this ship'),
+    })),
     (v) => `${v}`);
 
   bars('#casualties-woke',
@@ -15028,7 +16724,9 @@ async function renderSharedShips(days) {
   for (const ship of ships) {
     const tr = el('tr');
     tr.append(el('td', null, ship.handle));
-    tr.append(el('td', null, ship.ship));
+    const hull = el('td');
+    hull.append(refLink('ship', ship.ship, ship.ship));
+    tr.append(hull);
 
     // Whose ship it was is the interesting half: crewing for somebody is a
     // different evening from having them aboard yours.
@@ -15632,8 +17330,13 @@ function renderNowServer(state) {
   note.textContent = parts.join(' ');
   note.className = `note${state.shardNote || state.shardDisposition === 'avoid' ? ' warn' : ''}`;
 
+  // The glyph alone, as on the Servers table and a Fleet card: the card's
+  // stylesheet draws this as a 24px star, and the word "Favourite" beside it
+  // spilled out under the box. The words are the hover and the label.
   const star = $('#now-server-star');
-  star.textContent = state.shardFavorite ? tx('★ Favourite') : tx('☆ Favourite');
+  star.textContent = state.shardFavorite ? '★' : '☆';
+  star.title = state.shardFavorite ? tx('Remove from favourites') : tx('Add to favourites');
+  star.setAttribute('aria-label', star.title);
   star.className = `ghost tiny${state.shardFavorite ? ' on' : ''}`;
   star.onclick = () => setServerFavorite(state.shard, !state.shardFavorite).catch(() => {});
 
@@ -15839,8 +17542,13 @@ async function loadGarageCargo(cls) {
     const kinds = new Map();
     for (const g of grids) kinds.set(g.class, (kinds.get(g.class) || 0) + 1);
     const sizes = [...kinds].map(([k, n]) => { const g = grids.find((x) => x.class === k); return `${n > 1 ? `${n} × ` : ''}${fmt1(g.x)} × ${fmt1(g.y)} × ${fmt1(g.z)} m`; }).join(', ');
-    sub.textContent = `${txn(grids.length, '{count} grid, {scu} SCU by the dataset’s own placement: {sizes}.', '{count} grids, {scu} SCU by the dataset’s own placement: {sizes}.',
-      { scu: fmt1(grids.reduce((a, g) => a + g.scu, 0)), sizes })} ${tx('Type a load and see where each crate would go.')}`;
+    // Said where the grids came from: the install's own loadout for nearly
+    // every hull, the community dump for the few it does not place.
+    const values = { scu: fmt1(grids.reduce((a, g) => a + g.scu, 0)), sizes };
+    const placement = garageCargo.gridsFrom === 'install'
+      ? txn(grids.length, '{count} grid, {scu} SCU as your install’s loadout places it: {sizes}.', '{count} grids, {scu} SCU as your install’s loadout places them: {sizes}.', values)
+      : txn(grids.length, '{count} grid, {scu} SCU by the dataset’s own placement: {sizes}.', '{count} grids, {scu} SCU by the dataset’s own placement: {sizes}.', values);
+    sub.textContent = `${placement} ${tx('Type a load and see where each crate would go.')}`;
   }
 
   renderCargoLoadInputs();
@@ -16497,20 +18205,28 @@ function renderGarageRig(data) {
 
 function garageRigSlot(port, ship) {
   const selected = port.portIds.includes(garageSelectedPort);
-  const button = el('button', `garage-rig-slot${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}`);
-  button.type = 'button';
+  const fixed = Boolean(port.fixedReason);
+  // A frame with a button's role rather than a <button>: the fitted part's
+  // name inside it opens the part's Reference card, and a button cannot
+  // hold a link. Enter and Space select the port as the click does.
+  const button = el('div', `garage-rig-slot${port.changed ? ' changed' : ''}${selected ? ' selected' : ''}${fixed ? ' fixed' : ''}`);
+  button.setAttribute('role', 'button');
+  button.tabIndex = fixed ? -1 : 0;
   button.dataset.port = port.portIds[0];
   button.setAttribute('aria-pressed', String(selected));
+  if (fixed) button.setAttribute('aria-disabled', 'true');
   const many = port.portIds.length > 1;
   const name = port.name || port.class || tx('Empty port');
   button.title = `${garageWord(port.group)} · ${garagePortName(port.hardpoint)} · ${name}`;
-  button.disabled = !!port.fixedReason;
-  if (port.fixedReason) button.title = port.fixedReason;
+  if (fixed) button.title = port.fixedReason;
   button.append(partMark(port.fitted, true));
 
   const body = el('span', 'garage-rig-slot-body');
   body.append(el('span', 'garage-rig-slot-kind', garageWord(port.group)));
-  const part = el('span', 'garage-rig-slot-name', name);
+  const part = el('span', 'garage-rig-slot-name');
+  const fittedClass = port.fitted?.class || port.class;
+  if (fittedClass) part.append(rowRefLink('item', fittedClass, name));
+  else part.textContent = name;
   if (port.fitted) part.append(partChip(port.fitted));
   if (many) part.append(el('span', 'chip count', `×${port.portIds.length}`));
   body.append(part);
@@ -16518,7 +18234,13 @@ function garageRigSlot(port, ship) {
   const figures = partFigures(port.fitted, ship).slice(0, 2);
   if (figures.length) body.append(el('span', 'garage-rig-slot-spec', figures.map((f) => `${f[2]} ${f[0]}`).join(' · ')));
   button.append(body);
-  button.addEventListener('click', () => selectBenchPort(port.portIds[0], true).catch(() => {}));
+  const select = () => { if (!fixed) selectBenchPort(port.portIds[0], true).catch(() => {}); };
+  button.addEventListener('click', select);
+  button.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    select();
+  });
   return button;
 }
 
@@ -17039,7 +18761,10 @@ function renderBenchPanel() {
     rowEl.append(partMark(part));
 
     const mid = el('div');
-    const name = el('div', 'c-name', part.name);
+    // The name opens the part's Reference card - its shops, what drops it,
+    // which ships carry it - the way a component's name does everywhere.
+    const name = el('div', 'c-name');
+    name.append(refLink('item', part.class, part.name));
     name.append(partChip(part));
     const componentClass = componentClassChip(option.componentClass);
     if (componentClass) name.append(componentClass);
@@ -18960,29 +20685,33 @@ async function checklistCall(url, method = 'POST', body = null) {
   await loadChecklists();
 }
 
-function showChecklistAttachment(attachment) {
+/**
+ * One attachment as a chip - or, given the line's own words, as those words:
+ * "Get Gallant Rifle" over a chip reading GALLANT RIFLE said the name twice,
+ * so a line that already names what it links to becomes the link itself.
+ */
+function showChecklistAttachment(attachment, words) {
+  const chip = words ? 'link checklist-item-link' : 'checklist-attachment';
   if (attachment.kind === 'location') {
-    const button = el('button', 'checklist-attachment place-link', `⌖ ${attachment.label}`);
+    const button = el('button', words ? `${chip} place-link` : 'checklist-attachment place-link', words || `⌖ ${attachment.label}`);
     button.title = tx('Show this place on the map');
     button.addEventListener('click', () => briefingMap(attachment.placeId, attachment.target || attachment.label));
     return button;
   }
 
   if (attachment.kind === 'commodity') {
-    const button = el('button', 'checklist-attachment', `◇ ${attachment.label}`);
+    const button = el('button', chip, words || `◇ ${attachment.label}`);
     button.title = tx('Open this commodity');
     button.addEventListener('click', () => openCommodity(attachment.target || attachment.label));
     return button;
   }
 
+  // An item opens its Reference card: where it drops, who sells it, what it
+  // is fitted to - the question a line on a shopping list is asking.
   if (attachment.kind === 'item') {
-    const button = el('button', 'checklist-attachment', `▦ ${attachment.label}`);
-    button.title = tx('Find this item in Parts');
-    button.addEventListener('click', () => {
-      showView('parts');
-      $('#parts-search').value = attachment.target || attachment.label;
-      renderPartsRef();
-    });
+    const button = el('button', chip, words || `▦ ${attachment.label}`);
+    button.title = tx('Where to find it, buy it or craft it');
+    button.addEventListener('click', () => openRefDetail('item', attachment.target || attachment.label));
     return button;
   }
 
@@ -19013,7 +20742,14 @@ function checklistItemRow(list, item, compact = false) {
   row.append(check);
 
   const main = el('div', 'checklist-item-main');
-  main.append(el('div', 'checklist-item-text', item.text));
+  const attachments = item.attachments || [];
+  const said = (item.text || '').toLowerCase();
+  const named = attachments.find((a) => ['location', 'commodity', 'item'].includes(a.kind)
+    && a.label && said.includes(a.label.toLowerCase()));
+  const text = el('div', 'checklist-item-text');
+  if (named) text.append(showChecklistAttachment(named, item.text));
+  else text.textContent = item.text;
+  main.append(text);
   if (!compact && item.note) main.append(el('div', 'muted checklist-note', item.note));
   if (item.dueAt) main.append(el('div', 'checklist-due', `◷ ${checklistDue(item.dueAt)}`));
 
@@ -19023,16 +20759,27 @@ function checklistItemRow(list, item, compact = false) {
     main.append(note);
   }
 
-  const attachments = item.attachments || [];
-  if (attachments.length) {
+  // In an inventory since the line was written - looted, bought or given;
+  // the listing does not say which. Weaker than a receipt, so it is a note,
+  // not a strike-through, and the line stays the reader's to tick.
+  if (!item.done && !bought && item.found) {
+    const note = el('div', 'checklist-found', tx('in your inventory {date}', { date: dayOf(item.found) }));
+    note.title = item.foundBefore
+      ? `${tx('Your logs list this in your inventory since you wrote this line: looted, bought or given, which they do not tell apart.')} ${tx('It was listed before you wrote the line too, so it may be one you already had.')}`
+      : tx('Your logs list this in your inventory since you wrote this line: looted, bought or given, which they do not tell apart.');
+    main.append(note);
+  }
+
+  const others = attachments.filter((a) => a !== named);
+  if (others.length) {
     const links = el('div', 'checklist-attachments');
-    for (const attachment of attachments) links.append(showChecklistAttachment(attachment));
+    for (const attachment of others) links.append(showChecklistAttachment(attachment));
     main.append(links);
   }
   row.append(main);
 
   if (!compact) {
-    const remove = el('button', 'ghost tiny', '×');
+    const remove = el('button', 'ghost tiny icon', '×');
     remove.title = tx('Remove task');
     remove.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/items/${item.id}`, 'DELETE'));
     row.append(remove);
@@ -19197,6 +20944,10 @@ function renderChecklists(lists) {
     if (list.pinned) head.append(el('span', 'job-kind owned', tx('on Now')));
     head.append(el('span', 'spacer'));
 
+    const farm = el('button', checklistFarmOpen.has(list.id) ? 'ghost on checklist-farm-toggle' : 'ghost checklist-farm-toggle', tx('Where to get these'));
+    farm.title = tx('Where each open line can be found, bought or crafted, and the places that yield the most of the list');
+    head.append(farm);
+
     const pin = el('button', list.pinned ? 'ghost on' : 'ghost', list.pinned ? tx('On Now') : tx('Pin to Now'));
     pin.title = tx('Only one checklist is shown on Now and in the overlay');
     pin.addEventListener('click', () => checklistCall(`/api/checklists/${list.id}/pin`));
@@ -19211,8 +20962,168 @@ function renderChecklists(lists) {
     const items = el('ul', 'checklist-items');
     for (const entry of list.items) items.append(checklistItemRow(list, entry));
     if (!list.items.length) items.append(el('li', 'muted', tx('No tasks yet — add the first thing you want to remember.')));
-    card.append(items, checklistComposer(list));
+
+    // Open across re-renders: ticking a line redraws every card, and a panel
+    // that closed itself each time would have to be asked for again.
+    const panel = el('div', 'checklist-farm');
+    panel.hidden = !checklistFarmOpen.has(list.id);
+    if (!panel.hidden) showChecklistFarm(list, panel);
+    farm.addEventListener('click', () => {
+      if (checklistFarmOpen.has(list.id)) {
+        checklistFarmOpen.delete(list.id);
+        panel.hidden = true;
+        farm.classList.remove('on');
+      } else {
+        checklistFarmOpen.add(list.id);
+        panel.hidden = false;
+        farm.classList.add('on');
+        // Returned so whoever clicked can wait for the answer.
+        return showChecklistFarm(list, panel);
+      }
+    });
+
+    card.append(items, panel, checklistComposer(list));
     host.append(card);
+  }
+}
+
+const checklistFarmOpen = new Set();
+
+/**
+ * What a list's open lines name, as written: the item or commodity a line
+ * links to, or failing that its own text. A ticked line is done with.
+ */
+function checklistFarmNames(list) {
+  const names = [];
+  for (const item of list.items || []) {
+    if (item.done) continue;
+    const linked = (item.attachments || []).find((a) => a.kind === 'item' || a.kind === 'commodity');
+    const name = (linked?.label || item.text || '').trim();
+    if (name && !names.some((n) => n.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names;
+}
+
+async function showChecklistFarm(list, panel) {
+  const names = checklistFarmNames(list);
+  if (!names.length) {
+    panel.replaceChildren(el('p', 'muted', tx('Nothing left to get: every line is ticked.')));
+    return;
+  }
+
+  panel.replaceChildren(el('p', 'muted', tx('Reading the loot tables…')));
+  let data;
+  try {
+    const response = await fetch('/api/loot/farm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names }),
+    });
+    data = await response.json();
+  } catch {
+    panel.replaceChildren(el('p', 'muted', tx('The loot tables could not be read.')));
+    return;
+  }
+
+  renderChecklistFarm(panel, data);
+}
+
+/**
+ * A list's answer: the places that yield the most of it, then each line with
+ * where to find, buy or craft it. Lines that match no item say so rather than
+ * vanish - a commodity or a typo is still on the list.
+ */
+function renderChecklistFarm(panel, data) {
+  panel.textContent = '';
+  const items = data.items || [];
+  const places = data.places || [];
+
+  if (places.length) {
+    panel.append(el('h4', 'loot-where-sub', tx('Best places for this list')));
+    panel.append(el('p', 'muted caption', tx('Ranked by how many of the list a place can yield, then by the chances added up. Per crate slot, an estimate like every number on the Loot page.')));
+    if (data.tied > places.length) {
+      panel.append(el('p', 'caption checklist-farm-tied',
+        tx('{count} places tie for the best: these are the first ten, and the rest are just as good.', { count: data.tied })));
+    }
+
+    const table = el('table', 'loot-where-table checklist-farm-places');
+    const headRow = el('tr');
+    for (const label of [tx('Place'), tx('On'), tx('Covers'), tx('Items there')]) headRow.append(el('th', null, label));
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const place of places) {
+      const tr = el('tr');
+      tr.append(place.name ? el('td', null, place.name) : el('td', 'muted', tx('Unmarked spot')));
+      tr.append(el('td', 'muted', place.body || '—'));
+      tr.append(el('td', 'num', tx('{count} of {total}', { count: place.items.length, total: items.length })));
+      tr.append(el('td', 'muted loot-where-containers',
+        place.items.map((i) => `${i.name} ${lootPercent(i.chance)}`).join(', ')));
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    panel.append(wrap);
+  }
+
+  if (items.length) {
+    panel.append(el('h4', 'loot-where-sub', tx('Each line')));
+    const table = el('table', 'loot-where-table checklist-farm-items');
+    const headRow = el('tr');
+    for (const [label, title] of [
+      [tx('Item'), null],
+      [tx('Best place'), tx('The named place with the best per-slot chance, or an unmarked spot when there is none')],
+      [tx('Worn by'), tx('The NPC likeliest to have it on them, and how many kinds of NPC can')],
+      [tx('NPC ships'), null],
+      [tx('Buy'), tx('The cheapest shop in the UEX prices, and what you paid the last time you bought one')],
+      [tx('Craft'), tx('Whether the game has a recipe that makes it, and how long it takes')],
+    ]) {
+      const th = el('th', null, label);
+      if (title) th.title = title;
+      headRow.append(th);
+    }
+    const thead = el('thead');
+    thead.append(headRow);
+    table.append(thead);
+
+    const body = el('tbody');
+    for (const item of items) {
+      const tr = el('tr');
+      // The Reference card, as from every other table: it carries the same
+      // where-it-drops panel the Loot page shows, and the shops besides.
+      const cell = el('td');
+      cell.append(refLink('item', item.itemClass, item.name));
+      tr.append(cell);
+
+      tr.append(el('td', item.best ? null : 'muted', item.best
+        ? `${item.best.name || tx('Unmarked spot')}${item.best.body ? ` · ${item.best.body}` : ''} ${lootPercent(item.best.chance)}`
+        : '—'));
+      tr.append(el('td', item.npc ? null : 'muted', item.npc
+        ? `${item.npc.label} ${item.npc.share >= 0.9995 ? tx('always') : lootPercent(item.npc.share)}${item.npcs > 1 ? ` ${tx('+{count} more', { count: item.npcs - 1 })}` : ''}`
+        : '—'));
+      tr.append(el('td', 'num muted', item.ships > 0 ? String(item.ships) : '—'));
+      const prices = lootPriceLines(item.buy, item.paid);
+      const buy = el('td', prices.length ? 'checklist-farm-buy' : 'muted');
+      if (prices.length) buy.append(...prices);
+      else buy.textContent = data.uex ? tx('not sold') : tx('prices off');
+      tr.append(buy);
+      tr.append(el('td', item.craft ? null : 'muted', item.craft
+        ? tx('{minutes} min', { minutes: Math.max(1, Math.round(item.craft.craftSeconds / 60)) })
+        : '—'));
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el('div', 'table-wrap');
+    wrap.append(table);
+    panel.append(wrap);
+  }
+
+  const unmatched = data.unmatched || [];
+  if (unmatched.length) {
+    panel.append(el('p', 'muted caption', tx('Not matched to an item: {names}. A commodity, a typo, or something no table, NPC, ship or recipe has - Shopping can still find where it is sold.', { names: unmatched.join(', ') })));
   }
 }
 
@@ -19677,8 +21588,13 @@ async function loadLogbook() {
 
     li.append(el('span', `k ${row.kind}`, logbookKind(row.kind)));
 
-    // Item-ish lines pretty their class names; a session line is prose.
-    li.append(el('span', 'd what', logbookWhat(row)));
+    // Item-ish lines pretty their class names; a session line is prose. A
+    // line about one item - a purchase, a first sighting - opens its
+    // Reference card, by the class the server sends beside the words.
+    const what = el('span', 'd what');
+    if (row.subject) what.append(refLink('item', row.subject, logbookWhat(row)));
+    else what.textContent = logbookWhat(row);
+    li.append(what);
 
     if (row.place) {
       const place = el('span', 'd');
@@ -20753,7 +22669,7 @@ function shareReportDocument() {
 }
 
 function shareReportCss() {
-  return 'body{margin:0;background:#070c14;color:#dcebf7;font:14px/1.5 system-ui,Segoe UI,sans-serif}.share-report{max-width:960px;margin:32px auto;padding:28px;background:linear-gradient(150deg,#101d2c,#070c14);border:1px solid #2c526d}.share-report-head,.share-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.share-kicker{color:#8be7ff;font:700 11px ui-monospace,Consolas,monospace;letter-spacing:2px}.share-report h2{margin:4px 0;font-size:30px}.share-report h3{margin:0;color:#8be7ff;font-size:18px}.share-report h4{margin:20px 0 7px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#7691a8}.muted,.share-section-detail{color:#9ab0c3}.data-sources{display:flex;gap:4px;flex-wrap:wrap}.data-source{border:1px solid #2c526d;padding:2px 5px;font:10px ui-monospace,Consolas,monospace;letter-spacing:.7px;color:#8be7ff}.game-install{color:#7ee3a5}.screenshot-ocr,.data-source-qualifier{color:#ffbc66}.community-data{color:#c59cff}.share-section{margin-top:22px;padding-top:18px;border-top:1px solid #24445b}.share-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:14px}.share-metric{padding:10px;background:#0a1420;border-left:2px solid #35c8f0}.share-metric-value{font-size:16px;font-weight:700}.share-metric-label{font-size:10px;color:#9ab0c3;text-transform:uppercase;letter-spacing:.8px}.share-list{list-style:none;padding:0;margin:0}.share-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:6px 0;border-bottom:1px solid #172b3b}.share-list b{white-space:nowrap}.inward{color:#7ee3a5}.share-limits{margin:25px 0 0;color:#9ab0c3;font-size:12px}@media print{body{background:#fff;color:#14202b}.share-report{margin:0;max-width:none;border:0;background:#fff}.share-report h3,.share-kicker{color:#126b91}.share-section{border-color:#b8cbd6}.share-metric{background:#eef5f8;border-color:#126b91}.muted,.share-section-detail,.share-metric-label,.share-limits{color:#50616c}.data-source{color:#126b91;border-color:#8ca6b4}.share-list li{border-color:#d6e1e7}}';
+  return 'body{margin:0;background:#070c14;color:#dcebf7;font:14px/1.5 system-ui,Segoe UI,sans-serif}.share-report{max-width:960px;margin:32px auto;padding:28px;background:linear-gradient(150deg,#101d2c,#070c14);border:1px solid #2c526d}.share-report-head,.share-section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.share-kicker{color:#8be7ff;font:700 11px ui-monospace,Consolas,monospace;letter-spacing:2px}.share-report h2{margin:4px 0;font-size:30px}.share-report h3{margin:0;color:#8be7ff;font-size:18px}.share-report h4{margin:20px 0 7px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#7691a8}.muted,.share-section-detail{color:#9ab0c3}.data-sources{display:flex;gap:4px;flex-wrap:wrap}.data-source{border:1px solid #2c526d;padding:2px 5px;font:10px ui-monospace,Consolas,monospace;letter-spacing:.7px;color:#8be7ff}.game-log,.screenshot-ocr{color:#e9c27d}.screenshot-ocr{border-style:dashed}.game-install{color:#35c8f0}.data-source-qualifier{color:#ffbc66}.community-data{color:#5fd39a}.uex-prices{color:#b58cf0}.share-section{margin-top:22px;padding-top:18px;border-top:1px solid #24445b}.share-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-top:14px}.share-metric{padding:10px;background:#0a1420;border-left:2px solid #35c8f0}.share-metric-value{font-size:16px;font-weight:700}.share-metric-label{font-size:10px;color:#9ab0c3;text-transform:uppercase;letter-spacing:.8px}.share-list{list-style:none;padding:0;margin:0}.share-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:6px 0;border-bottom:1px solid #172b3b}.share-list b{white-space:nowrap}.inward{color:#7ee3a5}.share-limits{margin:25px 0 0;color:#9ab0c3;font-size:12px}@media print{body{background:#fff;color:#14202b}.share-report{margin:0;max-width:none;border:0;background:#fff}.share-report h3,.share-kicker{color:#126b91}.share-section{border-color:#b8cbd6}.share-metric{background:#eef5f8;border-color:#126b91}.muted,.share-section-detail,.share-metric-label,.share-limits{color:#50616c}.data-source{color:#126b91;border-color:#8ca6b4}.share-list li{border-color:#d6e1e7}}';
 }
 
 async function openShareReport() {
@@ -21752,7 +23668,11 @@ function makerOf(shipName) {
 
 /** The active ship deserves the same manufacturer mark as the Fleet page. */
 function renderNowShip(shipName) {
-  $('#now-ship').textContent = shipName || '—';
+  // The hero value opens the ship's Reference card, as every ship name does.
+  const value = $('#now-ship');
+  value.textContent = '';
+  if (shipName) value.append(refLink('ship', shipName, shipName));
+  else value.textContent = '—';
 
   const badge = $('#now-ship-logo');
   badge.textContent = '';
@@ -22018,7 +23938,11 @@ function renderFleetShips() {
     if (ship.className) card.append(shipPicture(ship, maker, { onPreview: () => toggleShipPreview(ship, card) }));
 
     const body = el('div', 'ship-body');
-    body.append(el('div', 'ship-name', maker.model));
+    // The name opens the ship's Reference card - spec sheet, shops, stock
+    // parts, NPC versions - as a ship's name does on the Reference pages.
+    const title = el('div', 'ship-name');
+    title.append(refLink('ship', ship.className || ship.name, maker.model));
+    body.append(title);
     body.append(el('div', 'ship-maker', maker.name));
 
     const stat = el('div', 'ship-stats');
@@ -22225,10 +24149,14 @@ function renderSpending(stats) {
     bars('#shops-more-chart', shopRows.slice(7), shopFormat);
   }
 
+  // The bar's name opens the item's Reference card. The totals are by display
+  // name rather than class, which the card resolves just as readily.
   const itemRows = stats.items.slice(0, 20).map((i) => ({
       label: i.name,
       value: Number(i.total),
       note: i.quantity > 1 ? `×${i.quantity}` : null,
+      onClick: () => openRefDetail('item', i.name),
+      title: tx('Open this item'),
     }));
   bars('#items-chart', itemRows.slice(0, 9), money);
   const moreItems = $('#items-more');
@@ -22415,7 +24343,9 @@ function loadoutSlotContents(slot, compact = false) {
 
   for (const item of slot.items) {
     const line = el('div', 'slot-current');
-    line.append(el('span', null, loadoutItemName(item)));
+    // The name opens the item's Reference card, as it does in a stash or a
+    // table; the card resolves the display name the port lines record.
+    line.append(refLink('item', item.name, loadoutItemName(item)));
     if (item.count > 1) line.append(el('span', 'slot-multi', ` ×${item.count}`));
     body.append(line);
 
@@ -22776,7 +24706,7 @@ async function renderStash(stats) {
 
       expandableList(card, group.items, 8, (item) => {
         const li = el('li');
-        li.append(el('span', 'slot-item', prettyItem(item.name)));
+        li.append(refLink('item', item.itemClass || item.name, prettyItem(item.name), 'slot-item'));
         li.append(el('span', 'slot-count', relative(item.lastSeen)));
         return li;
       }, Boolean(term));
@@ -22974,6 +24904,7 @@ async function loadGameData() {
   // moment there is something to fetch.
   if (state?.state === 'ready' && was && was !== 'ready') {
     loadPartsRef().catch((e) => console.error('parts refill', e));
+    loadComponentsRef().catch((e) => console.error('components refill', e));
     loadMiningRef().catch((e) => console.error('mining refill', e));
     loadCraftingRef().catch((e) => console.error('crafting refill', e));
     loadMiningPlaces().catch(() => {});
@@ -25011,7 +26942,7 @@ function runActionRow(trip, stop, action, editable = false) {
   }
 
   if (editable) {
-    const remove = el('button', 'ghost tiny', '×');
+    const remove = el('button', 'ghost tiny icon', '×');
     remove.title = tx('Remove this action');
     remove.addEventListener('click', () =>
       runActionCall(`/api/trips/${trip.id}/stops/${stop.id}/actions/${action.id}`, 'DELETE'));
@@ -25456,26 +27387,26 @@ function renderTripPanel() {
     // The panel is where a plan is edited; the Now card only reads it.
     const tools = el('div', 'trip-tools');
 
-    const up = el('button', 'ghost tiny', '↑');
+    const up = el('button', 'ghost tiny icon', '↑');
     up.title = tx('Earlier in the run');
     up.disabled = index === 0;
     up.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=-1`));
 
-    const down = el('button', 'ghost tiny', '↓');
+    const down = el('button', 'ghost tiny icon', '↓');
     down.title = tx('Later in the run');
     down.disabled = index === trip.stops.length - 1;
     down.addEventListener('click',
       () => tripCall(`/api/trips/${trip.id}/stops/${stop.id}/move?delta=1`));
 
-    const drop = el('button', 'ghost tiny', '×');
+    const drop = el('button', 'ghost tiny icon', '×');
     drop.title = tx('Drop this stop');
     drop.addEventListener('click', () => {
       if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
         return tripCall(`/api/trips/${trip.id}/stops/${stop.id}`, 'DELETE');
     });
 
-    const addAction = el('button', 'ghost tiny', '+');
+    const addAction = el('button', 'ghost tiny icon', '+');
     addAction.title = tx('Add a run-sheet action at this stop');
     addAction.addEventListener('click', () => {
       const existing = row.querySelector('.run-action-form');
@@ -26139,7 +28070,7 @@ function itineraryStop(trip, stop, index, isNext) {
     else main.append(runActionForm(trip, stop));
   });
 
-  const drop = el('button', 'ghost tiny', '×');
+  const drop = el('button', 'ghost tiny icon', '×');
   drop.title = tx('Drop this stop');
   drop.addEventListener('click', () => {
     if (confirm(tx('Remove the stop “{place}” and its run-sheet lines?', { place: stop.place })))
@@ -26638,7 +28569,7 @@ function renderKits() {
     prepare.addEventListener('click', () => prepareKit(kit.id).catch(() => {}));
     row.append(prepare);
 
-    const drop = el('button', 'ghost tiny danger', '×');
+    const drop = el('button', 'ghost tiny icon danger', '×');
     drop.title = tx('Delete this kit');
     drop.addEventListener('click', async () => {
       await fetch(`/api/kits/${encodeURIComponent(kit.id)}`, { method: 'DELETE' });
@@ -27556,7 +29487,7 @@ function renderMapInfoNotes(location) {
     const card = el('div', 'map-note');
     const top = el('div', 'map-note-top');
     top.append(el('b', null, note.title));
-    const remove = el('button', 'ghost tiny', '×');
+    const remove = el('button', 'ghost tiny icon', '×');
     remove.title = tx('Remove this map note');
     remove.addEventListener('click', () => removeMapNote(note.id));
     top.append(remove);
@@ -29795,9 +31726,9 @@ const VIEW_SOURCES = {
   logs: new Set(['now', 'map', 'logbook', 'sessions', 'servers', 'places', 'points', 'crew', 'casualties',
     'contracts', 'events', 'spending', 'ledger', 'commodities', 'market', 'routes', 'fleet', 'hangar',
     'loadout', 'stash', 'loot', 'garage', 'armoury', 'wikelo', 'blueprints']),
-  gamedata: new Set(['map', 'ships', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
-  uex: new Set(['market', 'commodity', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
-  community: new Set(['market', 'commodity', 'commodities', 'parts', 'mining']),
+  gamedata: new Set(['map', 'ships', 'components', 'parts', 'mining', 'crafting', 'blueprints', 'hangar', 'armoury']),
+  uex: new Set(['market', 'commodity', 'components', 'routes', 'garage', 'armoury', 'jobs', 'events', 'casualties']),
+  community: new Set(['market', 'commodity', 'commodities', 'components', 'parts', 'mining']),
 };
 
 const SEES_ALL_ACTIVITY = new Set(['settings', 'overlay', 'log']);
@@ -30272,6 +32203,7 @@ async function maybeShowSetup() {
 }
 
 async function boot() {
+  decorateNavigationGlyphs();
   initNowCardCollapsers();
   initCurrentStatusConfiguration();
   initPageStatsCollapsers();

@@ -14,6 +14,14 @@ inside in metres, and nothing readable says how many of each a hull places -
 the Spirit C1 places its one grid record twice, and the count sits in the
 vehicle definitions that are stored encrypted.
 
+**Since 0.20.20 the install answers first.** That count was in the DataCore
+after all, in each hull's default loadout - one port per grid - and the
+grids are now read from there (`GameCargoGrids`): 145 of the 149 hulls
+the dump credits with cargo agree with it to the SCU, so Cargo fit works
+without the download. The dump below is the fallback for the four the
+install does not place, and the page says which source drew the hold. See
+the correction at the end of the cargo section in `datacore.md`.
+
 **The community dump has the count.** `ships.json` (the 41 MB file the
 Garage already downloads and digests) carries a `CargoGrids` block per ship
 with one entry per grid the hull places, each with the grid's class, its

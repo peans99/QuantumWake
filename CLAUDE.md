@@ -186,6 +186,14 @@ sending holds the load event open until the timeout, by which point boot has
 run and every fetch has landed. To put the Now page in a state, have the
 stubbed `EventSource` deliver one frame from its constructor.
 
+**A scrolled page comes out with a black band on top.** Scroll the document
+before the shot and the PNG is shifted down by exactly the scroll - 250 px
+scrolled, 250 px of black, with the sticky top bar drawn below it. It is the
+capture, not the page: an element pinned at `top: 0` is shifted with it, and
+`.topbar` measures `top: 0`. It once read as the redesign's header coming
+unstuck. Use a taller window and scroll back to 0, or measure
+`getBoundingClientRect()` instead of judging the picture.
+
 **Write the PNG into the scratchpad directory, not `%TEMP%`.** Under the
 sandbox a `--screenshot=` path in `%TEMP%\claude` produced nothing and Chrome
 still exited zero; the same command with the scratchpad path wrote the file.

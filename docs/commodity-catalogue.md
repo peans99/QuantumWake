@@ -80,10 +80,12 @@ the archive.
 | What a given kiosk buys or sells | **No** — not in the DataCore. Community data has it; see below |
 | Naming a commodity in our own sale log | **Not offline** — solved via the opt-in community dataset; see below |
 
-The last two most likely live in `Data\ShopInventories\*.json`, which ships
-encrypted. Reading what CIG leaves open is one thing; circumventing a protection
-measure they deliberately applied is another, and it would break on any key
-change besides. Still not planned.
+The last two were long assumed to live in `Data\Scripts\ShopInventories\*.json`,
+which ships encrypted. Opened on 2026-10-31 with Nicolas's approval, they do
+not: the files are legacy stock tables (Port Olisar, 2018 sales), the item
+bought is listed for 2 of 72 logged purchases at shops that have a file, and
+none of the 13 logged commodity ids is in them. See section 9 of
+[untapped-signals.md](untapped-signals.md).
 
 ## The break: the community already resolved the join
 
