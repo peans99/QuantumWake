@@ -328,7 +328,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.27
+### 0.20.28
 
 **A new look for the logbook.** The dashboard has its own flight-deck style: calmer panels, angular buttons, and a small geometric glyph for every workspace and menu group, in the menu and beside its page title, and a refresh mark on Check for updates. A telemetry line keeps your system, location, ship and connection in view, and the current system and ship tint the quiet details around the page. Completed contracts earn small mission patches, and the live feed reads as a flight recorder. Update, patch and data notices now share one compact strip, with their detail and choices one click away instead of a full row each above your work. The Star map keeps its own star field and markers. Page changes make one short scan, and the reduced-motion setting is respected. The menu fits a laptop-width window down to 1280 pixels, in English and in French, and the new labels, from the telemetry line to the notices, are translated.
 
@@ -360,7 +360,7 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 **Ship components, by what they do.** Reference has a new **Components** page: every ship component a pilot can fit, 672 on this patch, with a tab for each kind (weapons, missiles, missile racks, shields, power plants, coolers, quantum drives, radars, and mining and utility). Each tab shows the figures that kind is chosen on: DPS, alpha, fire rate, range and projectile speed for guns; points, regeneration and downed delay for shields; output for power plants and coolers; speed, spool and cooldown for quantum drives; damage, lock time and tracking for missiles. Next to those are size, grade, maker, the cheapest UEX price, where the game files drop it, and how many ships come with it. Click any heading to sort by it, and click a name to open the part's Reference window. The figures come from the community dataset; without it the page lists the parts your install names and says the figures need it.
 
-**Fixes.** The favourite star on the Now page's Server card no longer spills the word "Favourite" out under an empty box: it is the star alone, as on the Servers page, with the words on hover. Every button that is a lone symbol, such as the × that removes a checklist line or the ↑ and ↓ that reorder a plan, is now drawn the same way: the symbol alone, outlined when you point at it, rather than lost in an empty frame.
+**Fixes.** The favourite star on the Now page's Server card no longer spills the word "Favourite" out under an empty box: it is the star alone, as on the Servers page, with the words on hover. Every button that is a lone symbol, such as the × that removes a checklist line or the ↑ and ↓ that reorder a plan, is now drawn the same way: the symbol alone, outlined when you point at it, rather than lost in an empty frame. Number boxes and dropdowns now draw their arrows dark instead of in the browser's light theme, and the savings goal on Now, the capital on Routes and the rock mass on Mining take any amount: a goal of 250,500 aUEC was refused because the box only accepted whole thousands.
 
 ### 0.20.0
 

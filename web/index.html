@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantum Wake</title>
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=0.20.27">
+  <link rel="stylesheet" href="app.css?v=0.20.28">
 <!-- Blocking on purpose: the language and its catalogue arrive before the
      body is drawn, so a French page never flashes English first. Served
      without a server, the first 404s and the page is simply English. -->
@@ -460,7 +460,7 @@
         <form class="goal-form" id="now-goal-form">
           <input type="text" id="now-goal-input" class="search" maxlength="40"
                  placeholder="Saving for&hellip;" autocomplete="off">
-          <input type="number" id="now-goal-target" class="search" min="0" step="1000"
+          <input type="number" id="now-goal-target" class="search" min="0" step="any"
                  placeholder="aUEC">
           <button type="submit" class="ghost" id="now-goal-save">Set</button>
           <button type="button" class="ghost" id="now-goal-clear" hidden>Clear</button>
@@ -728,7 +728,7 @@
         <p class="muted">Rank the current price reports against your ship and available capital.</p>
       </div>
       <div class="route-run-primary">
-        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="10000">
+        <input type="number" id="routes-capital" class="search" placeholder="Capital, aUEC" min="0" step="any">
         <select id="routes-ranking" class="select" title="How to rank trade routes">
           <option value="reliable">Reliable first</option>
           <option value="profit">Highest estimated profit</option>
@@ -2485,7 +2485,7 @@
         <section class="crack-rock">
           <h4>Scanned rock</h4>
           <label><span>Mass</span>
-            <input type="number" id="crack-mass" class="search" min="0" step="100" value="5000" title="Kilograms, as the scan HUD prints it">
+            <input type="number" id="crack-mass" class="search" min="0" step="any" value="5000" title="Kilograms, as the scan HUD prints it">
             <span class="unit">kg</span>
           </label>
           <label><span>Resistance</span>
@@ -4705,6 +4705,6 @@
        and in the overlay they are the only thing the player will actually see. -->
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-<script src="app.js?v=0.20.27"></script>
+<script src="app.js?v=0.20.28"></script>
 </body>
 </html>

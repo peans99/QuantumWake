@@ -7673,3 +7673,9 @@ body:not(.overlay) .checklist-item :is(button.ghost, button.tiny).icon:hover:not
 #components-table td .note-inline { margin-left: 6px; color: var(--dim); font-size: 10.5px; }
 #components-table th:first-child, #components-table td:first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--rule); background: var(--deep); }
 #components-table th:first-child { z-index: 2; background: var(--panel-2); }
+
+/* ---- Form controls in the dark (0.20.28). The browser drew its own parts of
+   them - a number box's spin arrows, a date picker, an open dropdown - in its
+   light theme, a white block on a dark card. Set on the controls rather than
+   the page, so the overlay's transparent page is left alone. ---- */
+body:not(.overlay) :is(input, select, textarea) { color-scheme: dark; }
