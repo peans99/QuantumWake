@@ -99,6 +99,21 @@ public class GameRepFiguresTests
             page.Text("repRunPaySource({ place: { rank: 'Rank I' }, pay: { rep: 0, source: 'elsewhere', contract: 'Standing' } })"));
     }
 
+    /// <summary>
+    /// The installer stays, optional, and its card says the app does not depend
+    /// on it. Static markup, so it is read from the page file the way the
+    /// catalogue tests read it; they check the French is there.
+    /// </summary>
+    [Fact]
+    public void The_starstrings_card_says_the_app_no_longer_needs_it()
+    {
+        var markup = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "web", "index.html"));
+        var card = markup[markup.IndexOf("id=\"starstrings-not-needed\"", StringComparison.Ordinal)..];
+
+        Assert.Contains("Quantum Wake no longer needs it.", card[..400]);
+        Assert.True(markup.IndexOf("starstrings-not-needed", StringComparison.Ordinal) < markup.IndexOf("id=\"starstrings-warning\"", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void In_french_the_new_sentences_are_translated()
     {
