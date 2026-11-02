@@ -12,7 +12,7 @@ public class ArmouryBenchTests
     private const string Pieces = """
         "attachments":[
           {"class":"scope","name":"Fixed scope","kind":"Sight","size":1},
-          {"class":"laser","name":"Laser pointer","kind":"Underbarrel","size":1},
+          {"class":"laser","name":"Laser pointer","kind":"Underbarrel","size":1,"effect":{"spread":0.885}},
           {"class":"wrong","name":"Incompatible barrel","kind":"Barrel","size":3}],
         """;
     private const string ScopeUrl = BareUrl + "scope";
@@ -55,6 +55,19 @@ public class ArmouryBenchTests
         Assert.Contains("distances and hit probabilities are not simulated", page.Text($"{Root}.textContent"));
         Assert.Contains("Spread is unchanged", page.Text($"{Result}.textContent"));
         Assert.All(page.Fetched(), u => Assert.StartsWith("GET ", u));
+    }
+
+    [Fact]
+    public void The_suggested_attachment_applies_a_real_fit_and_either_pattern_can_be_isolated()
+    {
+        var page = Open(true);
+        page.Do($"{Root}.byClass('bench-example')[0].click();");
+        Assert.Contains($"GET {ScopeLaserUrl}", page.Fetched());
+        Assert.Contains("11.5% narrower than bare", page.Text($"{Result}.textContent"));
+        page.Do($"{Result}.byClass('bench-legend-bare')[0].click();");
+        Assert.Equal("bare", page.Text($"{Result}.byClass('bench-plot')[0].dataset.layer"));
+        page.Do($"{Result}.byClass('bench-legend-fitted')[0].click();");
+        Assert.Equal("fitted", page.Text($"{Result}.byClass('bench-plot')[0].dataset.layer"));
     }
 
     [Fact]

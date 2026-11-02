@@ -10285,6 +10285,24 @@ function renderArmouryBench() {
   });
   if (w.ports?.length) controls.append(armouryFitPickers(w, request));
   else controls.append(el('p', 'muted small', tx('The files give this gun no attachment slots.')));
+  const choice = armouryFitChoice(w);
+  const spreadExample = (w.ports || []).filter((port) => !port.fixed && !choice[port.slot])
+    .flatMap((port) => (port.fits || []).map((key) => ({
+      slot: port.slot,
+      piece: armouryModel.attachments?.find((item) => item.class === key)
+    })))
+    .filter(({ piece }) => piece?.effect?.spread > 0 && piece.effect.spread !== 1)
+    .sort((a, b) => a.piece.effect.spread - b.piece.effect.spread)[0];
+  if (spreadExample) {
+    const example = el('button', 'ghost small bench-example', tx('Try {attachment}', { attachment: spreadExample.piece.name }));
+    example.type = 'button';
+    example.addEventListener('click', () => {
+      choice[spreadExample.slot] = spreadExample.piece.class;
+      renderArmouryBench();
+      $('#armoury-bench-weapon')?.focus();
+    });
+    controls.append(example);
+  }
   const reset = el('button', 'ghost small', tx('Factory fit'));
   reset.type = 'button';
   reset.addEventListener('click', () => {
@@ -10315,8 +10333,18 @@ function renderArmouryBenchReadout(w, fit, root) {
     plot.append(armouryBenchTarget(effect.spread));
     target.append(plot);
     const legend = el('div', 'bench-legend');
-    legend.append(el('span', 'bench-legend-bare', tx('Bare weapon')));
-    legend.append(el('span', 'bench-legend-fitted', tx('Current fit')));
+    const views = [];
+    for (const [key, label] of [['both', tx('Overlay')], ['bare', tx('Bare weapon')], ['fitted', tx('Current fit')]]) {
+      const view = el('button', `ghost tiny bench-legend-${key}`, label);
+      view.type = 'button';
+      view.setAttribute('aria-pressed', String(key === 'both'));
+      view.addEventListener('click', () => {
+        plot.dataset.layer = key;
+        for (const button of views) button.setAttribute('aria-pressed', String(button === view));
+      });
+      views.push(view);
+      legend.append(view);
+    }
     const sample = el('button', 'ghost tiny', tx('New sample'));
     sample.type = 'button';
     sample.addEventListener('click', () => {
@@ -10327,7 +10355,10 @@ function renderArmouryBenchReadout(w, fit, root) {
     legend.append(sample);
     target.append(legend);
     target.append(el('p', 'muted small', tx('Same sample points, scaled by the spread multiplier. Recoil, stance and distance are not modelled.')));
-    if (effect.spread === 1) target.append(el('p', 'small', tx('Spread is unchanged: the two patterns overlap.')));
+    if (effect.spread === 1) target.append(el('p', 'small', tx('Spread is unchanged: the two patterns overlap. Try an attachment that changes spread.')));
+    else target.append(el('p', 'small', effect.spread < 1
+      ? tx('{percent}% narrower than bare', { percent: armouryBenchIndex(1 - effect.spread) })
+      : tx('{percent}% wider than bare', { percent: armouryBenchIndex(effect.spread - 1) })));
   } else {
     target.append(el('p', 'bench-no-pattern muted', mode?.kind === 'Beam'
       ? tx('A beam has no shot pattern to plot. Compare its derived figures below.')

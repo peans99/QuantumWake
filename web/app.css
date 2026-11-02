@@ -6780,7 +6780,11 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .bench-legend-fitted { color: var(--cyan); }
 .bench-legend-bare::before, .bench-legend-fitted::before { content: ''; display: inline-block; width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; margin-right: 6px; }
 .bench-legend-fitted::before { background: currentColor; }
-.bench-legend button { margin-left: auto; }
+.bench-legend button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan-hot); }
+.bench-legend button:last-child { margin-left: auto; }
+.bench-plot[data-layer="bare"] .bench-pattern-fitted,
+.bench-plot[data-layer="fitted"] .bench-pattern-bare { display: none; }
+.bench-controls > .bench-example { display: block; max-width: 100%; white-space: normal; }
 .bench-target > p { line-height: 1.6; margin-bottom: 0; }
 .bench-no-pattern { min-height: 200px; display: grid; place-content: center; }
 .bench-handling > p { line-height: 1.6; margin: 10px 0 16px; }
