@@ -227,7 +227,11 @@ public sealed class SessionStore : IDisposable
     //     destination and its "Quantum to" line are written into the summary,
     //     so 54 of 203 distinct targets on this install would otherwise go on
     //     showing their raw ids in every session already stored.
-    private const int PayloadVersion = 19;
+    // 20: a contract keeps the marker's contractDefinitionId, which is how the
+    //     installed game's own rep figures reach it. All 734 contracts on this
+    //     install have one; a summary without it would leave every contract
+    //     flown before the update on the StarStrings tag, or on nothing.
+    private const int PayloadVersion = 20;
 
 
     /// <summary>

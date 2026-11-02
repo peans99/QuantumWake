@@ -2912,10 +2912,10 @@ async function loadStanding() {
     if (row.repFrom > 0) {
       rep.append(el('span', null, row.rep.toLocaleString()));
       rep.append(el('span', 'muted', ` · ${tx('from {count}', { count: row.repFrom })}`));
-      rep.title = txn(row.repFrom, 'Read from {count} contract title the StarStrings mod has annotated', 'Read from {count} contract titles the StarStrings mod has annotated');
+      rep.title = repFromTitle(row.repFrom, row.repTagged || 0);
     } else {
       rep.append(el('span', 'muted', '—'));
-      rep.title = tx('No annotated title among these, so nobody has written down what they pay');
+      rep.title = tx('None of these finished contracts pays rep, by the installed game or a title tag');
     }
 
     tr.append(rep);
@@ -2994,20 +2994,23 @@ async function loadContractList() {
     }
     tr.append(outcome);
 
-    // What the title says it pays, when a text mod has annotated it. Silence
-    // is the honest default: most titles say nothing, and a zero would read as
-    // "this pays nothing" rather than "nobody wrote it down".
+    // What finishing it pays, by the installed game's own figure for this
+    // contract - a StarStrings title tag only where the game has no word.
+    // Silence stays the default: an Iasi patrol pays no rep, and a zero
+    // would read as a figure rather than as nothing.
     const pays = el('td');
 
     if (row.rep) {
       const chip = el('span', 'tag-rep', tx('{rep} rep', { rep: row.rep.toLocaleString() }));
-      chip.title = tx('From the contract title, annotated by the StarStrings mod');
+      chip.title = row.repSource === 'game'
+        ? tx('What the installed game says finishing this contract pays')
+        : tx('From the contract title, annotated by the StarStrings mod');
       pays.append(chip);
     }
 
     if (row.blueprint) {
       const chip = el('span', 'tag-bp', 'BP');
-      chip.title = tx('Tagged as awarding a blueprint');
+      chip.title = blueprintChipTitle(row.blueprintChance);
       pays.append(chip);
     }
 
@@ -15972,8 +15975,9 @@ function saveSplitTradeRoute(route, portions) {
 /* ---------- rep runs ----------
    One small delivery flown again and again until the next rank. The rank and
    the estimate are the Reputation page's, read off the last Rep app
-   screenshot; what one delivery pays is the newest StarStrings tag on the
-   organisation's contracts, or what the pilot types. Everything past the
+   screenshot; what one delivery pays is what the installed game's contracts
+   for that rank pay - a StarStrings tag where the game has no word - or what
+   the pilot types. Everything past the
    first drop is arithmetic on those two, so the stops call it "about". */
 
 /** The most deliveries one plan writes out: a shift, not the whole climb. */
@@ -16078,11 +16082,42 @@ async function loadRepRun() {
   renderRepRun();
 }
 
+/**
+ * Where a Standing row's rep came from. Normally the installed game for every
+ * contract; a StarStrings tag only for one the game files did not know, and
+ * then the count of those is said rather than blended in.
+ */
+function repFromTitle(count, tagged) {
+  if (tagged <= 0) {
+    return txn(count, 'What the installed game says {count} finished contract paid', 'What the installed game says {count} finished contracts paid');
+  }
+  if (tagged >= count) {
+    return txn(count, 'Read from {count} contract title the StarStrings mod has annotated', 'Read from {count} contract titles the StarStrings mod has annotated');
+  }
+  return tx('{count} finished contracts: {game} by the installed game, {tagged} by a StarStrings title tag the game had no word on', {
+    count, game: count - tagged, tagged,
+  });
+}
+
+/** What the BP chip says: the game's chance when it gives one, else the tag. */
+function blueprintChipTitle(chance) {
+  if (chance == null) return tx('Tagged as awarding a blueprint');
+  if (chance >= 1) return tx('The installed game says finishing this contract awards a blueprint');
+  return tx('The installed game gives this contract a {chance} chance of a blueprint', {
+    chance: `${Math.round(chance * 100)}%`,
+  });
+}
+
 /** Where one delivery's figure came from, said beside the box it fills. */
 function repRunPaySource(org) {
   const pay = org.pay;
   if (!pay) {
-    return tx('None of their contracts in your logs carries a rep tag, so type what one delivery pays.');
+    return tx('Neither the installed game nor a rep tag in your logs says what one of their deliveries pays, so type it.');
+  }
+  if (pay.source === 'game') {
+    return tx('What a {rank} contract of theirs pays, by the installed game’s own contracts. Type over it if a delivery pays differently.', {
+      rank: pay.contract,
+    });
   }
   return pay.source === 'ladder'
     ? tx('The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.', {

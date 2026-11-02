@@ -350,6 +350,80 @@ if (args.Contains("--events", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// What every logged contract pays in rep by the installed game, joined on the
+// marker's contractDefinitionId, and checked against the StarStrings tags in
+// the titles - which the files never saw. The numbers behind docs/missions.md;
+// run it again after a patch, since a patch can move every id.
+if (args.Contains("--missions", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var catalogue = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Reputation;
+    var missions = catalogue.Missions ?? new Dictionary<string, GameMissionPay>();
+    var contracts = new List<ContractRecord>();
+    var receipts = new List<(BlueprintReceipt Receipt, ContractRecord? After)>();
+
+    foreach (var file in install.BackupLogs().Concat(install.HasGameLog ? [install.GameLogPath] : []))
+    {
+        var builder = new SessionBuilder(Path.GetFileName(file));
+        foreach (var ev in LogFileReader.ReadEvents(file, new LogEventParser())) builder.Add(ev);
+        var session = builder.Build();
+        contracts.AddRange(session.Contracts);
+
+        // A blueprint lands within a second of the completion that paid it.
+        foreach (var receipt in session.Blueprints)
+            receipts.Add((receipt, session.Contracts
+                .Where(c => c.CompletedAt is { } done && receipt.At - done >= TimeSpan.FromSeconds(-5) && receipt.At - done <= TimeSpan.FromSeconds(30))
+                .OrderByDescending(c => c.CompletedAt)
+                .FirstOrDefault()));
+    }
+
+    var known = contracts.Where(c => catalogue.Mission(c.DefinitionId) is not null).ToList();
+    var paying = known.Where(c => catalogue.Mission(c.DefinitionId)!.OnCompletion is > 0).ToList();
+
+    Console.WriteLine($"{missions.Count} contracts in the install; {missions.Values.Count(m => m.Rep.Count > 0)} move a ladder, "
+        + $"{missions.Values.Count(m => m.Blueprint is > 0)} can award a blueprint, {missions.Values.Count(m => m.Reward is not null)} pay a fixed sum");
+    Console.WriteLine($"{contracts.Count} logged contracts; {contracts.Count(c => c.DefinitionId is not null)} carry a definition id; "
+        + $"{known.Count} the install knows; {paying.Count} pay rep on completion");
+
+    // The check: a single-figure tag the mod wrote against the game's figure.
+    var tagged = known.Where(c => ContractTags.RepFrom(c.Title) is not null).ToList();
+    var agree = tagged.Count(c => ContractTags.RepFrom(c.Title) == catalogue.Mission(c.DefinitionId)!.OnCompletion);
+    Console.WriteLine($"\nStarStrings single-figure tags: {tagged.Count}; the install agrees on {agree}");
+    foreach (var c in tagged.Where(c => ContractTags.RepFrom(c.Title) != catalogue.Mission(c.DefinitionId)!.OnCompletion))
+        Console.WriteLine($"  ! {c.Raw}: tag {ContractTags.RepFrom(c.Title)}, game {catalogue.Mission(c.DefinitionId)!.OnCompletion}");
+
+    var laddered = known.Where(c => ContractTags.LadderFrom(c.Title) is not null).ToList();
+    var onLadder = laddered.Count(c => ContractTags.LadderFrom(c.Title)!.Contains(catalogue.Mission(c.DefinitionId)!.OnCompletion ?? -1));
+    Console.WriteLine($"StarStrings ladder tags: {laddered.Count}; the game's figure is one of the ladder's on {onLadder}");
+
+    var blueprintTags = known.Count(c => ContractTags.AwardsBlueprint(c.Title));
+    var blueprintBoth = known.Count(c => ContractTags.AwardsBlueprint(c.Title) && catalogue.Mission(c.DefinitionId)!.Blueprint is > 0);
+    Console.WriteLine($"[BP] tags: {blueprintTags}; the install has a blueprint result on {blueprintBoth}");
+
+    // The ground truth for blueprints is the toast that says one arrived.
+    var paired = receipts.Where(r => r.After is not null).ToList();
+    Console.WriteLine($"Received Blueprint toasts: {receipts.Count}; after a completion {paired.Count}; "
+        + $"the install predicted {paired.Count(r => catalogue.Mission(r.After!.DefinitionId)?.Blueprint is > 0)}, "
+        + $"a [BP] tag {paired.Count(r => ContractTags.AwardsBlueprint(r.After!.Title))}");
+    var tagOnly = contracts.Where(c => c.Outcome == ContractOutcome.Completed && ContractTags.AwardsBlueprint(c.Title)
+        && catalogue.Mission(c.DefinitionId)?.Blueprint is not > 0).ToList();
+    Console.WriteLine($"  completed with a [BP] tag the install does not back: {tagOnly.Count}; followed by a blueprint: "
+        + $"{tagOnly.Count(c => paired.Any(r => r.After == c))}");
+
+    Console.WriteLine("\nrep on completion, by issuer:");
+    foreach (var g in paying.GroupBy(c => (c.Issuer, Rep: catalogue.Mission(c.DefinitionId)!.OnCompletion)).OrderBy(g => g.Key.Issuer).ThenBy(g => g.Key.Rep))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key.Issuer,-30} {g.Key.Rep,7:N0}");
+
+    Console.WriteLine("\nlogged but paying no rep, by issuer:");
+    foreach (var g in known.Except(paying).GroupBy(c => c.Issuer).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {g.Count(),4}  {g.Key}");
+
+    foreach (var c in contracts.Where(c => c.DefinitionId is not null && catalogue.Mission(c.DefinitionId) is null).GroupBy(c => c.Raw).Take(20))
+        Console.WriteLine($"  ? not in the install: {c.Key} x{c.Count()}");
+
+    return 0;
+}
+
 // Hauling as the logs have it: every hauling contract folded out of the
 // backups with what its title and archetype say about the route, and the
 // totals that decide how much a screenshot still has to add. The evidence

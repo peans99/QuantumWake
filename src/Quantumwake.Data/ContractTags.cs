@@ -16,11 +16,12 @@ namespace Quantumwake.Data;
 /// on a server, and the client only ever opens a channel to ask about it.
 /// </para>
 /// <para>
-/// So this is second-hand by nature. The numbers are one player's research
-/// rather than the game reporting itself, they cover a fraction of the
-/// contracts anyone actually flies, and a patch can move them. Everything built
-/// on this says where it came from, and stays silent where there is no tag
-/// rather than guessing a zero.
+/// So this is second-hand by nature, and since 0.20.37 it is the fallback: the
+/// installed game's own files name every logged contract's rep and blueprint -
+/// see <see cref="ContractPay"/> and <c>docs/missions.md</c> - and agreed with
+/// every single-figure tag here, 38 of 38. A tag is read only for a contract
+/// the install does not know. <see cref="Clean"/> still matters everywhere,
+/// because a title the mod annotated keeps its brackets whatever reads it.
 /// </para>
 /// </remarks>
 public static partial class ContractTags

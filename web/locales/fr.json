@@ -1093,7 +1093,7 @@
   "The game has never stated what one of your contracts paid. It prices a completion only now and then, and only for hauling.": "Le jeu n’a jamais indiqué ce qu’un de vos contrats a rapporté. Il ne chiffre une réussite que de temps en temps, et seulement pour le transport.",
   "From {priced} of your {completed} completed contracts — the only ones the game put a price on. A floor, not your contract income.": "D’après {priced} de vos {completed} contrats terminés — les seuls auxquels le jeu a donné un prix. Un minimum, pas vos revenus de contrats.",
   "Standing": "Relations",
-  "Who you have worked for and how much of it you finished. <b>This is not your reputation</b> — the game logs none: the client opens a channel to a reputation service and every number stays on the far side of it. What can be counted is the work, which is what moves standing. The <em>rep</em> column fills in only for contracts whose title has been annotated by the StarStrings text mod, and says how many contracts it could read.": "Pour qui vous avez travaillé et quelle part vous en avez menée à bien. <b>Ce n’est pas votre réputation</b> — le jeu n’en enregistre aucune : le client ouvre un canal vers un service de réputation et chaque chiffre reste de l’autre côté. Ce qui peut être compté, c’est le travail, et c’est lui qui fait bouger les relations. La colonne <em>rép.</em> ne se remplit que pour les contrats dont le titre a été annoté par le mod de texte StarStrings, et indique combien de contrats elle a pu lire.",
+  "Who you have worked for and how much of it you finished. <b>This is not your reputation</b> — the game logs none: the client opens a channel to a reputation service and every number stays on the far side of it. What can be counted is the work, which is what moves standing. The <em>rep</em> column is what the finished ones paid by the installed game's own figures — a StarStrings title tag stands in only for a contract the game files do not know — and says how many contracts it could read.": "Pour qui vous avez travaillé et quelle part vous en avez menée à bien. <b>Ce n’est pas votre réputation</b> — le jeu n’en enregistre aucune : le client ouvre un canal vers un service de réputation et chaque chiffre reste de l’autre côté. Ce qui peut être compté, c’est le travail, et c’est lui qui fait bouger les relations. La colonne <em>rép.</em> donne ce qu’ont rapporté les contrats terminés selon les chiffres du jeu installé — une marque de titre StarStrings ne sert que pour un contrat que les fichiers du jeu ne connaissent pas — et indique combien de contrats elle a pu lire.",
   "Issuer": "Donneur d’ordre",
   "Finished": "Terminés",
   "Dropped": "Abandonnés",
@@ -1106,7 +1106,6 @@
     "one": "Lu sur {count} titre de contrat annoté par le mod StarStrings",
     "other": "Lu sur {count} titres de contrat annotés par le mod StarStrings"
   },
-  "No annotated title among these, so nobody has written down what they pay": "Aucun titre annoté parmi eux : personne n’a noté ce qu’ils rapportent",
   "Contracts by issuer": "Contrats par donneur d’ordre",
   "Contracts by type": "Contrats par type",
   "Every contract": "Tous les contrats",
@@ -5136,7 +5135,6 @@
   "One crate": "Une caisse",
   "Delivery {n} of {total} · about {rep} rep — {rank} reached": "Livraison {n} sur {total} · environ {rep} de réputation — {rank} atteint",
   "Delivery {n} of {total} · about {rep} rep, {standing}": "Livraison {n} sur {total} · environ {rep} de réputation, {standing}",
-  "None of their contracts in your logs carries a rep tag, so type what one delivery pays.": "Aucun de leurs contrats dans vos journaux ne porte de marque de réputation : saisissez ce que rapporte une livraison.",
   "The {rank} figure on the rep tag of “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.": "Le chiffre {rank} de la marque de réputation de « {contract} » — une recherche de StarStrings, pas une donnée du jeu. Remplacez-le si une livraison rapporte autre chose.",
   "The rep tag on “{contract}” — StarStrings’ research, not the game’s. Type over it if a delivery pays differently.": "La marque de réputation de « {contract} » — une recherche de StarStrings, pas une donnée du jeu. Remplacez-la si une livraison rapporte autre chose.",
   "None of your Rep app screenshots has a rank placed on a ladder with one above it yet, so there is nothing to climb towards.": "Aucune de vos captures de l’application Réputation n’a encore de rang placé sur une échelle avec un rang au-dessus : il n’y a rien vers quoi grimper.",
@@ -5648,5 +5646,16 @@
   "{count} commodity prices": {
     "one": "{count} prix de marchandise",
     "other": "{count} prix de marchandises"
-  }
+  },
+  "None of these finished contracts pays rep, by the installed game or a title tag": "Aucun de ces contrats terminés ne rapporte de réputation, selon le jeu installé ou une marque de titre",
+  "What the installed game says finishing this contract pays": "Ce que le jeu installé dit que rapporte ce contrat une fois terminé",
+  "What the installed game says {count} finished contracts paid": {
+    "one": "Ce que le jeu installé dit qu’a rapporté {count} contrat terminé",
+    "other": "Ce que le jeu installé dit qu’ont rapporté {count} contrats terminés"
+  },
+  "{count} finished contracts: {game} by the installed game, {tagged} by a StarStrings title tag the game had no word on": "{count} contrats terminés : {game} selon le jeu installé, {tagged} selon une marque de titre StarStrings que le jeu ne connaissait pas",
+  "The installed game says finishing this contract awards a blueprint": "Le jeu installé dit que terminer ce contrat donne un plan",
+  "The installed game gives this contract a {chance} chance of a blueprint": "Le jeu installé donne à ce contrat {chance} de chances de donner un plan",
+  "Neither the installed game nor a rep tag in your logs says what one of their deliveries pays, so type it.": "Ni le jeu installé ni une marque de réputation dans vos journaux ne dit ce que rapporte une de leurs livraisons : saisissez-le.",
+  "What a {rank} contract of theirs pays, by the installed game’s own contracts. Type over it if a delivery pays differently.": "Ce que rapporte un de leurs contrats de rang {rank}, d’après les contrats du jeu installé. Remplacez-le si une livraison rapporte autre chose."
 }

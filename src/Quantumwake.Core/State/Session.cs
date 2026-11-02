@@ -170,6 +170,17 @@ public sealed record ContractRecord(
     public string? MissionId { get; init; }
 
     /// <summary>
+    /// The marker's <c>contractDefinitionId</c>: which contract of the installed
+    /// game this was, and so what it pays - see <c>GameReputationCatalogue.Mission</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same id for every run of one contract, unlike <see cref="MissionId"/>.
+    /// It names the contract inside its generator rather than a record, which is
+    /// why it went unread for a year: looked up as a record it finds nothing.
+    /// </remarks>
+    public string? DefinitionId { get; init; }
+
+    /// <summary>
     /// The title the game showed when the contract was accepted, exactly as
     /// the toast rendered it - StarStrings' <c>[150 Rep]</c> tags and
     /// <c>&lt;EM&gt;</c> markup included.

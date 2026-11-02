@@ -132,7 +132,7 @@ public class RepRunTests
             "\"pay\":null"));
 
         Assert.Equal("", page.Text($"{Control("rep-run-rep")}.value"));
-        Assert.Contains("None of their contracts in your logs carries a rep tag", page.NodeText("#rep-run-body"));
+        Assert.Contains("Neither the installed game nor a rep tag in your logs says what one of their deliveries pays", page.NodeText("#rep-run-body"));
         Assert.Contains("Type what one delivery pays", page.Text($"{Host}.byClass('rep-run-summary')[0].textContent"));
         Assert.True(page.Truth($"{Host}.byClass('rep-run-make')[0].disabled"));
     }

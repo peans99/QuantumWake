@@ -45,6 +45,7 @@ public sealed class DataCore
     private readonly long _recordOffset;
     private readonly int _recordSize;
     private int _mappingCount;
+    private readonly long _boolValues;
     private readonly long _stringValues;
     private readonly long _localeValues;
     private readonly long _enumValues;
@@ -95,7 +96,7 @@ public sealed class DataCore
 
         cursor += int8 * 1L; cursor += int16 * 2L; cursor += int32 * 4L; cursor += int64 * 8L;
         cursor += uint8 * 1L; cursor += uint16 * 2L; cursor += uint32 * 4L; cursor += uint64 * 8L;
-        cursor += boolean * 1L;
+        _boolValues = cursor; cursor += boolean * 1L;
         cursor += single * 4L; cursor += dbl * 8L;
         cursor += guid * 16L;
 
@@ -613,6 +614,41 @@ public sealed class DataCore
                 (int)BitConverter.ToUInt32(_data, (int)e),
                 BitConverter.ToUInt16(_data, (int)(e + 4))));
         }
+
+        return items;
+    }
+
+    /// <summary>
+    /// A guid stored inline at <paramref name="at"/>, decoded the way a record's id is.
+    /// </summary>
+    /// <remarks>
+    /// The point of it is a contract's <c>id</c>, which is the
+    /// <c>contractDefinitionId</c> the log writes - see <c>GameMissions</c>.
+    /// </remarks>
+    public Guid GuidAt(long at) =>
+        at < 0 || at + 16 > _data.LongLength ? Guid.Empty : ReadHash(_data.AsSpan((int)at, 16));
+
+    /// <summary>A bool array read from an arbitrary instance: a count and a first index into the bool values.</summary>
+    /// <remarks>
+    /// A contract result's <c>missionResults</c> is one of these, one flag per
+    /// way a contract can end, saying which endings the result applies to.
+    /// </remarks>
+    public IReadOnlyList<bool> BoolArrayAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is null || field.ConversionType == 0
+            || field.DataType != 0x0001 || at + 8 > _data.LongLength)
+        {
+            return [];
+        }
+
+        var count = BitConverter.ToUInt32(_data, (int)at);
+        var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+        if (count > 64 || _boolValues + first + count > _data.LongLength) return [];
+
+        var items = new bool[count];
+        for (var i = 0; i < count; i++) items[i] = _data[_boolValues + first + i] != 0;
 
         return items;
     }

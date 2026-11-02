@@ -36,6 +36,19 @@ public sealed record GameReputationCatalogue(
     IReadOnlyList<GameRepScope> Scopes, IReadOnlyList<GameRepOrganisation>? Organisations = null)
 {
     public static GameReputationCatalogue Empty { get; } = new([], []);
+
+    /// <summary>
+    /// What each contract pays in reputation, by the <c>contractDefinitionId</c>
+    /// the log writes; see <see cref="GameMissions"/>. Null in a cache written
+    /// before they were read.
+    /// </summary>
+    public IReadOnlyDictionary<string, GameMissionPay>? Missions { get; init; }
+
+    /// <summary>What the install says a logged contract pays, or null when it does not know it.</summary>
+    public GameMissionPay? Mission(string? definitionId) =>
+        definitionId is { Length: > 0 } && Missions is { } missions && missions.TryGetValue(definitionId, out var pay)
+            ? pay
+            : null;
 }
 
 /// <summary>
@@ -94,6 +107,10 @@ public static class GameReputation
 
         var read = new List<GameRepScope>();
 
+        // Where each rank record lands once the ladder is sorted, so a
+        // contract's minStanding can be said as a rank on the ladder the page draws.
+        var standings = new Dictionary<Guid, (string Scope, int Index)>();
+
         foreach (var scope in scopes)
         {
             var at = core.InstanceAt(scope, scope.VariantIndex);
@@ -101,6 +118,7 @@ public static class GameReputation
             if (map is null) continue;
 
             var ranks = new List<GameRepRank>();
+            var rankIds = new List<(Guid Id, long Min)>();
 
             foreach (var id in core.ReferenceArrayAt(mapAt, map.StructIndex, "standings"))
             {
@@ -113,13 +131,20 @@ public static class GameReputation
                 // placeholders between the five it names.
                 if (key is null || key.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase)) continue;
 
+                var min = core.Int64At(standingAt, standing.StructIndex, "minReputation") ?? 0;
                 ranks.Add(new GameRepRank(
                     Localised(text, key) ?? Bare(standing.Name),
                     Localised(text, core.StringAt(standingAt, standing.StructIndex, "perkDescription")),
-                    core.Int64At(standingAt, standing.StructIndex, "minReputation") ?? 0));
+                    min));
+                rankIds.Add((id, min));
             }
 
             if (ranks.Count == 0) continue;
+
+            // The same order the ranks are sorted into below - OrderBy is stable,
+            // so ties keep their stored order in both.
+            var sorted = rankIds.OrderBy(r => r.Min).ToList();
+            for (var i = 0; i < sorted.Count; i++) standings.TryAdd(sorted[i].Id, (Bare(scope.Name), i));
 
             var nameKey = core.StringAt(at, scope.StructIndex, "displayName");
 
@@ -133,7 +158,10 @@ public static class GameReputation
 
         return new GameReputationCatalogue(
             [.. read.OrderBy(s => s.Id, StringComparer.Ordinal)],
-            Organisations(core, text, organisations, logoEntries ?? []));
+            Organisations(core, text, organisations, logoEntries ?? []))
+        {
+            Missions = GameMissions.Read(core, byId, standings),
+        };
     }
 
     /// <summary>

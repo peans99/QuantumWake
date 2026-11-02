@@ -1354,6 +1354,7 @@ public sealed class SessionBuilder
             Accepted: false)
         {
             MissionId = contract.MissionId,
+            DefinitionId = contract.ContractDefinitionId,
             Title = _titlesByMission.GetValueOrDefault(contract.MissionId),
 
             // A completed objective is a completed step, here as everywhere

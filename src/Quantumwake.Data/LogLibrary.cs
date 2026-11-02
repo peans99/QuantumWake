@@ -141,11 +141,14 @@ public sealed record ReceiptPrice(decimal UnitPrice, int Times, DateTimeOffset L
 /// <summary>One contract as the logbook can tell it, newest first.</summary>
 /// <param name="Steps">Journal-visible objectives, and how many finished.</param>
 /// <param name="Rep">
-/// The reputation the title says it pays, when a text mod has annotated it -
-/// see <see cref="ContractTags"/>. Null means nobody said, which is the usual
-/// case and is not the same as zero.
+/// The reputation finishing it pays, from the installed game's own figure for
+/// this contract, or from a StarStrings title tag when the install does not
+/// know it - see <see cref="ContractPay"/>. Null means nothing says, which is
+/// not the same as zero.
 /// </param>
-/// <param name="Blueprint">Whether the title is tagged as awarding a blueprint.</param>
+/// <param name="Blueprint">Whether it can award a blueprint.</param>
+/// <param name="RepSource"><c>game</c> or <c>tag</c>: where <paramref name="Rep"/> came from.</param>
+/// <param name="BlueprintChance">The chance of that blueprint, 0 to 1, when the install says.</param>
 /// <param name="Pickup">Where the cargo is collected, when the title says - "from Port Tressler".</param>
 /// <param name="Delivery">Where it goes, when the title says - "to Stanton Gateway".</param>
 /// <param name="Commodity">The cargo, when the archetype id spells it.</param>
@@ -179,7 +182,9 @@ public sealed record ContractLine(
     int DeliveriesDone = 0,
     int? EventPoints = null,
     string? Event = null,
-    IReadOnlyList<string>? EventTracks = null);
+    IReadOnlyList<string>? EventTracks = null,
+    string? RepSource = null,
+    double? BlueprintChance = null);
 
 /// <summary>
 /// How much work this install has done for one faction.
@@ -188,10 +193,11 @@ public sealed record ContractLine(
 /// Not reputation: the logs carry none, and the value lives on a server this
 /// app never talks to. This is the countable thing underneath it - contracts
 /// taken, finished and walked away from, per issuer, over time - which is what
-/// actually moves standing. <paramref name="Rep"/> is filled in only from
-/// titles a text mod has annotated, and <paramref name="RepFrom"/> says how
-/// many of the contracts that number came from, so it can never be mistaken
-/// for a total.
+/// actually moves standing. <paramref name="Rep"/> is what the finished ones
+/// paid by the installed game's figures - a StarStrings tag standing in where
+/// the install does not know a contract - and <paramref name="RepFrom"/> says
+/// how many of them that number came from, so it can never be mistaken for a
+/// total. <paramref name="RepTagged"/> says how many of those were tags.
 /// </remarks>
 public sealed record Standing(
     string Issuer,
@@ -202,7 +208,8 @@ public sealed record Standing(
     DateTimeOffset First,
     DateTimeOffset Last,
     int Rep,
-    int RepFrom);
+    int RepFrom,
+    int RepTagged = 0);
 
 /// <summary>
 /// Whether one kind of thing is still arriving in the logs.
@@ -1580,6 +1587,7 @@ public sealed class LogLibrary : IDisposable
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
         var events = EventPay.For(GameCommodities.Scenarios);
+        var reputation = GameCommodities.Reputation;
 
         return
         [
@@ -1608,8 +1616,8 @@ public sealed class LogLibrary : IDisposable
                     c.Steps,
                     c.StepsDone,
                     c.TimeToComplete?.TotalMinutes,
-                    ContractTags.RepFrom(c.Name),
-                    ContractTags.AwardsBlueprint(c.Name),
+                    ContractPay.Rep(c, reputation),
+                    ContractPay.Blueprint(c, reputation),
                     HaulingContract.IsHauling(c.Raw),
                     route?.Pickup,
                     route?.Delivery,
@@ -1620,7 +1628,9 @@ public sealed class LogLibrary : IDisposable
                     c.DeliveriesDone,
                     events.Pay(c.Raw)?.Points,
                     events.Pay(c.Raw)?.Event,
-                    events.Pay(c.Raw)?.Tracks);
+                    events.Pay(c.Raw)?.Tracks,
+                    ContractPay.RepSource(c, reputation),
+                    ContractPay.BlueprintChance(c, reputation));
                 })
         ];
     }
@@ -1640,13 +1650,14 @@ public sealed class LogLibrary : IDisposable
     /// The honest answer to "how is my standing with these people": every
     /// contract of theirs this install has taken, how many were finished, and
     /// when. Reputation itself is never logged - the client opens a channel to
-    /// a reputation service and the numbers stay on the far side of it - so the
-    /// only thing that can be counted is the work, and the only rep that can be
-    /// shown is what a text mod wrote on a title.
+    /// a reputation service and the numbers stay on the far side of it - so what
+    /// can be counted is the work, and the rep shown beside it is what the
+    /// installed game says each finished contract pays.
     /// </remarks>
     public IReadOnlyList<Standing> Standings(int days = 0)
     {
         var cutoff = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+        var reputation = GameCommodities.Reputation;
 
         return
         [
@@ -1656,9 +1667,11 @@ public sealed class LogLibrary : IDisposable
                 .GroupBy(c => ContractTags.IssuerKey(c.Issuer))
                 .Select(g =>
                 {
-                    var rep = g.Select(c => ContractTags.RepFrom(c.Name))
-                        .Where(r => r is not null)
-                        .Select(r => r!.Value)
+                    // Finished ones only: reputation moves when a contract is
+                    // handed in, and an abandoned haul paid nothing.
+                    var rep = g.Where(c => c.Outcome == ContractOutcome.Completed)
+                        .Select(c => (Rep: ContractPay.Rep(c, reputation), Source: ContractPay.RepSource(c, reputation)))
+                        .Where(r => r.Rep is not null)
                         .ToList();
 
                     return new Standing(
@@ -1673,8 +1686,9 @@ public sealed class LogLibrary : IDisposable
                         g.Count(c => c.Outcome == ContractOutcome.Failed),
                         g.Min(c => c.FirstSeen),
                         g.Max(c => c.FirstSeen),
-                        rep.Sum(),
-                        rep.Count);
+                        rep.Sum(r => r.Rep!.Value),
+                        rep.Count,
+                        rep.Count(r => r.Source == ContractPay.Tag));
                 })
                 .OrderByDescending(s => s.Completed)
                 .ThenByDescending(s => s.Contracts)
