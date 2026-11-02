@@ -358,6 +358,26 @@ attachments to the first gun in it with a free slot that takes them. The
 Loadout page's kit row then has a button per gun that opens it on the
 Armoury with those pieces fitted, clearing the gun filters on the way.
 
+## Attachment test bench
+
+The Armoury's **Test bench** tab shares attachment choices with each gun's
+expanded row. **Test this fit** opens the bench on that gun. Its pickers use
+the same server-provided port compatibility and fixed/default pieces; the
+existing `/api/armoury/fit` endpoint supplies the combined effects and derived
+mode figures. Factory fit restores the port defaults.
+
+The target is a relative illustration. Both layers use the same repeatable
+sample points in a unit disc, with the fitted layer scaled by the returned
+spread multiplier. Changing pieces retains the sample; **New sample** replaces
+both layers together. It does not model shot distribution, stance, distance,
+recoil, or hit probability. Beam modes have no scatter plot. The base gun's
+spread angle and recoil path are not extracted, so the target has no physical
+distance scale and the handling indices cannot rank different weapons.
+
+The firing figures are the endpoint's derived values at the muzzle, beside
+the same mode's bare values. These inherit the fitting caveats above. No
+saved kits or game data are changed by using the bench.
+
 ## Next
 
 - How long the plasma patch burns, from the hazard zone's state machine.

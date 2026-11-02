@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.57
+### 0.20.58
+
+**An attachment test bench in Armoury.** Pick a weapon and compatible attachments to compare a bare and fitted spread illustration, handling indices and derived firing figures. A gun's “Test this fit” shortcut carries its attachments into the bench. The target is a relative comparison of file multipliers: it does not claim measured shot placement, base spread angles or recoil paths.
 
 **The calmer Items colours across Reference.** Restored the original subtle row stripes instead of the stronger solid catalogue fills. Loot now shares the Reference header and table frames, including its item-location results. Encounter names use the same cyan link treatment as Items and can be expanded from the keyboard. Source, ownership and price colours keep their meaning.
 

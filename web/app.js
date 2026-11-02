@@ -9108,7 +9108,7 @@ let armouryOpenGun = null;
 let armouryRevealGun = null;
 let armouryOpenSet = null;
 
-const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate'];
+const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate', 'bench'];
 try {
   const kept = localStorage.getItem('qw-armoury-pane');
   if (ARMOURY_PANES.includes(kept)) armouryPane = kept;
@@ -9124,9 +9124,12 @@ function showArmouryPane(name) {
   }
   for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
-  const deck = name === 'guns' ? 'guns' : name === 'armour' || name === 'climate' ? 'armour' : 'kit';
+  const deck = name === 'guns' || name === 'bench' ? 'guns' : name === 'armour' || name === 'climate' ? 'armour' : 'kit';
   for (const key of ['guns', 'armour', 'kit'])
     $(`#armoury-open-${key}`)?.classList.toggle('active', key === deck);
+  if (name === 'bench') renderArmouryBench();
+  else ++armouryBenchTurn;
+  if (name === 'guns') renderArmouryGuns();
 }
 
 $('#armoury-tabs')?.addEventListener('click', (e) => {
@@ -9209,7 +9212,6 @@ async function loadArmoury() {
 
   renderArmouryBrief();
   showArmouryPane(armouryPane);
-  renderArmouryGuns();
   renderArmouryArmour();
   renderArmouryKit();
   renderArmouryClimate();
@@ -9944,6 +9946,16 @@ function renderArmouryGunDetail(w) {
   table.append(tb);
   inner.append(table);
   inner.append(armouryFitSection(w));
+  const testFit = el('button', 'ghost small', tx('Test this fit'));
+  testFit.type = 'button';
+  testFit.addEventListener('click', (e) => {
+    e.stopPropagation();
+    armouryBenchGun = w.class;
+    armouryBenchMode = 0;
+    showArmouryPane('bench');
+    $('#armoury-bench-weapon')?.focus();
+  });
+  inner.append(testFit);
 
   const notes = [];
   notes.push(tx('Projectile {speed} m/s for {seconds} s ({range} m before it is gone).',
@@ -10023,9 +10035,16 @@ function armouryFitSection(w) {
     wrap.append(el('p', 'muted small', tx('The files give this gun no attachment slots.')));
     return wrap;
   }
+  const result = el('div', 'armoury-fit-result');
+  wrap.append(armouryFitPickers(w, () => renderArmouryFit(w, result)));
+  wrap.append(result);
+  renderArmouryFit(w, result);
+  return wrap;
+}
+
+function armouryFitPickers(w, onChange) {
   const choice = armouryFitChoice(w);
   const pickers = el('div', 'armoury-fit-pickers');
-  const result = el('div', 'armoury-fit-result');
   for (const p of w.ports) {
     const label = el('label', 'armoury-fit-slot');
     label.append(el('span', 'armoury-fit-word', armourySlotWord(p.slot)));
@@ -10044,16 +10063,13 @@ function armouryFitSection(w) {
     select.addEventListener('click', (e) => e.stopPropagation());
     select.addEventListener('change', () => {
       choice[p.slot] = select.value;
-      renderArmouryFit(w, result);
+      onChange();
     });
     label.append(select);
     label.append(el('span', 'muted small', tx('size {sizes}', { sizes: p.minSize === p.maxSize ? p.minSize : `${p.minSize}–${p.maxSize}` })));
     pickers.append(label);
   }
-  wrap.append(pickers);
-  wrap.append(result);
-  renderArmouryFit(w, result);
-  return wrap;
+  return pickers;
 }
 
 /** "162 → 149", marked as a gain or a cost when the figure moved. */
@@ -10135,6 +10151,243 @@ async function renderArmouryFit(w, result) {
   result.append(line);
 
   result.append(el('p', 'muted small', tx('Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.')));
+}
+
+let armouryBenchGun = '';
+let armouryBenchMode = 0;
+let armouryBenchSeed = 1729;
+let armouryBenchTurn = 0;
+
+function armouryBenchIndex(multiplier) {
+  return (multiplier * 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+// One repeatable disc for both fits. These are illustrative sample points,
+// not a model of the game's shot distribution or a guessed recoil curve.
+function armouryBenchPattern(seed, count = 48) {
+  let state = seed >>> 0 || 1;
+  const random = () => {
+    state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+    return (state >>> 0) / 4294967296;
+  };
+  return Array.from({ length: count }, () => {
+    const radius = Math.sqrt(random());
+    const angle = random() * Math.PI * 2;
+    return [Math.cos(angle) * radius, Math.sin(angle) * radius];
+  });
+}
+
+function armouryBenchTarget(spread) {
+  const make = (tag, attrs = {}) => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+    return node;
+  };
+  const svg = make('svg', { viewBox: '0 0 400 360', role: 'img', 'aria-label': tx('Illustrative spread comparison: bare weapon and fitted weapon') });
+  for (const radius of [36, 72, 108, 144])
+    svg.append(make('circle', { cx: 200, cy: 180, r: radius, class: 'bench-target-ring' }));
+  svg.append(make('path', { d: 'M20 180H380 M200 18V342', class: 'bench-target-cross' }));
+  const bareRadius = 144 / Math.max(1, spread);
+  for (const [name, scale] of [['bare', 1], ['fitted', spread]]) {
+    const group = make('g', { class: `bench-pattern-${name}` });
+    group.append(make('circle', { cx: 200, cy: 180, r: bareRadius * scale, class: 'bench-pattern-limit' }));
+    for (const [x, y] of armouryBenchPattern(armouryBenchSeed))
+      group.append(make('circle', { cx: 200 + x * bareRadius * scale, cy: 180 + y * bareRadius * scale, r: name === 'bare' ? 2.6 : 2, class: 'bench-pattern-point' }));
+    svg.append(group);
+  }
+  svg.append(make('path', { d: 'M193 180H207 M200 173V187', class: 'bench-target-origin' }));
+  return svg;
+}
+
+function renderArmouryBench() {
+  const root = $('#armoury-bench');
+  if (!root || !armouryModel?.ready) return;
+  ++armouryBenchTurn;
+  root.textContent = '';
+  const weapons = [...(armouryModel.weapons || [])].sort((a, b) => a.name.localeCompare(b.name));
+  if (!weapons.length) {
+    root.append(el('p', 'muted', tx('No weapons were read from the install.')));
+    return;
+  }
+  const w = weapons.find((gun) => gun.class === armouryBenchGun) || weapons.find((gun) => gun.name === 'P4-AR Rifle') || weapons[0];
+  armouryBenchGun = w.class;
+  if (!w.modes?.[armouryBenchMode]) armouryBenchMode = 0;
+
+  const heading = el('div', 'bench-heading');
+  const words = el('div');
+  words.append(el('span', 'bench-eyebrow', tx('Attachment analysis')));
+  words.append(el('h3', null, tx('Weapon test bench')));
+  words.append(el('p', 'muted small', tx('Compare the same weapon before and after fitting attachments.')));
+  heading.append(words);
+  heading.append(el('span', 'bench-model-badge', tx('Relative model')));
+  root.append(heading);
+  root.append(el('p', 'bench-disclosure small', tx('The target illustrates attachment multipliers, not recorded shots. Base spread angles and recoil paths are not read, so distances and hit probabilities are not simulated.')));
+
+  const layout = el('div', 'bench-layout');
+  const controls = el('div', 'bench-controls');
+  const label = el('label', 'bench-field');
+  label.append(el('span', null, tx('Weapon')));
+  const weapon = el('select', 'select');
+  weapon.id = 'armoury-bench-weapon';
+  for (const gun of weapons) weapon.append(new Option(gun.name, gun.class));
+  weapon.value = w.class;
+  weapon.addEventListener('change', () => {
+    armouryBenchGun = weapon.value;
+    armouryBenchMode = 0;
+    renderArmouryBench();
+    $('#armoury-bench-weapon')?.focus();
+  });
+  label.append(weapon);
+  controls.append(label);
+
+  const modeLabel = el('label', 'bench-field');
+  modeLabel.append(el('span', null, tx('Fire mode')));
+  const mode = el('select', 'select');
+  mode.id = 'armoury-bench-mode';
+  (w.modes || []).forEach((m, i) => mode.append(new Option(armouryMode(m), String(i))));
+  mode.value = String(armouryBenchMode);
+  mode.disabled = !w.modes?.length;
+  modeLabel.append(mode);
+  controls.append(modeLabel);
+  controls.append(el('h4', null, tx('Fit attachments')));
+  const result = el('div', 'bench-readout');
+  result.id = 'armoury-bench-result';
+  result.setAttribute('aria-live', 'polite');
+  let currentFit = null;
+  const request = async () => {
+    const turn = ++armouryBenchTurn;
+    currentFit = null;
+    result.textContent = '';
+    result.setAttribute('aria-busy', 'true');
+    result.append(el('p', 'muted', tx('Calculating this fit…')));
+    const choice = armouryFitChoice(w);
+    const chosen = (w.ports || []).map((port) => choice[port.slot]).filter(Boolean);
+    let fit, problem;
+    try {
+      const response = await fetch(`/api/armoury/fit?gun=${encodeURIComponent(w.class)}&with=${chosen.map(encodeURIComponent).join(',')}`);
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.gun === w.class) fit = body;
+      else problem = body?.problem || String(response.status);
+    } catch (e) { problem = e.message; }
+    if (turn !== armouryBenchTurn) return;
+    result.setAttribute('aria-busy', 'false');
+    if (!fit) {
+      result.textContent = '';
+      result.append(el('p', 'muted', tx('The figures could not be worked out: {problem}', { problem: serverText(problem || tx('No fit was returned.')) })));
+      return;
+    }
+    currentFit = fit;
+    renderArmouryBenchReadout(w, fit, result);
+  };
+  mode.addEventListener('change', () => {
+    armouryBenchMode = Number(mode.value);
+    if (currentFit) renderArmouryBenchReadout(w, currentFit, result);
+  });
+  if (w.ports?.length) controls.append(armouryFitPickers(w, request));
+  else controls.append(el('p', 'muted small', tx('The files give this gun no attachment slots.')));
+  const reset = el('button', 'ghost small', tx('Factory fit'));
+  reset.type = 'button';
+  reset.addEventListener('click', () => {
+    delete armouryFits[w.class];
+    renderArmouryBench();
+    $('#armoury-bench-weapon')?.focus();
+  });
+  controls.append(reset);
+  controls.append(el('p', 'muted small', tx('Only compatible pieces are listed. Factory fit restores the attachments the gun ships with.')));
+  layout.append(controls, result);
+  root.append(layout);
+  request();
+}
+
+function renderArmouryBenchReadout(w, fit, root) {
+  root.textContent = '';
+  const effect = fit.effect || {};
+  const bare = w.modes?.[armouryBenchMode];
+  const mode = fit.modes?.[armouryBenchMode];
+  const spreadKnown = Number.isFinite(effect.spread) && effect.spread > 0;
+  const target = el('section', 'bench-target');
+  const title = el('div', 'bench-target-title');
+  title.append(el('h4', null, tx('Relative spread')));
+  title.append(el('span', 'bench-index', spreadKnown ? tx('{value} · bare = 100', { value: armouryBenchIndex(effect.spread) }) : '—'));
+  target.append(title);
+  if (bare && mode && mode.kind !== 'Beam' && spreadKnown) {
+    const plot = el('div', 'bench-plot');
+    plot.append(armouryBenchTarget(effect.spread));
+    target.append(plot);
+    const legend = el('div', 'bench-legend');
+    legend.append(el('span', 'bench-legend-bare', tx('Bare weapon')));
+    legend.append(el('span', 'bench-legend-fitted', tx('Current fit')));
+    const sample = el('button', 'ghost tiny', tx('New sample'));
+    sample.type = 'button';
+    sample.addEventListener('click', () => {
+      armouryBenchSeed = (armouryBenchSeed + 1) >>> 0;
+      plot.textContent = '';
+      plot.append(armouryBenchTarget(effect.spread));
+    });
+    legend.append(sample);
+    target.append(legend);
+    target.append(el('p', 'muted small', tx('Same sample points, scaled by the spread multiplier. Recoil, stance and distance are not modelled.')));
+    if (effect.spread === 1) target.append(el('p', 'small', tx('Spread is unchanged: the two patterns overlap.')));
+  } else {
+    target.append(el('p', 'bench-no-pattern muted', mode?.kind === 'Beam'
+      ? tx('A beam has no shot pattern to plot. Compare its derived figures below.')
+      : tx('No spread comparison is available for this mode.')));
+  }
+  root.append(target);
+
+  const handling = el('section', 'bench-handling');
+  handling.append(el('h4', null, tx('Handling indices')));
+  handling.append(el('p', 'muted small', tx('Bare = 100. Lower means less spread, kick, recovery time, sound radius or aim time. These indices do not compare different guns.')));
+  for (const [key, label] of [['spread', tx('Spread')], ['recoilStrength', tx('Recoil strength')], ['recoilTime', tx('Recoil recovery')], ['sound', tx('Sound radius')], ['zoomTime', tx('Aim time')]]) {
+    const value = effect[key];
+    const line = el('div', 'bench-handling-row');
+    line.append(el('span', null, label));
+    const known = Number.isFinite(value) && value > 0;
+    const track = el('span', 'bench-meter');
+    const bar = el('span', 'bench-meter-fill');
+    bar.style.width = known ? `${Math.min(value, 2) * 50}%` : '0%';
+    track.append(bar);
+    track.setAttribute('aria-hidden', 'true');
+    line.append(track);
+    line.append(el('strong', known ? value < 1 ? 'gain' : value > 1 ? 'cost' : 'muted' : 'muted', known ? armouryBenchIndex(value) : tx('Not read')));
+    handling.append(line);
+  }
+  root.append(handling);
+
+  const figures = el('section', 'bench-figures');
+  figures.append(el('h4', null, tx('Derived figures at the muzzle')));
+  if (!bare || !mode) {
+    figures.append(el('p', 'muted small', tx('No firing figures are available for this mode.')));
+  } else {
+    const table = el('table', 'bench-figures-table');
+    const head = el('thead');
+    const titles = el('tr');
+    for (const word of ['', tx('Bare weapon'), tx('Current fit')]) titles.append(el('th', null, word));
+    head.append(titles); table.append(head);
+    const body = el('tbody');
+    const seconds = (v) => `${fmtDamage(v)} s`;
+    const rows = [
+      [tx('DPS'), bare.damagePerSecond, mode.damagePerSecond, fmtInt],
+      ...(mode.kind === 'Beam' ? [] : [
+        [tx('Per shot'), bare.damagePerShot, mode.damagePerShot, fmtDamage],
+        [tx('Sustained'), bare.sustainedRoundsPerMinute, mode.sustainedRoundsPerMinute, (v) => `${fmtInt(v)} rpm`]
+      ]),
+      ...(w.magazine > 0 ? [[tx('Per mag'), bare.damagePerMagazine, mode.damagePerMagazine, fmtInt]] : []),
+      [tx('Empties in'), bare.secondsToEmpty, mode.secondsToEmpty, seconds]
+    ];
+    for (const [label, before, after, format] of rows) {
+      const tr = el('tr'); tr.append(el('th', null, label));
+      for (const value of [before, after]) tr.append(el('td', 'num', value > 0 ? format(value) : '—'));
+      body.append(tr);
+    }
+    table.append(body); figures.append(table);
+  }
+  figures.append(el('p', 'muted small', tx('Before armour and damage drop-off. Full-charge modes assume a full charge; sustained rates include burst cooldowns.')));
+  root.append(figures);
+  const source = el('details', 'bench-source');
+  source.append(el('summary', null, tx('How the comparison is calculated')));
+  source.append(el('p', 'muted small', tx('Derived: the pieces’ multipliers from the files, applied to the gun’s own figures at the muzzle. Two pieces that move one figure are multiplied; whether the game does the same, and whether a damage multiplier also lifts the drop’s floor, is not in the files.')));
+  root.append(source);
 }
 
 function armouryArmourFiltered() {

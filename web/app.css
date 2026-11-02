@@ -6699,7 +6699,7 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .armoury-pane { display: none; }
 .armoury-pane.active { display: block; }
 .armoury-pane[hidden], #armoury-tabs[hidden], #armoury-deck[hidden] { display: none; }
-#armoury-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--rule); background: rgba(7, 20, 30, .58); }
+#armoury-tabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--rule); background: rgba(7, 20, 30, .58); }
 #armoury-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; margin: 0; padding: 6px 8px; border: 1px solid transparent; border-bottom: 1px solid transparent; color: var(--muted); }
 #armoury-tabs button > span { color: var(--dim); font: 10px var(--mono); }
 #armoury-tabs button:hover { border-color: var(--rule-hot); background: rgba(30, 73, 91, .22); }
@@ -6739,6 +6739,67 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .armoury-fit-delta.gain { color: var(--green); }
 .armoury-fit-delta.cost { color: var(--amber); }
 .armoury-fit-handling { margin: 6px 0 4px; font-size: 12.5px; }
+
+/* A normalized target: decoration must not suggest a scale in metres. */
+.bench-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 22px 0 12px; }
+.bench-heading h3 { margin: 4px 0 6px; font-size: 24px; }
+.bench-heading p { margin: 0; }
+.bench-eyebrow, .bench-model-badge { font: 10px var(--mono); text-transform: uppercase; letter-spacing: .13em; color: var(--cyan); }
+.bench-model-badge { padding: 7px 10px; border: 1px solid var(--cyan-deep); white-space: nowrap; }
+.bench-disclosure { padding: 10px 14px; border-left: 2px solid var(--amber); background: rgba(196, 153, 79, .06); color: var(--muted); }
+.bench-layout { display: grid; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 18px; }
+.bench-controls { padding: 18px; border: 1px solid var(--rule); background: rgba(7, 18, 28, .65); }
+.bench-field { display: grid; gap: 7px; margin-bottom: 18px; color: var(--muted); font-size: 12px; }
+.bench-field select { width: 100%; min-width: 0; }
+.bench-controls h4 { margin: 26px 0 16px; }
+.bench-controls .armoury-fit-pickers { display: grid; gap: 18px; }
+.bench-controls .armoury-fit-slot { display: grid; gap: 6px; min-width: 0; }
+.bench-controls .armoury-fit-slot select { max-width: none; width: 100%; min-width: 0; }
+.bench-controls > button { margin: 16px 0 4px; }
+.bench-controls > p { line-height: 1.6; }
+.bench-readout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(230px, 1fr); gap: 16px; min-width: 0; }
+.bench-target, .bench-handling, .bench-figures { min-width: 0; border: 1px solid var(--rule); padding: 16px; background: rgba(7, 18, 28, .65); }
+.bench-readout h4 { margin: 0; font-size: 13px; color: var(--cyan-hot); }
+.bench-target { grid-row: span 2; }
+.bench-target-title { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: space-between; align-items: center; }
+.bench-index { color: var(--cyan); font: 11px var(--mono); }
+.bench-plot { max-width: 500px; margin: 8px auto 0; }
+.bench-plot svg { display: block; width: 100%; height: auto; }
+.bench-target-ring { fill: none; stroke: var(--cyan-deep); stroke-width: .6; opacity: .7; }
+.bench-target-cross { fill: none; stroke: var(--cyan-deep); stroke-width: .5; stroke-dasharray: 2 5; }
+.bench-target-origin { fill: none; stroke: var(--cyan-hot); stroke-width: 1; }
+.bench-pattern-limit { fill: none; stroke-width: 1; }
+.bench-pattern-bare { color: var(--muted); }
+.bench-pattern-bare .bench-pattern-limit { stroke: currentColor; stroke-dasharray: 4 6; opacity: .55; }
+.bench-pattern-bare .bench-pattern-point { fill: none; stroke: currentColor; stroke-width: 1; opacity: .65; }
+.bench-pattern-fitted { color: var(--cyan); }
+.bench-pattern-fitted .bench-pattern-limit { stroke: currentColor; opacity: .65; }
+.bench-pattern-fitted .bench-pattern-point { fill: currentColor; }
+.bench-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 11px; }
+.bench-legend-bare { color: var(--muted); }
+.bench-legend-fitted { color: var(--cyan); }
+.bench-legend-bare::before, .bench-legend-fitted::before { content: ''; display: inline-block; width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; margin-right: 6px; }
+.bench-legend-fitted::before { background: currentColor; }
+.bench-legend button { margin-left: auto; }
+.bench-target > p { line-height: 1.6; margin-bottom: 0; }
+.bench-no-pattern { min-height: 200px; display: grid; place-content: center; }
+.bench-handling > p { line-height: 1.6; margin: 10px 0 16px; }
+.bench-handling-row { display: grid; grid-template-columns: minmax(80px, 1.5fr) minmax(30px, 1fr) 40px; gap: 12px; align-items: center; margin-top: 14px; font-size: 12px; }
+.bench-handling-row strong { text-align: right; font: 12px var(--mono); }
+.bench-handling-row .gain { color: var(--green); }
+.bench-handling-row .cost { color: var(--amber); }
+.bench-meter { position: relative; height: 4px; background: var(--rule); }
+.bench-meter::after { content: ''; position: absolute; left: 50%; top: -3px; width: 1px; height: 10px; background: var(--muted); }
+.bench-meter-fill { display: block; height: 100%; background: var(--cyan-deep); }
+.bench-figures-table { width: 100%; margin-top: 10px; font-size: 12px; }
+.bench-figures-table th { white-space: normal; }
+.bench-figures-table thead th:not(:first-child) { text-align: right; }
+.bench-figures-table tbody th { font-weight: normal; color: var(--muted); text-align: left; }
+.bench-figures > p { line-height: 1.6; margin-bottom: 0; }
+.bench-source { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.bench-source summary { cursor: pointer; }
+@media (max-width: 1200px) { .bench-readout { grid-template-columns: minmax(0, 1fr); } .bench-target { grid-row: auto; } }
+@media (max-width: 620px) { .bench-layout { grid-template-columns: minmax(0, 1fr); } .bench-heading { align-items: start; } .bench-heading h3 { font-size: 20px; } .bench-model-badge { white-space: normal; text-align: center; } }
 #armoury-pane-attachments h3.spaced { margin-top: 18px; }
 #armoury-pane-attachments h3.spaced .muted { font-weight: normal; font-size: 12px; }
 td.armoury-gain { color: var(--green); }
