@@ -7346,18 +7346,6 @@ body:not(.overlay) .view.active::after {
     linear-gradient(30deg, transparent 49.5%, rgba(53, 200, 240, .14) 50%, transparent 50.5%),
     linear-gradient(153deg, transparent 49.5%, rgba(181, 140, 240, .13) 50%, transparent 50.5%);
 }
-/* Glass reflections only occupy the empty upper band of a workspace. The
-   actual panels remain opaque enough to preserve contrast and legibility. */
-body:not(.overlay) .view.active::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 230px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: .24;
-  background: linear-gradient(118deg, transparent 0 42%, rgba(152, 224, 255, .055) 43% 46%, transparent 47% 66%, rgba(255, 255, 255, .025) 67% 68%, transparent 69%), repeating-linear-gradient(90deg, rgba(127, 228, 255, .022) 0 1px, transparent 1px 9px);
-}
 body:not(.overlay) .view.active > * { position: relative; z-index: 1; }
 
 /* Source labels carry a small shape as well as words and colour, so provenance

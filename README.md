@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.48
+### 0.20.49
+
+**A smoother dashboard background.** Removed the cockpit-glass stripes and reflection layer behind page content, leaving the dark blue background clear around the cards and curved wake.
 
 **A lighter quantum wake.** The session-history decoration under page headings now fades through fine curved trails into a small star for today, echoing the logo's swept curve with two faint sparks behind it. The trail stays compact on wide screens, its spread follows your recent sessions, and today's star glows more brightly when you have flown today. It stops before header controls.
 
