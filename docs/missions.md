@@ -147,8 +147,8 @@ release or work in progress on themselves, their handler or their template, so
 | --- | ---: | --- |
 | Contractor | 99% | `Contractor` string parameter, else the handler's |
 | Mission type | 100% | `missionTypeOverride`, else the template's `MissionType.LocalisedTypeName` |
-| Title | 91% | `Title` string parameter |
-| Briefing | 86% | `Description` string parameter |
+| Title | 99% | `Title` string parameter, or the contractor's text it names |
+| Briefing | 94% | `Description` string parameter, likewise |
 | System | 81% | `ContractPrerequisite_Locality` |
 | Game's time estimate | 88% | `contractResults.timeToComplete`, minutes |
 | Difficulty ratings | 86% | `contractResults.difficulty`: mechanical skill, mental load, risk of loss, game knowledge |
@@ -160,6 +160,19 @@ release or work in progress on themselves, their handler or their template, so
 117 are marked illegal and 166 have a buy-in. A title whose English is a lone
 run-time placeholder (`~mission(Title)`, the Covalex random hauls) is read as
 none.
+
+A title of the form `~mission(Contractor|BlackBoxRecoverTitleMedium)` is not a
+run-time pick: it asks the contractor for a text by name. The contract names its
+contractor as a `Contractor` property (a `MissionPropertyValue_Organization`
+listing one `MissionOrganization`), and that organisation's
+`stringVariants.variants` hold one text per `Tag`, keyed by the tag's `tagName`.
+Bit Zeros' Medium black-box run is "Too Smart For Our Own Good". Until 0.20.46
+these read as none, and 373 released contracts showed their debug name: every
+recovery run for Bit Zeros, Hockrow, Dead Saints, FTL and Red Wind, Vaughn's
+assassinations, Adagio's salvage claims. Resolving them leaves 37 untitled, and
+for those the files hold no title at all: 24 first-time Hockrow facility-delve
+contracts (template `Phase2-Mission01` and its kin, empty `displayString`), 12
+tutorial parts and `MW_CH3`. No contract that already had a title changed.
 
 The difficulty ratings are not out of five: a Red Wind bulk haul's mental load
 is `Insane_complexity_NOT_soloable_7`. The page shows the number and the

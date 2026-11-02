@@ -104,19 +104,37 @@ public sealed class GameMissionCatalogue
 /// in fields of its own - and whose title is often <c>~mission(Title)</c>, the
 /// game choosing one at run time; such a title is read as none.
 /// </para>
+/// <para>
+/// A title of the form <c>~mission(Contractor|BlackBoxRecoverTitleMedium)</c>
+/// is not chosen at run time: it asks the contract's contractor for a text by
+/// name. The contract names that contractor as a <c>Contractor</c> property, a
+/// <c>MissionOrganization</c>, and the organisation's <c>stringVariants</c> hold
+/// one text per <c>Tag</c>, the tag's <c>tagName</c> being the name asked for.
+/// Bit Zeros' Medium black-box run is "Too Smart For Our Own Good" that way.
+/// Read as none until 0.20.46, which left 373 contracts showing their debug
+/// name, among them every recovery run for Bit Zeros, Hockrow, Dead Saints,
+/// FTL and Red Wind. A property listing several organisations is the game's
+/// pick at run time, and is left unresolved.
+/// </para>
 /// </remarks>
 public static partial class GameMissionDetails
 {
     private static readonly string[] ContractArrays = ["contracts", "introContracts", "legacyContracts"];
 
     /// <summary>What a contract takes from whatever it sits in.</summary>
+    /// <remarks>
+    /// TitleVariant and DescriptionVariant are a text the contractor holds by
+    /// name, resolved once the contract's own Organization is known; a plain
+    /// title further down replaces one, and one replaces a plain title.
+    /// </remarks>
     private sealed record Layer(
         string? Title, string? Description, string? Contractor, string? Type, string? Faction,
         List<string> Systems, List<string> Locations, double? MinCrime, double? MaxCrime,
         List<GameMissionGate> Gates, int? Requires, int? MaxPlayers, bool OnceOnly,
         bool? RetakeAbandon, bool? RetakeFail, bool Unreleased,
         string? Template = null, bool Illegal = false, double? Minutes = null, int? BuyIn = null,
-        GameMissionDifficulty? Difficulty = null);
+        GameMissionDifficulty? Difficulty = null,
+        Guid? Organization = null, string? TitleVariant = null, string? DescriptionVariant = null);
 
     public static GameMissionCatalogue Read(
         DataCore core,
@@ -143,6 +161,41 @@ public static partial class GameMissionDetails
                 return null;
             keys.Add(key);
             return key;
+        }
+
+        // The name in "~mission(Contractor|BlackBoxRecoverTitleMedium)", when that
+        // is the whole of the text: a text the contractor holds, not a run-time pick.
+        string? ContractorText(string? value)
+        {
+            var key = value?.TrimStart('@');
+            if (key is not { Length: > 0 } || !text.TryGetValue(key, out var english)) return null;
+            var asked = ContractorAsk().Match(english.Trim());
+            return asked.Success ? asked.Groups[1].Value : null;
+        }
+
+        // Each organisation's texts by tag name, read once.
+        var variants = new Dictionary<Guid, Dictionary<string, string>>();
+        string? Variant(Guid? organization, string? name)
+        {
+            if (organization is not { } id || name is null || !byId.TryGetValue(id, out var record)) return null;
+            if (!variants.TryGetValue(id, out var byName))
+            {
+                byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var (listAt, list) = core.FieldAt(core.InstanceAt(record, record.VariantIndex), record.StructIndex, "stringVariants");
+                if (list is not null)
+                {
+                    foreach (var variant in core.ClassArrayAt(listAt, list.StructIndex, "variants"))
+                    {
+                        var va = core.InstanceAt(variant);
+                        if (core.ReferenceAt(va, variant.StructIndex, "tag") is { } tag && byId.TryGetValue(tag, out var tagRecord)
+                            && core.StringAt(core.InstanceAt(tagRecord, tagRecord.VariantIndex), tagRecord.StructIndex, "tagName") is { Length: > 0 } tagName
+                            && core.StringAt(va, variant.StructIndex, "string") is { Length: > 0 } said)
+                            byName.TryAdd(tagName, said);
+                    }
+                }
+                variants[id] = byName;
+            }
+            return byName.TryGetValue(name, out var value) ? Key(value) : null;
         }
 
         string? TypeKey(Guid? type) =>
@@ -173,11 +226,32 @@ public static partial class GameMissionDetails
                 var value = core.StringAt(pa, param.StructIndex, "value");
                 switch (core.EnumAt(pa, param.StructIndex, "param"))
                 {
-                    case "Title": layer = layer with { Title = Key(value) ?? layer.Title }; break;
-                    case "Description": layer = layer with { Description = Key(value) ?? layer.Description }; break;
+                    case "Title":
+                        if (Key(value) is { } title) layer = layer with { Title = title, TitleVariant = null };
+                        else if (ContractorText(value) is { } asked) layer = layer with { Title = null, TitleVariant = asked };
+                        break;
+                    case "Description":
+                        if (Key(value) is { } description) layer = layer with { Description = description, DescriptionVariant = null };
+                        else if (ContractorText(value) is { } asked) layer = layer with { Description = null, DescriptionVariant = asked };
+                        break;
                     case "Contractor": layer = layer with { Contractor = Key(value) ?? layer.Contractor }; break;
                 }
             }
+
+            // Who "Contractor" is, for a title that asks the contractor for its text.
+            foreach (var property in core.ClassArrayAt(paramsAt, parameters.StructIndex, "propertyOverrides"))
+            {
+                var pa = core.InstanceAt(property);
+                if (core.StringAt(pa, property.StructIndex, "extendedTextToken") != "Contractor"
+                    || core.PointerAt(pa, property.StructIndex, "value") is not { StructIndex: >= 0 } chosen)
+                    continue;
+                var organizations = core.PointerArrayAt(core.InstanceAt(chosen), chosen.StructIndex, "matchConditions")
+                    .SelectMany(c => core.ReferenceArrayAt(core.InstanceAt(c), c.StructIndex, "organizations"))
+                    .Distinct()
+                    .ToList();
+                if (organizations.Count == 1) layer = layer with { Organization = organizations[0] };
+            }
+
             return TypeKey(core.ReferenceAt(paramsAt, parameters.StructIndex, "missionTypeOverride")) is { } type
                 ? layer with { Type = type }
                 : layer;
@@ -353,7 +427,9 @@ public static partial class GameMissionDetails
 
                 missions.Add(new GameMissionInfo(
                     id, name, generator, parent, layer.Template, layer.Type, layer.Faction,
-                    layer.Title, layer.Description, layer.Contractor,
+                    layer.Title ?? Variant(layer.Organization, layer.TitleVariant),
+                    layer.Description ?? Variant(layer.Organization, layer.DescriptionVariant),
+                    layer.Contractor,
                     layer.Systems, layer.Locations, layer.MinCrime, layer.MaxCrime,
                     gates, layer.Requires, layer.Minutes, layer.BuyIn, layer.MaxPlayers,
                     layer.OnceOnly, layer.RetakeAbandon, layer.RetakeFail, layer.Illegal, layer.Unreleased,
@@ -417,6 +493,10 @@ public static partial class GameMissionDetails
             Areas = areas,
         };
     }
+
+    /// <summary>A title that is only a request to the contractor: <c>~mission(Contractor|BlackBoxRecoverTitleMedium)</c>.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^~mission\(Contractor\|(\w+)\)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex ContractorAsk();
 
     /// <summary>A planet's star-map id - <c>Pyro1</c>, <c>Stanton4</c> - and not a moon's (<c>Stanton1a</c>) or a station's.</summary>
     [System.Text.RegularExpressions.GeneratedRegex(@"^(Stanton|Pyro|Nyx)\d+$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
