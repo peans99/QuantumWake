@@ -21276,6 +21276,8 @@ function applyLabelOptions(options) {
   if (!facts || !colour || !level) return;
 
   facts.checked = options ? options.facts !== false : true;
+  const routes = $('#label-routes');
+  if (routes) routes.checked = options ? options.routes !== false : true;
   colour.checked = !!(options && options.colour);
   level.value = String((options && options.level) || 3);
   level.disabled = !colour.checked;
@@ -21287,6 +21289,7 @@ async function saveLabelOptions() {
     colour: $('#label-colour').checked,
     level: Number($('#label-level').value) || 3,
     facts: $('#label-facts').checked,
+    routes: $('#label-routes') ? $('#label-routes').checked : true,
   };
 
   $('#label-level').disabled = !body.colour;
@@ -21308,7 +21311,7 @@ async function saveLabelOptions() {
   await loadTextOverlay().catch(() => {});
 }
 
-for (const id of ['#label-facts', '#label-colour', '#label-level']) {
+for (const id of ['#label-facts', '#label-routes', '#label-colour', '#label-level']) {
   $(id)?.addEventListener('change', () => { saveLabelOptions().catch(() => {}); });
 }
 
@@ -21341,6 +21344,9 @@ async function loadTextOverlay() {
     [tx('Something sells'), state.sold],
     [tx('Size or class marked'), state.annotated],
     [tx('Not gear you shop for'), state.skipped],
+    // Hauling titles are the overlay's other half: they ask the game to print
+    // a contract's places, which is how the logs come to name them at all.
+    ...(state.routed ? [[tx('Hauling titles naming places'), state.routed]] : []),
   ]);
 
   // Which file it builds on decides whether another mod survives, so it is

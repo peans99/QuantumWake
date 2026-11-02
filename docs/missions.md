@@ -154,3 +154,24 @@ Covalex_HaulCargo_AToB_title=~mission(ReputationRank) | DIRECT ~mission(CargoGra
 
 The game then fills in the placeholders. That is the one thing that still needs
 a text table rather than the DataCore.
+
+### Our overlay writes them (0.20.39)
+
+The item-label overlay now does the same for hauling titles
+(`TextOverlayOptions.Routes`, on by default). It uses the mod's exact wording,
+so `HaulingContract.RouteFromTitle` reads either the same way. Which ends a key
+gets (`GameMissions.HaulTitles`) is decided in two steps:
+
+1. **A key whose name states a shape** (`…HaulCargo_AToB…title`, `SingleToMulti`, `MultiToSingle`) gets the ends that name promises. The Covalex hauls flown here are broker missions that pick their title key at run time (`~mission(Title)`), so no contract record points at the key. All 54 logged under `Covalex_HaulCargo_SingleToMulti_title` read "from Port Tressler", as the name says. Three keys carry one generator contract of another shape each: Ling's two AToB titles each carry a multi-pickup haul, and Dead Saints' MultiToSingle title a single-pickup one. The name wins over those, as it does for the mod.
+2. **Any other key a hauling contract uses** (intro hauls, the Iasi event) names an end only when every contract under it has exactly one of that end.
+
+Measured on 4.10.2 (`--missions` prints it):
+
+- 28 keys: 18 A > B, 6 to, 4 from.
+- On the game's own text, all 28 lines are rewritten.
+- StarStrings placed 20 of these keys, and **all 20 get the same ends**.
+- 8 keys get places the mod never wrote: the Covalex and Ling Rehire evaluations, Covalex MultiToSingle, Ling SingleToMulti, Red Wind's intro haul and three Iasi event hauls.
+- Layered over an installed StarStrings, a title that already asks for its places is left alone, so on this install it adds those 8 and nothing else.
+
+Not yet seen: a log line from a title this overlay wrote. Install it, take a
+haul, and check that `--hauling` names its end.

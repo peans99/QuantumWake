@@ -49,6 +49,31 @@ public class ItemLabelOptionsTests
         Assert.True(page.Truth("__dom.node('#label-level').disabled"));
     }
 
+    /// <summary>Routes default on: a settings file written before they existed has no such field.</summary>
+    [Fact]
+    public void Naming_hauling_places_is_on_unless_turned_off_and_posts_with_the_rest()
+    {
+        var page = Loaded();
+        Assert.True(page.Truth("__dom.node('#label-routes').checked"));
+
+        page.Serve("/api/labels/options", """{"colour":true,"level":4,"facts":false,"routes":false}""");
+        page.Do("__dom.node('#label-routes').checked = false; await saveLabelOptions();");
+
+        Assert.Contains("\"routes\":false", page.BodyOf("/api/labels/options"));
+    }
+
+    [Fact]
+    public void The_summary_counts_the_hauling_titles_it_would_rewrite()
+    {
+        var page = new Page();
+        page.Serve("/api/labels", Status.Replace("\"annotated\":7", "\"annotated\":7,\"routed\":21"));
+        page.Do("await loadTextOverlay();");
+
+        var summary = page.NodeText("#textoverlay-summary");
+        Assert.Contains("Hauling titles naming places", summary);
+        Assert.Contains("21", summary);
+    }
+
     [Fact]
     public void Saving_a_choice_posts_it_and_says_it_is_not_installed_yet()
     {

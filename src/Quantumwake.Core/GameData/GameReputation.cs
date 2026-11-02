@@ -44,6 +44,14 @@ public sealed record GameReputationCatalogue(
     /// </summary>
     public IReadOnlyDictionary<string, GameMissionPay>? Missions { get; init; }
 
+    /// <summary>
+    /// Hauling contract title keys, and which ends a title under each can name -
+    /// <see cref="GameMissions.BothEnds"/>, <see cref="GameMissions.DeliveryEnd"/>
+    /// or <see cref="GameMissions.PickupEnd"/>. Kept with the missions because it
+    /// is read off the same contracts; see <see cref="GameMissions.HaulTitles"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? HaulTitles { get; init; }
+
     /// <summary>What the install says a logged contract pays, or null when it does not know it.</summary>
     public GameMissionPay? Mission(string? definitionId) =>
         definitionId is { Length: > 0 } && Missions is { } missions && missions.TryGetValue(definitionId, out var pay)
@@ -161,6 +169,7 @@ public static class GameReputation
             Organisations(core, text, organisations, logoEntries ?? []))
         {
             Missions = GameMissions.Read(core, byId, standings),
+            HaulTitles = GameMissions.HaulTitles(core, byId, text.Keys),
         };
     }
 

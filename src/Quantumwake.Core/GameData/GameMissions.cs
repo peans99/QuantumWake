@@ -106,7 +106,7 @@ public sealed record GameMissionPay(
 /// <c>missionReward</c> are what it pays.
 /// </para>
 /// </remarks>
-public static class GameMissions
+public static partial class GameMissions
 {
     private static readonly string[] ContractArrays = ["contracts", "introContracts", "legacyContracts"];
 
@@ -282,6 +282,141 @@ public static class GameMissions
         core.ReferenceAt(at, structIndex, field) is { } id && standings.TryGetValue(id, out var place)
             ? (place.Scope, place.Index)
             : (null, null);
+
+    /// <summary>A title names both ends: <c>A &gt; B</c>.</summary>
+    public const string BothEnds = "AToB";
+
+    /// <summary>A title names where it is delivered: <c>to X</c>.</summary>
+    public const string DeliveryEnd = "to";
+
+    /// <summary>A title names where it is picked up: <c>from X</c>.</summary>
+    public const string PickupEnd = "from";
+
+    /// <summary>
+    /// Every hauling contract title key, and which ends a title written under
+    /// it can honestly name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The places are not in the files: one Red Wind definition was logged as
+    /// "to Checkmate", "to Gaslight" and "to Ruin Station" - the server picks
+    /// them per run. The game fills <c>~mission(Location|name)</c> and
+    /// <c>~mission(Destination|name)</c> into a title at run time, so the text
+    /// table can ask for them; that is how StarStrings got places into the log.
+    /// </para>
+    /// <para>
+    /// A key whose name states a shape - <c>Covalex_HaulCargo_SingleToMulti_title</c> -
+    /// is read by its name. That is the evidence that holds: the Covalex hauls
+    /// flown here are older broker missions that choose their title key at run
+    /// time, so no contract record points at it, and all 54 of them logged under
+    /// it read "from Port Tressler", as the name says. The generator contracts
+    /// that do name such a key mostly agree; three keys carry one contract of
+    /// another shape each (Ling's AToB title has a multi-pickup haul, Dead
+    /// Saints' MultiToSingle title a single-pickup one), and the name is kept
+    /// over those, as StarStrings keeps it.
+    /// </para>
+    /// <para>
+    /// A key whose name says nothing - an intro haul's, the Iasi event's - is
+    /// read off the contracts that use it, and names an end only when every one
+    /// of them has exactly one of it: a direct haul has one of each, one with
+    /// many drops has one pickup, one with many pickups has one drop.
+    /// </para>
+    /// </remarks>
+    /// <param name="textKeys">The game's text table keys, where the keys that name their shape are found.</param>
+    public static Dictionary<string, string> HaulTitles(
+        DataCore core, IReadOnlyDictionary<Guid, DataRecord> byId, IEnumerable<string>? textKeys = null)
+    {
+        var shapes = new Dictionary<string, HashSet<State.HaulShape>>(StringComparer.OrdinalIgnoreCase);
+
+        void Visit(DataCore.Pointer contract, string? inherited)
+        {
+            var at = core.InstanceAt(contract);
+            var name = (core.StringAt(at, contract.StructIndex, "debugName") ?? "").Trim();
+            var (overridesAt, overrides) = core.FieldAt(at, contract.StructIndex, "paramOverrides");
+            var key = overrides is null ? inherited : TitleKey(core, overridesAt, overrides.StructIndex) ?? inherited;
+
+            if (key is { Length: > 0 } && name.Length > 0
+                && State.HaulingContract.FromArchetype(name)?.Shape is { } shape and not State.HaulShape.Unknown)
+            {
+                (shapes.TryGetValue(key, out var seen) ? seen : shapes[key] = []).Add(shape);
+            }
+
+            foreach (var sub in core.ClassArrayAt(at, contract.StructIndex, "subContracts")) Visit(sub, key);
+        }
+
+        foreach (var generator in byId.Values.Where(r => r.Name.StartsWith("ContractGenerator.", StringComparison.Ordinal)))
+        {
+            var generatorAt = core.InstanceAt(generator, generator.VariantIndex);
+
+            foreach (var handler in core.PointerArrayAt(generatorAt, generator.StructIndex, "generators"))
+            {
+                var handlerAt = core.InstanceAt(handler);
+                var (paramsAt, parameters) = core.FieldAt(handlerAt, handler.StructIndex, "contractParams");
+                var handlerKey = parameters is null ? null : TitleKey(core, paramsAt, parameters.StructIndex);
+
+                foreach (var array in ContractArrays)
+                    foreach (var contract in ContractsIn(core, handlerAt, handler.StructIndex, array))
+                        Visit(contract, handlerKey);
+            }
+        }
+
+        var titles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in (textKeys ?? []).Concat(shapes.Keys))
+        {
+            var bare = key.EndsWith(",P", StringComparison.OrdinalIgnoreCase) ? key[..^2] : key;
+            if (!titles.ContainsKey(bare) && EndsByName(bare) is { } ends) titles[bare] = ends;
+        }
+
+        foreach (var (key, seen) in shapes)
+        {
+            if (titles.ContainsKey(key)) continue;
+
+            var onePickup = seen.All(s => s is State.HaulShape.Direct or State.HaulShape.SingleToMulti);
+            var oneDrop = seen.All(s => s is State.HaulShape.Direct or State.HaulShape.MultiToSingle);
+
+            if (onePickup && oneDrop) titles[key] = BothEnds;
+            else if (oneDrop) titles[key] = DeliveryEnd;
+            else if (onePickup) titles[key] = PickupEnd;
+        }
+
+        return titles;
+    }
+
+    /// <summary>
+    /// The ends a hauling title key's own name promises, or null when it is not
+    /// a title or names no shape: <c>Covalex_HaulCargo_SingleToMulti_title</c>
+    /// is <see cref="PickupEnd"/>, a description key is nothing.
+    /// </summary>
+    public static string? EndsByName(string key)
+    {
+        if (!key.Contains("title", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var named = NamedShape().Match(key);
+        if (!named.Success) return null;
+
+        return named.Groups["shape"].Value.ToLowerInvariant() switch
+        {
+            "atob" => BothEnds,
+            "singletomulti" => PickupEnd,
+            _ => DeliveryEnd,
+        };
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"HaulCargo_(?<shape>AToB|SingleToMulti|MultiToSingle)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex NamedShape();
+
+    private static string? TitleKey(DataCore core, long overridesAt, int structIndex)
+    {
+        foreach (var param in core.ClassArrayAt(overridesAt, structIndex, "stringParamOverrides"))
+        {
+            var paramAt = core.InstanceAt(param);
+            if (core.EnumAt(paramAt, param.StructIndex, "param") == "Title")
+                return core.StringAt(paramAt, param.StructIndex, "value")?.TrimStart('@');
+        }
+
+        return null;
+    }
 
     private static IReadOnlyList<DataCore.Pointer> ContractsIn(DataCore core, long at, int structIndex, string field)
     {

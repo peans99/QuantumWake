@@ -410,6 +410,41 @@ if (args.Contains("--missions", StringComparer.OrdinalIgnoreCase))
     Console.WriteLine($"  completed with a [BP] tag the install does not back: {tagOnly.Count}; followed by a blueprint: "
         + $"{tagOnly.Count(c => paired.Any(r => r.After == c))}");
 
+    // Hauling titles: what the overlay would write into the game's own text,
+    // set beside what StarStrings wrote for the same key - the mod chose its
+    // wording from the key's name, this from the contracts under the key.
+    var haulTitles = catalogue.HaulTitles ?? new Dictionary<string, string>();
+    var vanillaRaw = new P4kArchive(P4kArchive.PathFor(install.RootPath)).TryRead(@"Data\Localization\english\global.ini");
+    if (vanillaRaw is not null)
+    {
+        var vanilla = GameText.WithoutBom(System.Text.Encoding.UTF8.GetString(vanillaRaw));
+        var plan = TextOverlay.Build(vanilla, _ => true, null, new TextOverlayOptions(Facts: false), haulTitles);
+        var ours = plan.Changes.Where(c => c.Category == TextOverlay.HaulTitleCategory)
+            .ToDictionary(c => c.ItemClass.EndsWith(",P") ? c.ItemClass[..^2] : c.ItemClass, c => c.Becomes, StringComparer.OrdinalIgnoreCase);
+
+        var loose = Path.Combine(install.RootPath, @"Data\Localization\english\global.ini");
+        var mod = File.Exists(loose)
+            ? File.ReadLines(loose).Select(l => l.TrimStart('﻿')).Where(l => l.Contains('='))
+                .Select(l => (Key: l[..l.IndexOf('=')], Value: l[(l.IndexOf('=') + 1)..]))
+                .Where(x => x.Value.Contains("~mission(Location") || x.Value.Contains("~mission(Destination"))
+                .GroupBy(x => x.Key.EndsWith(",P") ? x.Key[..^2] : x.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Value, StringComparer.OrdinalIgnoreCase)
+            : [];
+
+        static string Ends(string v) =>
+            v.Contains("~mission(Location|name) > ~mission(Destination|name)") ? "A > B"
+            : v.Contains("to ~mission(Destination") ? "to" : v.Contains("from ~mission(Location") ? "from" : "-";
+
+        Console.WriteLine($"\nhauling title keys: {haulTitles.Count} ({string.Join(", ", haulTitles.Values.GroupBy(v => v).Select(g => $"{g.Key} {g.Count()}"))}); "
+            + $"the overlay rewrites {plan.Routed} lines of the game's own text");
+        var shared = ours.Keys.Where(mod.ContainsKey).ToList();
+        Console.WriteLine($"  keys StarStrings also placed: {shared.Count}; same ends on {shared.Count(k => Ends(ours[k]) == Ends(mod[k]))}");
+        foreach (var k in shared.Where(k => Ends(ours[k]) != Ends(mod[k])))
+            Console.WriteLine($"    {k}: ours {Ends(ours[k])}, the mod's {Ends(mod[k])}");
+        foreach (var k in ours.Keys.Where(k => !mod.ContainsKey(k)))
+            Console.WriteLine($"    only ours: {k} ({Ends(ours[k])})");
+    }
+
     Console.WriteLine("\nrep on completion, by issuer:");
     foreach (var g in paying.GroupBy(c => (c.Issuer, Rep: catalogue.Mission(c.DefinitionId)!.OnCompletion)).OrderBy(g => g.Key.Issuer).ThenBy(g => g.Key.Rep))
         Console.WriteLine($"  {g.Count(),4}  {g.Key.Issuer,-30} {g.Key.Rep,7:N0}");
