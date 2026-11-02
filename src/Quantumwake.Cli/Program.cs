@@ -350,6 +350,40 @@ if (args.Contains("--events", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Each planet and moon's baseline against every armour set's temperature
+// range, by the rule the Armoury's Climate tab uses: a set is judged by the
+// narrowest of its pieces and counts only when it covers the body (a core or
+// an undersuit). The numbers behind docs/armoury.md's climate section.
+if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var armoury = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Armoury;
+    var climate = armoury.Climate ?? GameClimateData.Empty;
+
+    var families = armoury.Armour
+        .Where(p => p.Slot != "Backpack" && (p.TemperatureMin != 0 || p.TemperatureMax != 0))
+        .GroupBy(p => p.Family)
+        .Select(g => (Family: g.Key, Min: g.Max(p => p.TemperatureMin), Max: g.Min(p => p.TemperatureMax),
+            Body: g.Any(p => p.Slot is "Core" or "Undersuit")))
+        .ToList();
+    var sets = families.Where(f => f.Body).ToList();
+
+    Console.WriteLine($"{climate.Bodies.Count} bodies; unprotected {climate.BodyMin} to {climate.BodyMax} °C; visor frosts at {climate.VisorFrost} °C");
+    Console.WriteLine($"{sets.Count} sets that cover the body, {families.Count - sets.Count} other families (helmets, arms, legs alone)");
+    Console.WriteLine($"hottest-rated set {sets.MaxBy(s => s.Max).Family} to {sets.Max(s => s.Max)} °C; coldest {sets.MinBy(s => s.Min).Family} to {sets.Min(s => s.Min)} °C\n");
+
+    foreach (var b in climate.Bodies)
+    {
+        var rated = sets.Where(s => s.Min <= b.Celsius && b.Celsius <= s.Max).ToList();
+        var bare = climate.BodyMin <= b.Celsius && b.Celsius <= climate.BodyMax;
+        Console.WriteLine($"  {b.Name,-11} {(b.Parent is null ? "" : "(" + b.Parent + ")"),-12} {b.Celsius,7:F1} °C  p {b.Pressure,5}  h {b.Humidity,4}  "
+            + $"{(bare ? "comfortable" : "needs a suit"),-12}  sets {rated.Count,3}"
+            + (rated.Count is > 0 and <= 5 ? "  " + string.Join(", ", rated.Select(s => s.Family)) : ""));
+    }
+
+    return 0;
+}
+
 // What every logged contract pays in rep by the installed game, joined on the
 // marker's contractDefinitionId, and checked against the StarStrings tags in
 // the titles - which the files never saw. The numbers behind docs/missions.md;

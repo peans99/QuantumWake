@@ -5664,5 +5664,30 @@
   "Name the places on hauling contract titles <em class=\"muted\">The game fills them in when it shows the contract, so the logs say where a haul goes and the hauling planner can route it.</em>": "Nommer les lieux dans les titres des contrats de transport <em class=\"muted\">Le jeu les remplit quand il affiche le contrat : les journaux disent ainsi où va une cargaison, et le planificateur de transport peut tracer l’itinéraire.</em>",
   "Hauling titles naming places": "Titres de transport nommant les lieux",
   "Hauling title": "Titre de transport",
-  "<b>Quantum Wake no longer needs it.</b> The reputation, rep ladders and blueprints the app shows come from your installed game's own files, and the labels below name the places on hauling contract titles. Install it for what it does in game; the app reads its tags only for a contract your game files do not know.": "<b>Quantum Wake n’en a plus besoin.</b> La réputation, les échelles de réputation et les plans affichés par l’application viennent des fichiers de votre jeu installé, et les étiquettes ci-dessous nomment les lieux dans les titres des contrats de transport. Installez-le pour ce qu’il apporte en jeu ; l’application ne lit ses marques que pour un contrat que les fichiers de votre jeu ne connaissent pas."
+  "<b>Quantum Wake no longer needs it.</b> The reputation, rep ladders and blueprints the app shows come from your installed game's own files, and the labels below name the places on hauling contract titles. Install it for what it does in game; the app reads its tags only for a contract your game files do not know.": "<b>Quantum Wake n’en a plus besoin.</b> La réputation, les échelles de réputation et les plans affichés par l’application viennent des fichiers de votre jeu installé, et les étiquettes ci-dessous nomment les lieux dans les titres des contrats de transport. Installez-le pour ce qu’il apporte en jeu ; l’application ne lit ses marques que pour un contrat que les fichiers de votre jeu ne connaissent pas.",
+  "<span>06</span> Climate": "<span>06</span> Climat",
+  "Body": "Astre",
+  "Baseline": "Référence",
+  "Humidity": "Humidité",
+  "Unprotected": "Sans protection",
+  "Sets rated": "Ensembles adaptés",
+  "The body's baseline temperature in your game files, not the weather on the ground": "La température de référence de l’astre dans vos fichiers de jeu, pas la météo au sol",
+  "The game's own pressure figure; a room at its default reads 1": "Le chiffre de pression du jeu ; une pièce par défaut indique 1",
+  "Whether an unprotected body is comfortable at the baseline": "Si un corps sans protection est à l’aise à la température de référence",
+  "Your game files have not given any planet or moon climates yet.": "Vos fichiers de jeu n’ont encore donné aucun climat de planète ou de lune.",
+  "Each planet and moon's baseline temperature in your game files, set against every armour set's temperature range. A baseline, not the weather: biome, altitude, caves and night all move it, and the files give a night cooling rate, not a night temperature. An unprotected body is comfortable from {min} to {max} °C. A set is judged by the narrowest of its pieces; how the game combines pieces of different sets is not in the files, so a mixed outfit is not judged.": "La température de référence de chaque planète et lune dans vos fichiers de jeu, comparée à la plage de température de chaque ensemble d’armure. Une référence, pas la météo : le biome, l’altitude, les grottes et la nuit la font varier, et les fichiers donnent un taux de refroidissement nocturne, pas une température de nuit. Un corps sans protection est à l’aise de {min} à {max} °C. Un ensemble est jugé sur la plus étroite de ses pièces ; la façon dont le jeu combine des pièces d’ensembles différents n’est pas dans les fichiers, donc une tenue mélangée n’est pas jugée.",
+  "{value} °C": "{value} °C",
+  "moon of {planet}": "lune de {planet}",
+  "Comfortable": "À l’aise",
+  "Needs a suit": "Combinaison requise",
+  "Baseline {degrees} · pressure {pressure} · humidity {humidity}% · from your game files": "Référence {degrees} · pression {pressure} · humidité {humidity} % · d’après vos fichiers de jeu",
+  "No armour set in your game files is rated for this baseline. The hottest-rated reaches {hot}, the coldest {cold}.": "Aucun ensemble d’armure de vos fichiers de jeu n’est adapté à cette référence. Le plus résistant à la chaleur va jusqu’à {hot}, le plus résistant au froid jusqu’à {cold}.",
+  "And {count} more, with less room either side.": "Et {count} de plus, avec moins de marge de part et d’autre.",
+  "Its range takes in the baseline of none of the {total} planets and moons.": "Sa plage ne comprend la référence d’aucune des {total} planètes et lunes.",
+  "Its range takes in the baseline of {count} of the {total} planets and moons: {names}. A baseline, not the weather on the ground.": "Sa plage comprend la référence de {count} des {total} planètes et lunes : {names}. Une référence, pas la météo au sol.",
+  "Armour sets with a core or an undersuit whose temperature range takes in the baseline": "Ensembles d’armure avec un torse ou une sous-combinaison dont la plage de température comprend la référence",
+  "{count} helmets and other pieces are rated on their own as well; they do not cover the body, so they are not counted as sets.": {
+    "one": "{count} casque ou autre pièce est aussi adapté seul ; il ne couvre pas le corps et n’est donc pas compté comme un ensemble.",
+    "other": "{count} casques et autres pièces sont aussi adaptés seuls ; ils ne couvrent pas le corps et ne sont donc pas comptés comme des ensembles."
+  }
 }

@@ -8149,7 +8149,7 @@ let armouryPane = 'guns';
 let armouryOpenGun = null;
 let armouryOpenSet = null;
 
-const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives'];
+const ARMOURY_PANES = ['guns', 'armour', 'attachments', 'grenades', 'knives', 'climate'];
 try {
   const kept = localStorage.getItem('qw-armoury-pane');
   if (ARMOURY_PANES.includes(kept)) armouryPane = kept;
@@ -8165,7 +8165,7 @@ function showArmouryPane(name) {
   }
   for (const button of $('#armoury-tabs')?.querySelectorAll('button') || [])
     button.classList.toggle('active', button.dataset.pane === name);
-  const deck = name === 'guns' ? 'guns' : name === 'armour' ? 'armour' : 'kit';
+  const deck = name === 'guns' ? 'guns' : name === 'armour' || name === 'climate' ? 'armour' : 'kit';
   for (const key of ['guns', 'armour', 'kit'])
     $(`#armoury-open-${key}`)?.classList.toggle('active', key === deck);
 }
@@ -8253,6 +8253,149 @@ async function loadArmoury() {
   renderArmouryGuns();
   renderArmouryArmour();
   renderArmouryKit();
+  renderArmouryClimate();
+}
+
+/* ---------- climate ----------
+   Each planet and moon's baseline from the game files against every armour
+   set's temperature range. A baseline and said to be one everywhere: biome,
+   altitude, caves and night all move the ground's temperature, and Daymar's
+   reads 160 °C. Pieces of one set carry one range - every Testudo piece is
+   -50 to 80 °C - so a set is judged by the narrowest of its worn pieces; how
+   the game combines pieces of different sets is not in the files, and a mixed
+   outfit is not judged at all. */
+
+let armouryOpenBody = null;
+
+/**
+ * Every armour set's range: the narrowest across the pieces it is worn as.
+ * `body` says whether it covers the body - a core or an undersuit - because a
+ * helmet alone keeps nobody alive on Euterpe, and the install names a suit's
+ * helmet and its undersuit as two families ("Novikov", "Novikov Exploration")
+ * that nothing in the files pairs.
+ */
+function armourySetRanges() {
+  const sets = new Map();
+  for (const a of armouryModel?.armour || []) {
+    if (a.slot === 'Backpack' || (!a.temperatureMin && !a.temperatureMax)) continue;
+    const s = sets.get(a.family) || { family: a.family, min: -Infinity, max: Infinity, slots: new Set(), piece: a.pieces?.[0]?.class };
+    s.min = Math.max(s.min, a.temperatureMin);
+    s.max = Math.min(s.max, a.temperatureMax);
+    s.slots.add(a.slot);
+    sets.set(a.family, s);
+  }
+  return [...sets.values()].map((s) => ({ ...s, body: s.slots.has('Core') || s.slots.has('Undersuit') }));
+}
+
+/** Whether a range in °C takes in a body's baseline. */
+function climateCovers(min, max, body) {
+  return min <= body.celsius && body.celsius <= max;
+}
+
+/** "-7 °C", the baseline as a suit's range is written. */
+function climateDegrees(celsius) {
+  return tx('{value} °C', { value: fmtInt(celsius) });
+}
+
+function renderArmouryClimate() {
+  const body = $('#armoury-climate tbody');
+  if (!body || !armouryModel?.ready) return;
+  body.textContent = '';
+
+  const climate = armouryModel.climate;
+  const note = $('#armoury-climate-note');
+  if (!climate?.bodies?.length) {
+    if (note) note.textContent = tx('Your game files have not given any planet or moon climates yet.');
+    return;
+  }
+
+  const all = armourySetRanges();
+  const sets = all.filter((s) => s.body);
+  if (note) {
+    note.textContent = tx("Each planet and moon's baseline temperature in your game files, set against every armour set's temperature range. A baseline, not the weather: biome, altitude, caves and night all move it, and the files give a night cooling rate, not a night temperature. An unprotected body is comfortable from {min} to {max} °C. A set is judged by the narrowest of its pieces; how the game combines pieces of different sets is not in the files, so a mixed outfit is not judged.", {
+      min: fmtInt(climate.bodyMin), max: fmtInt(climate.bodyMax),
+    });
+  }
+
+  for (const b of climate.bodies) {
+    const rated = sets.filter((s) => climateCovers(s.min, s.max, b));
+    const tr = el('tr');
+    tr.dataset.body = b.id;
+    if (armouryOpenBody === b.id) tr.classList.add('open');
+
+    const name = el('td');
+    name.append(document.createTextNode(b.name));
+    if (b.parent) name.append(el('div', 'armoury-kind', tx('moon of {planet}', { planet: b.parent })));
+    tr.append(name);
+    tr.append(el('td', null, b.system));
+    tr.append(el('td', 'num', climateDegrees(b.celsius)));
+    tr.append(el('td', 'num', String(b.pressure)));
+    tr.append(el('td', 'num', `${Math.round(b.humidity * 100)}%`));
+    tr.append(el('td', null, climateCovers(climate.bodyMin, climate.bodyMax, b) ? tx('Comfortable') : tx('Needs a suit')));
+    tr.append(el('td', 'num', String(rated.length)));
+    tr.addEventListener('click', () => {
+      armouryOpenBody = armouryOpenBody === b.id ? null : b.id;
+      renderArmouryClimate();
+    });
+    body.append(tr);
+
+    if (armouryOpenBody === b.id) {
+      const parts = all.filter((s) => !s.body && climateCovers(s.min, s.max, b)).length;
+      body.append(armouryExpansion(renderArmouryClimateDetail(b, rated, sets, parts), 7));
+    }
+  }
+}
+
+/** The sets rated for one body, the roomiest first, or why there are none. */
+function renderArmouryClimateDetail(b, rated, sets, parts = 0) {
+  const inner = el('div', 'armoury-detail');
+  inner.append(el('div', 'panel-title', b.parent ? `${b.name} · ${b.parent}` : b.name));
+  inner.append(el('div', 'panel-sub', tx('Baseline {degrees} · pressure {pressure} · humidity {humidity}% · from your game files', {
+    degrees: climateDegrees(b.celsius), pressure: b.pressure, humidity: Math.round(b.humidity * 100),
+  })));
+
+  if (!rated.length) {
+    const hottest = Math.max(...sets.map((s) => s.max));
+    const coldest = Math.min(...sets.map((s) => s.min));
+    inner.append(el('p', 'muted small', tx('No armour set in your game files is rated for this baseline. The hottest-rated reaches {hot}, the coldest {cold}.', {
+      hot: climateDegrees(hottest), cold: climateDegrees(coldest),
+    })));
+    return inner;
+  }
+
+  // The roomiest first: the set with the most margin on its nearer side is
+  // the one that copes when the ground is hotter or colder than the baseline.
+  const margin = (s) => Math.min(b.celsius - s.min, s.max - b.celsius);
+  const shown = [...rated].sort((x, y) => margin(y) - margin(x) || x.family.localeCompare(y.family)).slice(0, 24);
+  const list = el('ul', 'armoury-climate-sets');
+  for (const s of shown) {
+    const li = el('li');
+    li.append(s.piece ? rowRefLink('item', s.piece, s.family) : document.createTextNode(s.family));
+    li.append(el('span', 'muted', ` · ${tx('{min} to {max} °C', { min: fmtInt(s.min), max: fmtInt(s.max) })} · ${[...s.slots].join(', ')}`));
+    list.append(li);
+  }
+  inner.append(list);
+  if (rated.length > shown.length) {
+    inner.append(el('p', 'muted small', tx('And {count} more, with less room either side.', { count: rated.length - shown.length })));
+  }
+  if (parts > 0) {
+    inner.append(el('p', 'muted small', txn(parts,
+      '{count} helmet or other piece is rated on its own as well; it does not cover the body, so it is not counted as a set.',
+      '{count} helmets and other pieces are rated on their own as well; they do not cover the body, so they are not counted as sets.',
+      { count: parts })));
+  }
+  return inner;
+}
+
+/** The bodies whose baseline one armour row's range takes in, for its detail. */
+function armouryClimateLine(a) {
+  const bodies = armouryModel?.climate?.bodies || [];
+  if (!bodies.length || (!a.temperatureMin && !a.temperatureMax)) return null;
+  const covered = bodies.filter((b) => climateCovers(a.temperatureMin, a.temperatureMax, b));
+  if (!covered.length) return tx('Its range takes in the baseline of none of the {total} planets and moons.', { total: bodies.length });
+  return tx('Its range takes in the baseline of {count} of the {total} planets and moons: {names}. A baseline, not the weather on the ground.', {
+    count: covered.length, total: bodies.length, names: covered.map((b) => b.name).join(', '),
+  });
 }
 
 /* ---------- attachments, grenades, knives ---------- */
@@ -8990,6 +9133,8 @@ function renderArmouryArmourDetail(a) {
     }));
   } else facts.push(tx('No resistance block: it stops nothing.'));
   if (a.protects?.length) facts.push(tx('Covers {parts}.', { parts: a.protects.join(', ') }));
+  const climateLine = armouryClimateLine(a);
+  if (climateLine) facts.push(climateLine);
   if (a.gForceResistance) facts.push(tx('G tolerance {value}.', { value: `${a.gForceResistance > 0 ? '+' : ''}${a.gForceResistance}` }));
   if (a.motionPenalty > 0 || a.viewPenalty > 0) {
     facts.push(tx('Restriction penalty {movement}% movement, {view}% view - the game\'s own figure; what puts the piece into that state is not read.',

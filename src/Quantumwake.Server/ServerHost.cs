@@ -1538,6 +1538,15 @@ public static partial class ServerHost
                 // One melee config shared by every knife is the finding the
                 // page states above the table; more than one means it cannot.
                 meleeConfigs = armoury.Melee.Where(k => k.BaseClass is null).Select(k => k.Config).Distinct().Count(),
+                // Each body's baseline, for "which suit copes here". The page
+                // does the matching: it already holds every set's range.
+                climate = armoury.Climate is { } climate
+                    ? new
+                    {
+                        bodies = climate.Bodies.Select(b => new { b.Id, b.Name, b.System, b.Parent, b.Celsius, b.Pressure, b.Humidity, b.NightCooling }),
+                        climate.BodyMin, climate.BodyMax, climate.VisorFrost,
+                    }
+                    : null,
                 itemPricesKnown = uex.IsEnabled,
                 // Pictures come from the wiki, and the wiki is asked only once the
                 // community dataset is on - the app's consent to talk to the network.

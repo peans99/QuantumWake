@@ -302,6 +302,12 @@ public sealed record GameArmouryData(
     public List<MeleeWeapon> Melee { get; init; } = Melee ?? [];
     public List<Throwable> Throwables { get; init; } = Throwables ?? [];
     public List<WeaponAttachment> Attachments { get; init; } = Attachments ?? [];
+
+    /// <summary>
+    /// Each planet and moon's baseline climate, for asking which suit copes
+    /// there; see <see cref="GameClimates"/>. Null in a cache written before it.
+    /// </summary>
+    public GameClimateData? Climate { get; init; }
 }
 
 /// <summary>

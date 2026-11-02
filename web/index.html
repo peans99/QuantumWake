@@ -3198,6 +3198,7 @@
       <button type="button" data-pane="attachments"><span>03</span> Attachments</button>
       <button type="button" data-pane="grenades"><span>04</span> Grenades</button>
       <button type="button" data-pane="knives"><span>05</span> Knives</button>
+      <button type="button" data-pane="climate"><span>06</span> Climate</button>
     </nav>
 
     <div class="armoury-pane active" id="armoury-pane-guns">
@@ -3342,6 +3343,23 @@
             <th class="num" title="The push a hit gives, in the game's own unit">Impulse</th><th class="num">kg</th>
             <th class="num" title="Colours and editions with these figures">Finishes</th>
             <th class="num" title="UEX's cheapest terminal across the knife's finishes">From</th><th>Cheapest at</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="armoury-pane" id="armoury-pane-climate">
+      <p class="muted small" id="armoury-climate-note"></p>
+      <div class="table-wrap">
+        <table id="armoury-climate">
+          <thead><tr>
+            <th>Body</th><th>System</th>
+            <th class="num" title="The body's baseline temperature in your game files, not the weather on the ground">Baseline</th>
+            <th class="num" title="The game's own pressure figure; a room at its default reads 1">Pressure</th>
+            <th class="num">Humidity</th>
+            <th title="Whether an unprotected body is comfortable at the baseline">Unprotected</th>
+            <th class="num" title="Armour sets with a core or an undersuit whose temperature range takes in the baseline">Sets rated</th>
           </tr></thead>
           <tbody></tbody>
         </table>

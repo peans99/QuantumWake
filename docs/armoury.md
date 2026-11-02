@@ -305,3 +305,55 @@ each asking for it took the first version of this endpoint thirty seconds.
 - Kits: a gun or a set from this page into a kit on the Loadout page, and a
   kit's missing pieces onto a shopping list with the destination that sells
   the most of them, as the Garage does for parts.
+
+## Climate: which suit copes where (0.20.41)
+
+Measured on 4.10.2; `dotnet run --project src\Quantumwake.Cli -c Release -- --climate --data <scratch folder>`
+reprints all of it.
+
+**Bodies.** Each planet and moon has an `AtmosphereStateTemplate` named for
+it (`Stanton1b`). Its `state` overrides temperature in kelvin, pressure and
+humidity. There are 67 templates, and 28 of them are a body: Stanton's 16 and
+Pyro's 12. The rest are gas clouds, asteroid fields, two prison rooms, a helmet
+and vacuum. Names come from the star map (`StarMapObject.Pyro5a` is "Ignis"),
+and from the app's table where a record has none, as Daymar's does.
+
+**It is a baseline.** `PlanetDayNightTemperatureTemplate` holds only cooling
+rates per profile: Earth-like -2.5, moon-like -16, Venus-like -0.1. It gives no
+night temperature. Biome, altitude and caves are not in these records at all.
+Daymar's baseline reads 160 °C, which no one at Shubin's pads would call
+noon. Every place the page shows a baseline, it says so.
+
+**The body.** `ActorEnvironmentComponent.temperatureParams`: an unprotected
+body is comfortable from 4 to 35 °C, and the visor is fully frosted at a
+suit temperature of -20 °C.
+
+**A suit.** Every piece of a set carries the same `TemperatureResistance`
+range. Every Testudo piece reads -50 to 80 °C; Novikov's exploration suit and
+its helmet are -225 to 75; Pembroke's are -75 to 225. So a set is judged by
+the narrowest of its worn pieces. How the game combines pieces of *different*
+sets is not in the files, and a mixed outfit is not judged.
+
+A set counts only when it covers the body, with a core or an undersuit. On
+Euterpe half of what the install rates is a helmet alone. A suit's helmet and
+its undersuit are named as two families ("Novikov", "Novikov Exploration"),
+and nothing in the files pairs them. That leaves 99 sets that cover the body,
+and 79 families of helmets, arms or legs alone.
+
+| Body | Baseline | Sets rated |
+|---|---|---|
+| Aberdeen | 249.8 °C | 0 |
+| Pyro I | 225.8 °C | 0 |
+| Arial | 225.0 °C | 1 (Pembroke Exploration, to exactly 225) |
+| Daymar | 159.9 °C | 3 (Stirling Exploration, Stirling Hazard, Pembroke Exploration) |
+| Terminus | -133.1 °C | 5 (the Stirling and Novikov exploration suits) |
+| Vatra | -86.0 °C | 7 |
+| Euterpe | -73.1 °C | 16 |
+| Bloom, Fairo, Fuego, Vuur, Ita, Cellin, ArcCorp | 6 to 30 °C | all 99; unprotected is comfortable |
+
+The hottest-rated set reaches 225 °C and the coldest -225 °C, so no suit in
+the install is rated for the baselines of Aberdeen or Pyro I.
+
+Not yet checked against anything outside the files: a screenshot of the
+helmet's temperature readout on a body would say how far the ground sits from
+its baseline.
