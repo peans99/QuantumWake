@@ -5486,7 +5486,6 @@ function renderShipsRef() {
    shown instead when the browser asks for reduced motion. */
 
 function drawWakes() {
-  const course = 'M80,20 C170,8 230,28 320,23 S470,23 580,10';
 
   // Every page's own header: the bar that opens a view, not one nested
   // further down (Now, Help and About open on something else entirely).
@@ -5517,9 +5516,13 @@ function drawWakes() {
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
+    svg.dataset.flight = ['pursuit', 'overtake', 'evasive'][Math.floor(Math.random() * 3)];
+    svg.flightPhase = .25 + Math.random() * .45;
+    svg.flightGap = .07 + Math.random() * .05;
+    svg.flightPace = .95 + Math.random() * .15;
     const ships = [
-      { colour: '#7fe4ff', begin: '-7s', resting: 'translate(375 22) rotate(-3)' },
-      { colour: '#e9c27d', begin: '-5s', resting: 'translate(285 23) rotate(2)' },
+      { colour: '#7fe4ff', resting: 'translate(375 22) rotate(-3)' },
+      { colour: '#e9c27d', resting: 'translate(285 23) rotate(2)' },
     ];
     const gradients = ships.map((ship, n) => `<linearGradient id="chase-${index}-${n}" gradientUnits="userSpaceOnUse" x1="-72" x2="-7">`
       + `<stop offset="0" stop-color="${ship.colour}" stop-opacity="0"/>`
@@ -5533,9 +5536,14 @@ function drawWakes() {
       + '<circle class="chase-engine" cx="-6" cy="0" r="1.2"/>';
     svg.innerHTML = `<defs>${gradients}</defs>` + ships.map((ship, n) =>
       `<g class="wake-chase-motion" style="color:${ship.colour}" opacity="0">`
-      + `<animateMotion dur="14s" begin="${ship.begin}" repeatCount="indefinite" rotate="auto" path="${course}"/>`
-      + `<animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.08;.9;1" dur="14s" begin="${ship.begin}" repeatCount="indefinite"/>`
-      + artwork(n) + '</g>'
+      + '<animateMotion class="chase-motion" repeatCount="indefinite" rotate="auto"/>'
+      + '<animate class="chase-fade" attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.08;.9;1" repeatCount="indefinite"/>'
+      + artwork(n)
+      + (n === 1
+        ? '<g class="chase-shot" opacity="0"><path d="M15,0 H30"/>'
+          + '<animate class="chase-fire" attributeName="opacity" values="0;0;.65;0;0" keyTimes="0;.42;.425;.445;1" repeatCount="indefinite"/>'
+          + '<animateTransform class="chase-bolt" attributeName="transform" type="translate" values="0 0;0 0;85 0;85 0" keyTimes="0;.42;.445;1" repeatCount="indefinite"/></g>' : '')
+      + '</g>'
       + `<g class="wake-chase-still" style="color:${ship.colour}" transform="${ship.resting}">${artwork(n)}</g>`).join('');
     bar.append(svg);
     fitWake(bar);
@@ -5565,6 +5573,35 @@ function fitWake(bar) {
   }
   if (end === null) bar.style.removeProperty('--wake-end');
   else bar.style.setProperty('--wake-end', `${end}px`);
+  const svg = bar.querySelector('.wake-chase');
+  const width = Math.round(svg?.getBoundingClientRect().width || 0);
+  if (svg && width > 0 && svg.flightWidth !== width) fitChase(svg, width);
+}
+
+function fitChase(svg, width) {
+  svg.flightWidth = width;
+  svg.dataset.compact = String(width < 180);
+  // Match the viewBox to CSS pixels: a wide course must not stretch the ships.
+  svg.setAttribute('viewBox', `0 0 ${width} 36`);
+  const x = (fraction) => Math.round(24 + Math.max(0, width - 48) * fraction);
+  const paths = {
+    pursuit: `M${x(0)},21 C${x(.2)},8 ${x(.35)},28 ${x(.52)},23 S${x(.82)},23 ${x(1)},12`,
+    overtake: `M${x(0)},23 C${x(.25)},23 ${x(.4)},12 ${x(.6)},17 S${x(.85)},25 ${x(1)},17`,
+    evasive: `M${x(0)},19 C${x(.16)},7 ${x(.25)},29 ${x(.4)},23 S${x(.6)},8 ${x(.73)},15 S${x(.9)},29 ${x(1)},15`,
+  };
+  const duration = Math.max(14, Math.min(28, width / 55)) * svg.flightPace;
+  Array.from(svg.querySelectorAll('.wake-chase-motion')).forEach((ship, n) => {
+    const seconds = duration * (n === 1 && svg.dataset.flight === 'overtake' ? .84 : 1);
+    const begin = -(svg.flightPhase - n * svg.flightGap) * seconds;
+    ship.querySelector('.chase-motion').setAttribute('path', paths[svg.dataset.flight]);
+    for (const animation of ship.querySelectorAll('animateMotion, animate, animateTransform')) {
+      animation.setAttribute('dur', `${seconds.toFixed(2)}s`);
+      animation.setAttribute('begin', `${begin.toFixed(2)}s`);
+    }
+  });
+  Array.from(svg.querySelectorAll('.wake-chase-still')).forEach((ship, n) => {
+    ship.setAttribute('transform', `translate(${x(.62 - n * .12)} ${20 + n * 3})`);
+  });
 }
 
 /**

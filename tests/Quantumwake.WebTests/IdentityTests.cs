@@ -79,6 +79,29 @@ public class IdentityTests
         Assert.Equal(1, page.Count($"{Bar("jobs")}.byClass('wake').length"));
     }
 
+    [Fact]
+    public void Resizing_the_lane_updates_its_viewbox_without_replacing_the_flight()
+    {
+        var page = WithSessions("[]");
+        page.Do($"const flight = {Bar("jobs")}.querySelector('.wake-chase'); const phase = flight.flightPhase; flight.getBoundingClientRect = () => ({{ width: 1760 }}); fitWake({Bar("jobs")});");
+        Assert.Equal("0 0 1760 36", page.Text("flight.getAttribute('viewBox')"));
+
+        page.Do($"flight.getBoundingClientRect = () => ({{ width: 920 }}); fitWake({Bar("jobs")});");
+        Assert.Equal("0 0 920 36", page.Text("flight.getAttribute('viewBox')"));
+        Assert.Equal("true", page.Text("String(flight.flightPhase === phase)"));
+        Assert.Equal("true", page.Text($"String(flight === {Bar("jobs")}.querySelector('.wake-chase'))"));
+    }
+
+    [Fact]
+    public void A_lane_too_narrow_for_two_ships_is_hidden()
+    {
+        var page = WithSessions("[]");
+        page.Do($"const flight = {Bar("jobs")}.querySelector('.wake-chase'); fitChase(flight, 120);");
+        Assert.Equal("true", page.Text("flight.dataset.compact"));
+        page.Do("fitChase(flight, 600);");
+        Assert.Equal("false", page.Text("flight.dataset.compact"));
+    }
+
     /// <summary>
     /// The wake ends before a header's controls rather than running gold
     /// behind its filters, which on Mining read as a stray drawing; a header

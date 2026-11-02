@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.51
+### 0.20.52
+
+**More room to fly.** The header's ships now use its available width while keeping their size. Each header picks a pursuit, overtaking or evasive flight with a varied starting position; some chases include a brief laser shot. A separate lower lane keeps the flight below the title and caption, and the reduced-motion version stays still.
 
 **A smoother dashboard background.** Removed the cockpit-glass stripes, reflection layer, crossing route lines and background light pools, leaving a consistent dark blue surface as you scroll. On ultrawide displays, matching circular Quantum Wake emblems sit in both outer margins, clear of the content.
 
