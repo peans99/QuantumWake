@@ -7595,7 +7595,13 @@ body:not(.overlay) .view > .section-bar { position: relative; isolation: isolate
 /* --wake-end, when set, is where the header's controls begin (fitWake): the
    course stops short of them rather than running behind them. */
 body:not(.overlay) .view > .section-bar:has(> .wake-chase),
-body:not(.overlay) #now-closed:has(> .wake-chase) { padding-bottom: 32px; }
+body:not(.overlay) #now-closed:has(> .wake-chase) { --flight-lane: 32px; padding-bottom: var(--flight-lane); }
+/* Extend the filter panel through the flight lane. Matching padding keeps its
+   controls in place while the divider and background reach the lower frame. */
+body:not(.overlay) .reference-toolbar-bar:has(> .wake-chase) .reference-toolbar {
+  margin-bottom: calc(-1 * var(--flight-lane));
+  padding-bottom: calc(10px + var(--flight-lane));
+}
 .wake { position: absolute; right: calc(100% - var(--wake-end, 100%) + 14px); bottom: -1px; height: 36px; width: max(0px, calc(var(--wake-end, 100%) - 14px)); pointer-events: none; z-index: -1; }
 .wake[data-compact="true"] { visibility: hidden; }
 .wake path { vector-effect: non-scaling-stroke; }

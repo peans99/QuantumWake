@@ -328,7 +328,9 @@ project and is not affiliated with or endorsed by Cloud Imperium Games.
 
 ## Release notes
 
-### 0.20.54
+### 0.20.55
+
+**A complete Reference header frame.** The divider and filter-panel background now extend through the ships' flight lane to the bottom of the header, instead of stopping part-way down.
 
 **Updated Components controls.** Component categories now use framed selectors with count badges and a clear selected state. The shopping-list action beside catalogue names also has a compact frame and retains its green confirmation after adding an item.
 
