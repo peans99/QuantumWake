@@ -453,6 +453,7 @@ function showView(name) {
     loadRefineryOrders().catch(() => {});
     loadCrackModel().catch(() => {});
     loadSalvage().catch(() => {});
+    loadRadar().catch(() => {});
     // A rock handed over from the Log opens on the calculator; otherwise the
     // page opens where it was left.
     showMiningPane(crackFromScan ? 'crack' : miningPane);
@@ -8027,14 +8028,181 @@ async function loadSalvage() {
   renderMiningWorkspaceHeader();
 }
 
-/* ---------- the Mining page's four panes ---------- */
+/* ---------- Mining → Radar: what a ping is ---------- */
 
 /**
- * Prospecting, mining fit, haul and refinery, salvage: four questions that
- * had grown into one long page. The pane is remembered in this browser, and the
- * deposit filters in the header belong to the first alone.
+ * The most rocks a ping is read as. A ship-rock cluster rarely passes a dozen;
+ * hand-mining patches run larger, and twenty keeps 3000 × 20 in reach without
+ * every big number matching something.
  */
-const MINING_PANES = ['go', 'crack', 'runs', 'salvage'];
+const RADAR_MOST_ROCKS = 20;
+
+let radarModel = null;
+
+/**
+ * Every way a ping is a whole number of one kind of rock.
+ *
+ * Exact only: the files give whole figures and the radar prints whole figures,
+ * so a ping that is 15 off is a different ore, not a near miss. Fewest rocks
+ * first, as the likelier reading.
+ */
+function radarMatches(ping, rows) {
+  if (!(ping > 0)) return [];
+  const found = [];
+  for (const row of rows || []) {
+    const count = Math.round(ping / row.signature);
+    if (count < 1 || count > RADAR_MOST_ROCKS) continue;
+    if (Math.abs(ping - count * row.signature) < 0.5) found.push({ row, count });
+  }
+  return found.sort((a, b) => a.count - b.count || a.row.signature - b.row.signature);
+}
+
+/**
+ * The readings nearest a ping that matches nothing, with how far off each is.
+ * A typo or a scanner that adds something both look like this, and the
+ * offset says which rows were close enough to be what was meant.
+ */
+function radarNearest(ping, rows, take = 3) {
+  if (!(ping > 0)) return [];
+  const near = [];
+  for (const row of rows || []) {
+    for (const count of [Math.floor(ping / row.signature), Math.ceil(ping / row.signature)]) {
+      if (count < 1 || count > RADAR_MOST_ROCKS) continue;
+      near.push({ row, count, off: ping - count * row.signature });
+    }
+  }
+  return near.sort((a, b) => Math.abs(a.off) - Math.abs(b.off) || a.count - b.count).slice(0, take);
+}
+
+/** The rock as the page names it; ship rocks by their ore, which the game does not translate. */
+function radarRockName(row) {
+  if (row.kind === 'ship') return row.name;
+  if (row.kind === 'asteroid') return tx('{type}-type asteroid', { type: row.name.charAt(0) });
+  if (row.kind === 'hand') return tx('Hand-mining deposit');
+  if (row.kind === 'ground') return tx('Ground-vehicle deposit');
+  return tx('Older deposit rock');
+}
+
+/** Written out so the catalogue test can see each one; a tx(variable) is invisible to it. */
+function radarTier(tier) {
+  switch (tier) {
+    case 'Common': return tx('Common');
+    case 'Uncommon': return tx('Uncommon');
+    case 'Rare': return tx('Rare');
+    case 'Epic': return tx('Epic');
+    case 'Legendary': return tx('Legendary');
+    default: return tier || '';
+  }
+}
+
+function radarFound(row) {
+  if (row.surface && row.asteroid) return tx('Surface & asteroid fields');
+  return row.asteroid ? tx('Asteroid fields') : tx('Surface');
+}
+
+/**
+ * What the rock holds, where the figure does not say: the choice it cannot
+ * make. A ship rock's ore is already its name, so it gets nothing here.
+ */
+function radarHolds(row) {
+  if (row.kind === 'ship') return '';
+  const ores = row.ores.join(', ');
+  return row.ores.length > 1 ? tx('one of {ores}', { ores }) : ores;
+}
+
+async function loadRadar() {
+  if (!$('#mining-pane-radar')) return;
+  try {
+    radarModel = await getJson('/api/mining/signatures');
+  } catch {
+    radarModel = null;
+  }
+  renderRadar();
+}
+
+function renderRadar() {
+  const unready = $('#radar-unready');
+  const table = $('#radar-table');
+  if (!table) return;
+
+  if (!radarModel?.ready) {
+    if (unready) {
+      unready.hidden = false;
+      unready.textContent = gameDataExcuse() || tx('The install has not been read yet - Settings says when the game data is ready.');
+    }
+    table.hidden = true;
+    $('#radar-matches').textContent = '';
+    $('#radar-note').textContent = '';
+    renderMiningWorkspaceHeader();
+    return;
+  }
+  if (unready) unready.hidden = true;
+  table.hidden = false;
+
+  const body = $('#radar-table tbody');
+  body.textContent = '';
+  for (const row of radarModel.rows) {
+    const tr = el('tr');
+    tr.dataset.kind = row.kind;
+    tr.append(el('td', 'num', fmtInt(row.signature)));
+    tr.append(el('td', null, radarRockName(row)));
+    tr.append(el('td', null, radarHolds(row)));
+    tr.append(el('td', null, radarTier(row.tier)));
+    tr.append(el('td', null, radarFound(row)));
+    for (let n = 2; n <= 6; n++) tr.append(el('td', 'num', fmtInt(row.signature * n)));
+    body.append(tr);
+  }
+
+  $('#radar-note').textContent = tx('{rows} rows from {read} rocks in the install. {unplaced} more are templates, test rocks or rocks no deposit places, and are left out.',
+    { rows: radarModel.rows.length, read: radarModel.read, unplaced: radarModel.unplaced });
+  renderRadarMatches();
+  renderMiningWorkspaceHeader();
+}
+
+function renderRadarMatches() {
+  const box = $('#radar-matches');
+  if (!box) return;
+  box.textContent = '';
+  const ping = Number($('#radar-ping')?.value);
+  if (!radarModel?.ready || !(ping > 0)) return;
+
+  const line = (m, extra) => {
+    const li = el('li', `radar-match radar-${m.row.kind}`);
+    li.append(el('b', 'radar-count', `${m.count} ×`));
+    li.append(el('span', 'radar-rock', ` ${radarRockName(m.row)}`));
+    const tier = radarTier(m.row.tier);
+    const detail = [tier, radarHolds(m.row), extra].filter(Boolean).join(' · ');
+    if (detail) li.append(el('span', 'muted', ` — ${detail}`));
+    return li;
+  };
+
+  const exact = radarMatches(ping, radarModel.rows);
+  if (exact.length) {
+    const list = el('ul', 'radar-match-list');
+    for (const m of exact) list.append(line(m));
+    box.append(list);
+    if (exact.length > 1)
+      box.append(el('p', 'muted small', tx('{count} readings fit {ping}; the figure alone cannot tell them apart.', { count: exact.length, ping: fmtInt(ping) })));
+    return;
+  }
+
+  box.append(el('p', 'muted small', tx('No rock count reads exactly {ping}. Closest:', { ping: fmtInt(ping) })));
+  const list = el('ul', 'radar-match-list');
+  for (const m of radarNearest(ping, radarModel.rows))
+    list.append(line(m, tx('{offset} from {total}', { offset: `${m.off > 0 ? '+' : '−'}${fmtInt(Math.abs(m.off))}`, total: fmtInt(m.count * m.row.signature) })));
+  box.append(list);
+}
+
+$('#radar-ping')?.addEventListener('input', renderRadarMatches);
+
+/* ---------- the Mining page's five panes ---------- */
+
+/**
+ * Prospecting, the radar, mining fit, haul and refinery, salvage: questions
+ * that had grown into one long page. The pane is remembered in this browser,
+ * and the deposit filters in the header belong to the first alone.
+ */
+const MINING_PANES = ['go', 'radar', 'crack', 'runs', 'salvage'];
 let miningPane = 'go';
 let miningReferenceMatches = null;
 let miningPendingJobs = null;
@@ -8049,7 +8217,7 @@ function showMiningPane(name) {
   miningPane = name;
   try { localStorage.setItem('qw-mining-pane', name); } catch { /* as above */ }
 
-  for (const id of ['#mining-pane-go', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
+  for (const id of ['#mining-pane-go', '#mining-pane-radar', '#mining-pane-crack', '#mining-pane-runs', '#mining-pane-salvage']) {
     const pane = $(id);
     if (pane) pane.classList.toggle('active', id === `#mining-pane-${name}`);
   }
@@ -8094,6 +8262,16 @@ function renderMiningWorkspaceHeader() {
         ? txn(miningPendingJobs.length, '{count} refinery job awaits your update.', '{count} refinery jobs await your update.')
         : tx('No refinery jobs await your update.');
     status.textContent = waiting ? `${waiting}. ${jobs}` : jobs;
+    return;
+  }
+
+  if (miningPane === 'radar') {
+    heading.textContent = tx('Radar');
+    bar.dataset.workspace = tx('RADAR');
+    bar.dataset.workspaceIcon = '';
+    status.textContent = radarModel?.ready
+      ? tx('{values} signatures from the install.', { values: new Set(radarModel.rows.map((r) => r.signature)).size })
+      : tx('What each rock reads on the mining radar.');
     return;
   }
 

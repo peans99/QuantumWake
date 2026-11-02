@@ -384,6 +384,38 @@ if (args.Contains("--climate", StringComparer.OrdinalIgnoreCase))
     return 0;
 }
 
+// Every mineable rock's radar signature, grouped by value, and which counts of
+// which rocks a ping could not tell apart. The numbers behind docs/mining.md's
+// radar section.
+if (args.Contains("--signatures", StringComparer.OrdinalIgnoreCase))
+{
+    var data = GetOption(args, "--data") ?? Quantumwake.Core.AppPaths.Root;
+    var mining = GameCommodities.Load(install.RootPath, Path.Combine(data, "commodities.json")).Mining;
+    var rocks = mining.Signatures ?? [];
+    Console.WriteLine($"{rocks.Count} mineable entities with a signature, {rocks.Count(r => r.Placed)} placed by a preset; {rocks.Select(r => r.Signature).Distinct().Count()} distinct values");
+    if (args.Contains("--all", StringComparer.OrdinalIgnoreCase))
+    {
+        foreach (var r in rocks) Console.WriteLine($"  {r.Signature,7}  {(r.Placed ? "placed" : "      ")}  {r.Class}  {r.Composition}");
+        return 0;
+    }
+    var radar = GameRockSignatures.Radar(rocks);
+    Console.WriteLine($"{radar.Count} radar rows, {radar.Select(r => r.Signature).Distinct().Count()} values a pilot can meet");
+    foreach (var r in radar)
+    {
+        var where = r.Surface && r.Asteroid ? "both" : r.Surface ? "surface" : "asteroid";
+        var stones = r.Stones.Count > 0 ? $"  stones: {string.Join(", ", r.Stones)}" : "";
+        Console.WriteLine($"  {r.Signature,7}  {r.Kind,-8} {r.Name,-24} {r.Tier,-10} {where,-8} {string.Join(", ", r.Ores)}{stones}");
+    }
+
+    // Counts of different rocks that read the same: a ping no reading can split.
+    var ones = radar.Select(r => (r.Signature, r.Name)).Distinct().ToList();
+    var sums = ones.SelectMany(o => Enumerable.Range(1, 12).Select(n => (Total: o.Signature * n, Read: $"{n}x {o.Name}")))
+        .GroupBy(x => x.Total).Where(g => g.Count() > 1).OrderBy(g => g.Key).ToList();
+    Console.WriteLine($"{sums.Count} totals up to 12 rocks that two readings share; the first ten:");
+    foreach (var g in sums.Take(10)) Console.WriteLine($"  {g.Key,7}  {string.Join(" = ", g.Select(x => x.Read))}");
+    return 0;
+}
+
 // Every contract's details as the Missions page shows them - contractor,
 // title, type, where, CrimeStat, gates - and how many of the logged contracts
 // they cover. The numbers behind docs/missions.md's catalogue section.

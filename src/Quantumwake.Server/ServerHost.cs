@@ -1261,6 +1261,24 @@ public static partial class ServerHost
             });
         });
 
+        // What each rock reads on the mining radar, from the install. The
+        // matching of a ping against these is the page's: it is arithmetic on
+        // 36 rows, and a reply per keystroke would be slower than doing it.
+        // Ready is false until the install has been read, or when the cache
+        // predates the signatures; unplaced counts what was left out.
+        app.MapGet("/api/mining/signatures", (LogLibrary lib) =>
+        {
+            var rocks = lib.GameCommodities.Mining.Signatures ?? [];
+            var rows = GameRockSignatures.Radar(rocks);
+            return Results.Ok(new
+            {
+                ready = rows.Count > 0,
+                rows,
+                read = rocks.Count,
+                unplaced = rocks.Count(r => !r.Placed),
+            });
+        });
+
         // A rock as scanned against a fit: the verdict, and the same rock on
         // every head of that size so the pilot sees what a different head
         // would do without refitting.

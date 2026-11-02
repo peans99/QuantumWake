@@ -6629,6 +6629,19 @@ body:not(.overlay) #now-server-star::after { display: none; }
 .subtabs button.active { color: var(--cyan); border-bottom-color: var(--cyan); }
 .mining-pane { display: none; }
 .mining-pane.active { display: block; }
+/* Mining → Radar: one number in, the rock counts that make it out. The answer
+   sits beside the box, not below a table, because it is the whole point. */
+.radar-lookup { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 16px; align-items: start; margin: 14px 0 6px; padding: 16px; border: 1px solid var(--rule); border-top: 2px solid var(--cyan-deep); background: linear-gradient(145deg, rgba(14, 25, 38, .98), rgba(6, 12, 19, .92)); }
+.radar-lookup label { display: flex; flex-direction: column; gap: 5px; font-size: 9.5px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+.radar-lookup .search { width: 100%; box-sizing: border-box; font: 20px var(--mono); letter-spacing: .04em; }
+#radar-matches { min-width: 0; }
+#radar-matches p { margin: 0 0 6px; }
+.radar-match-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.radar-match { padding: 5px 10px; border-left: 2px solid var(--cyan-deep); background: rgba(53, 200, 240, .04); overflow-wrap: anywhere; }
+.radar-match.radar-ship { border-left-color: var(--cyan); }
+.radar-count { font-family: var(--mono); color: var(--cyan); margin-right: 2px; }
+#radar-table tr:not([data-kind="ship"]) td:nth-child(2) { color: var(--muted); }
+@media (max-width: 560px) { .radar-lookup { grid-template-columns: 1fr; } }
 @keyframes mining-pane-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (max-width: 850px) {
   .crack-inputs { grid-template-columns: 1fr; }

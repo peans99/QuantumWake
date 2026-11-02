@@ -2560,9 +2560,10 @@
 
     <nav class="subtabs" id="mining-tabs" aria-label="Mining pages">
       <button type="button" data-pane="go" class="active"><span>01</span> Where to go</button>
-      <button type="button" data-pane="crack"><span>02</span> Mining fit</button>
-      <button type="button" data-pane="runs"><span>03</span> Haul &amp; refinery</button>
-      <button type="button" data-pane="salvage"><span>04</span> Salvage</button>
+      <button type="button" data-pane="radar"><span>02</span> Radar</button>
+      <button type="button" data-pane="crack"><span>03</span> Mining fit</button>
+      <button type="button" data-pane="runs"><span>04</span> Haul &amp; refinery</button>
+      <button type="button" data-pane="salvage"><span>05</span> Salvage</button>
     </nav>
 
     <div class="mining-pane active" id="mining-pane-go">
@@ -2644,6 +2645,47 @@
       </table>
     </div>
     <p class="muted caption" id="mining-count"></p>
+    </div>
+
+    <div class="mining-pane" id="mining-pane-radar">
+      <div class="mining-brief">
+        <span class="mining-brief-mark" aria-hidden="true"></span>
+        <p class="muted caption" id="radar-brief">
+          What each rock reads on the mining radar, from your install. Ship
+          rocks read one figure per ore, so a ping names the ore and how many
+          rocks; asteroid classes, hand-mining and ground-vehicle deposits read
+          one figure per kind of rock, whatever ore is inside.
+          <b>The files give one rock's figure, not the ping's</b>: that a ping
+          over a cluster reads it times the rocks in it is how pilots read the
+          radar, and has not been checked against yours.
+        </p>
+      </div>
+      <p class="muted" id="radar-unready" hidden></p>
+
+      <div class="radar-lookup">
+        <label><span>Ping</span>
+          <input type="number" id="radar-ping" class="search" min="0" step="1" inputmode="numeric"
+                 placeholder="6340" title="The number the mining radar shows over a contact">
+        </label>
+        <div id="radar-matches" aria-live="polite"></div>
+      </div>
+
+      <h4 class="spaced">Every rock's signature</h4>
+      <div class="table-wrap">
+        <table id="radar-table">
+          <thead><tr>
+            <th class="num" title="What one rock reads">Signature</th>
+            <th>Rock</th>
+            <th>Holds</th>
+            <th>Tier</th>
+            <th>Found</th>
+            <th class="num">×2</th><th class="num">×3</th><th class="num">×4</th>
+            <th class="num">×5</th><th class="num">×6</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="radar-note"></p>
     </div>
 
     <div class="mining-pane" id="mining-pane-crack">

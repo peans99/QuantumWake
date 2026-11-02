@@ -46,6 +46,7 @@ public sealed class DataCore
     private readonly int _recordSize;
     private int _mappingCount;
     private readonly long _boolValues;
+    private readonly long _singleValues;
     private readonly long _stringValues;
     private readonly long _localeValues;
     private readonly long _enumValues;
@@ -97,7 +98,7 @@ public sealed class DataCore
         cursor += int8 * 1L; cursor += int16 * 2L; cursor += int32 * 4L; cursor += int64 * 8L;
         cursor += uint8 * 1L; cursor += uint16 * 2L; cursor += uint32 * 4L; cursor += uint64 * 8L;
         _boolValues = cursor; cursor += boolean * 1L;
-        cursor += single * 4L; cursor += dbl * 8L;
+        _singleValues = cursor; cursor += single * 4L; cursor += dbl * 8L;
         cursor += guid * 16L;
 
         // The arrays a property can point into. Only these are needed so far;
@@ -649,6 +650,35 @@ public sealed class DataCore
 
         var items = new bool[count];
         for (var i = 0; i < count; i++) items[i] = _data[_boolValues + first + i] != 0;
+
+        return items;
+    }
+
+    /// <summary>
+    /// An array of floats, read from the single-value table the way a bool
+    /// array is read from the bool one: a count and a first index.
+    /// </summary>
+    /// <remarks>
+    /// Needed for a rock's radar signatures, eight floats on
+    /// <c>SSCSignatureSystemParams.radarProperties.baseSignatureParams.signatures</c>,
+    /// whose fifth is the one the mining radar shows.
+    /// </remarks>
+    public IReadOnlyList<float> SingleArrayAt(long instance, int structIndex, string name)
+    {
+        var (at, field) = FieldAt(instance, structIndex, name);
+
+        if (at < 0 || field is null || field.ConversionType == 0
+            || field.DataType != 0x000B || at + 8 > _data.LongLength)
+        {
+            return [];
+        }
+
+        var count = BitConverter.ToUInt32(_data, (int)at);
+        var first = BitConverter.ToUInt32(_data, (int)(at + 4));
+        if (count > 256 || _singleValues + (first + (long)count) * 4 > _data.LongLength) return [];
+
+        var items = new float[count];
+        for (var i = 0; i < count; i++) items[i] = BitConverter.ToSingle(_data, (int)(_singleValues + (first + i) * 4L));
 
         return items;
     }
